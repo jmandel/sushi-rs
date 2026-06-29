@@ -94,11 +94,19 @@ cargo test  -p <crate>                 # focused
 cargo run   -p rust_sushi -- <args>
 ```
 
-### Cache isolation policy
-Default harness runs use the **shared warm `~/.fhir`** (matches the plan's primary
-benchmark scenario — "packages already local and indexed"). Use `RUN_HOME=<dir>`
-only when deliberately testing cold acquisition / reproducibility. Don't pollute
-the shared cache with experiments.
+### Cache isolation policy (SAFETY — non-negotiable)
+**Never touch the user's real `~/.fhir`.** All runs use an **isolated FHIR home**
+at `temp/fhir-home/` (override `FHIR_HOME=`, must be under repo `temp/`). The
+isolated cache is **seeded by hardlinking** from the real cache (`cp -al`):
+instant, zero extra disk (7.5G shared by inode), and it does **not** write to the
+source. `harness/_guard.sh` enforces:
+- **pre-run guard** `assert_isolated_fhir_home`: aborts (exit 99) if the FHIR home
+  is the real home or not under repo `temp/`.
+- **post-run guard** `assert_real_fhir_untouched`: aborts (exit 98) if ANY file
+  under real `~/.fhir` changed during the run (catches leaks via shared inodes).
+
+Use `NO_SEED=1` for a genuinely cold cache. Verified: IPS run under isolation =
+118 resources, real `~/.fhir` 0 files modified.
 
 ## 6. Orchestration style (how I, the agent, work here)
 
@@ -137,3 +145,7 @@ Phases from the plan (0–9). Current state:
 - Don't optimize before the global data shape is known.
 - Keep `sushi-ts` pinned at v3.20.0 = the stock oracle version. If the oracle
   binary version changes, re-pin the submodule and re-record §4.
+- **NEVER use the real `~/.fhir` cache or real `$HOME`.** Always isolate (§5).
+  This applies to Rust code too: `package_store` must **require an explicit cache
+  dir** and **fail loud** if it's missing — never silently default to `~/.fhir`.
+  Defensive, fail-loud everywhere; never let defaults "slip" to real home.
