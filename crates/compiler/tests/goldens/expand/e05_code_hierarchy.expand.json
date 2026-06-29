@@ -1,0 +1,187 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {
+        "CS5": {
+          "__type": "FshCodeSystem",
+          "sourceInfo": {
+            "location": {
+              "startLine": 5,
+              "startColumn": 1,
+              "endLine": 7,
+              "endColumn": 21
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh"
+          },
+          "name": "CS5",
+          "_id": "CS5",
+          "rules": [
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 18
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh"
+              },
+              "path": "",
+              "code": "parent",
+              "display": "Parent",
+              "hierarchy": []
+            },
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 21
+                }
+              },
+              "path": "",
+              "code": "child1",
+              "display": "Child 1",
+              "hierarchy": [
+                "parent"
+              ]
+            },
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 21
+                }
+              },
+              "path": "",
+              "code": "child2",
+              "display": "Child 2",
+              "hierarchy": [
+                "parent"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "Kids": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 3,
+              "endColumn": 19
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh"
+          },
+          "name": "Kids",
+          "rules": [
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 21
+                }
+              },
+              "path": "",
+              "code": "child1",
+              "display": "Child 1",
+              "hierarchy": []
+            },
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e05_code_hierarchy.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 21
+                }
+              },
+              "path": "",
+              "code": "child2",
+              "display": "Child 2",
+              "hierarchy": []
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

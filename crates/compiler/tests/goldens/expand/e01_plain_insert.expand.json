@@ -1,0 +1,217 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "P1": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 5,
+              "startColumn": 1,
+              "endLine": 8,
+              "endColumn": 11
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh"
+          },
+          "name": "P1",
+          "_id": "P1",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 22
+                }
+              },
+              "path": "category",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 2,
+                    "startColumn": 13,
+                    "endLine": 2,
+                    "endColumn": 19
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh"
+                },
+                "code": "active"
+              },
+              "isInstance": false
+            },
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 23
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 22
+                }
+              },
+              "path": "category",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "experimental",
+              "value": false,
+              "rawValue": "false",
+              "isInstance": false
+            },
+            {
+              "__type": "CardRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 11
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh"
+              },
+              "path": "code",
+              "min": 1,
+              "max": "1"
+            }
+          ],
+          "parent": "Observation"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "Meta": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 3,
+              "endColumn": 23
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh"
+          },
+          "name": "Meta",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 22
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 2,
+                    "startColumn": 13,
+                    "endLine": 2,
+                    "endColumn": 19
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh"
+                },
+                "code": "active"
+              },
+              "isInstance": false
+            },
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 23
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e01_plain_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 22
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "experimental",
+              "value": false,
+              "rawValue": "false",
+              "isInstance": false
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

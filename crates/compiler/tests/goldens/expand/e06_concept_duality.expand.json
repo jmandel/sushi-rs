@@ -1,0 +1,120 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {
+        "VS6": {
+          "__type": "FshValueSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 5,
+              "startColumn": 1,
+              "endLine": 6,
+              "endColumn": 14
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh"
+          },
+          "name": "VS6",
+          "_id": "VS6",
+          "rules": []
+        }
+      }
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "Codes": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 3,
+              "endColumn": 8
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh"
+          },
+          "name": "Codes",
+          "rules": [
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 8
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh",
+                "appliedLocation": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "code": "a",
+              "display": "A",
+              "hierarchy": []
+            },
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 8
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e06_concept_duality.fsh",
+                "appliedLocation": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "code": "b",
+              "display": "B",
+              "hierarchy": []
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

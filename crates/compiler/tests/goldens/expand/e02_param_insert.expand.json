@@ -1,0 +1,120 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "P2": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 4,
+              "startColumn": 1,
+              "endLine": 6,
+              "endColumn": 57
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh"
+          },
+          "name": "P2",
+          "_id": "P2",
+          "rules": [
+            {
+              "__type": "BindingRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 48
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 57
+                }
+              },
+              "path": "category",
+              "valueSet": "http://example.org/vs",
+              "strength": "required"
+            }
+          ],
+          "parent": "Observation"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {}
+    },
+    "appliedRuleSets": {
+      "__map": {
+        "[\"Slice\",\"category\",\"http://example.org/vs\",\"required\"]": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 2,
+              "endColumn": 32
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh"
+          },
+          "name": "Slice",
+          "rules": [
+            {
+              "__type": "BindingRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 48
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e02_param_insert.fsh",
+                "appliedLocation": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 57
+                }
+              },
+              "path": "category",
+              "valueSet": "http://example.org/vs",
+              "strength": "required"
+            }
+          ]
+        }
+      }
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

@@ -1,0 +1,164 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "P4": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 8,
+              "startColumn": 1,
+              "endLine": 10,
+              "endColumn": 10
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh"
+          },
+          "name": "P4",
+          "_id": "P4",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 18
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e04_circular.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 10
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 2,
+                    "startColumn": 13,
+                    "endLine": 2,
+                    "endColumn": 18
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh"
+                },
+                "code": "draft"
+              },
+              "isInstance": false
+            }
+          ],
+          "parent": "Observation"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "A": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 3,
+              "endColumn": 10
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh"
+          },
+          "name": "A",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 18
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e04_circular.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 10
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 2,
+                    "startColumn": 13,
+                    "endLine": 2,
+                    "endColumn": 18
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh"
+                },
+                "code": "draft"
+              },
+              "isInstance": false
+            }
+          ]
+        },
+        "B": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 5,
+              "startColumn": 1,
+              "endLine": 6,
+              "endColumn": 10
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e04_circular.fsh"
+          },
+          "name": "B",
+          "rules": []
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

@@ -14,3 +14,7 @@ package_store.workspace = true
 json_emit.workspace = true
 rustc-hash.workspace = true
 anyhow.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }

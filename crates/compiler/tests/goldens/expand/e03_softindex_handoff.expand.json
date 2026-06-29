@@ -1,0 +1,251 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {
+        "I3": {
+          "__type": "Instance",
+          "sourceInfo": {
+            "location": {
+              "startLine": 5,
+              "startColumn": 1,
+              "endLine": 8,
+              "endColumn": 30
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh"
+          },
+          "name": "I3",
+          "_id": "I3",
+          "rules": [
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 30
+                }
+              },
+              "path": "component[+].system",
+              "value": "s",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 11
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 30
+                }
+              },
+              "path": "component[=].code",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 3,
+                    "startColumn": 10,
+                    "endLine": 3,
+                    "endColumn": 11
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh"
+                },
+                "code": "x"
+              },
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 30
+                }
+              },
+              "path": "component[+].system",
+              "value": "s",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 11
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 30
+                }
+              },
+              "path": "component[=].code",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 3,
+                    "startColumn": 10,
+                    "endLine": 3,
+                    "endColumn": 11
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh"
+                },
+                "code": "x"
+              },
+              "exactly": false,
+              "isInstance": false
+            }
+          ],
+          "usage": "Example",
+          "instanceOf": "Observation"
+        }
+      }
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "TwoRules": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 3,
+              "endColumn": 11
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh"
+          },
+          "name": "TwoRules",
+          "rules": [
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 30
+                }
+              },
+              "path": "system",
+              "value": "s",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 11
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh",
+                "appliedLocation": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 30
+                }
+              },
+              "path": "code",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 3,
+                    "startColumn": 10,
+                    "endLine": 3,
+                    "endColumn": 11
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e03_softindex_handoff.fsh"
+                },
+                "code": "x"
+              },
+              "exactly": false,
+              "isInstance": false
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

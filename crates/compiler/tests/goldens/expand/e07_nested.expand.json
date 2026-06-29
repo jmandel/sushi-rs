@@ -1,0 +1,240 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "P7": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 8,
+              "startColumn": 1,
+              "endLine": 10,
+              "endColumn": 14
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh"
+          },
+          "name": "P7",
+          "_id": "P7",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 5,
+                  "startColumn": 1,
+                  "endLine": 5,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 5,
+                    "startColumn": 13,
+                    "endLine": 5,
+                    "endColumn": 19
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh"
+                },
+                "code": "active"
+              },
+              "isInstance": false
+            },
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "title",
+              "value": "T",
+              "isInstance": false
+            }
+          ],
+          "parent": "Observation"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "Inner": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 2,
+              "endColumn": 14
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh"
+          },
+          "name": "Inner",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedLocation": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "title",
+              "value": "T",
+              "isInstance": false
+            }
+          ]
+        },
+        "Outer": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 4,
+              "startColumn": 1,
+              "endLine": 6,
+              "endColumn": 14
+            },
+            "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh"
+          },
+          "name": "Outer",
+          "rules": [
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 5,
+                  "startColumn": 1,
+                  "endLine": 5,
+                  "endColumn": 19
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 5,
+                    "startColumn": 13,
+                    "endLine": 5,
+                    "endColumn": 19
+                  },
+                  "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh"
+                },
+                "code": "active"
+              },
+              "isInstance": false
+            },
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 14
+                },
+                "file": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedFile": "crates/compiler/tests/fixtures/expand/e07_nested.fsh",
+                "appliedLocation": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 14
+                }
+              },
+              "path": "",
+              "isCodeCaretRule": false,
+              "pathArray": [],
+              "caretPath": "title",
+              "value": "T",
+              "isInstance": false
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]
