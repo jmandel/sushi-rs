@@ -211,12 +211,15 @@ Phases from the plan (0–9). Current state:
     the `JSON.stringify([name,...params])` identifier string in a `Vec`
     (Array.includes), checked AFTER fishing succeeds.
   - **Breadth check** (`rust_sushi expand` vs oracle, semantic JSON eq): MATCH on
-    IPS (123 files), fhir-ips, CARIN-BB, mCODE (x2). MISMATCH on SDC (both copies)
-    — root cause is a **Phase-2 parser gap**: nested parameterized inserts (a param
-    RuleSet whose body itself contains `insert RS(args)`) don't get their inner
-    `appliedRuleSets` registered, so expansion can't fish them. NOT a Phase-3 bug
-    (every appliedRuleSet that WAS parsed expands byte-identically). Fix belongs in
-    the importer's `applyRuleSetParams`/`parseGeneratedRuleSet` recursion.
+    IPS (123/123), fhir-ips, CARIN-BB, mCODE, and **SDC per-file 212/212**.
+  - **FIXED** the SDC nested-parameterized-insert gap: `parse_generated_ruleset`
+    now merges the temp doc's `appliedRuleSets` into the parent (FSHImporter.ts:
+    2016-2018). Gated by fixture `09_nested_param_insert`.
+  - **KNOWN RESIDUAL** (deferred, narrow): whole-IG *multi-file* SDC still has a
+    single off-by-one — `appliedLocation.endColumn` (165 vs 166) on a rule inside a
+    **doubly-nested** applied RuleSet. Span-rebasing edge in nested param inserts
+    (`rebase_rule` adjusts lines, not columns). Low impact; revisit when chasing
+    diagnostic span parity.
   - NOT COVERED (deferred): diagnostics are collected into a `Vec<String>` sink but
     NOT emitted/gated (exact wording ported though); `fishForMetadata`/full
     `internalFish` matcher (only RuleSet fishing needed here).
