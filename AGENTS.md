@@ -114,6 +114,13 @@ The Rust lexer must reproduce this stream byte-for-byte. Confirmed: STAR token
 is `"\n* "` (folds preceding newline+indent), keyword tokens include the colon
 (`"Profile:"`), `CODE`/`REFERENCE`/`CANONICAL` are single multi-char tokens.
 
+### Lexer parity check (Rust vs oracle, any file)
+```sh
+cargo build -p rust_sushi --release
+diff <(node harness/lex-oracle.cjs <f.fsh>) <(target/release/rust_sushi lex <f.fsh>)
+# empty diff = byte-exact token parity
+```
+
 ### Rust commands
 ```sh
 cargo build --workspace
@@ -155,13 +162,18 @@ Phases from the plan (0–9). Current state:
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
 - [~] **Phase 0 — harness** — `run-stock.sh` + `diff-resources.sh` done; IPS oracle captured. TODO: diagnostic-diff reporter, more corpus IGs (SDC/CRD/US Core/mCODE/Cycle), candidate-run wrapper.
 - [ ] **Phase 1 — package store + JSON emitter skeleton**
-- [~] **Phase 2 — FSH parser + AST** — IN PROGRESS. Infra ready: token oracle +
-  AST oracle, 8 fixtures with lex+AST goldens (`crates/fsh_lexer_parser/tests/`),
-  regen via `harness/gen-{lex,ast}-goldens.sh`, AST-shape ref `docs/specs/ast-shape.md`.
-  Lexer contract (`token.rs`) + parity test (`tests/lex_parity.rs`) committed;
-  `lex.rs` implementation delegated to a subagent (gate: `cargo test -p
-  fsh_lexer_parser`). NEXT after lexer: define `fsh_model` AST + recursive-descent
-  parser + AST dumper, gated by `tests/goldens/ast/`.
+- [~] **Phase 2 — FSH parser + AST** — LEXER DONE, parser next.
+  - **Lexer COMPLETE & verified**: `lex.rs` (~900 lines, hand-written port of
+    FSHLexer.g4, mode stack + maximal-munch + UTF-16 geometry). Gate `cargo test
+    -p fsh_lexer_parser` green (8 fixtures). Independently verified **byte-exact vs
+    ANTLR oracle on 423 real corpus files** (123 IPS + 300 broader) via
+    `rust_sushi lex <f>` diffed against `lex-oracle.cjs`.
+  - Infra: token+AST oracles, 8 fixtures w/ lex+AST goldens, regen
+    `harness/gen-{lex,ast}-goldens.sh`, AST-shape ref `docs/specs/ast-shape.md`.
+  - **NEXT**: `fsh_model` AST types + recursive-descent parser (port FSH.g4 +
+    FSHImporter visitor) + AST dumper matching parse-oracle; gate by
+    `tests/goldens/ast/`. Mind parity traps in §7b (STAR span math, two-pass
+    global importer, soft-index finally-mutation, id-getter, bigint vs float).
 - [ ] **Phase 3 — insert rules + tank indexes**
 - [ ] **Phase 4 — ValueSet/CodeSystem export**
 - [ ] **Phase 5 — SD arena + simple profiles**
