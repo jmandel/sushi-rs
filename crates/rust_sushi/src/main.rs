@@ -44,6 +44,21 @@ fn main() -> anyhow::Result<()> {
             let v = import_to_json(&[(file.as_str(), &content)]);
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
+        Some("expand") => {
+            // rust_sushi expand <file.fsh ...>  -> post-expansion AST matching harness/expand-oracle.cjs
+            let files: Vec<String> = args[2..].to_vec();
+            if files.is_empty() {
+                return Err(anyhow::anyhow!("usage: rust_sushi expand <file.fsh ...>"));
+            }
+            let loaded: Vec<(String, String)> = files
+                .iter()
+                .map(|f| Ok((f.clone(), std::fs::read_to_string(f)?)))
+                .collect::<anyhow::Result<_>>()?;
+            let refs: Vec<(&str, &str)> =
+                loaded.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
+            let v = compiler::expand_to_json(&refs);
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
         _ => {
             eprintln!("rust_sushi {}: compile pipeline under construction", env!("CARGO_PKG_VERSION"));
             eprintln!("usage: rust_sushi <lex <file.fsh> | ast <file.fsh> | --version>");

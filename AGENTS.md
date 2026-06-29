@@ -186,13 +186,40 @@ Phases from the plan (0–9). Current state:
     (b) AddElement/addCRElement + MappingRule lightly corpus-exercised — want
     fixtures; (c) bigint huge-magnitude edge cases; (d) nested `[[{param}]]` insert
     params; (e) ANTLR error-recovery not byte-matched. None block Phase 3.
-- [~] **Phase 3 — insert rules + tank indexes** — IN PROGRESS (delegated).
-  Oracle `harness/expand-oracle.cjs` (drives stock FSHTank + applyInsertRules);
-  7 insert fixtures + goldens in `crates/compiler/tests/`; gate
-  `tests/expand_parity.rs` calls `compiler::expand_to_json`. Spec: `docs/specs/
-  08-insert-rules-tank.md`. NOTE: soft-index NUMBER resolution (resolveSoftIndexing)
-  is EXPORT-time, NOT in this gate (goldens keep [+]/[=] literal); only the
-  applyInsertRules first-rule [+]→[=] handoff applies here. Diagnostics not gated yet.
+- [x] **Phase 3 — insert rules + tank indexes** — DONE & verified.
+  - `compiler::expand_to_json` (`crates/compiler/src/lib.rs`): imports via the
+    Phase-2 parser, runs `applyInsertRules` over every entity in FHIRExporter
+    order (invariants → profiles → extensions → logicals → resources → CS → VS →
+    instances → mappings), serializes post-expansion AST via `fsh_lexer_parser::dump`.
+    Gate `cargo test -p compiler` (expand_parity 7/7). Oracle:
+    `harness/expand-oracle.cjs`; spec `docs/specs/08-insert-rules-tank.md`.
+  - Design: tank = owned `Vec<FshDocument>`; borrow-safe in-place RuleSet mutation
+    via **take/expand/replace** (`std::mem::take` the rules out of the entity or
+    RuleSet so `&mut docs` is free for recursive fishing). `RsLoc`/`Field` locators
+    index into docs. `is_allowed_rule` static table, `DefKind` discriminant,
+    `fish_ruleset`/`fish_applied`/`resolve_alias` mirror FSHTank. Helper methods
+    added to `fsh_model::Rule` (`source_info_mut`, `path`, `set_path`, `is_insert`,
+    `constructor_name`). `rust_sushi expand <f...>` drives it for corpus diffs.
+  - PARITY TRAPS that bit: (1) appliedFile/appliedLocation are stamped on the
+    **shared** RuleSet rule (mutation persists in the tank, observable in the
+    ruleSets map; last-insert-wins, e.g. e03/e07). (2) `[+]→[=]` handoff is on
+    `context` *after the first pushed rule* — distinct from resolveSoftIndexing
+    (which is EXPORT-time NUMBER resolution, NOT in this gate; goldens keep
+    [+]/[=] literal). (3) ConceptRule-with-NO-system into a ValueSet is
+    **rejected** by isAllowedRule (e06 → empty rules), NOT converted; conversion
+    only fires when the concept carries a system. (4) circular detection keyed on
+    the `JSON.stringify([name,...params])` identifier string in a `Vec`
+    (Array.includes), checked AFTER fishing succeeds.
+  - **Breadth check** (`rust_sushi expand` vs oracle, semantic JSON eq): MATCH on
+    IPS (123 files), fhir-ips, CARIN-BB, mCODE (x2). MISMATCH on SDC (both copies)
+    — root cause is a **Phase-2 parser gap**: nested parameterized inserts (a param
+    RuleSet whose body itself contains `insert RS(args)`) don't get their inner
+    `appliedRuleSets` registered, so expansion can't fish them. NOT a Phase-3 bug
+    (every appliedRuleSet that WAS parsed expands byte-identically). Fix belongs in
+    the importer's `applyRuleSetParams`/`parseGeneratedRuleSet` recursion.
+  - NOT COVERED (deferred): diagnostics are collected into a `Vec<String>` sink but
+    NOT emitted/gated (exact wording ported though); `fishForMetadata`/full
+    `internalFish` matcher (only RuleSet fishing needed here).
 - [ ] **Phase 4 — ValueSet/CodeSystem export**
 - [ ] **Phase 5 — SD arena + simple profiles**
 - [ ] **Phase 6 — full SD compatibility**

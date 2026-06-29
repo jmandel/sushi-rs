@@ -236,6 +236,95 @@ pub enum Rule {
     },
 }
 
+impl Rule {
+    /// Mutable access to the rule's `sourceInfo` (every variant has one).
+    pub fn source_info_mut(&mut self) -> &mut SourceInfo {
+        match self {
+            Rule::Card { source_info, .. }
+            | Rule::Flag { source_info, .. }
+            | Rule::Binding { source_info, .. }
+            | Rule::Assignment { source_info, .. }
+            | Rule::Only { source_info, .. }
+            | Rule::Contains { source_info, .. }
+            | Rule::CaretValue { source_info, .. }
+            | Rule::Obeys { source_info, .. }
+            | Rule::Insert { source_info, .. }
+            | Rule::Path { source_info, .. }
+            | Rule::Concept { source_info, .. }
+            | Rule::Mapping { source_info, .. }
+            | Rule::AddElement { source_info, .. }
+            | Rule::VsConcept { source_info, .. }
+            | Rule::VsFilter { source_info, .. } => source_info,
+        }
+    }
+
+    /// The rule's dotted `path` (every variant has one).
+    pub fn path(&self) -> &str {
+        match self {
+            Rule::Card { path, .. }
+            | Rule::Flag { path, .. }
+            | Rule::Binding { path, .. }
+            | Rule::Assignment { path, .. }
+            | Rule::Only { path, .. }
+            | Rule::Contains { path, .. }
+            | Rule::CaretValue { path, .. }
+            | Rule::Obeys { path, .. }
+            | Rule::Insert { path, .. }
+            | Rule::Path { path, .. }
+            | Rule::Concept { path, .. }
+            | Rule::Mapping { path, .. }
+            | Rule::AddElement { path, .. }
+            | Rule::VsConcept { path, .. }
+            | Rule::VsFilter { path, .. } => path,
+        }
+    }
+
+    pub fn set_path(&mut self, p: String) {
+        match self {
+            Rule::Card { path, .. }
+            | Rule::Flag { path, .. }
+            | Rule::Binding { path, .. }
+            | Rule::Assignment { path, .. }
+            | Rule::Only { path, .. }
+            | Rule::Contains { path, .. }
+            | Rule::CaretValue { path, .. }
+            | Rule::Obeys { path, .. }
+            | Rule::Insert { path, .. }
+            | Rule::Path { path, .. }
+            | Rule::Concept { path, .. }
+            | Rule::Mapping { path, .. }
+            | Rule::AddElement { path, .. }
+            | Rule::VsConcept { path, .. }
+            | Rule::VsFilter { path, .. } => *path = p,
+        }
+    }
+
+    pub fn is_insert(&self) -> bool {
+        matches!(self, Rule::Insert { .. })
+    }
+
+    /// Mirrors TS `rule.constructorName`, used in diagnostic messages.
+    pub fn constructor_name(&self) -> &'static str {
+        match self {
+            Rule::Card { .. } => "CardRule",
+            Rule::Flag { .. } => "FlagRule",
+            Rule::Binding { .. } => "BindingRule",
+            Rule::Assignment { .. } => "AssignmentRule",
+            Rule::Only { .. } => "OnlyRule",
+            Rule::Contains { .. } => "ContainsRule",
+            Rule::CaretValue { .. } => "CaretValueRule",
+            Rule::Obeys { .. } => "ObeysRule",
+            Rule::Insert { .. } => "InsertRule",
+            Rule::Path { .. } => "PathRule",
+            Rule::Concept { .. } => "ConceptRule",
+            Rule::Mapping { .. } => "MappingRule",
+            Rule::AddElement { .. } => "AddElementRule",
+            Rule::VsConcept { .. } => "ValueSetConceptComponentRule",
+            Rule::VsFilter { .. } => "ValueSetFilterComponentRule",
+        }
+    }
+}
+
 // ---------- entities ----------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
