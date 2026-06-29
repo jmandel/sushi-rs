@@ -6,6 +6,8 @@
 
 pub mod token;
 pub mod lex;
+pub mod parser;
+pub mod dump;
 
 pub use lex::lex_document;
 pub use token::{Channel, Token, TokenKind};
@@ -15,6 +17,8 @@ pub use token::{Channel, Token, TokenKind};
 /// id getter->`_id`). The contract gated by `tests/ast_parity.rs`.
 ///
 /// IMPLEMENTATION PENDING — port FSH.g4 + the FSHImporter visitor + a dumper.
-pub fn import_to_json(_files: &[(&str, &str)]) -> serde_json::Value {
-    todo!("port FSH.g4 parser + FSHImporter -> fsh_model AST -> oracle-shape JSON dumper")
+pub fn import_to_json(files: &[(&str, &str)]) -> serde_json::Value {
+    let mut imp = parser::Importer::new();
+    imp.import(files);
+    dump::dump_docs(&imp.docs)
 }

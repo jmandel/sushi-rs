@@ -1,7 +1,7 @@
 //! rust_sushi CLI. Phase-by-phase the `compile` subcommand grows; for now it
 //! exposes `lex` for token-stream parity checking against the ANTLR oracle.
 
-use fsh_lexer_parser::{lex_document, Channel};
+use fsh_lexer_parser::{import_to_json, lex_document, Channel};
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -35,9 +35,18 @@ fn main() -> anyhow::Result<()> {
                 .collect();
             println!("{}", serde_json::to_string_pretty(&arr)?);
         }
+        Some("ast") => {
+            // rust_sushi ast <file.fsh>  -> import AST JSON matching harness/parse-oracle.cjs
+            let file = args
+                .get(2)
+                .ok_or_else(|| anyhow::anyhow!("usage: rust_sushi ast <file.fsh>"))?;
+            let content = std::fs::read_to_string(file)?;
+            let v = import_to_json(&[(file.as_str(), &content)]);
+            println!("{}", serde_json::to_string_pretty(&v)?);
+        }
         _ => {
             eprintln!("rust_sushi {}: compile pipeline under construction", env!("CARGO_PKG_VERSION"));
-            eprintln!("usage: rust_sushi <lex <file.fsh> | --version>");
+            eprintln!("usage: rust_sushi <lex <file.fsh> | ast <file.fsh> | --version>");
         }
     }
     Ok(())
