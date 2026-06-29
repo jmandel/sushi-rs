@@ -1,0 +1,11 @@
+[package]
+name = "fsh_lexer_parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+diagnostics.workspace = true
+fsh_model.workspace = true
+rustc-hash.workspace = true

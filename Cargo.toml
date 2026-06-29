@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fsh_lexer_parser",
+    "crates/fsh_model",
+    "crates/fhir_model",
+    "crates/package_store",
+    "crates/compiler",
+    "crates/diagnostics",
+    "crates/json_emit",
+    "crates/rust_sushi",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.90"
+
+[workspace.dependencies]
+# Internal crates
+fsh_lexer_parser = { path = "crates/fsh_lexer_parser" }
+fsh_model = { path = "crates/fsh_model" }
+fhir_model = { path = "crates/fhir_model" }
+package_store = { path = "crates/package_store" }
+compiler = { path = "crates/compiler" }
+diagnostics = { path = "crates/diagnostics" }
+json_emit = { path = "crates/json_emit" }
+
+# External
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = { version = "2", features = ["serde"] }
+smallvec = { version = "1", features = ["serde", "union"] }
+rustc-hash = "2"
+anyhow = "1"
+thiserror = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"

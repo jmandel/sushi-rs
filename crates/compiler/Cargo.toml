@@ -1,0 +1,16 @@
+[package]
+name = "compiler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+diagnostics.workspace = true
+fsh_model.workspace = true
+fhir_model.workspace = true
+fsh_lexer_parser.workspace = true
+package_store.workspace = true
+json_emit.workspace = true
+rustc-hash.workspace = true
+anyhow.workspace = true

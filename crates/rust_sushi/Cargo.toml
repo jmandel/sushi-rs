@@ -1,0 +1,18 @@
+[package]
+name = "rust_sushi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "rust_sushi"
+path = "src/main.rs"
+
+[dependencies]
+compiler.workspace = true
+fsh_lexer_parser.workspace = true
+fsh_model.workspace = true
+diagnostics.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
