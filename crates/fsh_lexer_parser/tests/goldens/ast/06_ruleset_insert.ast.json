@@ -1,0 +1,187 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "P": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 8,
+              "startColumn": 1,
+              "endLine": 11,
+              "endColumn": 37
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+          },
+          "name": "P",
+          "_id": "P",
+          "rules": [
+            {
+              "__type": "InsertRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 15
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+              },
+              "path": "",
+              "pathArray": [],
+              "params": [],
+              "ruleSet": "Common"
+            },
+            {
+              "__type": "InsertRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 11,
+                  "startColumn": 1,
+                  "endLine": 11,
+                  "endColumn": 37
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+              },
+              "path": "",
+              "pathArray": [],
+              "params": [
+                "1.0",
+                "Hello, World"
+              ],
+              "ruleSet": "Param"
+            }
+          ],
+          "parent": "Patient"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {
+        "Common": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 2,
+              "endColumn": 18
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+          },
+          "name": "Common",
+          "rules": [
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 18
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+              },
+              "path": "status",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 2,
+                    "startColumn": 12,
+                    "endLine": 2,
+                    "endColumn": 18
+                  },
+                  "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+                },
+                "code": "active"
+              },
+              "exactly": false,
+              "isInstance": false
+            }
+          ]
+        }
+      }
+    },
+    "appliedRuleSets": {
+      "__map": {
+        "[\"Param\",\"1.0\",\"Hello, World\"]": {
+          "__type": "RuleSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 4,
+              "startColumn": 1,
+              "endLine": 6,
+              "endColumn": 15
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+          },
+          "name": "Param",
+          "rules": [
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 5,
+                  "startColumn": 1,
+                  "endLine": 5,
+                  "endColumn": 17
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+              },
+              "path": "version",
+              "value": "1.0",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 24
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/06_ruleset_insert.fsh"
+              },
+              "path": "title",
+              "value": "Hello, World",
+              "exactly": false,
+              "isInstance": false
+            }
+          ]
+        }
+      }
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

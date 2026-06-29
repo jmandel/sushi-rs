@@ -1,0 +1,121 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {
+        "E": {
+          "__type": "Extension",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 2,
+              "endColumn": 45
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh"
+          },
+          "name": "E",
+          "_id": "E",
+          "rules": [],
+          "parent": "Extension",
+          "contexts": [
+            {
+              "value": "Patient",
+              "isQuoted": false,
+              "sourceInfo": {
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh",
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 10,
+                  "endLine": 2,
+                  "endColumn": 17
+                }
+              }
+            },
+            {
+              "value": "Observation.code",
+              "isQuoted": false,
+              "sourceInfo": {
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh",
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 19,
+                  "endLine": 2,
+                  "endColumn": 35
+                }
+              }
+            },
+            {
+              "value": "Procedure",
+              "isQuoted": false,
+              "sourceInfo": {
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh",
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 37,
+                  "endLine": 2,
+                  "endColumn": 45
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {
+        "L": {
+          "__type": "Logical",
+          "sourceInfo": {
+            "location": {
+              "startLine": 4,
+              "startColumn": 1,
+              "endLine": 5,
+              "endColumn": 42
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/07_context_chars.fsh"
+          },
+          "name": "L",
+          "_id": "L",
+          "rules": [],
+          "parent": "Base",
+          "characteristics": [
+            "can-be-target",
+            "can-bind"
+          ]
+        }
+      }
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {}
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

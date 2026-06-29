@@ -155,7 +155,13 @@ Phases from the plan (0–9). Current state:
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
 - [~] **Phase 0 — harness** — `run-stock.sh` + `diff-resources.sh` done; IPS oracle captured. TODO: diagnostic-diff reporter, more corpus IGs (SDC/CRD/US Core/mCODE/Cycle), candidate-run wrapper.
 - [ ] **Phase 1 — package store + JSON emitter skeleton**
-- [ ] **Phase 2 — FSH parser + AST** (next big build)
+- [~] **Phase 2 — FSH parser + AST** — IN PROGRESS. Infra ready: token oracle +
+  AST oracle, 8 fixtures with lex+AST goldens (`crates/fsh_lexer_parser/tests/`),
+  regen via `harness/gen-{lex,ast}-goldens.sh`, AST-shape ref `docs/specs/ast-shape.md`.
+  Lexer contract (`token.rs`) + parity test (`tests/lex_parity.rs`) committed;
+  `lex.rs` implementation delegated to a subagent (gate: `cargo test -p
+  fsh_lexer_parser`). NEXT after lexer: define `fsh_model` AST + recursive-descent
+  parser + AST dumper, gated by `tests/goldens/ast/`.
 - [ ] **Phase 3 — insert rules + tank indexes**
 - [ ] **Phase 4 — ValueSet/CodeSystem export**
 - [ ] **Phase 5 — SD arena + simple profiles**

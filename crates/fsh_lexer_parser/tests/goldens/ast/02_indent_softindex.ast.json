@@ -1,0 +1,154 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {
+        "ex": {
+          "__type": "Instance",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 8,
+              "endColumn": 30
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+          },
+          "name": "ex",
+          "_id": "ex",
+          "rules": [
+            {
+              "__type": "PathRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 6
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "name"
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 4,
+                  "startColumn": 3,
+                  "endLine": 4,
+                  "endColumn": 18
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "name.given",
+              "value": "Jane",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 5,
+                  "startColumn": 3,
+                  "endLine": 5,
+                  "endColumn": 18
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "name.given[+]",
+              "value": "Q",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 6,
+                  "startColumn": 3,
+                  "endLine": 6,
+                  "endColumn": 18
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "name.family",
+              "value": "Doe",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 29
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "contact[+].name.given",
+              "value": "A",
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 30
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/02_indent_softindex.fsh"
+              },
+              "path": "contact[=].name.family",
+              "value": "B",
+              "exactly": false,
+              "isInstance": false
+            }
+          ],
+          "usage": "Example",
+          "instanceOf": "Patient"
+        }
+      }
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {}
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

@@ -1,0 +1,190 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {
+        "MyPatient": {
+          "__type": "Profile",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 11,
+              "endColumn": 13
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+          },
+          "name": "MyPatient",
+          "_id": "my-patient",
+          "rules": [
+            {
+              "__type": "CardRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 14
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "name",
+              "min": 1,
+              "max": "*"
+            },
+            {
+              "__type": "FlagRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 6,
+                  "startColumn": 1,
+                  "endLine": 6,
+                  "endColumn": 14
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "name",
+              "mustSupport": true
+            },
+            {
+              "__type": "CardRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 13
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "gender",
+              "min": 0,
+              "max": "1"
+            },
+            {
+              "__type": "CaretValueRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 29
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "identifier",
+              "isCodeCaretRule": false,
+              "pathArray": [
+                "identifier"
+              ],
+              "caretPath": "short",
+              "value": "An id",
+              "isInstance": false
+            },
+            {
+              "__type": "OnlyRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 9,
+                  "startColumn": 1,
+                  "endLine": 9,
+                  "endColumn": 43
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "value[x]",
+              "types": [
+                {
+                  "type": "Quantity"
+                },
+                {
+                  "type": "CodeableConcept"
+                }
+              ]
+            },
+            {
+              "__type": "AssignmentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 10,
+                  "startColumn": 1,
+                  "endLine": 10,
+                  "endColumn": 25
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "code",
+              "value": {
+                "__type": "FshCode",
+                "sourceInfo": {
+                  "location": {
+                    "startLine": 10,
+                    "startColumn": 10,
+                    "endLine": 10,
+                    "endColumn": 25
+                  },
+                  "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+                },
+                "code": "active",
+                "display": "Active"
+              },
+              "exactly": false,
+              "isInstance": false
+            },
+            {
+              "__type": "ObeysRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 11,
+                  "startColumn": 1,
+                  "endLine": 11,
+                  "endColumn": 13
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/01_profile_basic.fsh"
+              },
+              "path": "",
+              "invariant": "inv-1"
+            }
+          ],
+          "parent": "Patient",
+          "title": "My Patient",
+          "description": "A test"
+        }
+      }
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {}
+    },
+    "codeSystems": {
+      "__map": {}
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {}
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]

@@ -1,0 +1,214 @@
+[
+  {
+    "__type": "FSHDocument",
+    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh",
+    "aliases": {
+      "__map": {}
+    },
+    "profiles": {
+      "__map": {}
+    },
+    "extensions": {
+      "__map": {}
+    },
+    "resources": {
+      "__map": {}
+    },
+    "logicals": {
+      "__map": {}
+    },
+    "instances": {
+      "__map": {}
+    },
+    "valueSets": {
+      "__map": {
+        "MyVS": {
+          "__type": "FshValueSet",
+          "sourceInfo": {
+            "location": {
+              "startLine": 1,
+              "startColumn": 1,
+              "endLine": 4,
+              "endColumn": 16
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+          },
+          "name": "MyVS",
+          "_id": "MyVS",
+          "rules": [
+            {
+              "__type": "ValueSetFilterComponentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 2,
+                  "startColumn": 1,
+                  "endLine": 2,
+                  "endColumn": 58
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+              },
+              "path": "",
+              "inclusion": true,
+              "from": {
+                "system": "http://x"
+              },
+              "filters": [
+                {
+                  "property": "concept",
+                  "operator": "is-a",
+                  "value": {
+                    "__type": "FshCode",
+                    "sourceInfo": {
+                      "location": {
+                        "startLine": 2,
+                        "startColumn": 57,
+                        "endLine": 2,
+                        "endColumn": 58
+                      },
+                      "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+                    },
+                    "code": "1"
+                  }
+                }
+              ]
+            },
+            {
+              "__type": "ValueSetConceptComponentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 3,
+                  "startColumn": 1,
+                  "endLine": 3,
+                  "endColumn": 26
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+              },
+              "path": "",
+              "inclusion": false,
+              "from": {
+                "system": "http://y"
+              },
+              "concepts": [
+                {
+                  "__type": "FshCode",
+                  "sourceInfo": {
+                    "location": {
+                      "startLine": 3,
+                      "startColumn": 11,
+                      "endLine": 3,
+                      "endColumn": 26
+                    },
+                    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+                  },
+                  "code": "2",
+                  "system": "http://y",
+                  "display": "two"
+                }
+              ]
+            },
+            {
+              "__type": "ValueSetConceptComponentRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 4,
+                  "startColumn": 1,
+                  "endLine": 4,
+                  "endColumn": 16
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+              },
+              "path": "",
+              "inclusion": true,
+              "from": {
+                "system": "$sct"
+              },
+              "concepts": [
+                {
+                  "__type": "FshCode",
+                  "sourceInfo": {
+                    "location": {
+                      "startLine": 4,
+                      "startColumn": 3,
+                      "endLine": 4,
+                      "endColumn": 16
+                    },
+                    "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+                  },
+                  "code": "3",
+                  "system": "$sct",
+                  "display": "three"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "codeSystems": {
+      "__map": {
+        "MyCS": {
+          "__type": "FshCodeSystem",
+          "sourceInfo": {
+            "location": {
+              "startLine": 6,
+              "startColumn": 1,
+              "endLine": 8,
+              "endColumn": 20
+            },
+            "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+          },
+          "name": "MyCS",
+          "_id": "MyCS",
+          "rules": [
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 7,
+                  "startColumn": 1,
+                  "endLine": 7,
+                  "endColumn": 13
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+              },
+              "path": "",
+              "code": "parent",
+              "display": "P",
+              "hierarchy": []
+            },
+            {
+              "__type": "ConceptRule",
+              "sourceInfo": {
+                "location": {
+                  "startLine": 8,
+                  "startColumn": 1,
+                  "endLine": 8,
+                  "endColumn": 20
+                },
+                "file": "/home/jmandel/hobby/sushi-rs/crates/fsh_lexer_parser/tests/fixtures/lex/05_vs_cs.fsh"
+              },
+              "path": "",
+              "code": "child",
+              "display": "C",
+              "hierarchy": [
+                "parent"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "invariants": {
+      "__map": {}
+    },
+    "ruleSets": {
+      "__map": {}
+    },
+    "appliedRuleSets": {
+      "__map": {}
+    },
+    "mappings": {
+      "__map": {}
+    }
+  }
+]
