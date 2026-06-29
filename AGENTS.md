@@ -186,7 +186,13 @@ Phases from the plan (0–9). Current state:
     (b) AddElement/addCRElement + MappingRule lightly corpus-exercised — want
     fixtures; (c) bigint huge-magnitude edge cases; (d) nested `[[{param}]]` insert
     params; (e) ANTLR error-recovery not byte-matched. None block Phase 3.
-- [ ] **Phase 3 — insert rules + tank indexes**
+- [~] **Phase 3 — insert rules + tank indexes** — IN PROGRESS (delegated).
+  Oracle `harness/expand-oracle.cjs` (drives stock FSHTank + applyInsertRules);
+  7 insert fixtures + goldens in `crates/compiler/tests/`; gate
+  `tests/expand_parity.rs` calls `compiler::expand_to_json`. Spec: `docs/specs/
+  08-insert-rules-tank.md`. NOTE: soft-index NUMBER resolution (resolveSoftIndexing)
+  is EXPORT-time, NOT in this gate (goldens keep [+]/[=] literal); only the
+  applyInsertRules first-rule [+]→[=] handoff applies here. Diagnostics not gated yet.
 - [ ] **Phase 4 — ValueSet/CodeSystem export**
 - [ ] **Phase 5 — SD arena + simple profiles**
 - [ ] **Phase 6 — full SD compatibility**
