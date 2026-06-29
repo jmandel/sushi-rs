@@ -30,6 +30,7 @@ json_emit = { path = "crates/json_emit" }
 # External
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
 indexmap = { version = "2", features = ["serde"] }
 smallvec = { version = "1", features = ["serde", "union"] }
 rustc-hash = "2"

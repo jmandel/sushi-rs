@@ -467,3 +467,14 @@ pub fn expand_to_json(files: &[(&str, &str)]) -> serde_json::Value {
     run_global_expansion(&mut docs, &mut diag);
     dump::dump_docs(&docs)
 }
+
+/// Build a SUSHI project: read `sushi-config.yaml` + `input/fsh/**/*.fsh` from
+/// `ig_dir`, run the compile pipeline, and write generated resources to
+/// `<out_dir>/fsh-generated/resources/<ResourceType>-<id>.json` byte-identically
+/// to stock SUSHI. Grows resource-family by family (Phase 4: ValueSet/CodeSystem
+/// first). Gate: `harness/diff-resources-glob.sh`.
+///
+/// IMPLEMENTATION PENDING.
+pub fn build_project(_ig_dir: &str, _out_dir: &str) -> anyhow::Result<()> {
+    anyhow::bail!("build_project: export pipeline under construction")
+}

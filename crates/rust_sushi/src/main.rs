@@ -59,6 +59,15 @@ fn main() -> anyhow::Result<()> {
             let v = compiler::expand_to_json(&refs);
             println!("{}", serde_json::to_string_pretty(&v)?);
         }
+        Some("build") => {
+            // rust_sushi build <ig-dir> -o <out-dir>
+            let ig = args.get(2).ok_or_else(|| anyhow::anyhow!("usage: rust_sushi build <ig-dir> -o <out>"))?;
+            let mut out = "fsh-generated".to_string();
+            if let Some(i) = args.iter().position(|a| a == "-o" || a == "--out") {
+                out = args.get(i + 1).cloned().ok_or_else(|| anyhow::anyhow!("-o needs a value"))?;
+            }
+            compiler::build_project(ig, &out)?;
+        }
         _ => {
             eprintln!("rust_sushi {}: compile pipeline under construction", env!("CARGO_PKG_VERSION"));
             eprintln!("usage: rust_sushi <lex <file.fsh> | ast <file.fsh> | --version>");
