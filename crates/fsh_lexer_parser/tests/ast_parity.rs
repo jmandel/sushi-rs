@@ -76,4 +76,5 @@ parity_tests! {
     ruleset_insert   => "06_ruleset_insert",
     context_chars    => "07_context_chars",
     caret_regex      => "08_caret_regex",
+    nested_param_insert => "09_nested_param_insert",
 }

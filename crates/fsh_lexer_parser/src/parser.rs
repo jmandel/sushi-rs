@@ -2768,7 +2768,12 @@ impl Importer {
         }
 
         // retrieve result
-        let temp_doc = self.docs.remove(temp_idx);
+        let mut temp_doc = self.docs.remove(temp_idx);
+        // Inner parameterized inserts (e.g. a param RuleSet whose body contains
+        // `insert Other(args)`) registered their expansions in this temp doc.
+        // Stock SUSHI merges them into the parent doc (FSHImporter.ts:2016-2018,
+        // Map.set semantics: replace-by-identifier else append).
+        let merged_applied = std::mem::take(&mut temp_doc.applied_rule_sets);
         let result = temp_doc
             .rule_sets
             .into_iter()
@@ -2779,6 +2784,15 @@ impl Importer {
         self.current_doc = saved_doc;
         self.path_context = saved_ctx;
         self.top_level_parse = prev_top;
+
+        for (id, rs) in merged_applied {
+            let doc = &mut self.docs[self.current_doc];
+            if let Some(slot) = doc.applied_rule_sets.iter_mut().find(|(k, _)| *k == id) {
+                slot.1 = rs;
+            } else {
+                doc.applied_rule_sets.push((id, rs));
+            }
+        }
 
         result
     }

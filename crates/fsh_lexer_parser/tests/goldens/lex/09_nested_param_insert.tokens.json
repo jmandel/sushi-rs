@@ -1,0 +1,299 @@
+[
+  {
+    "type": "KW_RULESET",
+    "channel": 0,
+    "text": "RuleSet:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 7
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Inner(",
+    "line": 1,
+    "col": 8,
+    "start": 8,
+    "stop": 14
+  },
+  {
+    "type": "LAST_PLAIN_PARAM",
+    "channel": 0,
+    "text": "x)",
+    "line": 1,
+    "col": 15,
+    "start": 15,
+    "stop": 16
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 1,
+    "col": 17,
+    "start": 17,
+    "stop": 19
+  },
+  {
+    "type": "CARET_SEQUENCE",
+    "channel": 0,
+    "text": "^title",
+    "line": 2,
+    "col": 2,
+    "start": 20,
+    "stop": 25
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 8,
+    "start": 26,
+    "stop": 26
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 2,
+    "col": 9,
+    "start": 27,
+    "stop": 27
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 10,
+    "start": 28,
+    "stop": 28
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"{x}\"",
+    "line": 2,
+    "col": 11,
+    "start": 29,
+    "stop": 33
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 2,
+    "col": 16,
+    "start": 34,
+    "stop": 34
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 3,
+    "col": 0,
+    "start": 35,
+    "stop": 35
+  },
+  {
+    "type": "KW_RULESET",
+    "channel": 0,
+    "text": "RuleSet:",
+    "line": 4,
+    "col": 0,
+    "start": 36,
+    "stop": 43
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Outer(",
+    "line": 4,
+    "col": 8,
+    "start": 44,
+    "stop": 50
+  },
+  {
+    "type": "LAST_PLAIN_PARAM",
+    "channel": 0,
+    "text": "y)",
+    "line": 4,
+    "col": 15,
+    "start": 51,
+    "stop": 52
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 4,
+    "col": 17,
+    "start": 53,
+    "stop": 55
+  },
+  {
+    "type": "KW_INSERT",
+    "channel": 0,
+    "text": "insert",
+    "line": 5,
+    "col": 2,
+    "start": 56,
+    "stop": 61
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Inner(",
+    "line": 5,
+    "col": 8,
+    "start": 62,
+    "stop": 68
+  },
+  {
+    "type": "LAST_PLAIN_PARAM",
+    "channel": 0,
+    "text": "{y})",
+    "line": 5,
+    "col": 15,
+    "start": 69,
+    "stop": 72
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 5,
+    "col": 19,
+    "start": 73,
+    "stop": 73
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 6,
+    "col": 0,
+    "start": 74,
+    "stop": 74
+  },
+  {
+    "type": "KW_PROFILE",
+    "channel": 0,
+    "text": "Profile:",
+    "line": 7,
+    "col": 0,
+    "start": 75,
+    "stop": 82
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 7,
+    "col": 8,
+    "start": 83,
+    "stop": 83
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "PN",
+    "line": 7,
+    "col": 9,
+    "start": 84,
+    "stop": 85
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 7,
+    "col": 11,
+    "start": 86,
+    "stop": 86
+  },
+  {
+    "type": "KW_PARENT",
+    "channel": 0,
+    "text": "Parent:",
+    "line": 8,
+    "col": 0,
+    "start": 87,
+    "stop": 93
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 7,
+    "start": 94,
+    "stop": 94
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "Observation",
+    "line": 8,
+    "col": 8,
+    "start": 95,
+    "stop": 105
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 8,
+    "col": 19,
+    "start": 106,
+    "stop": 108
+  },
+  {
+    "type": "KW_INSERT",
+    "channel": 0,
+    "text": "insert",
+    "line": 9,
+    "col": 2,
+    "start": 109,
+    "stop": 114
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Outer(",
+    "line": 9,
+    "col": 8,
+    "start": 115,
+    "stop": 121
+  },
+  {
+    "type": "LAST_PLAIN_PARAM",
+    "channel": 0,
+    "text": "hello)",
+    "line": 9,
+    "col": 15,
+    "start": 122,
+    "stop": 127
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 9,
+    "col": 21,
+    "start": 128,
+    "stop": 128
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 10,
+    "col": 0,
+    "start": 129,
+    "stop": 128
+  }
+]
