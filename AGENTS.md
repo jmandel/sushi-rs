@@ -171,18 +171,21 @@ Phases from the plan (0–9). Current state:
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
 - [x] **Phase 0 — harness** — DONE: `run-stock.sh` (isolated cache), `diff-resources.sh`, `diag.cjs` (diagnostic normalize/diff), `lex-oracle.cjs` + `parse-oracle.cjs`, timing.json schema, IPS oracle. Remaining (deferred, not blocking): add SDC/CRD/US Core/mCODE/Cycle IGs when available locally (only IPS present now); full `compile` candidate wrapper grows with the compiler.
 - [ ] **Phase 1 — package store + JSON emitter skeleton**
-- [~] **Phase 2 — FSH parser + AST** — LEXER DONE, parser next.
-  - **Lexer COMPLETE & verified**: `lex.rs` (~900 lines, hand-written port of
-    FSHLexer.g4, mode stack + maximal-munch + UTF-16 geometry). Gate `cargo test
-    -p fsh_lexer_parser` green (8 fixtures). Independently verified **byte-exact vs
-    ANTLR oracle on 423 real corpus files** (123 IPS + 300 broader) via
-    `rust_sushi lex <f>` diffed against `lex-oracle.cjs`.
-  - Infra: token+AST oracles, 8 fixtures w/ lex+AST goldens, regen
-    `harness/gen-{lex,ast}-goldens.sh`, AST-shape ref `docs/specs/ast-shape.md`.
-  - **NEXT**: `fsh_model` AST types + recursive-descent parser (port FSH.g4 +
-    FSHImporter visitor) + AST dumper matching parse-oracle; gate by
-    `tests/goldens/ast/`. Mind parity traps in §7b (STAR span math, two-pass
-    global importer, soft-index finally-mutation, id-getter, bigint vs float).
+- [x] **Phase 2 — FSH parser + AST** — DONE & verified.
+  - **Lexer**: `lex.rs` (~900 lines, FSHLexer.g4 port). Byte-exact vs ANTLR oracle
+    on 423 files. Gate: `cargo test -p fsh_lexer_parser` (lex_parity 8/8).
+  - **Parser+importer+dumper**: `fsh_model/ast.rs` (AST types), `parser.rs`
+    (~3270 lines, FSH.g4 + FSHImporter: two-pass global aliases/param-RuleSets,
+    extractStartStop span math, soft-index, alias res, MiniFSH param expansion),
+    `dump.rs` (oracle-shape JSON). Gate: ast_parity 8/8. Independently verified
+    semantic AST parity vs parse-oracle on **178 real files (123 IPS + 55 diverse
+    IGs), 0 diffs** (agent reported ~1450 clean).
+  - CLI: `rust_sushi {lex,ast} <file>`; comparator `harness/cmp-ast.cjs`.
+  - **KNOWN GAPS for later** (from parser agent): (a) NO diagnostics emitted yet
+    (gate is AST-only — `logger.error/warn` + FSHErrorListener catalog deferred);
+    (b) AddElement/addCRElement + MappingRule lightly corpus-exercised — want
+    fixtures; (c) bigint huge-magnitude edge cases; (d) nested `[[{param}]]` insert
+    params; (e) ANTLR error-recovery not byte-matched. None block Phase 3.
 - [ ] **Phase 3 — insert rules + tank indexes**
 - [ ] **Phase 4 — ValueSet/CodeSystem export**
 - [ ] **Phase 5 — SD arena + simple profiles**
