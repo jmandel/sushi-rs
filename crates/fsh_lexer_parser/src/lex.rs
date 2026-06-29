@@ -454,14 +454,14 @@ fn m_code(s: &[char], i: usize) -> Option<usize> {
             }
             if q > p + 1 {
                 let len = q - i;
-                if best.map_or(true, |b| len > b) {
+                if best.is_none_or(|b| len > b) {
                     best = Some(len);
                 }
             }
             // tail option 2: CONCEPT_STRING
             if let Some(cl) = m_concept_string(s, p + 1) {
                 let len = p + 1 + cl - i;
-                if best.map_or(true, |b| len > b) {
+                if best.is_none_or(|b| len > b) {
                     best = Some(len);
                 }
             }
@@ -522,7 +522,7 @@ fn valid_ref_content(s: &[char], a: usize, b: usize) -> bool {
         }
         words.push((st, m));
     }
-    if words.is_empty() || words.len() % 2 == 0 {
+    if words.is_empty() || words.len().is_multiple_of(2) {
         return false;
     }
     for (idx, &(st, en)) in words.iter().enumerate() {

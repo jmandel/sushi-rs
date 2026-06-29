@@ -489,6 +489,12 @@ pub struct Importer {
     top_level_parse: bool,
 }
 
+impl Default for Importer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Importer {
     pub fn new() -> Self {
         Importer {
@@ -1962,15 +1968,14 @@ impl Importer {
         // system handling
         let mut system = None;
         let any_system = codes.iter().any(|(_, s)| s.is_some());
-        if any_system {
-            if in_ruleset
+        if any_system
+            && in_ruleset
                 && code_part_system.is_some()
                 && definition.is_none()
                 && hierarchy.is_empty()
             {
                 system = code_part_system;
             }
-        }
         Rule::Concept {
             source_info: SourceInfo::new(&self.current_file, location),
             path: String::new(),
