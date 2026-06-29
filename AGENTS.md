@@ -152,6 +152,52 @@ Phases from the plan (0–9). Current state:
 - [ ] **Phase 8 — full corpus parity**
 - [ ] **Phase 9 — optimization loop**
 
+## 7b. Porting specs + cross-cutting parity traps
+
+Full cited specs live in `docs/specs/` (read the relevant one before porting a
+subsystem). Each cites `sushi-ts/...:line`. The traps most likely to break a
+naive port (distilled from the specs):
+
+- **STAR token swallows the preceding newline + indent** (`FSHLexer.g4:65`). A
+  rule's `startLine = STAR.line + 1`; indentation is recovered from the STAR
+  token text (`length - lastIndexOf('\n') - 2`), NOT parser columns. Get this
+  wrong and every rule span + soft-index context is wrong. (spec 01)
+- **Two span conventions coexist**: `extractStartStop` end-col is `+1`; the
+  error listener end-col is `column + text.length` (no `+1`). Do not unify. (01)
+- **Importer is two-pass + global**: pass 1 gathers aliases + parameterized
+  RuleSets across ALL files; duplicate names are **first-wins** tank-wide. (01)
+- **Parameterized RuleSets are substituted + re-parsed at PARSE time**, cached in
+  `FSHDocument.appliedRuleSets` keyed by `JSON.stringify([name,...params])`;
+  export-time `applyInsertRules` only looks them up. (08)
+- **Numbers split types**: assignment/caret values use arbitrary-precision
+  `bigint`; quantities use `parseFloat`. (01) Our oracle tags bigint as `{__bigint}`.
+- **`id` is a recomputed getter** scanning rules with `findLast` (last-wins:
+  `^id` CaretValueRule for SD/VS/CS, `id` AssignmentRule for Instance/Invariant);
+  Mapping.id is a field. Don't snapshot id at construction. (02)
+- **Type discriminant is `constructorName` string**, not instanceof. `InsertRule`
+  is allowed nowhere (must be expanded); Logical/Resource allow AddElementRule but
+  forbid ContainsRule. (02)
+- **`FSHTank.fish` is order-sensitive AND mutating**: alias→split `|`→fixed
+  10-type order→entities-before-instances→first-hit; `fishForMetadata` calls
+  `applyInsertRules` (side effects). (02/08)
+- **SD model is flat + string-id-driven**: `ElementDefinition.path` derived from
+  `id`; tree links are lazy id-prefix caches; **lookup (`findElementByPath`)
+  mutates the SD** (unfold/sliceMatchingValueX add elements, leave residue on
+  failed deeper lookups). Snapshot+differential both derive from one `elements`
+  array. (03)
+- **Export order is load-bearing** (`FHIRExporter.export`): ALL `applyInsertRules`
+  → SD → CS → VS → Instance → SD `applyDeferredRules` → Mapping last. Mappings
+  mutate already-exported SDs; deferred caret rules run after instances. (04)
+- **JSON has 3 ordering regimes**: SD/ElementDefinition use fixed `PROPS` arrays;
+  InstanceDefinition = `resourceType,id,meta` prefix then JS insertion order;
+  CS/VS their own. Never rely on map order. (05)
+- **package layer = external `fhir-package-loader` v2** (npm). Its internal
+  match/best-version predicate is the thing `package_store` must replicate;
+  OPEN QUESTION — not fully verifiable from source alone. (06)
+- **Diagnostics**: winston format order is ignore-check → count → footer(`File:`/
+  `Line:`) → print; ignore-list matches the BARE message; ignored msgs don't
+  count as error/warn. (07)
+
 ## 8. Hard rules (do not violate)
 
 - No silent normalization of output diffs. Classify every diff.
