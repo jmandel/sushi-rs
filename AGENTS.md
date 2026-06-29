@@ -86,6 +86,15 @@ bash harness/diff-resources.sh <stock-out> <candidate-out>
 #   e.g. bash harness/diff-resources.sh temp/ips-stock temp/rust-ips
 ```
 
+### Diagnostic parity (QA output)
+```sh
+# Normalize a captured SUSHI console log to ordered JSON (basename'd file refs):
+node harness/diag.cjs normalize <out>/sushi-console.log --levels error,warn
+# Order-sensitive diff of two runs' diagnostics:
+node harness/diag.cjs diff <stock>/sushi-console.log <cand>/sushi-console.log --levels error,warn
+```
+Parses winston format `<level> <msg>` + `  File:`/`  Line:`/`  Applied …` footers.
+
 ### Parser oracle (Phase 2 golden)
 ```sh
 # Dump stock SUSHI's import AST as stable JSON (Maps->{__map}, BigInt->{__bigint},
@@ -160,7 +169,7 @@ cohesion-critical code (workspace shape, diagnostics, parser core).
 Phases from the plan (0–9). Current state:
 
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
-- [~] **Phase 0 — harness** — `run-stock.sh` + `diff-resources.sh` done; IPS oracle captured. TODO: diagnostic-diff reporter, more corpus IGs (SDC/CRD/US Core/mCODE/Cycle), candidate-run wrapper.
+- [x] **Phase 0 — harness** — DONE: `run-stock.sh` (isolated cache), `diff-resources.sh`, `diag.cjs` (diagnostic normalize/diff), `lex-oracle.cjs` + `parse-oracle.cjs`, timing.json schema, IPS oracle. Remaining (deferred, not blocking): add SDC/CRD/US Core/mCODE/Cycle IGs when available locally (only IPS present now); full `compile` candidate wrapper grows with the compiler.
 - [ ] **Phase 1 — package store + JSON emitter skeleton**
 - [~] **Phase 2 — FSH parser + AST** — LEXER DONE, parser next.
   - **Lexer COMPLETE & verified**: `lex.rs` (~900 lines, hand-written port of
