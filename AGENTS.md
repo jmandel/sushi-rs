@@ -102,6 +102,18 @@ ValueSetConceptComponentRule 14, ObeysRule 9, Invariant 7, RuleSet 5, Logical 3,
 FshCanonical 2, Mapping 1. **Key parity fact:** `* name 1..* MS` expands to TWO
 rules (CardRule + FlagRule) sharing one source span.
 
+### Lexer oracle (Phase 2 token golden)
+```sh
+# Dump stock SUSHI's exact ANTLR token stream (incl. HIDDEN whitespace; skipped
+# comments absent). type=symbolic name, line=1-based, col=0-based UTF-16,
+# start/stop=0-based inclusive UTF-16 offsets. Appends \n like the importer.
+node harness/lex-oracle.cjs <file.fsh> > tokens.json
+node harness/lex-oracle.cjs --text 'Profile: Foo' > tokens.json
+```
+The Rust lexer must reproduce this stream byte-for-byte. Confirmed: STAR token
+is `"\n* "` (folds preceding newline+indent), keyword tokens include the colon
+(`"Profile:"`), `CODE`/`REFERENCE`/`CANONICAL` are single multi-char tokens.
+
 ### Rust commands
 ```sh
 cargo build --workspace
