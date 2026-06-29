@@ -1,0 +1,371 @@
+[
+  {
+    "type": "KW_ALIAS",
+    "channel": 0,
+    "text": "Alias:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 5
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 6,
+    "start": 6,
+    "stop": 6
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "$sct",
+    "line": 1,
+    "col": 7,
+    "start": 7,
+    "stop": 10
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 11,
+    "start": 11,
+    "stop": 11
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 1,
+    "col": 12,
+    "start": 12,
+    "stop": 12
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 13,
+    "start": 13,
+    "stop": 13
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "http://snomed.info/sct",
+    "line": 1,
+    "col": 14,
+    "start": 14,
+    "stop": 35
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 1,
+    "col": 36,
+    "start": 36,
+    "stop": 38
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "code",
+    "line": 2,
+    "col": 2,
+    "start": 39,
+    "stop": 42
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 6,
+    "start": 43,
+    "stop": 43
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 2,
+    "col": 7,
+    "start": 44,
+    "stop": 44
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 8,
+    "start": 45,
+    "stop": 45
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "$sct#1234",
+    "line": 2,
+    "col": 9,
+    "start": 46,
+    "stop": 54
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 18,
+    "start": 55,
+    "stop": 55
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"label\"",
+    "line": 2,
+    "col": 19,
+    "start": 56,
+    "stop": 62
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 2,
+    "col": 26,
+    "start": 63,
+    "stop": 65
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "subject",
+    "line": 3,
+    "col": 2,
+    "start": 66,
+    "stop": 72
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 9,
+    "start": 73,
+    "stop": 73
+  },
+  {
+    "type": "KW_ONLY",
+    "channel": 0,
+    "text": "only",
+    "line": 3,
+    "col": 10,
+    "start": 74,
+    "stop": 77
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 14,
+    "start": 78,
+    "stop": 78
+  },
+  {
+    "type": "REFERENCE",
+    "channel": 0,
+    "text": "Reference(Patient or Group)",
+    "line": 3,
+    "col": 15,
+    "start": 79,
+    "stop": 105
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 3,
+    "col": 42,
+    "start": 106,
+    "stop": 108
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "topic",
+    "line": 4,
+    "col": 2,
+    "start": 109,
+    "stop": 113
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 7,
+    "start": 114,
+    "stop": 114
+  },
+  {
+    "type": "KW_ONLY",
+    "channel": 0,
+    "text": "only",
+    "line": 4,
+    "col": 8,
+    "start": 115,
+    "stop": 118
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 12,
+    "start": 119,
+    "stop": 119
+  },
+  {
+    "type": "CODEABLE_REFERENCE",
+    "channel": 0,
+    "text": "CodeableReference(Observation)",
+    "line": 4,
+    "col": 13,
+    "start": 120,
+    "stop": 149
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 4,
+    "col": 43,
+    "start": 150,
+    "stop": 152
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "instantiates",
+    "line": 5,
+    "col": 2,
+    "start": 153,
+    "stop": 164
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 14,
+    "start": 165,
+    "stop": 165
+  },
+  {
+    "type": "KW_ONLY",
+    "channel": 0,
+    "text": "only",
+    "line": 5,
+    "col": 15,
+    "start": 166,
+    "stop": 169
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 19,
+    "start": 170,
+    "stop": 170
+  },
+  {
+    "type": "CANONICAL",
+    "channel": 0,
+    "text": "Canonical(http://x/y|1.0 or http://z)",
+    "line": 5,
+    "col": 20,
+    "start": 171,
+    "stop": 207
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 5,
+    "col": 57,
+    "start": 208,
+    "stop": 210
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "mod[x]",
+    "line": 6,
+    "col": 2,
+    "start": 211,
+    "stop": 216
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 8,
+    "start": 217,
+    "stop": 217
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 6,
+    "col": 9,
+    "start": 218,
+    "stop": 218
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 10,
+    "start": 219,
+    "stop": 219
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#\"quoted code\"",
+    "line": 6,
+    "col": 11,
+    "start": 220,
+    "stop": 233
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 6,
+    "col": 25,
+    "start": 234,
+    "stop": 234
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 7,
+    "col": 0,
+    "start": 235,
+    "stop": 234
+  }
+]

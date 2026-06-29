@@ -9,3 +9,6 @@ rust-version.workspace = true
 diagnostics.workspace = true
 fsh_model.workspace = true
 rustc-hash.workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }

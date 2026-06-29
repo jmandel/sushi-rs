@@ -1,0 +1,434 @@
+[
+  {
+    "type": "KW_VALUESET",
+    "channel": 0,
+    "text": "ValueSet:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 8
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 9,
+    "start": 9,
+    "stop": 9
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "MyVS",
+    "line": 1,
+    "col": 10,
+    "start": 10,
+    "stop": 13
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 1,
+    "col": 14,
+    "start": 14,
+    "stop": 16
+  },
+  {
+    "type": "KW_INCLUDE",
+    "channel": 0,
+    "text": "include",
+    "line": 2,
+    "col": 2,
+    "start": 17,
+    "stop": 23
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 9,
+    "start": 24,
+    "stop": 24
+  },
+  {
+    "type": "KW_CODES",
+    "channel": 0,
+    "text": "codes",
+    "line": 2,
+    "col": 10,
+    "start": 25,
+    "stop": 29
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 15,
+    "start": 30,
+    "stop": 30
+  },
+  {
+    "type": "KW_FROM",
+    "channel": 0,
+    "text": "from",
+    "line": 2,
+    "col": 16,
+    "start": 31,
+    "stop": 34
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 20,
+    "start": 35,
+    "stop": 35
+  },
+  {
+    "type": "KW_SYSTEM",
+    "channel": 0,
+    "text": "system",
+    "line": 2,
+    "col": 21,
+    "start": 36,
+    "stop": 41
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 27,
+    "start": 42,
+    "stop": 42
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "http://x",
+    "line": 2,
+    "col": 28,
+    "start": 43,
+    "stop": 50
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 36,
+    "start": 51,
+    "stop": 51
+  },
+  {
+    "type": "KW_WHERE",
+    "channel": 0,
+    "text": "where",
+    "line": 2,
+    "col": 37,
+    "start": 52,
+    "stop": 56
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 42,
+    "start": 57,
+    "stop": 57
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "concept",
+    "line": 2,
+    "col": 43,
+    "start": 58,
+    "stop": 64
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 50,
+    "start": 65,
+    "stop": 65
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "is-a",
+    "line": 2,
+    "col": 51,
+    "start": 66,
+    "stop": 69
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 55,
+    "start": 70,
+    "stop": 70
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#1",
+    "line": 2,
+    "col": 56,
+    "start": 71,
+    "stop": 72
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 2,
+    "col": 58,
+    "start": 73,
+    "stop": 75
+  },
+  {
+    "type": "KW_EXCLUDE",
+    "channel": 0,
+    "text": "exclude",
+    "line": 3,
+    "col": 2,
+    "start": 76,
+    "stop": 82
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 9,
+    "start": 83,
+    "stop": 83
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "http://y#2",
+    "line": 3,
+    "col": 10,
+    "start": 84,
+    "stop": 93
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 20,
+    "start": 94,
+    "stop": 94
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"two\"",
+    "line": 3,
+    "col": 21,
+    "start": 95,
+    "stop": 99
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 3,
+    "col": 26,
+    "start": 100,
+    "stop": 102
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "$sct#3",
+    "line": 4,
+    "col": 2,
+    "start": 103,
+    "stop": 108
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 8,
+    "start": 109,
+    "stop": 109
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"three\"",
+    "line": 4,
+    "col": 9,
+    "start": 110,
+    "stop": 116
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 4,
+    "col": 16,
+    "start": 117,
+    "stop": 117
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 5,
+    "col": 0,
+    "start": 118,
+    "stop": 118
+  },
+  {
+    "type": "KW_CODESYSTEM",
+    "channel": 0,
+    "text": "CodeSystem:",
+    "line": 6,
+    "col": 0,
+    "start": 119,
+    "stop": 129
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 11,
+    "start": 130,
+    "stop": 130
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "MyCS",
+    "line": 6,
+    "col": 12,
+    "start": 131,
+    "stop": 134
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 6,
+    "col": 16,
+    "start": 135,
+    "stop": 137
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#parent",
+    "line": 7,
+    "col": 2,
+    "start": 138,
+    "stop": 144
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 7,
+    "col": 9,
+    "start": 145,
+    "stop": 145
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"P\"",
+    "line": 7,
+    "col": 10,
+    "start": 146,
+    "stop": 148
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 7,
+    "col": 13,
+    "start": 149,
+    "stop": 151
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#parent",
+    "line": 8,
+    "col": 2,
+    "start": 152,
+    "stop": 158
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 9,
+    "start": 159,
+    "stop": 159
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#child",
+    "line": 8,
+    "col": 10,
+    "start": 160,
+    "stop": 165
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 16,
+    "start": 166,
+    "stop": 166
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"C\"",
+    "line": 8,
+    "col": 17,
+    "start": 167,
+    "stop": 169
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 8,
+    "col": 20,
+    "start": 170,
+    "stop": 170
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 9,
+    "col": 0,
+    "start": 171,
+    "stop": 170
+  }
+]

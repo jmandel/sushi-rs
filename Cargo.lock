@@ -54,6 +54,7 @@ dependencies = [
  "diagnostics",
  "fsh_model",
  "rustc-hash",
+ "serde_json",
 ]
 
 [[package]]

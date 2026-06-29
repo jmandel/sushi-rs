@@ -1,0 +1,425 @@
+[
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "*",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 0
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 1,
+    "start": 1,
+    "stop": 1
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "a",
+    "line": 1,
+    "col": 2,
+    "start": 2,
+    "stop": 2
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 3,
+    "start": 3,
+    "stop": 3
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 1,
+    "col": 4,
+    "start": 4,
+    "stop": 4
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 5,
+    "start": 5,
+    "stop": 5
+  },
+  {
+    "type": "NUMBER",
+    "channel": 0,
+    "text": "1",
+    "line": 1,
+    "col": 6,
+    "start": 6,
+    "stop": 6
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 1,
+    "col": 7,
+    "start": 7,
+    "stop": 9
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "b",
+    "line": 2,
+    "col": 2,
+    "start": 10,
+    "stop": 10
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 3,
+    "start": 11,
+    "stop": 11
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 2,
+    "col": 4,
+    "start": 12,
+    "stop": 12
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 5,
+    "start": 13,
+    "stop": 13
+  },
+  {
+    "type": "NUMBER",
+    "channel": 0,
+    "text": "-2.50",
+    "line": 2,
+    "col": 6,
+    "start": 14,
+    "stop": 18
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 2,
+    "col": 11,
+    "start": 19,
+    "stop": 21
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "c",
+    "line": 3,
+    "col": 2,
+    "start": 22,
+    "stop": 22
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 3,
+    "start": 23,
+    "stop": 23
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 3,
+    "col": 4,
+    "start": 24,
+    "stop": 24
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 5,
+    "start": 25,
+    "stop": 25
+  },
+  {
+    "type": "NUMBER",
+    "channel": 0,
+    "text": "1e3",
+    "line": 3,
+    "col": 6,
+    "start": 26,
+    "stop": 28
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 3,
+    "col": 9,
+    "start": 29,
+    "stop": 31
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "d",
+    "line": 4,
+    "col": 2,
+    "start": 32,
+    "stop": 32
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 3,
+    "start": 33,
+    "stop": 33
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 4,
+    "col": 4,
+    "start": 34,
+    "stop": 34
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 5,
+    "start": 35,
+    "stop": 35
+  },
+  {
+    "type": "NUMBER",
+    "channel": 0,
+    "text": "9999999999999999999",
+    "line": 4,
+    "col": 6,
+    "start": 36,
+    "stop": 54
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 4,
+    "col": 25,
+    "start": 55,
+    "stop": 57
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "e",
+    "line": 5,
+    "col": 2,
+    "start": 58,
+    "stop": 58
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 3,
+    "start": 59,
+    "stop": 59
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 5,
+    "col": 4,
+    "start": 60,
+    "stop": 60
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 5,
+    "start": 61,
+    "stop": 61
+  },
+  {
+    "type": "MULTILINE_STRING",
+    "channel": 0,
+    "text": "\"\"\"\n  multi\n    line\n  \"\"\"",
+    "line": 5,
+    "col": 6,
+    "start": 62,
+    "stop": 87
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 8,
+    "col": 5,
+    "start": 88,
+    "stop": 90
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "q",
+    "line": 9,
+    "col": 2,
+    "start": 91,
+    "stop": 91
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 3,
+    "start": 92,
+    "stop": 92
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 9,
+    "col": 4,
+    "start": 93,
+    "stop": 93
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 5,
+    "start": 94,
+    "stop": 94
+  },
+  {
+    "type": "NUMBER",
+    "channel": 0,
+    "text": "5",
+    "line": 9,
+    "col": 6,
+    "start": 95,
+    "stop": 95
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 7,
+    "start": 96,
+    "stop": 96
+  },
+  {
+    "type": "UNIT",
+    "channel": 0,
+    "text": "'mg'",
+    "line": 9,
+    "col": 8,
+    "start": 97,
+    "stop": 100
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 9,
+    "col": 12,
+    "start": 101,
+    "stop": 103
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "dt",
+    "line": 10,
+    "col": 2,
+    "start": 104,
+    "stop": 105
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 10,
+    "col": 4,
+    "start": 106,
+    "stop": 106
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 10,
+    "col": 5,
+    "start": 107,
+    "stop": 107
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 10,
+    "col": 6,
+    "start": 108,
+    "stop": 108
+  },
+  {
+    "type": "DATETIME",
+    "channel": 0,
+    "text": "2024-01-02T13:14:15Z",
+    "line": 10,
+    "col": 7,
+    "start": 109,
+    "stop": 128
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 10,
+    "col": 27,
+    "start": 129,
+    "stop": 129
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 11,
+    "col": 0,
+    "start": 130,
+    "stop": 129
+  }
+]

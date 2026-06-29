@@ -1,0 +1,551 @@
+[
+  {
+    "type": "KW_PROFILE",
+    "channel": 0,
+    "text": "Profile:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 7
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 8,
+    "start": 8,
+    "stop": 8
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "MyPatient",
+    "line": 1,
+    "col": 9,
+    "start": 9,
+    "stop": 17
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 1,
+    "col": 18,
+    "start": 18,
+    "stop": 18
+  },
+  {
+    "type": "KW_PARENT",
+    "channel": 0,
+    "text": "Parent:",
+    "line": 2,
+    "col": 0,
+    "start": 19,
+    "stop": 25
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 7,
+    "start": 26,
+    "stop": 26
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "Patient",
+    "line": 2,
+    "col": 8,
+    "start": 27,
+    "stop": 33
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 2,
+    "col": 15,
+    "start": 34,
+    "stop": 34
+  },
+  {
+    "type": "KW_ID",
+    "channel": 0,
+    "text": "Id:",
+    "line": 3,
+    "col": 0,
+    "start": 35,
+    "stop": 37
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 3,
+    "col": 3,
+    "start": 38,
+    "stop": 38
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "my-patient",
+    "line": 3,
+    "col": 4,
+    "start": 39,
+    "stop": 48
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 3,
+    "col": 14,
+    "start": 49,
+    "stop": 49
+  },
+  {
+    "type": "KW_TITLE",
+    "channel": 0,
+    "text": "Title:",
+    "line": 4,
+    "col": 0,
+    "start": 50,
+    "stop": 55
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 6,
+    "start": 56,
+    "stop": 56
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"My Patient\"",
+    "line": 4,
+    "col": 7,
+    "start": 57,
+    "stop": 68
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 4,
+    "col": 19,
+    "start": 69,
+    "stop": 69
+  },
+  {
+    "type": "KW_DESCRIPTION",
+    "channel": 0,
+    "text": "Description:",
+    "line": 5,
+    "col": 0,
+    "start": 70,
+    "stop": 81
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 12,
+    "start": 82,
+    "stop": 82
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"A test\"",
+    "line": 5,
+    "col": 13,
+    "start": 83,
+    "stop": 90
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 5,
+    "col": 21,
+    "start": 91,
+    "stop": 93
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "name",
+    "line": 6,
+    "col": 2,
+    "start": 94,
+    "stop": 97
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 6,
+    "start": 98,
+    "stop": 98
+  },
+  {
+    "type": "CARD",
+    "channel": 0,
+    "text": "1..*",
+    "line": 6,
+    "col": 7,
+    "start": 99,
+    "stop": 102
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 11,
+    "start": 103,
+    "stop": 103
+  },
+  {
+    "type": "KW_MS",
+    "channel": 0,
+    "text": "MS",
+    "line": 6,
+    "col": 12,
+    "start": 104,
+    "stop": 105
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 6,
+    "col": 14,
+    "start": 106,
+    "stop": 108
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "gender",
+    "line": 7,
+    "col": 2,
+    "start": 109,
+    "stop": 114
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 7,
+    "col": 8,
+    "start": 115,
+    "stop": 115
+  },
+  {
+    "type": "CARD",
+    "channel": 0,
+    "text": "0..1",
+    "line": 7,
+    "col": 9,
+    "start": 116,
+    "stop": 119
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 7,
+    "col": 13,
+    "start": 120,
+    "stop": 122
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "identifier",
+    "line": 8,
+    "col": 2,
+    "start": 123,
+    "stop": 132
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 12,
+    "start": 133,
+    "stop": 133
+  },
+  {
+    "type": "CARET_SEQUENCE",
+    "channel": 0,
+    "text": "^short",
+    "line": 8,
+    "col": 13,
+    "start": 134,
+    "stop": 139
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 19,
+    "start": 140,
+    "stop": 140
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 8,
+    "col": 20,
+    "start": 141,
+    "stop": 141
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 21,
+    "start": 142,
+    "stop": 142
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"An id\"",
+    "line": 8,
+    "col": 22,
+    "start": 143,
+    "stop": 149
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 8,
+    "col": 29,
+    "start": 150,
+    "stop": 152
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "value[x]",
+    "line": 9,
+    "col": 2,
+    "start": 153,
+    "stop": 160
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 10,
+    "start": 161,
+    "stop": 161
+  },
+  {
+    "type": "KW_ONLY",
+    "channel": 0,
+    "text": "only",
+    "line": 9,
+    "col": 11,
+    "start": 162,
+    "stop": 165
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 15,
+    "start": 166,
+    "stop": 166
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "Quantity",
+    "line": 9,
+    "col": 16,
+    "start": 167,
+    "stop": 174
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 24,
+    "start": 175,
+    "stop": 175
+  },
+  {
+    "type": "KW_OR",
+    "channel": 0,
+    "text": "or",
+    "line": 9,
+    "col": 25,
+    "start": 176,
+    "stop": 177
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 27,
+    "start": 178,
+    "stop": 178
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "CodeableConcept",
+    "line": 9,
+    "col": 28,
+    "start": 179,
+    "stop": 193
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 9,
+    "col": 43,
+    "start": 194,
+    "stop": 196
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "code",
+    "line": 10,
+    "col": 2,
+    "start": 197,
+    "stop": 200
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 10,
+    "col": 6,
+    "start": 201,
+    "stop": 201
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 10,
+    "col": 7,
+    "start": 202,
+    "stop": 202
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 10,
+    "col": 8,
+    "start": 203,
+    "stop": 203
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#active",
+    "line": 10,
+    "col": 9,
+    "start": 204,
+    "stop": 210
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 10,
+    "col": 16,
+    "start": 211,
+    "stop": 211
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"Active\"",
+    "line": 10,
+    "col": 17,
+    "start": 212,
+    "stop": 219
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 10,
+    "col": 25,
+    "start": 220,
+    "stop": 222
+  },
+  {
+    "type": "KW_OBEYS",
+    "channel": 0,
+    "text": "obeys",
+    "line": 11,
+    "col": 2,
+    "start": 223,
+    "stop": 227
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 11,
+    "col": 7,
+    "start": 228,
+    "stop": 228
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "inv-1",
+    "line": 11,
+    "col": 8,
+    "start": 229,
+    "stop": 233
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 11,
+    "col": 13,
+    "start": 234,
+    "stop": 234
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 12,
+    "col": 0,
+    "start": 235,
+    "stop": 234
+  }
+]

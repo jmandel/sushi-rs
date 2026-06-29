@@ -1,0 +1,371 @@
+[
+  {
+    "type": "KW_INSTANCE",
+    "channel": 0,
+    "text": "Instance:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 8
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 1,
+    "col": 9,
+    "start": 9,
+    "stop": 9
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "ex",
+    "line": 1,
+    "col": 10,
+    "start": 10,
+    "stop": 11
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 1,
+    "col": 12,
+    "start": 12,
+    "stop": 12
+  },
+  {
+    "type": "KW_INSTANCEOF",
+    "channel": 0,
+    "text": "InstanceOf:",
+    "line": 2,
+    "col": 0,
+    "start": 13,
+    "stop": 23
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 11,
+    "start": 24,
+    "stop": 24
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "Patient",
+    "line": 2,
+    "col": 12,
+    "start": 25,
+    "stop": 31
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 2,
+    "col": 19,
+    "start": 32,
+    "stop": 34
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "name",
+    "line": 3,
+    "col": 2,
+    "start": 35,
+    "stop": 38
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n  * ",
+    "line": 3,
+    "col": 6,
+    "start": 39,
+    "stop": 43
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "given",
+    "line": 4,
+    "col": 4,
+    "start": 44,
+    "stop": 48
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 9,
+    "start": 49,
+    "stop": 49
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 4,
+    "col": 10,
+    "start": 50,
+    "stop": 50
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 4,
+    "col": 11,
+    "start": 51,
+    "stop": 51
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"Jane\"",
+    "line": 4,
+    "col": 12,
+    "start": 52,
+    "stop": 57
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n  * ",
+    "line": 4,
+    "col": 18,
+    "start": 58,
+    "stop": 62
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "given[+]",
+    "line": 5,
+    "col": 4,
+    "start": 63,
+    "stop": 70
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 12,
+    "start": 71,
+    "stop": 71
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 5,
+    "col": 13,
+    "start": 72,
+    "stop": 72
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 14,
+    "start": 73,
+    "stop": 73
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"Q\"",
+    "line": 5,
+    "col": 15,
+    "start": 74,
+    "stop": 76
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n  * ",
+    "line": 5,
+    "col": 18,
+    "start": 77,
+    "stop": 81
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "family",
+    "line": 6,
+    "col": 4,
+    "start": 82,
+    "stop": 87
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 10,
+    "start": 88,
+    "stop": 88
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 6,
+    "col": 11,
+    "start": 89,
+    "stop": 89
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 12,
+    "start": 90,
+    "stop": 90
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"Doe\"",
+    "line": 6,
+    "col": 13,
+    "start": 91,
+    "stop": 95
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 6,
+    "col": 18,
+    "start": 96,
+    "stop": 98
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "contact[+].name.given",
+    "line": 7,
+    "col": 2,
+    "start": 99,
+    "stop": 119
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 7,
+    "col": 23,
+    "start": 120,
+    "stop": 120
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 7,
+    "col": 24,
+    "start": 121,
+    "stop": 121
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 7,
+    "col": 25,
+    "start": 122,
+    "stop": 122
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"A\"",
+    "line": 7,
+    "col": 26,
+    "start": 123,
+    "stop": 125
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 7,
+    "col": 29,
+    "start": 126,
+    "stop": 128
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "contact[=].name.family",
+    "line": 8,
+    "col": 2,
+    "start": 129,
+    "stop": 150
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 24,
+    "start": 151,
+    "stop": 151
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 8,
+    "col": 25,
+    "start": 152,
+    "stop": 152
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 26,
+    "start": 153,
+    "stop": 153
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"B\"",
+    "line": 8,
+    "col": 27,
+    "start": 154,
+    "stop": 156
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 8,
+    "col": 30,
+    "start": 157,
+    "stop": 157
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 9,
+    "col": 0,
+    "start": 158,
+    "stop": 157
+  }
+]

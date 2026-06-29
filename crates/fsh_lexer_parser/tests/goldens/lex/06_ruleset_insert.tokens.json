@@ -1,0 +1,407 @@
+[
+  {
+    "type": "KW_RULESET",
+    "channel": 0,
+    "text": "RuleSet:",
+    "line": 1,
+    "col": 0,
+    "start": 0,
+    "stop": 7
+  },
+  {
+    "type": "RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Common",
+    "line": 1,
+    "col": 8,
+    "start": 8,
+    "stop": 14
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 1,
+    "col": 15,
+    "start": 15,
+    "stop": 17
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "status",
+    "line": 2,
+    "col": 2,
+    "start": 18,
+    "stop": 23
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 8,
+    "start": 24,
+    "stop": 24
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 2,
+    "col": 9,
+    "start": 25,
+    "stop": 25
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 2,
+    "col": 10,
+    "start": 26,
+    "stop": 26
+  },
+  {
+    "type": "CODE",
+    "channel": 0,
+    "text": "#active",
+    "line": 2,
+    "col": 11,
+    "start": 27,
+    "stop": 33
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 2,
+    "col": 18,
+    "start": 34,
+    "stop": 34
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 3,
+    "col": 0,
+    "start": 35,
+    "stop": 35
+  },
+  {
+    "type": "KW_RULESET",
+    "channel": 0,
+    "text": "RuleSet:",
+    "line": 4,
+    "col": 0,
+    "start": 36,
+    "stop": 43
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Param(",
+    "line": 4,
+    "col": 8,
+    "start": 44,
+    "stop": 50
+  },
+  {
+    "type": "PLAIN_PARAM",
+    "channel": 0,
+    "text": "a,",
+    "line": 4,
+    "col": 15,
+    "start": 51,
+    "stop": 52
+  },
+  {
+    "type": "LAST_PLAIN_PARAM",
+    "channel": 0,
+    "text": " b)",
+    "line": 4,
+    "col": 17,
+    "start": 53,
+    "stop": 55
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 4,
+    "col": 20,
+    "start": 56,
+    "stop": 58
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "version",
+    "line": 5,
+    "col": 2,
+    "start": 59,
+    "stop": 65
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 9,
+    "start": 66,
+    "stop": 66
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 5,
+    "col": 10,
+    "start": 67,
+    "stop": 67
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 5,
+    "col": 11,
+    "start": 68,
+    "stop": 68
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"{a}\"",
+    "line": 5,
+    "col": 12,
+    "start": 69,
+    "stop": 73
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 5,
+    "col": 17,
+    "start": 74,
+    "stop": 76
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "title",
+    "line": 6,
+    "col": 2,
+    "start": 77,
+    "stop": 81
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 7,
+    "start": 82,
+    "stop": 82
+  },
+  {
+    "type": "EQUAL",
+    "channel": 0,
+    "text": "=",
+    "line": 6,
+    "col": 8,
+    "start": 83,
+    "stop": 83
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 6,
+    "col": 9,
+    "start": 84,
+    "stop": 84
+  },
+  {
+    "type": "STRING",
+    "channel": 0,
+    "text": "\"{b}\"",
+    "line": 6,
+    "col": 10,
+    "start": 85,
+    "stop": 89
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 6,
+    "col": 15,
+    "start": 90,
+    "stop": 90
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 7,
+    "col": 0,
+    "start": 91,
+    "stop": 91
+  },
+  {
+    "type": "KW_PROFILE",
+    "channel": 0,
+    "text": "Profile:",
+    "line": 8,
+    "col": 0,
+    "start": 92,
+    "stop": 99
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 8,
+    "col": 8,
+    "start": 100,
+    "stop": 100
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "P",
+    "line": 8,
+    "col": 9,
+    "start": 101,
+    "stop": 101
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 8,
+    "col": 10,
+    "start": 102,
+    "stop": 102
+  },
+  {
+    "type": "KW_PARENT",
+    "channel": 0,
+    "text": "Parent:",
+    "line": 9,
+    "col": 0,
+    "start": 103,
+    "stop": 109
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": " ",
+    "line": 9,
+    "col": 7,
+    "start": 110,
+    "stop": 110
+  },
+  {
+    "type": "SEQUENCE",
+    "channel": 0,
+    "text": "Patient",
+    "line": 9,
+    "col": 8,
+    "start": 111,
+    "stop": 117
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 9,
+    "col": 15,
+    "start": 118,
+    "stop": 120
+  },
+  {
+    "type": "KW_INSERT",
+    "channel": 0,
+    "text": "insert",
+    "line": 10,
+    "col": 2,
+    "start": 121,
+    "stop": 126
+  },
+  {
+    "type": "RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Common",
+    "line": 10,
+    "col": 8,
+    "start": 127,
+    "stop": 133
+  },
+  {
+    "type": "STAR",
+    "channel": 0,
+    "text": "\n* ",
+    "line": 10,
+    "col": 15,
+    "start": 134,
+    "stop": 136
+  },
+  {
+    "type": "KW_INSERT",
+    "channel": 0,
+    "text": "insert",
+    "line": 11,
+    "col": 2,
+    "start": 137,
+    "stop": 142
+  },
+  {
+    "type": "PARAM_RULESET_REFERENCE",
+    "channel": 0,
+    "text": " Param(",
+    "line": 11,
+    "col": 8,
+    "start": 143,
+    "stop": 149
+  },
+  {
+    "type": "PLAIN_PARAM",
+    "channel": 0,
+    "text": "1.0,",
+    "line": 11,
+    "col": 15,
+    "start": 150,
+    "stop": 153
+  },
+  {
+    "type": "LAST_BRACKETED_PARAM",
+    "channel": 0,
+    "text": " [[Hello, World]])",
+    "line": 11,
+    "col": 19,
+    "start": 154,
+    "stop": 171
+  },
+  {
+    "type": "WHITESPACE",
+    "channel": "HIDDEN",
+    "text": "\n",
+    "line": 11,
+    "col": 37,
+    "start": 172,
+    "stop": 172
+  },
+  {
+    "type": "EOF",
+    "channel": 0,
+    "text": "<EOF>",
+    "line": 12,
+    "col": 0,
+    "start": 173,
+    "stop": 172
+  }
+]
