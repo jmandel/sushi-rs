@@ -86,6 +86,22 @@ bash harness/diff-resources.sh <stock-out> <candidate-out>
 #   e.g. bash harness/diff-resources.sh temp/ips-stock temp/rust-ips
 ```
 
+### Parser oracle (Phase 2 golden)
+```sh
+# Dump stock SUSHI's import AST as stable JSON (Maps->{__map}, BigInt->{__bigint},
+# class instances tagged __type). Logs silenced; stdout is pure JSON.
+node harness/parse-oracle.cjs <file.fsh ...> > ast.json
+node harness/parse-oracle.cjs --dir <dir-of-fsh> > ast.json
+```
+Verified: full IPS corpus = 123 docs, ~4.95MB AST. **Rule/value type frequency
+in IPS (parser priority order):** CaretValueRule 2311, AssignmentRule 2224,
+FshCode 1972, FshReference 270, CardRule 223, FlagRule 222, OnlyRule 171,
+Instance 148, ValueSetFilterComponentRule 112, FshValueSet/FshQuantity/BindingRule 36,
+Profile 29, ContainsRule 28, MappingRule/InsertRule/AddElementRule 16,
+ValueSetConceptComponentRule 14, ObeysRule 9, Invariant 7, RuleSet 5, Logical 3,
+FshCanonical 2, Mapping 1. **Key parity fact:** `* name 1..* MS` expands to TWO
+rules (CardRule + FlagRule) sharing one source span.
+
 ### Rust commands
 ```sh
 cargo build --workspace
