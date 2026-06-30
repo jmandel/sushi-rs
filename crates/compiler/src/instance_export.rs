@@ -510,17 +510,41 @@ fn validate_value_at_path(
             if let (Some(ext_idx), Some(b0)) = (ext_el, bracket0) {
                 if let Some(meta) = fisher.fish_for_metadata(&b0) {
                     if let Some(url) = &meta.url {
-                        // Ensure slicing exists.
-                        if sd.elements[ext_idx].get("slicing").is_none() {
-                            slice_it_value_url(sd, ext_idx);
-                        }
-                        let slice_name_for = if b0.starts_with("http") {
-                            meta.id.clone()
+                        // First, try to match an EXISTING slice on the SD by its
+                        // type profile url (`findMatchingSlice` fishForFHIR branch,
+                        // StructureDefinition.ts:907-913). The bracket may be an
+                        // alias/url/id that doesn't equal the slice's sliceName
+                        // (e.g. `extension[USCoreRace]` -> inherited `race` slice).
+                        if let Some(existing_sn) = find_ext_slice_by_profile(sd, ext_idx, url) {
+                            // Replace the path to use the sliceName (StructureDefinition.ts:671-681).
+                            let new_brackets: Vec<String> =
+                                existing_sn.split('/').map(|s| s.to_string()).collect();
+                            path_parts[i].brackets = new_brackets;
+                            // Rebuild currentPath with the rewritten bracket.
+                            current_path = previous_path.clone();
+                            if !current_path.is_empty() {
+                                current_path.push('.');
+                            }
+                            current_path.push_str(&path_parts[i].base);
+                            for b in &path_parts[i].brackets {
+                                current_path.push('[');
+                                current_path.push_str(b);
+                                current_path.push(']');
+                            }
+                            current_idx = sd.find_element_by_path(&current_path, fisher);
                         } else {
-                            b0.clone()
-                        };
-                        add_extension_slice(sd, ext_idx, &slice_name_for, url);
-                        current_idx = sd.find_element_by_path(&current_path, fisher);
+                            // Ensure slicing exists.
+                            if sd.elements[ext_idx].get("slicing").is_none() {
+                                slice_it_value_url(sd, ext_idx);
+                            }
+                            let slice_name_for = if b0.starts_with("http") {
+                                meta.id.clone()
+                            } else {
+                                b0.clone()
+                            };
+                            add_extension_slice(sd, ext_idx, &slice_name_for, url);
+                            current_idx = sd.find_element_by_path(&current_path, fisher);
+                        }
                     }
                 }
             }
@@ -594,6 +618,37 @@ fn validate_value_at_path(
         path_parts,
         child_path,
     })
+}
+
+/// Find an existing extension slice on the SD by its type profile url. Mirrors
+/// `findMatchingSlice`'s `fishForFHIR(...,Type.Extension)` branch
+/// (StructureDefinition.ts:908-913): among siblings sharing the extension
+/// element's path, return the sliceName of the one whose `type[0].profile[0]`
+/// equals `url` and which has a sliceName.
+fn find_ext_slice_by_profile(
+    sd: &StructureDefinition,
+    ext_idx: usize,
+    url: &str,
+) -> Option<String> {
+    let ext_path = el_path(sd, ext_idx);
+    for el in &sd.elements {
+        if el.path() != ext_path {
+            continue;
+        }
+        let Some(sn) = el.slice_name() else { continue };
+        let profile0 = el
+            .get("type")
+            .and_then(|v| v.as_array())
+            .and_then(|a| a.first())
+            .and_then(|t| t.get("profile"))
+            .and_then(|p| p.as_array())
+            .and_then(|a| a.first())
+            .and_then(|v| v.as_str());
+        if profile0 == Some(url) {
+            return Some(sn.to_string());
+        }
+    }
+    None
 }
 
 /// `sliceIt('value','url')` — set a value/url discriminator on element `idx`.
@@ -1799,11 +1854,15 @@ fn merge(target: &mut J, source: &J) {
 pub struct InstanceIndex {
     /// name|id -> (instanceOf, id)
     by_ref: HashMap<String, (String, String)>,
+    /// name|id -> url (only for instances carrying a `* url = "..."` rule), for
+    /// resolving `Canonical(instanceName)` to a local instance's canonical url.
+    inst_url: HashMap<String, String>,
 }
 
 impl InstanceIndex {
     fn build(docs: &[FshDocument]) -> InstanceIndex {
         let mut by_ref = HashMap::new();
+        let mut inst_url = HashMap::new();
         for doc in docs {
             for (_k, inst) in &doc.instances {
                 if let Some(io) = &inst.instance_of {
@@ -1813,12 +1872,28 @@ impl InstanceIndex {
                         .or_insert((io.clone(), id.clone()));
                     by_ref
                         .entry(id.clone())
-                        .or_insert((io.clone(), id));
+                        .or_insert((io.clone(), id.clone()));
+                    if let Some(url) = effective_instance_url(inst) {
+                        inst_url.entry(inst.name.clone()).or_insert(url.clone());
+                        inst_url.entry(id).or_insert(url);
+                    }
                 }
             }
         }
-        InstanceIndex { by_ref }
+        InstanceIndex { by_ref, inst_url }
     }
+}
+
+/// The effective canonical url of an instance: the last `* url = "..."` rule.
+fn effective_instance_url(inst: &Instance) -> Option<String> {
+    for r in inst.rules.iter().rev() {
+        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+            if path == "url" {
+                return Some(s.clone());
+            }
+        }
+    }
+    None
 }
 
 /// The effective instance id: the last `* id = "..."` AssignmentRule's value,
@@ -1840,12 +1915,15 @@ struct DefIndex {
     by_ref: HashMap<String, (String, String)>,
     /// code-system name|id -> url
     cs_url: HashMap<String, String>,
+    /// value-set name|id -> url
+    vs_url: HashMap<String, String>,
 }
 
 impl DefIndex {
     fn build(docs: &[FshDocument], cfg: &Config) -> DefIndex {
         let mut by_ref = HashMap::new();
         let mut cs_url = HashMap::new();
+        let mut vs_url = HashMap::new();
         let mut add_sd = |name: &str, id: &str| {
             by_ref
                 .entry(name.to_string())
@@ -1874,15 +1952,18 @@ impl DefIndex {
             }
             for (_k, vs) in &doc.value_sets {
                 let id = crate::export::effective_id(&vs.rules, &vs.id);
+                let url = format!("{}/ValueSet/{}", cfg.canonical, id);
                 by_ref
                     .entry(vs.name.clone())
                     .or_insert(("ValueSet".to_string(), id.clone()));
                 by_ref
                     .entry(id.clone())
                     .or_insert(("ValueSet".to_string(), id.clone()));
+                vs_url.insert(vs.name.clone(), url.clone());
+                vs_url.insert(id.clone(), url);
             }
         }
-        DefIndex { by_ref, cs_url }
+        DefIndex { by_ref, cs_url, vs_url }
     }
 }
 
@@ -1924,6 +2005,23 @@ fn replace_references(
                 }
             }
         }
+        FshValue::Canonical(c) => {
+            // Resolve a local ValueSet/CodeSystem/Instance name to its canonical
+            // url. (Local SDs + package resources are resolved later in
+            // coerce_value via the fisher; per ElementDefinition.ts:2006 stock
+            // fishes SD types BEFORE ValueSet/CodeSystem/Instance, so only fall
+            // back to these locals when the fisher can't resolve an SD url.)
+            if fisher.fish_for_metadata(&c.entity_name).and_then(|m| m.url).is_none() {
+                if let Some(url) = def_idx
+                    .vs_url
+                    .get(&c.entity_name)
+                    .or_else(|| def_idx.cs_url.get(&c.entity_name))
+                    .or_else(|| inst_idx.inst_url.get(&c.entity_name))
+                {
+                    c.entity_name = url.clone();
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -1947,7 +2045,35 @@ struct Exporter<'a> {
     by_name: HashMap<String, &'a Instance>,
     /// effective instance id -> name (for fishing inline instances by id).
     id_to_name: HashMap<String, String>,
+    /// FSH alias name -> value (first-wins), resolved on every fish like FSHTank.fish.
+    aliases: HashMap<String, String>,
     memo: std::cell::RefCell<HashMap<String, Option<ExportedInst>>>,
+}
+
+/// Wraps a fisher so that the queried name is alias-resolved first, mirroring
+/// `FSHTank.fish` (`item = this.resolveAlias(item) ?? item`). Stock's MasterFisher
+/// delegates to the tank, which resolves aliases before every fish.
+struct AliasFisher<'a> {
+    inner: &'a dyn Fisher,
+    aliases: &'a HashMap<String, String>,
+}
+
+impl AliasFisher<'_> {
+    fn resolve<'n>(&self, name: &'n str) -> std::borrow::Cow<'n, str> {
+        match self.aliases.get(name) {
+            Some(v) => std::borrow::Cow::Owned(v.clone()),
+            None => std::borrow::Cow::Borrowed(name),
+        }
+    }
+}
+
+impl Fisher for AliasFisher<'_> {
+    fn fish_for_fhir(&self, name: &str) -> Option<J> {
+        self.inner.fish_for_fhir(&self.resolve(name))
+    }
+    fn fish_for_metadata(&self, name: &str) -> Option<fhir_model::Metadata> {
+        self.inner.fish_for_metadata(&self.resolve(name))
+    }
 }
 
 pub fn export_instances(
@@ -1969,6 +2095,12 @@ pub fn export_instances(
             }
         }
     }
+    let mut aliases: HashMap<String, String> = HashMap::new();
+    for doc in docs {
+        for (k, v) in &doc.aliases {
+            aliases.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
     let exporter = Exporter {
         cfg,
         ctx,
@@ -1976,6 +2108,7 @@ pub fn export_instances(
         def_idx: DefIndex::build(docs, cfg),
         by_name,
         id_to_name,
+        aliases,
         memo: std::cell::RefCell::new(HashMap::new()),
     };
 
@@ -2021,7 +2154,8 @@ impl<'a> Exporter<'a> {
 
     fn export_compute(&self, name: &str) -> Option<ExportedInst> {
         let inst = *self.by_name.get(name)?;
-        let fisher = self.ctx.fisher();
+        let inner_fisher = self.ctx.fisher();
+        let fisher = AliasFisher { inner: &inner_fisher, aliases: &self.aliases };
         let instance_of = inst.instance_of.as_ref()?;
         let base = instance_of.split('|').next().unwrap_or(instance_of);
         let json = self.ctx.fish_sd_json(base)?;
@@ -2320,16 +2454,26 @@ fn set_assigned_values(
         }
     }
 
-    // 4. paths array for implied properties.
+    // 4. paths array for implied properties. Also collect the paths where an
+    // inline resource was assigned (`inlineResourcePaths`) so setImpliedProperties
+    // does NOT unfold/inject implied values into the embedded resource
+    // (InstanceExporter.ts:140-160 + common.ts:518).
     let mut paths: Vec<String> = vec![String::new()];
+    let mut assigned_resource_paths: Vec<String> = Vec::new();
     for ar in &assign_rules {
         let path = &ar.path;
         // find validated pathParts for this rule path (first match)
-        if let Some((_, parts, _)) = rule_map.iter().find(|(k, _, _)| k == path || k.starts_with(&format!("{path}."))) {
-            paths.push(strip_zero_only(&assemble_fsh_path(parts)));
+        let assembled = if let Some((_, parts, _)) =
+            rule_map.iter().find(|(k, _, _)| k == path || k.starts_with(&format!("{path}.")))
+        {
+            strip_zero_only(&assemble_fsh_path(parts))
         } else {
-            paths.push(path.clone());
+            path.clone()
+        };
+        if ar.inline.is_some() {
+            assigned_resource_paths.push(assembled.clone());
         }
+        paths.push(assembled);
     }
 
     // 5. knownSlices (+ createUsefulSlices mutation under manualSliceOrdering).
@@ -2348,7 +2492,7 @@ fn set_assigned_values(
         instance,
         sd,
         &paths,
-        &[],
+        &assigned_resource_paths,
         fisher,
         &known,
         manual_slice_ordering,

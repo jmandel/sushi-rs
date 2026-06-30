@@ -384,10 +384,49 @@ Phases from the plan (0–9). Current state:
   ips 28/32, mcode 45/53, crd 24/27). Remaining: AddElementRule (logicals, +R5 Base
   unbundle), predefined input/resources, deep reslicing (ips Composition), nested
   contentReference min ordering (epi). Serial cleanup after Phase 7.
-- [~] **Phase 7 — instance export** — LARGELY DONE & verified. Byte parity:
-  **epi 52/54, ips 46/46, crd 22/22 real instances** (120 total; misses are R5
-  ActorDefinition + the IG resource). SD/VS/CS gates + `cargo test --workspace`
-  (18 suites) stay green. Gate `harness/diff-instances.sh temp/<ig>-stock temp/rust-<ig>`.
+- [~] **Phase 7 — instance export** — LARGELY DONE & verified. Byte parity (2026-06-29
+  update): **mcode 189/193, epi 54/54, ips 49/49, crd 26/26 real instances** — only
+  remaining instance misses are 3 mcode (SD-blocked, see below) + the per-IG
+  ImplementationGuide resource (separate IGExporter, not ported). SD/VS/CS gates +
+  `cargo test --workspace` (18 suites) stay green. Gate
+  `harness/diff-instances.sh temp/<ig>-stock temp/rust-<ig>`.
+  - **2026-06-29 nested-extension + canonical fixes (19→3 instance failures, dashboard
+    620→638/665), all in `instance_export.rs`:**
+    1. **Alias-resolving fisher** (`AliasFisher`): every fish in instance export now
+       resolves FSH aliases first (mirrors `FSHTank.fish` `resolveAlias`). The
+       FisherView/package fisher had no alias map, so `extension[USCoreRace]`-style
+       bracket fishes returned None.
+    2. **Nested extension slice match by profile url** (`find_ext_slice_by_profile`):
+       in `validate_value_at_path`'s extension fallback, when the bracket (alias/url/id)
+       doesn't equal a sliceName, match an EXISTING inherited slice whose
+       `type[0].profile[0]` == the fished url and rewrite the bracket to that sliceName
+       (ports `findMatchingSlice` fishForFHIR branch StructureDefinition.ts:908-913 +
+       path-rewrite 671-681). Fixed mcode Patient×6 + Condition×2 (`extension[USCoreRace]
+       .extension[ombCategory]...` → inherited `race` slice, then existing unfold
+       machinery resolves the nested sub-extension). NOTE: the generic
+       `find_matching_slice` in fhir_model still lacks this fallback (left untouched to
+       avoid SD-parity churn); the fix lives entirely in the instance engine.
+    3. **`Canonical()` local resolution**: `replace_references` now resolves
+       `Canonical(name)` against local ValueSet (`vs_url`), CodeSystem (`cs_url`), and
+       Instance (`InstanceIndex.inst_url`, from each instance's `* url =` rule) urls —
+       only when the package/SD fisher can't resolve an SD url first (stock precedence,
+       ElementDefinition.ts:2006). Fixed mcode ConceptMap (sourceCanonical/source) + ips
+       ActorDefinition-Server (capabilities=Canonical(ips-server),
+       derivedFrom=Canonical(Creator)).
+    4. **`assignedResourcePaths` wired** (was passed `&[]`): set_assigned_values now
+       collects inline-instance assignment paths and passes them to
+       `set_implied_properties_on_instance`, so implied/fixed values are NOT injected
+       into embedded resources (common.ts:518). Fixed both epi type3 Bundles (the
+       embedded ClinicalUseDefinition got a spurious fixed `type` injected first +
+       fullUrl/resource key order swapped).
+  - **REMAINING 3 mcode instance failures are SD-export-blocked** (NOT instance bugs):
+    Procedure×2 + Bundle-jenny-m all embed `mcode-radiotherapy-dose-delivered-to-volume`,
+    whose `totalDoseDelivered.value[x]` should carry `patternQuantity {code:cGy,
+    system:ucum}` from `* extension[totalDoseDelivered].valueQuantity = UCUM#cGy` (an
+    AssignmentRule of a FshCode to a Quantity-typed `value[x]` choice). Our SD export
+    drops it (this SD is 1 of the 8 failing mcode SDs), so the instance can't apply the
+    implied code/system → wrong valueQuantity key order + url placement. Fix belongs in
+    `sd_export.rs` (Phase-6 cleanup), which was out of scope for this pass.
   - `compiler/src/instance_export.rs` (~2200 lines) ports `InstanceExporter` + the
     `common.ts` machinery. `Exporter` = memoized recursive export (RefCell memo)
     over `SdContext` (fishes the InstanceOf snapshot via `ctx.fish_sd_json`/
@@ -427,11 +466,13 @@ Phases from the plan (0–9). Current state:
     QA/diagnostics (validateRequiredElements/checkForMultipleChoice/nameless-slice)
     collected-as-wording but NOT emitted/gated.
 - [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
-  **Current: 620/665 byte-identical** (was 547 before the Phase 4.1 caret
-  key-ordering fix; 247 pre-SD). VS/CS now ips 35/36, epi 29/29, mcode 104/104,
-  crd 28/31. Remaining VS follow-ups (4) are all external bare-name CS/VS→url
-  resolution via package_store (wire the fisher into the VS exporter) — see
-  Phase 4.1 note.
+  **Current: 638/665 byte-identical** (was 620 before the 2026-06-29 instance
+  nested-extension/canonical fixes; 547 pre-Phase-4.1; 247 pre-SD). VS/CS now ips
+  35/36, epi 29/29, mcode 104/104, crd 28/31. Remaining gaps: 8 mcode + 4 ips + 1 epi
+  + 3 crd SDs (AddElementRule, predefined input/resources, deep reslicing,
+  patternQuantity-on-value[x]-choice), 4 VS (external bare-name CS/VS→url), 3 mcode
+  instances (SD-blocked patternQuantity, see Phase 7), and the 4 per-IG
+  ImplementationGuide resources (no IGExporter).
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps
