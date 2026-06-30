@@ -413,17 +413,27 @@ fn rewrite_tag_quotes(tag: &str) -> String {
     let mut out = String::new();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '\'' {
-            // find closing single quote
-            if let Some(close) = (i + 1..chars.len()).find(|&k| chars[k] == '\'') {
+        let q = chars[i];
+        if q == '\'' || q == '"' {
+            // Treat any quoted span in a tag as an attribute value: find its
+            // matching close quote, trim leading/trailing whitespace inside it
+            // (html-minifier-terser `collapseWhitespace:true` trims attribute
+            // values — ElementDefinition.ts:2389), and re-emit. Prefer double
+            // quotes unless the trimmed value itself contains a `"`.
+            if let Some(close) = (i + 1..chars.len()).find(|&k| chars[k] == q) {
                 let inner: String = chars[i + 1..close].iter().collect();
-                if !inner.contains('"') {
+                let trimmed = inner.trim();
+                if !trimmed.contains('"') {
                     out.push('"');
-                    out.push_str(&inner);
+                    out.push_str(trimmed);
                     out.push('"');
-                    i = close + 1;
-                    continue;
+                } else {
+                    out.push(q);
+                    out.push_str(trimmed);
+                    out.push(q);
                 }
+                i = close + 1;
+                continue;
             }
         }
         out.push(chars[i]);
