@@ -10,6 +10,7 @@ use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 pub mod caret_schema;
 pub mod config;
 pub mod export;
+pub mod ig_export;
 pub mod instance_export;
 pub mod paths;
 pub mod sd_export;
@@ -532,8 +533,28 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let cache_dir = resolve_cache_dir()?;
     let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
 
+    // Collect IG `definition.resource` metadata as we export.
+    use ig_export::{ConformanceRes, IgInputs};
+    let mut vs_conformance: Vec<ConformanceRes> = Vec::new();
+    let mut cs_conformance: Vec<ConformanceRes> = Vec::new();
+
     // ValueSets + CodeSystems (Phase 4).
     for exported in export::export_all(&docs, &cfg, Some(&store)) {
+        let rt = exported
+            .body
+            .get("resourceType")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let cr = conformance_from_body(&exported.body);
+        if rt == "ValueSet" {
+            if let Some(c) = cr {
+                vs_conformance.push(c);
+            }
+        } else if rt == "CodeSystem" {
+            if let Some(c) = cr {
+                cs_conformance.push(c);
+            }
+        }
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
     }
@@ -543,17 +564,100 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let vs_url = |s: &str| tank.vs_url(s);
     let cs_url = |s: &str| tank.cs_url(s);
     let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url);
+
+    // SD conformance (profiles, extensions, logicals — in tank order), local
+    // profile/logical urls, custom-resource detection.
+    let mut sd_conformance: Vec<ConformanceRes> = Vec::new();
+    let mut local_profile_logical: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let mut has_custom_resources = false;
+    // `ctx.exported` can list an SD more than once (on-demand re-export during
+    // circular fishing); stock's pkg.profiles/extensions/logicals list each once.
+    let mut seen_sd: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for e in &ctx.exported {
+        use fsh_model::StructureKind;
+        if e.kind == StructureKind::Resource {
+            has_custom_resources = true;
+            continue;
+        }
+        let id = e.sd.get_str("id").unwrap_or("").to_string();
+        if !seen_sd.insert(id.clone()) {
+            continue;
+        }
+        let url = e.sd.get_str("url").map(str::to_string);
+        let name = sd_ig_name(&e.sd);
+        let description = e.sd.get_str("description").map(str::to_string);
+        if matches!(e.kind, StructureKind::Profile | StructureKind::Logical) {
+            if let Some(u) = &url {
+                let ver = e.sd.get_str("version").unwrap_or("").to_string();
+                local_profile_logical.insert(u.clone(), ver);
+            }
+        }
+        sd_conformance.push(ConformanceRes {
+            reference_key: format!("StructureDefinition/{id}"),
+            name,
+            description,
+        });
+    }
     for exported in sd_export::exported_files(&ctx) {
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
     }
 
     // Instances (Phase 7).
-    for exported in instance_export::export_instances(&docs, &cfg, &ctx) {
-        let text = json_emit::to_fhir_json_string(&exported.body);
-        std::fs::write(resources_dir.join(&exported.filename), text)?;
+    let instances = instance_export::export_instances(&docs, &cfg, &ctx);
+    for inst in &instances {
+        let text = json_emit::to_fhir_json_string(&inst.exported.body);
+        std::fs::write(resources_dir.join(&inst.exported.filename), text)?;
+    }
+
+    // ImplementationGuide resource (last — references all of the above).
+    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
+    let mut conformance = sd_conformance;
+    conformance.append(&mut vs_conformance);
+    conformance.append(&mut cs_conformance);
+    let inputs = IgInputs {
+        conformance,
+        instances: instances.iter().map(|i| &i.ig).collect(),
+        local_profile_logical,
+        has_custom_resources,
+        cache_dir: cache_dir.clone(),
+        ig_dir: ig_dir.to_string(),
+    };
+    if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
+        let text = json_emit::to_fhir_json_string(&ig.body);
+        std::fs::write(resources_dir.join(&ig.filename), text)?;
     }
     Ok(())
+}
+
+/// Build a `ConformanceRes` from an exported VS/CS body (`name = title ?? name ?? id`).
+fn conformance_from_body(body: &serde_json::Value) -> Option<ig_export::ConformanceRes> {
+    let rt = body.get("resourceType")?.as_str()?;
+    let id = body.get("id").and_then(|v| v.as_str()).unwrap_or("");
+    let name = body
+        .get("title")
+        .and_then(|v| v.as_str())
+        .or_else(|| body.get("name").and_then(|v| v.as_str()))
+        .or(Some(id))
+        .map(str::to_string);
+    let description = body
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    Some(ig_export::ConformanceRes {
+        reference_key: format!("{rt}/{id}"),
+        name,
+        description,
+    })
+}
+
+/// `name = title ?? name ?? id` for an SD IG entry.
+fn sd_ig_name(sd: &fhir_model::StructureDefinition) -> Option<String> {
+    sd.get_str("title")
+        .or_else(|| sd.get_str("name"))
+        .or_else(|| sd.get_str("id"))
+        .map(str::to_string)
 }
 
 /// Locate the explicit FHIR package cache. Honors `FHIR_CACHE`, else the repo's

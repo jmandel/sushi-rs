@@ -509,14 +509,60 @@ Phases from the plan (0–9). Current state:
     ordering diff (standalone cud passes; embedded copy differs). (d) instance
     QA/diagnostics (validateRequiredElements/checkForMultipleChoice/nameless-slice)
     collected-as-wording but NOT emitted/gated.
+- [x] **Phase 7b — ImplementationGuide resource export** (DONE, 2026-06-30). New
+  module `crates/compiler/src/ig_export.rs` writes `ImplementationGuide-<id>.json`;
+  wired into `build_project` AFTER all other resources (it references them all).
+  **All 4 IGs byte-identical** (ips/epi/mcode/crd). Dashboard 654→**662/665**.
+  - Design: `build_project` collects per-resource IG metadata as it exports —
+    conformance (SD profiles/ext/logicals + VS + CS): `name = title ?? name ?? id`,
+    `description`; instances: `IgInstanceMeta` returned from `export_instances`
+    (`reference_key`, name=`inst.title ?? body.title ?? inst.name`, description,
+    usage, logical?, `instance_of_url`=sd.url, `meta.profile`). `ig_export::export_ig`
+    ports `initIG`/`fixDependsOn`/`addResources`/`addPackageResource`/
+    `addPredefinedResources`/`addConfiguredResources`/`sortResources`/
+    `addConfiguredGroups`/page+parameter builders + the R5/R4 transforms. Config is
+    read straight from `serde_yaml::Value` (full yaml), not the typed `Config`.
+  - **PARITY TRAPS that bit:** (1) `ctx.exported` lists an SD MORE THAN ONCE
+    (on-demand re-export during circular fishing) → must DEDUP conformance by id
+    (stock's pkg.profiles has each once) — this was the epi 4-dup bug. (2) **R4 vs
+    R5 IG shape differs** (epi is R5/5.0.0): R5 uses `isExample` (not
+    `exampleBoolean`), `parameter.code` is a `{code,system:ig-parameters}` Coding,
+    and `page` keys are `name`/`sourceUrl` ordered AFTER `page[]`; R4 uses
+    `exampleBoolean`/string `code`/`nameUrl`. (3) **dependsOn key order** =
+    parsed-config order (id,packageId,uri,version) minus `reason`, plus missing
+    uri/id appended, plus the reason→`extension[valueMarkdown]` appended LAST (R4).
+    `uri` when absent is fished from the dependency package's IG `url` via its
+    `.index.json` (`find_dependency_ig_url`). (4) **resource ORDER** = stable sort
+    by `name.toUpperCase()` (none of our IGs hit the config/group full-sort paths).
+    (5) **predefined resources** (crd `input/resources`, 33 files incl. **XML**):
+    needed a lightweight FHIR-XML field extractor (resourceType/id/title/name/
+    description) — non-examples key order is `reference, description, exampleBoolean,
+    name`; Binary/* config entries skip the predefined file + are pushed verbatim by
+    addConfiguredResources. (6) **group resources are BARE names** → normalize to
+    `Type/id` (fish against built entries) before setting `groupingId`/group-sort.
+    (7) **disk-scanned pages** (ips uses `menu`, no `pages` → `addOtherPageContent`
+    scans `input/pagecontent`): title = `title-case(lodash.words(name))` — ported
+    `title-case@3.0.3` (SMALL_WORDS keep "in"/"of"/"the" lowercase) + lodash `words`;
+    `nameUrl` keeps the original filename; `-intro`/`-notes` + `index` filtered;
+    sorted by numeric-prefix then `localeCompare`. epi/mcode/crd use `pages` config.
+  - Files I own/touched: `ig_export.rs` (new), `lib.rs` `build_project` wiring +
+    `conformance_from_body`/`sd_ig_name` helpers, `instance_export.rs`
+    (`IgInstanceMeta`/`InstanceExport`, `export_instances` return type). NO change to
+    SD/VS/CS/instance body output (gates unchanged).
+  - **KNOWN GAPS (not exercised by the 4 IGs):** path-resource `/*` recursion, meta
+    `instance-name`/`instance-description` extensions on predefined non-conformance
+    resources, R5 `guide-parameter-code` VS membership (hardcoded ig-parameters —
+    fine since epi's codes aren't in it), useContext/template/global beyond
+    passthrough, menu.xml/page-file generation (not needed for the JSON resource).
 - [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
-  **Current: 654/665 byte-identical** (was 638 before the 2026-06-29 SD-parity pass;
+  **Current: 662/665 byte-identical** (654 before IG export; was 638 before the 2026-06-29 SD-parity pass;
   620 pre instance nested-ext/canonical; 547 pre-Phase-4.1; 247 pre-SD). SD now mcode
   53/53, ips 31/32, crd 26/27, epi 27/28 (137/140). VS/CS ips 35/36, epi 29/29, mcode
-  104/104, crd 28/31. Instances all clean (only the per-IG ImplementationGuide misses).
-  **Remaining 11 gaps**: 3 SD (ips Composition-uv-ips + epi composition-epi-type1 deep
-  reslicing/contentReference; crd profile-nutritionorder needs predefined-XML loading),
-  4 VS (external bare-name CS/VS→url), 4 per-IG ImplementationGuide (no IGExporter).
+  104/104, crd 28/28. Instances all clean; all 4 ImplementationGuide resources now pass.
+  **Remaining 3 gaps (all SD)**: ips `Composition-uv-ips` + epi `composition-epi-type1`
+  (deep `section.section` reslicing / nested contentReference); crd
+  `profile-nutritionorder` (binds to ValueSets defined as predefined XML — needs the
+  VS *bodies* loaded into the SD-export fisher, separate from the IG resource list).
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps

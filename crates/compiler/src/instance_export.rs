@@ -2035,6 +2035,32 @@ struct ExportedInst {
     body: J,
     filename: String,
     write: bool,
+    ig: IgInstanceMeta,
+}
+
+/// Metadata an instance contributes to the generated ImplementationGuide
+/// `definition.resource` entry (mirrors `IGExporter.addPackageResource` for
+/// `InstanceDefinition`s).
+#[derive(Clone)]
+pub struct IgInstanceMeta {
+    /// `${sdKind==='logical'?'Binary':resourceType}/${id}`
+    pub reference_key: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    /// Effective usage after datatype→Inline forcing.
+    pub usage: String,
+    /// `_instanceMeta.sdKind === 'logical'`.
+    pub logical: bool,
+    /// The InstanceOf StructureDefinition's url (`_instanceMeta.instanceOfUrl`).
+    pub instance_of_url: Option<String>,
+    /// `meta.profile` urls present on the exported instance body.
+    pub meta_profile: Vec<String>,
+}
+
+/// One written instance plus its IG metadata.
+pub struct InstanceExport {
+    pub exported: crate::export::Exported,
+    pub ig: IgInstanceMeta,
 }
 
 struct Exporter<'a> {
@@ -2080,7 +2106,7 @@ pub fn export_instances(
     docs: &[FshDocument],
     cfg: &Config,
     ctx: &SdContext,
-) -> Vec<crate::export::Exported> {
+) -> Vec<InstanceExport> {
     let mut by_name: HashMap<String, &Instance> = HashMap::new();
     let mut id_to_name: HashMap<String, String> = HashMap::new();
     let mut order: Vec<String> = Vec::new();
@@ -2116,9 +2142,12 @@ pub fn export_instances(
     for name in &order {
         if let Some(e) = exporter.export(name) {
             if e.write {
-                out.push(crate::export::Exported {
-                    filename: e.filename,
-                    body: e.body,
+                out.push(InstanceExport {
+                    exported: crate::export::Exported {
+                        filename: e.filename,
+                        body: e.body,
+                    },
+                    ig: e.ig,
                 });
             }
         }
@@ -2202,12 +2231,50 @@ impl<'a> Exporter<'a> {
         } else {
             sd.type_().to_string()
         };
-        let id = body.get("id").and_then(|v| v.as_str()).unwrap_or(&inst.id);
+        let id = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&inst.id)
+            .to_string();
         let filename = sanitize(&format!("{type_name}-{id}.json"));
+
+        // IG resource metadata (IGExporter.addPackageResource for instances).
+        let body_title = body.get("title").and_then(|v| v.as_str()).map(str::to_string);
+        let body_description = body
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let ig_name = inst
+            .title
+            .clone()
+            .or(body_title)
+            .or_else(|| Some(inst.name.clone()));
+        let ig_description = inst.description.clone().or(body_description);
+        let meta_profile = body
+            .get("meta")
+            .and_then(|m| m.get("profile"))
+            .and_then(|p| p.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let ig = IgInstanceMeta {
+            reference_key: format!("{type_name}/{id}"),
+            name: ig_name,
+            description: ig_description,
+            usage: usage.clone(),
+            logical: kind == "logical",
+            instance_of_url: sd.get_str("url").map(str::to_string),
+            meta_profile,
+        };
+
         Some(ExportedInst {
             body,
             filename,
             write: !is_inline,
+            ig,
         })
     }
 
