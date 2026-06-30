@@ -288,6 +288,16 @@ pub(crate) struct Seg {
     pub array: bool,
     pub slice_url: Option<String>,
     pub index: Option<usize>,
+    /// When this segment is a URL-valued extension slice, whether stock SUSHI
+    /// defers the implied `url` to *after* the assigned children for slice
+    /// instances at array index >= 1 (yielding `{…children, url}`). This is the
+    /// case when the original FSH bracket token is NOT a URI (an alias or a plain
+    /// slice name) — stock keeps that token as the `_sliceName`, so the indexed
+    /// implied-url path overlaps the rule path and sorts after its descendants in
+    /// `setImpliedPropertiesOnInstance`. When the token IS a literal URI, stock
+    /// renames the slice to the extension id (no overlap), so the implied `url`
+    /// stays first for every index. Defaults to false (URI / not an extension).
+    pub defer_url: bool,
 }
 
 /// Split a caret path on `.` that are outside `[...]` brackets.
@@ -421,6 +431,81 @@ pub(crate) fn set_value(target: &mut J, leaf: J) {
     }
 }
 
+/// Whether a slice bracket token is a URI (mirrors stock's `isUri(token)`): only
+/// then does stock rename an extension slice to the extension id. Non-URI tokens
+/// (aliases like `$obligation`, or plain slice names) keep their token as the
+/// `_sliceName`, which triggers the implied-url deferral for index >= 1.
+fn slice_token_is_uri(token: &str) -> bool {
+    token.contains("://") || token.starts_with("urn:")
+}
+
+/// Set `defer_url` on each URL-valued extension-slice segment using the ORIGINAL
+/// (pre-alias-resolution) caret path. Stock defers the implied `url` (to after the
+/// assigned children, for slice index >= 1) exactly when the original FSH bracket
+/// token is not a URI. `segs` are produced from the alias-resolved path, where the
+/// token is already the canonical url, so the original path is needed to recover
+/// this distinction. The k-th URL-valued slice segment corresponds to the k-th
+/// extension slice token in the original path (both walk the path in order).
+pub(crate) fn mark_defer_urls(segs: &mut [Seg], original_caret_path: &str) {
+    if !segs.iter().any(|s| s.slice_url.is_some()) {
+        return;
+    }
+    // Collect the original slice tokens (non-numeric bracket of each
+    // extension/modifierExtension part) in path order.
+    let mut tokens: Vec<String> = Vec::new();
+    for part in split_caret_path(original_caret_path) {
+        let base = part.split('[').next().unwrap_or("");
+        if base != "extension" && base != "modifierExtension" {
+            continue;
+        }
+        // last non-numeric bracket token (mirrors the resolver's slice_url pick)
+        let mut tok: Option<String> = None;
+        let mut depth = 0i32;
+        let mut cur = String::new();
+        for c in part.chars() {
+            match c {
+                '[' => {
+                    depth += 1;
+                    if depth == 1 {
+                        cur.clear();
+                    }
+                }
+                ']' => {
+                    depth -= 1;
+                    if depth == 0 && !(cur.chars().all(|c| c.is_ascii_digit()) && !cur.is_empty()) {
+                        tok = Some(std::mem::take(&mut cur));
+                    }
+                }
+                _ if depth >= 1 => cur.push(c),
+                _ => {}
+            }
+        }
+        if let Some(t) = tok {
+            tokens.push(t);
+        }
+    }
+    // The implied `url` is only deferred (to after the children) when the rule
+    // descends into a NESTED extension slice under this one: the nested
+    // sub-extension's own implied `url` is what sorts ahead of this slice's `url`
+    // in stock's `setImpliedPropertiesOnInstance`. A slice that takes a direct
+    // value (e.g. `^extension[$cwp][+].valueCanonical = …`) has no such nested
+    // implied url, so its `url` stays first for every index.
+    let slice_positions: Vec<usize> = segs
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.slice_url.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    let mut ti = 0usize;
+    for &pos in &slice_positions {
+        let has_deeper_slice = segs[pos + 1..].iter().any(|s| s.slice_url.is_some());
+        if let Some(t) = tokens.get(ti) {
+            segs[pos].defer_url = has_deeper_slice && !slice_token_is_uri(t);
+        }
+        ti += 1;
+    }
+}
+
 pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
     let seg = &segs[0];
     let last = segs.len() == 1;
@@ -432,6 +517,15 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
             *arr = J::Array(vec![]);
         }
         let arr = arr.as_array_mut().unwrap();
+        // When a new URL-valued extension slice entry is created, stock SUSHI
+        // materializes its implied (fixed) `url` via `setImpliedPropertiesOnInstance`.
+        // For the *first* instance of the slice (array index 0) the implied path is
+        // non-indexed (`extension[$slice].url`), which sorts ahead of its assigned
+        // children — so `url` is emitted first. For *subsequent* instances (index
+        // >= 1) the implied path is indexed (`extension[$slice][n].url`), which sorts
+        // AFTER the assigned children — so `url` is emitted last. We replicate that by
+        // deferring the `url` insertion until after the children are set when want>=1.
+        let mut deferred_url: Option<String> = None;
         let idx = if let Some(url) = &seg.slice_url {
             // n-th occurrence of this url (default 0); create entries as needed.
             let want = seg.index.unwrap_or(0);
@@ -445,7 +539,11 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
                 p
             } else {
                 let mut m = Map::new();
-                m.insert("url".into(), J::String(url.clone()));
+                if want == 0 || !seg.defer_url {
+                    m.insert("url".into(), J::String(url.clone()));
+                } else {
+                    deferred_url = Some(url.clone());
+                }
                 arr.push(J::Object(m));
                 arr.len() - 1
             }
@@ -463,6 +561,11 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
                 arr[idx] = J::Object(Map::new());
             }
             apply(arr[idx].as_object_mut().unwrap(), &segs[1..], leaf);
+        }
+        if let Some(url) = deferred_url {
+            if let Some(o) = arr[idx].as_object_mut() {
+                o.entry("url".to_string()).or_insert(J::String(url));
+            }
         }
     } else if last {
         match obj.get_mut(&seg.key) {
@@ -497,9 +600,8 @@ fn apply_caret(
 ) {
     // Resolve aliases inside path brackets (e.g. `^extension[FMM]` where FMM is a
     // global Alias) — same export-time resolution the SD exporter does.
-    let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
-    let caret_path = caret_path.as_str();
-    let Some((segs, leaf_ty)) = resolver.resolve(resource_type, caret_path) else {
+    let resolved_path = crate::sd_export::resolve_caret_aliases(caret_path);
+    let Some((mut segs, leaf_ty)) = resolver.resolve(resource_type, resolved_path.as_str()) else {
         return;
     };
     // `replaceReferences` / `assignValue`(Canonical) pass, mirroring stock: a
@@ -510,6 +612,7 @@ fn apply_caret(
     let Some(leaf) = coerce(&resolved, &leaf_ty, resolver) else {
         return;
     };
+    mark_defer_urls(&mut segs, caret_path);
     apply(obj, &segs, leaf);
 }
 

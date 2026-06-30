@@ -310,6 +310,9 @@ impl<'a> TypeResolver<'a> {
                 array: ei.array,
                 slice_url: slice_url.clone(),
                 index,
+                // Default: implied url stays first. Callers that have the original
+                // (pre-alias-resolution) FSH path set this for non-URI slice tokens.
+                defer_url: false,
             });
 
             if is_last {

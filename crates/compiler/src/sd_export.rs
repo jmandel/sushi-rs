@@ -2464,9 +2464,10 @@ fn apply_caret_fhir(
     _cfg: &Config,
     resolver: &crate::type_resolver::TypeResolver,
 ) {
-    let caret_path = resolve_caret_aliases(caret_path);
-    if let Some((segs, leaf_ty)) = resolver.resolve(resource_type, &caret_path) {
+    let resolved_path = resolve_caret_aliases(caret_path);
+    if let Some((mut segs, leaf_ty)) = resolver.resolve(resource_type, &resolved_path) {
         if let Some(leaf) = crate::export::coerce(value, &leaf_ty, resolver) {
+            crate::export::mark_defer_urls(&mut segs, caret_path);
             crate::export::apply(obj, &segs, leaf);
         }
     }
@@ -2479,9 +2480,10 @@ fn apply_caret_element(
     _cfg: &Config,
     resolver: &crate::type_resolver::TypeResolver,
 ) {
-    let caret_path = resolve_caret_aliases(caret_path);
-    if let Some((segs, leaf_ty)) = resolver.resolve("ElementDefinition", &caret_path) {
+    let resolved_path = resolve_caret_aliases(caret_path);
+    if let Some((mut segs, leaf_ty)) = resolver.resolve("ElementDefinition", &resolved_path) {
         if let Some(leaf) = crate::export::coerce(value, &leaf_ty, resolver) {
+            crate::export::mark_defer_urls(&mut segs, caret_path);
             crate::export::apply(ed.map_mut(), &segs, leaf);
         }
     }
