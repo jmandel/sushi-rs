@@ -40,7 +40,15 @@ effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit
 only to reproduce invalid output). Score: **byte-identical 2052/2065, EQUIVALENT 2056/2065
 (99.6%)**, 9 REAL fails left (sdc 3 + dtr 4 + ecr 2 — genuine bugs, separate root causes).
 
-**8/12 IGs BYTE-IDENTICAL:** ips, epi, mcode, crd, carinbb, genomics(301/301), cmc, ndh(260/260).
+**PHASE 1 (12-IG set) COMPLETE — 2065/2065 EQUIVALENT (100%):** all 12 byte-identical except
+the 4 pas compat-breaks. **PHASE 2 (20-IG set) IN PROGRESS:** 6 new FSH IGs added to
+`gate1.sh` (bulk/pdex/plannet/formulary/cdshooks/subscriptions, built vs materialized
+`temp/top20-cache`); at 417/430, 13 real fails being fixed by agents `fix/xext` (cross-version
+`extension contains <URL>` unfold) + `fix/xig` (IG X1 dependsOn-xver + X5 copyrightLabel).
+Root Cause C RESOLVED via compat-break (see above). The acquisition leniency fix (skip
+unresolvable non-core deps, match stock) let all 6 new IGs build self-reliantly.
+
+**(historical) 8/12 IGs were byte-identical mid-session:** ips, epi, mcode, crd, carinbb, genomics, cmc, ndh.
 Fixed & integrated this session via the **investigate-then-align loop** (deep-dive stock's
 algorithm → port it; NEVER spot-fix): N7, G4, N1, **G2** (carinbb perfect, genomics +64),
 G14/G11, G9, G5, narrative, G13 (instance order = InstanceOf snapshot order), VS/CS carets
