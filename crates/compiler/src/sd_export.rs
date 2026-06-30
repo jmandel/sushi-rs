@@ -64,6 +64,9 @@ pub struct ExportedSd {
 pub struct SdContext<'a> {
     pub store: &'a package_store::PackageStore,
     cfg: &'a Config,
+    /// The parsed FSH documents — retained so the SD pass can export an inline
+    /// `Instance` on demand when it is assigned to a profile element.
+    docs: &'a [FshDocument],
     tank: Vec<TankSd>,
     /// name -> tank index
     by_name: std::collections::HashMap<String, usize>,
@@ -215,7 +218,7 @@ impl<'a> SdContext<'a> {
     pub fn new(
         store: &'a package_store::PackageStore,
         cfg: &'a Config,
-        docs: &[FshDocument],
+        docs: &'a [FshDocument],
         vs_url: &'a dyn Fn(&str) -> Option<String>,
         cs_url: &'a dyn Fn(&str) -> Option<String>,
     ) -> SdContext<'a> {
@@ -274,6 +277,7 @@ impl<'a> SdContext<'a> {
         SdContext {
             store,
             cfg,
+            docs,
             tank,
             by_name,
             by_id,
@@ -302,6 +306,16 @@ impl<'a> SdContext<'a> {
             tank_sd_meta: &self.tank_sd_meta,
             predefined_vs: &self.predefined_vs,
         }
+    }
+
+    /// The IG config (for on-demand inline-instance export in the SD pass).
+    pub fn cfg(&self) -> &'a Config {
+        self.cfg
+    }
+
+    /// The parsed FSH documents (for on-demand inline-instance export).
+    pub fn docs(&self) -> &'a [FshDocument] {
+        self.docs
     }
 
     /// Fish the InstanceOf SD JSON (snapshot) for an instance export, mirroring
@@ -485,7 +499,7 @@ impl<'a> SdContext<'a> {
                 predefined_vs: &self.predefined_vs,
             };
             let mut local_diag = Vec::new();
-            set_rules(&mut sd, &mut def, kind, &fisher, self.cfg, self.vs_url, self.cs_url, &mut local_diag);
+            set_rules(&mut sd, &mut def, kind, &fisher, self.cfg, self.vs_url, self.cs_url, &mut local_diag, &*self);
             if kind == StructureKind::Extension {
                 set_context(&mut sd, &def, &fisher);
             }
@@ -983,6 +997,7 @@ fn set_rules(
     vs_url: &dyn Fn(&str) -> Option<String>,
     cs_url: &dyn Fn(&str) -> Option<String>,
     diag: &mut Vec<String>,
+    ctx: &SdContext,
 ) {
     resolve_soft_indexing(&mut def.rules);
     let rules = def.rules.clone();
@@ -1025,6 +1040,35 @@ fn set_rules(
                 // CodeSystems alike.
                 let resolved = resolve_code_system_in_value(value, fisher, cs_url);
                 assign_value(sd, ei, resolved.as_ref().unwrap_or(value), *exactly, fisher);
+            }
+            Rule::Assignment {
+                value,
+                raw_value,
+                exactly,
+                is_instance: true,
+                ..
+            } => {
+                // An inline `Instance` assigned to a profile element
+                // (`StructureDefinitionExporter.setAssignedValues`,
+                // `sushi-ts/src/export/StructureDefinitionExporter.ts:795-823`):
+                // stock lazily exports the Instance via a fresh `InstanceExporter`
+                // and `element.assignValue(value, exactly)`. We mirror that by
+                // exporting the inline Instance on demand and assigning its JSON as
+                // `pattern[x]`/`fixed[x]` (key from the Instance's `InstanceOf`
+                // FHIR type). The instance name may be a non-string token, so fall
+                // back to the raw value text (matches the instance-pass handling).
+                let name = match value {
+                    Some(FshValue::Str(s)) => Some(s.clone()),
+                    _ => raw_value.clone(),
+                };
+                if let Some(name) = name {
+                    if let Some((body, type_name)) =
+                        crate::instance_export::export_inline_instance(ctx, &name)
+                    {
+                        set_pattern(&mut sd.elements[ei], &type_name, body, *exactly);
+                        enforce_discriminator_min(sd, ei);
+                    }
+                }
             }
             Rule::Flag { flags, .. } => {
                 apply_flags_sd(sd, ei, flags, sd_derivation_specialization(kind), diag);
@@ -2395,7 +2439,7 @@ fn apply_caret_element(
 /// Build the SD export context and export every local SD (in tank order).
 /// Returns the context so the InstanceExporter can fish InstanceOf snapshots.
 pub fn build_sd_context<'a>(
-    docs: &[FshDocument],
+    docs: &'a [FshDocument],
     cfg: &'a Config,
     store: &'a package_store::PackageStore,
     vs_url: &'a dyn Fn(&str) -> Option<String>,

@@ -2287,6 +2287,10 @@ struct ExportedInst {
     filename: String,
     write: bool,
     ig: IgInstanceMeta,
+    /// FHIR type of the InstanceOf SD (`sd.type`, or `Binary` for logicals).
+    /// Used by on-demand inline-instance assignment to pick the `pattern[x]`
+    /// / `fixed[x]` key in the StructureDefinition exporter.
+    type_name: String,
 }
 
 /// Metadata an instance contributes to the generated ImplementationGuide
@@ -2422,6 +2426,53 @@ pub fn export_instances(
     out
 }
 
+/// Export a single inline `Instance` on demand for assignment to a profile
+/// element. Mirrors stock `StructureDefinitionExporter.setAssignedValues`
+/// (`sushi-ts/src/export/StructureDefinitionExporter.ts:795-823`), which creates
+/// a fresh `InstanceExporter` and calls `fishForFHIR(rule.value)`. Returns the
+/// ordered FHIR JSON body plus the instance's FHIR type name (for the
+/// `pattern[x]`/`fixed[x]` key). A fresh exporter (and memo) per call matches
+/// stock's per-rule `new InstanceExporter(...)`.
+pub fn export_inline_instance(ctx: &SdContext, name: &str) -> Option<(J, String)> {
+    let cfg = ctx.cfg();
+    let docs = ctx.docs();
+    let mut by_name: HashMap<String, &Instance> = HashMap::new();
+    let mut id_to_name: HashMap<String, String> = HashMap::new();
+    for doc in docs {
+        for (_k, inst) in &doc.instances {
+            if !by_name.contains_key(&inst.name) {
+                by_name.insert(inst.name.clone(), inst);
+                id_to_name
+                    .entry(effective_instance_id(inst))
+                    .or_insert_with(|| inst.name.clone());
+            }
+        }
+    }
+    let mut aliases: HashMap<String, String> = HashMap::new();
+    for doc in docs {
+        for (k, v) in &doc.aliases {
+            aliases.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
+    let inst_idx = {
+        let inner_fisher = ctx.fisher();
+        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        InstanceIndex::build(docs, cfg, &index_fisher)
+    };
+    let exporter = Exporter {
+        cfg,
+        ctx,
+        inst_idx,
+        def_idx: DefIndex::build(docs, cfg),
+        by_name,
+        id_to_name,
+        aliases,
+        memo: std::cell::RefCell::new(HashMap::new()),
+        sd_cache: std::cell::RefCell::new(HashMap::new()),
+    };
+    exporter.fish_instance_typed(name)
+}
+
 impl<'a> Exporter<'a> {
     /// Fish an exported InstanceDefinition body by FSH name (for inline-instance
     /// assignment). Returns the ordered JSON to embed.
@@ -2436,6 +2487,27 @@ impl<'a> Exporter<'a> {
         // External instance: fish raw FHIR JSON from packages. This body is owned
         // by the AssignRule and mutated downstream, so clone out of the shared Rc.
         self.ctx.fisher().fish_for_fhir(base).map(|rc| (*rc).clone())
+    }
+
+    /// Like `fish_instance`, but also returns the instance's FHIR type name so the
+    /// StructureDefinition exporter can pick the `pattern[x]`/`fixed[x]` key when
+    /// assigning an inline Instance to a profile element.
+    fn fish_instance_typed(&self, name: &str) -> Option<(J, String)> {
+        let base = name.split('|').next().unwrap_or(name);
+        if self.by_name.contains_key(base) {
+            return self.export(base).map(|e| (e.body, e.type_name));
+        }
+        if let Some(real) = self.id_to_name.get(base) {
+            return self.export(real).map(|e| (e.body, e.type_name));
+        }
+        // External instance: type comes from the raw FHIR JSON's resourceType.
+        let body = (*self.ctx.fisher().fish_for_fhir(base)?).clone();
+        let tn = body
+            .get("resourceType")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        Some((body, tn))
     }
 
     fn export(&self, name: &str) -> Option<ExportedInst> {
@@ -2557,6 +2629,7 @@ impl<'a> Exporter<'a> {
             filename,
             write: !is_inline,
             ig,
+            type_name,
         })
     }
 
