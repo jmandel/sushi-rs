@@ -27,6 +27,19 @@ them) and don't move the 2065 number even when correct — verify those via
 longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
 `reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
+**COMPAT-BREAK MECHANISM (2026-06-30):** intentional divergences where STOCK emits invalid/
+buggy output are tracked in `docs/compat-breaks.json` + `tests/compat-golden/<ig>/<file>.diff`,
+and counted SEPARATELY from byte-parity (not failures). It is **DIFF-BASED**: the gate asserts
+the current `diff <stock> <ours>` EQUALS the recorded `.diff` — only the specific recorded
+difference is tolerated; any other change in that file is flagged UNEXPECTED (regression) or
+RESOLVED (stock now matches). Dashboard reports both **byte-identical** AND **EQUIVALENT
+(parity + tracked divergences)**. First entry: **4 pas files** where stock emits an empty
+required-extension scaffold (`{url}`-only, violates FHIR **ext-1**) as an order-dependent side-
+effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit valid FHIR. So
+**Root Cause C is RESOLVED via compat-break, NOT the risky shared-cache work** (which existed
+only to reproduce invalid output). Score: **byte-identical 2052/2065, EQUIVALENT 2056/2065
+(99.6%)**, 9 REAL fails left (sdc 3 + dtr 4 + ecr 2 — genuine bugs, separate root causes).
+
 **8/12 IGs BYTE-IDENTICAL:** ips, epi, mcode, crd, carinbb, genomics(301/301), cmc, ndh(260/260).
 Fixed & integrated this session via the **investigate-then-align loop** (deep-dive stock's
 algorithm → port it; NEVER spot-fix): N7, G4, N1, **G2** (carinbb perfect, genomics +64),

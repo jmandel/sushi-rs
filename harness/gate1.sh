@@ -18,6 +18,14 @@ BIN="$REPO/target/release/rust_sushi"
 CACHE="${FHIR_CACHE:-$MAIN/temp/fhir-home/.fhir/packages}"
 OUT="${OUT:-/tmp/gate1-$$}"; mkdir -p "$OUT"
 
+# Intentional divergences (docs/compat-breaks.json): gated vs golden, never counted as fail.
+declare -A DIVERGE
+if [ -f "$MAIN/docs/compat-breaks.json" ]; then
+  while IFS= read -r key; do DIVERGE["$key"]=1; done < <(
+    python3 -c "import json
+for d in json.load(open('$MAIN/docs/compat-breaks.json'))['divergences']: print(d['ig']+'/'+d['file'])" 2>/dev/null)
+fi
+
 declare -A IG
 for ig in ips epi mcode crd; do
   IG[$ig]="/home/jmandel/periodicity/temp/$ig-ig|$MAIN/temp/$ig-stock"
@@ -40,6 +48,14 @@ for ig in "${sel[@]}"; do
   p=0; f=0; m=0
   for sf in "$A"/*.json; do
     bn="$(basename "$sf")"
+    # intentional divergence (docs/compat-breaks.json): the stock-vs-ours diff must
+    # EQUAL the recorded expected diff exactly (pins the specific accepted difference).
+    if [ -n "${DIVERGE[$ig/$bn]:-}" ]; then
+      exp="$MAIN/tests/compat-golden/$ig/$bn.diff"
+      if [ -f "$B/$bn" ] && [ -f "$exp" ] && [ "$(diff "$sf" "$B/$bn")" = "$(cat "$exp")" ]; then :;
+      else f=$((f+1)); echo "  COMPAT-UNEXPECTED $ig/$bn (divergence != recorded diff)"; fi
+      continue
+    fi
     if [ ! -f "$B/$bn" ]; then m=$((m+1));
     elif diff -q "$sf" "$B/$bn" >/dev/null 2>&1; then p=$((p+1)); else f=$((f+1)); fi
   done
