@@ -1,0 +1,60 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ersd-supplemental-library",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-supplemental-library",
+  "name": "ERSDSupplementalLibrary",
+  "title": "eRSD Supplemental Library",
+  "status": "active",
+  "description": "Defines the asset-collection library containing the eRSD supplemental assets.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Library",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-supplemental-library",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Library",
+        "path": "Library",
+        "short": "eRSD Supplemental Library"
+      },
+      {
+        "id": "Library.relatedArtifact",
+        "path": "Library.relatedArtifact",
+        "min": 3
+      },
+      {
+        "id": "Library.relatedArtifact:sliceJurisdictionsCodeSystem",
+        "path": "Library.relatedArtifact",
+        "sliceName": "sliceJurisdictionsCodeSystem",
+        "short": "Jurisdiction CodeSystem",
+        "definition": "Jurisdictions CodeSystem",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.relatedArtifact:sliceJurisdictionsCodeSystem.type",
+        "path": "Library.relatedArtifact.type",
+        "short": "composed-of",
+        "definition": "The type of relationship to the related artifact. Fixed to composed-of.",
+        "patternCode": "composed-of"
+      },
+      {
+        "id": "Library.relatedArtifact:sliceJurisdictionsCodeSystem.resource",
+        "path": "Library.relatedArtifact.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-codesystem"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-external-resource-extension",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-external-resource-extension",
+  "name": "RRExternalResourceExtension",
+  "title": "RR External Resource Extension",
+  "status": "active",
+  "description": "This Extension profile represents an external resource (DocumentReference) pertaining to the condition such as a text guidance, link to access forms for additional reporting needs, additional testing and/or laboratory testing needs, treatment and/or prevention resources, Public Health Agency contact information and general additional resources.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Observation",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "External Resource"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-external-resource-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "DocumentReference for an external resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-documentreference"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

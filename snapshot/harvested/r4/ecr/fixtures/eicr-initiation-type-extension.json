@@ -1,0 +1,53 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-initiation-type-extension",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-initiation-type-extension",
+  "name": "EICRInitiationTypeExtension",
+  "title": "eICR Initiation Type Extension",
+  "status": "active",
+  "description": "This Extension profile represents that the eICR, was either manually or alternately initiated by the provider.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Composition.section",
+      "type": "element"
+    },
+    {
+      "expression": "Composition",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-initiation-type-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.11",
+          "description": "Initiation Types"
+        }
+      }
+    ]
+  }
+}

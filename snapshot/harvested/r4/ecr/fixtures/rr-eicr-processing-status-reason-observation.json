@@ -1,0 +1,106 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-eicr-processing-status-reason-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-reason-observation",
+  "name": "RREicrProcessingStatusReasonObservation",
+  "title": "eICR Processing Status Reason Observation",
+  "status": "active",
+  "description": "This Observation profile represents, if the incoming eICR was not successfully processed for a determination of reportability, the reason it was not processed.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "CDA",
+      "name": "eICR Processing Status Reason observation mapping to CDA",
+      "comment": "This table maps eICR Processing status reason observation profile to CDA"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "eICR Processing Status Reason",
+        "definition": "If the incoming eICR was not successfully processed for a determination of reportability, contains the reason it was not processed.  If any of the trigger codes used to generate the eICR are from an outdated version of the RCTC or the codes are marked as inactive in the latest version fo the RCTC, these are flagged and compoent observations will hold the details of the outdated and expected versions of the RCTC."
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "RR6",
+              "system": "urn:oid:2.16.840.1.114222.4.5.232",
+              "display": "eICR Processing Status Reason"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "Processing status reason",
+        "definition": "If the incoming eICR was not successfully processed for a determination of reportability, contains the reason it was not processed.",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.7",
+          "description": "Processing Status Reason"
+        }
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "short": "eICR Processing Status Reason Detail",
+        "definition": "Further details about eICR processing status warnings or errors. If any of the trigger codes used to generate the eICR are from an outdated version of the RCTC or the codes are marked as inactive in the latest version of the RCTC, will contain the details of the outdated and expected versions of the RCTC.",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component.code",
+        "path": "Observation.component.code",
+        "short": "Type of processing status reason detail",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.10",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+              "valueString": "ObservationCode"
+            }
+          ],
+          "description": "Processing Status Reason Detail Type"
+        }
+      },
+      {
+        "id": "Observation.component.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "Processing status reason detail",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          },
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "eICR Processing Status/eICR Processing Status Reason/eICR Processing Status Reason Detail/value"
+          }
+        ]
+      }
+    ]
+  }
+}

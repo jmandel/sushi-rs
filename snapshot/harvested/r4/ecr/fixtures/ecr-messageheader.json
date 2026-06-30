@@ -1,0 +1,45 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ecr-messageheader",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ecr-messageheader",
+  "name": "ECRMessageHeader",
+  "title": "eCR MessageHeader",
+  "status": "active",
+  "description": "This MessageHeader profile represents metadata to support the eCR messaging paradigm.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "MessageHeader",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-messageheader",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MessageHeader.source.name",
+        "path": "MessageHeader.source.name",
+        "mustSupport": true
+      },
+      {
+        "id": "MessageHeader.source.contact",
+        "path": "MessageHeader.source.contact",
+        "mustSupport": true
+      },
+      {
+        "id": "MessageHeader.focus",
+        "path": "MessageHeader.focus",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-document-bundle",
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-document-bundle"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-relevant-reportable-condition-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-relevant-reportable-condition-observation",
+  "name": "RRRelevantReportableConditionObservation",
+  "title": "RR Relevant Reportable Condition Observation",
+  "status": "active",
+  "description": "This profile represents a relevant reportable condition.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "RR Relevant Reportable Condition Observation"
+      },
+      {
+        "id": "Observation.extension",
+        "path": "Observation.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Observation.extension:externalResourceExtension",
+        "path": "Observation.extension",
+        "sliceName": "externalResourceExtension",
+        "short": "External resources pertaining to the condition",
+        "definition": "External resources such as a text guidance, link to access forms for additional reporting needs, additional testing and/or laboratory testing needs, treatment and/or prevention resources, Public Health Agency contact information and general additional resources.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-external-resource-extension"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.extension:supportingInformation",
+        "path": "Observation.extension",
+        "sliceName": "supportingInformation",
+        "short": "The supportingInformation Extension is used to reference supporting information contained in other resources",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/workflow-supportingInfo"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeSNOMED",
+        "path": "Observation.code.coding",
+        "sliceName": "codeSNOMED",
+        "short": "Condition",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeSNOMED.system",
+        "path": "Observation.code.coding.system",
+        "min": 1,
+        "fixedUri": "http://snomed.info/sct",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeSNOMED.code",
+        "path": "Observation.code.coding.code",
+        "min": 1,
+        "fixedCode": "64572001",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeLOINC",
+        "path": "Observation.code.coding",
+        "sliceName": "codeLOINC",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeLOINC.system",
+        "path": "Observation.code.coding.system",
+        "min": 1,
+        "fixedUri": "http://loinc.org",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding:codeLOINC.code",
+        "path": "Observation.code.coding.code",
+        "min": 1,
+        "fixedCode": "75323-6",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x].coding",
+        "path": "Observation.value[x].coding",
+        "short": "The condition code shall be selected from SNOMED CT",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x].coding.system",
+        "path": "Observation.value[x].coding.system",
+        "fixedUri": "http://snomed.info/sct"
+      },
+      {
+        "id": "Observation.value[x].text",
+        "path": "Observation.value[x].text",
+        "short": "Use text if there is no available condition code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.dataAbsentReason",
+        "path": "Observation.dataAbsentReason",
+        "short": "Use 'not-applicable' when eICR manually initiated or no reportable condition identified",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.hasMember",
+        "path": "Observation.hasMember",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.hasMember:sliceReportabilityInformationObservation",
+        "path": "Observation.hasMember",
+        "sliceName": "sliceReportabilityInformationObservation",
+        "short": "Reportability information based on the PHA in which is located the patient's home, the provider facility, or both locations",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-reportability-information-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

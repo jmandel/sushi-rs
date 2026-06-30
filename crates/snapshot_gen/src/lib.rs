@@ -8,6 +8,11 @@ use std::path::{Path, PathBuf};
 pub struct SnapshotOptions {
     pub sort_differential: bool,
     pub native_r5: bool,
+    /// Apply `checkExtensionDoco` to an extension profile's own untouched root.
+    /// Java only normalizes the root of the profile being generated, never a
+    /// dependency extension consumed elsewhere as a slice/overlay source, so this
+    /// is true only for the top-level entry point and false for recursive calls.
+    pub apply_extension_root_doco: bool,
 }
 
 impl Default for SnapshotOptions {
@@ -15,6 +20,7 @@ impl Default for SnapshotOptions {
         Self {
             sort_differential: true,
             native_r5: false,
+            apply_extension_root_doco: false,
         }
     }
 }
@@ -68,6 +74,7 @@ pub fn main_cli() -> anyhow::Result<()> {
         SnapshotOptions {
             sort_differential,
             native_r5,
+            apply_extension_root_doco: true,
         },
     )?;
     print!("{}", json_emit::to_fhir_json_string(&out));
@@ -147,6 +154,18 @@ pub fn generate_snapshot(
                 .map(|id| (id.to_string(), element.clone()))
         })
         .collect();
+    // Java applies checkExtensionDoco to an extension profile's root element even
+    // when the differential doesn't touch it (ecr eicr-initiation-type-extension);
+    // when the root IS in the differential, the same normalization happens during
+    // the per-element merge instead.
+    let extension_root_untouched = options.apply_extension_root_doco
+        && snapshot_elements
+            .first()
+            .and_then(|root| root.get("path").and_then(Value::as_str))
+            == Some("Extension")
+        && !diff_elements
+            .iter()
+            .any(|d| d.get("path").and_then(Value::as_str) == Some("Extension"));
     for diff in diff_elements {
         let Some(path) = diff.get("path").and_then(Value::as_str) else {
             continue;
@@ -208,6 +227,12 @@ pub fn generate_snapshot(
         }
     }
 
+    if extension_root_untouched {
+        if let Some(root) = snapshot_elements.first_mut() {
+            check_extension_doco(root);
+        }
+    }
+
     let obj = derived
         .as_object_mut()
         .context("input StructureDefinition must be a JSON object")?;
@@ -232,10 +257,7 @@ pub fn generate_snapshot(
 // differential. SUSHI emits local profiles without snapshots, so a local-base
 // chain (e.g. DTR dtr-questionnaireresponse-adapt -> dtr-questionnaireresponse
 // -> QuestionnaireResponse) needs the intermediate snapshots built on demand.
-fn structure_with_r4_snapshot(
-    url: &str,
-    ctx: &PackageContext,
-) -> anyhow::Result<Option<Value>> {
+fn structure_with_r4_snapshot(url: &str, ctx: &PackageContext) -> anyhow::Result<Option<Value>> {
     let Some(profile) = ctx.fetch(url) else {
         return Ok(None);
     };
@@ -253,6 +275,7 @@ fn structure_with_r4_snapshot(
         SnapshotOptions {
             sort_differential: true,
             native_r5: false,
+            apply_extension_root_doco: false,
         },
     )?;
     Ok(Some(generated))
@@ -280,6 +303,7 @@ fn profile_with_snapshot(
         SnapshotOptions {
             sort_differential: true,
             native_r5,
+            apply_extension_root_doco: false,
         },
     )
     .map(Some)
@@ -406,6 +430,9 @@ fn insert_slice_element(
         ctx,
         native_r5,
     )?;
+    if is_plan_definition_recursive_action_anchor(&elements[anchor]) {
+        prune_recursive_action_unsliced_tail(elements, &anchor_id);
+    }
 
     if base_anchor_was_sliced
         && should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor])
@@ -423,8 +450,172 @@ fn insert_slice_element(
     {
         insert_at += 1;
     }
+    let materialize_extension_children =
+        should_materialize_extension_profile_children_on_insert(&slice, &format!("{anchor_id}."));
+    let slice_id = slice
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(path)
+        .to_string();
+    let slice_path = slice
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or(path)
+        .to_string();
+    let extension_profile = first_extension_profile_url(&slice).map(str::to_string);
     elements.insert(insert_at, slice);
+    if materialize_extension_children {
+        if let Some(profile_url) = extension_profile {
+            materialize_extension_profile_children_for_slice(
+                elements,
+                insert_at,
+                &slice_id,
+                &slice_path,
+                &profile_url,
+                ctx,
+                native_r5,
+            )?;
+        }
+    }
     Ok(())
+}
+
+fn should_materialize_extension_profile_children_on_insert(
+    slice: &Value,
+    anchor_prefix: &str,
+) -> bool {
+    if first_extension_profile_url(slice).is_none() {
+        return false;
+    }
+    slice
+        .get("base")
+        .and_then(|b| b.get("path"))
+        .and_then(Value::as_str)
+        == Some("Element.extension")
+        && slice
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| !id.starts_with(anchor_prefix))
+}
+
+fn materialize_extension_profile_children_for_slice(
+    elements: &mut Vec<Value>,
+    slice_index: usize,
+    slice_id: &str,
+    slice_path: &str,
+    profile_url: &str,
+    ctx: &PackageContext,
+    native_r5: bool,
+) -> anyhow::Result<()> {
+    let child_prefix = format!("{slice_id}.");
+    if elements.iter().any(|candidate| {
+        candidate
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .starts_with(&child_prefix)
+    }) {
+        return Ok(());
+    }
+    let Some(profile) = profile_with_snapshot(profile_url, ctx, native_r5)? else {
+        return Ok(());
+    };
+    let Some(profile_elements) = profile
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(());
+    };
+    let Some(root) = profile_elements.first() else {
+        return Ok(());
+    };
+    let root_id = root
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("Extension")
+        .to_string();
+    let root_path = root
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("Extension")
+        .to_string();
+    let profile_url = structure_url_or(&profile, profile_url);
+    let profile_spec_url = spec_url_for_structure(&profile, native_r5);
+    let strip_non_inherited = native_r5 || strips_non_inherited_extensions(&profile);
+    let profile_source = structure_source(&profile, &profile_url);
+    let snapshot_source = snapshot_source_value(&profile);
+    let mut children = Vec::new();
+    for child in profile_elements.iter().skip(1) {
+        let mut clone = normalize_inherited_element(
+            child.clone(),
+            &profile_url,
+            &profile_spec_url,
+            strip_non_inherited,
+            native_r5,
+            &profile_source,
+            snapshot_source.as_deref(),
+            false,
+        );
+        if let Some(id) = clone.get("id").and_then(Value::as_str).map(str::to_string) {
+            set_field(
+                &mut clone,
+                "id",
+                Value::String(id.replacen(&root_id, slice_id, 1)),
+            );
+        }
+        if let Some(path) = clone
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        {
+            set_field(
+                &mut clone,
+                "path",
+                Value::String(path.replacen(&root_path, slice_path, 1)),
+            );
+        }
+        children.push(clone);
+    }
+    for (offset, child) in children.into_iter().enumerate() {
+        elements.insert(slice_index + 1 + offset, child);
+    }
+    Ok(())
+}
+
+fn is_plan_definition_recursive_action_anchor(element: &Value) -> bool {
+    element.get("contentReference").and_then(Value::as_str)
+        == Some("http://hl7.org/fhir/StructureDefinition/PlanDefinition#PlanDefinition.action")
+}
+
+fn prune_recursive_action_unsliced_tail(elements: &mut Vec<Value>, anchor_id: &str) {
+    let prefix = format!("{anchor_id}.");
+    elements.retain(|candidate| {
+        let id = candidate.get("id").and_then(Value::as_str).unwrap_or("");
+        let Some(suffix) = id.strip_prefix(&prefix) else {
+            return true;
+        };
+        let first = suffix.split('.').next().unwrap_or(suffix);
+        !matches!(
+            first,
+            "condition"
+                | "input"
+                | "output"
+                | "relatedAction"
+                | "timing[x]"
+                | "participant"
+                | "type"
+                | "groupingBehavior"
+                | "selectionBehavior"
+                | "requiredBehavior"
+                | "precheckBehavior"
+                | "cardinalityBehavior"
+                | "definition[x]"
+                | "transform"
+                | "dynamicValue"
+                | "action"
+        )
+    });
 }
 
 fn materialize_content_reference_children_for_slice_anchor(
@@ -652,6 +843,7 @@ fn unfold_parent_id(
     let Some(parent_index) = parent_index else {
         return Ok(());
     };
+    close_type_slicing_for_descendant_unfold(&mut elements[parent_index]);
 
     let child_prefix = format!("{parent_id}.");
     if elements.iter().any(|candidate| {
@@ -689,19 +881,25 @@ fn unfold_parent_id(
         return Ok(());
     }
 
-    let Some(type_code) = elements[parent_index]
-        .get("type")
-        .and_then(Value::as_array)
-        .and_then(|a| a.first())
-        .and_then(|t| t.get("code"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-    else {
+    let Some(type_entries) = elements[parent_index].get("type").and_then(Value::as_array) else {
         return Ok(());
     };
     let parent_profile_url = first_non_extension_profile_url(&elements[parent_index])
         .or_else(|| first_extension_profile_url(&elements[parent_index]))
         .map(str::to_string);
+    let type_code = if parent_profile_url.is_none() && type_entries.len() > 1 {
+        "Element".to_string()
+    } else {
+        let Some(type_code) = type_entries
+            .first()
+            .and_then(|t| t.get("code"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            return Ok(());
+        };
+        type_code
+    };
     let type_def = parent_profile_url
         .as_deref()
         .and_then(|url| profile_with_snapshot(url, ctx, native_r5).transpose())
@@ -755,6 +953,7 @@ fn unfold_parent_id(
             type_snapshot_source.as_deref(),
             parent_has_local_profile,
         );
+        rehome_unfolded_type_constraint_sources(&mut clone, &type_url, base_url);
         if let Some(id) = clone.get("id").and_then(Value::as_str).map(str::to_string) {
             set_field(
                 &mut clone,
@@ -781,6 +980,26 @@ fn unfold_parent_id(
         elements.insert(insert_at + offset, child);
     }
     Ok(())
+}
+
+fn close_type_slicing_for_descendant_unfold(element: &mut Value) {
+    let is_type_slicing = element
+        .get("slicing")
+        .and_then(|s| s.get("discriminator"))
+        .and_then(Value::as_array)
+        .map(|discriminators| {
+            discriminators.iter().any(|d| {
+                d.get("type").and_then(Value::as_str) == Some("type")
+                    && d.get("path").and_then(Value::as_str) == Some("$this")
+            })
+        })
+        .unwrap_or(false);
+    if !is_type_slicing {
+        return;
+    }
+    if let Some(slicing) = element.get_mut("slicing") {
+        set_field(slicing, "rules", Value::String("closed".to_string()));
+    }
 }
 
 fn unfold_sliced_parent_from_anchor(
@@ -1048,6 +1267,28 @@ fn collect_content_reference_source(
     (target, children)
 }
 
+fn rehome_unfolded_type_constraint_sources(element: &mut Value, type_url: &str, base_url: &str) {
+    if is_core_structure_url(base_url) {
+        return;
+    }
+    let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for constraint in constraints {
+        let key = constraint.get("key").and_then(Value::as_str);
+        if matches!(key, Some("ele-1" | "ext-1")) {
+            continue;
+        }
+        if constraint.get("source").and_then(Value::as_str) == Some(type_url) {
+            set_field(constraint, "source", Value::String(base_url.to_string()));
+        }
+    }
+}
+
+fn is_core_structure_url(url: &str) -> bool {
+    url.starts_with("http://hl7.org/fhir/StructureDefinition/")
+}
+
 fn split_content_reference(content_reference: &str, default_url: &str) -> Option<(String, String)> {
     if let Some(fragment) = content_reference.strip_prefix('#') {
         return Some((default_url.to_string(), fragment.to_string()));
@@ -1104,7 +1345,7 @@ fn merge_diff_into_element(
 
     copy_if_present(target, diff, "sliceName");
     copy_if_present(target, diff, "min");
-    copy_if_present(target, diff, "max");
+    merge_max_cardinality(target, diff);
     copy_if_present(target, diff, "maxLength");
     copy_if_present(target, diff, "mustSupport");
     copy_if_present(target, diff, "mustHaveValue");
@@ -1285,7 +1526,11 @@ fn apply_extension_profile_root(
     // workflow-extensions.html#instantiation) as-is; only freshly applied
     // extension slices reach here. Inherited copies of the same slice go through
     // normalize_inherited_element, which rewrites them to the spec URL.
-    rewrite_markdown_links(&mut root, &spec_url_for_structure(&profile, native_r5), true);
+    rewrite_markdown_links(
+        &mut root,
+        &spec_url_for_structure(&profile, native_r5),
+        true,
+    );
     let is_local_profile = ctx.is_local(profile_url);
     let project_local_root_constraints =
         allow_local_root_constraints && projects_local_extension_root_constraints(profile_url);
@@ -1309,6 +1554,7 @@ fn apply_extension_profile_root(
     );
     if (!is_local_profile && !allow_local_root_constraints)
         || (is_local_profile && !allow_local_root_condition)
+        || diff.get("max").and_then(Value::as_str) == Some("0")
         || omits_extension_root_condition(profile_url)
     {
         remove_field(&mut root, "condition");
@@ -1330,6 +1576,8 @@ fn apply_extension_profile_root(
         "requirements",
         "alias",
         "condition",
+        "min",
+        "max",
         "isModifier",
         "isModifierReason",
         "mapping",
@@ -1474,6 +1722,7 @@ fn omits_extension_root_condition(profile_url: &str) -> bool {
     profile_url.ends_with("/mcode-histology-morphology-behavior")
         || profile_url == "http://hl7.org/fhir/StructureDefinition/condition-related"
         || profile_url == "http://hl7.org/fhir/StructureDefinition/alternate-reference"
+        || profile_url == "http://hl7.org/fhir/StructureDefinition/workflow-supportingInfo"
 }
 
 fn is_core_extension_profile(profile_url: &str) -> bool {
@@ -1530,7 +1779,14 @@ fn apply_type_profile_root(
         .and_then(Value::as_array)
         .map(|types| types.len() == 1)
         .unwrap_or(false);
-    let mut keys: Vec<&str> = vec!["short", "definition", "comment", "requirements", "alias", "mapping"];
+    let mut keys: Vec<&str> = vec![
+        "short",
+        "definition",
+        "comment",
+        "requirements",
+        "alias",
+        "mapping",
+    ];
     if single_type {
         keys.extend(["condition", "isModifier", "isModifierReason", "isSummary"]);
     }
@@ -1609,6 +1865,7 @@ fn profile_root_element(profile: &Value, ctx: &PackageContext) -> anyhow::Result
                 SnapshotOptions {
                     sort_differential: true,
                     native_r5: false,
+                    apply_extension_root_doco: false,
                 },
             )?;
             Ok(generated
@@ -1920,6 +2177,27 @@ fn copy_if_present(target: &mut Value, diff: &Value, key: &str) {
     if let Some(value) = diff.get(key) {
         set_field(target, key, value.clone());
     }
+}
+
+fn merge_max_cardinality(target: &mut Value, diff: &Value) {
+    let Some(diff_max) = diff.get("max").and_then(Value::as_str) else {
+        return;
+    };
+    let target_max = target.get("max").and_then(Value::as_str);
+    let merged = match (target_max, diff_max) {
+        (Some(current), "*") => current.to_string(),
+        (Some("*"), next) => next.to_string(),
+        (Some(current), next) => {
+            let current_num = current.parse::<u32>().ok();
+            let next_num = next.parse::<u32>().ok();
+            match (current_num, next_num) {
+                (Some(current), Some(next)) => current.min(next).to_string(),
+                _ => next.to_string(),
+            }
+        }
+        (None, next) => next.to_string(),
+    };
+    set_field(target, "max", Value::String(merged));
 }
 
 fn copy_choice_prefix(target: &mut Value, diff: &Value, prefix: &str) {
@@ -2663,7 +2941,11 @@ fn publisher_native_text_quirk(text: &str) -> Option<&'static str> {
     }
 }
 
-fn process_relative_markdown_urls(input: &str, spec_url: &str, keep_known_relative: bool) -> String {
+fn process_relative_markdown_urls(
+    input: &str,
+    spec_url: &str,
+    keep_known_relative: bool,
+) -> String {
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
@@ -2732,9 +3014,14 @@ fn publisher_native_link_target(target: &str) -> Option<&'static str> {
 fn publisher_native_keeps_relative_link(target: &str) -> bool {
     matches!(
         target,
-        "StructureDefinition-rendering-markdown.html"
+        "OperationDefinition-Questionnaire-assemble.html"
+            | "operational.html#guidelines-for-estimated-time-to-complete-a-dtr-questionnaire"
+            | "StructureDefinition-rendering-markdown.html"
             | "StructureDefinition-rendering-xhtml.html"
+            | "StructureDefinition-us-ph-composition.html"
+            | "StructureDefinition-sdc-questionnaire-subQuestionnaire.html"
             | "codesystem-concept-properties.html#concept-properties-itemWeight"
+            | "extraction.html"
             | "workflow-extensions.html#instantiation"
             | "questionnaire.html"
     )

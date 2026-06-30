@@ -1,0 +1,110 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-responsible-agency-organization",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-responsible-agency-organization",
+  "name": "RRResponsibleAgencyOrganization",
+  "title": "RR Responsible Agency Organization",
+  "status": "active",
+  "description": "This Organization profile represents the Responsible Agency which is a PHA to which reporting is legally required.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "CDA",
+      "name": "RR Responsible Agency Organization mapping to CDA",
+      "comment": "This table maps RR Responsible Agency Organization profile to CDA"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-organization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization",
+        "path": "Organization",
+        "short": "Responsible Agency",
+        "definition": "The Responsible Agency profile is based on the eCR Organization profile and sets the type to 'Responsible Agency'. A Responsible Agency is a PHA to which reporting is legally required. This represents the PHA for the location in which care was provided and/or where the patient lives."
+      },
+      {
+        "id": "Organization.text",
+        "path": "Organization.text",
+        "short": "Repsponsible Agency Description",
+        "definition": "Description of the Responsible Agency",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Responsible Agency/participantRole/playingEntity/desc",
+            "comment": "Responsible Agency Description"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier",
+        "path": "Organization.identifier",
+        "short": "Responsible Agency Id",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Responsible Agency/participantRole/id",
+            "comment": "Responsible Agency Identifier"
+          }
+        ]
+      },
+      {
+        "id": "Organization.type",
+        "path": "Organization.type",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "RR8",
+              "system": "urn:oid:2.16.840.1.114222.4.5.232",
+              "display": "Responsible Agency"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.name",
+        "path": "Organization.name",
+        "short": "Responsible Agency Name",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Responsible Agency/participantRole/playingEntity/name",
+            "comment": "Responsible Agency Name"
+          }
+        ]
+      },
+      {
+        "id": "Organization.telecom",
+        "path": "Organization.telecom",
+        "short": "Responsible Agency Contact Information",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Responsible Agency/participantRole/telecom",
+            "comment": "Responsible Agency Contact Information"
+          }
+        ]
+      },
+      {
+        "id": "Organization.address",
+        "path": "Organization.address",
+        "short": "Responsible Agency Address",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Responsible Agency/participantRole/addr",
+            "comment": "Responsible Agency Address Information"
+          }
+        ]
+      }
+    ]
+  }
+}

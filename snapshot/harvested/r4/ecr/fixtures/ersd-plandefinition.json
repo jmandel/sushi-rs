@@ -1,0 +1,1135 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ersd-plandefinition",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-plandefinition",
+  "name": "ERSDPlanDefinition",
+  "title": "eRSD PlanDefinition",
+  "status": "active",
+  "description": "This PlanDefinition profile defines the logic and rules around determining: whether or not a condition is reportable to public health, which jurisdiction(s) is/are responsible, which jurisdiction(s) need to be notified, and if the condition is reportable, gives timing information, next steps and condition information to the clinician. The rules for determining reportability described by an eRSD specification involve the use of triggering codes to determine potentially reportable events, and optionally locally evaluated rules for determining suspected reportable events. The final determination of reportability is made by the Public Health Agency or Agencies appropriate for the event, and may be performed by a combination of decisions occurring at various points during the processing of an eICR, as explained in the Reportability Response profile.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "PlanDefinition",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-plandefinition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "PlanDefinition",
+        "path": "PlanDefinition",
+        "short": "eRSD - electronic Reporting and Surveillance Distribution",
+        "definition": "Defines the logic and rules around determining: whether or not a condition is reportable to public health, which jurisdiction(s) is/are responsible, which jurisdiction(s) need to be notified, and if the condition is reportable, gives timing information, next steps and condition information to the clinician."
+      },
+      {
+        "id": "PlanDefinition.extension:variable",
+        "path": "PlanDefinition.extension",
+        "sliceName": "variable",
+        "short": "Defines variables for the PlanDefinition.",
+        "definition": "Defines variables for the PlanDefinition.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/variable"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action",
+        "path": "PlanDefinition.action",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "id"
+            }
+          ],
+          "ordered": true,
+          "rules": "open"
+        },
+        "min": 7
+      },
+      {
+        "id": "PlanDefinition.action.input.extension",
+        "path": "PlanDefinition.action.input.extension",
+        "definition": "Defines extensions for the action.",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action.input.extension:fhirquerypattern.url",
+        "path": "PlanDefinition.action.input.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action.relatedAction.offset[x]:offsetDuration",
+        "path": "PlanDefinition.action.relatedAction.offset[x]",
+        "sliceName": "offsetDuration",
+        "definition": "The duration quantity may include a comparator, indicating how the offset should be applied. For example, <= 1 hour, meaning that the offset should be no more than 1 hour. This allows systems flexibility in scheduling the actions to isolate reporting activities to off hours.",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart",
+        "path": "PlanDefinition.action",
+        "sliceName": "encounterStart",
+        "short": "Encounter start code",
+        "definition": "Defines the \"start\" action",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "start-workflow",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.description",
+        "path": "PlanDefinition.action.description",
+        "short": "Description of the \"start\" action.",
+        "definition": "Description of the \"start\" action.",
+        "min": 1,
+        "fixedString": "This action represents the start of the reporting workflow in response to the encounter-start event."
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.textEquivalent",
+        "path": "PlanDefinition.action.textEquivalent",
+        "short": "Text equivalent of the \"start\" action.",
+        "definition": "Text equivalent of the \"start\" action.",
+        "min": 1,
+        "fixedString": "Start the reporting workflow in response to an encounter-start event",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.code",
+        "path": "PlanDefinition.action.code",
+        "short": "Code for the \"start\" action.",
+        "definition": "The US-PH-PlanDefinition-Action code for the \"start\" action.",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "initiate-reporting-workflow",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.trigger",
+        "path": "PlanDefinition.action.trigger",
+        "short": "When the \"start\" action should be triggered.",
+        "definition": "When the \"start\" action should be triggered.",
+        "min": 1,
+        "constraint": [
+          {
+            "key": "epd-1",
+            "human": "The code value of the namedEventType SHALL be the same as the name element",
+            "source": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-plandefinition",
+            "severity": "error",
+            "expression": "name.supersetOf(extension('http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-named-eventtype-extension').value.coding.code)",
+            "xpath": "exists(f:extension)!=exists(f:*[starts-with(local-name(.), \"name\")])"
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.trigger.extension:namedEventType",
+        "path": "PlanDefinition.action.trigger.extension",
+        "sliceName": "namedEventType",
+        "short": "Indicates the types of named events to subscribe to from the EHR."
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.trigger.name",
+        "path": "PlanDefinition.action.trigger.name",
+        "definition": "The name of the event, encounter-start in this case. For any action invoked as a result of this trigger, the triggering encounter is accessible via the context variable `%encounter`",
+        "fixedString": "encounter-start"
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.relatedAction",
+        "path": "PlanDefinition.action.relatedAction",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.relatedAction.actionId",
+        "path": "PlanDefinition.action.relatedAction.actionId",
+        "fixedId": "check-suspected-disorder"
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.relatedAction.relationship",
+        "path": "PlanDefinition.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:encounterStart.relatedAction.offset[x]:offsetDuration",
+        "path": "PlanDefinition.action.relatedAction.offset[x]",
+        "sliceName": "offsetDuration",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ],
+        "example": [
+          {
+            "label": "Wait 1 hour before next action.",
+            "valueDuration": {
+              "value": 1,
+              "unit": "h"
+            }
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder",
+        "path": "PlanDefinition.action",
+        "sliceName": "checkSuspectedDisorder",
+        "short": "Check suspected disorder",
+        "definition": "Defines the \"check-suspected-disorder\" action",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "check-suspected-disorder",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.description",
+        "path": "PlanDefinition.action.description",
+        "short": "Description of the check for suspected disorders action.",
+        "definition": "Description of the check for suspected disorders action.",
+        "min": 1,
+        "fixedString": "This action represents the start of the check suspected disorder reporting workflow in response to the encounter-start event."
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.code",
+        "path": "PlanDefinition.action.code",
+        "short": "Code for the \"check-suspected-disorder\" action.",
+        "definition": "The US-PH-PlanDefinition-Action code for the \"check-suspected-disorder\" action.",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "execute-reporting-workflow",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action",
+        "path": "PlanDefinition.action.action",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "id"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 2
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "isEncounterSuspectedDisorder",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "is-encounter-suspected-disorder",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "check-trigger-codes",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.condition",
+        "path": "PlanDefinition.action.action.condition",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.input",
+        "path": "PlanDefinition.action.action.input",
+        "definition": "Defines input data requirements for the action. Required data is accessible via a context variable named '%[id]' using the 'id' of the input data requirement",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.input.id",
+        "path": "PlanDefinition.action.action.input.id",
+        "definition": "The id of the input requirement, allowing the data to be referenced via a context variable named '%[id]'",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.relatedAction.actionId",
+        "path": "PlanDefinition.action.action.relatedAction.actionId",
+        "fixedId": "create-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:isEncounterSuspectedDisorder.relatedAction.relationship",
+        "path": "PlanDefinition.action.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "continueCheckReportable",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "continue-check-reportable",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "evaluate-condition",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.relatedAction.actionId",
+        "path": "PlanDefinition.action.action.relatedAction.actionId",
+        "fixedId": "check-reportable"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.relatedAction.relationship",
+        "path": "PlanDefinition.action.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.relatedAction.offset[x]",
+        "path": "PlanDefinition.action.action.relatedAction.offset[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkSuspectedDisorder.action:continueCheckReportable.relatedAction.offset[x]:offsetDuration",
+        "path": "PlanDefinition.action.action.relatedAction.offset[x]",
+        "sliceName": "offsetDuration",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ],
+        "example": [
+          {
+            "label": "Wait 6 hours before next action.",
+            "valueDuration": {
+              "value": 6,
+              "unit": "h"
+            }
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable",
+        "path": "PlanDefinition.action",
+        "sliceName": "checkReportable",
+        "short": "Check the encounter for reportability",
+        "definition": "Defines the checking of the encounter for reportability.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "check-reportable",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.description",
+        "path": "PlanDefinition.action.description",
+        "short": "Description of the Periodic Update of eICR action.",
+        "definition": "Description of the Periodic Update of eICR action within the eICR action.",
+        "fixedString": "This action represents the check for suspected reportability of the eICR."
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.code",
+        "path": "PlanDefinition.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "execute-reporting-workflow",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action",
+        "path": "PlanDefinition.action.action",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "id"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 4
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "isEncounterReportable",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "is-encounter-reportable",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "check-trigger-codes",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.input",
+        "path": "PlanDefinition.action.action.input",
+        "definition": "Defines input data requirements for the action. Required data is accessible via a context variable named `%[id]` using the `id` of the input data requirement",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.input.id",
+        "path": "PlanDefinition.action.action.input.id",
+        "definition": "The id of the input requirement, allowing the data to be referenced via a context variable named `%[id]`",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.relatedAction.actionId",
+        "path": "PlanDefinition.action.action.relatedAction.actionId",
+        "fixedId": "create-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:isEncounterReportable.relatedAction.relationship",
+        "path": "PlanDefinition.action.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "checkUpdateEicr",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "check-update-eicr",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "evaluate-condition",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.relatedAction.actionId",
+        "path": "PlanDefinition.action.action.relatedAction.actionId",
+        "fixedId": "create-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:checkUpdateEicr.relatedAction.relationship",
+        "path": "PlanDefinition.action.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "encounterInProgress",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "is-encounter-in-progress",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "evaluate-condition",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.relatedAction.actionId",
+        "path": "PlanDefinition.action.action.relatedAction.actionId",
+        "fixedId": "check-reportable"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.relatedAction.relationship",
+        "path": "PlanDefinition.action.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.relatedAction.offset[x]",
+        "path": "PlanDefinition.action.action.relatedAction.offset[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterInProgress.relatedAction.offset[x]:offsetDuration",
+        "path": "PlanDefinition.action.action.relatedAction.offset[x]",
+        "sliceName": "offsetDuration",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ],
+        "example": [
+          {
+            "label": "Wait 6 hours before next action.",
+            "valueDuration": {
+              "value": 6,
+              "unit": "h"
+            }
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete",
+        "path": "PlanDefinition.action.action",
+        "sliceName": "encounterComplete",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete.id",
+        "path": "PlanDefinition.action.action.id",
+        "min": 1,
+        "fixedString": "is-encounter-completed",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete.code",
+        "path": "PlanDefinition.action.action.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "complete-reporting",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:checkReportable.action:encounterComplete.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      },
+      {
+        "id": "PlanDefinition.action:createEicr",
+        "path": "PlanDefinition.action",
+        "sliceName": "createEicr",
+        "short": "Create the eICR",
+        "definition": "Defines the \"create-eicr\" action",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "create-eicr",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.description",
+        "path": "PlanDefinition.action.description",
+        "fixedString": "This action represents the creation of the eICR. It subsequently calls validate."
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.code",
+        "path": "PlanDefinition.action.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "create-report",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.relatedAction",
+        "path": "PlanDefinition.action.relatedAction",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.relatedAction.actionId",
+        "path": "PlanDefinition.action.relatedAction.actionId",
+        "fixedId": "validate-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:createEicr.relatedAction.relationship",
+        "path": "PlanDefinition.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr",
+        "path": "PlanDefinition.action",
+        "sliceName": "validateEicr",
+        "short": "Validate the eICR",
+        "definition": "Defines the \"validate-eicr\" action",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "validate-eicr",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.description",
+        "path": "PlanDefinition.action.description",
+        "fixedString": "This action represents the validation of the eICR. It subsequently calls route-and-send."
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.code",
+        "path": "PlanDefinition.action.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "validate-report",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.relatedAction",
+        "path": "PlanDefinition.action.relatedAction",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.relatedAction.actionId",
+        "path": "PlanDefinition.action.relatedAction.actionId",
+        "fixedId": "route-and-send-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:validateEicr.relatedAction.relationship",
+        "path": "PlanDefinition.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr",
+        "path": "PlanDefinition.action",
+        "sliceName": "routeAndSendEicr",
+        "short": "Route and send eICR",
+        "definition": "Defines the routing and sending of the eICR.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "route-and-send-eicr",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr.description",
+        "path": "PlanDefinition.action.description",
+        "short": "Description of the route and send action.",
+        "definition": "Description of the route and send action.",
+        "min": 1,
+        "fixedString": "This action represents the routing and sending of the eICR."
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr.textEquivalent",
+        "path": "PlanDefinition.action.textEquivalent",
+        "min": 1,
+        "fixedString": "Route and send eICR",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr.code",
+        "path": "PlanDefinition.action.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "submit-report",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:routeAndSendEicr.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified",
+        "path": "PlanDefinition.action",
+        "sliceName": "encounterModified",
+        "short": "Encounter modified code",
+        "definition": "Defines the \"encounter-modified\" action",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.id",
+        "path": "PlanDefinition.action.id",
+        "min": 1,
+        "fixedString": "encounter-modified",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.description",
+        "path": "PlanDefinition.action.description",
+        "short": "Description of the \"encounter-modified\" action.",
+        "definition": "Description of the \"encounter-modified\" action.",
+        "min": 1,
+        "fixedString": "This action represents the start of the reporting workflow in response to the encounter-modified event"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.textEquivalent",
+        "path": "PlanDefinition.action.textEquivalent",
+        "short": "Text equivalent of the \"encounter-modified\" action.",
+        "definition": "Text equivalent of the \"encounter-modified\" action.",
+        "min": 1,
+        "fixedString": "Start the reporting workflow in response to an encounter-modified event",
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.code",
+        "path": "PlanDefinition.action.code",
+        "short": "Code for the \"encounter-modified\" action.",
+        "definition": "The US-PH-PlanDefinition-Action code for the \"encounter-modified\" action.",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "initiate-reporting-workflow",
+              "system": "http://hl7.org/fhir/us/ph-library/CodeSystem/us-ph-codesystem-plandefinition-actions"
+            }
+          ]
+        }
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.trigger",
+        "path": "PlanDefinition.action.trigger",
+        "short": "When the \"encounter-modified\" action should be triggered.",
+        "definition": "When the \"encounter-modified\" action should be triggered.",
+        "min": 1,
+        "constraint": [
+          {
+            "key": "epd-1",
+            "human": "The code value of the namedEventType SHALL be the same as the name element",
+            "source": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-plandefinition",
+            "severity": "error",
+            "expression": "name.supersetOf(extension('http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-named-eventtype-extension').value.coding.code)",
+            "xpath": "exists(f:extension)!=exists(f:*[starts-with(local-name(.), \"name\")])"
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.trigger.extension:namedEventType",
+        "path": "PlanDefinition.action.trigger.extension",
+        "sliceName": "namedEventType",
+        "short": "Indicates the types of named events to subscribe to from the EHR."
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.trigger.name",
+        "path": "PlanDefinition.action.trigger.name",
+        "definition": "The name of the event, encounter-start in this case. For any action invoked as a result of this trigger, the triggering encounter is accessible via the context variable `%encounter`",
+        "fixedString": "encounter-modified"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.input.extension:fhirquerypattern",
+        "path": "PlanDefinition.action.input.extension",
+        "sliceName": "fhirquerypattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.relatedAction",
+        "path": "PlanDefinition.action.relatedAction",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.relatedAction.actionId",
+        "path": "PlanDefinition.action.relatedAction.actionId",
+        "fixedId": "create-eicr"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.relatedAction.relationship",
+        "path": "PlanDefinition.action.relatedAction.relationship",
+        "fixedCode": "before-start"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.action",
+        "path": "PlanDefinition.action.action",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ]
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.action.condition.kind",
+        "path": "PlanDefinition.action.action.condition.kind",
+        "fixedCode": "applicability"
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.action.condition.expression",
+        "path": "PlanDefinition.action.action.condition.expression",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "PlanDefinition.action:encounterModified.action.condition.expression.language",
+        "path": "PlanDefinition.action.action.condition.expression.language",
+        "fixedCode": "text/fhirpath"
+      }
+    ]
+  }
+}

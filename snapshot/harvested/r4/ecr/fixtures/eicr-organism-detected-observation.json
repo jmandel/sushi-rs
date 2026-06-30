@@ -1,0 +1,79 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-organism-detected-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-detected-observation",
+  "name": "EICROrganismDetectedObservation",
+  "title": "eICR Organism Detected Observation",
+  "status": "active",
+  "description": "This Observation profile is used to report a detected organism in an eICR laboratory result. It SHALL include at least one reference to an associated organism susceptibility observation.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-lab-result-observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "eICR Organism Detected Observation"
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "Organism Detection Test"
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "Organism Detected Name"
+      },
+      {
+        "id": "Observation.hasMember",
+        "path": "Observation.hasMember",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "short": "Susceptibility Observation",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.hasMember:susceptibilityObservation",
+        "path": "Observation.hasMember",
+        "sliceName": "susceptibilityObservation",
+        "short": "Organism Susceptibility Observation",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-susceptibility-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

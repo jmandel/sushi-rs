@@ -1,0 +1,68 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-eicr-processing-status-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-observation",
+  "name": "RREicrProcessingStatusObservation",
+  "title": "eICR Processing Status Observation",
+  "status": "active",
+  "description": "This Observation profile represents the  eICR processing status.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "CDA",
+      "name": "ECR Processing status profile mapping to CDA",
+      "comment": "This table maps eICR Processing Status observation code to CDA"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "eICR Processing Status",
+        "definition": "Indicates the eICR processing status. If it was not processed or was processed with a warning, the reason and details will be contained in the related eICR Processing Status Reason resource."
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "eICR Processing Status",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.8",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+              "valueString": "ObservationCode"
+            }
+          ],
+          "description": "Processing Status"
+        },
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "eICR Processing Status/code",
+            "comment": "eICR Processing Status"
+          }
+        ]
+      },
+      {
+        "id": "Observation.hasMember",
+        "path": "Observation.hasMember",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-reason-observation"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

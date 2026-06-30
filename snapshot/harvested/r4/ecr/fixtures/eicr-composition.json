@@ -1,0 +1,2115 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-composition",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-composition",
+  "name": "EICRComposition",
+  "title": "eICR Composition",
+  "status": "active",
+  "description": "This Composition profile represents an Electronic Initial Case Report (eICR). It is based on and further constrains the US Public Health Composition.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "eCR-CDA",
+      "name": "eCR FHIR to CDA Mapping",
+      "comment": "This table maps FHIR eCR profile elements to eICR/RR CDA template elements located in the CDA eICR IG (R2 STU2) and CDA RR IG (R2 STU1)."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Composition",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-composition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Composition",
+        "path": "Composition",
+        "short": "eICR Composition Profile",
+        "definition": "This Composition profile represents an Electronic Initial Case Report (eICR). It is based on and further constrains the US Public Health Composition.",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] 1.1.2 Initial Public Health Case Report Document (eICR) (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.extension:extensionEICRInitiationType",
+        "path": "Composition.extension",
+        "sliceName": "extensionEICRInitiationType",
+        "short": "Initial Case Report Initiation Type",
+        "definition": "When set to \"PHC1464: Manually Initiated eICR\", indicates that this document is manually initiated. When set to \"PHC2235: Alternately Initiated eICR\", indicates that this eICR document was initiated by automated process and is intended to force reporting to the responsible Public Health Agency (PHA) for the jurisdiction of care. Unlike eICRs manually initiated by a provider, which are force reported to all relevant jurisdictions, PHC2235 will be sent to, and only to, the PHA of the jurisdiction of care. If a reportable condition is found by public health decision support then the alternately initiated eICR may also be reported to the jurisdiction of residence PHA.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-initiation-type-extension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] ClinicalDocument/documentationOf/serviceEvent/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.extension:extensionEICRInitiationReason",
+        "path": "Composition.extension",
+        "sliceName": "extensionEICRInitiationReason",
+        "short": "Initial Case Report Initiation Reason",
+        "definition": "An explanation for the manual or alternate initiation of the eICR.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-initiation-reason-extension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Initial Case Report initiation Reason (V2)/value",
+            "comment": "Initiation Reason"
+          }
+        ]
+      },
+      {
+        "id": "Composition.type",
+        "path": "Composition.type",
+        "short": "Public Health Case Report",
+        "definition": "The type of this Composition is a Public Health Case Report",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "55751-2",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] ClinicalDocument/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.subject",
+        "path": "Composition.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.encounter",
+        "path": "Composition.encounter",
+        "short": "eICR Encounter",
+        "definition": "The encounter during which the eICR was triggered.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-encounter"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.author",
+        "path": "Composition.author",
+        "short": "The author(s) of the document. Where a trigger occurs outside of an encounter the author will be a US Public Health PractitionerRole and represent the Provider and Facility for reporting purposes."
+      },
+      {
+        "id": "Composition.custodian",
+        "path": "Composition.custodian",
+        "min": 1
+      },
+      {
+        "id": "Composition.section",
+        "path": "Composition.section",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 7,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReasonForVisitSection",
+        "path": "Composition.section",
+        "sliceName": "sliceReasonForVisitSection",
+        "short": "Reason for Visit Section",
+        "definition": "This section records the reason for the patient's visit (the provider’s description of the reason for visit).",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Reason for Visit Section"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceReasonForVisitSection.code",
+        "path": "Composition.section.code",
+        "short": "Reason for Visit code",
+        "definition": "Reason for Visit code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "29299-5",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Reason for Visit Section/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceReasonForVisitSection.text",
+        "path": "Composition.section.text",
+        "short": "Reason for Visit narrative",
+        "definition": "Reason for Visit narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Reason for Visit Section/text",
+            "comment": "Reason for Visit"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceChiefComplaintSection",
+        "path": "Composition.section",
+        "sliceName": "sliceChiefComplaintSection",
+        "short": "Chief Complaint Section",
+        "definition": "This section records the patient's chief complaint (the patient’s own description).",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Chief Complaint Section"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceChiefComplaintSection.code",
+        "path": "Composition.section.code",
+        "short": "Chief Complaint code",
+        "definition": "Chief Complaint code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "10154-3",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Chief Complaint Section/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceChiefComplaintSection.text",
+        "path": "Composition.section.text",
+        "short": "Chief Complaint narrative",
+        "definition": "Chief Complaint narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Chief Complaint Section/text",
+            "comment": "Chief Complaint"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceHistoryOfPresentIllnessSection",
+        "path": "Composition.section",
+        "sliceName": "sliceHistoryOfPresentIllnessSection",
+        "short": "History of Present Illness Section",
+        "definition": "The History of Present Illness section describes the history related to the reason for the encounter. It contains the historical details leading up to and pertaining to the patient’s current complaint or reason for seeking medical care.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] History of Present Illness Section"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceHistoryOfPresentIllnessSection.code",
+        "path": "Composition.section.code",
+        "short": "History of Present Illness code",
+        "definition": "History of Present Illness code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "10164-2",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] History of Present Illness Section/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceHistoryOfPresentIllnessSection.text",
+        "path": "Composition.section.text",
+        "short": "History of Present Illness narrative",
+        "definition": "History of Present Illness narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] History of Present Illness Section/text",
+            "comment": "History of Present Illness"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProblemSection",
+        "path": "Composition.section",
+        "sliceName": "sliceProblemSection",
+        "short": "Problem Section",
+        "definition": "This section lists and describes all the patient's current problems on the maintained problem list.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Problem Section (entries required) (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.code",
+        "path": "Composition.section.code",
+        "short": "Problem Section code",
+        "definition": "Problem Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "11450-4",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Problem Section (entries required) (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.text",
+        "path": "Composition.section.text",
+        "short": "Problem Section narrative",
+        "definition": "Problem Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Problem Section (entries required) (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.entry:sliceEICRCondition",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceEICRCondition",
+        "short": "eICR Condition entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for an eICR Condition (diagnosis), based on a trigger code match of the diagnosis (condition.code) to the eRSD PlanDefinition Diagnosis Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-condition-problems-health-concerns"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Problem Observation (V3) + Initial Case Report Trigger Code Problem Observation (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.entry:sliceEICRCondition.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceProblemSection.entry:sliceEICRCondition.extension:sliceTriggerCondition",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerCondition",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eCR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Initial Case Report Trigger Code Problem Observation",
+            "comment": "Diagnosis Trigger"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection",
+        "path": "Composition.section",
+        "sliceName": "sliceMedicationsAdministeredSection",
+        "short": "Medications Administered Section",
+        "definition": "The Medications Administered Section defines medications administered during the encounter.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Administered Section (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.code",
+        "path": "Composition.section.code",
+        "short": "Medications Administered Section code",
+        "definition": "Medications Administered Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "29549-3",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Administered Section (V2)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.text",
+        "path": "Composition.section.text",
+        "short": "Medications Administered Section narrative",
+        "definition": "Medications Administered Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Administered Section (V2)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.entry:sliceMedicationAdministration",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceMedicationAdministration",
+        "short": "Medication Administration entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for an MedicationAdministration, based on a trigger code match of the medication (MedicationAdministration.medicationCodeableConcept) to the eRSD PlanDefinition Medications Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-medicationadministration"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medication Activity (V2)/Medication Information (V2) + Medication Activity (V2)/Initial Case Report Trigger Code Medication Information"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.entry:sliceMedicationAdministration.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceMedicationsAdministeredSection.entry:sliceMedicationAdministration.extension:sliceTriggerMedicationAdministered",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerMedicationAdministered",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eICR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceAdmissionMedicationsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceAdmissionMedicationsSection",
+        "short": "Admission Medications Section",
+        "definition": "The Admissions Medications Section contains the medications taken by the patient prior to and at the time of admission to the facility.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Admission Medications Section (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceAdmissionMedicationsSection.code",
+        "path": "Composition.section.code",
+        "short": "Admission Medications Section code",
+        "definition": "Admission Medications Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "42346-7",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Admission Medications Section (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceAdmissionMedicationsSection.text",
+        "path": "Composition.section.text",
+        "short": "Admission Medications Section narrative",
+        "definition": "Admission Medications Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Admission Medications Administered Section (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceAdmissionMedicationsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceAdmissionMedicationsSection.entry:sliceMedication",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceMedication",
+        "short": "Admission Medication entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/MedicationAdministration"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Admission Medication (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceMedicationsSection",
+        "short": "Medications Section",
+        "definition": "The Medications Section contains a patient's current medications and pertinent medication history. At a minimum, the currently active medications are listed. An entire medication history is an option.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Section (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.code",
+        "path": "Composition.section.code",
+        "short": "Medications Section code",
+        "definition": "Medications Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "10160-0",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Section (V2)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.text",
+        "path": "Composition.section.text",
+        "short": "Medications Section narrative",
+        "definition": "Medications Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medications Section (V2)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.entry:sliceMedicationAdministration",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceMedicationAdministration",
+        "short": "Medication Administration entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for an MedicationAdministration, based on a trigger code match of the medication (MedicationAdministration.medicationCodeableConcept) to the eRSD PlanDefinition Medications Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/MedicationAdministration"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Medication Activity (V2)/Medication Information (V2) + Medication Activity (V2)/Initial Case Report Trigger Code Medication Information"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.entry:sliceMedicationAdministration.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceMedicationsSection.entry:sliceMedicationAdministration.extension:sliceTriggerMedicationAdministered",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerMedicationAdministered",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eICR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceResultsSection",
+        "short": "Results Section",
+        "definition": "The Results Section contains observations of results generated by laboratories, imaging procedures, and other procedures. The scope includes observations such as hematology, chemistry, serology, virology, toxicology, microbiology, plain x-ray, ultrasound, CT, MRI, angiography, echocardiography, nuclear medicine, pathology, and procedure observations. The section often includes notable results such as abnormal values or relevant trends, and could contain all results for the period of time being documented.\n\nLaboratory results are typically generated by laboratories providing analytic services in areas such as chemistry, hematology, serology, histology, cytology, anatomic pathology, microbiology, and/or virology. These observations are based on analysis of specimens obtained from the patient and submitted to the laboratory. Imaging results are typically generated by a clinician reviewing the output of an imaging procedure, such as where a cardiologist reports the left ventricular ejection fraction based on the review of a cardiac echocardiogram.\n\nProcedure results are typically generated by a clinician to provide more granular information about component observations made during a procedure, such as where a gastroenterologist reports the size of a polyp observed during a colonoscopy.\n",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Results Section (entries required) (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.code",
+        "path": "Composition.section.code",
+        "short": "Results Section code",
+        "definition": "Results Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "30954-2",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Results Section (entries required) (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.text",
+        "path": "Composition.section.text",
+        "short": "Results Section narrative",
+        "definition": "Results Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Results Section (entries required) (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceUSPHLabResultObservation",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceUSPHLabResultObservation",
+        "definition": "The eICR Trigger Code Flag (extension) is present for a laboratory result, based on a trigger code match of either the lab test (observation.code) to the eRSD PlanDefinition Lab Obs Test Name Trigger or the lab test result (observation.value) to the eRSD PlanDefinition Organism Substance Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-lab-result-observation"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Result Observation (V3) + Initial Case Report Trigger Code Result Observation (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceUSPHLabResultObservation.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceUSPHLabResultObservation.extension:sliceTriggerUSPHLabResultObservation",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerUSPHLabResultObservation",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents one or more (lab result observations can contain hasMember) triggering events and caused the eCR to be generated.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceOrganismDetectedObservation",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceOrganismDetectedObservation",
+        "definition": "The eICR Trigger Code Flag (extension) is present for a laboratory result, based on a trigger code match of either the lab test (observation.code) to the eRSD PlanDefinition Lab Obs Test Name Trigger or the lab test result (observation.value) to the eRSD PlanDefinition Organism Substance Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-detected-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceOrganismDetectedObservation.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceResultsSection.entry:sliceOrganismDetectedObservation.extension:sliceTriggerEICROrganismDetectedObservation",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerEICROrganismDetectedObservation",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents one or more (lab result observations can contain hasMember) triggering events and caused the eCR to be generated.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection",
+        "path": "Composition.section",
+        "sliceName": "slicePlanOfTreatmentSection",
+        "short": "Plan of Treatment Section",
+        "definition": "This section contains data that define pending orders, interventions, encounters, services, and procedures for the patient. It is limited to prospective, unfulfilled, or incomplete orders and requests only. All active, incomplete, or pending orders, appointments, referrals, procedures, services, or any other pending event of clinical significance to the current care of the patient should be listed. ",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Plan of Treatment Section (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.code",
+        "path": "Composition.section.code",
+        "short": "Plan of Treatment code",
+        "definition": "Plan of Treatment code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "18776-5",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Plan of Treatment Section (V2)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.text",
+        "path": "Composition.section.text",
+        "short": "Plan of Treatment narrative",
+        "definition": "Plan of Treatment narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Plan of Treatment Section (V2)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceEICRServiceRequest",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceEICRServiceRequest",
+        "short": "eICR Service Request entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for a laboratory test order, based on a trigger code match of the lab test (observation.code) to the eRSD PlanDefinition Lab Obs Test Name Trigger or the lab test result (observation.value) to the eRSD PlanDefinition Organism Substance Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-servicerequest"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Planned Observation (V2) + Initial Case Report Trigger Code Lab Test Order (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceEICRServiceRequest.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceEICRServiceRequest.extension:sliceTriggerEICRServiceRequest",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerEICRServiceRequest",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eCR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceUSCoreMedicationRequest",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceUSCoreMedicationRequest",
+        "short": "US Core Medication Request entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for a MedicationRequest, based on a trigger code match of the medication (MedicationRequest.medicationCodeableConcept) to the eRSD PlanDefinition Medications Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Planned Medication Activity (V2)/Medication Information (V2) + Planned Medication Activity (V2)/Initial Case Report Trigger Code Medication Information"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceUSCoreMedicationRequest.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePlanOfTreatmentSection.entry:sliceUSCoreMedicationRequest.extension:sliceTriggerUSCoreMedicationRequest",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerUSCoreMedicationRequest",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eCR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceImmunizationsSection",
+        "short": "Immunizations Section",
+        "definition": "The Immunizations Section defines a patient's current immunization status and pertinent immunization history. The primary use case for the Immunization Section is to enable communication of a patient's immunization status. The section should include current immunization status, and may contain the entire immunization history that is relevant to the period of time being summarized.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Immunizations Section (entries required) (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.code",
+        "path": "Composition.section.code",
+        "short": "Immunizations code",
+        "definition": "Immunizations code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "11369-6",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Immunizations Section (entries required) (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.text",
+        "path": "Composition.section.text",
+        "short": "Immunizations narrative",
+        "definition": "Immunizations narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Immunizations Section (entries required) (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.entry:sliceUSCoreImmunization",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceUSCoreImmunization",
+        "short": "Immunization entry",
+        "definition": "The eICR Trigger Code Flag (extension) is present for an Immunization, based on a trigger code match of the vaccine (Immunization.vaccineCode) to the eRSD PlanDefinition Immunizations Trigger.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Immunization Activity (V3)/Immunization Medication Information (V2) + Immunization Activity (V3)/Initial Case Report Trigger Code Immunization Medication Information",
+            "comment": "Immunization Status"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.entry:sliceUSCoreImmunization.extension",
+        "path": "Composition.section.entry.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.entry:sliceUSCoreImmunization.extension:sliceTriggerImmunization",
+        "path": "Composition.section.entry.extension",
+        "sliceName": "sliceTriggerImmunization",
+        "short": "eICR Trigger Code Flag",
+        "definition": "A flag to indicate that the **target** reference represents a triggering event and caused the eCR to be generated.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceImmunizationsSection.entry:sliceVaccineCredentialsPatientAssertion",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceVaccineCredentialsPatientAssertion",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-vaccine-credential-patient-assertion"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceProceduresSection",
+        "path": "Composition.section",
+        "sliceName": "sliceProceduresSection",
+        "short": "This section describes all interventional, surgical, diagnostic, or therapeutic procedures or treatments pertinent to the patient historically at the time the document is generated.",
+        "definition": "This section describes all interventional, surgical, diagnostic, or therapeutic procedures or treatments pertinent to the patient historically at the time the document is generated. The section should include notable procedures, but can contain all procedures for the period of time being summarized.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3] Procedures Section (entries required) (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProceduresSection.code",
+        "path": "Composition.section.code",
+        "short": "Procedures Section code",
+        "definition": "Procedures Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "47519-4",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3] Procedures Section (entries required) (V2)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProceduresSection.text",
+        "path": "Composition.section.text",
+        "short": "Procedures Section narrative",
+        "definition": "Procedures Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3] Procedures Section (entries required) (V2)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceProceduresSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceProceduresSection.entry:sliceEICRProcedure",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceEICRProcedure",
+        "short": "EICR Procedure entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-procedure"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Procedure Activity Act (V2) + Procedure Activity Observation (V2) + Procedure Activity Procedure (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceVitalSignsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceVitalSignsSection",
+        "short": "Vital Signs Section",
+        "definition": "The Vital Signs Section contains relevant vital signs for the eICR. The section should include notable vital signs such as the most recent, maximum and/or minimum, baseline, or relevant trends. Vital signs are represented in the same way as other results, but are aggregated into their own section to follow clinical conventions.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Vital Signs Section (entries required) (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceVitalSignsSection.code",
+        "path": "Composition.section.code",
+        "short": "Vital Signs code",
+        "definition": "Vital Signs code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "8716-3",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Vital Signs Section (entries required) (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceVitalSignsSection.text",
+        "path": "Composition.section.text",
+        "short": "Vital Signs narrative",
+        "definition": "Vital Signs narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Vital Signs Section (entries required) (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceVitalSignsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceVitalSignsSection.entry:sliceVitalSigns",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceVitalSigns",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Vital Signs Organizer (V3)/Vital Sign Observation (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection",
+        "path": "Composition.section",
+        "sliceName": "sliceSocialHistorySection",
+        "short": "Social History Section",
+        "definition": "This section contains social history data that influence a patient’s physical, psychological or emotional health such as occupation, home environment, travel history, and disability status.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Social History Section (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.code",
+        "path": "Composition.section.code",
+        "short": "Social History Section code",
+        "definition": "Social History Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "29762-2",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Social History Section (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.text",
+        "path": "Composition.section.text",
+        "short": "Social History Section narrative",
+        "definition": "Social History Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Social History Section (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceCharacteristicsOfHomeEnvironment",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceCharacteristicsOfHomeEnvironment",
+        "short": "Characteristics of Home Environment",
+        "definition": "If the patient is homeless, complete as much address information as possible (city, zip, county, etc.) and use the Characteristics of Home Environment profile to indicate that the patient is homeless.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-characteristics-of-home-environment"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceODHPastOrPresentJob",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceODHPastOrPresentJob",
+        "short": "ODH Past or Present Job entry",
+        "definition": "ODH Past or Present Job entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/odh/StructureDefinition/odh-PastOrPresentJob"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Past or Present Occupation Observation",
+            "comment": "Current Occupation, Current Industry, Current Job Title, Current Employer Name, Current Employer Phone, Current Employer Address"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceODHUsualWork",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceODHUsualWork",
+        "short": "ODH Usual Work entry",
+        "definition": "ODH Usual Work entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/odh/StructureDefinition/odh-UsualWork"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Usual Occupation Observation",
+            "comment": "Usual Occupation, Usual Industry, Occupational Exposure"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceODHEmploymentStatus",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceODHEmploymentStatus",
+        "short": "ODH Employment Status entry",
+        "definition": "ODH Employment Status entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/odh/StructureDefinition/odh-EmploymentStatus"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Usual Occupation Observation",
+            "comment": "Usual Occupation, Usual Industry, Occupational Exposure"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceTravelHistory",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceTravelHistory",
+        "short": "Travel History entry",
+        "definition": "ODH Travel History entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-travel-history"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Travel History"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceDisabilityStatus",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceDisabilityStatus",
+        "short": "Disability Status entry",
+        "definition": "Disability status entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-disability-status"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceExposureContactInformation",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceExposureContactInformation",
+        "short": "Exposure Information entry",
+        "definition": "Exposure Information entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-exposure-contact-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceCountryOfResidence",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceCountryOfResidence",
+        "short": "Country of residence entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-country-of-residence-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceSocialHistorySection.entry:sliceCountryOfNationality",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceCountryOfNationality",
+        "short": "Country of nationality entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-country-of-nationality"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePregnancySection",
+        "path": "Composition.section",
+        "sliceName": "slicePregnancySection",
+        "short": "Pregnancy Section",
+        "definition": "The Pregnancy Section contains a patient's current and past pregnancy history information.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Pregnancy Section"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.code",
+        "path": "Composition.section.code",
+        "short": "Pregnancy summary Document code",
+        "definition": "Pregnancy summary Document code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "90767-5",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Pregnancy Section/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.text",
+        "path": "Composition.section.text",
+        "short": "Pregnancy summary Document narrative",
+        "definition": "Pregnancy summary Document narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Pregnancy Section/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.entry:slicePregnancyStatusObservation",
+        "path": "Composition.section.entry",
+        "sliceName": "slicePregnancyStatusObservation",
+        "short": "Pregnancy Status Observation entry",
+        "definition": "Pregnancy Status Observation entry",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-pregnancy-status-observation"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Pregnancy Status Observation (SUPPLEMENTAL PREGNANCY)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.entry:slicePregnancyOutcome",
+        "path": "Composition.section.entry",
+        "sliceName": "slicePregnancyOutcome",
+        "short": "Pregnancy Outcome entry",
+        "definition": "Pregnancy Outcome entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-pregnancy-outcome-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.entry:sliceLastMenstrualPeriod",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceLastMenstrualPeriod",
+        "short": "Last Menstrual Period entry",
+        "definition": "Last Menstrual Period entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/bfdr/StructureDefinition/Observation-last-menstrual-period"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Last Menstrual Period (V2)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePregnancySection.entry:slicePostpartumStatus",
+        "path": "Composition.section.entry",
+        "sliceName": "slicePostpartumStatus",
+        "short": "Postpartum Status entry",
+        "definition": "Postpartum Status entry",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-is-postpartum"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Postpartum Status"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceEmergencyOutbreakInformationSection",
+        "path": "Composition.section",
+        "sliceName": "sliceEmergencyOutbreakInformationSection",
+        "short": "Emergency Outbreak Information Section",
+        "definition": "This section represents information that is required during a public health emergency/outbreak.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEmergencyOutbreakInformationSection.code",
+        "path": "Composition.section.code",
+        "short": "Emergency Outbreak Information Section code",
+        "definition": "Emergency Outbreak Information Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "83910-0",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEmergencyOutbreakInformationSection.text",
+        "path": "Composition.section.text",
+        "short": "Emergency Outbreak Information Section narrative",
+        "definition": "Emergency Outbreak Information Section narrative",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEmergencyOutbreakInformationSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEmergencyOutbreakInformationSection.entry:sliceObservationEmergencyOutbreakInformation",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceObservationEmergencyOutbreakInformation",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-emergency-outbreak-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePastMedicalHistorySection",
+        "path": "Composition.section",
+        "sliceName": "slicePastMedicalHistorySection",
+        "short": "Past Medical History Section",
+        "definition": "This section contains a record of the patient’s past complaints, problems, and diagnoses. It contains data from the patient’s past up to the patient’s current complaint or reason for seeking medical care.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Past Medical History Section (V3)"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePastMedicalHistorySection.code",
+        "path": "Composition.section.code",
+        "short": "Past Medical History Section code",
+        "definition": "Past Medical History Section code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "11348-0",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Past Medical History Section (V3)/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePastMedicalHistorySection.text",
+        "path": "Composition.section.text",
+        "short": "Past Medical History Section narrative",
+        "definition": "Past Medical History Section narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Past Medical History Section (V3)/text"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:slicePastMedicalHistorySection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:slicePastMedicalHistorySection.entry:sliceUSCoreCondition",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceUSCoreCondition",
+        "short": "US Core Condition entry",
+        "definition": "US Core Condition",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-condition-problems-health-concerns"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReviewOfSystemsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceReviewOfSystemsSection",
+        "short": "Review of Systems Section",
+        "definition": "The Review of Systems Section contains a relevant collection of symptoms and functions systematically gathered by a clinician. It includes symptoms the patient is currently experiencing, some of which were not elicited during the history of present illness, as well as a potentially large number of pertinent negatives, for example, symptoms that the patient denied experiencing.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Review of Systems Section"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceReviewOfSystemsSection.code",
+        "path": "Composition.section.code",
+        "short": "Review of Systems code",
+        "definition": "Review of Systems code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "10187-3",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Review of Systems Section/code"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceReviewOfSystemsSection.text",
+        "path": "Composition.section.text",
+        "short": "Review of Systems narrative",
+        "definition": "Review of Systems narrative",
+        "min": 1,
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Review of Systems Section/text",
+            "comment": "Review of Systems"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceCareTeamsSection",
+        "path": "Composition.section",
+        "sliceName": "sliceCareTeamsSection",
+        "short": "Care Teams Section",
+        "definition": "The Care Team Section is used to share historical and current Care Team information. An individual can have more than one Care Team. A Care Team, such as a rehabilitation team, may exist to address a person's needs associated with a particular care event, or a team can be based on addressing a specific condition.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceCareTeamsSection.code",
+        "path": "Composition.section.code",
+        "short": "Patient Care team information code",
+        "definition": "Patient Care team information code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "85847-2",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceCareTeamsSection.text",
+        "path": "Composition.section.text",
+        "short": "Patient Care team information narrative",
+        "definition": "Patient Care team information narrative",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceCareTeamsSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceCareTeamsSection.entry:sliceUSCoreCareTeam",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceUSCoreCareTeam",
+        "short": "US Core Care Team entry",
+        "definition": "US Core Care Team",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careteam"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReportabilityResponseInformationSection",
+        "path": "Composition.section",
+        "sliceName": "sliceReportabilityResponseInformationSection",
+        "short": "Reportability Response Information Section (for post-processing only)",
+        "definition": "The Reportability Response Information Section contains information from a Reportability Response that was generated in response to this eICR.\n\nThis section is to be used for the Public Health agency to receive the eICR with the RR included (after the RR has been created). This is needed to help the PHA ingest the information. As part of the PHA's process they will put parts of the RR into the eICR. This is useful for working with the surveillance vendors. All this work will be done within the internal data integration processes of the PHA. It is a placeholder so it can be used in the future. A number of surveillance systems need to include specific data that is not available until the eICR and RR are available inside of the receiving organization (PHA). This is important to ensure that they have a consistent, documented way of including the data.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReportabilityResponseInformationSection.code",
+        "path": "Composition.section.code",
+        "short": "Reportability response report Document Public health",
+        "definition": "Reportability response report Document Public health",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "88085-6",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReportabilityResponseInformationSection.text",
+        "path": "Composition.section.text",
+        "short": "Reportability Response Information Section narrative",
+        "definition": "Reportability Response Information Section narrative",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceReportabilityResponseInformationSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Composition.section:sliceReportabilityResponseInformationSection.entry:sliceReportabilityResponseRelevantCondition",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceReportabilityResponseRelevantCondition",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-relevant-reportable-condition-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

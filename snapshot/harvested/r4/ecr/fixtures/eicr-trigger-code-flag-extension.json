@@ -1,0 +1,161 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-trigger-code-flag-extension",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension",
+  "name": "EICRTriggerCodeFlagExtension",
+  "title": "eICR Trigger Code Flag Extension",
+  "status": "active",
+  "description": "This Extension profile represents a flag which, if it is present, indicates that the **target** reference represents a triggering event and caused the eCR to be generated.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "eCR-CDA",
+      "name": "eCR FHIR to CDA Mapping",
+      "comment": "This table maps FHIR eCR profile elements to eICR/RR CDA template elements located in the CDA eICR IG (R2 STU2) and CDA RR IG (R2 STU1)."
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Composition.section.entry",
+      "type": "element"
+    },
+    {
+      "expression": "Encounter.diagnosis",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "eICR Trigger Code Flag",
+        "definition": "Definition: A flag to indicate that the **target** reference represents a triggering event and caused the eCR to be generated. It is used in the eICR profile in the following places:\r\r\n- Composition[eICR Composition].section[Problem Section].entry\r- Composition[eICR Composition].section[Results Section].entry\r\n- Composition[eICR Composition].section[Plan of Treatment Section].entry\r- Encounter[eICR Encounter].diagnosis"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 3
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSet",
+        "path": "Extension.extension",
+        "sliceName": "triggerCodeValueSet",
+        "short": "RCTC value set OID (as a string)",
+        "definition": "RCTC value set OID (as a string)",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSet.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSet.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "triggerCodeValueSet"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSet.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] @sdtc:valueSet (Any of the eICR trigger code templates)"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSetVersion",
+        "path": "Extension.extension",
+        "sliceName": "triggerCodeValueSetVersion",
+        "short": "RCTC value set version",
+        "definition": "RCTC value set version",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSetVersion.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSetVersion.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "triggerCodeValueSetVersion"
+      },
+      {
+        "id": "Extension.extension:triggerCodeValueSetVersion.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] @sdtc:valueSetVersion (Any of the eICR trigger code templates)"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:triggerCode",
+        "path": "Extension.extension",
+        "sliceName": "triggerCode",
+        "short": "Trigger code",
+        "definition": "Trigger code - this code is the same as the trigger code in the resource and is used to identify which code(s) in a resource that allows multiple trigger codes (e.g. US Core Observation Lab where a trigger code could be contained in either the code (lab test) or the value (lab test result) or in the case of a battery or panel of tests, in the hasMember as another US Core Observation Lab code or value).",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:triggerCode.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:triggerCode.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "triggerCode"
+      },
+      {
+        "id": "Extension.extension:triggerCode.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[eICR R2 STU3.1] Any of the eICR trigger codes (code, value[xsi:type='CD'], or translation"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

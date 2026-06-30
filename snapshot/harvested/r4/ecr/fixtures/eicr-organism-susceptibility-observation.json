@@ -1,0 +1,51 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-organism-susceptibility-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-susceptibility-observation",
+  "name": "EICROrganismSusceptibilityObservation",
+  "title": "eICR Organism Susceptibility Observation",
+  "status": "active",
+  "description": "This Observation profile is used to report organism susceptibility in eICR laboratory results.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-lab-result-observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "eICR Organism Susceptibility Observation"
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "Susceptibility Test"
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "Susceptibility Test Result"
+      },
+      {
+        "id": "Observation.interpretation",
+        "path": "Observation.interpretation",
+        "short": "Susceptibility Interpretation"
+      }
+    ]
+  }
+}

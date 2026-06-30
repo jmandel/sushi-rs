@@ -1,0 +1,99 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-country-of-residence-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-country-of-residence-observation",
+  "name": "EICRCountryOfResidenceObservation",
+  "title": "eICR Country of Residence Observation",
+  "status": "active",
+  "description": "This Observation profile represents the patient's country of usual residence.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "eICR Country of Residence"
+      },
+      {
+        "id": "Observation.category:us-core",
+        "path": "Observation.category",
+        "sliceName": "us-core",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "social-history",
+              "system": "http://terminology.hl7.org/CodeSystem/observation-category"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "Country of usual residence",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "77983-5",
+              "system": "http://loinc.org"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "type": [
+          {
+            "code": "dateTime",
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "Patient's country of residence",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept",
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ],
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/ValueSet/iso3166-1-2",
+          "description": "Iso 3166 Part 1: 2 Letter Codes"
+        }
+      }
+    ]
+  }
+}

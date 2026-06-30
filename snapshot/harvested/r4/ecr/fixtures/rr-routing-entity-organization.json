@@ -1,0 +1,110 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-routing-entity-organization",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-routing-entity-organization",
+  "name": "RRRoutingEntityOrganization",
+  "title": "RRRouting Entity Organization",
+  "status": "active",
+  "description": "This Organization profile represents the Routing Entity which is a PHA or other organization identified by the PHA (such as an HIE) to which the eICR and/or the Reportability Response will be provided immediately following the creation of the Reportability Response.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "CDA",
+      "name": "RR Routing Entity Organization profile to CDA",
+      "comment": "This table maps RR Routing Entity Organization profile to CDA"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-organization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization",
+        "path": "Organization",
+        "short": "Routing Entity",
+        "definition": "The Routing Entity profile is based on the eCR Organization profile and sets the type to 'Routing Entity'. A Routing Entity is a PHA or other organization identified by the PHA (such as an HIE) to which the eICR and/or the Reportability Response will be provided immediately following the creation of the Reportability Response. This entity may just be acting to route the eICR and Reportability Response on their way to a Responsible Agency."
+      },
+      {
+        "id": "Organization.text",
+        "path": "Organization.text",
+        "short": "Routing Entity Description",
+        "definition": "Description of the Routing Entity",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Routing Entity/participantRole/playingEntity/desc",
+            "comment": "Routing Entity Description"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier",
+        "path": "Organization.identifier",
+        "short": "Routing Entity Id",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Routing Entity/participantRole/playingEntity/id",
+            "comment": "Routing Entity Identifier"
+          }
+        ]
+      },
+      {
+        "id": "Organization.type",
+        "path": "Organization.type",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "RR7",
+              "system": "urn:oid:2.16.840.1.114222.4.5.232",
+              "display": "Routing Entity"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.name",
+        "path": "Organization.name",
+        "short": "Routing Entity Name",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Routing Entity/participantRole/playingEntity/name",
+            "comment": "Routing Entity Name"
+          }
+        ]
+      },
+      {
+        "id": "Organization.telecom",
+        "path": "Organization.telecom",
+        "short": "Routing Entity Contact Information",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Routing Entity/participantRole/telecom",
+            "comment": "Routing Entity Contact Information"
+          }
+        ]
+      },
+      {
+        "id": "Organization.address",
+        "path": "Organization.address",
+        "short": "Routing Entity Address",
+        "mapping": [
+          {
+            "identity": "CDA",
+            "map": "Reportability Response Coded Information Organizer/Relevant Reportable Condition Observation/Reportability Information Organizer/Routing Entity/participantRole/addr",
+            "comment": "Routing Entity Address Information"
+          }
+        ]
+      }
+    ]
+  }
+}

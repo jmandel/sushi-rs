@@ -1,0 +1,237 @@
+{
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs/temp/holdout/ecr-stock/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 28,
+    "harvested": 28,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "ecr-messageheader",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ecr-messageheader",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-messageheader",
+      "source": "StructureDefinition-ecr-messageheader.json",
+      "fixture": "fixtures/ecr-messageheader.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "eicr-composition",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-composition",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-composition",
+      "source": "StructureDefinition-eicr-composition.json",
+      "fixture": "fixtures/eicr-composition.json",
+      "differentialElements": 126
+    },
+    {
+      "id": "eicr-country-of-residence-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-country-of-residence-observation",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-eicr-country-of-residence-observation.json",
+      "fixture": "fixtures/eicr-country-of-residence-observation.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "eicr-document-bundle",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-document-bundle",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-document-bundle",
+      "source": "StructureDefinition-eicr-document-bundle.json",
+      "fixture": "fixtures/eicr-document-bundle.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "eicr-encounter",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-encounter",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-encounter",
+      "source": "StructureDefinition-eicr-encounter.json",
+      "fixture": "fixtures/eicr-encounter.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "eicr-initiation-type-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-initiation-type-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-eicr-initiation-type-extension.json",
+      "fixture": "fixtures/eicr-initiation-type-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "eicr-organism-detected-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-detected-observation",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-lab-result-observation",
+      "source": "StructureDefinition-eicr-organism-detected-observation.json",
+      "fixture": "fixtures/eicr-organism-detected-observation.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "eicr-organism-susceptibility-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-organism-susceptibility-observation",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-lab-result-observation",
+      "source": "StructureDefinition-eicr-organism-susceptibility-observation.json",
+      "fixture": "fixtures/eicr-organism-susceptibility-observation.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "eicr-procedure",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-procedure",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "source": "StructureDefinition-eicr-procedure.json",
+      "fixture": "fixtures/eicr-procedure.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "eicr-servicerequest",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest",
+      "source": "StructureDefinition-eicr-servicerequest.json",
+      "fixture": "fixtures/eicr-servicerequest.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "eicr-trigger-code-flag-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-trigger-code-flag-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-eicr-trigger-code-flag-extension.json",
+      "fixture": "fixtures/eicr-trigger-code-flag-extension.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "ersd-plandefinition",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-plandefinition",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-plandefinition",
+      "source": "StructureDefinition-ersd-plandefinition.json",
+      "fixture": "fixtures/ersd-plandefinition.json",
+      "differentialElements": 125
+    },
+    {
+      "id": "ersd-supplemental-library",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/ersd-supplemental-library",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-supplemental-library",
+      "source": "StructureDefinition-ersd-supplemental-library.json",
+      "fixture": "fixtures/ersd-supplemental-library.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "rr-composition",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-composition",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-composition",
+      "source": "StructureDefinition-rr-composition.json",
+      "fixture": "fixtures/rr-composition.json",
+      "differentialElements": 30
+    },
+    {
+      "id": "rr-document-bundle",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-document-bundle",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-document-bundle",
+      "source": "StructureDefinition-rr-document-bundle.json",
+      "fixture": "fixtures/rr-document-bundle.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "rr-documentreference",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-documentreference",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference",
+      "source": "StructureDefinition-rr-documentreference.json",
+      "fixture": "fixtures/rr-documentreference.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "rr-eicr-processing-status-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-rr-eicr-processing-status-extension.json",
+      "fixture": "fixtures/rr-eicr-processing-status-extension.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "rr-eicr-processing-status-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-rr-eicr-processing-status-observation.json",
+      "fixture": "fixtures/rr-eicr-processing-status-observation.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "rr-eicr-processing-status-reason-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-reason-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-rr-eicr-processing-status-reason-observation.json",
+      "fixture": "fixtures/rr-eicr-processing-status-reason-observation.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "rr-eicr-receipt-time-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-receipt-time-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-rr-eicr-receipt-time-extension.json",
+      "fixture": "fixtures/rr-eicr-receipt-time-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "rr-external-resource-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-external-resource-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-rr-external-resource-extension.json",
+      "fixture": "fixtures/rr-external-resource-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "rr-priority-extension",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-priority-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-rr-priority-extension.json",
+      "fixture": "fixtures/rr-priority-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "rr-relevant-reportable-condition-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-relevant-reportable-condition-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-rr-relevant-reportable-condition-observation.json",
+      "fixture": "fixtures/rr-relevant-reportable-condition-observation.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "rr-reportability-information-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-reportability-information-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-rr-reportability-information-observation.json",
+      "fixture": "fixtures/rr-reportability-information-observation.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "rr-responsible-agency-organization",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-responsible-agency-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-organization",
+      "source": "StructureDefinition-rr-responsible-agency-organization.json",
+      "fixture": "fixtures/rr-responsible-agency-organization.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "rr-routing-entity-organization",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-routing-entity-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-organization",
+      "source": "StructureDefinition-rr-routing-entity-organization.json",
+      "fixture": "fixtures/rr-routing-entity-organization.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "rr-rules-authoring-agency-organization",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-rules-authoring-agency-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-organization",
+      "source": "StructureDefinition-rr-rules-authoring-agency-organization.json",
+      "fixture": "fixtures/rr-rules-authoring-agency-organization.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "rr-summary-observation",
+      "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-summary-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-rr-summary-observation.json",
+      "fixture": "fixtures/rr-summary-observation.json",
+      "differentialElements": 3
+    }
+  ],
+  "skipped": []
+}

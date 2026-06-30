@@ -1,0 +1,37 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-document-bundle",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-document-bundle",
+  "name": "EICRDocumentBundle",
+  "title": "eICR Document Bundle",
+  "status": "active",
+  "description": "This Bundle profile represents an eCR Document Bundle. It contains an eICR Composition.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Bundle",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-document-bundle",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Bundle.entry:USPublicHealthComposition",
+        "path": "Bundle.entry",
+        "sliceName": "USPublicHealthComposition"
+      },
+      {
+        "id": "Bundle.entry:USPublicHealthComposition.resource",
+        "path": "Bundle.entry.resource",
+        "short": "eICR Composition",
+        "type": [
+          {
+            "code": "Composition",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-composition"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

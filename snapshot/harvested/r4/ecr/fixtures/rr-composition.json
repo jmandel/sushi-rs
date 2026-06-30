@@ -1,0 +1,407 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-composition",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-composition",
+  "name": "RRComposition",
+  "title": "RR Composition",
+  "status": "active",
+  "description": "This Composition profile represents the Reportability Response that is created in response to an electronic Initial Case Report Composition.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "eCR-CDA",
+      "name": "eCR FHIR to CDA Mapping",
+      "comment": "This table maps FHIR eCR profile elements to eICR/RR CDA template elements located in the CDA eICR IG (R2 STU2) and CDA RR IG (R2 STU1)."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Composition",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-composition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Composition",
+        "path": "Composition",
+        "short": "Reportability Response Composition",
+        "definition": "This Composition profile represents the Reportability Response that will be created in response to an electronic Initial Case Report Composition."
+      },
+      {
+        "id": "Composition.extension",
+        "path": "Composition.extension",
+        "min": 2
+      },
+      {
+        "id": "Composition.extension:extensionInformationRecipient",
+        "path": "Composition.extension",
+        "sliceName": "extensionInformationRecipient",
+        "short": "Reportability Response recipient(s)",
+        "definition": "Reporting may be identified for multiple PHAs by the PHA system (or its intermediary) (because the patient's residence and the provider location are in separate jurisdictions) including other identified organization (such as an HIE) to which the eICR (if deemed reportable) and/or the Reportability Response will be routed.",
+        "min": 1
+      },
+      {
+        "id": "Composition.type",
+        "path": "Composition.type",
+        "short": "Public Health Reportability Response Document",
+        "definition": "The type of this Composition is a Public Health Reportability Response Document",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "88085-6",
+              "system": "http://loinc.org"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.subject",
+        "path": "Composition.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.encounter",
+        "path": "Composition.encounter",
+        "short": "eICR Encounter",
+        "definition": "The encounter during which the eICR was triggered.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-encounter"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.author",
+        "path": "Composition.author",
+        "short": "The author(s) of the document. For the Reportability Response Composition, this will most likely be the software that is generating the response, though this will not always the be case."
+      },
+      {
+        "id": "Composition.custodian",
+        "path": "Composition.custodian",
+        "min": 1
+      },
+      {
+        "id": "Composition.section",
+        "path": "Composition.section",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Composition.section:sliceRRSubjectSection",
+        "path": "Composition.section",
+        "sliceName": "sliceRRSubjectSection",
+        "short": "Reportability Response Subject Section",
+        "definition": "This section contains the subject (short description) of the Reportability Response Document. This information can be used in a work queue or an email subject and gives a concise description of the determination of reportability. This section is present in the Reportability Response Document if the eICR Document was processed and is not present if the eICR Document was not processed. The narrative in this section is displayed first in the Reportability Response Document and consists of paragraphs containing the 'Subject:' heading and the subject text.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSubjectSection.code",
+        "path": "Composition.section.code",
+        "short": "Reportable condition response information and summary Document",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "88084-9",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSubjectSection.text",
+        "path": "Composition.section.text",
+        "short": "Reportability Response Subject Section",
+        "definition": "Contains the subject (short description) of the Reportability Response Document. This information can be used in a work queue or an email subject and gives a concise description of the determination of reportability.",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection",
+        "path": "Composition.section",
+        "sliceName": "sliceEICRSection",
+        "short": "Electronic Initial Case Report Section",
+        "definition": "This section contains information about the eICR Document to which this document is a response.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.extension",
+        "path": "Composition.section.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.extension:extensionEICRProcessingStatus",
+        "path": "Composition.section.extension",
+        "sliceName": "extensionEICRProcessingStatus",
+        "short": "eICR Processing Status",
+        "definition": "This extension constains processing status information about the eICR.",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-processing-status-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.extension:extensionAlternatelyManuallyInitiatedEICR",
+        "path": "Composition.section.extension",
+        "sliceName": "extensionAlternatelyManuallyInitiatedEICR",
+        "short": "Alternately or Manually Initiated eICR",
+        "definition": "The presence of this extension indicates whether or not the eICR Document for which this Reportability Response is a response, was either alternately or manually initiated. The eICR could also contain trigger codes (automatic trigger code initiation).",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-initiation-type-extension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[RR R1 STU1] Manually Initiated eICR/code",
+            "comment": "No mapping for Alternately Initiation eICR in the current version of CDA RR"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.extension:extensionEICRReceiptTime",
+        "path": "Composition.section.extension",
+        "sliceName": "extensionEICRReceiptTime",
+        "short": "Date and time of eICR receipt",
+        "definition": "This extension contains the date and time of eICR receipt.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-eicr-receipt-time-extension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "eCR-CDA",
+            "map": "[RR R1 STU1] Received eICR Information/eICR External Document Reference/effectiveTime"
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.code",
+        "path": "Composition.section.code",
+        "short": "Initial case report processing information Document",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "88082-3",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.entry:sliceEICRDocument",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceEICRDocument",
+        "short": "Reference to eICR Document Bundle or eICR CDA document",
+        "definition": "Reference to eICR Document Bundle or eICR CDA document. Use identifier for eICR Document Bundle identifier 2. Use display for eICR file name (or other identifying string): recommended primarily for dealing with eICR error cases. In the case where an eICR document is unreadable for some reason, it is possible that the only identifying information is the eICR filename (or other identifying string).",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-document-bundle",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.entry:sliceEICRDocument.identifier",
+        "path": "Composition.section.entry.identifier",
+        "short": "eICR Document Bundle identifier"
+      },
+      {
+        "id": "Composition.section:sliceEICRSection.entry:sliceEICRDocument.display",
+        "path": "Composition.section.entry.display",
+        "short": "Filename of eICR",
+        "definition": "The filename is recommended primarily for dealing with eICR error cases. In the case where an eICR document is unreadable for some reason, it is likely that the setId and versionNumber would be unavailable, and it is possible that the only identifying information is the eICR document filename.",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection",
+        "path": "Composition.section",
+        "sliceName": "sliceRRSummarySection",
+        "short": "Reportability Response Summary Section",
+        "definition": "This section contains the Reportability Response Summary profile and the Reportability Response Priority profile.\n\nThis section is present in the Reportability Response Document if the eICR Document was processed and is not present if the eICR Document was not processed.\n\nThe narrative in this section is displayed last in the Reportability Response Document and consists of the following elements in the following order (see example included in IG):\n\n* Paragraphs containing the \"Summary:\" heading and the summary text\n* A list containing external resources from the following categories (code specified in External Resources/code), in the order specified below:\n    * Outbreak- or Cluster-related\n    * Additional reporting needs\n    * Additional detection and/or laboratory testing needs\n    * Treatment and/or prevention\n    * PHA contact information\n* A list containing external resources from the category (code specified in External Resources/code):\n    * Additional resources",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.extension",
+        "path": "Composition.section.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.extension:extensionRRPriority",
+        "path": "Composition.section.extension",
+        "sliceName": "extensionRRPriority",
+        "short": "RR Priority",
+        "definition": "Represents a priority for the reportability response overall. It has been calculated from the highest priority of any included External Resources or the highest priority of included Conditions based on a separate, jurisdictionally developed priority list. This priority should be used for EHR workflow including notification, alerting, routing and queueing.",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-priority-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.code",
+        "path": "Composition.section.code",
+        "short": "Document summary",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "55112-7",
+              "system": "http://loinc.org"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.text",
+        "path": "Composition.section.text",
+        "short": "RR Summary Section narrative",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.entry",
+        "path": "Composition.section.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 2,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.entry:sliceRRSummary",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceRRSummary",
+        "short": "RR Summary",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-summary-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:sliceRRSummarySection.entry:sliceRRCondition",
+        "path": "Composition.section.entry",
+        "sliceName": "sliceRRCondition",
+        "short": "Relevant Reportable Condition",
+        "definition": "Contains one (if both the patient's home and the provider location have the same responsible agency) or more (if the patient's home and provider location have different responsible agencies) Reportability Information Observations. It may also contain external resources specific to the condition.",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-relevant-reportable-condition-observation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

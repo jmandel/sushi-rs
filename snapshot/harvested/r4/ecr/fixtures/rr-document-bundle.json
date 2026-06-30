@@ -1,0 +1,37 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-document-bundle",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-document-bundle",
+  "name": "RRDocumentBundle",
+  "title": "RR Document Bundle",
+  "status": "active",
+  "description": "This Bundle profile represents an RR Document Bundle. It contains an RR Composition.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Bundle",
+  "baseDefinition": "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-document-bundle",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Bundle.entry:USPublicHealthComposition",
+        "path": "Bundle.entry",
+        "sliceName": "USPublicHealthComposition"
+      },
+      {
+        "id": "Bundle.entry:USPublicHealthComposition.resource",
+        "path": "Bundle.entry.resource",
+        "short": "RR Composition",
+        "type": [
+          {
+            "code": "Composition",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-composition"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

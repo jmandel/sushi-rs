@@ -1,0 +1,62 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-priority-extension",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-priority-extension",
+  "name": "RRPriorityExtension",
+  "title": "Reportability Response Priority Extension",
+  "status": "active",
+  "description": "This Extension profile represents the priority given to the whole composition or one or more external resources.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Composition.section",
+      "type": "element"
+    },
+    {
+      "expression": "DocumentReference",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Reportability Response Priority",
+        "definition": "Priority given to the composition or one or more external resources."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-priority-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Reportability priority",
+        "definition": "Priority given to the whole composition or one or more external resources.",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.5",
+          "description": "Reportability Priority"
+        }
+      }
+    ]
+  }
+}

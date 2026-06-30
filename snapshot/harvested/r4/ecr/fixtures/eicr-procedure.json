@@ -1,0 +1,36 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "eicr-procedure",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/eicr-procedure",
+  "name": "EICRProcedure",
+  "title": "eICR Procedure",
+  "status": "active",
+  "description": "This Procedure profile defines constraints on the US Core Procedure profile for the eICR use case.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Procedure",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Procedure",
+        "path": "Procedure",
+        "short": "Defines constraints on the US Core Procedure profile for the case reporting use case."
+      },
+      {
+        "id": "Procedure.focalDevice",
+        "path": "Procedure.focalDevice",
+        "short": "Device such as a ventilator as the focus of the procedure",
+        "definition": "A device that is implanted, removed or otherwise manipulated such as a ventilator as a focal portion of the Procedure.",
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.focalDevice.manipulated",
+        "path": "Procedure.focalDevice.manipulated",
+        "mustSupport": true
+      }
+    ]
+  }
+}

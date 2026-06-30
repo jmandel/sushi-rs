@@ -1,0 +1,253 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "rr-reportability-information-observation",
+  "url": "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-reportability-information-observation",
+  "name": "RRReportabilityInformationObservation",
+  "title": "RR Reportability Information Observation",
+  "status": "active",
+  "description": "This profile represents reportability information based on the PHA in which is located the patient's home, the provider facility, or both locations.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "eCR-CDA",
+      "name": "Mappings for eCR FHIR to CDA",
+      "comment": "This table maps FHIR eCR profile elements to eICR/RR CDA template elements located in the CDA eICR IG (R2 STU2) and CDA RR IG (R2 STU1)."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "short": "Reportability Information Observation",
+        "definition": "This profile defines the reportability information for a condition-jurisdiction pair, based on the PHA in which is located the patient's home, the provider facility, or both locations. The Determination of Reportability, Determination of Reportability Reason, and Determination of Reportability Rule are contained in extensions. This profile also contains extensions for the Responsible Agency, the Rules Authoring Agency, and the Routing Entity.  The Relevant Reportable Condition is contained in goal.addresses and any External Resources are contained in action (one action may contain multiple External Resources (documentation))."
+      },
+      {
+        "id": "Observation.extension",
+        "path": "Observation.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Observation.extension:determinationOfReportability",
+        "path": "Observation.extension",
+        "sliceName": "determinationOfReportability",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-determination-of-reportability-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.extension:determinationOfReportabilityReason",
+        "path": "Observation.extension",
+        "sliceName": "determinationOfReportabilityReason",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-determination-of-reportability-reason-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.extension:determinationOfReportabilityRule",
+        "path": "Observation.extension",
+        "sliceName": "determinationOfReportabilityRule",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-determination-of-reportability-rule-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.extension:externalResourceExtension",
+        "path": "Observation.extension",
+        "sliceName": "externalResourceExtension",
+        "short": "External resources pertaining to the condition",
+        "definition": "External resources such as a text guidance, link to access forms for additional reporting needs, additional testing and/or laboratory testing needs, treatment and/or prevention resources, Public Health Agency contact information and general additional resources.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-external-resource-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.status",
+        "path": "Observation.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "Location Relevance",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://phinvads.cdc.gov/fhir/ValueSet/2.16.840.1.113883.10.20.15.2.5.6",
+          "description": "Location Relevance"
+        }
+      },
+      {
+        "id": "Observation.performer",
+        "path": "Observation.performer",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 2,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer:rulesAuthoringAgency",
+        "path": "Observation.performer",
+        "sliceName": "rulesAuthoringAgency",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-rules-authoring-agency-organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer:routingEntity",
+        "path": "Observation.performer",
+        "sliceName": "routingEntity",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-routing-entity-organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer:responsibleAgency",
+        "path": "Observation.performer",
+        "sliceName": "responsibleAgency",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ecr/StructureDefinition/rr-responsible-agency-organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "rules": "open"
+        },
+        "short": "Reporting timeframe",
+        "definition": "The timeframe in which the receiver should take the actions specified.",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sliceReportingTimeframe",
+        "path": "Observation.component",
+        "sliceName": "sliceReportingTimeframe",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sliceReportingTimeframe.code",
+        "path": "Observation.component.code",
+        "short": "Timeframe to report (urgency)",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "RR4",
+              "system": "urn:oid:2.16.840.1.114222.4.5.232"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sliceReportingTimeframe.value[x]",
+        "path": "Observation.component.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sliceReportingTimeframe.value[x].value",
+        "path": "Observation.component.value[x].value",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sliceReportingTimeframe.value[x].unit",
+        "path": "Observation.component.value[x].unit",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}
