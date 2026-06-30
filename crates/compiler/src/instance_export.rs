@@ -393,9 +393,13 @@ fn tag_element_name(tag: &str) -> String {
 }
 
 fn is_inline_element(name: &str) -> bool {
+    // Matches html-minifier-terser's whitespace handling: surrounding whitespace
+    // is preserved (collapsed to one space) only for inline elements. `br` is a
+    // void element whose adjacent whitespace html-minifier trims, so it is NOT
+    // treated as inline here (stock emits `x<br/>y`, never `x <br/> y`).
     matches!(
         name,
-        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "br" | "button" | "cite" | "code"
+        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "button" | "cite" | "code"
             | "dfn" | "em" | "i" | "img" | "input" | "kbd" | "label" | "map" | "object" | "q"
             | "samp" | "select" | "small" | "span" | "strong" | "sub" | "sup" | "textarea"
             | "time" | "tt" | "u" | "var"
