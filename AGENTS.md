@@ -40,7 +40,7 @@ effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit
 only to reproduce invalid output). Score: **byte-identical 2052/2065, EQUIVALENT 2056/2065
 (99.6%)**, 9 REAL fails left (sdc 3 + dtr 4 + ecr 2 — genuine bugs, separate root causes).
 
-**PHASE 1 (12-IG set) COMPLETE — 2065/2065 EQUIVALENT (100%):** all 12 byte-identical except
+**PHASE 1 (12-IG) COMPLETE — 2065/2065 EQUIVALENT (100%). PHASE 2 (20-IG) NEAR-COMPLETE:**
 the 4 pas compat-breaks. **PHASE 2 (20-IG set) IN PROGRESS:** 6 new FSH IGs added to
 `gate1.sh` (bulk/pdex/plannet/formulary/cdshooks/subscriptions, built vs materialized
 `temp/top20-cache`); at 417/430, 13 real fails being fixed by agents `fix/xext` (cross-version
