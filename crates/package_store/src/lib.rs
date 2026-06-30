@@ -594,6 +594,23 @@ fn probe_name_from_path(path: &Path) -> Option<String> {
     }
 }
 
+/// Build an `IndexEntry` from a parsed resource JSON, extracting exactly the
+/// fields `.index.json` would have precomputed. Used by the directory-scan
+/// reconcile when a file is not covered by `.index.json` (empty/stale index).
+fn index_entry_from_json(json: &Value, filename: String) -> IndexEntry {
+    let s = |k: &str| json.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    IndexEntry {
+        filename,
+        resource_type: s("resourceType"),
+        id: s("id"),
+        url: s("url"),
+        version: s("version"),
+        kind: s("kind"),
+        sd_type: s("type"),
+        derivation: s("derivation"),
+    }
+}
+
 /// Classify an index entry into a `FishType`, mirroring how FPL/FHIRDefinitions
 /// derive the searchable type for SD/VS/CS. Returns `None` for resources that are
 /// not fishable as one of the conformance types (instances, examples, etc.).
@@ -659,85 +676,146 @@ impl PackageStore {
                 sd_type: str_field("type"),
                 derivation: str_field("derivation"),
             };
-            if let Some(fish_type) = classify(&ie) {
+            if classify(&ie).is_some() {
                 let name = str_field("name");
-                let idx = store.entries.len();
-                let entry = ResEntry {
-                    seq,
-                    resource_type: ie.resource_type.unwrap_or_default(),
-                    id: ie.id.unwrap_or_default(),
-                    url: ie.url,
-                    version: ie.version,
-                    sd_type: ie.sd_type,
-                    kind: ie.kind,
-                    name: name.clone(),
-                    fish_type,
-                    path: PathBuf::new(),
-                    embedded: Some(content),
-                };
-                if !entry.id.is_empty() {
-                    store.by_id.entry(entry.id.clone()).or_default().push(idx);
-                }
-                if let Some(u) = &entry.url {
-                    store.by_url.entry(u.clone()).or_default().push(idx);
-                }
-                if let Some(n) = &name {
-                    store.by_name.entry(n.clone()).or_default().push(idx);
-                }
-                store.entries.push(entry);
+                store.add_entry(ie, name, PathBuf::new(), Some(content), seq);
             }
             seq += 1;
         }
 
         for (id, version) in &load_list {
             let pkg_dir = cache.join(format!("{id}#{version}")).join("package");
-            let index_path = pkg_dir.join(".index.json");
-            let Ok(bytes) = std::fs::read(&index_path) else {
-                // Package not present / unreadable — FPL would fail to load it.
-                continue;
-            };
-            let Ok(index): Result<IndexFile, _> = serde_json::from_slice(&bytes) else {
-                continue;
-            };
-            for e in index.files {
-                let Some(fish_type) = classify(&e) else {
-                    seq += 1;
-                    continue;
-                };
-                let path = pkg_dir.join(&e.filename);
-                // name is not in .index.json — probe it from the file header only
-                // (prefix read; full read only if the header is inconclusive).
-                let name = probe_name_from_path(&path);
-                let idx = store.entries.len();
-                // Insert lookup keys (cloned — maps own their keys), then MOVE the
-                // remaining owned fields into the entry to avoid per-field clones.
-                let id = e.id.unwrap_or_default();
-                if !id.is_empty() {
-                    store.by_id.entry(id.clone()).or_default().push(idx);
-                }
-                if let Some(u) = &e.url {
-                    store.by_url.entry(u.clone()).or_default().push(idx);
-                }
-                if let Some(n) = &name {
-                    store.by_name.entry(n.clone()).or_default().push(idx);
-                }
-                store.entries.push(ResEntry {
-                    seq,
-                    resource_type: e.resource_type.unwrap_or_default(),
-                    id,
-                    url: e.url,
-                    version: e.version,
-                    sd_type: e.sd_type,
-                    kind: e.kind,
-                    name,
-                    fish_type,
-                    path,
-                    embedded: None,
-                });
-                seq += 1;
-            }
+            store.index_package(&pkg_dir, &mut seq);
         }
         Ok(store)
+    }
+
+    /// Index a single resolved package directory, mirroring FPL's
+    /// `loadResourcesFromCache` / `getPotentialResourcePaths`.
+    ///
+    /// **Stock behavior (the rule we match):** `fhir-package-loader` v2 (and SUSHI
+    /// v3.20.0) **never read `package/.index.json`** — `getPotentialResourcePaths`
+    /// scans the package directory for files matching `^[^.].*\.json$`, sorts them,
+    /// and reads each one (`BasePackageLoader.loadResourcesFromCache`). The
+    /// `.index.json` is a legacy artifact FPL ignores entirely.
+    ///
+    /// We use `.index.json` purely as a metadata CACHE for the files it lists (to
+    /// avoid re-parsing thousands of large core SDs), then **reconcile against the
+    /// directory**: any resource file present on disk but missing from (or absent
+    /// because the whole index is) `files:[]` is still indexed by reading it — this
+    /// is the empty/stale-index case (e.g. `hl7.fhir.uv.subscriptions-backport.r4
+    /// #1.1.0`, whose `.index.json` is `files:[]` despite 23 resources). Scanned
+    /// files are processed in sorted filename order, matching FPL's sorted scan, so
+    /// the load/seq order (and thus LIFO fishing precedence) matches stock.
+    fn index_package(&mut self, pkg_dir: &Path, seq: &mut usize) {
+        if !pkg_dir.is_dir() {
+            // Package not present — FPL would fail to load it.
+            return;
+        }
+
+        // -- Fast path: trust the metadata already in `.index.json`. -----------
+        let mut indexed: std::collections::HashSet<String> = std::collections::HashSet::new();
+        if let Ok(bytes) = std::fs::read(pkg_dir.join(".index.json")) {
+            if let Ok(index) = serde_json::from_slice::<IndexFile>(&bytes) {
+                for e in index.files {
+                    // Record coverage even for non-fishable entries so the
+                    // directory reconcile below doesn't re-read them.
+                    indexed.insert(e.filename.clone());
+                    if classify(&e).is_none() {
+                        *seq += 1;
+                        continue;
+                    }
+                    let path = pkg_dir.join(&e.filename);
+                    // name is not in .index.json — probe it from the file header
+                    // only (prefix read; full read only if header is inconclusive).
+                    let name = probe_name_from_path(&path);
+                    self.add_entry(e, name, path, None, *seq);
+                    *seq += 1;
+                }
+            }
+        }
+
+        // -- Reconcile with the directory (FPL's actual source of truth). ------
+        // FPL's filter is `^[^.].*\.json$`, sorted. Files the index already
+        // covered are skipped; the rest are read from disk and indexed — this is
+        // what recovers resources from an empty/stale `.index.json`.
+        let Ok(rd) = std::fs::read_dir(pkg_dir) else {
+            return;
+        };
+        let mut extra: Vec<String> = Vec::new();
+        for ent in rd.flatten() {
+            if !ent.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                continue;
+            }
+            let fname = ent.file_name().to_string_lossy().into_owned();
+            if fname.starts_with('.') || !fname.to_ascii_lowercase().ends_with(".json") {
+                continue; // dotfiles (incl. .index.json) and non-json excluded.
+            }
+            // package.json carries no resourceType — FPL reads then rejects it.
+            if fname == "package.json" || indexed.contains(&fname) {
+                continue;
+            }
+            extra.push(fname);
+        }
+        extra.sort(); // FPL `getPotentialResourcePaths` sorts the paths.
+        for fname in extra {
+            let path = pkg_dir.join(&fname);
+            // Read the resource directly (the metadata FPL extracts from the JSON
+            // is exactly the subset `.index.json` would have precomputed).
+            let entry = std::fs::read(&path)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+            if let Some(json) = entry {
+                let ie = index_entry_from_json(&json, fname);
+                if classify(&ie).is_some() {
+                    let name = json.get("name").and_then(|v| v.as_str()).map(str::to_string);
+                    self.add_entry(ie, name, path, None, *seq);
+                }
+            }
+            *seq += 1;
+        }
+    }
+
+    /// Push one index entry into the resource table + lookup maps if it classifies
+    /// as a fishable conformance type. Shared by the `.index.json` fast path, the
+    /// directory-scan reconcile, and the bundled R5-in-R4 injection.
+    fn add_entry(
+        &mut self,
+        ie: IndexEntry,
+        name: Option<String>,
+        path: PathBuf,
+        embedded: Option<&'static str>,
+        seq: usize,
+    ) {
+        let Some(fish_type) = classify(&ie) else {
+            return;
+        };
+        let idx = self.entries.len();
+        // Insert lookup keys (cloned — maps own their keys), then MOVE the
+        // remaining owned fields into the entry to avoid per-field clones.
+        let id = ie.id.unwrap_or_default();
+        if !id.is_empty() {
+            self.by_id.entry(id.clone()).or_default().push(idx);
+        }
+        if let Some(u) = &ie.url {
+            self.by_url.entry(u.clone()).or_default().push(idx);
+        }
+        if let Some(n) = &name {
+            self.by_name.entry(n.clone()).or_default().push(idx);
+        }
+        self.entries.push(ResEntry {
+            seq,
+            resource_type: ie.resource_type.unwrap_or_default(),
+            id,
+            url: ie.url,
+            version: ie.version,
+            sd_type: ie.sd_type,
+            kind: ie.kind,
+            name,
+            fish_type,
+            path,
+            embedded,
+        });
     }
 
     /// Resolve a query (`item` or `item|version`) + requested types to the winning
@@ -1118,6 +1196,93 @@ mod tests {
         std::fs::write(&p, &json).unwrap();
         assert_eq!(probe_name_from_path(&p).as_deref(), Some("DeepName"));
         let _ = std::fs::remove_file(&p);
+    }
+
+    fn empty_store() -> PackageStore {
+        PackageStore {
+            entries: Vec::new(),
+            by_id: FxHashMap::default(),
+            by_url: FxHashMap::default(),
+            by_name: FxHashMap::default(),
+            cache: std::cell::RefCell::new(FxHashMap::default()),
+        }
+    }
+
+    /// A package whose `.index.json` is `files:[]` (or missing) must still have
+    /// its on-disk resources indexed by the directory-scan reconcile — exactly as
+    /// stock SUSHI / fhir-package-loader do (FPL never reads `.index.json`).
+    #[test]
+    fn empty_index_directory_fallback() {
+        let dir = std::env::temp_dir().join(format!("pkgstore_emptyidx_{}", std::process::id()));
+        let pkg = dir.join("package");
+        std::fs::create_dir_all(&pkg).unwrap();
+        // The bug repro: an empty index next to real resources on disk.
+        std::fs::write(pkg.join(".index.json"), r#"{"index-version":2,"files":[]}"#).unwrap();
+        std::fs::write(
+            pkg.join("StructureDefinition-backport-subscription.json"),
+            r#"{"resourceType":"StructureDefinition","id":"backport-subscription","url":"http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription","name":"BackportSubscription","derivation":"constraint","kind":"resource","type":"Subscription"}"#,
+        )
+        .unwrap();
+        // A non-fishable file (instance) and package.json must be ignored.
+        std::fs::write(
+            pkg.join("Patient-example.json"),
+            r#"{"resourceType":"Patient","id":"example"}"#,
+        )
+        .unwrap();
+        std::fs::write(pkg.join("package.json"), r#"{"name":"p","version":"1.0.0"}"#).unwrap();
+
+        let mut store = empty_store();
+        let mut seq = 0usize;
+        store.index_package(&pkg, &mut seq);
+
+        // The empty index yielded nothing; the scan recovered the profile.
+        assert_eq!(store.entries.len(), 1, "only the SD profile should be indexed");
+        for q in [
+            "backport-subscription",
+            "BackportSubscription",
+            "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription",
+        ] {
+            let hit = store.fish_for_fhir(q, &[FishType::Profile]);
+            assert!(hit.is_some(), "should fish {q} by id/name/url after scan");
+        }
+
+        // A completely missing `.index.json` must behave identically.
+        std::fs::remove_file(pkg.join(".index.json")).unwrap();
+        let mut store2 = empty_store();
+        let mut seq2 = 0usize;
+        store2.index_package(&pkg, &mut seq2);
+        assert!(store2
+            .fish_for_fhir("backport-subscription", &[FishType::Profile])
+            .is_some());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A complete `.index.json` must take the fast path unchanged: the scan adds
+    /// nothing (only package.json is left over, and it is skipped).
+    #[test]
+    fn complete_index_no_double_index() {
+        let dir = std::env::temp_dir().join(format!("pkgstore_fullidx_{}", std::process::id()));
+        let pkg = dir.join("package");
+        std::fs::create_dir_all(&pkg).unwrap();
+        std::fs::write(
+            pkg.join(".index.json"),
+            r#"{"index-version":2,"files":[{"filename":"StructureDefinition-foo.json","resourceType":"StructureDefinition","id":"foo","url":"http://x/foo","version":"1.0.0","kind":"resource","type":"Patient","derivation":"constraint"}]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            pkg.join("StructureDefinition-foo.json"),
+            r#"{"resourceType":"StructureDefinition","id":"foo","url":"http://x/foo","name":"Foo","derivation":"constraint","kind":"resource","type":"Patient"}"#,
+        )
+        .unwrap();
+        std::fs::write(pkg.join("package.json"), r#"{"name":"p","version":"1.0.0"}"#).unwrap();
+
+        let mut store = empty_store();
+        let mut seq = 0usize;
+        store.index_package(&pkg, &mut seq);
+        assert_eq!(store.entries.len(), 1, "no double-indexing from the reconcile");
+        assert!(store.fish_for_fhir("foo", &[FishType::Profile]).is_some());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
