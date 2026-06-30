@@ -77,7 +77,23 @@ struct ResEntry {
     fish_type: FishType,
     /// Absolute path to the resource JSON on disk.
     path: PathBuf,
+    /// For the bundled R5-in-R4 virtual package: the embedded JSON (no disk path).
+    embedded: Option<&'static str>,
 }
+
+/// The `sushi-r5forR4#1.0.0` virtual package: 7 R5 defs needed in R4
+/// (`dist/fhirdefs/R5DefsForR4`). Vendored so the port doesn't depend on the
+/// fsh-sushi install. Loaded FIRST (lowest priority) so real packages shadow
+/// them, but they're the only source for ActorDefinition / Base / etc.
+const R5_FOR_R4_DEFS: &[&str] = &[
+    include_str!("../vendor/r5-for-r4/StructureDefinition-Base.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-ActorDefinition.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-Requirements.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-SubscriptionTopic.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-TestPlan.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-CodeableReference.json"),
+    include_str!("../vendor/r5-for-r4/StructureDefinition-DataType.json"),
+];
 
 /// Reads package `.index.json` files and resolves canonical/id/name → resource.
 pub struct PackageStore {
@@ -341,6 +357,53 @@ impl PackageStore {
             cache: std::cell::RefCell::new(FxHashMap::default()),
         };
         let mut seq = 0usize;
+
+        // Inject the bundled R5-in-R4 virtual package FIRST (lowest priority).
+        for content in R5_FOR_R4_DEFS {
+            let Ok(json): Result<Value, _> = serde_json::from_str(content) else {
+                continue;
+            };
+            let str_field = |k: &str| json.get(k).and_then(|v| v.as_str()).map(str::to_string);
+            let ie = IndexEntry {
+                filename: String::new(),
+                resource_type: str_field("resourceType"),
+                id: str_field("id"),
+                url: str_field("url"),
+                version: str_field("version"),
+                kind: str_field("kind"),
+                sd_type: str_field("type"),
+                derivation: str_field("derivation"),
+            };
+            if let Some(fish_type) = classify(&ie) {
+                let name = str_field("name");
+                let idx = store.entries.len();
+                let entry = ResEntry {
+                    seq,
+                    resource_type: ie.resource_type.unwrap_or_default(),
+                    id: ie.id.unwrap_or_default(),
+                    url: ie.url,
+                    version: ie.version,
+                    sd_type: ie.sd_type,
+                    kind: ie.kind,
+                    name: name.clone(),
+                    fish_type,
+                    path: PathBuf::new(),
+                    embedded: Some(content),
+                };
+                if !entry.id.is_empty() {
+                    store.by_id.entry(entry.id.clone()).or_default().push(idx);
+                }
+                if let Some(u) = &entry.url {
+                    store.by_url.entry(u.clone()).or_default().push(idx);
+                }
+                if let Some(n) = &name {
+                    store.by_name.entry(n.clone()).or_default().push(idx);
+                }
+                store.entries.push(entry);
+            }
+            seq += 1;
+        }
+
         for (id, version) in &load_list {
             let pkg_dir = cache.join(format!("{id}#{version}")).join("package");
             let index_path = pkg_dir.join(".index.json");
@@ -374,6 +437,7 @@ impl PackageStore {
                     name: name.clone(),
                     fish_type,
                     path,
+                    embedded: None,
                 };
                 if !entry.id.is_empty() {
                     store.by_id.entry(entry.id.clone()).or_default().push(idx);
@@ -439,8 +503,13 @@ impl PackageStore {
         if let Some(v) = self.cache.borrow().get(&idx) {
             return Some(v.clone());
         }
-        let bytes = std::fs::read(&self.entries[idx].path).ok()?;
-        let v = std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?);
+        let entry = &self.entries[idx];
+        let v = if let Some(content) = entry.embedded {
+            std::rc::Rc::new(serde_json::from_str::<Value>(content).ok()?)
+        } else {
+            let bytes = std::fs::read(&entry.path).ok()?;
+            std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?)
+        };
         self.cache.borrow_mut().insert(idx, v.clone());
         Some(v)
     }
