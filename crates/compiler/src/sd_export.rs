@@ -727,6 +727,8 @@ fn reset_parent_elements(sd: &mut StructureDefinition, def: &StructureDef, kind:
         };
         e.set_id(new_id);
     }
+    // ids were renamed in place (count unchanged) — drop the stale id->index cache.
+    sd.invalidate_id_index();
     // root base.path = root path
     if let Some(root) = sd.elements.first_mut() {
         let rp = root.path().to_string();

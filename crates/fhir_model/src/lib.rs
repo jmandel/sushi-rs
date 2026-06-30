@@ -6,7 +6,9 @@
 //! The StructureDefinition keeps its top-level props in an ordered `body` map and
 //! a flat `elements` vector; snapshot+differential are both derived from it.
 
+use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
+use std::cell::RefCell;
 
 pub mod props;
 pub use props::{ED_PROPS, SD_PROPS};
@@ -75,6 +77,12 @@ pub fn id_to_path(id: &str) -> String {
 pub struct ElementDefinition {
     pub map: Map<String, Value>,
     pub original: Option<Map<String, Value>>,
+    // Cached mirrors of `map["id"]` / `map["path"]` to avoid IndexMap+SipHash
+    // lookups on the hottest accessors (`id()`/`path()` run inside every linear
+    // element scan). Kept in sync by `from_json`/`new`/`set_id` (the only writers
+    // of those map keys). Never written via `set()`/`map.insert` elsewhere.
+    id: String,
+    path: String,
 }
 
 impl ElementDefinition {
@@ -95,7 +103,9 @@ impl ElementDefinition {
                 }
             }
         }
-        let mut ed = ElementDefinition { map, original: None };
+        let id = map.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let path = map.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let mut ed = ElementDefinition { map, original: None, id, path };
         if capture {
             ed.capture_original();
         }
@@ -103,17 +113,23 @@ impl ElementDefinition {
     }
 
     pub fn new(id: &str) -> ElementDefinition {
+        let path = id_to_path(id);
         let mut map = Map::new();
         map.insert("id".into(), Value::String(id.to_string()));
-        map.insert("path".into(), Value::String(id_to_path(id)));
-        ElementDefinition { map, original: None }
+        map.insert("path".into(), Value::String(path.clone()));
+        ElementDefinition {
+            map,
+            original: None,
+            id: id.to_string(),
+            path,
+        }
     }
 
     pub fn id(&self) -> &str {
-        self.map.get("id").and_then(|v| v.as_str()).unwrap_or("")
+        &self.id
     }
     pub fn path(&self) -> &str {
-        self.map.get("path").and_then(|v| v.as_str()).unwrap_or("")
+        &self.path
     }
     pub fn slice_name(&self) -> Option<&str> {
         self.map.get("sliceName").and_then(|v| v.as_str())
@@ -121,8 +137,10 @@ impl ElementDefinition {
 
     pub fn set_id(&mut self, id: String) {
         let path = id_to_path(&id);
-        self.map.insert("id".into(), Value::String(id));
-        self.map.insert("path".into(), Value::String(path));
+        self.map.insert("id".into(), Value::String(id.clone()));
+        self.map.insert("path".into(), Value::String(path.clone()));
+        self.id = id;
+        self.path = path;
     }
 
     pub fn capture_original(&mut self) {
@@ -336,12 +354,21 @@ pub fn type_code(t: &Value) -> &str {
 // StructureDefinition
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct StructureDefinition {
     pub body: Map<String, Value>,
     pub elements: Vec<ElementDefinition>,
     pub original_mapping: Vec<Value>,
     pub in_progress: bool,
+    /// Lazy id -> element-index cache (cheap FxHash) backing `index_of_id`/
+    /// `path_of_id`, which otherwise linear-scan the elements vec (O(n²) inside
+    /// `find_element_by_path`). Stores `(elements.len() at build time, map)`.
+    /// Rebuilt automatically when the element count changes (covers every
+    /// add/splice in this module). Callers that rename element ids in place
+    /// WITHOUT changing the count (e.g. `reset_parent_elements`'s `set_id` loop)
+    /// MUST call `invalidate_id_index()` afterwards. A per-lookup verification
+    /// (`elements[i].id() == id`) self-heals any shifted-position staleness.
+    id_index: RefCell<Option<(usize, FxHashMap<String, usize>)>>,
 }
 
 impl StructureDefinition {
@@ -377,7 +404,14 @@ impl StructureDefinition {
             elements,
             original_mapping,
             in_progress: false,
+            id_index: RefCell::new(None),
         }
+    }
+
+    /// Drop the cached id->index map. Call after renaming element ids in place
+    /// without changing the element count (e.g. an external `set_id` loop).
+    pub fn invalidate_id_index(&self) {
+        *self.id_index.borrow_mut() = None;
     }
 
     pub fn get_str(&self, key: &str) -> Option<&str> {
@@ -421,11 +455,34 @@ impl StructureDefinition {
     }
 
     pub fn find_element(&self, id: &str) -> Option<usize> {
-        self.elements.iter().position(|e| e.id() == id)
+        self.index_of_id(id)
     }
 
     pub fn index_of_id(&self, id: &str) -> Option<usize> {
-        self.elements.iter().position(|e| e.id() == id)
+        {
+            let cache = self.id_index.borrow();
+            if let Some((len, map)) = cache.as_ref() {
+                if *len == self.elements.len() {
+                    return match map.get(id) {
+                        // Verify the cached slot still holds this id (self-heals a
+                        // position shift that didn't change the count). `position`
+                        // semantics: first match wins (the map keeps first).
+                        Some(&i) if self.elements.get(i).map(|e| e.id()) == Some(id) => Some(i),
+                        Some(_) => self.elements.iter().position(|e| e.id() == id),
+                        None => None,
+                    };
+                }
+            }
+        }
+        // (Re)build the index for the current element vec.
+        let mut map: FxHashMap<String, usize> =
+            FxHashMap::with_capacity_and_hasher(self.elements.len(), Default::default());
+        for (i, e) in self.elements.iter().enumerate() {
+            map.entry(e.id().to_string()).or_insert(i);
+        }
+        let result = map.get(id).copied();
+        *self.id_index.borrow_mut() = Some((self.elements.len(), map));
+        result
     }
     pub fn path_of_id(&self, id: &str) -> Option<&str> {
         self.index_of_id(id).map(|i| self.elements[i].path())
@@ -477,12 +534,14 @@ impl StructureDefinition {
         let mut matching: Vec<String> = self.elements.iter().map(|e| e.id().to_string()).collect();
         for part in &parsed {
             fhir_path = format!("{fhir_path}.{}", part.base);
+            let fhir_path_dot = format!("{fhir_path}.");
+            let fhir_path_colon = format!("{fhir_path}:");
             let mut new_matching: Vec<String> = matching
                 .iter()
                 .filter(|id| {
                     let p = self.path_of_id(id).unwrap_or("");
-                    p.starts_with(&format!("{fhir_path}."))
-                        || p.starts_with(&format!("{fhir_path}:"))
+                    p.starts_with(&fhir_path_dot)
+                        || p.starts_with(&fhir_path_colon)
                         || p == fhir_path
                 })
                 .cloned()
@@ -529,10 +588,13 @@ impl StructureDefinition {
                 // remove slices that don't match exactly
                 let pdepth = path_depth(&fhir_path);
                 let path_end = fhir_path.split('.').nth(pdepth).unwrap_or("").to_string();
+                let path_end_colon = format!("{path_end}:");
+                let path_end_base = format!("{path_end}:{}", part.base);
+                let differs = path_end != part.base;
                 matching.retain(|id| {
                     let id_end = id.split('.').nth(pdepth).unwrap_or("");
-                    !id_end.contains(&format!("{path_end}:"))
-                        || (id_end == format!("{path_end}:{}", part.base) && path_end != part.base)
+                    !id_end.contains(&path_end_colon)
+                        || (id_end == path_end_base && differs)
                 });
             }
             previous_part = part.base.clone();
@@ -1041,9 +1103,10 @@ impl StructureDefinition {
 
     fn get_slices(&self, idx: usize) -> impl Iterator<Item = usize> + '_ {
         let e = &self.elements[idx];
-        let id = e.id().to_string();
         let path = e.path().to_string();
         let is_slice = e.slice_name().is_some();
+        // Boundary-prefixed id: `id/` for a slice's reslices, `id:` for slices.
+        let prefix = format!("{}{}", e.id(), if is_slice { '/' } else { ':' });
         (0..self.elements.len()).filter(move |&j| {
             if j == idx {
                 return false;
@@ -1052,12 +1115,7 @@ impl StructureDefinition {
             if c.path() != path {
                 return false;
             }
-            let cid = c.id();
-            if is_slice {
-                cid.starts_with(&format!("{id}/"))
-            } else {
-                cid.starts_with(&format!("{id}:"))
-            }
+            c.id().starts_with(&prefix)
         })
     }
 

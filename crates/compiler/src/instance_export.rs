@@ -1125,9 +1125,10 @@ fn set_implied_properties_on_instance(
         }
         let final_min = *effective_mins.get(&trace_path).unwrap_or(&0);
 
+        let trace_path_dot = format!("{trace_path}.");
         let matching_rule = paths
             .iter()
-            .find(|p| **p == trace_path || p.starts_with(&format!("{trace_path}.")))
+            .find(|p| **p == trace_path || p.starts_with(&trace_path_dot))
             .cloned();
 
         // assigned value (fixed*/pattern*)
@@ -2530,8 +2531,9 @@ fn set_assigned_values(
     for ar in &assign_rules {
         let path = &ar.path;
         // find validated pathParts for this rule path (first match)
+        let path_dot = format!("{path}.");
         let assembled = if let Some((_, parts, _)) =
-            rule_map.iter().find(|(k, _, _)| k == path || k.starts_with(&format!("{path}.")))
+            rule_map.iter().find(|(k, _, _)| k == path || k.starts_with(&path_dot))
         {
             strip_zero_only(&assemble_fsh_path(parts))
         } else {

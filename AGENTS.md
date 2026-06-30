@@ -593,7 +593,25 @@ Phases from the plan (0–9). Current state:
     All three are in `fhir_model/src/lib.rs` (unfold/clone) + `compiler/src/sd_export.rs`
     (binding fisher) + `compiler/src/ig_export.rs` (predefined scanner) + `lib.rs`
     wiring. Full dashboard re-run after each — NO regression to the 130+ passing SDs.
-- [ ] **Phase 9 — optimization loop**
+- [x] **Phase 9 — optimization loop** — DONE (2026-06-30). Warm IPS **14s → 1.57s
+  (8.9x)**, mcode **13.5s → 2.73s**, epi 1.11s, crd 1.63s; all in/near the 1.5–2.5s
+  target (stock ~39s). **Parity preserved: 665/665 byte-identical, `cargo test
+  --workspace` green.** Full write-up + before/after profiles in
+  `docs/perf-notes.md`. Four parity-preserving changes:
+  1. **Cache `id`/`path` as String fields on `ElementDefinition`** (mirror
+     `map["id"]/["path"]`, written only by new/from_json/set_id) — kills the 62%
+     IndexMap/SipHash from `e.id()`/`e.path()` in every linear scan. 14s→1.88s.
+  2. Hoist `format!` out of `fhir_model` hot filter loops (find_element_by_path,
+     get_slices). →1.77s.
+  3. **Lazy `FxHashMap<id,index>` side index** for `index_of_id`/`path_of_id`
+     (rebuilt on element-count change + per-lookup id-verify self-heal;
+     `reset_parent_elements`'s in-place `set_id` loop calls new
+     `StructureDefinition::invalidate_id_index()`). O(n²) find_element_by_path →
+     O(n). →1.64s.
+  4. Hoist two per-element `format!("{x}.")` out of `.find()` loops in
+     `instance_export` (`set_implied_properties_on_instance` +
+     `set_assigned_values`) — the big mcode wins (13.5s→4.2s→2.8s).
+  mcode is now lexer-bound (`lex::m_ref` ~26%, out of scope). NOT committed.
 
 ## 7b. Porting specs + cross-cutting parity traps
 
