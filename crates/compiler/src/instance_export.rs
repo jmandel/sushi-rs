@@ -1730,8 +1730,14 @@ fn create_useful_slices(
     fisher: &dyn Fisher,
 ) -> HashMap<String, i64> {
     let mut known = HashMap::new();
-    for (path, parts) in rule_map {
-        let non_numeric = strip_numeric_brackets(path);
+    for (_path, parts) in rule_map {
+        // Gate on the REWRITTEN parts (which carry the resolved sliceName), not the
+        // raw rule path — identical to `determine_known_slices`. The raw rule_map key
+        // can still hold an unresolved bracket alias (e.g.
+        // `extension[$questionnaire-versionAlgorithm]`) that `find_element_by_path`
+        // won't resolve, which would skip the slice and drop its placeholder element
+        // (corrupting key order). Mirrors stock keying its ruleMap on the resolved path.
+        let non_numeric = strip_numeric_brackets(&assemble_fsh_path(parts));
         if sd.find_element_by_path(&non_numeric, fisher).is_none() {
             continue;
         }
