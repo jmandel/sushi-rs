@@ -1102,9 +1102,47 @@ fn sd_derivation_specialization(kind: StructureKind) -> bool {
 // Element mutation: cardinality / flags / binding / constraint
 // ---------------------------------------------------------------------------
 
-/// constrainCardinality with slice→parent min propagation.
+/// constrainCardinality with connected-element and slice→parent propagation.
 fn constrain_cardinality_sd(sd: &mut StructureDefinition, ei: usize, min: Option<i64>, max: &str) {
     constrain_cardinality(&mut sd.elements[ei], min, max);
+    // Propagate to connected elements (findConnectedElements): each connected
+    // element's cardinality is narrowed (never widened) to the new bounds. Stock
+    // excludes direct slices of this element (handled by the slice rules).
+    let this_id = sd.elements[ei].id().to_string();
+    let this_path = sd.elements[ei].path().to_string();
+    let eff_min = sd.elements[ei].get("min").and_then(|v| v.as_i64());
+    let eff_max = sd.elements[ei].get("max").and_then(|v| v.as_str()).map(String::from);
+    let connected: Vec<String> = find_connected_element_ids(sd, ei)
+        .into_iter()
+        .filter(|cid| {
+            !(cid.starts_with(&this_id)
+                && sd.index_of_id(cid).map(|i| sd.elements[i].path() == this_path).unwrap_or(false))
+        })
+        .collect();
+    for cid in connected {
+        let Some(ci) = sd.index_of_id(&cid) else { continue };
+        let ce_min = sd.elements[ci].get("min").and_then(|v| v.as_i64());
+        let ce_max = sd.elements[ci].get("max").and_then(|v| v.as_str()).map(String::from);
+        let new_min = match (eff_min, ce_min) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        let new_max = match eff_max.as_deref() {
+            Some("*") | None => ce_max.clone().unwrap_or_default(),
+            Some(m) => match ce_max.as_deref() {
+                Some("*") | None => m.to_string(),
+                Some(cm) => {
+                    let a = m.parse::<i64>().ok();
+                    let b = cm.parse::<i64>().ok();
+                    match (a, b) {
+                        (Some(a), Some(b)) => a.min(b).to_string(),
+                        _ => m.to_string(),
+                    }
+                }
+            },
+        };
+        constrain_cardinality_sd(sd, ci, new_min, &new_max);
+    }
     // If this is a slice, bump the sliced element's min to the sum of slice mins.
     if sd.elements[ei].slice_name().is_none() {
         return;
@@ -1797,7 +1835,7 @@ fn constrain_type(
     // (`findConnectedElements`): each slice's type becomes the intersection of
     // the new types with its current types. Stock only applies the changes when
     // *every* connected slice yields a non-empty intersection.
-    let connected = connected_slice_ids(sd, ei);
+    let connected = find_connected_element_ids(sd, ei);
     if !connected.is_empty() {
         let mut changes: Vec<(usize, Vec<J>)> = Vec::new();
         for cid in &connected {
@@ -1823,23 +1861,52 @@ fn constrain_type(
     sd.elements[ei].set("type", J::Array(new_types));
 }
 
-/// Slice elements connected to element `ei` (`findConnectedElements`, direct
-/// slices only): same path, id prefixed with `{ei.id}:`, max != "0".
-fn connected_slice_ids(sd: &StructureDefinition, ei: usize) -> Vec<String> {
+/// `getSlices` of element `ei`: same-path elements whose id is prefixed with
+/// `{ei.id}:` (or `{ei.id}/` when `ei` is itself a slice / reslice).
+fn slice_ids_of(sd: &StructureDefinition, ei: usize) -> Vec<String> {
     let base_id = sd.elements[ei].id().to_string();
     let base_path = sd.elements[ei].path().to_string();
-    let prefix = format!("{base_id}:");
+    let sep = if sd.elements[ei].slice_name().is_some() { '/' } else { ':' };
+    let prefix = format!("{base_id}{sep}");
     sd.elements
         .iter()
-        .filter(|e| {
-            let id = e.id();
-            id != base_id
-                && e.path() == base_path
-                && id.starts_with(&prefix)
-                && e.get("max").and_then(|v| v.as_str()) != Some("0")
-        })
+        .filter(|e| e.id() != base_id && e.path() == base_path && e.id().starts_with(&prefix))
         .map(|e| e.id().to_string())
         .collect()
+}
+
+/// `findConnectedElements` — slices of this element (and, recursively, the
+/// same sub-path under slices of every ancestor), filtered to slices with
+/// max != "0". Returns connected element ids.
+fn find_connected_element_ids(sd: &StructureDefinition, ei: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    fce_recurse(sd, ei, "", &mut out);
+    out
+}
+
+fn fce_recurse(sd: &StructureDefinition, ei: usize, post_path: &str, out: &mut Vec<String>) {
+    for sid in slice_ids_of(sd, ei) {
+        let si = match sd.index_of_id(&sid) {
+            Some(i) => i,
+            None => continue,
+        };
+        if sd.elements[si].get("max").and_then(|v| v.as_str()) == Some("0") {
+            continue;
+        }
+        let target = format!("{sid}{post_path}");
+        if sd.find_element(&target).is_some() {
+            out.push(target);
+        }
+    }
+    let id = sd.elements[ei].id().to_string();
+    if let Some(cut) = id.rfind('.') {
+        let last_seg = &id[cut + 1..];
+        let parent_id = &id[..cut];
+        if let Some(pi) = sd.index_of_id(parent_id) {
+            let new_post = format!(".{last_seg}{post_path}");
+            fce_recurse(sd, pi, &new_post, out);
+        }
+    }
 }
 
 /// `findTypeMatch` for a plain type name (no Reference/canonical keyword) against
