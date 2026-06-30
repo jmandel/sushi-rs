@@ -13,6 +13,12 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | **1.052** |
 
 ### Integration log
+- **ROUND 1 LOCKED = A+B (no mimalloc).** **perf/C REJECTED**: head-to-head A+B vs
+  A+C (C = transient String/Vec/format allocs) — A+B won every IG (ips 1.01 vs 1.26,
+  epi 0.76 vs 0.95, mcode 1.46 vs 1.71, crd 1.00 vs 1.03). B and C compete on the
+  same churn; B's structural COW+snapshot-cache dominates C's local tweaks (which
+  also overlapped A's fmt-buffer). C dropped wholesale.
+
 - **mimalloc REVERTED** (user decision: avoid the C-toolchain build dependency).
   Kept all pure-Rust changes. Current main (no mimalloc) best-of-5:
   **ips 1.009 / epi 0.757 / mcode 1.457 / crd 0.995** (−23..−35% vs initial).
