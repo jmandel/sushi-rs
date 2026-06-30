@@ -7,13 +7,13 @@
 use fsh_lexer_parser::{dump, parser};
 use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 
-pub mod caret_schema;
 pub mod config;
 pub mod export;
 pub mod ig_export;
 pub mod instance_export;
 pub mod paths;
 pub mod sd_export;
+pub mod type_resolver;
 
 /// Entity-type discriminant (mirrors TS `constructorName`) used for the
 /// `isAllowedRule` table and diagnostic messages.

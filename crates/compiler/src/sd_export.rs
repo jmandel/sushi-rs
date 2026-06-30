@@ -927,6 +927,11 @@ fn set_rules(
 ) {
     resolve_soft_indexing(&mut def.rules);
     let rules = def.rules.clone();
+    // One SD-driven type resolver for all caret rules of this SD (cache reused
+    // across segments/rules). Fishes StructureDefinition/ElementDefinition + every
+    // datatype/extension SD on demand instead of a hardcoded element-type table.
+    let fish = |name: &str| fisher.fish_for_fhir(name);
+    let resolver = crate::type_resolver::TypeResolver::new(&fish);
     let mut i = 0;
     while i < rules.len() {
         let rule = &rules[i];
@@ -992,7 +997,7 @@ fn set_rules(
             Rule::Obeys { invariant, .. } => {
                 // handled by full obeys port below
                 let url = sd.url().to_string();
-                apply_obeys(sd, ei, invariant, &url, def, diag);
+                apply_obeys(sd, ei, invariant, &url, def, diag, &resolver);
             }
             Rule::CaretValue {
                 path: rpath,
@@ -1007,12 +1012,12 @@ fn set_rules(
                 if rpath.is_empty() {
                     // SD-body instance carets (e.g. ^contained) are deferred — skip.
                     if !is_instance {
-                        apply_caret_fhir(&mut sd.body, "StructureDefinition", cp, value, cfg);
+                        apply_caret_fhir(&mut sd.body, "StructureDefinition", cp, value, cfg, &resolver);
                     }
                 } else {
                     // Element carets: apply literal value (bare-name `valueId`/`valueCode`
                     // assignments resolve to the name string).
-                    apply_caret_element(&mut sd.elements[ei], cp, value, cfg);
+                    apply_caret_element(&mut sd.elements[ei], cp, value, cfg, &resolver);
                 }
             }
             Rule::Contains { items, .. } => {
@@ -1322,6 +1327,7 @@ fn apply_obeys(
     sd_url: &str,
     def: &StructureDef,
     diag: &mut Vec<String>,
+    resolver: &crate::type_resolver::TypeResolver,
 ) {
     // find invariant in tank-collected list (passed via def? we need access)
     // We look up via the global invariant registry stored on the context's tank.
@@ -1373,7 +1379,7 @@ fn apply_obeys(
         } = r
         {
             let caret_path = format!("constraint[{cst_idx}].{path}");
-            apply_caret_element(&mut sd.elements[ei], &caret_path, value, &Config::default());
+            apply_caret_element(&mut sd.elements[ei], &caret_path, value, &Config::default(), resolver);
         }
     }
     let _ = def;
@@ -1954,19 +1960,32 @@ fn resolve_canonical_caret(
     value.clone()
 }
 
-fn apply_caret_fhir(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, value: &FshValue, _cfg: &Config) {
+fn apply_caret_fhir(
+    obj: &mut Map<String, J>,
+    resource_type: &str,
+    caret_path: &str,
+    value: &FshValue,
+    _cfg: &Config,
+    resolver: &crate::type_resolver::TypeResolver,
+) {
     let caret_path = resolve_caret_aliases(caret_path);
-    if let Some((segs, leaf_ty)) = crate::caret_schema::resolve_path(resource_type, &caret_path) {
-        if let Some(leaf) = crate::export::coerce(value, &leaf_ty) {
+    if let Some((segs, leaf_ty)) = resolver.resolve(resource_type, &caret_path) {
+        if let Some(leaf) = crate::export::coerce(value, &leaf_ty, resolver) {
             crate::export::apply(obj, &segs, leaf);
         }
     }
 }
 
-fn apply_caret_element(ed: &mut ElementDefinition, caret_path: &str, value: &FshValue, _cfg: &Config) {
+fn apply_caret_element(
+    ed: &mut ElementDefinition,
+    caret_path: &str,
+    value: &FshValue,
+    _cfg: &Config,
+    resolver: &crate::type_resolver::TypeResolver,
+) {
     let caret_path = resolve_caret_aliases(caret_path);
-    if let Some((segs, leaf_ty)) = crate::caret_schema::resolve_path("ElementDefinition", &caret_path) {
-        if let Some(leaf) = crate::export::coerce(value, &leaf_ty) {
+    if let Some((segs, leaf_ty)) = resolver.resolve("ElementDefinition", &caret_path) {
+        if let Some(leaf) = crate::export::coerce(value, &leaf_ty, resolver) {
             crate::export::apply(ed.map_mut(), &segs, leaf);
         }
     }

@@ -14,6 +14,7 @@
 //! self-contained (no FHIR packages needed).
 
 use crate::config::Config;
+use crate::type_resolver::TypeResolver;
 use fsh_model::{
     FilterValue, FshCode, FshCodeSystem, FshDocument, FshValueSet, Rule, Value as FshValue,
     ValueSetComponentFrom,
@@ -110,244 +111,6 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
     declared.to_string()
 }
 
-// ---------------------------------------------------------------------------
-// Embedded element-type schema (only what VS/CS caret rules need).
-// ---------------------------------------------------------------------------
-
-fn is_primitive(ty: &str) -> bool {
-    matches!(
-        ty,
-        "code"
-            | "string"
-            | "uri"
-            | "url"
-            | "canonical"
-            | "markdown"
-            | "boolean"
-            | "integer"
-            | "unsignedInt"
-            | "positiveInt"
-            | "decimal"
-            | "dateTime"
-            | "date"
-            | "instant"
-            | "id"
-            | "base64Binary"
-            | "time"
-            | "oid"
-            | "uuid"
-    )
-}
-
-fn is_complex(ty: &str) -> bool {
-    matches!(
-        ty,
-        "Meta"
-            | "Identifier"
-            | "ContactDetail"
-            | "ContactPoint"
-            | "CodeableConcept"
-            | "Coding"
-            | "Extension"
-            | "UsageContext"
-            | "Period"
-            | "Reference"
-            | "Quantity"
-    )
-}
-
-/// Element type table: `(type_name, base) -> (element_type, is_array)`.
-fn field_def(type_name: &str, base: &str) -> Option<(&'static str, bool)> {
-    // Shared conformance-resource metadata elements (ValueSet & CodeSystem).
-    let shared = |base: &str| -> Option<(&'static str, bool)> {
-        Some(match base {
-            "meta" => ("Meta", false),
-            "implicitRules" => ("uri", false),
-            "language" => ("code", false),
-            "extension" => ("Extension", true),
-            "modifierExtension" => ("Extension", true),
-            "url" => ("uri", false),
-            "identifier" => ("Identifier", true),
-            "version" => ("string", false),
-            "name" => ("string", false),
-            "title" => ("string", false),
-            "status" => ("code", false),
-            "experimental" => ("boolean", false),
-            "date" => ("dateTime", false),
-            "publisher" => ("string", false),
-            "contact" => ("ContactDetail", true),
-            "description" => ("markdown", false),
-            "useContext" => ("UsageContext", true),
-            "jurisdiction" => ("CodeableConcept", true),
-            "purpose" => ("markdown", false),
-            "copyright" => ("markdown", false),
-            "id" => ("id", false),
-            _ => return None,
-        })
-    };
-    match type_name {
-        "ValueSet" => shared(base).or(match base {
-            "immutable" => Some(("boolean", false)),
-            "compose" => Some(("ValueSetCompose", false)),
-            _ => None,
-        }),
-        "CodeSystem" => shared(base).or(match base {
-            "caseSensitive" => Some(("boolean", false)),
-            "valueSet" => Some(("canonical", false)),
-            "hierarchyMeaning" => Some(("code", false)),
-            "compositional" => Some(("boolean", false)),
-            "versionNeeded" => Some(("boolean", false)),
-            "content" => Some(("code", false)),
-            "supplements" => Some(("canonical", false)),
-            "count" => Some(("unsignedInt", false)),
-            "filter" => Some(("CodeSystemFilter", true)),
-            "property" => Some(("CodeSystemProperty", true)),
-            "concept" => Some(("CodeSystemConcept", true)),
-            _ => None,
-        }),
-        "CodeSystemFilter" => Some(match base {
-            "code" => ("code", false),
-            "description" => ("string", false),
-            "operator" => ("code", true),
-            "value" => ("string", false),
-            _ => return None,
-        }),
-        "CodeSystemProperty" => Some(match base {
-            "code" => ("code", false),
-            "uri" => ("uri", false),
-            "description" => ("string", false),
-            "type" => ("code", false),
-            _ => return None,
-        }),
-        "CodeSystemConcept" => Some(match base {
-            "code" => ("code", false),
-            "display" => ("string", false),
-            "definition" => ("string", false),
-            "designation" => ("CodeSystemConceptDesignation", true),
-            "property" => ("CodeSystemConceptProperty", true),
-            "concept" => ("CodeSystemConcept", true),
-            "extension" => ("Extension", true),
-            _ => return None,
-        }),
-        "CodeSystemConceptDesignation" => Some(match base {
-            "language" => ("code", false),
-            "use" => ("Coding", false),
-            "value" => ("string", false),
-            _ => return None,
-        }),
-        // CodeSystemConceptProperty: code + value[x] (handled via resolve_choice).
-        "CodeSystemConceptProperty" => Some(match base {
-            "code" => ("code", false),
-            _ => return None,
-        }),
-        "Meta" => Some(match base {
-            "versionId" => ("id", false),
-            "lastUpdated" => ("instant", false),
-            "source" => ("uri", false),
-            "profile" => ("canonical", true),
-            "security" => ("Coding", true),
-            "tag" => ("Coding", true),
-            _ => return None,
-        }),
-        "Identifier" => Some(match base {
-            "use" => ("code", false),
-            "type" => ("CodeableConcept", false),
-            "system" => ("uri", false),
-            "value" => ("string", false),
-            "period" => ("Period", false),
-            "assigner" => ("Reference", false),
-            _ => return None,
-        }),
-        "ContactDetail" => Some(match base {
-            "name" => ("string", false),
-            "telecom" => ("ContactPoint", true),
-            _ => return None,
-        }),
-        "ContactPoint" => Some(match base {
-            "system" => ("code", false),
-            "value" => ("string", false),
-            "use" => ("code", false),
-            "rank" => ("positiveInt", false),
-            "period" => ("Period", false),
-            _ => return None,
-        }),
-        "CodeableConcept" => Some(match base {
-            "coding" => ("Coding", true),
-            "text" => ("string", false),
-            _ => return None,
-        }),
-        "Coding" => Some(match base {
-            "system" => ("uri", false),
-            "version" => ("string", false),
-            "code" => ("code", false),
-            "display" => ("string", false),
-            "userSelected" => ("boolean", false),
-            _ => return None,
-        }),
-        "Extension" => Some(match base {
-            "url" => ("uri", false),
-            "extension" => ("Extension", true),
-            _ => return None,
-        }),
-        "UsageContext" => Some(match base {
-            "code" => ("Coding", false),
-            _ => return None,
-        }),
-        _ => None,
-    }
-}
-
-/// Resolve a `value[x]` choice key (e.g. `valueCode`) on a type that has a
-/// choice element (Extension / UsageContext) to its concrete element type.
-fn resolve_choice(type_name: &str, base: &str) -> Option<&'static str> {
-    if !matches!(
-        type_name,
-        "Extension" | "UsageContext" | "CodeSystemConceptProperty"
-    ) {
-        return None;
-    }
-    let suffix = base.strip_prefix("value")?;
-    if suffix.is_empty() {
-        return None;
-    }
-    // PascalCase suffix -> complex type name; otherwise lower-camel primitive.
-    let complex = match suffix {
-        "Coding" => Some("Coding"),
-        "CodeableConcept" => Some("CodeableConcept"),
-        "Quantity" => Some("Quantity"),
-        "Reference" => Some("Reference"),
-        "Period" => Some("Period"),
-        "Identifier" => Some("Identifier"),
-        _ => None,
-    };
-    if let Some(c) = complex {
-        return Some(c);
-    }
-    // Primitive: lowercase the first character.
-    let prim: &'static str = match suffix {
-        "Code" => "code",
-        "String" => "string",
-        "Uri" => "uri",
-        "Url" => "url",
-        "Canonical" => "canonical",
-        "Markdown" => "markdown",
-        "Boolean" => "boolean",
-        "Integer" => "integer",
-        "UnsignedInt" => "unsignedInt",
-        "PositiveInt" => "positiveInt",
-        "Decimal" => "decimal",
-        "DateTime" => "dateTime",
-        "Date" => "date",
-        "Instant" => "instant",
-        "Id" => "id",
-        "Time" => "time",
-        "Oid" => "oid",
-        "Uuid" => "uuid",
-        "Base64Binary" => "base64Binary",
-        _ => return None,
-    };
-    Some(prim)
-}
 
 // ---------------------------------------------------------------------------
 // Caret path parsing + application.
@@ -387,63 +150,6 @@ pub(crate) fn split_caret_path(path: &str) -> Vec<String> {
     parts
 }
 
-/// Parse a path part into `(base, bracket_content)`.
-pub(crate) fn parse_part(part: &str) -> (String, Option<String>) {
-    if let Some(open) = part.find('[') {
-        let base = part[..open].to_string();
-        let inner = part[open + 1..]
-            .strip_suffix(']')
-            .unwrap_or(&part[open + 1..])
-            .to_string();
-        (base, Some(inner))
-    } else {
-        (part.to_string(), None)
-    }
-}
-
-/// Resolve a caret path on a resource type into segments + the leaf element type.
-fn resolve_path(resource_type: &str, caret_path: &str) -> Option<(Vec<Seg>, String)> {
-    let parts = split_caret_path(caret_path);
-    if parts.is_empty() {
-        return None;
-    }
-    let mut cur = resource_type.to_string();
-    let mut segs = Vec::with_capacity(parts.len());
-    let mut leaf_ty = String::new();
-    let n = parts.len();
-    for (i, part) in parts.iter().enumerate() {
-        let (base, bracket) = parse_part(part);
-        let (ty, array) = match field_def(&cur, &base) {
-            Some(v) => v,
-            None => {
-                // `value[x]` choice on Extension/UsageContext.
-                let choice = resolve_choice(&cur, &base)?;
-                (choice, false)
-            }
-        };
-        let mut index = None;
-        let slice_url = match &bracket {
-            Some(b) if b.chars().all(|c| c.is_ascii_digit()) => {
-                index = b.parse::<usize>().ok();
-                None
-            }
-            Some(b) if base == "extension" || base == "modifierExtension" => Some(b.clone()),
-            _ => None,
-        };
-        segs.push(Seg {
-            key: base,
-            array,
-            slice_url,
-            index,
-        });
-        if i == n - 1 {
-            leaf_ty = ty.to_string();
-        } else {
-            cur = ty.to_string();
-        }
-    }
-    Some((segs, leaf_ty))
-}
 
 /// Build a FHIR Coding JSON object from an FshCode (key order: code, system,
 /// version, display) — mirrors `FshCode.toFHIRCoding`.
@@ -468,8 +174,8 @@ pub(crate) fn coding_from(fc: &FshCode) -> J {
 
 /// Coerce an FSH caret value to JSON according to the resolved leaf element type
 /// (port of the relevant `assignValue` / `assignFshCode` branches).
-pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
-    if is_primitive(leaf_ty) {
+pub(crate) fn coerce(value: &FshValue, leaf_ty: &str, resolver: &TypeResolver) -> Option<J> {
+    if resolver.is_primitive(leaf_ty) {
         Some(match value {
             // For a code/string/uri leaf, a FshCode contributes only its code.
             FshValue::Code(fc) => J::String(fc.code.clone()),
@@ -490,7 +196,7 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
             FshValue::Canonical(c) => J::String(c.entity_name.clone()),
             _ => return None,
         })
-    } else if is_complex(leaf_ty) {
+    } else if resolver.is_complex(leaf_ty) {
         match (leaf_ty, value) {
             ("Coding", FshValue::Code(fc)) => Some(coding_from(fc)),
             ("CodeableConcept", FshValue::Code(fc)) => {
@@ -582,15 +288,21 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
 }
 
 /// Apply one top-level caret rule (`path == ''`) onto the resource object.
-fn apply_caret(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, value: &FshValue) {
+fn apply_caret(
+    obj: &mut Map<String, J>,
+    resource_type: &str,
+    caret_path: &str,
+    value: &FshValue,
+    resolver: &TypeResolver,
+) {
     // Resolve aliases inside path brackets (e.g. `^extension[FMM]` where FMM is a
     // global Alias) — same export-time resolution the SD exporter does.
     let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
     let caret_path = caret_path.as_str();
-    let Some((segs, leaf_ty)) = resolve_path(resource_type, caret_path) else {
+    let Some((segs, leaf_ty)) = resolver.resolve(resource_type, caret_path) else {
         return;
     };
-    let Some(leaf) = coerce(value, &leaf_ty) else {
+    let Some(leaf) = coerce(value, &leaf_ty, resolver) else {
         return;
     };
     apply(obj, &segs, leaf);
@@ -675,9 +387,14 @@ fn precreate_implied(obj: &mut Map<String, J>, segs: &[Seg]) {
 }
 
 /// Run the implied-properties pre-pass for one caret rule path.
-fn precreate_implied_for_path(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str) {
+fn precreate_implied_for_path(
+    obj: &mut Map<String, J>,
+    resource_type: &str,
+    caret_path: &str,
+    resolver: &TypeResolver,
+) {
     let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
-    if let Some((segs, _)) = resolve_path(resource_type, caret_path.as_str()) {
+    if let Some((segs, _)) = resolver.resolve(resource_type, caret_path.as_str()) {
         precreate_implied(obj, &segs);
     }
 }
@@ -692,7 +409,13 @@ pub struct Exported {
     pub body: J,
 }
 
-pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store: Option<&PackageStore>) -> Exported {
+pub fn export_value_set(
+    vs: &FshValueSet,
+    cfg: &Config,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+    resolver: &TypeResolver,
+) -> Exported {
     let id = effective_id(&vs.rules, &vs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -741,7 +464,7 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store:
             ..
         } = r
         {
-            precreate_implied_for_path(&mut obj, "ValueSet", cp);
+            precreate_implied_for_path(&mut obj, "ValueSet", cp, resolver);
         }
     }
 
@@ -755,7 +478,7 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store:
         } = r
         {
             if let Some(cp) = caret_path {
-                apply_caret(&mut obj, "ValueSet", cp, value);
+                apply_caret(&mut obj, "ValueSet", cp, value, resolver);
             }
         }
     }
@@ -1030,7 +753,12 @@ fn filter_value_to_string(v: &FilterValue) -> String {
 // CodeSystem export.
 // ---------------------------------------------------------------------------
 
-pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -> Exported {
+pub fn export_code_system(
+    cs: &FshCodeSystem,
+    cfg: &Config,
+    _tank: &TankIndex,
+    resolver: &TypeResolver,
+) -> Exported {
     let id = effective_id(&cs.rules, &cs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -1097,12 +825,12 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
     // setImpliedPropertiesOnInstance pre-pass (see export_value_set): hoist
     // extension/modifierExtension slice urls ahead of later metadata caret keys.
     for (full, _) in &cs_carets {
-        precreate_implied_for_path(&mut obj, "CodeSystem", full);
+        precreate_implied_for_path(&mut obj, "CodeSystem", full, resolver);
     }
 
     // value loop, in source order.
     for (full, value) in &cs_carets {
-        apply_caret(&mut obj, "CodeSystem", full, value);
+        apply_caret(&mut obj, "CodeSystem", full, value, resolver);
     }
 
     // updateCount: only when content == 'complete'.
@@ -1244,6 +972,12 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
     // the SD exporter). Idempotent; safe to call before/after SD export.
     crate::sd_export::set_aliases(docs);
     let tank = TankIndex::build(docs, cfg);
+    // SD-driven type resolver over the FHIR packages (fishes ValueSet/CodeSystem +
+    // every datatype/extension SD on demand). A local extension referenced by url
+    // that isn't yet exported falls back to the generic Extension SD inside the
+    // resolver, so `value[x]` still types correctly.
+    let fish = |name: &str| store.and_then(|s| s.fish_for_fhir(name, package_store::ALL_FISH_TYPES));
+    let resolver = TypeResolver::new(&fish);
     let mut out = Vec::new();
     // CodeSystems export before ValueSets (FHIRExporter order), though it does
     // not affect file output for these self-contained resources.
@@ -1254,7 +988,7 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_cs.push(cs.name.clone());
-            out.push(export_code_system(cs, cfg, &tank));
+            out.push(export_code_system(cs, cfg, &tank, &resolver));
         }
     }
     let mut seen_vs: Vec<String> = Vec::new();
@@ -1264,7 +998,7 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_vs.push(vs.name.clone());
-            out.push(export_value_set(vs, cfg, &tank, store));
+            out.push(export_value_set(vs, cfg, &tank, store, &resolver));
         }
     }
     out
