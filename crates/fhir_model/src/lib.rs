@@ -793,7 +793,7 @@ impl StructureDefinition {
         fhir_path: &str,
         part: &crate::PathPart,
         elements: &[String],
-        _fisher: &dyn Fisher,
+        fisher: &dyn Fisher,
     ) -> Option<String> {
         let slice_name = part.brackets.join("/");
         if let Some(id) = elements
@@ -840,6 +840,43 @@ impl StructureDefinition {
                     }
                     self.add_element(new_el);
                     return Some(new_id);
+                }
+            }
+
+            // fishForFHIR fallback (StructureDefinition.ts:907-913): if the bracket
+            // is not a sliceName, fish it as an Extension and match the slice whose
+            // `type[0].profile[0]` equals the extension's url. This resolves an
+            // extension referenced by its canonical url (e.g.
+            // `mode.extension[http://.../capabilitystatement-expectation]`) to the
+            // slice that was registered under the extension's id.
+            if let Some(url) = fisher
+                .fish_for_metadata(&part.brackets[0])
+                .and_then(|m| m.url)
+            {
+                if let Some(id) = elements
+                    .iter()
+                    .find(|id| {
+                        self.path_of_id(id).unwrap_or("") == fhir_path
+                            && self
+                                .index_of_id(id)
+                                .map(|i| {
+                                    let ed = &self.elements[i];
+                                    ed.slice_name().is_some()
+                                        && ed
+                                            .get("type")
+                                            .and_then(|v| v.as_array())
+                                            .and_then(|a| a.first())
+                                            .and_then(|t| t.get("profile"))
+                                            .and_then(|p| p.as_array())
+                                            .and_then(|a| a.first())
+                                            .and_then(|v| v.as_str())
+                                            == Some(url.as_str())
+                                })
+                                .unwrap_or(false)
+                    })
+                    .cloned()
+                {
+                    return Some(id);
                 }
             }
         }
