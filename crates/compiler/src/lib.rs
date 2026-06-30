@@ -10,6 +10,7 @@ use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 pub mod caret_schema;
 pub mod config;
 pub mod export;
+pub mod instance_export;
 pub mod paths;
 pub mod sd_export;
 
@@ -539,9 +540,14 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let tank = export::TankIndex::build(&docs, &cfg);
     let vs_url = |s: &str| tank.vs_url(s);
     let cs_url = |s: &str| tank.cs_url(s);
-    for exported in
-        sd_export::export_structure_definitions(&docs, &cfg, &store, &vs_url, &cs_url)
-    {
+    let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url);
+    for exported in sd_export::exported_files(&ctx) {
+        let text = json_emit::to_fhir_json_string(&exported.body);
+        std::fs::write(resources_dir.join(&exported.filename), text)?;
+    }
+
+    // Instances (Phase 7).
+    for exported in instance_export::export_instances(&docs, &cfg, &ctx) {
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
     }

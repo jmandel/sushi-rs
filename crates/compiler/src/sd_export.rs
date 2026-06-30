@@ -78,7 +78,7 @@ pub struct SdContext<'a> {
 }
 
 /// A read-only fisher over package + already-exported local SDs.
-struct FisherView<'a> {
+pub struct FisherView<'a> {
     store: &'a package_store::PackageStore,
     exported: &'a [ExportedSd],
     in_progress_meta: &'a std::collections::HashMap<String, Metadata>,
@@ -207,12 +207,18 @@ impl<'a> SdContext<'a> {
         }
     }
 
-    fn fisher(&self) -> FisherView<'_> {
+    pub fn fisher(&self) -> FisherView<'_> {
         FisherView {
             store: self.store,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
         }
+    }
+
+    /// Fish the InstanceOf SD JSON (snapshot) for an instance export, mirroring
+    /// `fisher.fishForFHIR(instanceOf, Resource, Profile, Extension, Type, Logical)`.
+    pub fn fish_sd_json(&self, name: &str) -> Option<J> {
+        self.fisher().fish_for_fhir(name)
     }
 
     fn tank_index(&self, name: &str) -> Option<usize> {
@@ -1573,17 +1579,24 @@ fn apply_caret_element(ed: &mut ElementDefinition, caret_path: &str, value: &Fsh
 // Driver
 // ---------------------------------------------------------------------------
 
-pub fn export_structure_definitions(
+/// Build the SD export context and export every local SD (in tank order).
+/// Returns the context so the InstanceExporter can fish InstanceOf snapshots.
+pub fn build_sd_context<'a>(
     docs: &[FshDocument],
-    cfg: &Config,
-    store: &package_store::PackageStore,
-    vs_url: &dyn Fn(&str) -> Option<String>,
-    cs_url: &dyn Fn(&str) -> Option<String>,
-) -> Vec<crate::export::Exported> {
+    cfg: &'a Config,
+    store: &'a package_store::PackageStore,
+    vs_url: &'a dyn Fn(&str) -> Option<String>,
+    cs_url: &'a dyn Fn(&str) -> Option<String>,
+) -> SdContext<'a> {
     set_invariants(docs);
     set_aliases(docs);
     let mut ctx = SdContext::new(store, cfg, docs, vs_url, cs_url);
     ctx.export_all();
+    ctx
+}
+
+/// The exported SD JSON files (differential), in export order.
+pub fn exported_files(ctx: &SdContext) -> Vec<crate::export::Exported> {
     let mut out = Vec::new();
     for e in &ctx.exported {
         let id = e.sd.get_str("id").unwrap_or("").to_string();
@@ -1593,4 +1606,15 @@ pub fn export_structure_definitions(
         });
     }
     out
+}
+
+pub fn export_structure_definitions(
+    docs: &[FshDocument],
+    cfg: &Config,
+    store: &package_store::PackageStore,
+    vs_url: &dyn Fn(&str) -> Option<String>,
+    cs_url: &dyn Fn(&str) -> Option<String>,
+) -> Vec<crate::export::Exported> {
+    let ctx = build_sd_context(docs, cfg, store, vs_url, cs_url);
+    exported_files(&ctx)
 }

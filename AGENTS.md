@@ -357,11 +357,48 @@ Phases from the plan (0–9). Current state:
   ips 28/32, mcode 45/53, crd 24/27). Remaining: AddElementRule (logicals, +R5 Base
   unbundle), predefined input/resources, deep reslicing (ips Composition), nested
   contentReference min ordering (epi). Serial cleanup after Phase 7.
-- [~] **Phase 7 — instance export + required QA** — IN PROGRESS (delegated).
-  Gate `harness/diff-instances.sh <stock> <cand>` (non-SD/VS/CS resources);
-  stock instances: ips 50, epi 55, crd 27, mcode 193. Reuses sd_export (instanceOf
-  SD typing) + package_store. InstanceDefinition JSON order = resourceType,id,meta
-  then insertion.
+- [~] **Phase 7 — instance export** — LARGELY DONE & verified. Byte parity:
+  **epi 52/54, ips 46/46, crd 22/22 real instances** (120 total; misses are R5
+  ActorDefinition + the IG resource). SD/VS/CS gates + `cargo test --workspace`
+  (18 suites) stay green. Gate `harness/diff-instances.sh temp/<ig>-stock temp/rust-<ig>`.
+  - `compiler/src/instance_export.rs` (~2200 lines) ports `InstanceExporter` + the
+    `common.ts` machinery. `Exporter` = memoized recursive export (RefCell memo)
+    over `SdContext` (fishes the InstanceOf snapshot via `ctx.fish_sd_json`/
+    `FisherView`). Per instance: resourceType/id/meta prefix → `set_assigned_values`
+    → `apply_meta_profile` → `clean_resource` → `order_instance` (resourceType,id,meta
+    prefix then insertion order via `json_emit::ordered_clone_deep`). Written = usage
+    != Inline; non-resource InstanceOf forced Inline.
+  - Ported: `validate_value_at_path` (path walk + find_element_by_path + `0`-bracket
+    array insertion + primitive flag + extension-slice creation + leaf coerce),
+    `coerce_value` (FshCode→code/Coding/CodeableConcept/Quantity/CodeableReference by
+    element type; Quantity/Ratio/Reference/Canonical; xhtml minify),
+    `set_implied_properties_on_instance` (BFS ElementTrace + sliceTree/effectiveMins +
+    connected elements + requirementRoot sort), `set_property_on_instance`
+    (arrays/slices/`_x` primitive siblings/`assignComplexValue` w/ partial-match merge),
+    `create_useful_slices`+`determine_known_slices`, `replace_references`,
+    `clean_resource` (+ contained-ref `#id` rewrite), lodash `merge`. Config respects
+    `instanceOptions.{manualSliceOrdering,setMetaProfile,setId}`; `Usage:#definition`
+    sets url/title/description; inline-instance assignment embeds memoized bodies.
+  - **PARITY TRAPS that bit (record!)**: (1) **`serde_json::Map::remove` is
+    swap_remove** → reorders keys; MUST use `shift_remove` (broke every sliced
+    instance). (2) **unfold/add_element shift the elements Vec** → the implied-property
+    traversal MUST key ElementTrace by element **id**, re-resolving the index each
+    iteration (index caching caused runaway `id.id.id…` recursion). (3) instance key
+    order = `createUsefulSlices`/implied placeholders FIRST (mutate instanceDef before
+    rules), THEN `merge(instanceDef, ruleInstance)` appends rule-only keys in rule
+    order — NOT pure rule order; **manualSliceOrdering (epi/crd) → createUsefulSlices
+    + SKIP the implied sort; ips → determineKnownSlices + sort**. (4) `assignComplexValue`
+    needs the partial-match branch or you get duplicate codings. (5) xhtml `text.div`
+    runs through html-minifier (collapseWhitespace, attr quotes→`"`, ` />`→`/>`,
+    block-vs-inline) — ported in `minify_xhtml`. (6) reference resolution is by
+    **effective id** (last `* id =` rule), not declared name; numeric inline ids use
+    raw_value + Resource-element MismatchedType recovery.
+  - **KNOWN GAPS**: (a) R5 `ActorDefinition` instances (ips 3, crd 5) not in R4 cache
+    (package_store gap a). (b) `ImplementationGuide` resource (separate IGExporter).
+    (c) 2 epi Bundles with a deeply-nested inline ClinicalUseDefinition: `type`/`fullUrl`
+    ordering diff (standalone cud passes; embedded copy differs). (d) instance
+    QA/diagnostics (validateRequiredElements/checkForMultipleChoice/nameless-slice)
+    collected-as-wording but NOT emitted/gated.
 - [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
   **Current: 247/665 byte-identical** (was 123 pre-SD). Known VS follow-ups: mcode
   43/103, crd 15/28 + CS 0/3 (external-name/$alias resolution via package_store —

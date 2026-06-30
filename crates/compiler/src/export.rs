@@ -76,7 +76,7 @@ impl TankIndex {
 
 /// Recompute the effective `id` (`FshValueSet.get id()` / `FshCodeSystem`):
 /// `findLast` non-instance `^id` CaretValueRule, else the declared id.
-fn effective_id(rules: &[Rule], declared: &str) -> String {
+pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
     for r in rules.iter().rev() {
         if let Rule::CaretValue {
             path,

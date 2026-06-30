@@ -20,6 +20,28 @@ pub struct Config {
     pub apply_extension_metadata_to_root: bool,
     #[serde(default, rename = "fhirVersion")]
     pub fhir_version: Option<serde_yaml::Value>,
+    #[serde(default, rename = "instanceOptions")]
+    pub instance_options: Option<InstanceOptions>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct InstanceOptions {
+    #[serde(default, rename = "manualSliceOrdering")]
+    pub manual_slice_ordering: bool,
+    #[serde(default, rename = "setMetaProfile")]
+    pub set_meta_profile: Option<String>,
+    #[serde(default, rename = "setId")]
+    pub set_id: Option<String>,
+}
+
+impl Config {
+    /// `config.instanceOptions?.manualSliceOrdering ?? false`.
+    pub fn manual_slice_ordering(&self) -> bool {
+        self.instance_options
+            .as_ref()
+            .map(|o| o.manual_slice_ordering)
+            .unwrap_or(false)
+    }
 }
 
 fn default_true() -> bool {
