@@ -34,7 +34,11 @@ pub struct Metadata {
 /// compiler's combined tank + package_store fisher.
 pub trait Fisher {
     /// Full SD JSON (with snapshot) for a type/profile/etc. name|id|url.
-    fn fish_for_fhir(&self, name: &str) -> Option<Value>;
+    ///
+    /// Returns a shared `Rc<Value>`: the package-store path hands back its memoized
+    /// parse with no deep clone, and callers here only read it (build a
+    /// `StructureDefinition`, inspect fields) via deref coercion.
+    fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<Value>>;
     /// Metadata for a name|id|url.
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata>;
     /// Metadata restricted to ValueSet definitions (`fishForMetadata(_, Type.ValueSet)`).

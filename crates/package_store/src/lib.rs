@@ -669,9 +669,14 @@ impl PackageStore {
     }
 
     /// `fishForFHIR(item, ...types)` — returns the full resource JSON.
-    pub fn fish_for_fhir(&self, item: &str, types: &[FishType]) -> Option<Value> {
+    ///
+    /// Returns the memoized `Rc<Value>` directly: callers almost always just read
+    /// the SD (build a `StructureDefinition`, read fields) and discard, so the old
+    /// per-fish deep clone of (large) base StructureDefinitions was pure waste.
+    /// The rare caller that needs ownership clones at its own site.
+    pub fn fish_for_fhir(&self, item: &str, types: &[FishType]) -> Option<std::rc::Rc<Value>> {
         let idx = self.resolve(item, types)?;
-        self.read_value(idx).map(|v| (*v).clone())
+        self.read_value(idx)
     }
 
     /// `fishForMetadata(item, ...types)` — the `Metadata` object SUSHI emits
@@ -679,9 +684,9 @@ impl PackageStore {
     /// falsy-omission match the oracle.
     pub fn fish_for_metadata(&self, item: &str, types: &[FishType]) -> Option<Value> {
         let idx = self.resolve(item, types)?;
-        let cached = self.read_value(idx);
+        // Read-only here (we only `.get(...)` fields), so hold the Rc, never clone.
+        let value: Option<std::rc::Rc<Value>> = self.read_value(idx);
         let entry = &self.entries[idx];
-        let value: Option<Value> = cached.map(|v| (*v).clone());
 
         let mut out = Map::new();
         // id
@@ -743,7 +748,7 @@ impl PackageStore {
         }
         // canBeTarget / canBind — only for logical models.
         if entry.kind.as_deref() == Some("logical") {
-            let chars = sd_characteristics(value.as_ref());
+            let chars = sd_characteristics(value.as_deref());
             out.insert(
                 "canBeTarget".into(),
                 Value::Bool(chars.iter().any(|c| c == "can-be-target")),

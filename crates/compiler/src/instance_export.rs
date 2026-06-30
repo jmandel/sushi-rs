@@ -2103,7 +2103,7 @@ impl AliasFisher<'_> {
 }
 
 impl Fisher for AliasFisher<'_> {
-    fn fish_for_fhir(&self, name: &str) -> Option<J> {
+    fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
         self.inner.fish_for_fhir(&self.resolve(name))
     }
     fn fish_for_metadata(&self, name: &str) -> Option<fhir_model::Metadata> {
@@ -2176,8 +2176,9 @@ impl<'a> Exporter<'a> {
         if let Some(real) = self.id_to_name.get(base) {
             return self.export(real).map(|e| e.body);
         }
-        // External instance: fish raw FHIR JSON from packages.
-        self.ctx.fisher().fish_for_fhir(base)
+        // External instance: fish raw FHIR JSON from packages. This body is owned
+        // by the AssignRule and mutated downstream, so clone out of the shared Rc.
+        self.ctx.fisher().fish_for_fhir(base).map(|rc| (*rc).clone())
     }
 
     fn export(&self, name: &str) -> Option<ExportedInst> {

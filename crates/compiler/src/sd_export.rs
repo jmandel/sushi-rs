@@ -88,14 +88,14 @@ pub struct FisherView<'a> {
 }
 
 impl Fisher for FisherView<'_> {
-    fn fish_for_fhir(&self, name: &str) -> Option<J> {
+    fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
         let base = name.split('|').next().unwrap_or(name);
         // local exported SDs (by name, id, or url)
         for e in self.exported {
             let url = e.sd.url();
             let id = e.sd.get_str("id").unwrap_or("");
             if e.name == base || id == base || url == base {
-                return Some(e.sd.to_json_snapshot());
+                return Some(std::rc::Rc::new(e.sd.to_json_snapshot()));
             }
         }
         self.store.fish_for_fhir(name, package_store::ALL_FISH_TYPES)
@@ -257,7 +257,7 @@ impl<'a> SdContext<'a> {
 
     /// Fish the InstanceOf SD JSON (snapshot) for an instance export, mirroring
     /// `fisher.fishForFHIR(instanceOf, Resource, Profile, Extension, Type, Logical)`.
-    pub fn fish_sd_json(&self, name: &str) -> Option<J> {
+    pub fn fish_sd_json(&self, name: &str) -> Option<std::rc::Rc<J>> {
         self.fisher().fish_for_fhir(name)
     }
 
