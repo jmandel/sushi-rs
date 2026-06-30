@@ -606,28 +606,11 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
             }
         }
 
-        // fixCrossVersionDependencies (Processing.ts:542, applied for the IG by
-        // IGExporter.ts:230): replace an old-style cross-version extensions
-        // dependency (e.g. `hl7.fhir.extensions.r5#4.0.1`) with the official xver
-        // package (`hl7.fhir.uv.xver-r5.r4`). Stock clones the dep and overrides
-        // packageId/version/uri; `version` becomes `latest` (later resolved to the
-        // installed version by fixDependsOn), `uri` is set explicitly, and `id` is
-        // regenerated from the new packageId (or kept if the config gave one).
-        if let Some((xver_pkg, xver_uri)) = fix_cross_version_dep(&package_id, version.as_deref()) {
-            package_id = xver_pkg.clone();
-            version = Some("latest".into());
-            uri = Some(xver_uri.clone());
-            entry.clear();
-            if let Some(i) = &id {
-                entry.push(("id".into(), J::String(i.clone())));
-            }
-            entry.push(("packageId".into(), J::String(xver_pkg)));
-            entry.push(("version".into(), J::String("latest".into())));
-            entry.push(("uri".into(), J::String(xver_uri)));
-            if let Some(e) = &explicit_ext {
-                entry.push(("extension".into(), e.clone()));
-            }
-        }
+        // NB: the cross-version-extensions dependency rewrite
+        // (fixCrossVersionDependencies, Processing.ts:542 / IGExporter.ts:230) is
+        // handled UP FRONT via `package_store::xver_substitution` (lines ~551-558),
+        // which sets package_id/uri/version before the entry is built. (An earlier
+        // duplicate `fix_cross_version_dep` pass here was redundant and removed.)
 
         // fixDependsOn: version required, else drop.
         let Some(raw_version) = version.clone() else {
@@ -785,81 +768,6 @@ fn max_satisfying_x(installed: &[String], range: &str) -> Option<String> {
     best.map(|(_, s)| s)
 }
 
-/// Port of `fixCrossVersionDependencies` (Processing.ts:542) for a single dep.
-///
-/// Matches a legacy cross-version extensions package id (`^hl7.fhir.extensions.rNb?$`)
-/// and rewrites it to the official xver package. `source` is the release suffix of
-/// the legacy id (`r5` from `hl7.fhir.extensions.r5`); `target` is the release the
-/// declared version belongs to (`4.0.1` -> `r4`), giving `hl7.fhir.uv.xver-r5.r4`
-/// and `http://hl7.org/fhir/uv/xver/ImplementationGuide/hl7.fhir.uv.xver-r5.r4`.
-/// Returns `None` (leaving the dep untouched) when the id doesn't match or the
-/// version's release can't be determined.
-fn fix_cross_version_dep(package_id: &str, version: Option<&str>) -> Option<(String, String)> {
-    let source = package_id.strip_prefix("hl7.fhir.extensions.")?;
-    if !is_release_suffix(source) {
-        return None;
-    }
-    let target = fhir_version_release_suffix(version?)?;
-    let pkg = format!("hl7.fhir.uv.xver-{source}.{target}");
-    let uri = format!("http://hl7.org/fhir/uv/xver/ImplementationGuide/{pkg}");
-    Some((pkg, uri))
-}
-
-/// A FHIR release suffix: `r` + digits + optional trailing `b` (e.g. `r4`, `r4b`, `r5`).
-fn is_release_suffix(s: &str) -> bool {
-    let Some(digits) = s.strip_prefix('r') else {
-        return false;
-    };
-    let digits = digits.strip_suffix('b').unwrap_or(digits);
-    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
-}
-
-/// Lowercased release suffix for a FHIR version string: the `name` from
-/// `getFHIRVersionInfo` (FHIRVersionUtils.ts) with `D?STU` -> `r`, lowercased
-/// (so `STU3` -> `r3`, `DSTU2` -> `r2`). Returns `None` for the catch-all `??`.
-fn fhir_version_release_suffix(version: &str) -> Option<String> {
-    let name = fhir_version_name(version)?;
-    Some(name.replace("DSTU", "r").replace("STU", "r").to_lowercase())
-}
-
-/// Port of the `name` lookup in `getFHIRVersionInfo` (FHIRVersionUtils.ts): the
-/// FHIR release name for a version string. Returns `None` for the `??` catch-all.
-fn fhir_version_name(version: &str) -> Option<&'static str> {
-    let parts: Vec<&str> = version.splitn(3, '.').collect();
-    let major = parts.first().copied().unwrap_or("");
-    let minor = parts.get(1).copied().unwrap_or("");
-    let has_pre = version.contains('-');
-    // Mirrors the ordered VERSIONS table; first match wins.
-    match major {
-        "4" => match minor {
-            "0" => Some("R4"),
-            "3" => Some("R4B"),
-            "1" => Some("R4B"), // 4.1.x pre-release
-            _ => Some("R5"),    // other 4.x are R5 pre-releases
-        },
-        "5" => Some("R5"),
-        "6" => Some("R6"),
-        "3" => {
-            if minor == "0" && !has_pre {
-                Some("STU3")
-            } else if minor == "0" {
-                Some("STU3")
-            } else {
-                Some("R4") // 3.x (non-0 minor) maps to R4 in the table
-            }
-        }
-        "1" => {
-            if minor == "0" {
-                Some("DSTU2")
-            } else {
-                Some("STU3")
-            }
-        }
-        "dev" | "current" => Some("R5"),
-        _ if version.starts_with("dev") || version.starts_with("current") => Some("R5"),
-        _ => None,
-    }
-}
 
 /// Resolve the version used for the dependency URI lookup (fixDependsOn,
 /// IGExporter.ts:289-315). For `latest`, pick an installed version and mutate
