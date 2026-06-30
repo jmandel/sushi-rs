@@ -95,6 +95,7 @@ pub struct FisherView<'a> {
 
 impl Fisher for FisherView<'_> {
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
+        let name = &resolve_alias_tl(name);
         let base = name.split('|').next().unwrap_or(name);
         // local exported SDs (by name, id, or url)
         for e in self.exported {
@@ -108,6 +109,7 @@ impl Fisher for FisherView<'_> {
     }
 
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata> {
+        let name = &resolve_alias_tl(name);
         let base = name.split('|').next().unwrap_or(name);
         for e in self.exported {
             let url = e.sd.url();
@@ -1493,6 +1495,12 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
     static ALIASES: std::cell::RefCell<std::collections::HashMap<String, String>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// `tank.resolveAlias(item)` — the MasterFisher resolves an alias token to its
+/// target before fishing. Returns the input unchanged when it isn't an alias.
+pub(crate) fn resolve_alias_tl(name: &str) -> String {
+    ALIASES.with(|m| m.borrow().get(name).cloned().unwrap_or_else(|| name.to_string()))
 }
 
 pub(crate) fn set_aliases(docs: &[FshDocument]) {
