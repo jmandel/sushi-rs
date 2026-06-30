@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::sd_export::SdContext;
 use fhir_model::{Fisher, StructureDefinition};
 use fsh_model::{FshCode, FshDocument, FshQuantity, FshReference, Instance, Rule, Value as FshValue};
+use rustc_hash::FxHashMap;
 use serde_json::{Map, Value as J};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -111,36 +112,115 @@ fn el_type_codes(sd: &StructureDefinition, idx: usize) -> Vec<String> {
     sd.elements[idx].type_codes()
 }
 
+/// Per-traversal structural index over `sd.elements`, replacing the O(n) linear
+/// scans in `children_direct`/`get_slices`. Those are hit many times per BFS node
+/// (`find_connected_elements` alone walks the entire ancestor chain calling
+/// `get_slices` at every level, for every dequeued node), so the scans were
+/// effectively O(n^2). Self-heals when the element count changes — an `unfold`
+/// splices in new elements — mirroring `index_of_id`'s length-keyed cache.
+/// LOOKUP ONLY: results stay index-ascending, byte-identical to the scans they
+/// replace, and never drive emission order.
+#[derive(Default)]
+struct StructIndexInner {
+    /// Element count both maps were built for (`usize::MAX` = unbuilt).
+    len: usize,
+    /// Direct children per element index (ascending) — TS `children(true)` shape.
+    children: Vec<Vec<usize>>,
+    /// Element indices grouped by exact `path` (ascending) — slice candidates.
+    by_path: FxHashMap<String, Vec<usize>>,
+}
+
+struct StructIndex {
+    inner: std::cell::RefCell<StructIndexInner>,
+}
+
+impl StructIndex {
+    fn new() -> Self {
+        let inner = StructIndexInner {
+            len: usize::MAX,
+            ..Default::default()
+        };
+        Self {
+            inner: std::cell::RefCell::new(inner),
+        }
+    }
+
+    /// (Re)build both maps in a single pass iff the element count changed. Built
+    /// lazily on first lookup; mcode traversals need both maps (children for the
+    /// BFS, by_path for `get_slices`/`find_connected_elements`), so one combined
+    /// pass beats two. The `by_path` key alloc is negligible whole-program.
+    fn ensure(&self, sd: &StructureDefinition) {
+        let n = sd.elements.len();
+        if self.inner.borrow().len == n {
+            return;
+        }
+        let mut inner = self.inner.borrow_mut();
+        inner.children.clear();
+        inner.children.resize_with(n, Vec::new);
+        inner.by_path.clear();
+        // id -> first index (matches `index_of_id` first-wins semantics).
+        let mut id_to_idx: FxHashMap<&str, usize> =
+            FxHashMap::with_capacity_and_hasher(n, Default::default());
+        for (i, e) in sd.elements.iter().enumerate() {
+            id_to_idx.entry(e.id()).or_insert(i);
+        }
+        for (j, e) in sd.elements.iter().enumerate() {
+            let id = e.id();
+            // `children_direct(p)` == { j : id_j starts with "{id_p}." at depth+1 }.
+            // Since id segments are '.'-separated (slice ':'/'/' never add a '.'),
+            // that is exactly { j : id_j without its last '.'-segment == id_p }.
+            if let Some(cut) = id.rfind('.') {
+                if let Some(&p) = id_to_idx.get(&id[..cut]) {
+                    inner.children[p].push(j);
+                }
+            }
+            inner.by_path.entry(e.path().to_string()).or_default().push(j);
+        }
+        inner.len = n;
+    }
+
+    fn children(&self, sd: &StructureDefinition, idx: usize) -> Vec<usize> {
+        self.ensure(sd);
+        self.inner.borrow().children.get(idx).cloned().unwrap_or_default()
+    }
+
+    fn slices(&self, sd: &StructureDefinition, idx: usize) -> Vec<usize> {
+        self.ensure(sd);
+        let id = sd.elements[idx].id();
+        let idl = id.len();
+        let sep = if sd.elements[idx].slice_name().is_some() {
+            b'/'
+        } else {
+            b':'
+        };
+        let path = sd.elements[idx].path();
+        let inner = self.inner.borrow();
+        let Some(cands) = inner.by_path.get(path) else {
+            return Vec::new();
+        };
+        cands
+            .iter()
+            .copied()
+            .filter(|&j| {
+                if j == idx {
+                    return false;
+                }
+                let jid = sd.elements[j].id();
+                let jb = jid.as_bytes();
+                jb.len() > idl && jb[idl] == sep && jid.starts_with(id)
+            })
+            .collect()
+    }
+}
+
 /// Direct children: ids starting `{id}.` with path-depth == this+1.
-fn children_direct(sd: &StructureDefinition, idx: usize) -> Vec<usize> {
-    let id = el_id(sd, idx);
-    let path = el_path(sd, idx);
-    let pdepth = path.split('.').count();
-    let prefix = format!("{id}.");
-    (0..sd.elements.len())
-        .filter(|&j| {
-            j != idx
-                && sd.elements[j].id().starts_with(&prefix)
-                && sd.elements[j].path().split('.').count() == pdepth + 1
-        })
-        .collect()
+fn children_direct(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> Vec<usize> {
+    ix.children(sd, idx)
 }
 
 /// `getSlices()` — siblings that are slices/reslices of element `idx`.
-fn get_slices(sd: &StructureDefinition, idx: usize) -> Vec<usize> {
-    let id = el_id(sd, idx);
-    let path = el_path(sd, idx);
-    let is_slice = el_slice_name(sd, idx).is_some();
-    let needle = if is_slice {
-        format!("{id}/")
-    } else {
-        format!("{id}:")
-    };
-    (0..sd.elements.len())
-        .filter(|&j| {
-            j != idx && sd.elements[j].path() == path && sd.elements[j].id().starts_with(&needle)
-        })
-        .collect()
+fn get_slices(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> Vec<usize> {
+    ix.slices(sd, idx)
 }
 
 /// `parent()` — element at id without the trailing `.segment`.
@@ -992,13 +1072,13 @@ struct SliceNode {
     count: i64,
 }
 
-fn build_slice_tree(sd: &StructureDefinition, idx: usize) -> SliceNode {
+fn build_slice_tree(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> SliceNode {
     let mut root = SliceNode {
         idx,
         children: vec![],
         count: 0,
     };
-    for s in get_slices(sd, idx) {
+    for s in get_slices(sd, idx, ix) {
         insert_slice_tree(sd, &mut root, s);
     }
     root
@@ -1082,9 +1162,12 @@ fn set_implied_properties_on_instance(
     let mut requirement_roots: HashMap<String, String> = HashMap::new();
     let mut assigned_value_storage: HashMap<String, J> = HashMap::new();
 
+    // Structural index over the (mutating) element tree; self-heals on unfold.
+    let ix = StructIndex::new();
+
     // topLevelElements = elements[0].children(true)
     let mut queue: std::collections::VecDeque<ElementTrace> = std::collections::VecDeque::new();
-    for c in children_direct(sd, 0) {
+    for c in children_direct(sd, 0, &ix) {
         let rr = compute_requirement_root(sd, c);
         queue.push_back(ElementTrace {
             id: el_id(sd, c),
@@ -1105,7 +1188,7 @@ fn set_implied_properties_on_instance(
         let mut next_trace = split_periods(&el_id(sd, cur_idx)).pop().unwrap_or_default();
         let types = el_type_codes(sd, cur_idx);
         if next_trace.contains("[x]") && types.len() == 1 {
-            let has_slices = !get_slices(sd, cur_idx).is_empty();
+            let has_slices = !get_slices(sd, cur_idx, &ix).is_empty();
             if el_slice_name(sd, cur_idx).is_some() || !has_slices {
                 next_trace = replace_x(&next_trace, &upper_first(&types[0]));
             }
@@ -1116,7 +1199,7 @@ fn set_implied_properties_on_instance(
         let trace_path = trace_parts.join(".");
 
         if !effective_mins.contains_key(&trace_path) {
-            let mut tree = build_slice_tree(sd, cur_idx);
+            let mut tree = build_slice_tree(sd, cur_idx, &ix);
             let mut key_start = current.history.join(".");
             if !key_start.is_empty() {
                 key_start.push('.');
@@ -1142,7 +1225,7 @@ fn set_implied_properties_on_instance(
             .as_ref()
             .and_then(|k| sd.elements[cur_idx].get(k).cloned());
 
-        let connected_ids: Vec<String> = find_connected_elements(sd, cur_idx)
+        let connected_ids: Vec<String> = find_connected_elements(sd, cur_idx, &ix)
             .iter()
             .map(|&i| el_id(sd, i))
             .collect();
@@ -1161,7 +1244,7 @@ fn set_implied_properties_on_instance(
                 if let Some(ce) = sd.find_element(ce_id) {
                     if el_min(sd, ce) < cur_min && !ce_id.starts_with(&current.id) {
                         sd.elements[ce].set("min", J::Number(cur_min.into()));
-                        if children_direct(sd, ce).is_empty() {
+                        if children_direct(sd, ce, &ix).is_empty() {
                             sd.unfold_by_id(ce_id, fisher);
                         }
                     }
@@ -1197,10 +1280,10 @@ fn set_implied_properties_on_instance(
             }
             // children
             let children: Vec<String> =
-                children_direct(sd, cur_idx).iter().map(|&i| el_id(sd, i)).collect();
+                children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
             let mut existing_slice_count = 0i64;
             if final_min < cur_min && el_slice_name(sd, cur_idx).is_none() {
-                for s in get_slices(sd, cur_idx) {
+                for s in get_slices(sd, cur_idx, &ix) {
                     let sp = format!("{trace_path}[{}]", el_slice_name(sd, s).unwrap_or_default());
                     if let Some(c) = known_slices.get(&sp) {
                         existing_slice_count += c;
@@ -1239,7 +1322,7 @@ fn set_implied_properties_on_instance(
                 }
             }
             let mut children: Vec<String> =
-                children_direct(sd, cur_idx).iter().map(|&i| el_id(sd, i)).collect();
+                children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
             let is_assigned_resource = matching_rule
                 .as_ref()
                 .map(|m| assigned_resource_paths.contains(m))
@@ -1247,7 +1330,7 @@ fn set_implied_properties_on_instance(
             if children.is_empty() && !is_assigned_resource {
                 sd.unfold_by_id(&current.id, fisher);
                 let cur_idx = sd.find_element(&current.id).unwrap();
-                children = children_direct(sd, cur_idx).iter().map(|&i| el_id(sd, i)).collect();
+                children = children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
             }
             let new_hist = trace_parts.last().cloned().unwrap_or_default();
             for child in &children {
@@ -1334,13 +1417,18 @@ fn fix_choice_path(sd: &mut StructureDefinition, ip: &str, fisher: &dyn Fisher) 
 }
 
 /// findConnectedElements (port). Returns indices.
-fn find_connected_elements(sd: &StructureDefinition, idx: usize) -> Vec<usize> {
-    find_connected_elements_post(sd, idx, "")
+fn find_connected_elements(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> Vec<usize> {
+    find_connected_elements_post(sd, idx, "", ix)
 }
 
-fn find_connected_elements_post(sd: &StructureDefinition, idx: usize, post: &str) -> Vec<usize> {
+fn find_connected_elements_post(
+    sd: &StructureDefinition,
+    idx: usize,
+    post: &str,
+    ix: &StructIndex,
+) -> Vec<usize> {
     let mut out = Vec::new();
-    for s in get_slices(sd, idx) {
+    for s in get_slices(sd, idx, ix) {
         if el_max(sd, s) == Some("0") {
             continue;
         }
@@ -1351,7 +1439,7 @@ fn find_connected_elements_post(sd: &StructureDefinition, idx: usize, post: &str
     }
     if let Some(p) = parent_idx(sd, idx) {
         let parent_path = split_periods(&el_id(sd, idx)).pop().unwrap_or_default();
-        let mut more = find_connected_elements_post(sd, p, &format!(".{parent_path}{post}"));
+        let mut more = find_connected_elements_post(sd, p, &format!(".{parent_path}{post}"), ix);
         out.append(&mut more);
     }
     out
