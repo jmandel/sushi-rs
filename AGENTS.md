@@ -58,10 +58,25 @@ gaps → `docs/top20-findings.md`. Integrate/triage its findings when it lands.
 **USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
 `../sushi-rs-snapshot` (`snapshot-gen`). (`../sushi-rs-package-acquisition` is merged + removed.)
 
+**TOP-20 VALIDATION DONE (`docs/top20-findings.md`) — next front after C.** 6 new IGs are
+FSH-buildable (Bulk Data 13/13 ✅, PDex 176/179, Plan Net 107/110, Drug Formulary 84/86,
+CDS Hooks 7/8, Subscriptions-backport 28/34); 6 aren't FSH on default branch (US Core/CDex/
+IPA/QI-Core/AU Core/SMART author conformance JSON directly — need an FSH branch/tag to test).
+Clones+oracles preserved in `temp/top20/<slug>{,-stock,-rust}` (reuse as a gate; consider
+adding the 6 buildable to `full-dashboard.sh` → 18-IG corpus). **New root-cause family X1-X6
+(cross-version extensions + extension-slice unfolding):** X2/X3 (HIGH, one surface) = fish &
+unfold the SD behind an `extension contains <URL>` slice — fixes both under-production (drop
+real sub-ext constraints: Plan Net, PDex) AND over-production (synthesize slices for
+UNRESOLVABLE exts that stock errors-and-skips: Subscriptions — note stock emits 43 diagnostics
+there, we emit 0 → ties to the diagnostics worktree); X1 legacy `extensions.r5`→`xver-r5.r4`
+substitution (`fixCrossVersionDependencies`, Drug Formulary); X5 `translateR5PropertiesToR4`
+(`copyrightLabel`, CDS Hooks); X4 named-soft-index + `[+]/[=]` shared sequence on unsliced
+array (PDex); X6 absolute-URL-token ext slice (Subscriptions). Detail in top20-findings.md.
+
 **Longer-tail backlog:** N2/N4/N5 (decimal/empty-value/id-sanitization — mining, corpus-
 invisible), **L1** leniency (reject invalid FSH like stock — tie to diagnostics worktree),
-scaling SUSHI-test mining to the EXPORT suite, + whatever top-20 surfaces. FIXED earlier:
-G1/G3 (T1 SD-driven TypeResolver), G6 (T2 dir-reconcile).
+scaling SUSHI-test mining to the EXPORT suite. FIXED earlier: G1/G3 (T1 SD-driven
+TypeResolver), G6 (T2 dir-reconcile).
 
 ## 1. What we are doing
 
