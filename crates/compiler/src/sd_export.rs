@@ -471,12 +471,22 @@ impl<'a> SdContext<'a> {
     }
 
     fn export_sd(&mut self, name: &str) {
-        if self.already_exported(name) || self.in_progress.contains(name) {
-            return;
-        }
+        // Resolve the incoming token (which may be a name, id, or url) to its tank
+        // entry first, then dedup on that entry's canonical name. Stock's
+        // `exportStructDef` keys its already-exported guard on `fshDefinition.name`
+        // after resolving the token through the tank/fisher (StructureDefinitionExporter
+        // `fishForFHIR`/`exportStructDef`), so a parent or dependency referenced by Id
+        // resolves to the same single export instead of being duplicated. Keying on the
+        // raw token (e.g. a by-Id `Parent:`) produced a duplicate `exported` entry that
+        // discarded post-export mutations such as `Mapping`s.
         let Some(ti) = self.tank_index(name) else {
             return;
         };
+        let name = self.tank[ti].def.name.clone();
+        let name = name.as_str();
+        if self.already_exported(name) || self.in_progress.contains(name) {
+            return;
+        }
         self.in_progress.insert(name.to_string());
         let kind = self.tank[ti].kind;
         let mut def = self.tank[ti].def.clone();
