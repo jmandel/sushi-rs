@@ -261,6 +261,37 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     insert_passthrough(&mut ig, cfg_yaml, "extension");
     insert_passthrough(&mut ig, cfg_yaml, "modifierExtension");
 
+    // translateR5PropertiesToR4 (IGExporter.ts:1663): for an R4 IG, R5-only
+    // top-level IG properties are emitted as extensions appended to
+    // `ImplementationGuide.extension` (the bare R5 property is added instead for
+    // R5 IGs — see the copyrightLabel branch after `definition`). The extension
+    // array keeps its DomainResource key position, so append here.
+    if is_r4 {
+        if let Some(cl) = yget_str(cfg_yaml, "copyrightLabel") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.copyrightLabel",
+                "valueString",
+                J::String(cl),
+            );
+        }
+        if let Some(va) = yget_str(cfg_yaml, "versionAlgorithmString") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.versionAlgorithm",
+                "valueString",
+                J::String(va),
+            );
+        } else if let Some(vc) = yget(cfg_yaml, "versionAlgorithmCoding") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.versionAlgorithm",
+                "valueCoding",
+                yaml_to_json(vc),
+            );
+        }
+    }
+
     // url
     let url = yget_str(cfg_yaml, "url")
         .unwrap_or_else(|| format!("{canonical}/ImplementationGuide/{id}"));
@@ -361,6 +392,22 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
         filename,
         body: J::Object(ig),
     })
+}
+
+/// Append an `{ url, <value_key>: value }` extension to `ImplementationGuide.extension`,
+/// creating the array (at its current key position) if absent. Mirrors stock's
+/// `this.ig.extension = (this.ig.extension ?? []).concat({...})`.
+fn append_ig_extension(ig: &mut Map<String, J>, url: &str, value_key: &str, value: J) {
+    let mut obj = Map::new();
+    obj.insert("url".into(), J::String(url.into()));
+    obj.insert(value_key.into(), value);
+    let ext = J::Object(obj);
+    match ig.get_mut("extension") {
+        Some(J::Array(arr)) => arr.push(ext),
+        _ => {
+            ig.insert("extension".into(), J::Array(vec![ext]));
+        }
+    }
 }
 
 fn insert_passthrough(ig: &mut Map<String, J>, cfg_yaml: &Y, key: &str) {
