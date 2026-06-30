@@ -13,6 +13,10 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | 1.052 | **0.755** |
 
 ### Integration log
+- **R3 perf/I INTEGRATED**: O(1) prefix-index replaces the O(nodes*paths) matching_rule
+  linear scan in set_implied_properties_on_instance (self-time 9.47%->0.67%). +13 LOC,
+  instance_export only. mcode -13%, no regressions. Parity 665/665, tests green.
+
 - **INTERMEDIATE perf/G INTEGRATED** (single-agent round): killed instance-hot-path
   string/path churn — allocation-free split_on_path_periods (SmallVec<&str>),
   borrowing el_id, gated find_connected_elements, and (biggest) a no-alloc
