@@ -2110,7 +2110,9 @@ impl DefIndex {
         for doc in docs {
             for (_k, cs) in &doc.code_systems {
                 let id = crate::export::effective_id(&cs.rules, &cs.id);
-                let url = format!("{}/CodeSystem/{}", cfg.canonical, id);
+                // G14: honor a `* ^url = ...` caret override (matches TankIndex).
+                let url = crate::export::effective_url(&cs.rules)
+                    .unwrap_or_else(|| format!("{}/CodeSystem/{}", cfg.canonical, id));
                 by_ref
                     .entry(cs.name.clone())
                     .or_insert(("CodeSystem".to_string(), id.clone()));
@@ -2122,7 +2124,8 @@ impl DefIndex {
             }
             for (_k, vs) in &doc.value_sets {
                 let id = crate::export::effective_id(&vs.rules, &vs.id);
-                let url = format!("{}/ValueSet/{}", cfg.canonical, id);
+                let url = crate::export::effective_url(&vs.rules)
+                    .unwrap_or_else(|| format!("{}/ValueSet/{}", cfg.canonical, id));
                 by_ref
                     .entry(vs.name.clone())
                     .or_insert(("ValueSet".to_string(), id.clone()));

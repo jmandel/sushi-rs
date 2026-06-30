@@ -51,12 +51,16 @@ impl TankIndex {
         for doc in docs {
             for (_k, cs) in &doc.code_systems {
                 let id = effective_id(&cs.rules, &cs.id);
-                let url = format!("{}/CodeSystem/{}", cfg.canonical, id);
+                // G14/G11: a `* ^url = ...` caret overrides the default canonical
+                // (stock fishes the CodeSystem's declared url, not the derived one).
+                let url = effective_url(&cs.rules)
+                    .unwrap_or_else(|| format!("{}/CodeSystem/{}", cfg.canonical, id));
                 code_systems.push((vec![cs.name.clone(), id, url.clone()], url));
             }
             for (_k, vs) in &doc.value_sets {
                 let id = effective_id(&vs.rules, &vs.id);
-                let url = format!("{}/ValueSet/{}", cfg.canonical, id);
+                let url = effective_url(&vs.rules)
+                    .unwrap_or_else(|| format!("{}/ValueSet/{}", cfg.canonical, id));
                 value_sets.push((vec![vs.name.clone(), id, url.clone()], url));
             }
         }
@@ -109,6 +113,31 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
         }
     }
     declared.to_string()
+}
+
+/// Effective canonical url from a `* ^url = "..."` caret override (findLast,
+/// non-instance, root path), or `None` to fall back to the derived default.
+pub(crate) fn effective_url(rules: &[Rule]) -> Option<String> {
+    for r in rules.iter().rev() {
+        if let Rule::CaretValue {
+            path,
+            caret_path,
+            value,
+            is_instance,
+            ..
+        } = r
+        {
+            if path.is_empty()
+                && caret_path.as_deref() == Some("url")
+                && !is_instance
+            {
+                if let Some(FshValue::Str(s)) = value {
+                    return Some(s.clone());
+                }
+            }
+        }
+    }
+    None
 }
 
 
