@@ -59,14 +59,14 @@ merge + acquisition leniency. Catalogs: `docs/holdout-findings.md` (G1-G14), `do
 findings.md` (N1-N7), `docs/top20-findings.md` (X1-X6).
 
 **REMAINING:**
-- **1 real fail** — `subscriptions/CapabilityStatement-backport-subscription-server-r4` (agent
-  `fix/lastfile`): two causes, BOTH needed to flip it — (a) X6 dropped `_mode` primitive-
-  sibling extension (`capabilitystatement-expectation`); (b) G13 instance property order (stock
-  emits CapStmt metadata AFTER `rest`). Cause (b) is the delicate snapshot-order code that
-  touches every instance — agent is under HARD orders not to regress the 12 to flip 1 file.
-- **6 of the top-20 are NOT FSH** on their default branch (US Core/CDex/IPA/QI-Core/AU Core/
-  SMART author conformance JSON directly) — need an FSH branch/tag to test the SD exporter on
-  national base profiles. Future expansion.
+- **ZERO real fails on the 18-IG set** — all 2491/2491 byte-identical (+4 compat-breaks). The
+  last file (subscriptions CapStmt: X6 url-referenced extension on a primitive + the path
+  sliceName-rewrite that orders implied metadata after `rest`) is FIXED (commits `7cd9756` then
+  `a513bd8` — ORDER MATTERS: the rewrite must precede the url-resolution or it regresses 61).
+- **NEXT-20 batch IN PROGRESS** — agent validating `docs/igs-to-test-with-next-20.json`
+  (international/IHE/CDA set) → `docs/next20-findings.md`. Integrate/triage when it lands.
+- **6 of the FIRST top-20 are NOT FSH** on their default branch (US Core/CDex/IPA/QI-Core/
+  AU Core/SMART) — need an FSH branch/tag to test. Future expansion.
 
 **USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
 `../sushi-rs-snapshot` (`snapshot-gen`).
