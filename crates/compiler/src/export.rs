@@ -445,9 +445,14 @@ pub fn export_value_set(
         J::String(format!("{}/ValueSet/{}", cfg.canonical, id)),
     );
 
+    // Resolve `[+]`/`[=]` soft indices on caret paths (e.g. `^useContext[+]`,
+    // `^extension[=]`), exactly as the SD/instance exporters do. Without this a
+    // `[=]` would be emitted literally as a slice url.
+    let mut resolved_rules = vs.rules.clone();
+    crate::paths::resolve_soft_indexing(&mut resolved_rules);
+
     // partition caret rules: concept-level (pathArray non-empty) vs other.
-    let other_carets: Vec<&Rule> = vs
-        .rules
+    let other_carets: Vec<&Rule> = resolved_rules
         .iter()
         .filter(|r| matches!(r, Rule::CaretValue { path_array, .. } if path_array.is_empty()))
         .collect();
@@ -792,13 +797,16 @@ pub fn export_code_system(
     // setConcepts.
     set_concepts(&mut obj, cs);
 
+    // Resolve `[+]`/`[=]` soft indices on caret paths (keyed per concept-path).
+    let mut resolved_rules = cs.rules.clone();
+    crate::paths::resolve_soft_indexing(&mut resolved_rules);
+
     // setCaretPathRules (`CodeSystemExporter.ts:108`): both top-level carets
     // (empty pathArray) and concept-level carets (pathArray of concept codes →
     // `concept[i]...` prefix via findConceptPath). The full caret path is the
     // concept prefix joined with the rule's caret path. Concepts must already be
     // built (set_concepts above) so the indices resolve.
-    let cs_carets: Vec<(String, &FshValue)> = cs
-        .rules
+    let cs_carets: Vec<(String, &FshValue)> = resolved_rules
         .iter()
         .filter_map(|r| {
             if let Rule::CaretValue {

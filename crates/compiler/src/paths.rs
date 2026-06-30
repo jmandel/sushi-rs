@@ -190,10 +190,16 @@ pub fn resolve_soft_indexing(rules: &mut [Rule]) {
         let new_path = assemble_fsh_path(&parsed);
         rule.set_path(new_path.clone());
 
-        if let Rule::CaretValue { caret_path, .. } = rule {
+        if let Rule::CaretValue { caret_path, path_array, .. } = rule {
             if let Some(cp) = caret_path.clone() {
+                // Key the caret soft-index map by the rule path AND the concept
+                // path-array. `path_array` is non-empty only for CodeSystem
+                // concept-level carets (`* #code ^property[+]`), so this isolates
+                // each concept's `[+]`/`[=]` counters (they reset per concept)
+                // without changing SD/instance/VS carets (empty path_array).
+                let map_key = format!("{}\u{1}{}", new_path, path_array.join("\u{1}"));
                 let mut cparsed = parse_fsh_path(&cp);
-                let cm = caret_maps.entry(new_path.clone()).or_default();
+                let cm = caret_maps.entry(map_key).or_default();
                 for i in 0..cparsed.len() {
                     cparsed[i].prefix = assemble_fsh_path(&cparsed[..i]);
                     convert_soft_indices(&mut cparsed[i], cm);
