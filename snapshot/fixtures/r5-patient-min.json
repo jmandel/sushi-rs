@@ -1,0 +1,6 @@
+{ "resourceType":"StructureDefinition","url":"http://example.org/StructureDefinition/MyPatient",
+  "name":"MyPatient","status":"draft","fhirVersion":"5.0.0","kind":"resource","abstract":false,
+  "type":"Patient","baseDefinition":"http://hl7.org/fhir/StructureDefinition/Patient","derivation":"constraint",
+  "differential":{"element":[
+    {"id":"Patient.name","path":"Patient.name","min":1,"max":"*"},
+    {"id":"Patient.gender","path":"Patient.gender","mustSupport":true}]}}
