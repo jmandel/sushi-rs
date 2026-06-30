@@ -32,6 +32,92 @@ fn pkg_url(store: Option<&PackageStore>, name: &str, ty: FishType) -> Option<Str
         .and_then(|m| m.get("url").and_then(|u| u.as_str()).map(String::from))
 }
 
+/// `fisher.fishForMetadata(entityName, <all entity types>)?.url` for the
+/// `ElementDefinition.assignValue` Canonical case (`ElementDefinition.ts:2006`),
+/// which fishes Resource/Logical/Type/Profile/Extension/ValueSet/CodeSystem/Instance.
+/// Used as the dependency-package fallback when a `Canonical(name)` doesn't
+/// resolve to a LOCAL ValueSet/CodeSystem.
+fn pkg_canonical_url(store: Option<&PackageStore>, name: &str) -> Option<String> {
+    let base = name.split('|').next().unwrap_or(name);
+    let types = [
+        FishType::Resource,
+        FishType::Logical,
+        FishType::Type,
+        FishType::Profile,
+        FishType::Extension,
+        FishType::ValueSet,
+        FishType::CodeSystem,
+        FishType::Instance,
+    ];
+    store?
+        .fish_for_metadata(base, &types)
+        .and_then(|m| m.get("url").and_then(|u| u.as_str()).map(String::from))
+}
+
+/// Stock's `replaceReferences` (`common.ts:903`) + `ElementDefinition.assignValue`
+/// Canonical case (`ElementDefinition.ts:2003`), applied to a VS/CS caret value
+/// before coercion. Two resolutions, matching exactly when stock runs each:
+///
+/// * `FshCanonical` -> the target entity's url + optional `|version`. This runs
+///   for BOTH ValueSet and CodeSystem carets, because the resolution lives in
+///   `assignValue` (invoked via `setPropertyOnDefinitionInstance` for both
+///   exporters), not in `replaceReferences`. Local ValueSets/CodeSystems resolve
+///   via the tank; dependency-package entities via the fisher. The bare name is
+///   kept when nothing resolves.
+/// * `FshCode` system -> the system CodeSystem's canonical url. This runs ONLY for
+///   CodeSystem carets: the CS exporter calls `replaceReferences(rule, ...)`
+///   (`CodeSystemExporter.ts:203`) whereas the VS exporter does not
+///   (`ValueSetExporter.ts:360-366` passes `rule.value` straight to
+///   `validateValueAtPath`).
+///
+/// `FshReference` is intentionally NOT rewritten here: the VS exporter performs no
+/// reference replacement, and our targets (and stock for `/`-containing values)
+/// keep the reference verbatim — `coerce`'s Reference arm builds the object as-is.
+fn resolve_caret_value(
+    value: &FshValue,
+    is_code_system: bool,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+) -> FshValue {
+    match value {
+        FshValue::Canonical(c) => {
+            let base = c.entity_name.split('|').next().unwrap_or(&c.entity_name);
+            let url = tank
+                .vs_url(base)
+                .or_else(|| tank.cs_url(base))
+                .or_else(|| pkg_canonical_url(store, base));
+            match url {
+                Some(mut url) => {
+                    if let Some(v) = &c.version {
+                        url = format!("{url}|{v}");
+                    }
+                    let mut c2 = c.clone();
+                    c2.entity_name = url;
+                    c2.version = None;
+                    FshValue::Canonical(c2)
+                }
+                None => value.clone(),
+            }
+        }
+        FshValue::Code(fc) if is_code_system => {
+            let Some(sys) = &fc.system else {
+                return value.clone();
+            };
+            let resolve_cs =
+                |b: &str| tank.cs_url(b).or_else(|| pkg_url(store, b, FishType::CodeSystem));
+            match replace_code_system(sys, resolve_cs) {
+                Some(new_sys) => {
+                    let mut fc2 = fc.clone();
+                    fc2.system = Some(new_sys);
+                    FshValue::Code(fc2)
+                }
+                None => value.clone(),
+            }
+        }
+        _ => value.clone(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tank fisher: resolve local ValueSet/CodeSystem names/ids/urls to their url.
 // ---------------------------------------------------------------------------
@@ -303,6 +389,18 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str, resolver: &TypeResolver) -
                 m.insert("coding".into(), J::Array(vec![coding_from(fc)]));
                 Some(J::Object(m))
             }
+            // `FshReference.toFHIRReference` (key order: reference, then display).
+            // The reference string is emitted as-is; any local name->Type/id /
+            // canonical resolution happens upstream (stock's `replaceReferences`),
+            // and stock leaves `/`- or `urn:`-prefixed references untouched.
+            ("Reference", FshValue::Reference(r)) => {
+                let mut m = Map::new();
+                m.insert("reference".into(), J::String(r.reference.clone()));
+                if let Some(d) = &r.display {
+                    m.insert("display".into(), J::String(d.clone()));
+                }
+                Some(J::Object(m))
+            }
             _ => None,
         }
     } else {
@@ -387,12 +485,15 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
 }
 
 /// Apply one top-level caret rule (`path == ''`) onto the resource object.
+#[allow(clippy::too_many_arguments)]
 fn apply_caret(
     obj: &mut Map<String, J>,
     resource_type: &str,
     caret_path: &str,
     value: &FshValue,
     resolver: &TypeResolver,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
 ) {
     // Resolve aliases inside path brackets (e.g. `^extension[FMM]` where FMM is a
     // global Alias) — same export-time resolution the SD exporter does.
@@ -401,7 +502,12 @@ fn apply_caret(
     let Some((segs, leaf_ty)) = resolver.resolve(resource_type, caret_path) else {
         return;
     };
-    let Some(leaf) = coerce(value, &leaf_ty, resolver) else {
+    // `replaceReferences` / `assignValue`(Canonical) pass, mirroring stock: a
+    // `Canonical(name)` resolves to the entity url for both VS & CS; a CodeSystem
+    // caret's `FshCode` system resolves to its CodeSystem url. See
+    // `resolve_caret_value`.
+    let resolved = resolve_caret_value(value, resource_type == "CodeSystem", tank, store);
+    let Some(leaf) = coerce(&resolved, &leaf_ty, resolver) else {
         return;
     };
     apply(obj, &segs, leaf);
@@ -582,7 +688,7 @@ pub fn export_value_set(
         } = r
         {
             if let Some(cp) = caret_path {
-                apply_caret(&mut obj, "ValueSet", cp, value, resolver);
+                apply_caret(&mut obj, "ValueSet", cp, value, resolver, tank, store);
             }
         }
     }
@@ -860,7 +966,8 @@ fn filter_value_to_string(v: &FilterValue) -> String {
 pub fn export_code_system(
     cs: &FshCodeSystem,
     cfg: &Config,
-    _tank: &TankIndex,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
     resolver: &TypeResolver,
 ) -> Exported {
     let id = effective_id(&cs.rules, &cs.id);
@@ -937,7 +1044,7 @@ pub fn export_code_system(
 
     // value loop, in source order.
     for (full, value) in &cs_carets {
-        apply_caret(&mut obj, "CodeSystem", full, value, resolver);
+        apply_caret(&mut obj, "CodeSystem", full, value, resolver, tank, store);
     }
 
     // updateCount: only when content == 'complete'.
@@ -1095,7 +1202,7 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_cs.push(cs.name.clone());
-            out.push(export_code_system(cs, cfg, &tank, &resolver));
+            out.push(export_code_system(cs, cfg, &tank, store, &resolver));
         }
     }
     let mut seen_vs: Vec<String> = Vec::new();
