@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "C4BB-RelatedPerson",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-RelatedPerson",
+  "name": "C4BBRelatedPerson",
+  "title": "C4BB RelatedPerson",
+  "status": "active",
+  "description": "This profile is used to convey basic demographic information about a person related to the claim.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "RelatedPerson",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "RelatedPerson.meta",
+        "path": "RelatedPerson.meta",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "RelatedPerson.meta.lastUpdated",
+        "path": "RelatedPerson.meta.lastUpdated",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "RelatedPerson.meta.profile",
+        "path": "RelatedPerson.meta.profile",
+        "min": 1
+      },
+      {
+        "id": "RelatedPerson.patient",
+        "path": "RelatedPerson.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Patient"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

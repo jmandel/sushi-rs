@@ -1,0 +1,112 @@
+{
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs/temp/holdout/carinbb-stock/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 16,
+    "harvested": 6,
+    "skipped": 10
+  },
+  "entries": [
+    {
+      "id": "C4BB-Coverage",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Coverage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|7.0.0",
+      "source": "StructureDefinition-C4BB-Coverage.json",
+      "fixture": "fixtures/C4BB-Coverage.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ExplanationOfBenefit",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit.json",
+      "fixture": "fixtures/C4BB-ExplanationOfBenefit.json",
+      "differentialElements": 45
+    },
+    {
+      "id": "C4BB-Organization",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|7.0.0",
+      "source": "StructureDefinition-C4BB-Organization.json",
+      "fixture": "fixtures/C4BB-Organization.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "C4BB-Patient",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Patient",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+      "source": "StructureDefinition-C4BB-Patient.json",
+      "fixture": "fixtures/C4BB-Patient.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "C4BB-Practitioner",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|7.0.0",
+      "source": "StructureDefinition-C4BB-Practitioner.json",
+      "fixture": "fixtures/C4BB-Practitioner.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "C4BB-RelatedPerson",
+      "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-RelatedPerson",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson|7.0.0",
+      "source": "StructureDefinition-C4BB-RelatedPerson.json",
+      "fixture": "fixtures/C4BB-RelatedPerson.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": [
+    {
+      "id": "C4BB-ExplanationOfBenefit-Inpatient-Institutional-Basis",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Inpatient-Institutional-Basis.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Inpatient-Institutional",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Inpatient-Institutional.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Inpatient-Institutional-Basis"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Oral-Basis",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Oral-Basis.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Oral",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Oral.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Oral-Basis"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Outpatient-Institutional-Basis",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Outpatient-Institutional-Basis.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Outpatient-Institutional",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Outpatient-Institutional.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Outpatient-Institutional-Basis"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Pharmacy-Basis",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Pharmacy-Basis.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Pharmacy",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Pharmacy.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Pharmacy-Basis"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Professional-NonClinician-Basis",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Professional-NonClinician-Basis.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+    },
+    {
+      "id": "C4BB-ExplanationOfBenefit-Professional-NonClinician",
+      "source": "StructureDefinition-C4BB-ExplanationOfBenefit-Professional-NonClinician.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Professional-NonClinician-Basis"
+    }
+  ]
+}

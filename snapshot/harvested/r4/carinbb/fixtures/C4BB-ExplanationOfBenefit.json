@@ -1,0 +1,394 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "C4BB-ExplanationOfBenefit",
+  "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit",
+  "name": "C4BBExplanationOfBenefit",
+  "title": "C4BB Explanation Of Benefit",
+  "status": "active",
+  "description": "Abstract parent profile that includes constraints that are common to the four specific ExplanationOfBenefit (EOB) profiles defined in this Implementation Guide.\nAll EOB instances should be from one of the four concrete EOB profiles defined in this Implementation Guide:  Inpatient, Outpatient, Pharmacy, and Professional/NonClinician",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": true,
+  "type": "ExplanationOfBenefit",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ExplanationOfBenefit",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ExplanationOfBenefit.meta",
+        "path": "ExplanationOfBenefit.meta",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.meta.lastUpdated",
+        "path": "ExplanationOfBenefit.meta.lastUpdated",
+        "comment": "Defines the date the Resource was created or updated, whichever comes last (163). Payers SHALL provide the last time the data was updated or the date of creation in the payer’s system of record, whichever comes last",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.meta.profile",
+        "path": "ExplanationOfBenefit.meta.profile",
+        "comment": "meta.profile is required as a matter of convenience of receiving systems. The meta.profile should be used by the Server to hint/assert/declare that this instance conforms to one (or more) stated profiles (with business versions). meta.profile does not capture any business logic, processing directives, or semantics (for example, inpatient or outpatient). Clients should not assume that the Server will exhaustively indicate all profiles with all versions that this instance conforms to. Clients can (and should) perform their own validation of conformance to the indicated profile(s) and to any other profiles of interest. CPCDS data element (190)",
+        "min": 1
+      },
+      {
+        "id": "ExplanationOfBenefit.identifier",
+        "path": "ExplanationOfBenefit.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type"
+            }
+          ],
+          "rules": "open",
+          "ordered": false,
+          "description": "Slice based on value"
+        },
+        "comment": "Identifier assigned by a payer for a claim received from a provider or subscriber. It is not the same identifier as that assigned by a provider. (35)",
+        "min": 1
+      },
+      {
+        "id": "ExplanationOfBenefit.identifier.type",
+        "path": "ExplanationOfBenefit.identifier.type",
+        "comment": "Indicates that the claim identifier is that assigned by a payer for a claim received from a provider or subscriber. (183)"
+      },
+      {
+        "id": "ExplanationOfBenefit.identifier:uniqueclaimid",
+        "path": "ExplanationOfBenefit.identifier",
+        "sliceName": "uniqueclaimid",
+        "short": "Unique Claim Identifier",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.identifier:uniqueclaimid.type",
+        "path": "ExplanationOfBenefit.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "uc",
+              "system": "http://hl7.org/fhir/us/carin-bb/CodeSystem/C4BBIdentifierType"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.identifier:uniqueclaimid.value",
+        "path": "ExplanationOfBenefit.identifier.value",
+        "short": "Unique Claim Identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.status",
+        "path": "ExplanationOfBenefit.status",
+        "comment": "Claim processing status code (140).  Expected values are active or cancelled.  To comply with the CMS rule, draft EOBs are not required",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.type",
+        "path": "ExplanationOfBenefit.type",
+        "comment": "Specifies the type of claim. (e.g., inpatient institutional, outpatient institutional, physician, etc.) (16).  Defines the Claims profiles.  Values from Claim Type Codes are required; a data absent reason is not allowed",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/claim-type"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.use",
+        "path": "ExplanationOfBenefit.use",
+        "comment": "Expected value is claim. The CMS rule applies to adjudicated claims; it does not require preauthorizations or predeterminations",
+        "patternCode": "claim",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.patient",
+        "path": "ExplanationOfBenefit.patient",
+        "comment": "Identifier for a member assigned by the Payer.  If members receive ID cards, that is the identifier that should be provided. (1). The patient must be supplied to the insurer so that confirmation of coverage and service history may be considered as part of the authorization and/or adjudication. Additional required path:EOB.insurance.coverage(Coverage).beneficiary(Patient).identifier",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.billablePeriod",
+        "path": "ExplanationOfBenefit.billablePeriod",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.billablePeriod.start",
+        "path": "ExplanationOfBenefit.billablePeriod.start",
+        "comment": "The first day on the billing statement covering services rendered to the beneficiary (i.e. 'Statement Covers From Date’). (177)",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.billablePeriod.end",
+        "path": "ExplanationOfBenefit.billablePeriod.end",
+        "comment": "The last day on the billing statement covering services rendered to the beneficiary (i.e. 'Statement Covers Thru Date’). (178)"
+      },
+      {
+        "id": "ExplanationOfBenefit.created",
+        "path": "ExplanationOfBenefit.created",
+        "comment": "Date the claim was adjudicated (179)"
+      },
+      {
+        "id": "ExplanationOfBenefit.insurer",
+        "path": "ExplanationOfBenefit.insurer",
+        "comment": "Code of the payer responsible for the claim (2, 5).  Same as insurance.coverage.organization.  Party responsible for reimbursing the provider",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.provider",
+        "path": "ExplanationOfBenefit.provider",
+        "comment": "The identifier assigned to the Billing Provider. (94)",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization",
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Practitioner"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.priority",
+        "path": "ExplanationOfBenefit.priority",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/process-priority"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.related",
+        "path": "ExplanationOfBenefit.related",
+        "comment": "If the current claim represents a claim that has been adjusted and was given a prior claim number, this field represents the prior claim number. If the current claim has been adjusted; i.e., replaced by or merged to another claim number, this data element represents that new number.(111, 112)",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.related.relationship",
+        "path": "ExplanationOfBenefit.related.relationship",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/carin-bb/ValueSet/C4BBRelatedClaimRelationshipCodes"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.related.reference",
+        "path": "ExplanationOfBenefit.related.reference",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.payee",
+        "path": "ExplanationOfBenefit.payee",
+        "constraint": [
+          {
+            "key": "EOB-payee-other-type-requires-party",
+            "severity": "error",
+            "human": "Base EOB: if payee type is other, payee party is required",
+            "expression": "type.coding.where(code = 'other' and system = 'http://terminology.hl7.org/CodeSystem/payeetype').exists() implies party.exists()",
+            "source": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.payee.type",
+        "path": "ExplanationOfBenefit.payee.type",
+        "comment": "Identifies the type of recipient of the adjudication amount; i.e., provider, subscriber, beneficiary or another recipient. (120)",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/carin-bb/ValueSet/C4BBPayeeType"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.payee.party",
+        "path": "ExplanationOfBenefit.payee.party",
+        "comment": "Recipient reference (121)",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization",
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Patient",
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Practitioner",
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-RelatedPerson"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.outcome",
+        "path": "ExplanationOfBenefit.outcome",
+        "comment": "Expected value is complete",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.careTeam",
+        "path": "ExplanationOfBenefit.careTeam",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.careTeam.sequence",
+        "path": "ExplanationOfBenefit.careTeam.sequence",
+        "comment": "careTeam.sequence values uniquely identify careTeam members.  They do not necessarily indicate any order in which the patient was seen by the careTeam or identify any level of significance of the careTeam to the patient, etc.  Client app implementations should not assign any significance to the sequence values"
+      },
+      {
+        "id": "ExplanationOfBenefit.careTeam.provider",
+        "path": "ExplanationOfBenefit.careTeam.provider",
+        "comment": "The identifier assigned to the care team. (varies depending on the profile)",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization",
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Practitioner"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.careTeam.role",
+        "path": "ExplanationOfBenefit.careTeam.role",
+        "comment": "The functional role of a provider on a claim. (165)",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.supportingInfo",
+        "path": "ExplanationOfBenefit.supportingInfo",
+        "comment": "Defines data elements not available in the base EOB resource",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.supportingInfo.sequence",
+        "path": "ExplanationOfBenefit.supportingInfo.sequence",
+        "comment": "Client app implementations should look-up supportingInfo elements based on category values instead of sequence values"
+      },
+      {
+        "id": "ExplanationOfBenefit.supportingInfo.category",
+        "path": "ExplanationOfBenefit.supportingInfo.category",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/carin-bb/ValueSet/C4BBSupportingInfoType"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.insurance",
+        "path": "ExplanationOfBenefit.insurance",
+        "comment": "Identity of the payers responsible for the claim. (2, 141).  All insurance coverages for the patient which may be applicable for reimbursement, of the products and services listed in the claim, are typically provided in the claim to allow insurers to confirm the ordering of the insurance coverages relative to local 'coordination of benefit' rules. One coverage (and only one) with 'focal=true' is to be used in the adjudication of this claim. An invariant is defined to enforce the following rule:  Will have multiple occurrences on secondary / tertiary, etc. claims.  Up to one occurrence, that of the ExplanationOfBenefit.insurer, will have a boolean value = 'True'",
+        "constraint": [
+          {
+            "key": "EOB-insurance-focal",
+            "severity": "error",
+            "human": "EOB.insurance:  at most one with focal = true",
+            "expression": "select (focal = true).count() < 2",
+            "source": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.insurance.focal",
+        "path": "ExplanationOfBenefit.insurance.focal",
+        "comment": "A patient may (will) have multiple insurance policies which provide reimbursement for healthcare services and products. For example, a person may also be covered by their spouse's policy and both appear in the list (and may be from the same insurer). This flag will be set to true for only one of the listed policies and that policy will be used for adjudicating this claim. Other claims would be created to request adjudication against the other listed policies. An invariant is defined to enforce the following rule:  Will have multiple occurrences on secondary / tertiary, etc. claims.  Up to one occurrence, that of the ExplanationOfBenefit.insurer, will have a boolean value = 'True'",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.insurance.coverage",
+        "path": "ExplanationOfBenefit.insurance.coverage",
+        "comment": "Same as insurance.coverage.organization.  Party responsible for reimbursing the provider. When focal = true, Coverage.payer--> Organization.identifier.  When focal = false, EOB.insurance.coverage.display = [name of other carrier]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Coverage"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.item",
+        "path": "ExplanationOfBenefit.item",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.item.sequence",
+        "path": "ExplanationOfBenefit.item.sequence",
+        "comment": "Line identification number that represents the number assigned in a source system for identification and processing. (36)",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.item.noteNumber",
+        "path": "ExplanationOfBenefit.item.noteNumber",
+        "comment": "References number of the associated processNote entered",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.item.adjudication.category",
+        "path": "ExplanationOfBenefit.item.adjudication.category",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.payment",
+        "path": "ExplanationOfBenefit.payment",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.payment.type",
+        "path": "ExplanationOfBenefit.payment.type",
+        "comment": "Indicates whether the claim was paid or denied. (91)",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/carin-bb/ValueSet/C4BBPayerClaimPaymentStatusCode"
+        }
+      },
+      {
+        "id": "ExplanationOfBenefit.payment.date",
+        "path": "ExplanationOfBenefit.payment.date",
+        "comment": "The date the claim was paid. (107)"
+      },
+      {
+        "id": "ExplanationOfBenefit.processNote",
+        "path": "ExplanationOfBenefit.processNote",
+        "mustSupport": true
+      },
+      {
+        "id": "ExplanationOfBenefit.processNote.text",
+        "path": "ExplanationOfBenefit.processNote.text",
+        "comment": "Payment denial explanation to a member, typically goes on the EOB when the payment is denied or disallowed (181)"
+      }
+    ]
+  }
+}

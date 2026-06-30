@@ -204,6 +204,7 @@ pub fn generate_snapshot(
                 &mut snapshot_elements[index],
                 &diff,
                 base_strip_non_inherited,
+                &base_constraint_source,
             )?;
         }
     }
@@ -309,6 +310,20 @@ fn insert_slice_element(
         .and_then(Value::as_str)
         .unwrap_or(path)
         .to_string();
+    let unsliced_anchor_id = if anchor_id.contains(':') || anchor_id.contains('/') {
+        unsliced_element_id(&anchor_id).unwrap_or_else(|| anchor_id.clone())
+    } else {
+        anchor_id.clone()
+    };
+    // Java only drops the inherited unsliced datatype children when the base
+    // element was already sliced (ProfilePathProcessor.processPathWithSlicedBase,
+    // e.g. CRD Practitioner.identifier). When this profile newly introduces the
+    // slicing on a previously-unsliced datatype element, processSimplePathDefault
+    // keeps the unsliced children (e.g. CARIN BB Patient.identifier).
+    let base_anchor_was_sliced = original_elements_by_id
+        .get(&unsliced_anchor_id)
+        .map(|element| element.get("slicing").is_some())
+        .unwrap_or(false);
     let mut slice = if anchor_id.contains(':') || anchor_id.contains('/') {
         unsliced_element_id(&anchor_id)
             .and_then(|id| original_elements_by_id.get(&id).cloned())
@@ -319,7 +334,7 @@ fn insert_slice_element(
             .cloned()
             .unwrap_or_else(|| elements[anchor].clone())
     };
-    fill_missing_constraint_sources_on_constrained_element(&mut slice);
+    fill_missing_constraint_sources_on_constrained_element(&mut slice, host_extension_source);
     remove_field(&mut slice, "slicing");
     if let Some(id) = diff.get("id") {
         set_field(&mut slice, "id", id.clone());
@@ -344,7 +359,7 @@ fn insert_slice_element(
             allow_condition,
         )?;
     }
-    merge_diff_into_element(&mut slice, diff, strip_non_inherited)?;
+    merge_diff_into_element(&mut slice, diff, strip_non_inherited, host_extension_source)?;
 
     let anchor_path = elements[anchor]
         .get("path")
@@ -362,7 +377,9 @@ fn insert_slice_element(
         native_r5,
     )?;
 
-    if should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor]) {
+    if base_anchor_was_sliced
+        && should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor])
+    {
         prune_unsliced_descendants(elements, &anchor_id);
     }
 
@@ -1033,6 +1050,7 @@ fn merge_diff_into_element(
     target: &mut Value,
     diff: &Value,
     strip_non_inherited: bool,
+    constraint_source: &str,
 ) -> anyhow::Result<()> {
     let is_extension_doco = check_extension_doco(target);
     merge_extensions_from_definition(target, diff, strip_non_inherited);
@@ -1048,7 +1066,7 @@ fn merge_diff_into_element(
 
     merge_unique_array_strings(target, diff, "alias");
     merge_unique_array_strings(target, diff, "condition");
-    fill_missing_constraint_sources_on_constrained_element(target);
+    fill_missing_constraint_sources_on_constrained_element(target, constraint_source);
     merge_unique_by_key(target, diff, "constraint", "key");
     merge_unique_values(target, diff, "example");
     merge_unique_values_prepend(target, diff, "mapping");
@@ -1266,7 +1284,10 @@ fn apply_extension_profile_root(
     } else if is_local_profile && !project_local_root_constraints {
         retain_base_extension_constraints(&mut root);
     }
-    fill_missing_constraint_sources_on_constrained_element(&mut root);
+    fill_missing_constraint_sources_on_constrained_element(
+        &mut root,
+        host_extension_source.unwrap_or(profile_url),
+    );
 
     for key in [
         "short",
@@ -1456,7 +1477,7 @@ fn apply_type_profile_root(
             &constraint_xpaths,
         );
     }
-    fill_missing_constraint_sources_on_constrained_element(&mut root);
+    fill_missing_constraint_sources_on_constrained_element(&mut root, profile_url);
 
     for key in [
         "short",
@@ -1519,7 +1540,13 @@ fn profile_root_element(profile: &Value, ctx: &PackageContext) -> anyhow::Result
         (Some((mut root, strip_non_inherited)), Some(diff_root))
             if is_profile_root_diff(profile, diff_root) =>
         {
-            merge_diff_into_element(&mut root, diff_root, strip_non_inherited)?;
+            let profile_constraint_source = structure_url_or(profile, "");
+            merge_diff_into_element(
+                &mut root,
+                diff_root,
+                strip_non_inherited,
+                &profile_constraint_source,
+            )?;
             Ok(Some(root))
         }
         (Some((root, _)), _) => Ok(Some(root)),
@@ -1915,14 +1942,14 @@ fn normalize_inherited_element(
     element
 }
 
-fn fill_missing_constraint_sources_on_constrained_element(element: &mut Value) {
-    let Some(id) = element
-        .get("id")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-    else {
-        return;
-    };
+// Mirrors org.hl7.fhir.r5.conformance.profile.ProfileUtilities updateFromDefinition
+// (~line 3085): when a derived element is merged with its base, every base
+// constraint lacking a `source` is stamped with the source StructureDefinition's
+// URL (srcSD.getUrl()). This fires only for elements actually touched by the
+// differential, so inherited-but-untouched constraints (e.g. CRD's us-core-16..19
+// on slices it never merges) keep their missing source, while a profile that does
+// constrain the slice (e.g. CARIN BB's Organization.identifier:NPI) stamps them.
+fn fill_missing_constraint_sources_on_constrained_element(element: &mut Value, source: &str) {
     let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
         return;
     };
@@ -1930,9 +1957,8 @@ fn fill_missing_constraint_sources_on_constrained_element(element: &mut Value) {
         let Some(obj) = constraint.as_object_mut() else {
             continue;
         };
-        let key = obj.get("key").and_then(Value::as_str);
-        if !obj.contains_key("source") && !preserves_missing_constraint_source(key) {
-            obj.insert("source".to_string(), Value::String(id.clone()));
+        if !obj.contains_key("source") {
+            obj.insert("source".to_string(), Value::String(source.to_string()));
         }
     }
 }

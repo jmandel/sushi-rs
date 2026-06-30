@@ -1,0 +1,122 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "C4BB-Organization",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization",
+  "name": "C4BBOrganization",
+  "title": "C4BB Organization",
+  "status": "active",
+  "description": "This profile builds upon the US Core Organization profile. It is used to convey a payer, provider, payee or service facility organization.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization",
+        "path": "Organization",
+        "constraint": [
+          {
+            "key": "uncontained-requires-lastUpdated",
+            "severity": "error",
+            "human": "meta.lastUpdated required if not a contained resource",
+            "expression": "%resource = %rootResource implies meta.lastUpdated.exists()",
+            "source": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization"
+          },
+          {
+            "key": "organization-meta-profile-version",
+            "severity": "warning",
+            "human": "Organization: meta.profile with canonical and major.minor. version required.",
+            "expression": "meta.profile.exists($this.startsWith('http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization|2.2'))",
+            "source": "http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-Organization"
+          }
+        ]
+      },
+      {
+        "id": "Organization.meta",
+        "path": "Organization.meta",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.meta.lastUpdated",
+        "path": "Organization.meta.lastUpdated",
+        "comment": "Defines the date the Resource was created or updated, whichever comes last (163).  Payers SHALL provide the last time the data was updated or the date of creation in the payer’s system of record, whichever comes last. Apps will use the meta.lastUpdated value to determine if the Reference resources are as of the current date or date of service.  lastUpdated required unless the Resource is \"contained\"",
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.meta.profile",
+        "path": "Organization.meta.profile",
+        "comment": "meta.profile is required as a matter of convenience of receiving systems. The meta.profile should be used by the Server to hint/assert/declare that this instance conforms to one (or more) stated profiles (with business versions). meta.profile does not capture any business logic, processing directives, or semantics (for example, inpatient or outpatient). Clients should not assume that the Server will exhaustively indicate all profiles with all versions that this instance conforms to. Clients can (and should) perform their own validation of conformance to the indicated profile(s) and to any other profiles of interest. CPCDS data element (190)",
+        "min": 1
+      },
+      {
+        "id": "Organization.identifier:NPI",
+        "path": "Organization.identifier",
+        "sliceName": "NPI",
+        "comment": "The National Provider Identifier assigned to the Billing Provider, Care Team members and the Service Facility (93, 94, 95, 97, 99, 100, 122, 173).  Service Facility NPI will be populated with the value 'NPI has not been assigned' if an NPI has not been assigned to the Service Location Organization",
+        "max": "1"
+      },
+      {
+        "id": "Organization.identifier:NAIC",
+        "path": "Organization.identifier",
+        "sliceName": "NAIC",
+        "comment": "NAIC Code of the payer responsible for the claim (2)"
+      },
+      {
+        "id": "Organization.identifier:tax",
+        "path": "Organization.identifier",
+        "sliceName": "tax",
+        "short": "Tax ID Number",
+        "comment": "Tax ID Number",
+        "min": 0,
+        "max": "*",
+        "patternIdentifier": {
+          "type": {
+            "coding": [
+              {
+                "code": "TAX",
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0203"
+              }
+            ]
+          },
+          "system": "urn:oid:2.16.840.1.113883.4.4"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.identifier:payerid",
+        "path": "Organization.identifier",
+        "sliceName": "payerid",
+        "short": "Payer ID used in HIPAA covered claims submission transactions",
+        "comment": "Internal value assigned by the payer responsible for the claim (2)",
+        "min": 0,
+        "max": "*",
+        "patternIdentifier": {
+          "type": {
+            "coding": [
+              {
+                "code": "payerid",
+                "system": "http://hl7.org/fhir/us/carin-bb/CodeSystem/C4BBIdentifierType"
+              }
+            ]
+          }
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Organization.address",
+        "path": "Organization.address",
+        "comment": "Enter address of the location where the services were rendered.  If the location is a component of the Billing Provider, do not populate this data element"
+      }
+    ]
+  }
+}
