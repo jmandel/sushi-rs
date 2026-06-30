@@ -91,14 +91,17 @@ impl ElementDefinition {
     pub fn from_json(json: &Value, capture: bool) -> ElementDefinition {
         let mut map = Map::new();
         if let Some(obj) = json.as_object() {
+            let mut uk = String::new();
             for prop in ED_PROPS {
                 if let Some(key) = resolve_choice_key(prop, obj) {
                     if let Some(v) = obj.get(&key) {
                         map.insert(key.clone(), v.clone());
                     }
-                    let uk = format!("_{key}");
-                    if let Some(v) = obj.get(&uk) {
-                        map.insert(uk, v.clone());
+                    uk.clear();
+                    uk.push('_');
+                    uk.push_str(&key);
+                    if let Some(v) = obj.get(uk.as_str()) {
+                        map.insert(uk.clone(), v.clone());
                     }
                 }
             }
@@ -169,6 +172,7 @@ impl ElementDefinition {
     pub fn has_own_diff(&self) -> bool {
         let blank = Map::new();
         let original = self.original.as_ref().unwrap_or(&blank);
+        let mut uk = String::new();
         for prop in ED_PROPS {
             let key = match resolve_choice_key_either(prop, &self.map, original) {
                 Some(k) => k,
@@ -177,8 +181,10 @@ impl ElementDefinition {
             if self.map.get(&key) != original.get(&key) {
                 return true;
             }
-            let uk = format!("_{key}");
-            if self.map.get(&uk) != original.get(&uk) {
+            uk.clear();
+            uk.push('_');
+            uk.push_str(&key);
+            if self.map.get(uk.as_str()) != original.get(uk.as_str()) {
                 return true;
             }
         }
@@ -196,14 +202,17 @@ impl ElementDefinition {
 
         let is_choice_slice = self.slice_name().is_some() && self.path().ends_with("[x]");
 
+        let mut uk = String::new();
         for prop in ED_PROPS {
             let key = match resolve_choice_key_either(prop, &self.map, original) {
                 Some(k) => k,
                 None => continue,
             };
-            let uk = format!("_{key}");
+            uk.clear();
+            uk.push('_');
+            uk.push_str(&key);
             let changed = self.map.get(&key) != original.get(&key);
-            let uchanged = self.map.get(&uk) != original.get(&uk);
+            let uchanged = self.map.get(uk.as_str()) != original.get(uk.as_str());
 
             if changed {
                 if key == "mapping" || key == "constraint" {
@@ -228,8 +237,8 @@ impl ElementDefinition {
                 }
             }
             if uchanged {
-                if let Some(v) = self.map.get(&uk) {
-                    diff.insert(uk, v.clone());
+                if let Some(v) = self.map.get(uk.as_str()) {
+                    diff.insert(uk.clone(), v.clone());
                 }
             }
         }
@@ -281,6 +290,7 @@ fn order_type_obj(t: &Value) -> Value {
 /// Order an element JSON map per ED PROPS (with `[x]` resolution + `_` siblings).
 fn order_element_json(map: &Map<String, Value>) -> Value {
     let mut out = Map::new();
+    let mut uk = String::new();
     for prop in ED_PROPS {
         if let Some(key) = resolve_choice_key(prop, map) {
             if let Some(v) = map.get(&key) {
@@ -294,9 +304,11 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
                 };
                 out.insert(key.clone(), v);
             }
-            let uk = format!("_{key}");
-            if let Some(v) = map.get(&uk) {
-                out.insert(uk, v.clone());
+            uk.clear();
+            uk.push('_');
+            uk.push_str(&key);
+            if let Some(v) = map.get(uk.as_str()) {
+                out.insert(uk.clone(), v.clone());
             }
         }
     }
@@ -375,13 +387,16 @@ impl StructureDefinition {
     pub fn from_json(json: &Value, capture: bool) -> StructureDefinition {
         let mut body = Map::new();
         let obj = json.as_object().cloned().unwrap_or_default();
+        let mut uk = String::new();
         for prop in SD_PROPS {
             if let Some(v) = obj.get(*prop) {
                 body.insert((*prop).to_string(), v.clone());
             }
-            let uk = format!("_{prop}");
-            if let Some(v) = obj.get(&uk) {
-                body.insert(uk, v.clone());
+            uk.clear();
+            uk.push('_');
+            uk.push_str(prop);
+            if let Some(v) = obj.get(uk.as_str()) {
+                body.insert(uk.clone(), v.clone());
             }
         }
         let mut elements = Vec::new();
