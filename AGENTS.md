@@ -27,37 +27,41 @@ them) and don't move the 2065 number even when correct — verify those via
 longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
 `reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
-**Fixed & integrated THIS session (1800→1987):** N7 (FSHOnly suppress IG), G4 (`Context:`
-keyword source order, +42), N1 (Quantity/Ratio→pattern[x]), **G2** (bare-local-CS-name→url,
-carinbb perfect + genomics +64), **G14/G11** (local CS/VS `^url` override, genomics +16),
-**G9** (inline/contained resource truncation), **G5** (derived url for local instances),
-ecr narrative `<br/>` whitespace, + the package-acquisition merge.
+**8/12 IGs BYTE-IDENTICAL:** ips, epi, mcode, crd, carinbb, genomics(301/301), cmc, ndh(260/260).
+Fixed & integrated this session via the **investigate-then-align loop** (deep-dive stock's
+algorithm → port it; NEVER spot-fix): N7, G4, N1, **G2** (carinbb perfect, genomics +64),
+G14/G11, G9, G5, narrative, G13 (instance order = InstanceOf snapshot order), VS/CS carets
+through replaceReferences/Canonical, `unfoldChoiceElementTypes` for multi-type `value[x]`,
+underscore-sibling diff, IG `normalizeResourceReference` + `.x`-version maxSatisfying, SD
+inline-instance→pattern, strict soft-indexing (`convertSoftIndicesStrict`), cross-slice
+extension scoping, DefIndex instance-CS url, xhtml attr whitespace — PLUS the
+package-acquisition merge. Detailed catalog: `docs/holdout-findings.md` (G1-G14 + tail),
+`docs/mining-findings.md` (N1-N7).
 
-**RUNNING NOW (our-owned):** the **SD-tail** agent (worktree `../sushi-rs-sdtail`, branch
-`fix/sdtail`) — sd_export.rs cluster (sdc `^mapping`, ndh `type.profile[]`, genomics
-targetProfile, cmc R5 reslices, pas/dtr). Integrate its commits when it reports; it's
-disjoint from instance_export.rs.
+**REMAINING 13 fails (the deep tail — see holdout-findings.md "Remaining 13"):**
+- **Root Cause C (the big one)** — pas 4 + dtr ~3-4 + sdc Questionnaires: stock's
+  `InstanceExporter.sdCache` shares ONE mutable SD per profile url across instances, so
+  unfold/constrainCardinality mutations PERSIST (order-dependent BY DESIGN) and let a
+  value-less instance see required value-less extension scaffolds. We clone a pristine
+  template per instance → scaffolds dropped. Aligned fix = adopt the shared per-url cache,
+  but a direct attempt regressed sdc −7/cmc −1 because our `unfold`/`createUsefulSlices`/
+  `validateValueAtPath` SD-mutations aren't yet byte-equal to stock's (the clone was masking
+  it). So C = FIRST reconcile SD-mutation helpers with stock, THEN share the cache.
+  Substantial/high-risk; sequence as its own careful effort. **NEXT BIG ITEM.**
+- **ecr 2** (`Bundle-bundle-ersd-{specification,supplemental}`) + **sdc 3** Questionnaire
+  content — may be separate sub-causes; re-triage after C.
 
-**REMAINING ~78 fails (gated by full-dashboard; complete census in holdout-findings.md):**
-- **G13** instance property order = InstanceOf SNAPSHOT element order (~15 sdc, pure
-  key-order). Delicate — a naive "force DomainResource prefix" REGRESSED −130. Real fix is
-  in our `setImpliedPropertiesOnInstance` port (instance_export.rs ~1380-1445); we already
-  have the walk, subtle divergence on profile-constrained elements. Trace `sdc-CHF`. MINE NEXT.
-- **cmc R5 reslices** (~9, MedicinalProductDefinition/SubstanceDefinition) — hard; SD-tail
-  may defer.
-- **ndh** Instance-of-CodeSystem url fill (4) — stock fills via a separate InstanceExporter
-  mechanism; left bare correctly for now.
-- SD-tail targets (in flight) + misc OTHER tail.
+**RUNNING NOW (our-owned):** the **top-20 validation** agent (`a3d98bf`) — clones the full
+top-20 IGs (`docs/igs-to-test-with.json`), builds stock(isolated HOME) vs ours, reports new
+gaps → `docs/top20-findings.md`. Integrate/triage its findings when it lands.
 
 **USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
-`../sushi-rs-snapshot` (`snapshot-gen`). The `../sushi-rs-package-acquisition` worktree is
-now MERGED (safe to remove). `main` advanced; those worktrees should rebase on `main`.
+`../sushi-rs-snapshot` (`snapshot-gen`). (`../sushi-rs-package-acquisition` is merged + removed.)
 
-**Longer-tail backlog (after the above):** N2/N4/N5 (decimal serialization, empty-value
-omission, id/filename sanitization — mining bugs, corpus-invisible), G8/G10 tail, **L1**
-leniency (reject invalid FSH like stock — tie to the diagnostics worktree), and **scaling
-the SUSHI-test mining** to the EXPORT suite (deepest untested instance/SD behavior).
-FIXED earlier: G1/G3 (T1 SD-driven TypeResolver), G6 (T2 dir-reconcile).
+**Longer-tail backlog:** N2/N4/N5 (decimal/empty-value/id-sanitization — mining, corpus-
+invisible), **L1** leniency (reject invalid FSH like stock — tie to diagnostics worktree),
+scaling SUSHI-test mining to the EXPORT suite, + whatever top-20 surfaces. FIXED earlier:
+G1/G3 (T1 SD-driven TypeResolver), G6 (T2 dir-reconcile).
 
 ## 1. What we are doing
 
