@@ -11,22 +11,18 @@
 for the 4 tuning IGs (ips/epi/mcode/crd = **665/665**, the non-regression floor). Perf
 week DONE — sub-second warm builds (ips 0.74 / epi 0.58 / mcode 0.84 / crd 0.66s; ~50×
 stock). **Now: generalization hardening** against 8 *holdout* IGs (unseen), gated by
-`harness/full-dashboard.sh` (12 IGs). Post-T2 verified score **1719/2065 (~83%)**;
-holdout bugs catalogued in `docs/holdout-findings.md` (G1..G12). `main` HEAD ~`fd100f3`.
-(Live `full-dashboard` runs are noisy while background agents hammer the CPU; trust the
-verified 1719 from the clean T2 integration.)
+`harness/full-dashboard.sh` (12 IGs). Verified score **1800/2065 (87.2%)** (T1+T2
+integrated). holdout bugs catalogued in `docs/holdout-findings.md` (G1..G12); mining
+bugs in `docs/mining-findings.md` (N1..N7, L1). `main` HEAD `5902198`.
 
-**ACTIVE BACKGROUND AGENTS — do NOT re-launch; await their completion notifications:**
-- **T1** (`a483bfa74e93b176b`, worktree `../sushi-rs-perf/T1` branch `fix/T1`): the big
-  fix — **SD-driven type resolver** (replaces the two hardcoded datatype tables in
-  `compiler/src/export.rs` + `caret_schema.rs`; descends datatypes/extensions via
-  `package_store`, reads `value[x]` choices from the SD) = bug **G3 (~90+ files)** +
-  the **G1 genomics crash** (`instance_export.rs:859` unwrap). When it lands: build its
-  worktree, run `full-dashboard.sh` (corpus MUST stay 665, holdout must climb),
-  cherry-pick onto `main`. NO-HARDCODING mandate from the owner.
-- **SUSHI-test mining pilot** (`a7ff86b73555f331d`, `temp/sushi-tests/`): extracts FSH
-  snippets from `sushi-ts/test/` → builds stock-vs-port → reports a divergence-rate +
-  new bug groups (a finer correctness gate). Read its report, decide scale-or-not.
+**NO OUR-OWNED background agents running right now** (T1 + the mining pilot both DONE
+and integrated/recorded). Both were:
+- **T1 (DONE, integrated)** — SD-driven `TypeResolver` (`compiler/src/type_resolver.rs`)
+  replaced BOTH hardcoded datatype tables (`caret_schema.rs` DELETED); fixed G1 crash +
+  most of G3. +219 holdout. NO-HARDCODING mandate met.
+- **SUSHI-test mining pilot (DONE)** — 18.3% divergence over 273 extracted snippets,
+  surfaced 6 NEW true-bug groups (N1-N7) + a leniency class (L1), recommended scaling.
+  Fixtures in `temp/sushi-tests/`; report in `docs/mining-findings.md`.
 
 **USER-OWNED parallel worktrees — DO NOT TOUCH (separate efforts):**
 - `../sushi-rs-diagnostics` (`diagnostics-parity`) — diagnostics feature; plan
@@ -39,13 +35,24 @@ verified 1719 from the clean T2 integration.)
 `main` advanced (holdout gate, index heuristic, design docs); those worktrees should
 rebase on `main`.
 
-**NEXT STEPS when resuming:** (1) integrate T1 vs `full-dashboard.sh`; (2) then drive
-the remaining holdout clusters SERIALLY (they share `export.rs`/`instance_export.rs`
-with T1): **G2** bare-local-CodeSystem-name fishing in `replaceReferences`, **G4**
-`^context` key order, then G5/G7–G12 (findings doc, ROI-ordered). **G6 FIXED** (T2:
-`package_store` directory-reconcile; stock never reads `.index.json`). (3) assess the
-mining-pilot yield; (4) diagnostics is the owner's worktree, not ours. **Gate every fix
-with `full-dashboard.sh`: corpus 665 must never drop; holdout must climb.**
+**NEXT STEPS when resuming (ROI-ordered):** drive remaining bugs (each gated by
+`full-dashboard.sh`: corpus 665 must never drop; holdout must climb). Fixes touch
+`export.rs`/`instance_export.rs`/`sd_export.rs` — run them SERIALLY or in disjoint
+worktrees to avoid conflicts.
+1. **G2** bare-local-CodeSystem-name → url in `replaceReferences` (carinbb all 31 +
+   genomics Observations + ndh/pas; overlaps mining **N3** Canonical-on-uri). Biggest.
+2. **N1** Quantity/Ratio literal → `pattern[x]` in profiles (key order; valueRatio
+   dropped) — isolated, oracles in `temp/sushi-tests/`.
+3. **G4** `^context` key order (`expression` before `type`) — ~40 ndh SDs.
+4. **N2/N4/N5** decimal serialization, empty-value omission, id/filename sanitization.
+5. **N7** `FSHOnly:true` must suppress the ImplementationGuide resource.
+6. **G5/G9/G10** + remaining holdout tail; **L1** leniency (reject invalid FSH like
+   stock) — tie to the diagnostics effort.
+7. **Scale the mining** to the EXPORT test suite (needs a builder→FSH transpiler or
+   driving stock `fshToFhir`) — deepest untested instance/SD behavior.
+FIXED already: **G1, G3** (T1), **G6** (T2: stock never reads `.index.json`;
+`package_store` directory-reconciles). Diagnostics + acquisition are the owner's
+worktrees, not ours.
 
 ## 1. What we are doing
 
