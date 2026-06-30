@@ -18,7 +18,18 @@ use fsh_model::{
     FilterValue, FshCode, FshCodeSystem, FshDocument, FshValueSet, Rule, Value as FshValue,
     ValueSetComponentFrom,
 };
+use package_store::{FishType, PackageStore};
 use serde_json::{Map, Value as J};
+
+/// `fisher.fishForMetadata(name, ty)?.url` against the FHIR packages — the
+/// fallback when a compose system/valueset isn't a LOCAL CS/VS (e.g. a bare
+/// external name like `ConditionCategoryCodes` resolved from THO).
+fn pkg_url(store: Option<&PackageStore>, name: &str, ty: FishType) -> Option<String> {
+    let base = name.split('|').next().unwrap_or(name);
+    store?
+        .fish_for_metadata(base, &[ty])
+        .and_then(|m| m.get("url").and_then(|u| u.as_str()).map(String::from))
+}
 
 // ---------------------------------------------------------------------------
 // Tank fisher: resolve local ValueSet/CodeSystem names/ids/urls to their url.
@@ -681,7 +692,7 @@ pub struct Exported {
     pub body: J,
 }
 
-pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex) -> Exported {
+pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store: Option<&PackageStore>) -> Exported {
     let id = effective_id(&vs.rules, &vs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -750,7 +761,7 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex) -> Exp
     }
 
     // setCompose.
-    set_compose(&mut obj, vs, tank);
+    set_compose(&mut obj, vs, tank, store);
 
     Exported {
         filename: format!("ValueSet-{}.json", id),
@@ -762,12 +773,14 @@ fn from_to_compose_element(
     from: &ValueSetComponentFrom,
     tank: &TankIndex,
     vs_url: &str,
+    store: Option<&PackageStore>,
 ) -> Map<String, J> {
     let mut ce: Map<String, J> = Map::new();
     if let Some(system) = &from.system {
         let system_parts: Vec<&str> = system.split('|').collect();
         let resolved = tank
             .cs_url(system)
+            .or_else(|| pkg_url(store, system, FishType::CodeSystem))
             .unwrap_or_else(|| system_parts[0].to_string());
         ce.insert("system".into(), J::String(resolved));
         let version = system_parts[1..].join("|");
@@ -779,7 +792,8 @@ fn from_to_compose_element(
         let mapped: Vec<J> = value_sets
             .iter()
             .map(|vs| {
-                let url = match tank.vs_url(vs) {
+                let resolved = tank.vs_url(vs).or_else(|| pkg_url(store, vs, FishType::ValueSet));
+                match resolved {
                     Some(u) => {
                         let version = vs.split('|').skip(1).collect::<Vec<_>>().join("|");
                         if version.is_empty() {
@@ -789,8 +803,7 @@ fn from_to_compose_element(
                         }
                     }
                     None => vs.clone(),
-                };
-                url
+                }
             })
             .filter(|u| u != vs_url)
             .map(J::String)
@@ -883,7 +896,7 @@ fn xor_empty(a: &[String], b: &[String]) -> bool {
 }
 
 /// `setCompose` (`ValueSetExporter.ts:73`).
-fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex) {
+fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, store: Option<&PackageStore>) {
     let components: Vec<&Rule> = vs
         .rules
         .iter()
@@ -904,7 +917,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex) {
                 concepts,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
                 if !concepts.is_empty() {
                     ce.insert("concept".into(), J::Array(compose_concepts(concepts)));
                 }
@@ -916,7 +929,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex) {
                 filters,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
                 if !filters.is_empty() {
                     let f: Vec<J> = filters
                         .iter()
@@ -1226,7 +1239,7 @@ fn insert_into_hierarchy(container: &mut Vec<J>, hierarchy: &[String], concept: 
 // ---------------------------------------------------------------------------
 
 /// Export every ValueSet and CodeSystem from the (already insert-expanded) tank.
-pub fn export_all(docs: &[FshDocument], cfg: &Config) -> Vec<Exported> {
+pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStore>) -> Vec<Exported> {
     // Populate the global alias table so caret-path brackets resolve (shared with
     // the SD exporter). Idempotent; safe to call before/after SD export.
     crate::sd_export::set_aliases(docs);
@@ -1251,7 +1264,7 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config) -> Vec<Exported> {
                 continue;
             }
             seen_vs.push(vs.name.clone());
-            out.push(export_value_set(vs, cfg, &tank));
+            out.push(export_value_set(vs, cfg, &tank, store));
         }
     }
     out

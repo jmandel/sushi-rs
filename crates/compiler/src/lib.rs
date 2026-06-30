@@ -528,15 +528,17 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let resources_dir = Path::new(out_dir).join("fsh-generated").join("resources");
     std::fs::create_dir_all(&resources_dir)?;
 
+    // The FHIR package cache (needed by VS external-name resolution + SD export).
+    let cache_dir = resolve_cache_dir()?;
+    let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
+
     // ValueSets + CodeSystems (Phase 4).
-    for exported in export::export_all(&docs, &cfg) {
+    for exported in export::export_all(&docs, &cfg, Some(&store)) {
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
     }
 
-    // StructureDefinitions (Phase 5/6): needs the FHIR package cache.
-    let cache_dir = resolve_cache_dir()?;
-    let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
+    // StructureDefinitions (Phase 5/6).
     let tank = export::TankIndex::build(&docs, &cfg);
     let vs_url = |s: &str| tank.vs_url(s);
     let cs_url = |s: &str| tank.cs_url(s);
