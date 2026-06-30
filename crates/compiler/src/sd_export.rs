@@ -1742,7 +1742,150 @@ fn constrain_type(
             }
         }
     }
+    // Propagate the type constraint to connected slice elements
+    // (`findConnectedElements`): each slice's type becomes the intersection of
+    // the new types with its current types. Stock only applies the changes when
+    // *every* connected slice yields a non-empty intersection.
+    let connected = connected_slice_ids(sd, ei);
+    if !connected.is_empty() {
+        let mut changes: Vec<(usize, Vec<J>)> = Vec::new();
+        for cid in &connected {
+            let Some(ci) = sd.index_of_id(cid) else { continue };
+            let ce_types: Vec<J> = sd.elements[ci]
+                .get("type")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
+            let inter = find_type_intersection(&new_types, &ce_types, &kind, fisher);
+            if inter.is_empty() {
+                changes.clear();
+                break;
+            }
+            changes.push((ci, inter));
+        }
+        if changes.len() == connected.len() {
+            for (ci, t) in changes {
+                sd.elements[ci].set("type", J::Array(t));
+            }
+        }
+    }
     sd.elements[ei].set("type", J::Array(new_types));
+}
+
+/// Slice elements connected to element `ei` (`findConnectedElements`, direct
+/// slices only): same path, id prefixed with `{ei.id}:`, max != "0".
+fn connected_slice_ids(sd: &StructureDefinition, ei: usize) -> Vec<String> {
+    let base_id = sd.elements[ei].id().to_string();
+    let base_path = sd.elements[ei].path().to_string();
+    let prefix = format!("{base_id}:");
+    sd.elements
+        .iter()
+        .filter(|e| {
+            let id = e.id();
+            id != base_id
+                && e.path() == base_path
+                && id.starts_with(&prefix)
+                && e.get("max").and_then(|v| v.as_str()) != Some("0")
+        })
+        .map(|e| e.id().to_string())
+        .collect()
+}
+
+/// `findTypeMatch` for a plain type name (no Reference/canonical keyword) against
+/// a set of existing element types. Returns the candidate's own metadata
+/// (`lineage[0]`) paired with the matched element-type code, mirroring stock.
+fn find_type_match_plain(
+    type_name: &str,
+    right_types: &[J],
+    kind: &str,
+    fisher: &dyn Fisher,
+) -> Option<Match> {
+    let lineage = get_type_lineage(type_name, fisher);
+    if lineage.is_empty() {
+        return None;
+    }
+    for md in &lineage {
+        let md_url = md.url.clone().unwrap_or_default();
+        let md_sdtype = md.sd_type.clone().unwrap_or_default();
+        let versioned = format!("{md_url}|{}", md.version.clone().unwrap_or_default());
+        for rt in right_types {
+            let c = type_code(rt).to_string();
+            let profiles: Vec<String> = rt
+                .get("profile")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let matches_unprofiled = c == md.id && profiles.is_empty();
+            let anc = get_type_lineage(&md_sdtype, fisher);
+            let matches_profile = anc.iter().any(|a| a.sd_type.as_deref() == Some(c.as_str()))
+                && (profiles.contains(&md_url) || profiles.contains(&versioned));
+            let matches_logical = kind == "logical" && !c.is_empty() && c == md_sdtype;
+            if matches_unprofiled || matches_profile || matches_logical {
+                return Some(Match { metadata: lineage[0].clone(), code: c });
+            }
+        }
+    }
+    None
+}
+
+/// `applyTypeIntersection` (targetType == None): group matches by their grouping
+/// code, then build one constrained type per group.
+fn apply_type_intersection(left: &J, matches: &[Match], kind: &str) -> Vec<J> {
+    let mut groups: Vec<(String, Vec<&Match>)> = Vec::new();
+    for m in matches {
+        let group_code = if is_reference_type(&m.code) || m.code == "canonical" {
+            m.code.clone()
+        } else {
+            m.metadata.sd_type.clone().unwrap_or_else(|| m.code.clone())
+        };
+        if let Some(g) = groups.iter_mut().find(|(k, _)| *k == group_code) {
+            g.1.push(m);
+        } else {
+            groups.push((group_code, vec![m]));
+        }
+    }
+    let mut out = Vec::new();
+    for (group_code, gmatches) in groups {
+        let mut nt = left.clone();
+        let actual = left.get("code").and_then(|v| v.as_str()).unwrap_or("");
+        if !actual.starts_with("http://hl7.org/fhirpath/System.") {
+            if let Some(o) = nt.as_object_mut() {
+                o.insert("code".into(), J::String(group_code.clone()));
+            }
+        }
+        apply_profiles(&mut nt, &gmatches, kind);
+        out.push(nt);
+    }
+    out
+}
+
+/// `findTypeIntersection` — intersect `left_types` (the newly-constrained parent
+/// types) with `right_types` (a connected slice's current types).
+fn find_type_intersection(
+    left_types: &[J],
+    right_types: &[J],
+    kind: &str,
+    fisher: &dyn Fisher,
+) -> Vec<J> {
+    let mut intersection: Vec<J> = Vec::new();
+    for left in left_types {
+        let lcode = type_code(left).to_string();
+        let lprofiles: Vec<String> = left
+            .get("profile")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        let types_to_try: Vec<String> =
+            if lprofiles.is_empty() { vec![lcode] } else { lprofiles };
+        let mut matches: Vec<Match> = Vec::new();
+        for tt in &types_to_try {
+            if let Some(m) = find_type_match_plain(tt, right_types, kind, fisher) {
+                matches.push(m);
+            }
+        }
+        intersection.extend(apply_type_intersection(left, &matches, kind));
+    }
+    intersection
 }
 
 /// `applyProfiles` (targetType == None branch).
