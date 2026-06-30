@@ -8,7 +8,7 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **THE VALIDATION CORPUS IS THE 12 IGs (2065 resources) in `harness/full-dashboard.sh`.
-SCORE = that total; LEAD WITH IT.** Currently **2042/2065 (98.9%)** (`main` ~`b7515b7`+).
+SCORE = that total; LEAD WITH IT.** Currently **2052/2065 (99.4%)** (`main` ~`743fa0b`+; 8/12 IGs byte-identical).
 Session start was 1800. **Non-regression = none of the 12 IGs may drop** (ips/epi/mcode/crd/
 carinbb/sdc/pas/dtr/genomics/ecr/cmc/ndh — an R4 + R5 + R4B mix). Do NOT single out the old
 4-IG "665" subset as a "floor"/headline — that framing is RETIRED; all 12 are the corpus.

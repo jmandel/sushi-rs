@@ -130,3 +130,26 @@ Ratio pattern — corpus-invisible, mining fixtures), N7 (FSHOnly IG — DONE, i
 **Round-2 (after R1 lands + rebase):** G4 (42, sd_export), G13 (16, instance_export),
 then G9 (contained/Parameters truncation — sdc/ecr/genomics Bundles), G5 (derived url —
 dtr/pas), G8/G10 tail. G4+G13 are pure-ordering, ~58 fails, very high ROI for round 2.
+
+## Remaining 13 fails @ 2052/2065 (2026-06-30) — the deep tail
+8/12 IGs byte-identical (ips/epi/mcode/crd/carinbb/genomics/cmc/ndh). Remaining:
+- **sdc 3** (`Questionnaire-*-{form-behavior,multi-subject,PHQ9}`), **pas 4** (`Bundle-*`,
+  `ClaimResponse-*`), **dtr 3-4** (`Bundle-home-o2-*`, `Parameters-*`, `Questionnaire-home-o2`),
+  **ecr 2** (`Bundle-bundle-ersd-{specification,supplemental}-example`).
+
+**Root Cause C (the big one) — shared mutable `InstanceExporter.sdCache`.** Stock stores
+ONE mutable `StructureDefinition` per profile url (`InstanceExporter.ts:822-826`) and reuses
+it across ALL instances of that profile, so `unfold`/`constrainCardinality`/`createUsefulSlices`
+mutations from an EARLIER instance PERSIST and let a later value-less instance see the
+unfolded children (e.g. a required extension scaffold `item.extension=[{url:...,extension:[{url:...}]}]`
+with no value). Stock's output is therefore ORDER-DEPENDENT by design. We hand each instance a
+fresh clone of a pristine template (`fish_sd_template`), so mutations never carry over → required
+value-less extension scaffolds are dropped → pas/dtr fail. **Aligned fix = adopt the shared
+per-url sdCache.** BUT a direct attempt (inst2 agent) regressed sdc −7 / cmc −1: our
+`unfold`/`createUsefulSlices`/`validateValueAtPath` SD-mutations are NOT yet byte-equal to
+stock's, and the per-instance clone was MASKING those latent divergences. So C requires FIRST
+reconciling our SD-mutation helpers with stock exactly, THEN switching to the shared cache.
+Substantial, high-risk — sequence it as its own careful effort (minimal repro: a pas
+`RejectionResponseExample`-style value-less required extension, plus the sdc manualSliceOrdering
+corruption that appeared under sharing). The ecr ersd Bundles + sdc Questionnaire-content cases
+may be separate sub-causes — re-triage after C.
