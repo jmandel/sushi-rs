@@ -916,12 +916,43 @@ impl StructureDefinition {
         let parent_id = self.elements[idx].id().to_string();
         if self.elements[idx].slice_name().is_some() {
             if let Some(sliced_id) = self.sliced_element_id(&parent_id) {
-                let child_ids = self.children_ids(&sliced_id);
-                if !child_ids.is_empty() {
-                    // sliceName unfold uses cloneChildren(slicedElement, false):
-                    // slice extensions keep their inherited original so they still
-                    // appear as diffs in the slice (ElementDefinition.ts:2742).
-                    return self.clone_children_from(&sliced_id, &parent_id, idx, false);
+                // Stock only clones children from the sliced (generic) element when
+                // EITHER this slice has no profile of its own, OR its single profile
+                // equals the sliced element's single profile. Otherwise it leaves
+                // newElements empty and falls through to fishing this slice's profile,
+                // so profile-specific fixed values (notably an extension slice's `url`
+                // fixedUri) get applied. Cloning unconditionally from a sliced element
+                // that was already unfolded (e.g. a sibling generic `extension[+]`
+                // forced it) drops the slice's `url` fixedUri.
+                // (ElementDefinition.ts:2736-2748)
+                let clone_from_sliced = match &profile_to_use {
+                    None => true,
+                    Some(p) => {
+                        if let Some(si) = self.index_of_id(&sliced_id) {
+                            let types = self.elements[si].get("type").and_then(|v| v.as_array());
+                            let one_type = types.map(|a| a.len() == 1).unwrap_or(false);
+                            let sliced_profiles: Vec<String> = types
+                                .and_then(|a| a.first())
+                                .and_then(|t| t.get("profile"))
+                                .and_then(|pr| pr.as_array())
+                                .map(|a| {
+                                    a.iter().filter_map(|v| v.as_str().map(String::from)).collect()
+                                })
+                                .unwrap_or_default();
+                            one_type && sliced_profiles.len() == 1 && &sliced_profiles[0] == p
+                        } else {
+                            false
+                        }
+                    }
+                };
+                if clone_from_sliced {
+                    let child_ids = self.children_ids(&sliced_id);
+                    if !child_ids.is_empty() {
+                        // sliceName unfold uses cloneChildren(slicedElement, false):
+                        // slice extensions keep their inherited original so they still
+                        // appear as diffs in the slice (ElementDefinition.ts:2742).
+                        return self.clone_children_from(&sliced_id, &parent_id, idx, false);
+                    }
                 }
             }
         }
