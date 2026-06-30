@@ -2895,6 +2895,13 @@ struct Exporter<'a> {
     /// clone (cheap: element maps are shared `Rc`s until a write forks them, and
     /// the template's lazy id-index stays `None` so clones don't copy it).
     sd_cache: std::cell::RefCell<HashMap<String, Option<Rc<StructureDefinition>>>>,
+    /// Names in the order their export first *completes*, mirroring stock's
+    /// `this.pkg.instances.push(...)` at the end of `exportInstance`. Because an
+    /// inline-assigned instance (`entry.resource = X`) is exported recursively
+    /// mid-rule, its push lands before the container's — so this captures the
+    /// dependency-before-dependent ordering that breaks ties in the IG resource
+    /// list (`sortResources` is a stable sort keyed on name).
+    complete_order: std::cell::RefCell<Vec<String>>,
 }
 
 /// Wraps a fisher so that the queried name is alias-resolved first, mirroring
@@ -3021,10 +3028,18 @@ pub fn export_instances(
         memo: std::cell::RefCell::new(HashMap::new()),
         exported_conformance: index_conformance(conformance),
         sd_cache: std::cell::RefCell::new(HashMap::new()),
+        complete_order: std::cell::RefCell::new(Vec::new()),
     };
 
-    let mut out = Vec::new();
+    // First pass: export every instance in FSH-definition order. Inline-assigned
+    // instances are exported recursively, so `complete_order` ends up holding
+    // names in stock's `pkg.instances` push order (dependency before dependent).
     for name in &order {
+        exporter.export(name);
+    }
+    let mut out = Vec::new();
+    let complete = exporter.complete_order.borrow().clone();
+    for name in &complete {
         if let Some(e) = exporter.export(name) {
             if e.write {
                 out.push(InstanceExport {
@@ -3084,6 +3099,7 @@ pub fn export_inline_instance(ctx: &SdContext, name: &str) -> Option<(J, String)
         memo: std::cell::RefCell::new(HashMap::new()),
         exported_conformance: HashMap::new(),
         sd_cache: std::cell::RefCell::new(HashMap::new()),
+        complete_order: std::cell::RefCell::new(Vec::new()),
     };
     exporter.fish_instance_typed(name)
 }
@@ -3146,6 +3162,8 @@ impl<'a> Exporter<'a> {
         self.memo.borrow_mut().insert(name.to_string(), None);
         let result = self.export_compute(name);
         self.memo.borrow_mut().insert(name.to_string(), result.clone());
+        // Record completion order (stock pushes to pkg.instances here).
+        self.complete_order.borrow_mut().push(name.to_string());
         result
     }
 

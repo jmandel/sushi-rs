@@ -1166,30 +1166,54 @@ fn build_resources(
     }
 
     // normalizeResourceReferences: group resources that are bare names resolve to
-    // `Type/id` (fished against the package). Resolve against the built entries.
+    // `Type/id` (fished against the package by name/id/url, matching stock's
+    // `normalizeResourceReference` → `fishForFHIR`). Resolve against the FSH inputs.
+    let mut name_to_ref: HashMap<String, String> = HashMap::new();
     let mut id_to_ref: HashMap<String, String> = HashMap::new();
+    let mut url_to_ref: HashMap<String, String> = HashMap::new();
+    for c in &inputs.conformance {
+        if let Some((_, id)) = c.reference_key.split_once('/') {
+            id_to_ref.entry(id.to_string()).or_insert_with(|| c.reference_key.clone());
+        }
+        if let Some(n) = &c.fhir_name {
+            name_to_ref.entry(n.clone()).or_insert_with(|| c.reference_key.clone());
+        }
+        if let Some(u) = &c.url {
+            url_to_ref.entry(u.clone()).or_insert_with(|| c.reference_key.clone());
+        }
+    }
+    for inst in &inputs.instances {
+        if let Some((_, id)) = inst.reference_key.split_once('/') {
+            id_to_ref.entry(id.to_string()).or_insert_with(|| inst.reference_key.clone());
+        }
+        if let Some(n) = &inst.name {
+            name_to_ref.entry(n.clone()).or_insert_with(|| inst.reference_key.clone());
+        }
+    }
+    // Also let any built entry resolve by its id (covers predefined resources).
     for e in &entries {
         if let Some((_, id)) = e.reference_key.split_once('/') {
             id_to_ref.entry(id.to_string()).or_insert_with(|| e.reference_key.clone());
         }
     }
+    let resolve_ref = |r: &str| -> String {
+        if r.contains('/') || r.contains(':') {
+            return r.to_string();
+        }
+        name_to_ref
+            .get(r)
+            .or_else(|| id_to_ref.get(r))
+            .or_else(|| url_to_ref.get(r))
+            .cloned()
+            .unwrap_or_else(|| r.to_string())
+    };
     let groups: Vec<Group> = groups
         .iter()
         .map(|g| Group {
             id: g.id.clone(),
             name: g.name.clone(),
             description: g.description.clone(),
-            resources: g
-                .resources
-                .iter()
-                .map(|r| {
-                    if r.contains('/') || r.contains(':') {
-                        r.clone()
-                    } else {
-                        id_to_ref.get(r).cloned().unwrap_or_else(|| r.clone())
-                    }
-                })
-                .collect(),
+            resources: g.resources.iter().map(|r| resolve_ref(r)).collect(),
         })
         .collect();
     let groups = &groups[..];
