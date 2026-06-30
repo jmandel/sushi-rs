@@ -1027,7 +1027,7 @@ fn set_rules(
                 assign_value(sd, ei, resolved.as_ref().unwrap_or(value), *exactly, fisher);
             }
             Rule::Flag { flags, .. } => {
-                apply_flags(&mut sd.elements[ei], flags, sd_derivation_specialization(kind), diag);
+                apply_flags_sd(sd, ei, flags, sd_derivation_specialization(kind), diag);
             }
             Rule::Only { types, .. } => {
                 let target = get_reference_or_canonical_name(path);
@@ -1190,6 +1190,38 @@ fn constrain_cardinality(ed: &mut ElementDefinition, min: Option<i64>, max: &str
     }
     if let Some(m) = new_max {
         ed.set("max", J::String(m));
+    }
+}
+
+/// `applyFlags` plus connected-element propagation: mustSupport flows to
+/// connected elements that aren't themselves slices (or share this element's
+/// slice name); isSummary/isModifier flow to every connected element.
+fn apply_flags_sd(
+    sd: &mut StructureDefinition,
+    ei: usize,
+    flags: &fsh_model::Flags,
+    specialization: bool,
+    diag: &mut Vec<String>,
+) {
+    apply_flags(&mut sd.elements[ei], flags, specialization, diag);
+    if !(flags.must_support || flags.summary || flags.modifier) {
+        return;
+    }
+    let this_slice = sd.elements[ei].slice_name().map(String::from);
+    for cid in find_connected_element_ids(sd, ei) {
+        let Some(ci) = sd.index_of_id(&cid) else { continue };
+        if flags.must_support && !specialization {
+            let ce_slice = sd.elements[ci].slice_name().map(String::from);
+            if ce_slice.is_none() || ce_slice == this_slice {
+                sd.elements[ci].set("mustSupport", J::Bool(true));
+            }
+        }
+        if flags.summary {
+            sd.elements[ci].set("isSummary", J::Bool(true));
+        }
+        if flags.modifier {
+            sd.elements[ci].set("isModifier", J::Bool(true));
+        }
     }
 }
 
