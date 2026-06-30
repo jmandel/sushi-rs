@@ -787,7 +787,7 @@ impl StructureDefinition {
         }
     }
 
-    /// `findMatchingSlice` (simplified: direct + url-encode retry).
+    /// `findMatchingSlice` (direct match + connected-slice fallback).
     fn find_matching_slice(
         &mut self,
         fhir_path: &str,
@@ -796,7 +796,7 @@ impl StructureDefinition {
         _fisher: &dyn Fisher,
     ) -> Option<String> {
         let slice_name = part.brackets.join("/");
-        elements
+        if let Some(id) = elements
             .iter()
             .find(|id| {
                 self.path_of_id(id).unwrap_or("") == fhir_path
@@ -806,6 +806,59 @@ impl StructureDefinition {
                         .unwrap_or(false)
             })
             .cloned()
+        {
+            return Some(id);
+        }
+        // Connected-slice fallback (StructureDefinition.ts:888-905): when the current
+        // element is a child of a slice, the requested slice may be defined on the
+        // *unsliced* (connected) sibling element rather than under this slice. e.g.
+        // `adjudication[amounttype].extension[reviewAction]` where the `reviewAction`
+        // extension slice lives on the generic `adjudication.extension`. Clone the
+        // matching slice from the connected element onto this slice's path so the
+        // path (and its later unfold) resolves.
+        if part.brackets.len() == 1 {
+            for e_id in elements {
+                let Some(connected) = self.find_connected_slice_element_id(e_id, "") else {
+                    continue;
+                };
+                let Some(ci) = self.index_of_id(&connected) else { continue };
+                let slice_idx = self.get_slices(ci).find(|&j| {
+                    self.elements[j].path() == fhir_path
+                        && self.elements[j].slice_name() == Some(slice_name.as_str())
+                });
+                if let Some(si) = slice_idx {
+                    let mut new_el = self.elements[si].clone();
+                    let new_id = format!("{e_id}:{slice_name}");
+                    new_el.set_id(new_id.clone());
+                    // Copy the connected element's slicing onto this element if absent.
+                    if let Some(ei) = self.index_of_id(e_id) {
+                        if self.elements[ei].get("slicing").is_none() {
+                            if let Some(sl) = self.elements[ci].get("slicing").cloned() {
+                                self.elements[ei].set("slicing", sl);
+                            }
+                        }
+                    }
+                    self.add_element(new_el);
+                    return Some(new_id);
+                }
+            }
+        }
+        None
+    }
+
+    /// `findConnectedSliceElement` (ElementDefinition.ts:1019-1027): walk up until
+    /// we reach a slice, then return the corresponding element on the *unsliced*
+    /// sliced root (`slicedElement().id + postPath`).
+    fn find_connected_slice_element_id(&self, id: &str, post_path: &str) -> Option<String> {
+        // slicedElement() is non-null iff this id's last path segment is a slice.
+        if let Some(root) = self.sliced_element_id(id) {
+            let target = format!("{root}{post_path}");
+            return self.index_of_id(&target).map(|_| target);
+        }
+        let path = self.path_of_id(id)?;
+        let last_seg = path.rsplit('.').next()?.to_string();
+        let parent = id.rfind('.').map(|i| id[..i].to_string())?;
+        self.find_connected_slice_element_id(&parent, &format!(".{last_seg}{post_path}"))
     }
 
     /// `findMatchingSlice` fishForFHIR branch (StructureDefinition.ts:907-913):
