@@ -8,7 +8,7 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE = the full 12-IG `harness/full-dashboard.sh` total. LEAD WITH IT.** Currently
-**2013/2065 (97.5%)** (`main` ~`fc199cd`+; SD-tail's 7 fixes integrated +26). Session start was 1800. The "665"
+**2031/2065 (98.4%)** (`main` ~`016c443`+; G13 instance-order +18). Session start was 1800. The "665"
 (ips/epi/mcode/crd) is only the 4-IG **non-regression FLOOR** — a guard rail that must
 never drop, NOT the headline. During parallel fixes the fast `harness/gate1.sh` runs
 floor + a fix's target IGs only (to keep worktrees cheap); ALWAYS re-run the FULL
