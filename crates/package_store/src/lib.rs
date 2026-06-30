@@ -85,6 +85,10 @@ pub struct PackageStore {
     by_id: FxHashMap<String, Vec<usize>>,
     by_url: FxHashMap<String, Vec<usize>>,
     by_name: FxHashMap<String, Vec<usize>>,
+    /// Parse cache: a resource file is read+parsed once, then shared. SUSHI's
+    /// FHIRDefinitions holds all defs in memory; we lazily memoize. Single-threaded
+    /// build, so RefCell is fine. (Avoids re-parsing core SDs hundreds of times.)
+    cache: std::cell::RefCell<FxHashMap<usize, std::rc::Rc<Value>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +338,7 @@ impl PackageStore {
             by_id: FxHashMap::default(),
             by_url: FxHashMap::default(),
             by_name: FxHashMap::default(),
+            cache: std::cell::RefCell::new(FxHashMap::default()),
         };
         let mut seq = 0usize;
         for (id, version) in &load_list {
@@ -428,11 +433,22 @@ impl PackageStore {
         })
     }
 
+    /// Read+parse a resource file once, memoized (core SDs are fished hundreds of
+    /// times during a build; re-parsing dominated wall time before this cache).
+    fn read_value(&self, idx: usize) -> Option<std::rc::Rc<Value>> {
+        if let Some(v) = self.cache.borrow().get(&idx) {
+            return Some(v.clone());
+        }
+        let bytes = std::fs::read(&self.entries[idx].path).ok()?;
+        let v = std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?);
+        self.cache.borrow_mut().insert(idx, v.clone());
+        Some(v)
+    }
+
     /// `fishForFHIR(item, ...types)` — returns the full resource JSON.
     pub fn fish_for_fhir(&self, item: &str, types: &[FishType]) -> Option<Value> {
         let idx = self.resolve(item, types)?;
-        let bytes = std::fs::read(&self.entries[idx].path).ok()?;
-        serde_json::from_slice(&bytes).ok()
+        self.read_value(idx).map(|v| (*v).clone())
     }
 
     /// `fishForMetadata(item, ...types)` — the `Metadata` object SUSHI emits
@@ -440,10 +456,9 @@ impl PackageStore {
     /// falsy-omission match the oracle.
     pub fn fish_for_metadata(&self, item: &str, types: &[FishType]) -> Option<Value> {
         let idx = self.resolve(item, types)?;
+        let cached = self.read_value(idx);
         let entry = &self.entries[idx];
-        let value: Option<Value> = std::fs::read(&entry.path)
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok());
+        let value: Option<Value> = cached.map(|v| (*v).clone());
 
         let mut out = Map::new();
         // id
