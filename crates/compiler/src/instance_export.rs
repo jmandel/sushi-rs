@@ -687,6 +687,33 @@ fn validate_value_at_path(
         }
 
         let cur = current_idx?;
+
+        // If the element is an extension and we found it via some identifier other
+        // than its sliceName (e.g. the extension's canonical url), rewrite the path
+        // to use the sliceName — the user's intent (StructureDefinition.ts:671-681).
+        // This makes the assembled rule path (and the `paths` array driving
+        // setImpliedPropertiesOnInstance) carry the sliceName, so the slice's fixed
+        // children (notably the extension's fixed `url`) are recognized and emitted.
+        if is_extension_base(&path_parts[i].base) {
+            let slices_joined = get_slice_name(&path_parts[i]);
+            if !slices_joined.is_empty() {
+                if let Some(sn) = el_slice_name(sd, cur) {
+                    if sn != slices_joined {
+                        let numeric: Vec<String> = path_parts[i]
+                            .brackets
+                            .iter()
+                            .filter(|b| !b.is_empty() && b.chars().all(|c| c.is_ascii_digit()))
+                            .cloned()
+                            .collect();
+                        let mut new_brackets: Vec<String> =
+                            sn.split('/').map(|s| s.to_string()).collect();
+                        new_brackets.extend(numeric);
+                        path_parts[i].brackets = new_brackets;
+                    }
+                }
+            }
+        }
+
         let max = el_max(sd, cur).map(|s| s.to_string());
         // Cannot resolve if max==0 or array index out of bounds.
         if max.as_deref() == Some("0") {
