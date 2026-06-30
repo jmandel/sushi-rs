@@ -539,17 +539,38 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
             package_id
         };
 
+        // Replace a legacy cross-version extensions package with the official xver
+        // package in the emitted dependsOn (fixCrossVersionDependencies, called from
+        // IGExporter.ts:230). The substitution forces packageId, version=`latest`
+        // (later resolved to the installed version), and the canonical xver uri.
+        let raw_cfg_version = match val {
+            Y::String(_) | Y::Number(_) => ystr(val),
+            Y::Mapping(_) => yget(val, "version").and_then(ystr),
+            _ => None,
+        };
+        let xver = raw_cfg_version
+            .as_deref()
+            .and_then(|v| package_store::xver_substitution(&package_id, v));
+        let package_id = match &xver {
+            Some((xid, _, _)) => xid.clone(),
+            None => package_id,
+        };
+        let forced_uri = xver.as_ref().map(|(_, _, u)| u.clone());
+
         // Parse config entry preserving key order: id, packageId, uri, version, (reason/extension).
         let mut entry: Vec<(String, J)> = Vec::new();
         let mut reason: Option<String> = None;
         let mut version: Option<String> = None;
-        let mut uri: Option<String> = None;
+        let mut uri: Option<String> = forced_uri.clone();
         let mut id: Option<String> = None;
         let mut explicit_ext: Option<J> = None;
 
         match val {
             Y::String(_) | Y::Number(_) => {
-                version = ystr(val);
+                version = match &xver {
+                    Some((_, v, _)) => Some(v.clone()),
+                    None => ystr(val),
+                };
                 entry.push(("packageId".into(), J::String(package_id.clone())));
                 if let Some(v) = &version {
                     entry.push(("version".into(), J::String(v.clone())));
@@ -557,8 +578,11 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
             }
             Y::Mapping(_) => {
                 id = yget_str(val, "id");
-                uri = yget_str(val, "uri");
-                version = yget(val, "version").and_then(ystr);
+                uri = forced_uri.clone().or_else(|| yget_str(val, "uri"));
+                version = match &xver {
+                    Some((_, v, _)) => Some(v.clone()),
+                    None => yget(val, "version").and_then(ystr),
+                };
                 reason = yget_str(val, "reason");
                 explicit_ext = yget(val, "extension").map(yaml_to_json);
                 // removeUndefinedValues: build in order id, packageId, uri, version, [extension]
@@ -617,13 +641,18 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
         let resolved_version =
             resolve_depends_on_version(cache_dir, &package_id, &raw_version, &mut entry);
 
-        // uri: resolve if missing.
-        if uri.is_none() {
-            let resolved = find_dependency_ig_url(cache_dir, &package_id, &resolved_version)
-                .or_else(|| find_package_canonical(cache_dir, &package_id, &resolved_version))
-                .unwrap_or_else(|| {
-                    format!("http://fhir.org/packages/{package_id}/ImplementationGuide/{package_id}")
-                });
+        // uri: push when not already present in the entry. A forced (xver
+        // substitution) uri or, for a string-form dependency, a resolved one.
+        if !entry.iter().any(|(k, _)| k == "uri") {
+            let resolved = uri.clone().unwrap_or_else(|| {
+                find_dependency_ig_url(cache_dir, &package_id, &resolved_version)
+                    .or_else(|| find_package_canonical(cache_dir, &package_id, &resolved_version))
+                    .unwrap_or_else(|| {
+                        format!(
+                            "http://fhir.org/packages/{package_id}/ImplementationGuide/{package_id}"
+                        )
+                    })
+            });
             entry.push(("uri".into(), J::String(resolved)));
         }
 

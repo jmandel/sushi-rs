@@ -166,6 +166,19 @@ fn fix_cross_version_dep(package_id: &str, version: Option<String>) -> (String, 
     (package_id.to_string(), version)
 }
 
+/// Public form of `fixCrossVersionDependencies` (Processing.ts:540-568) for the
+/// IG `dependsOn` exporter. Given a configured dependency's `(package_id, version)`,
+/// returns the official xver package `(packageId, "latest", uri)` when `package_id`
+/// is a legacy `hl7.fhir.extensions.r{N}` package, else `None`.
+pub fn xver_substitution(package_id: &str, version: &str) -> Option<(String, String, String)> {
+    let source = legacy_xver_source(package_id)?;
+    let name = fhir_version_info(version).1;
+    let target = name.replace("DSTU", "r").replace("STU", "r").to_lowercase();
+    let id = format!("hl7.fhir.uv.xver-{source}.{target}");
+    let uri = format!("http://hl7.org/fhir/uv/xver/ImplementationGuide/{id}");
+    Some((id, "latest".to_string(), uri))
+}
+
 fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
     let cfg_path = Path::new(ig_dir).join("sushi-config.yaml");
     let text = std::fs::read_to_string(&cfg_path)
