@@ -1192,6 +1192,26 @@ fn set_implied_properties_on_instance(
 ) {
     // normalize reslice style
     let paths: Vec<String> = paths.iter().map(|p| p.replace('/', "][")).collect();
+
+    // Index `paths` so the per-node "does any rule path lie at-or-under this
+    // trace_path" test is an O(1) lookup instead of a linear scan with
+    // path_eq_or_under (this scan was the dominant self-cost: the BFS visits
+    // many nodes and `paths` can be sizeable). For a rule path P, the set of
+    // base/trace_paths T for which path_eq_or_under(P, T) holds is exactly P
+    // itself plus each of its component-prefixes (the slices of P ending right
+    // before a literal '.'). Map every such key to the FIRST (paths-order)
+    // matching index, preserving `find`'s first-match semantics so we can still
+    // recover the matched path for the assigned_resource_paths check.
+    let mut first_match_path: HashMap<&str, usize> = HashMap::with_capacity(paths.len() * 2);
+    for (i, p) in paths.iter().enumerate() {
+        first_match_path.entry(p.as_str()).or_insert(i);
+        for (j, &b) in p.as_bytes().iter().enumerate() {
+            if b == b'.' {
+                first_match_path.entry(&p[..j]).or_insert(i);
+            }
+        }
+    }
+
     let mut sd_rule_map: Vec<(String, J)> = Vec::new();
     let mut requirement_roots: HashMap<String, String> = HashMap::new();
     let mut assigned_value_storage: HashMap<String, J> = HashMap::new();
@@ -1241,10 +1261,7 @@ fn set_implied_properties_on_instance(
         }
         let final_min = *effective_mins.get(&trace_path).unwrap_or(&0);
 
-        let matching_rule = paths
-            .iter()
-            .find(|p| path_eq_or_under(p, &trace_path))
-            .cloned();
+        let matching_idx = first_match_path.get(trace_path.as_str()).copied();
 
         // assigned value (fixed*/pattern*)
         let assigned_value_key = sd.elements[cur_idx]
@@ -1351,8 +1368,8 @@ fn set_implied_properties_on_instance(
                     });
                 }
             }
-        } else if matching_rule.is_some() || cur_min > 0 {
-            if let (Some(_), Some(fa)) = (&matching_rule, &found_assigned) {
+        } else if matching_idx.is_some() || cur_min > 0 {
+            if let (Some(_), Some(fa)) = (matching_idx, &found_assigned) {
                 if !current.ghost {
                     sd_rule_map.push((trace_path.clone(), fa.clone()));
                     requirement_roots.insert(trace_path.clone(), current.requirement_root.clone());
@@ -1360,9 +1377,8 @@ fn set_implied_properties_on_instance(
             }
             let mut children: Vec<String> =
                 children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
-            let is_assigned_resource = matching_rule
-                .as_ref()
-                .map(|m| assigned_resource_paths.contains(m))
+            let is_assigned_resource = matching_idx
+                .map(|m| assigned_resource_paths.contains(&paths[m]))
                 .unwrap_or(false);
             if children.is_empty() && !is_assigned_resource {
                 sd.unfold_by_id(&current.id, fisher);
@@ -1370,7 +1386,7 @@ fn set_implied_properties_on_instance(
                 children = children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
             }
             let child_hist = join_seg(&current.history, &next_trace);
-            let ghost = matching_rule.is_none();
+            let ghost = matching_idx.is_none();
             for child in &children {
                 let child_min = sd.find_element(child).map(|i| el_min(sd, i)).unwrap_or(0);
                 let rr = if child_min > 0 {
