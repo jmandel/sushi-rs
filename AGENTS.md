@@ -7,13 +7,25 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
-**Where we are:** the port emits **byte-identical FHIR output** vs stock SUSHI v3.20.0
-for the 4 tuning IGs (ips/epi/mcode/crd = **665/665**, the non-regression floor). Perf
-week DONE — sub-second warm builds (ips 0.74 / epi 0.58 / mcode 0.84 / crd 0.66s; ~50×
-stock). **Now: generalization hardening** against 8 *holdout* IGs (unseen), gated by
-`harness/full-dashboard.sh` (12 IGs). Verified score **1800/2065 (87.2%)** (T1+T2
-integrated). holdout bugs catalogued in `docs/holdout-findings.md` (G1..G12); mining
-bugs in `docs/mining-findings.md` (N1..N7, L1). `main` HEAD `5902198`.
+**SCORE = the full 12-IG `harness/full-dashboard.sh` total. LEAD WITH IT.** Currently
+**1842/2065 (89.2%)**. The "665" (ips/epi/mcode/crd) is only the 4-IG **non-regression
+FLOOR** — a guard rail that must never drop, NOT the headline. During parallel fixes the
+fast `harness/gate1.sh` runs floor + a fix's target IGs only (to keep worktrees cheap);
+always re-run the FULL dashboard after integrating and report the 2065 total.
+NOTE: some fixes are **corpus-invisible** (no dashboard IG exercises them) and don't move
+the 2065 number even when correct — verify those via their `temp/sushi-tests/` fixtures
+and say so explicitly (e.g. N1 Quantity/Ratio profile pattern, N7 FSHOnly).
+
+**Where we are:** byte-identical vs stock SUSHI v3.20.0 on the 4 tuning IGs (665/665).
+Perf week DONE — sub-second warm builds (ips 0.74 / epi 0.58 / mcode 0.84 / crd 0.66s;
+~50× stock). **Now: generalization hardening** against 8 *holdout* IGs (unseen). holdout
+bugs in `docs/holdout-findings.md` (G1..G13 + failure taxonomy); mining bugs in
+`docs/mining-findings.md` (N1..N7, L1). `main` HEAD `4949b82`.
+FIXED & integrated this round: **N7** (FSHOnly suppresses IG, corpus-invisible), **G4**
+(`Context:` keyword source order, +42: ndh/ecr/cmc), **N1** (Quantity/Ratio→pattern[x],
+corpus-invisible, 12/12 fixtures). **G2 in flight** (worktree `../sushi-rs-g2`, biggest
+lever ≈100 fails). Round-2 queued: **G13** (instance `extension` position, 16 sdc),
+then G9/G5/G8/G10 tail (see taxonomy in holdout-findings.md).
 
 **NO OUR-OWNED background agents running right now** (T1 + the mining pilot both DONE
 and integrated/recorded). Both were:
