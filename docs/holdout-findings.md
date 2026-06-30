@@ -89,7 +89,13 @@ KEY-ORDER class (58, semantically identical to stock — mechanical ordering fix
 - **G13 (NEW) instance `extension` property position — 16** (all sdc). Stock places
   `extension` right after `meta` (DomainResource order); we shove it down past the
   content elements (e.g. after `item`/`parameter`). Affects Questionnaire/Library
-  instances. Fix in `instance_export` property ordering.
+  instances. **Fix:** `order_instance` (`instance_export.rs:2811`) pins only
+  `[resourceType,id,meta]` then keeps insertion order; extend the prefix to the full
+  Resource/DomainResource leading block in FHIR order —
+  `resourceType,id,meta,implicitRules,language,text,contained,extension,modifierExtension`
+  (each with its `_`-sibling). Verified stock order from sdc `render` example:
+  `...meta, contained, extension, modifierExtension, item ...` (contained BEFORE
+  extension). Gate corpus — only MOVES these keys earlier; corpus must hold.
 
 SEMANTIC class (207) by IG:
 - **carinbb 31 — ALL G2** (system bare-name + duplicate-coding merge).
