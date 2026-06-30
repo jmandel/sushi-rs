@@ -696,10 +696,111 @@ pub fn export_value_set(
     // setCompose.
     set_compose(&mut obj, vs, tank, store);
 
+    // setConceptCaretRules (`ValueSetExporter.ts:441`): concept-level carets
+    // (`* system#code ^designation...`) whose `path_array` carries the concept's
+    // `system#code`. These run AFTER setCompose so the targeted concept already
+    // exists in `compose.include[]`/`compose.exclude[]`.
+    let concept_carets: Vec<&Rule> = resolved_rules
+        .iter()
+        .filter(|r| matches!(r, Rule::CaretValue { path_array, .. } if !path_array.is_empty()))
+        .collect();
+    set_concept_caret_rules(&mut obj, &concept_carets, tank, store, resolver);
+
     Exported {
         filename: format!("ValueSet-{}.json", id),
         body: J::Object(obj),
     }
+}
+
+/// Port of `ValueSetExporter.setConceptCaretRules` (`ValueSetExporter.ts:441`).
+/// For each concept-level caret rule, locate the `compose.include`/`compose.exclude`
+/// element (matched by system + version, with no `filter`) and the concept (matched
+/// by code), then apply the caret value at
+/// `compose.<array>[i].concept[j].<caretPath>`.
+fn set_concept_caret_rules(
+    obj: &mut Map<String, J>,
+    rules: &[&Rule],
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+    resolver: &TypeResolver,
+) {
+    for r in rules {
+        let Rule::CaretValue {
+            path_array,
+            caret_path: Some(cp),
+            value: Some(value),
+            is_instance: false,
+            ..
+        } = r
+        else {
+            continue;
+        };
+        let Some(concept_path) = path_array.first() else {
+            continue;
+        };
+        // `pathArray[0].split('#')`: system before the first `#`, code after.
+        let Some((system, code)) = concept_path.split_once('#') else {
+            continue;
+        };
+        // `system.split('|')`: base system and optional version.
+        let (base_system, version) = match system.split_once('|') {
+            Some((b, v)) => (b, Some(v)),
+            None => (system, None),
+        };
+        // `fishForMetadata(baseSystem, CodeSystem)?.url` — a local CS may be named.
+        let system_url = tank
+            .cs_url(base_system)
+            .or_else(|| pkg_url(store, base_system, FishType::CodeSystem));
+
+        // Find the compose include (then exclude) element matching system+version
+        // with no filter, then the concept index by code.
+        let Some((array_name, ci, ji)) =
+            find_concept(obj, base_system, system_url.as_deref(), version, code)
+        else {
+            continue;
+        };
+        let full_path = format!("compose.{array_name}[{ci}].concept[{ji}].{cp}");
+        apply_caret(obj, "ValueSet", &full_path, value, resolver, tank, store);
+    }
+}
+
+/// Locate the `(array, composeIndex, conceptIndex)` for a concept-caret target,
+/// mirroring the include-then-exclude search in `setConceptCaretRules`.
+fn find_concept(
+    obj: &Map<String, J>,
+    base_system: &str,
+    system_url: Option<&str>,
+    version: Option<&str>,
+    code: &str,
+) -> Option<(&'static str, usize, usize)> {
+    let compose = obj.get("compose")?.as_object()?;
+    for array_name in ["include", "exclude"] {
+        let Some(arr) = compose.get(array_name).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for (ci, ce) in arr.iter().enumerate() {
+            let Some(ce) = ce.as_object() else { continue };
+            if ce.contains_key("filter") {
+                continue;
+            }
+            let ce_system = ce_get_str(ce, "system");
+            let ce_version = ce_get_str(ce, "version");
+            let system_ok = ce_system == Some(base_system) || (system_url.is_some() && ce_system == system_url);
+            if !system_ok || ce_version != version {
+                continue;
+            }
+            let Some(concepts) = ce.get("concept").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            if let Some(ji) = concepts
+                .iter()
+                .position(|c| c.get("code").and_then(|v| v.as_str()) == Some(code))
+            {
+                return Some((array_name, ci, ji));
+            }
+        }
+    }
+    None
 }
 
 fn from_to_compose_element(

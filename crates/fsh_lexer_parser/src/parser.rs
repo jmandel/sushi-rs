@@ -1901,7 +1901,12 @@ impl Importer {
             let (code, sys) = parse_code_lexeme(&cur.tok().text);
             cur.advance();
             if keep_system {
-                local_code_path.push(format!("{}#{}", sys.unwrap_or_default(), code));
+                // Resolve the system alias (e.g. `$sct`) the same way the FSH importer
+                // does, so a VS concept-level caret's `path_array` carries the resolved
+                // system url — letting `setConceptCaretRules` match it against the
+                // already-resolved `compose.include[].system`.
+                let sys = self.alias_aware(&sys.unwrap_or_default());
+                local_code_path.push(format!("{}#{}", sys, code));
             } else {
                 local_code_path.push(format!("#{}", code));
             }
@@ -2106,7 +2111,12 @@ impl Importer {
             let (code, sys) = parse_code_lexeme(&cur.tok().text);
             cur.advance();
             if keep_system {
-                local_code_path.push(format!("{}#{}", sys.unwrap_or_default(), code));
+                // Resolve the system alias (e.g. `$sct`) the same way the FSH importer
+                // does, so a VS concept-level caret's `path_array` carries the resolved
+                // system url — letting `setConceptCaretRules` match it against the
+                // already-resolved `compose.include[].system`.
+                let sys = self.alias_aware(&sys.unwrap_or_default());
+                local_code_path.push(format!("{}#{}", sys, code));
             } else {
                 local_code_path.push(format!("#{}", code));
             }
