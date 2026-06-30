@@ -606,13 +606,39 @@ impl StructureDefinition {
             if new_matching.is_empty() && matching.len() == 1 {
                 let single = matching[0].clone();
                 unfolded = self.unfold_by_id(&single, fisher);
-                new_matching = unfolded
-                    .iter()
-                    .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
-                    .cloned()
-                    .collect();
+                if !unfolded.is_empty() {
+                    // Only keep the children that match our path.
+                    new_matching = unfolded
+                        .iter()
+                        .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
+                        .cloned()
+                        .collect();
+                    // If none matched, try unfolding the choice element's types
+                    // (the single match was already sliced to this choice type).
+                    if new_matching.is_empty()
+                        && single.ends_with(&format!("[x]:{previous_part}"))
+                    {
+                        unfolded = self.unfold_choice_element_types(&single, fisher);
+                        new_matching = unfolded
+                            .iter()
+                            .filter(|id| {
+                                self.path_of_id(id).unwrap_or("").starts_with(&fhir_path)
+                            })
+                            .cloned()
+                            .collect();
+                    }
+                } else if single.ends_with("[x]") {
+                    // `unfold` returned [] for a multi-type choice; graft the
+                    // common-ancestor children so deeper paths (e.g. `.extension`)
+                    // resolve. Port of StructureDefinition.ts:303-305.
+                    unfolded = self.unfold_choice_element_types(&single, fisher);
+                    new_matching = unfolded
+                        .iter()
+                        .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
+                        .cloned()
+                        .collect();
+                }
             }
-            let _ = &previous_part;
 
             if new_matching.is_empty() {
                 // sliceMatchingValueX: resolve e.g. valueCodeableConcept -> value[x].
@@ -920,6 +946,60 @@ impl StructureDefinition {
             let old_id = ed.id().to_string();
             let new_id = old_id.replacen(&def_pt, &parent_id, 1);
             ed.set_id(new_id);
+            ed.capture_original();
+            new_children.push(ed);
+        }
+        self.add_elements(new_children)
+    }
+
+    /// `unfoldChoiceElementTypes(fisher)`. Port of `ElementDefinition.ts:2910`.
+    /// Unfolds a multi-type choice element (one `unfold` refuses, since it returns
+    /// `[]` for a >1-type choice) by grafting the children of the common ancestor
+    /// of all available types onto this choice element. Returns the new ids.
+    pub fn unfold_choice_element_types(&mut self, id: &str, fisher: &dyn Fisher) -> Vec<String> {
+        let Some(idx) = self.index_of_id(id) else {
+            return vec![];
+        };
+        // Gather every type: its profiles if present, else the bare code.
+        let mut all_types: Vec<String> = Vec::new();
+        if let Some(types) = self.elements[idx].get("type").and_then(|v| v.as_array()) {
+            for t in types {
+                let profiles: Vec<String> = t
+                    .get("profile")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                if !profiles.is_empty() {
+                    all_types.extend(profiles);
+                } else {
+                    all_types.push(type_code(t).to_string());
+                }
+            }
+        }
+        // Ancestry (lineage urls) of each type; intersect to the shared ancestry,
+        // preserving the order of the first type's lineage (lodash intersectionWith
+        // with no comparator behaves like intersection). The nearest common ancestor
+        // is the first shared url.
+        let all_ancestry: Vec<Vec<String>> =
+            all_types.iter().map(|t| type_lineage_urls(t, fisher)).collect();
+        let shared = intersection_first(&all_ancestry);
+        let Some(common_url) = shared.first() else {
+            // No common ancestor — stock logs an error and returns [].
+            return vec![];
+        };
+        let Some(json) = fisher.fish_for_fhir(common_url) else {
+            return vec![];
+        };
+        let def = StructureDefinition::from_json(&json, true);
+        let def_pt = def.path_type();
+        let parent_id = self.elements[idx].id().to_string();
+        let mut new_children = Vec::new();
+        for child in def.elements.iter().skip(1) {
+            let mut ed = child.clone();
+            let old_id = ed.id().to_string();
+            let new_id = old_id.replacen(&def_pt, &parent_id, 1);
+            ed.set_id(new_id);
+            remove_uninherited(&mut ed);
             ed.capture_original();
             new_children.push(ed);
         }
@@ -1426,6 +1506,47 @@ fn reclone_capture(ed: &mut ElementDefinition, recapture_slice_extensions: bool)
             Rc::make_mut(orig).insert("id".into(), Value::String(new_id));
         }
     }
+}
+
+/// `getTypeLineage(type, fisher)` reduced to the chain of canonical urls.
+/// Port of `ElementDefinition.getTypeLineage` (without `includeImposeProfiles`),
+/// mirroring `sd_export::get_type_lineage`. Walks up `parent` from `type_name`.
+fn type_lineage_urls(type_name: &str, fisher: &dyn Fisher) -> Vec<String> {
+    let mut urls = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut current = Some(type_name.to_string());
+    while let Some(ct) = current {
+        if seen.contains(&ct) {
+            break;
+        }
+        let md = fisher
+            .fish_for_metadata(&ct)
+            .or_else(|| fisher.fish_for_metadata(ct.split('|').next().unwrap_or(&ct)));
+        let Some(md) = md else { break };
+        if let Some(u) = &md.url {
+            if seen.contains(u) {
+                break;
+            }
+            seen.push(u.clone());
+            urls.push(u.clone());
+        }
+        current = md.parent.clone();
+    }
+    urls
+}
+
+/// Intersection of all lists, preserving the order of (and deduped by) the first.
+/// Equivalent to lodash `intersectionWith(...arrays)` with no comparator.
+fn intersection_first(arrays: &[Vec<String>]) -> Vec<String> {
+    let Some(first) = arrays.first() else {
+        return vec![];
+    };
+    let rest = &arrays[1..];
+    first
+        .iter()
+        .filter(|x| rest.iter().all(|a| a.contains(*x)))
+        .cloned()
+        .collect()
 }
 
 fn remove_uninherited(ed: &mut ElementDefinition) {
