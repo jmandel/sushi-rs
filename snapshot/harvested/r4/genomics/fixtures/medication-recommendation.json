@@ -1,0 +1,62 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "medication-recommendation",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/medication-recommendation",
+  "name": "MedicationRecommendation",
+  "title": "Medication Recommendation",
+  "status": "active",
+  "description": "Task proposing medication recommendations based on the implications of genomic findings.",
+  "copyright": "This material contains content from LOINC (http://loinc.org). LOINC is copyright © 1995-2020, Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at http://loinc.org/license. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Task",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Task.status",
+        "path": "Task.status",
+        "patternCode": "requested"
+      },
+      {
+        "id": "Task.intent",
+        "path": "Task.intent",
+        "patternCode": "proposal"
+      },
+      {
+        "id": "Task.code",
+        "path": "Task.code",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://loinc.org/vs/LL4049-4"
+        }
+      },
+      {
+        "id": "Task.focus",
+        "path": "Task.focus",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/MedicationStatement"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Task.reasonReference",
+        "path": "Task.reasonReference",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/therapeutic-implication"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

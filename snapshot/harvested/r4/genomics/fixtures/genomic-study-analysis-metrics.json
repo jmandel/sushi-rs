@@ -1,0 +1,135 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-analysis-metrics",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-metrics",
+  "name": "GenomicStudyAnalysisMetrics",
+  "title": "Genomic Study Analysis Metrics",
+  "status": "active",
+  "description": "Metrics about the sequencing analysis that was performed",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Procedure"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Genomic Study Analysis Metrics",
+        "definition": "Metrics about the sequencing analysis that was performed"
+      },
+      {
+        "id": "Extension.extension:read-depth",
+        "path": "Extension.extension",
+        "sliceName": "read-depth",
+        "short": "Read Depth",
+        "definition": "The average read depth (number of reads for a position) for the sequencing test",
+        "requirements": "This value is typically represented with an 'x' after the number (30x). Simply share the quantity here.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:read-depth.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:read-depth.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "read-depth"
+      },
+      {
+        "id": "Extension.extension:read-depth.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "30, 100",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:sequencing-coverage",
+        "path": "Extension.extension",
+        "sliceName": "sequencing-coverage",
+        "short": "Sequencing Coverage",
+        "definition": "The percentage of the studied regions that were sequenced",
+        "requirements": "This value is typically represented with an '%' after the number (95%). Simply share the quantity here.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:sequencing-coverage.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:sequencing-coverage.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "sequencing-coverage"
+      },
+      {
+        "id": "Extension.extension:sequencing-coverage.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "95, 100",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:metrics-description",
+        "path": "Extension.extension",
+        "sliceName": "metrics-description",
+        "short": "Metrics Description",
+        "definition": "Freetext description of the coverage metrics for the sequencing test",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:metrics-description.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:metrics-description.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "metrics-description"
+      },
+      {
+        "id": "Extension.extension:metrics-description.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-metrics"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

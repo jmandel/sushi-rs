@@ -1,0 +1,57 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-reference",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-reference",
+  "name": "GenomicStudyReference",
+  "title": "Genomic Study Reference",
+  "status": "active",
+  "description": "Used to reference a GenomicStudy profile",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DiagnosticReport"
+    },
+    {
+      "type": "element",
+      "expression": "Observation"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Genomic Study Reference",
+        "definition": "Used to reference a GenomicStudy profile"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-reference"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

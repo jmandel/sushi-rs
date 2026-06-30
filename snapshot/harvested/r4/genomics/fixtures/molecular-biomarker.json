@@ -1,0 +1,245 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "molecular-biomarker",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/molecular-biomarker",
+  "name": "MolecularBiomarker",
+  "title": "Molecular Biomarker",
+  "status": "active",
+  "description": "This profile is used to represent laboratory measurements of human inherent substances such as gene products, antigens and antibodies, and complex chemicals that result from post-translational processing of multi-gene products.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "coding"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on the category.code pattern"
+        },
+        "min": 2
+      },
+      {
+        "id": "Observation.category:labCategory",
+        "path": "Observation.category",
+        "sliceName": "labCategory",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category:labCategory.coding",
+        "path": "Observation.category.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "code": "laboratory",
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category"
+        }
+      },
+      {
+        "id": "Observation.category:mbCategory",
+        "path": "Observation.category",
+        "sliceName": "mbCategory",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category:mbCategory.coding",
+        "path": "Observation.category.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "code": "biomarker-category",
+          "system": "http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes-cs"
+        }
+      },
+      {
+        "id": "Observation.category:geCategory",
+        "path": "Observation.category",
+        "sliceName": "geCategory",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category:geCategory.coding",
+        "path": "Observation.category.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "code": "GE",
+          "system": "http://terminology.hl7.org/CodeSystem/v2-0074"
+        }
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "Code for the biomarker",
+        "definition": "The code is used to represent the biomarker - laboratory measurements of human inherent substances such as gene products, antigens and antibodies, and complex chemicals that result from post-translational processing of multi-gene products.",
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/molecular-biomarker-code-vs"
+        }
+      },
+      {
+        "id": "Observation.derivedFrom",
+        "path": "Observation.derivedFrom",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resolve()"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on the reference profile pattern"
+        }
+      },
+      {
+        "id": "Observation.derivedFrom:variant",
+        "path": "Observation.derivedFrom",
+        "sliceName": "variant",
+        "short": "Variant the biomarker is derived from",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/variant"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.derivedFrom:genotype",
+        "path": "Observation.derivedFrom",
+        "sliceName": "genotype",
+        "short": "Genotype the biomarker is derived from",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genotype"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.derivedFrom:haplotype",
+        "path": "Observation.derivedFrom",
+        "sliceName": "haplotype",
+        "short": "Haplotype the biomarker is derived from",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/haplotype"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on the component.code pattern"
+        }
+      },
+      {
+        "id": "Observation.component:gene-studied",
+        "path": "Observation.component",
+        "sliceName": "gene-studied",
+        "short": "Gene Studied",
+        "definition": "The gene(s) directly or indirectly assessed by the biomarker.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Observation.component:gene-studied.code",
+        "path": "Observation.component.code",
+        "short": "48018-6",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "48018-6",
+              "system": "http://loinc.org"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.component:gene-studied.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "The HGNC gene symbol is to be used as display text and the HGNC gene ID used as the code. If no HGNC code issued for this gene yet, NCBI gene IDs SHALL be used.",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc-vs"
+        }
+      },
+      {
+        "id": "Observation.component:biomarker-category",
+        "path": "Observation.component",
+        "sliceName": "biomarker-category",
+        "short": "Biomarker Category",
+        "definition": "A categorization of a given biomarker observation.",
+        "comment": "Component biomarker-category is an optional and repeating field that provides for a categorization of a given biomarker observation. The example 'molecular biomarker ontology' value set provides a categorization of biomarkers along several axes. A given lab test can be associated with more than one category within more than one axis. For example, LOINC code 85337-4 represents Estrogen receptor antigen in tissue by immune stain. It can be categorized by physiologic role of cell receptor and antigen; by molecule type of protein; and by method of immune stain.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Observation.component:biomarker-category.code",
+        "path": "Observation.component.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "biomarker-category",
+              "system": "http://hl7.org/fhir/uv/genomics-reporting/CodeSystem/tbd-codes-cs"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.component:biomarker-category.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "cell receptor | antigen | protein | immune stain",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/molecular-biomarker-category-vs"
+        }
+      }
+    ]
+  }
+}

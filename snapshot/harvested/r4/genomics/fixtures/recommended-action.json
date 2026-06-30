@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "recommended-action",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/recommended-action",
+  "name": "RecommendedAction",
+  "title": "Recommended Action",
+  "status": "active",
+  "description": "References a proposed action that is recommended based on the results of the diagnostic report.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DiagnosticReport"
+    },
+    {
+      "type": "element",
+      "expression": "Observation"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Recommended Action",
+        "definition": "References a proposed action that is recommended based on the results of the diagnostic report."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/recommended-action"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/medication-recommendation",
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/followup-recommendation"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

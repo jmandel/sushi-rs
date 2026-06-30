@@ -1,0 +1,103 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-analysis-output",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-output",
+  "name": "GenomicStudyAnalysisOutput",
+  "title": "Genomic Study Analysis Output",
+  "status": "active",
+  "description": "Genomic Study Analysis Output",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Procedure"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Genomic Study Analysis Output",
+        "definition": "Genomic Study Analysis Output"
+      },
+      {
+        "id": "Extension.extension:file",
+        "path": "Extension.extension",
+        "sliceName": "file",
+        "short": "GenomicStudy.analysis.output.file",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:file.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:file.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "file"
+      },
+      {
+        "id": "Extension.extension:file.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:type",
+        "path": "Extension.extension",
+        "sliceName": "type",
+        "short": "GenomicStudy.analysis.output.type",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:type.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:type.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "type"
+      },
+      {
+        "id": "Extension.extension:type.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "bam | bed | vcf | ... (many)",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/genomic-study-data-format-vs"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-output"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

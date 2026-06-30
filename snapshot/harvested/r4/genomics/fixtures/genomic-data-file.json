@@ -1,0 +1,36 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-data-file",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file",
+  "name": "GenomicDataFile",
+  "title": "Genomic Data File",
+  "status": "active",
+  "description": "A profile of DocumentReference used to represent a genomics file.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "DocumentReference",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DocumentReference.description",
+        "path": "DocumentReference.description",
+        "short": "Human-readable description to provide guidance on how the file was generated"
+      },
+      {
+        "id": "DocumentReference.context.related",
+        "path": "DocumentReference.context.related",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-report"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

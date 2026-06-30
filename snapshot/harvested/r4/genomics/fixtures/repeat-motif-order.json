@@ -1,0 +1,50 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "repeat-motif-order",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/repeat-motif-order",
+  "name": "RepeatMotifOrder",
+  "title": "Repeat Motif Order",
+  "status": "active",
+  "description": "Use to group and order repeat expansion motifs.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Observation.component"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Repeat Motif Order",
+        "definition": "Use to group and order repeat expansion motifs."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/repeat-motif-order"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "positiveInt"
+          }
+        ]
+      }
+    ]
+  }
+}

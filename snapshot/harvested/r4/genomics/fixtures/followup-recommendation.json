@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "followup-recommendation",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/followup-recommendation",
+  "name": "FollowupRecommendation",
+  "title": "Followup Recommendation",
+  "status": "active",
+  "description": "Task proposing a follow-up that is recommended based on the implications of genomic findings.",
+  "copyright": "This material contains content from LOINC (http://loinc.org). LOINC is copyright © 1995-2020, Regenstrief Institute, Inc. and the Logical Observation Identifiers Names and Codes (LOINC) Committee and is available at no cost under the license at http://loinc.org/license. LOINC® is a registered United States trademark of Regenstrief Institute, Inc.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Task",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Task.status",
+        "path": "Task.status",
+        "patternCode": "requested"
+      },
+      {
+        "id": "Task.intent",
+        "path": "Task.intent",
+        "patternCode": "proposal"
+      },
+      {
+        "id": "Task.code",
+        "path": "Task.code",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://loinc.org/vs/LL1037-2"
+        }
+      },
+      {
+        "id": "Task.reasonReference",
+        "path": "Task.reasonReference",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/therapeutic-implication",
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/diagnostic-implication",
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/molecular-consequence"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

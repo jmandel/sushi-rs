@@ -1,0 +1,328 @@
+{
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs/temp/holdout/genomics-stock/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 43,
+    "harvested": 33,
+    "skipped": 10
+  },
+  "entries": [
+    {
+      "id": "annotation-code",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/annotation-code",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-annotation-code.json",
+      "fixture": "fixtures/annotation-code.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "coded-annotation",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/coded-annotation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Annotation",
+      "source": "StructureDefinition-coded-annotation.json",
+      "fixture": "fixtures/coded-annotation.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "followup-recommendation",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/followup-recommendation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-followup-recommendation.json",
+      "fixture": "fixtures/followup-recommendation.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-base",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-base",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-genomic-base.json",
+      "fixture": "fixtures/genomic-base.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "genomic-data-file",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-genomic-data-file.json",
+      "fixture": "fixtures/genomic-data-file.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "genomic-report-note",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-report-note",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-report-note.json",
+      "fixture": "fixtures/genomic-report-note.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-report",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-report",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-genomic-report.json",
+      "fixture": "fixtures/genomic-report.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "genomic-risk-assessment",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-risk-assessment",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-risk-assessment.json",
+      "fixture": "fixtures/genomic-risk-assessment.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-change-type",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-change-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-change-type.json",
+      "fixture": "fixtures/genomic-study-analysis-change-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-device",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-device.json",
+      "fixture": "fixtures/genomic-study-analysis-device.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "genomic-study-analysis-ext",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-ext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-ext.json",
+      "fixture": "fixtures/genomic-study-analysis-ext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-focus",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-focus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-focus.json",
+      "fixture": "fixtures/genomic-study-analysis-focus.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-genome-build",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-genome-build",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-genome-build.json",
+      "fixture": "fixtures/genomic-study-analysis-genome-build.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-genomic-source-class",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-genomic-source-class",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-genomic-source-class.json",
+      "fixture": "fixtures/genomic-study-analysis-genomic-source-class.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-input",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-input",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-input.json",
+      "fixture": "fixtures/genomic-study-analysis-input.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "genomic-study-analysis-method-type",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-method-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-method-type.json",
+      "fixture": "fixtures/genomic-study-analysis-method-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-metrics",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-metrics",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-metrics.json",
+      "fixture": "fixtures/genomic-study-analysis-metrics.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "genomic-study-analysis-output",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-output",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-output.json",
+      "fixture": "fixtures/genomic-study-analysis-output.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "genomic-study-analysis-protocol-performed",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-protocol-performed",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-protocol-performed.json",
+      "fixture": "fixtures/genomic-study-analysis-protocol-performed.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-regions",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-regions",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-regions.json",
+      "fixture": "fixtures/genomic-study-analysis-regions.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "genomic-study-analysis-specimen",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-specimen",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-specimen.json",
+      "fixture": "fixtures/genomic-study-analysis-specimen.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis-title",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-title",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-analysis-title.json",
+      "fixture": "fixtures/genomic-study-analysis-title.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-analysis",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-genomic-study-analysis.json",
+      "fixture": "fixtures/genomic-study-analysis.json",
+      "differentialElements": 43
+    },
+    {
+      "id": "genomic-study-reference",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-reference.json",
+      "fixture": "fixtures/genomic-study-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study-referrer-ext",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-referrer-ext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-genomic-study-referrer-ext.json",
+      "fixture": "fixtures/genomic-study-referrer-ext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "genomic-study",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-genomic-study.json",
+      "fixture": "fixtures/genomic-study.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "knowledgebase-ancestry-group",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/knowledgebase-ancestry-group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-knowledgebase-ancestry-group.json",
+      "fixture": "fixtures/knowledgebase-ancestry-group.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-assessed-reference",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/medication-assessed-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-assessed-reference.json",
+      "fixture": "fixtures/medication-assessed-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-recommendation",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/medication-recommendation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-medication-recommendation.json",
+      "fixture": "fixtures/medication-recommendation.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "molecular-biomarker",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/molecular-biomarker",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-molecular-biomarker.json",
+      "fixture": "fixtures/molecular-biomarker.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "recommended-action",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/recommended-action",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-recommended-action.json",
+      "fixture": "fixtures/recommended-action.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "repeat-motif-order",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/repeat-motif-order",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-repeat-motif-order.json",
+      "fixture": "fixtures/repeat-motif-order.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "therapy-assessed-reference",
+      "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/therapy-assessed-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-therapy-assessed-reference.json",
+      "fixture": "fixtures/therapy-assessed-reference.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": [
+    {
+      "id": "diagnostic-implication",
+      "source": "StructureDefinition-diagnostic-implication.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/implication"
+    },
+    {
+      "id": "finding",
+      "source": "StructureDefinition-finding.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-base"
+    },
+    {
+      "id": "genomic-annotation",
+      "source": "StructureDefinition-genomic-annotation.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/implication"
+    },
+    {
+      "id": "genotype",
+      "source": "StructureDefinition-genotype.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/finding"
+    },
+    {
+      "id": "haplotype",
+      "source": "StructureDefinition-haplotype.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/finding"
+    },
+    {
+      "id": "implication",
+      "source": "StructureDefinition-implication.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-base"
+    },
+    {
+      "id": "molecular-consequence",
+      "source": "StructureDefinition-molecular-consequence.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/implication"
+    },
+    {
+      "id": "sequence-phase-relationship",
+      "source": "StructureDefinition-sequence-phase-relationship.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/finding"
+    },
+    {
+      "id": "therapeutic-implication",
+      "source": "StructureDefinition-therapeutic-implication.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/implication"
+    },
+    {
+      "id": "variant",
+      "source": "StructureDefinition-variant.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/finding"
+    }
+  ]
+}

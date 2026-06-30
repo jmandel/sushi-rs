@@ -1,0 +1,192 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-analysis-regions",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-regions",
+  "name": "GenomicStudyAnalysisRegions",
+  "title": "Genomic Study Analysis Regions",
+  "status": "active",
+  "description": "Defines the regions studied, regions called, and regions deemed uncallable (generally due to low coverage)",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Procedure"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Genomic Study Analysis Regions",
+        "definition": "Defines the regions studied, regions called, and regions deemed uncallable (generally due to low coverage)"
+      },
+      {
+        "id": "Extension.extension:description",
+        "path": "Extension.extension",
+        "sliceName": "description",
+        "short": "Regions Studied Description",
+        "definition": "Freetext description of the regions studied for the sequencing test",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:description.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:description.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "description"
+      },
+      {
+        "id": "Extension.extension:description.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:studied",
+        "path": "Extension.extension",
+        "sliceName": "studied",
+        "short": "Genes or Regions Studied (GenomicStudy.analysis.regionsStudied)",
+        "definition": "The genes or regions that were studied in the analysis.",
+        "requirements": "Shared as a coded list of HGNC gene symbols or a BED file. For coded genes, the HGNC gene symbol is to be used as display text and the HGNC gene ID used as the code. If no HGNC code issued for this gene yet, NCBI gene IDs SHALL be used. If details beyond a coded list of genes are needed, a BED file SHALL be used to further describe the regions studied in the analysis.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:studied.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:studied.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "studied"
+      },
+      {
+        "id": "Extension.extension:studied.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Gene codes or BED file",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          },
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file"
+            ]
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc-vs"
+        }
+      },
+      {
+        "id": "Extension.extension:called",
+        "path": "Extension.extension",
+        "sliceName": "called",
+        "short": "Genes or Regions Called (GenomicStudy.analysis.regionsCalled)",
+        "definition": "The genes or regions that were studied for the analysis with sufficient coverage and quality to be called.",
+        "requirements": "Shared as a coded list of HGNC gene symbols or a BED file. For coded genes, the HGNC gene symbol is to be used as display text and the HGNC gene ID used as the code. If no HGNC code issued for this gene yet, NCBI gene IDs SHALL be used. If details beyond a coded list of genes are needed, a BED file SHALL be used to further describe the regions deemed callable.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:called.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:called.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "called"
+      },
+      {
+        "id": "Extension.extension:called.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Gene codes or BED file",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          },
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file"
+            ]
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc-vs"
+        }
+      },
+      {
+        "id": "Extension.extension:uncalled",
+        "path": "Extension.extension",
+        "sliceName": "uncalled",
+        "short": "Genes or Regions Uncalled",
+        "definition": "The genes or regions that were studied for the analysis but were deemed uncallable.",
+        "requirements": "Shared as a coded list of HGNC gene symbols or a BED file. For coded genes, the HGNC gene symbol is to be used as display text and the HGNC gene ID used as the code. If no HGNC code issued for this gene yet, NCBI gene IDs SHALL be used. If details beyond a coded list of genes are needed, a BED file SHALL be used to further describe the regions deemed uncallable.",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:uncalled.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:uncalled.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "uncalled"
+      },
+      {
+        "id": "Extension.extension:uncalled.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Gene codes or BED file",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          },
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-data-file"
+            ]
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/hgnc-vs"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-regions"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

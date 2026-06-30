@@ -1,0 +1,416 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-analysis",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis",
+  "name": "GenomicStudyAnalysis",
+  "title": "Genomic Study Analysis",
+  "status": "active",
+  "description": "A genomic study analysis is a component of a genomic study.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Procedure",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Procedure.extension",
+        "path": "Procedure.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Procedure.extension:method-type",
+        "path": "Procedure.extension",
+        "sliceName": "method-type",
+        "short": "GenomicStudy.analysis.methodType",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-method-type"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:change-type",
+        "path": "Procedure.extension",
+        "sliceName": "change-type",
+        "short": "GenomicStudy.analysis.changeType",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-change-type"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:genome-build",
+        "path": "Procedure.extension",
+        "sliceName": "genome-build",
+        "short": "GenomicStudy.analysis.genomeBuild",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-genome-build"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:genomic-source-class",
+        "path": "Procedure.extension",
+        "sliceName": "genomic-source-class",
+        "short": "GenomicStudy.analysis.genomicSourceClass",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-genomic-source-class"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:title",
+        "path": "Procedure.extension",
+        "sliceName": "title",
+        "short": "GenomicStudy.analysis.title",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-title"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:focus",
+        "path": "Procedure.extension",
+        "sliceName": "focus",
+        "short": "GenomicStudy.analysis.focus",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-focus"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:specimen",
+        "path": "Procedure.extension",
+        "sliceName": "specimen",
+        "short": "GenomicStudy.analysis.specimen",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-specimen"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:metrics",
+        "path": "Procedure.extension",
+        "sliceName": "metrics",
+        "short": "Genomic Study Analysis Metrics",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-metrics"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:regions",
+        "path": "Procedure.extension",
+        "sliceName": "regions",
+        "short": "Genomic Study Analysis Regions",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-regions"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:device",
+        "path": "Procedure.extension",
+        "sliceName": "device",
+        "short": "GenomicStudy.analysis.device",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-device"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:protocol-performed",
+        "path": "Procedure.extension",
+        "sliceName": "protocol-performed",
+        "short": "GenomicStudy.protocolPerformed",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-protocol-performed"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:input",
+        "path": "Procedure.extension",
+        "sliceName": "input",
+        "short": "GenomicStudy.analysis.input",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-input"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.extension:output",
+        "path": "Procedure.extension",
+        "sliceName": "output",
+        "short": "GenomicStudy.analysis.output",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-output"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.identifier",
+        "path": "Procedure.identifier",
+        "short": "GenomicStudy.analysis.identifier"
+      },
+      {
+        "id": "Procedure.instantiatesCanonical",
+        "path": "Procedure.instantiatesCanonical",
+        "short": "GenomicStudy.analysis.instantiatesCanonical",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/PlanDefinition",
+              "http://hl7.org/fhir/StructureDefinition/ActivityDefinition"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.instantiatesUri",
+        "path": "Procedure.instantiatesUri",
+        "short": "GenomicStudy.analysis.instantiatesUri"
+      },
+      {
+        "id": "Procedure.basedOn",
+        "path": "Procedure.basedOn",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.partOf",
+        "path": "Procedure.partOf",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.status",
+        "path": "Procedure.status",
+        "patternCode": "completed"
+      },
+      {
+        "id": "Procedure.statusReason",
+        "path": "Procedure.statusReason",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.category",
+        "path": "Procedure.category",
+        "min": 1
+      },
+      {
+        "id": "Procedure.category.coding",
+        "path": "Procedure.category.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "code": "laboratory",
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category"
+        }
+      },
+      {
+        "id": "Procedure.code",
+        "path": "Procedure.code",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.encounter",
+        "path": "Procedure.encounter",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.performed[x]",
+        "path": "Procedure.performed[x]",
+        "short": "GenomicStudy.analysis.date",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ]
+      },
+      {
+        "id": "Procedure.recorder",
+        "path": "Procedure.recorder",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.asserter",
+        "path": "Procedure.asserter",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.performer.function",
+        "path": "Procedure.performer.function",
+        "short": "GenomicStudy.analysis.performer.role"
+      },
+      {
+        "id": "Procedure.performer.actor",
+        "path": "Procedure.performer.actor",
+        "short": "GenomicStudy.analysis.performer.actor",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Practitioner",
+              "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+              "http://hl7.org/fhir/StructureDefinition/Organization",
+              "http://hl7.org/fhir/StructureDefinition/Device"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.location",
+        "path": "Procedure.location",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.reasonCode",
+        "path": "Procedure.reasonCode",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.reasonReference",
+        "path": "Procedure.reasonReference",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.bodySite",
+        "path": "Procedure.bodySite",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.outcome",
+        "path": "Procedure.outcome",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.report",
+        "path": "Procedure.report",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.complication",
+        "path": "Procedure.complication",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.complicationDetail",
+        "path": "Procedure.complicationDetail",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.followUp",
+        "path": "Procedure.followUp",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.note",
+        "path": "Procedure.note",
+        "short": "GenomicStudy.analysis.note"
+      },
+      {
+        "id": "Procedure.focalDevice",
+        "path": "Procedure.focalDevice",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.usedReference",
+        "path": "Procedure.usedReference",
+        "max": "0"
+      },
+      {
+        "id": "Procedure.usedCode",
+        "path": "Procedure.usedCode",
+        "max": "0"
+      }
+    ]
+  }
+}

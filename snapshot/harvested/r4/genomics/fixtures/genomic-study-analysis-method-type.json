@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "genomic-study-analysis-method-type",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-method-type",
+  "name": "GenomicStudyAnalysisMethodType",
+  "title": "Genomic Study Analysis Method Type",
+  "status": "active",
+  "description": "Defines a method type for a genomic analysis",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Procedure"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Genomic Study Analysis Method Type",
+        "definition": "Defines a method type for a genomic analysis"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomic-study-analysis-method-type"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "cytogenetics | deletion-duplication-analysis | fish | sequence-analysis-of-the-entire-coding-region | ... (many)",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/genomic-study-method-type-vs"
+        }
+      }
+    ]
+  }
+}

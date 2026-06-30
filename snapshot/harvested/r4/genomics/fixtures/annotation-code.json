@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "annotation-code",
+  "url": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/annotation-code",
+  "name": "AnnotationCode",
+  "title": "Annotation Code",
+  "status": "active",
+  "description": "Codifies the content of an Annotation",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Annotation"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Annotation Code",
+        "definition": "Codifies the content of an Annotation"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/annotation-code"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/uv/genomics-reporting/ValueSet/coded-annotation-types-vs"
+        }
+      }
+    ]
+  }
+}
