@@ -357,18 +357,36 @@ impl PackageCas {
                 version: request.version,
             };
             let requested_label = coord.label();
-            let package_ref = if let Some(existing) = existing_by_request.get(&requested_label) {
+            let acquired = if let Some(existing) = existing_by_request.get(&requested_label) {
                 let selected_for_update = update_packages.contains(existing.name.as_str())
                     || update_packages.contains(requested_label.as_str());
                 let should_update = existing.mutable && (update_all_mutable || selected_for_update);
                 if !should_update {
-                    self.ensure_locked_ref_in_cas(existing, offline)?;
-                    existing.clone()
+                    self.ensure_locked_ref_in_cas(existing, offline)
+                        .map(|()| existing.clone())
                 } else {
-                    self.acquire_or_read_ref(&coord, registries, offline)?
+                    self.acquire_or_read_ref(&coord, registries, offline)
                 }
             } else {
-                self.acquire_or_read_ref(&coord, registries, offline)?
+                self.acquire_or_read_ref(&coord, registries, offline)
+            };
+
+            let package_ref = match acquired {
+                Ok(package_ref) => package_ref,
+                Err(error) => {
+                    // Mirror stock SUSHI's per-dependency leniency: an unresolvable
+                    // *non-core* dependency is logged and skipped rather than aborting
+                    // the whole build. See `loadConfiguredDependencies` (the per-dep
+                    // `.catch(... logger.error ...)`) and `loadAutomaticDependencies`
+                    // (the `logger.warn("Failed to load ...")`) in
+                    // `sushi-ts/src/utils/Processing.ts`. FHIR core stays fatal — stock
+                    // cannot build without it.
+                    if is_core_package(&coord.name) || is_build_server_version(&coord.version) {
+                        return Err(error);
+                    }
+                    eprintln!("warn  Failed to load {requested_label}: {error:#}");
+                    continue;
+                }
             };
 
             let materialized = package_ref.materialized_label();
@@ -1247,6 +1265,29 @@ fn is_build_server_version(v: &str) -> bool {
     v == "dev" || v == "current" || v.starts_with("current$")
 }
 
+/// True for the FHIR core definitional package (e.g. `hl7.fhir.r4.core`,
+/// `hl7.fhir.r4b.core`, `hl7.fhir.r5.core`, `hl7.fhir.r6.core`).
+///
+/// Stock SUSHI tolerates a failed load of any *configured* or *automatic*
+/// dependency (it logs and continues — see `loadConfiguredDependencies` /
+/// `loadAutomaticDependencies` in `sushi-ts/src/utils/Processing.ts`), but it
+/// cannot produce any output without FHIR core. We mirror that by keeping a
+/// failure to acquire core fatal while skipping other unresolvable deps.
+fn is_core_package(name: &str) -> bool {
+    let Some(mid) = name
+        .strip_prefix("hl7.fhir.")
+        .and_then(|s| s.strip_suffix(".core"))
+    else {
+        return name == "hl7.fhir.core";
+    };
+    // `mid` is the FHIR release token, e.g. "r4", "r4b", "r5", "r6".
+    let digits = mid
+        .strip_prefix('r')
+        .map(|d| d.strip_suffix('b').unwrap_or(d))
+        .unwrap_or("");
+    !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
+}
+
 fn is_exact_version(v: &str) -> bool {
     !is_mutable_version(v)
 }
@@ -1323,6 +1364,28 @@ mod tests {
             std::cmp::Ordering::Greater
         );
         assert_eq!(version_cmp("1.2.4", "1.2.3"), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn core_package_detection_matches_fhir_core_only() {
+        for core in [
+            "hl7.fhir.r4.core",
+            "hl7.fhir.r4b.core",
+            "hl7.fhir.r5.core",
+            "hl7.fhir.r6.core",
+            "hl7.fhir.core",
+        ] {
+            assert!(is_core_package(core), "{core} should be core");
+        }
+        for non_core in [
+            "hl7.fhir.us.core",
+            "hl7.fhir.uv.tools.r4",
+            "hl7.fhir.extensions.r5",
+            "hl7.fhir.uv.extensions.r4",
+            "hl7.terminology.r4",
+        ] {
+            assert!(!is_core_package(non_core), "{non_core} should not be core");
+        }
     }
 
     #[test]
