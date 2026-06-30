@@ -1052,7 +1052,9 @@ fn assign_complex_value(current: &mut J, assigned: &J) {
 struct ElementTrace {
     /// Stable element id (indices shift when unfold inserts elements).
     id: String,
-    history: Vec<String>,
+    /// '.'-joined path of ancestor segments (replaces the old `Vec<String>`;
+    /// it was only ever joined, never indexed except `.last()` == `next_trace`).
+    history: String,
     ghost: bool,
     requirement_root: String,
 }
@@ -1072,6 +1074,20 @@ fn split_periods(s: &str) -> Vec<String> {
 /// Last '.'-segment of an element id, borrowed (no Vec/String allocation).
 fn last_seg(s: &str) -> &str {
     crate::paths::last_path_period_segment(s)
+}
+
+/// Join a '.'-separated base path with one more segment (`base.seg`), or just
+/// `seg` when `base` is empty. Pre-sized, single allocation.
+fn join_seg(base: &str, seg: &str) -> String {
+    if base.is_empty() {
+        seg.to_string()
+    } else {
+        let mut s = String::with_capacity(base.len() + 1 + seg.len());
+        s.push_str(base);
+        s.push('.');
+        s.push_str(seg);
+        s
+    }
 }
 
 /// `p == base || p.starts_with(&format!("{base}."))` with no allocation: `p`
@@ -1186,7 +1202,7 @@ fn set_implied_properties_on_instance(
         let rr = compute_requirement_root(sd, c);
         queue.push_back(ElementTrace {
             id: el_id(sd, c),
-            history: vec![],
+            history: String::new(),
             ghost: false,
             requirement_root: rr,
         });
@@ -1209,13 +1225,11 @@ fn set_implied_properties_on_instance(
             }
         }
         next_trace = reslice_brackets(&next_trace);
-        let mut trace_parts = current.history.clone();
-        trace_parts.push(next_trace.clone());
-        let trace_path = trace_parts.join(".");
+        let trace_path = join_seg(&current.history, &next_trace);
 
         if !effective_mins.contains_key(&trace_path) {
             let mut tree = build_slice_tree(sd, cur_idx, &ix);
-            let mut key_start = current.history.join(".");
+            let mut key_start = current.history.clone();
             if !key_start.is_empty() {
                 key_start.push('.');
             }
@@ -1313,23 +1327,22 @@ fn set_implied_properties_on_instance(
             }
             for idx in 0..final_min {
                 let eff_idx = idx + existing_slice_count;
-                let last = trace_parts.last().cloned().unwrap_or_default();
                 let new_hist = if eff_idx > 0 {
-                    format!("{last}[{eff_idx}]")
+                    format!("{next_trace}[{eff_idx}]")
                 } else {
-                    last
+                    next_trace.clone()
                 };
+                let child_hist = join_seg(&current.history, &new_hist);
+                let rr_inherit = cur_min > idx;
                 for child in &children {
-                    let mut h = current.history.clone();
-                    h.push(new_hist.clone());
-                    let rr = if cur_min > idx {
+                    let rr = if rr_inherit {
                         current.requirement_root.clone()
                     } else {
-                        h.join(".")
+                        child_hist.clone()
                     };
                     queue.push_back(ElementTrace {
                         id: child.clone(),
-                        history: h,
+                        history: child_hist.clone(),
                         ghost: current.ghost,
                         requirement_root: rr,
                     });
@@ -1353,20 +1366,19 @@ fn set_implied_properties_on_instance(
                 let cur_idx = sd.find_element(&current.id).unwrap();
                 children = children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
             }
-            let new_hist = trace_parts.last().cloned().unwrap_or_default();
+            let child_hist = join_seg(&current.history, &next_trace);
+            let ghost = matching_rule.is_none();
             for child in &children {
-                let mut h = current.history.clone();
-                h.push(new_hist.clone());
                 let child_min = sd.find_element(child).map(|i| el_min(sd, i)).unwrap_or(0);
                 let rr = if child_min > 0 {
                     current.requirement_root.clone()
                 } else {
-                    h.join(".")
+                    child_hist.clone()
                 };
                 queue.push_back(ElementTrace {
                     id: child.clone(),
-                    history: h,
-                    ghost: matching_rule.is_none(),
+                    history: child_hist.clone(),
+                    ghost,
                     requirement_root: rr,
                 });
             }
