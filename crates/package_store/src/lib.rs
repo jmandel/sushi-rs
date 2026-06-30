@@ -309,6 +309,161 @@ struct NameProbe {
     name: Option<String>,
 }
 
+/// Fast extraction of a FHIR resource's top-level `"name"` string, semantically
+/// equivalent to `serde_json::from_slice::<NameProbe>(b).ok().and_then(|p| p.name)`
+/// but stopping as soon as the top-level `name` is located instead of parsing
+/// (and string-skipping) the entire document. The full-parse probe was crd's #1
+/// hotspot (~37%: `skip_to_escape` + `ignore_str` over megabytes of snapshot
+/// JSON it ultimately discarded). `name` in a FHIR conformance resource is always
+/// a simple unescaped identifier near the top of the object.
+///
+/// Returns `Ok(Some(name))` / `Ok(None)` as the definitive result; returns
+/// `Err(NeedFallback)` only for the cases this scanner deliberately does not
+/// decode itself (a `name` key or string value containing a `\` escape, or
+/// malformed input), so the caller defers to the exact serde path. Real FHIR
+/// package files never hit the fallback.
+struct NeedFallback;
+
+#[inline]
+fn skip_ws(b: &[u8], p: &mut usize) {
+    while *p < b.len() && matches!(b[*p], b' ' | b'\t' | b'\n' | b'\r') {
+        *p += 1;
+    }
+}
+
+/// `b[*p]` must be `"`. Advance `*p` past the closing quote. Returns
+/// `Some(had_escape)` or `None` if the string is unterminated (malformed).
+#[inline]
+fn skip_string(b: &[u8], p: &mut usize) -> Option<bool> {
+    *p += 1; // opening quote
+    let mut had_escape = false;
+    while *p < b.len() {
+        match b[*p] {
+            b'"' => {
+                *p += 1;
+                return Some(had_escape);
+            }
+            b'\\' => {
+                had_escape = true;
+                *p += 2; // skip backslash + escaped byte (hex digits of \u are harmless)
+            }
+            _ => *p += 1,
+        }
+    }
+    None
+}
+
+/// Skip one JSON value starting at `*p` (after leading whitespace already
+/// consumed). Returns `None` on malformed input.
+fn skip_value(b: &[u8], p: &mut usize) -> Option<()> {
+    if *p >= b.len() {
+        return None;
+    }
+    match b[*p] {
+        b'"' => skip_string(b, p).map(|_| ()),
+        b'{' | b'[' => {
+            let mut depth: i32 = 0;
+            while *p < b.len() {
+                match b[*p] {
+                    b'"' => {
+                        skip_string(b, p)?;
+                    }
+                    b'{' | b'[' => {
+                        depth += 1;
+                        *p += 1;
+                    }
+                    b'}' | b']' => {
+                        depth -= 1;
+                        *p += 1;
+                        if depth == 0 {
+                            return Some(());
+                        }
+                    }
+                    _ => *p += 1,
+                }
+            }
+            None
+        }
+        _ => {
+            // number / true / false / null — run to the next structural delimiter.
+            while *p < b.len()
+                && !matches!(b[*p], b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r')
+            {
+                *p += 1;
+            }
+            Some(())
+        }
+    }
+}
+
+fn fast_top_level_name(b: &[u8]) -> Result<Option<String>, NeedFallback> {
+    let n = b.len();
+    let mut p = 0usize;
+    skip_ws(b, &mut p);
+    if p >= n || b[p] != b'{' {
+        return Ok(None); // not a JSON object → no top-level name
+    }
+    p += 1;
+    loop {
+        skip_ws(b, &mut p);
+        if p >= n {
+            return Ok(None);
+        }
+        if b[p] == b'}' {
+            return Ok(None); // end of object, no name
+        }
+        if b[p] != b'"' {
+            return Ok(None); // malformed key position → serde would yield None too
+        }
+        let key_start = p + 1;
+        let had_escape = skip_string(b, &mut p).ok_or(NeedFallback)?;
+        let key_end = p - 1; // index of closing quote
+        let is_name = !had_escape && &b[key_start..key_end] == b"name";
+        skip_ws(b, &mut p);
+        if p >= n || b[p] != b':' {
+            return Ok(None);
+        }
+        p += 1;
+        skip_ws(b, &mut p);
+        if p >= n {
+            return Ok(None);
+        }
+        if is_name {
+            if b[p] != b'"' {
+                // name present but not a string → NameProbe type error → None
+                return Ok(None);
+            }
+            let vstart = p + 1;
+            let v_escape = skip_string(b, &mut p).ok_or(NeedFallback)?;
+            if v_escape {
+                return Err(NeedFallback); // let serde decode the escapes exactly
+            }
+            let vend = p - 1;
+            return match std::str::from_utf8(&b[vstart..vend]) {
+                Ok(s) => Ok(Some(s.to_string())),
+                Err(_) => Err(NeedFallback),
+            };
+        }
+        skip_value(b, &mut p).ok_or(NeedFallback)?;
+        skip_ws(b, &mut p);
+        if p >= n {
+            return Ok(None);
+        }
+        match b[p] {
+            b',' => p += 1,
+            _ => return Ok(None), // '}' or malformed
+        }
+    }
+}
+
+/// Top-level `name`, fast scan with an exact serde fallback for escaped strings.
+fn probe_name(b: &[u8]) -> Option<String> {
+    match fast_top_level_name(b) {
+        Ok(opt) => opt,
+        Err(NeedFallback) => serde_json::from_slice::<NameProbe>(b).ok().and_then(|p| p.name),
+    }
+}
+
 /// Classify an index entry into a `FishType`, mirroring how FPL/FHIRDefinitions
 /// derive the searchable type for SD/VS/CS. Returns `None` for resources that are
 /// not fishable as one of the conformance types (instances, examples, etc.).
@@ -421,10 +576,7 @@ impl PackageStore {
                 };
                 let path = pkg_dir.join(&e.filename);
                 // name is not in .index.json — read it eagerly (cheap probe).
-                let name = std::fs::read(&path)
-                    .ok()
-                    .and_then(|b| serde_json::from_slice::<NameProbe>(&b).ok())
-                    .and_then(|p| p.name);
+                let name = std::fs::read(&path).ok().and_then(|b| probe_name(&b));
                 let idx = store.entries.len();
                 let entry = ResEntry {
                     seq,
