@@ -72,6 +72,18 @@ fn is_path_token(k: K) -> bool {
     )
 }
 
+/// FIRST(value): the tokens that can begin a `value` in the FSH grammar
+/// (`value: STRING | MULTILINE_STRING | NUMBER | DATETIME | TIME | reference |
+/// canonical | code | quantity | ratio | bool | name`). `is_path_token` already
+/// covers SEQUENCE/NUMBER/DATETIME/TIME and the alpha keywords (incl. true/false).
+fn is_value_start(k: K) -> bool {
+    is_path_token(k)
+        || matches!(
+            k,
+            K::STRING | K::MULTILINE_STRING | K::REFERENCE | K::CANONICAL | K::CODE | K::UNIT
+        )
+}
+
 fn utf16_len(s: &str) -> i64 {
     s.encode_utf16().count() as i64
 }
@@ -1891,16 +1903,10 @@ impl Importer {
         let caret_path = cur.tok().text.clone();
         cur.advance(); // CARET_SEQUENCE
         let caret_path = caret_path.strip_prefix('^').unwrap_or(&caret_path).to_string();
-        let mut value = None;
-        let mut raw_value = None;
-        let mut is_instance = false;
-        if cur.kind() == K::EQUAL {
-            cur.advance();
-            let vr = self.parse_value(cur);
-            value = vr.value;
-            raw_value = vr.raw_value;
-            is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
-        }
+        let vr = self.parse_equal_value(cur);
+        let value = vr.value;
+        let raw_value = vr.raw_value;
+        let is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
         let stop = self.stop_tok(cur, start);
         let location = loc(star, &stop);
         let split = split_path(local_path);
@@ -1940,16 +1946,10 @@ impl Importer {
             cur.advance();
             caret_path = Some(cp.strip_prefix('^').unwrap_or(&cp).to_string());
         }
-        let mut value = None;
-        let mut raw_value = None;
-        let mut is_instance = false;
-        if cur.kind() == K::EQUAL {
-            cur.advance();
-            let vr = self.parse_value(cur);
-            value = vr.value;
-            raw_value = vr.raw_value;
-            is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
-        }
+        let vr = self.parse_equal_value(cur);
+        let value = vr.value;
+        let raw_value = vr.raw_value;
+        let is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
         let stop = self.stop_tok(cur, start);
         let location = loc(star, &stop);
         let path_array = self.prepend_path_context(local_code_path, &location, false, false, false);
@@ -2209,6 +2209,23 @@ impl Importer {
     }
 
     // ---------- value parsing ----------
+
+    /// Parse `EQUAL value`. Emulates ANTLR's single-token insertion of a missing
+    /// `=`: when the operator is absent but a value-start token follows, ANTLR's
+    /// error recovery inserts the missing EQUAL and parses the value anyway. This
+    /// happens for inputs like `^short ="x"`, where the lexer greedily makes
+    /// `="x"` a single SEQUENCE token (longest match) rather than EQUAL + STRING,
+    /// so the parser sees `caretPath SEQUENCE` and recovers by inserting EQUAL.
+    fn parse_equal_value(&mut self, cur: &mut Cursor) -> ValueResult {
+        if cur.kind() == K::EQUAL {
+            cur.advance();
+            self.parse_value(cur)
+        } else if is_value_start(cur.kind()) {
+            self.parse_value(cur)
+        } else {
+            ValueResult::default()
+        }
+    }
 
     fn parse_value(&mut self, cur: &mut Cursor) -> ValueResult {
         let mut vr = ValueResult::default();
