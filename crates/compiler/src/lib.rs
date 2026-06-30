@@ -7,6 +7,9 @@
 use fsh_lexer_parser::{dump, parser};
 use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 
+pub mod config;
+pub mod export;
+
 /// Entity-type discriminant (mirrors TS `constructorName`) used for the
 /// `isAllowedRule` table and diagnostic messages.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -474,7 +477,55 @@ pub fn expand_to_json(files: &[(&str, &str)]) -> serde_json::Value {
 /// to stock SUSHI. Grows resource-family by family (Phase 4: ValueSet/CodeSystem
 /// first). Gate: `harness/diff-resources-glob.sh`.
 ///
-/// IMPLEMENTATION PENDING.
-pub fn build_project(_ig_dir: &str, _out_dir: &str) -> anyhow::Result<()> {
-    anyhow::bail!("build_project: export pipeline under construction")
+pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
+    use std::path::{Path, PathBuf};
+
+    // 1. Config.
+    let cfg_path = Path::new(ig_dir).join("sushi-config.yaml");
+    let cfg_text = std::fs::read_to_string(&cfg_path)
+        .map_err(|e| anyhow::anyhow!("reading {}: {e}", cfg_path.display()))?;
+    let cfg = config::Config::from_yaml(&cfg_text)?;
+
+    // 2. Gather all input/fsh/**/*.fsh files (sorted for determinism).
+    let fsh_root = Path::new(ig_dir).join("input").join("fsh");
+    let mut files: Vec<PathBuf> = Vec::new();
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+        let mut entries: Vec<_> = std::fs::read_dir(dir)?.collect::<Result<_, _>>()?;
+        entries.sort_by_key(|e| e.path());
+        for e in entries {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out)?;
+            } else if p.extension().and_then(|s| s.to_str()) == Some("fsh") {
+                out.push(p);
+            }
+        }
+        Ok(())
+    }
+    walk(&fsh_root, &mut files)?;
+
+    let loaded: Vec<(String, String)> = files
+        .iter()
+        .map(|p| Ok((p.to_string_lossy().into_owned(), std::fs::read_to_string(p)?)))
+        .collect::<anyhow::Result<_>>()?;
+    let refs: Vec<(&str, &str)> = loaded.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
+
+    // 3. Import + global insert-rule expansion.
+    let mut imp = parser::Importer::new();
+    imp.import(&refs);
+    let mut docs = imp.docs;
+    let mut diag: Vec<String> = Vec::new();
+    run_global_expansion(&mut docs, &mut diag);
+
+    // 4. Export ValueSets + CodeSystems and write byte-identical JSON.
+    let resources_dir = Path::new(out_dir).join("fsh-generated").join("resources");
+    std::fs::create_dir_all(&resources_dir)?;
+    for exported in export::export_all(&docs, &cfg) {
+        let text = json_emit::to_fhir_json_string(&exported.body);
+        std::fs::write(resources_dir.join(&exported.filename), text)?;
+    }
+    Ok(())
 }

@@ -223,7 +223,38 @@ Phases from the plan (0–9). Current state:
   - NOT COVERED (deferred): diagnostics are collected into a `Vec<String>` sink but
     NOT emitted/gated (exact wording ported though); `fishForMetadata`/full
     `internalFish` matcher (only RuleSet fishing needed here).
-- [ ] **Phase 4 — ValueSet/CodeSystem export**
+- [x] **Phase 4 — ValueSet/CodeSystem export** — DONE (byte parity except 1
+  package-dependent VS). `compiler::build_project` reads `sushi-config.yaml`
+  (`config.rs`), imports+expands all `input/fsh/**/*.fsh`, and writes
+  `ValueSet-*.json` / `CodeSystem-*.json` via `json_emit::to_fhir_json_string`.
+  - `json_emit`: `ordered_clone_deep` (underscore-sibling gluing, `common.ts:1571`)
+    + `to_fhir_json_string` = `serde_json::to_string_pretty` (2-space) + `\n`.
+    serde_json (preserve_order) matches `JSON.stringify(_,null,2)` byte-for-byte
+    here (no non-ASCII/`/` escaping, empty `[]`/`{}`).
+  - `compiler::export` ports ValueSet/CodeSystem exporters: setMetadata order
+    (constructor-seeded `status` for VS; `status`+`content='complete'` for CS,
+    THEN name,id,title,description,[version if FSHOnly],url), caret rules, compose
+    (include/exclude, concept dedupe-merge `addConceptComposeElement`, filters),
+    CS concepts (+hierarchy) and `updateCount`. `id` is the recomputed getter
+    (findLast non-instance `^id`). `url = {canonical}/{Type}/{id}`.
+  - Caret engine: embedded element-type table for VS/CS + datatypes (Meta,
+    Identifier, ContactDetail/Point, CodeableConcept, Coding, Extension w/
+    `value[x]` choice) instead of fishing the real SD (no packages). Port of
+    `setPropertyOnInstance` array/slice handling incl. `extension[url]` slice.
+  - **Gate**: IPS **35/36 VS**, epi **24/24 VS + 5/5 CS**. `cargo test --workspace` green.
+  - PARITY TRAPS: (1) CS/VS key order is insertion order seeded by the TWO/THREE
+    constructor-initialized fields, NOT a PROPS array. (2) VS runs setCaretRules
+    BEFORE setCompose; CS runs setConcepts BEFORE setCaretPathRules. (3) `op`
+    `descendant`→`descendent` already normalized in parser; alias-resolved code
+    `system`s already URLs in AST. (4) version-less compose `version` set to
+    undefined → dropped. (5) FshCode→CodeableConcept/Coding coercion key order
+    (code,system,version,display). (6) inline-concept includes with same
+    system+version MERGE into one `compose.include` entry.
+  - **KNOWN RESIDUAL** (package-dependent, not fixable w/o FHIR cache):
+    `ValueSet-problem-type-uv-ips` references CodeSystem **by bare name**
+    `ConditionCategoryCodes` (THO `condition-category`); stock fishes its url
+    from packages, we fall back to the literal name. The only IPS VS that needs
+    an external (non-local, non-alias) CodeSystem-name→url resolution.
 - [ ] **Phase 5 — SD arena + simple profiles**
 - [ ] **Phase 6 — full SD compatibility**
 - [ ] **Phase 7 — instance export + required QA**
