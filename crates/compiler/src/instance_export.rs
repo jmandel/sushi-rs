@@ -541,11 +541,13 @@ fn validate_value_at_path(
     sd: &mut StructureDefinition,
     path: &str,
     value: Option<&FshValue>,
+    inline_resource_types: &[Option<String>],
     fisher: &dyn Fisher,
 ) -> Option<Validated> {
     let mut path_parts = parse_ipath(path);
     let mut current_path = String::new();
     let mut current_idx: Option<usize> = None;
+    let mut previous_idx: Option<usize> = None;
     let n = path_parts.len();
 
     for i in 0..n {
@@ -652,16 +654,21 @@ fn validate_value_at_path(
             }
         }
 
-        // resourceType pseudo-element on an inline resource.
+        // resourceType pseudo-element on an inline resource: when the previous
+        // element is a single-typed Resource placeholder, `<x>.resourceType =
+        // "Type"` assigns the resourceType string directly (StructureDefinition.ts
+        // :682-693). Mirror `isInheritedResource(value, prevType)`.
         if current_idx.is_none() && path_parts[i].base == "resourceType" {
-            if let Some(value) = value {
-                if let FshValue::Str(_) = value {
+            if let (Some(FshValue::Str(s)), Some(prev)) = (value, previous_idx) {
+                let prev_types = el_type_codes(sd, prev);
+                if prev_types.len() == 1 && is_inherited_resource(s, &prev_types[0], fisher, false) {
                     return Some(Validated {
-                        assigned_value: None,
+                        assigned_value: Some(J::String(s.clone())),
                         path_parts,
                         child_path: None,
                     });
                 }
+                return None;
             }
         }
 
@@ -699,6 +706,41 @@ fn validate_value_at_path(
             path_parts[i].primitive = true;
         }
 
+        // If we have an inline resource type at this path part, the element is a
+        // `Resource` (or `DomainResource`/specific resource) placeholder being
+        // populated as a concrete resourceType. Switch to that type's
+        // StructureDefinition and validate the remainder of the path against it,
+        // splicing the result back in (StructureDefinition.ts:732-766).
+        if let Some(Some(inline_type)) = inline_resource_types.get(i) {
+            if types.len() == 1 && is_inherited_resource(inline_type, &types[0], fisher, true) {
+                if let Some(inline_json) = fisher.fish_for_fhir(inline_type) {
+                    let mut inline_sd = StructureDefinition::from_json(&inline_json, false);
+                    if !inline_sd.elements.is_empty() {
+                        let inline_path = assemble_fsh_path(&path_parts[i + 1..]);
+                        let sub_types: Vec<Option<String>> = inline_resource_types
+                            .get(i + 1..)
+                            .map(|s| s.to_vec())
+                            .unwrap_or_default();
+                        let sub = validate_value_at_path(
+                            &mut inline_sd,
+                            &inline_path,
+                            value,
+                            &sub_types,
+                            fisher,
+                        )?;
+                        let mut combined = path_parts[..=i].to_vec();
+                        combined.extend(sub.path_parts);
+                        return Some(Validated {
+                            assigned_value: sub.assigned_value,
+                            path_parts: combined,
+                            child_path: sub.child_path,
+                        });
+                    }
+                }
+            }
+        }
+
+        previous_idx = current_idx;
     }
 
     let cur = current_idx?;
@@ -1439,7 +1481,7 @@ fn set_implied_properties_on_instance(
     };
 
     for path in sorted {
-        if let Some(validated) = validate_value_at_path(sd, &path, None, fisher) {
+        if let Some(validated) = validate_value_at_path(sd, &path, None, &[], fisher) {
             if let Some(v) = value_for(&path) {
                 set_property_on_instance(instance, &validated.path_parts, &v);
             }
@@ -2700,11 +2742,53 @@ fn set_assigned_values(
         }
     }
 
+    // 2b. Collect inlineResourcePaths (InstanceExporter.ts:137-159): for each
+    // inline-instance assignment, {path, instanceOf = body.meta.profile[0] ??
+    // body.resourceType}; for each `<x>.resourceType = "Type"` rule, {x, Type}.
+    // These switch the element type during validation so sub-paths of an inline
+    // resource resolve against the right resource StructureDefinition.
+    let mut inline_resource_paths: Vec<(String, String)> = Vec::new();
+    for ar in &assign_rules {
+        if let Some(body) = &ar.inline {
+            let io = body
+                .get("meta")
+                .and_then(|m| m.get("profile"))
+                .and_then(|p| p.as_array())
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .or_else(|| body.get("resourceType").and_then(|v| v.as_str()))
+                .map(str::to_string);
+            if let Some(io) = io {
+                inline_resource_paths.push((ar.path.clone(), io));
+            }
+        } else if let Some(stripped) = ar.path.strip_suffix(".resourceType") {
+            if let Some(FshValue::Str(s)) = &ar.value {
+                inline_resource_paths.push((stripped.to_string(), s.clone()));
+            }
+        }
+    }
+    // Helper: build the sparse inlineResourceTypes array for a given rule path.
+    let inline_types_for = |rule_path: &str| -> Vec<Option<String>> {
+        let mut out: Vec<Option<String>> = Vec::new();
+        for (ip_path, io) in &inline_resource_paths {
+            let prefix = format!("{ip_path}.");
+            if rule_path.starts_with(&prefix) && rule_path != format!("{ip_path}.resourceType") {
+                let idx = split_periods(ip_path).len() - 1;
+                if out.len() <= idx {
+                    out.resize(idx + 1, None);
+                }
+                out[idx] = Some(io.clone());
+            }
+        }
+        out
+    };
+
     // 3. Build ruleMap (validate each rule), keyed by rule path (last-wins replaced).
     let mut rule_map: Vec<(String, Vec<IPathPart>, J)> = Vec::new();
     for ar in &assign_rules {
         let path = &ar.path;
-        if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), fisher) {
+        let inline_types = inline_types_for(path);
+        if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), &inline_types, fisher) {
             // skip choice [x] unresolved
             let av = if let Some(body) = &ar.inline {
                 body.clone()
@@ -2781,6 +2865,30 @@ fn set_assigned_values(
     }
     merge(instance, &rule_instance);
 }
+}
+
+/// Port of `common.ts:isInheritedResource`. Does `resource_type` (a resource
+/// type or, when `allow_profile`, a profile) satisfy an element typed `type_code`
+/// (`Resource`, `DomainResource`, or a specific resource type)?
+fn is_inherited_resource(
+    resource_type: &str,
+    type_code: &str,
+    fisher: &dyn Fisher,
+    allow_profile: bool,
+) -> bool {
+    let Some(resource) = fisher.fish_for_fhir(resource_type) else {
+        return false;
+    };
+    let mut rt = resource_type.to_string();
+    if allow_profile {
+        if let Some(actual) = resource.get("resourceType").and_then(|v| v.as_str()) {
+            rt = actual.to_string();
+        }
+    }
+    type_code == "Resource"
+        || (type_code == "DomainResource"
+            && !matches!(rt.as_str(), "Bundle" | "Parameters" | "Binary"))
+        || type_code == rt
 }
 
 /// Does the element at `path` have a single `Resource` type (so a primitive
