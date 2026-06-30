@@ -9,6 +9,7 @@
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
 use std::cell::RefCell;
+use std::rc::Rc;
 
 pub mod props;
 pub use props::{ED_PROPS, SD_PROPS};
@@ -75,8 +76,15 @@ pub fn id_to_path(id: &str) -> String {
 
 #[derive(Clone, Debug)]
 pub struct ElementDefinition {
-    pub map: Map<String, Value>,
-    pub original: Option<Map<String, Value>>,
+    // Copy-on-write element JSON. Shared (`Rc`) between an element and its
+    // captured `original`, and across cloned elements (unfold/cloneChildren/
+    // addSlice), so cloning an element or capturing its original is a refcount
+    // bump — the inner `Map` is deep-cloned lazily, only when a write actually
+    // needs a private copy (`map_mut` / `original_mut` -> `Rc::make_mut`). This
+    // exactly models `captureOriginal`: capture shares the Rc, the first
+    // subsequent mutation forks `map` away while `original` keeps the snapshot.
+    pub map: Rc<Map<String, Value>>,
+    pub original: Option<Rc<Map<String, Value>>>,
     // Cached mirrors of `map["id"]` / `map["path"]` to avoid IndexMap+SipHash
     // lookups on the hottest accessors (`id()`/`path()` run inside every linear
     // element scan). Kept in sync by `from_json`/`new`/`set_id` (the only writers
@@ -108,7 +116,7 @@ impl ElementDefinition {
         }
         let id = map.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let path = map.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let mut ed = ElementDefinition { map, original: None, id, path };
+        let mut ed = ElementDefinition { map: Rc::new(map), original: None, id, path };
         if capture {
             ed.capture_original();
         }
@@ -121,11 +129,19 @@ impl ElementDefinition {
         map.insert("id".into(), Value::String(id.to_string()));
         map.insert("path".into(), Value::String(path.clone()));
         ElementDefinition {
-            map,
+            map: Rc::new(map),
             original: None,
             id: id.to_string(),
             path,
         }
+    }
+
+    /// Mutable access to the element map, copy-on-write: forks a private copy of
+    /// the inner `Map` only if it is currently shared (with `original` or another
+    /// cloned element). The sole write path for `map`.
+    #[inline]
+    pub fn map_mut(&mut self) -> &mut Map<String, Value> {
+        Rc::make_mut(&mut self.map)
     }
 
     pub fn id(&self) -> &str {
@@ -140,24 +156,27 @@ impl ElementDefinition {
 
     pub fn set_id(&mut self, id: String) {
         let path = id_to_path(&id);
-        self.map.insert("id".into(), Value::String(id.clone()));
-        self.map.insert("path".into(), Value::String(path.clone()));
+        let m = self.map_mut();
+        m.insert("id".into(), Value::String(id.clone()));
+        m.insert("path".into(), Value::String(path.clone()));
         self.id = id;
         self.path = path;
     }
 
     pub fn capture_original(&mut self) {
-        self.original = Some(self.map.clone());
+        // Zero-copy: share the current map Rc as the captured original. The first
+        // later write to `map` forks it (make_mut), leaving `original` intact.
+        self.original = Some(Rc::clone(&self.map));
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.map.get(key)
     }
     pub fn set(&mut self, key: &str, v: Value) {
-        self.map.insert(key.to_string(), v);
+        self.map_mut().insert(key.to_string(), v);
     }
     pub fn remove(&mut self, key: &str) {
-        self.map.remove(key);
+        self.map_mut().remove(key);
     }
 
     /// Type codes (raw `code` or fhir-type extension valueUrl/valueUri).
@@ -171,7 +190,7 @@ impl ElementDefinition {
 
     pub fn has_own_diff(&self) -> bool {
         let blank = Map::new();
-        let original = self.original.as_ref().unwrap_or(&blank);
+        let original = self.original.as_deref().unwrap_or(&blank);
         let mut uk = String::new();
         for prop in ED_PROPS {
             let key = match resolve_choice_key_either(prop, &self.map, original) {
@@ -194,7 +213,7 @@ impl ElementDefinition {
     /// `calculateDiff().toJSON()` collapsed.
     pub fn calculate_diff_json(&self) -> Value {
         let blank = Map::new();
-        let original = self.original.as_ref().unwrap_or(&blank);
+        let original = self.original.as_deref().unwrap_or(&blank);
         let mut diff = Map::new();
         let id = self.id().to_string();
         diff.insert("id".into(), Value::String(id.clone()));
@@ -1036,11 +1055,17 @@ impl StructureDefinition {
             return None;
         }
         let mut slice = parent.clone();
-        slice.map.remove("slicing");
+        {
+            let m = slice.map_mut();
+            m.remove("slicing");
+        }
         slice.set_id(slice_id.clone());
-        slice.map.remove("min");
-        slice.map.remove("max");
-        slice.map.remove("mustSupport");
+        {
+            let m = slice.map_mut();
+            m.remove("min");
+            m.remove("max");
+            m.remove("mustSupport");
+        }
         slice.capture_original();
         let slice_name = if parent_is_slice {
             format!("{}/{name}", parent.slice_name().unwrap())
@@ -1377,7 +1402,7 @@ fn reclone_capture(ed: &mut ElementDefinition, recapture_slice_extensions: bool)
     } else {
         let new_id = ed.id().to_string();
         if let Some(orig) = ed.original.as_mut() {
-            orig.insert("id".into(), Value::String(new_id));
+            Rc::make_mut(orig).insert("id".into(), Value::String(new_id));
         }
     }
 }
@@ -1400,14 +1425,32 @@ fn remove_uninherited(ed: &mut ElementDefinition) {
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status-reason",
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-summary",
     ];
-    if let Some(Value::Array(exts)) = ed.map.get_mut("extension") {
+    // Avoid forking the COW map if there is nothing to strip.
+    let has_uninherited = ed
+        .map
+        .get("extension")
+        .and_then(|v| v.as_array())
+        .map(|exts| {
+            exts.iter().any(|e| {
+                let u = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                UNINHERITED.contains(&u)
+            })
+        })
+        .unwrap_or(false);
+    if !has_uninherited {
+        return;
+    }
+    let m = ed.map_mut();
+    let mut became_empty = false;
+    if let Some(Value::Array(exts)) = m.get_mut("extension") {
         exts.retain(|e| {
             let u = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
             !UNINHERITED.contains(&u)
         });
-        if exts.is_empty() {
-            ed.map.remove("extension");
-        }
+        became_empty = exts.is_empty();
+    }
+    if became_empty {
+        m.remove("extension");
     }
 }
 

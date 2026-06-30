@@ -388,7 +388,7 @@ impl<'a> SdContext<'a> {
                 entry.insert("language".into(), J::String(l.code.clone()));
             }
             let arr = sd.elements[ei]
-                .map
+                .map_mut()
                 .entry("mapping".to_string())
                 .or_insert_with(|| J::Array(vec![]));
             if let Some(a) = arr.as_array_mut() {
@@ -696,14 +696,32 @@ fn remove_matching_extensions(body: &mut Map<String, J>, urls: &[&str]) {
 }
 
 fn remove_uninherited_ed_extensions(ed: &mut ElementDefinition) {
-    if let Some(J::Array(exts)) = ed.map.get_mut("extension") {
+    // Skip forking the COW map when there is nothing to strip.
+    let has_uninherited = ed
+        .map
+        .get("extension")
+        .and_then(|v| v.as_array())
+        .map(|exts| {
+            exts.iter().any(|e| {
+                let u = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                UNINHERITED_ED_EXTENSIONS.contains(&u)
+            })
+        })
+        .unwrap_or(false);
+    if !has_uninherited {
+        return;
+    }
+    let m = ed.map_mut();
+    let mut became_empty = false;
+    if let Some(J::Array(exts)) = m.get_mut("extension") {
         exts.retain(|e| {
             let u = e.get("url").and_then(|v| v.as_str()).unwrap_or("");
             !UNINHERITED_ED_EXTENSIONS.contains(&u)
         });
-        if exts.is_empty() {
-            ed.map.remove("extension");
-        }
+        became_empty = exts.is_empty();
+    }
+    if became_empty {
+        m.remove("extension");
     }
 }
 
@@ -732,16 +750,18 @@ fn reset_parent_elements(sd: &mut StructureDefinition, def: &StructureDef, kind:
     // root base.path = root path
     if let Some(root) = sd.elements.first_mut() {
         let rp = root.path().to_string();
-        if let Some(base) = root.map.get_mut("base") {
-            if let Some(bo) = base.as_object_mut() {
-                bo.insert("path".into(), J::String(rp));
+        if root.map.get("base").is_some() {
+            if let Some(base) = root.map_mut().get_mut("base") {
+                if let Some(bo) = base.as_object_mut() {
+                    bo.insert("path".into(), J::String(rp));
+                }
             }
         }
     }
     let parent = def.parent.as_deref().unwrap_or("");
     if parent == "Element" || parent == "http://hl7.org/fhir/StructureDefinition/Element" {
         if let Some(root) = sd.elements.first_mut() {
-            root.map.remove("extension");
+            root.map_mut().remove("extension");
         }
     }
     sd.capture_original_elements();
@@ -1947,7 +1967,7 @@ fn apply_caret_element(ed: &mut ElementDefinition, caret_path: &str, value: &Fsh
     let caret_path = resolve_caret_aliases(caret_path);
     if let Some((segs, leaf_ty)) = crate::caret_schema::resolve_path("ElementDefinition", &caret_path) {
         if let Some(leaf) = crate::export::coerce(value, &leaf_ty) {
-            crate::export::apply(&mut ed.map, &segs, leaf);
+            crate::export::apply(ed.map_mut(), &segs, leaf);
         }
     }
 }
