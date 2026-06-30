@@ -1945,11 +1945,17 @@ fn handle_extension_contains(
         };
         let si = sd.index_of_id(&slice_id).unwrap();
         if let Some(type_name) = &item.type_ {
-            // named extension: type = [{code:Extension, profile:[url]}], url fixed
-            let url = fisher
-            .fish_for_metadata(type_name)
-            .and_then(|m| m.url)
-            .unwrap_or_else(|| type_name.clone());
+            // named extension: type = [{code:Extension, profile:[url]}], url fixed.
+            // Stock computes `item.type.replace(/^[^|]+/, extension.url)`, i.e. it
+            // keeps any `|version` suffix that was on the (possibly aliased) type
+            // and only swaps the canonical part for the fished extension url.
+            let url = match fisher.fish_for_metadata(type_name).and_then(|m| m.url) {
+                Some(ext_url) => match type_name.find('|') {
+                    Some(idx) => format!("{ext_url}{}", &type_name[idx..]),
+                    None => ext_url,
+                },
+                None => type_name.clone(),
+            };
             sd.elements[si].set(
                 "type",
                 json!([{ "code": "Extension", "profile": [url] }]),

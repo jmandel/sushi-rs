@@ -64,6 +64,29 @@ impl TankIndex {
                 value_sets.push((vec![vs.name.clone(), id, url.clone()], url));
             }
         }
+        // Instance-defined conformance ValueSets/CodeSystems (`InstanceOf: ValueSet`
+        // / `CodeSystem` with `Usage` other than Inline) are fishable as their
+        // resource type. Stock's MasterFisher.fixMetadata synthesizes a url
+        // `{canonical}/{resourceType}/{id}` when the instance has no explicit
+        // `* url`. Added after keyword-defined VS/CS so those win on name clash,
+        // matching FSHTank.fish (entities before instances).
+        for doc in docs {
+            for (_k, inst) in &doc.instances {
+                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
+                let (target, fhir_type) = match instance_of {
+                    "ValueSet" => (&mut value_sets, "ValueSet"),
+                    "CodeSystem" => (&mut code_systems, "CodeSystem"),
+                    _ => continue,
+                };
+                if inst.usage == "Inline" {
+                    continue;
+                }
+                let id = instance_effective_id(inst);
+                let url = instance_assigned_url(inst)
+                    .unwrap_or_else(|| format!("{}/{}/{}", cfg.canonical, fhir_type, id));
+                target.push((vec![inst.name.clone(), id, url.clone()], url));
+            }
+        }
         TankIndex {
             code_systems,
             value_sets,
@@ -88,6 +111,35 @@ impl TankIndex {
             .find(|(keys, _)| keys.iter().any(|k| k == base))
             .map(|(_, url)| url.clone())
     }
+}
+
+/// Effective instance id: the last `* id = "..."` AssignmentRule's value, else
+/// the declared id (which defaults to the instance name).
+fn instance_effective_id(inst: &fsh_model::Instance) -> String {
+    for r in inst.rules.iter().rev() {
+        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+            if path == "url" {
+                continue;
+            }
+            if path == "id" {
+                return s.clone();
+            }
+        }
+    }
+    inst.id.clone()
+}
+
+/// An explicit `* url = "..."` AssignmentRule on an instance, if present
+/// (mirrors `getNonInstanceValueFromRules(entity, 'url')`).
+fn instance_assigned_url(inst: &fsh_model::Instance) -> Option<String> {
+    for r in inst.rules.iter().rev() {
+        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+            if path == "url" {
+                return Some(s.clone());
+            }
+        }
+    }
+    None
 }
 
 /// Recompute the effective `id` (`FshValueSet.get id()` / `FshCodeSystem`):
