@@ -697,10 +697,47 @@ impl StructureDefinition {
             .and_then(|v| v.as_str())
             .map(String::from)
         {
-            let ref_id = cr.trim_start_matches('#').to_string();
+            // getContentReferenceId: everything after the '#'.
+            let ref_id = match cr.find('#') {
+                Some(p) => cr[p + 1..].to_string(),
+                None => cr.clone(),
+            };
+            let parent_id = self.elements[idx].id().to_string();
+            let sd_type = self.type_().to_string();
+            let sd_id = self.get_str("id").unwrap_or("").to_string();
+            let sd_url = self.get_str("url").unwrap_or("").to_string();
+
+            // SUSHI clones from the *constrained* snapshot element ONLY when the
+            // referenced element carries the elementdefinition-profile-element
+            // extension in this profile's differential (rare, SDC-style). Otherwise
+            // it clones from the *unconstrained base resource*, so diffs are taken
+            // relative to base cardinalities, not the already-constrained parent
+            // (`ElementDefinition.ts:2706-2735`).
+            let use_constrained = fisher
+                .fish_for_fhir(&sd_id)
+                .map(|pj| has_profile_element_extension(&pj, &ref_id, &sd_url))
+                .unwrap_or(false);
+
+            if !use_constrained {
+                if let Some(base_json) = fisher.fish_for_fhir(&sd_type) {
+                    let base_def = StructureDefinition::from_json(&base_json, true);
+                    if let Some(rbi) = base_def.index_of_id(&ref_id) {
+                        let ref_type = base_def.elements[rbi].get("type").cloned();
+                        let new_ids =
+                            self.clone_children_from_def(&base_def, &ref_id, &parent_id, true);
+                        if !new_ids.is_empty() {
+                            if let Some(t) = ref_type {
+                                self.elements[idx].set("type", t);
+                            }
+                            self.elements[idx].remove("contentReference");
+                        }
+                        return new_ids;
+                    }
+                }
+            }
+            // Constrained-snapshot branch (profile-element extension) + fallback.
             if let Some(ri) = self.index_of_id(&ref_id) {
                 let ref_type = self.elements[ri].get("type").cloned();
-                let parent_id = self.elements[idx].id().to_string();
                 let new_ids = self.clone_children_from(&ref_id, &parent_id, idx, true);
                 if !new_ids.is_empty() {
                     if let Some(t) = ref_type {
@@ -738,7 +775,10 @@ impl StructureDefinition {
             if let Some(sliced_id) = self.sliced_element_id(&parent_id) {
                 let child_ids = self.children_ids(&sliced_id);
                 if !child_ids.is_empty() {
-                    return self.clone_children_from(&sliced_id, &parent_id, idx, true);
+                    // sliceName unfold uses cloneChildren(slicedElement, false):
+                    // slice extensions keep their inherited original so they still
+                    // appear as diffs in the slice (ElementDefinition.ts:2742).
+                    return self.clone_children_from(&sliced_id, &parent_id, idx, false);
                 }
             }
         }
@@ -769,14 +809,18 @@ impl StructureDefinition {
         self.add_elements(new_children)
     }
 
-    /// Clone children of `from_id` to be children of `to_id`. `recapture`:
-    /// captureOriginal each (true) or fix `_original.id` (false).
+    /// Clone children of `from_id` to be children of `to_id`. Port of
+    /// `ElementDefinition.cloneChildren`: each child captures a fresh original
+    /// UNLESS it is a slice extension (sliceName set + path ends in `.extension`)
+    /// and `recapture_slice_extensions` is false — in that case the child keeps its
+    /// inherited original (only `_original.id` is re-pointed) so the slice still
+    /// shows as a diff against base. `recaptureSliceExtensions` (ElementDefinition.ts:2814).
     fn clone_children_from(
         &mut self,
         from_id: &str,
         to_id: &str,
         _parent_idx: usize,
-        recapture: bool,
+        recapture_slice_extensions: bool,
     ) -> Vec<String> {
         let child_ids = self.children_ids(from_id);
         let mut clones = Vec::new();
@@ -786,15 +830,31 @@ impl StructureDefinition {
             let new_id = cid.replacen(from_id, to_id, 1);
             ed.set_id(new_id);
             remove_uninherited(&mut ed);
-            if recapture {
-                ed.capture_original();
-            } else {
-                let (new_id, new_path) = (ed.id().to_string(), ed.path().to_string());
-                if let Some(orig) = ed.original.as_mut() {
-                    orig.insert("id".into(), Value::String(new_id));
-                    orig.insert("path".into(), Value::String(new_path));
-                }
-            }
+            reclone_capture(&mut ed, recapture_slice_extensions);
+            clones.push(ed);
+        }
+        self.add_elements(clones)
+    }
+
+    /// Like `clone_children_from`, but the source children come from a *separate*
+    /// StructureDefinition (`src`) — used to unfold a contentReference against the
+    /// unconstrained base resource rather than this profile's constrained snapshot.
+    fn clone_children_from_def(
+        &mut self,
+        src: &StructureDefinition,
+        from_id: &str,
+        to_id: &str,
+        recapture_slice_extensions: bool,
+    ) -> Vec<String> {
+        let child_ids = src.children_ids(from_id);
+        let mut clones = Vec::new();
+        for cid in &child_ids {
+            let i = src.index_of_id(cid).unwrap();
+            let mut ed = src.elements[i].clone();
+            let new_id = cid.replacen(from_id, to_id, 1);
+            ed.set_id(new_id);
+            remove_uninherited(&mut ed);
+            reclone_capture(&mut ed, recapture_slice_extensions);
             clones.push(ed);
         }
         self.add_elements(clones)
@@ -1149,6 +1209,68 @@ fn path_depth(path: &str) -> usize {
     path.split('.').count().saturating_sub(1)
 }
 
+/// Port of `ElementDefinition.hasProfileElementExtension`: returns true when the
+/// referenced element (`element_name`) in this profile's differential carries the
+/// elementdefinition-profile-element extension pointing back at itself. When true,
+/// a contentReference unfolds from the constrained snapshot rather than base.
+fn has_profile_element_extension(profile_json: &Value, element_name: &str, sd_url: &str) -> bool {
+    const PROFILE_ELEMENT_EXTENSION: &str =
+        "http://hl7.org/fhir/StructureDefinition/elementdefinition-profile-element";
+    let Some(diff) = profile_json
+        .get("differential")
+        .and_then(|d| d.get("element"))
+        .and_then(|e| e.as_array())
+    else {
+        return false;
+    };
+    let Some(elem) = diff
+        .iter()
+        .find(|e| e.get("id").and_then(|v| v.as_str()) == Some(element_name))
+    else {
+        return false;
+    };
+    let Some(etype) = elem
+        .get("type")
+        .and_then(|t| t.as_array())
+        .and_then(|a| a.first())
+    else {
+        return false;
+    };
+    let (Some(profiles), Some(uprofiles)) = (
+        etype.get("profile").and_then(|p| p.as_array()),
+        etype.get("_profile").and_then(|p| p.as_array()),
+    ) else {
+        return false;
+    };
+    let has_ext = |prof: &Value| -> bool {
+        prof.get("extension")
+            .and_then(|e| e.as_array())
+            .map(|exts| {
+                exts.iter().any(|ext| {
+                    ext.get("url").and_then(|u| u.as_str()) == Some(PROFILE_ELEMENT_EXTENSION)
+                        && ext.get("valueString").is_some()
+                })
+            })
+            .unwrap_or(false)
+    };
+    let Some(pi) = uprofiles.iter().position(|p| p.is_object() && has_ext(p)) else {
+        return false;
+    };
+    let exts = uprofiles[pi].get("extension").and_then(|e| e.as_array());
+    let target_element = exts
+        .and_then(|e| {
+            e.iter().find(|x| {
+                x.get("url").and_then(|u| u.as_str()) == Some(PROFILE_ELEMENT_EXTENSION)
+                    && x.get("valueString").is_some()
+            })
+        })
+        .and_then(|x| x.get("valueString"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let profile_canonical = profiles.get(pi).and_then(|v| v.as_str()).unwrap_or("");
+    profile_canonical == sd_url && target_element == element_name
+}
+
 /// `^{escapePath(prefix)}[.:/]` test: id starts with prefix then a boundary char.
 fn starts_with_boundary(id: &str, prefix: &str) -> bool {
     id.strip_prefix(prefix)
@@ -1167,6 +1289,24 @@ fn starts_with_slice(id: &str, prefix: &str) -> bool {
     id.strip_prefix(prefix)
         .map(|r| matches!(r.chars().next(), Some(':') | Some('/')))
         .unwrap_or(false)
+}
+
+/// Port of the per-child capture logic in `ElementDefinition.cloneChildren`:
+/// `shouldCaptureOriginal = recaptureSliceExtensions || sliceName == null ||
+/// !path.endsWith('.extension')`. When capturing, snapshot the current state as the
+/// new original; otherwise keep the inherited original and only re-point its `id`.
+fn reclone_capture(ed: &mut ElementDefinition, recapture_slice_extensions: bool) {
+    let should_capture = recapture_slice_extensions
+        || ed.slice_name().is_none()
+        || !ed.path().ends_with(".extension");
+    if should_capture {
+        ed.capture_original();
+    } else {
+        let new_id = ed.id().to_string();
+        if let Some(orig) = ed.original.as_mut() {
+            orig.insert("id".into(), Value::String(new_id));
+        }
+    }
 }
 
 fn remove_uninherited(ed: &mut ElementDefinition) {

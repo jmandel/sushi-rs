@@ -75,6 +75,8 @@ pub struct SdContext<'a> {
     pub diag: Vec<String>,
     vs_url: &'a dyn Fn(&str) -> Option<String>,
     cs_url: &'a dyn Fn(&str) -> Option<String>,
+    /// name/id/url -> canonical url for predefined ValueSets (input/resources).
+    predefined_vs: std::collections::HashMap<String, String>,
 }
 
 /// A read-only fisher over package + already-exported local SDs.
@@ -82,6 +84,7 @@ pub struct FisherView<'a> {
     store: &'a package_store::PackageStore,
     exported: &'a [ExportedSd],
     in_progress_meta: &'a std::collections::HashMap<String, Metadata>,
+    predefined_vs: &'a std::collections::HashMap<String, String>,
 }
 
 impl Fisher for FisherView<'_> {
@@ -120,6 +123,26 @@ impl Fisher for FisherView<'_> {
     fn fish_for_metadata_vs(&self, name: &str) -> Option<Metadata> {
         // Local ValueSets are resolved by the exporter's `vs_url` closure; here
         // we only restrict the package fish to ValueSet definitions.
+        // Predefined ValueSets (input/resources/*.{xml,json}) win over packages,
+        // mirroring SUSHI's FHIRDefinitions precedence (predefined before packages):
+        // a `* path from <Name>` binding resolves to the local canonical url before
+        // a wrong same-named THO/core ValueSet (or no match).
+        let base = name.split('|').next().unwrap_or(name);
+        if let Some(url) = self.predefined_vs.get(base) {
+            return Some(Metadata {
+                id: String::new(),
+                name: base.to_string(),
+                sd_type: None,
+                url: Some(url.clone()),
+                parent: None,
+                abstract_: None,
+                version: None,
+                kind: None,
+                can_bind: false,
+                can_be_target: false,
+                instance_usage: None,
+            });
+        }
         let m = self
             .store
             .fish_for_metadata(name, &[package_store::FishType::ValueSet])?;
@@ -213,7 +236,14 @@ impl<'a> SdContext<'a> {
             diag: Vec::new(),
             vs_url,
             cs_url,
+            predefined_vs: std::collections::HashMap::new(),
         }
+    }
+
+    /// Install the predefined ValueSet name/id/url -> url map used by the binding
+    /// fisher (see `FisherView::fish_for_metadata_vs`).
+    pub fn set_predefined_vs(&mut self, map: std::collections::HashMap<String, String>) {
+        self.predefined_vs = map;
     }
 
     pub fn fisher(&self) -> FisherView<'_> {
@@ -221,6 +251,7 @@ impl<'a> SdContext<'a> {
             store: self.store,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
+            predefined_vs: &self.predefined_vs,
         }
     }
 
@@ -332,6 +363,7 @@ impl<'a> SdContext<'a> {
             store: self.store,
             exported: &[],
             in_progress_meta: &self.in_progress_meta,
+            predefined_vs: &self.predefined_vs,
         };
         // We need the SD mutably and a fisher over the package + in-progress meta.
         // The mapping source SD is already exported; element lookups only need the
@@ -396,6 +428,7 @@ impl<'a> SdContext<'a> {
                 store: self.store,
                 exported: &self.exported,
                 in_progress_meta: &self.in_progress_meta,
+                predefined_vs: &self.predefined_vs,
             };
             let mut local_diag = Vec::new();
             set_rules(&mut sd, &mut def, kind, &fisher, self.cfg, self.vs_url, self.cs_url, &mut local_diag);
@@ -1929,10 +1962,12 @@ pub fn build_sd_context<'a>(
     store: &'a package_store::PackageStore,
     vs_url: &'a dyn Fn(&str) -> Option<String>,
     cs_url: &'a dyn Fn(&str) -> Option<String>,
+    predefined_vs: std::collections::HashMap<String, String>,
 ) -> SdContext<'a> {
     set_invariants(docs);
     set_aliases(docs);
     let mut ctx = SdContext::new(store, cfg, docs, vs_url, cs_url);
+    ctx.set_predefined_vs(predefined_vs);
     ctx.export_all();
     ctx.export_mappings(docs);
     ctx
@@ -1958,6 +1993,6 @@ pub fn export_structure_definitions(
     vs_url: &dyn Fn(&str) -> Option<String>,
     cs_url: &dyn Fn(&str) -> Option<String>,
 ) -> Vec<crate::export::Exported> {
-    let ctx = build_sd_context(docs, cfg, store, vs_url, cs_url);
+    let ctx = build_sd_context(docs, cfg, store, vs_url, cs_url, std::collections::HashMap::new());
     exported_files(&ctx)
 }

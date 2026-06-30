@@ -563,7 +563,14 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let tank = export::TankIndex::build(&docs, &cfg);
     let vs_url = |s: &str| tank.vs_url(s);
     let cs_url = |s: &str| tank.cs_url(s);
-    let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url);
+    // Predefined ValueSets (input/resources/*.{xml,json}) feed the SD binding
+    // fisher so `* path from <Name>` resolves to the local canonical url before
+    // a wrong same-named package ValueSet.
+    let predefined_vs = {
+        let cy: serde_yaml::Value = serde_yaml::from_str(&cfg_text).unwrap_or(serde_yaml::Value::Null);
+        ig_export::predefined_vs_map(ig_dir, &cy)
+    };
+    let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url, predefined_vs);
 
     // SD conformance (profiles, extensions, logicals — in tank order), local
     // profile/logical urls, custom-resource detection.

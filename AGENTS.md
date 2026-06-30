@@ -554,15 +554,45 @@ Phases from the plan (0–9). Current state:
     resources, R5 `guide-parameter-code` VS membership (hardcoded ig-parameters —
     fine since epi's codes aren't in it), useContext/template/global beyond
     passthrough, menu.xml/page-file generation (not needed for the JSON resource).
-- [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
-  **Current: 662/665 byte-identical** (654 before IG export; was 638 before the 2026-06-29 SD-parity pass;
-  620 pre instance nested-ext/canonical; 547 pre-Phase-4.1; 247 pre-SD). SD now mcode
-  53/53, ips 31/32, crd 26/27, epi 27/28 (137/140). VS/CS ips 35/36, epi 29/29, mcode
-  104/104, crd 28/28. Instances all clean; all 4 ImplementationGuide resources now pass.
-  **Remaining 3 gaps (all SD)**: ips `Composition-uv-ips` + epi `composition-epi-type1`
-  (deep `section.section` reslicing / nested contentReference); crd
-  `profile-nutritionorder` (binds to ValueSets defined as predefined XML — needs the
-  VS *bodies* loaded into the SD-export fisher, separate from the IG resource list).
+- [x] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
+  **Current: 665/665 byte-identical — COMPLETE** (662 before the 2026-06-30 final-3 SD
+  pass; 654 before IG export; 638 before the 2026-06-29 SD-parity pass; 620 pre
+  instance nested-ext/canonical; 547 pre-Phase-4.1; 247 pre-SD). SD now mcode 53/53,
+  ips 32/32, crd 27/27, epi 28/28 (140/140). VS/CS/instances/IGs all clean. `cargo
+  test --workspace` green (18 suites).
+  - **2026-06-30 final-3 SD fixes (the last 3 SD edge cases):**
+    1. **crd `profile-nutritionorder`** — bindings `* path from <Name>` to ValueSets
+       defined ONLY as **predefined `input/resources/*.xml`** (TypesOfEdibleSubstances→
+       edible-substance-type, DietCodes→diet-type, NutrientCodes→nutrient-code)
+       resolved to a wrong same-named THO/core VS (or not at all). Fix: load a
+       predefined-VS name/id/url→canonical-url map (`ig_export::predefined_vs_map`,
+       reuses the predefined scanner + a new `url` field on the XML/JSON extractor)
+       and consult it in `FisherView::fish_for_metadata_vs` BEFORE the package fish
+       (SUSHI FHIRDefinitions precedence: predefined wins over packages). Threaded
+       via `build_sd_context(..., predefined_vs)` → `SdContext::set_predefined_vs`.
+    2. **epi `composition-epi-type1`** — nested contentReference (`section.section` →
+       `#Composition.section`) was cloning children from the ALREADY-CONSTRAINED
+       parent snapshot, so diffs were relative to the constrained section (dropped
+       `min:1` on `.id`, spurious `min:0` on `.title`, missing `.code.coding.system`
+       etc.). Fix: port `ElementDefinition.unfold`'s two-branch logic — clone from the
+       constrained snapshot ONLY when the referenced element carries the
+       elementdefinition-profile-element extension in the differential
+       (`has_profile_element_extension`, rare SDC case); otherwise clone from the
+       **unconstrained base resource** (`clone_children_from_def` over a
+       `StructureDefinition::from_json` of the fished base type). Diffs now taken vs
+       base cardinalities. `type:[BackboneElement]` is re-set from the base ref.
+    3. **ips `Composition-uv-ips`** — named section slices (`section:sectionProblems`
+       …) dropped their inherited `extension:section-note` sub-slice (16 missing
+       reslice elements). Root cause: the sliceName-unfold path cloned children with
+       `recapture=true`, so the slice extension recaptured its constrained state as
+       original → `hasDiff` false → omitted. Fix: port `cloneChildren`'s per-child
+       `shouldCaptureOriginal = recaptureSliceExtensions || sliceName==null ||
+       !path.endsWith('.extension')` (`reclone_capture` helper); the sliceName unfold
+       now passes `recaptureSliceExtensions=false` (`ElementDefinition.ts:2742`,2814),
+       so slice extensions keep their inherited (base) original and show as diffs.
+    All three are in `fhir_model/src/lib.rs` (unfold/clone) + `compiler/src/sd_export.rs`
+    (binding fisher) + `compiler/src/ig_export.rs` (predefined scanner) + `lib.rs`
+    wiring. Full dashboard re-run after each — NO regression to the 130+ passing SDs.
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps

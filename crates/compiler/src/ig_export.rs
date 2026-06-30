@@ -1193,6 +1193,7 @@ struct PredefinedRes {
     id: String,
     title: Option<String>,
     name: Option<String>,
+    url: Option<String>,
     description: Option<String>,
     /// basename of the containing folder (e.g. "resources", "examples").
     folder: String,
@@ -1424,6 +1425,33 @@ fn is_conformance_type(rt: &str) -> bool {
     )
 }
 
+/// Build a name/id/url -> canonical-url lookup of predefined ValueSet resources
+/// (loaded from `input/resources` etc.). Used by the SD binding fisher so that a
+/// `* path from <Name>` binding resolves to a locally-defined ValueSet's url
+/// before falling through to the FHIR packages (which may carry a wrong same-named
+/// THO/core ValueSet, or none at all).
+pub fn predefined_vs_map(
+    ig_dir: &str,
+    cfg_yaml: &Y,
+) -> std::collections::HashMap<String, String> {
+    let mut map = std::collections::HashMap::new();
+    for pf in collect_predefined_files(ig_dir, cfg_yaml) {
+        if pf.resource_type != "ValueSet" {
+            continue;
+        }
+        let Some(url) = pf.url.clone() else { continue };
+        // First writer wins (folder iteration order); keys: name, id, url.
+        if let Some(n) = &pf.name {
+            map.entry(n.clone()).or_insert_with(|| url.clone());
+        }
+        if !pf.id.is_empty() {
+            map.entry(pf.id.clone()).or_insert_with(|| url.clone());
+        }
+        map.entry(url.clone()).or_insert(url);
+    }
+    map
+}
+
 /// Enumerate predefined resource files in the recognized input folders.
 fn collect_predefined_files(ig_dir: &str, cfg_yaml: &Y) -> Vec<PredefinedRes> {
     let input = Path::new(ig_dir).join("input");
@@ -1521,6 +1549,7 @@ fn parse_predefined_file(
             id,
             title: json.get("title").and_then(|v| v.as_str()).map(str::to_string),
             name: json.get("name").and_then(|v| v.as_str()).map(str::to_string),
+            url: json.get("url").and_then(|v| v.as_str()).map(str::to_string),
             description: json
                 .get("description")
                 .and_then(|v| v.as_str())
@@ -1545,6 +1574,7 @@ fn parse_predefined_xml(text: &str, folder: &str, stem: &str) -> Option<Predefin
     let mut id = String::new();
     let mut title = None;
     let mut name = None;
+    let mut url = None;
     let mut description = None;
     let mut meta_profile = Vec::new();
     let mut in_meta_depth: Option<i32> = None;
@@ -1565,6 +1595,7 @@ fn parse_predefined_xml(text: &str, folder: &str, stem: &str) -> Option<Predefin
                     match tag.as_str() {
                         "id" if id.is_empty() => id = val.unwrap_or_default(),
                         "name" if name.is_none() => name = val,
+                        "url" if url.is_none() => url = val,
                         "title" if title.is_none() => title = val,
                         "description" if description.is_none() => description = val,
                         "meta" => in_meta_depth = Some(depth),
@@ -1604,6 +1635,7 @@ fn parse_predefined_xml(text: &str, folder: &str, stem: &str) -> Option<Predefin
         id,
         title,
         name,
+        url,
         description,
         folder: folder.to_string(),
         file_stem: stem.to_string(),
