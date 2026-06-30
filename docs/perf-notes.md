@@ -66,3 +66,20 @@ called inside every linear element scan (`index_of_id`/`path_of_id`/
 - Parallelizing resource exports — would need care to preserve deterministic
   emission order; not needed to hit target.
 - `package_store` parse cache — already done in an earlier phase.
+
+## Follow-up pass (2026-06-30): lexer was the fenced-off lever
+The first Phase-9 pass excluded the lexer by task constraint. Re-profiling showed
+`lex::m_ref` was the #1 cost on Reference/Canonical-heavy IGs (**26% on mCODE**) —
+O(n^2)+unbounded. Rewrote it as a single forward parse with early termination
+(parity-gated by the byte-exact lex oracle + 423-file corpus diff).
+Result: **mcode 2.73->1.94s (in target), ips 1.57->1.42s.** 665/665 preserved.
+
+### Remaining headroom (post-m_ref, broadly distributed — diminishing returns)
+mcode profile now has NO dominant symbol:
+- allocation churn (malloc+realloc+free+reserve) ~20% — serde_json Value / Vec<String> / element-map clones
+- `format!` string building (format_inner/fmt::write/write_str) ~3% self, called widely
+- `IndexMap::clone` ~5% (cloneDeep of element maps in unfold/diff/instance)
+- `set_implied_properties_on_instance` ~5%
+Further gains (est. 10-30%) need allocation reduction: intern/reuse path Strings in
+hot loops, COW element clones instead of full cloneDeep. Higher risk in the delicate
+SD/instance engines for modest gain; both IGs are already in target.
