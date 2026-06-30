@@ -13,6 +13,17 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | 1.052 | **0.755** |
 
 ### Integration log
+- **R3 perf/J INTEGRATED**: package_store reads only a 16KiB prefix for name
+  extraction (full-read fallback; +2 unit tests) and drops a whole-SD deep-clone in
+  from_json. crd -10% ips -10% epi -6% mcode -6%. Parity 665/665, 4000-query pkg-fish
+  parity, tests green. +177 LOC.
+- **R3 perf/H REJECTED** (maintenance call): FxHash element-map newtype (+157 LOC,
+  core data-structure change, permanent shift_remove invariant). Gave ~5.5% standalone
+  but part of that was the from_json clone J already removed, so marginal-over-J is
+  ~3-4%; and H's own analysis notes the hashing ceiling is probe/Value-tree, not
+  hash-compute (unfixable without forking serde_json). Structural cost not justified
+  for a sub-second build. Finding recorded; revisit only if a custom Value is ever needed.
+
 - **R3 perf/I INTEGRATED**: O(1) prefix-index replaces the O(nodes*paths) matching_rule
   linear scan in set_implied_properties_on_instance (self-time 9.47%->0.67%). +13 LOC,
   instance_export only. mcode -13%, no regressions. Parity 665/665, tests green.
