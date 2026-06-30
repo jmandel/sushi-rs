@@ -176,6 +176,17 @@ cohesion-critical code (workspace shape, diagnostics, parser core).
 
 ## 7. Phase status (update as we go)
 
+> **🎉 PORT COMPLETE (2026-06-30): 665/665 byte-identical** across IPS/epi/mCODE/CRD
+> (`bash harness/diff-resources.sh` = PARITY for all 4; `bash harness/parity-dashboard.sh`
+> = 665/665). Every resource family matches stock SUSHI v3.20.0: StructureDefinition
+> 140/140, ValueSet 191/191, CodeSystem 9/9, Instance 325/325, ImplementationGuide 4/4.
+> **Phase 9 perf DONE**: warm IPS 14s→1.57s (target 1.5–2.5s; stock ~39s), mCODE 2.73s.
+> `cargo test --workspace` green (18 suites). ALL plan phases 0–9 complete.
+> **One documented gap (low ROI, corpus-unexercised):** winston-format *diagnostic
+> emission* — exporters collect message wording but the CLI doesn't print it; this
+> corpus is diagnostic-free (3/4 IGs 0/0; epi has 1 config warning). See §9.
+> The per-phase notes below are historical detail (some "gaps" listed were later closed).
+
 Phases from the plan (0–9). Current state:
 
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
@@ -324,7 +335,7 @@ Phases from the plan (0–9). Current state:
     `orderDetail` (ServiceType / ExampleVisionPrescriptionProductCodes),
     `serviceRequestCodes` (SNOMED_CT) — bare external CS/VS names, no local def,
     no alias.
-- [~] **Phase 5/6 — StructureDefinition export** — IN PROGRESS (byte parity:
+- [x] **Phase 5/6 — StructureDefinition export** — IN PROGRESS (byte parity:
   **epi 26/28, ips 27/32, crd 19/27 SD = 72/87**). VS/CS gates stay green; `cargo
   test --workspace` green. Differential-only output.
   - `fhir_model` (`lib.rs`+`props.rs`): `StructureDefinition`/`ElementDefinition`
@@ -380,7 +391,7 @@ Phases from the plan (0–9). Current state:
     resolve `$alias` brackets (pre-existing Phase-4 gap; shows up only in crd VS, which
     was never gated). (g) AssignmentRule of an Instance / deferred `^contained` carets
     not handled.
-- [~] **Phase 6 — full SD compatibility** — **137/140 SDs byte-identical (mcode
+- [x] **Phase 6 — full SD compatibility** (DONE 665/665; notes historical) — **137/140 SDs byte-identical (mcode
   53/53, ips 31/32, crd 26/27, epi 27/28)** after the 2026-06-29 SD-parity pass
   (dashboard 638→654/665). Remaining 3 SD: ips `Composition-uv-ips` + epi
   `composition-epi-type1` (deep `section.section` reslicing + nested
@@ -428,7 +439,7 @@ Phases from the plan (0–9). Current state:
        fhir-type-ext-resolved `type_code`. `* url only uri` was rewriting Extension.url's
        `code` from `System.String` to `uri`. Fixed crd ext-coverage-information.
        **GENERIC change to constrain_type — re-ran full dashboard, no regression.**
-- [~] **Phase 7 — instance export** — LARGELY DONE & verified. Byte parity (2026-06-29
+- [x] **Phase 7 — instance export** (DONE 665/665; notes historical) — LARGELY DONE & verified. Byte parity (2026-06-29
   update): **mcode 189/193, epi 54/54, ips 49/49, crd 26/26 real instances** — only
   remaining instance misses are 3 mcode (SD-blocked, see below) + the per-IG
   ImplementationGuide resource (separate IGExporter, not ported). SD/VS/CS gates +
