@@ -12,7 +12,7 @@ Per-IG: carinbb 31 diff, sdc 43, pas 23+2missing, dtr 14, genomics 13+**225 lost
 
 ## Bug groups
 
-**G1 — [CRASH] instance_export panic** (`instance_export.rs:859` `obj.get_mut(&key).unwrap()` on None).
+**G1 — [FIXED 2026-06-30 T1: extension-slice rewrite dropped trailing index + determine_known_slices regating] instance_export panic** (`instance_export.rs:859` `obj.get_mut(&key).unwrap()` on None).
 Nested extension inside a complex-datatype value under a soft-indexed extension slice.
 Aborts the whole build (SIGABRT) — genomics lost 225 resources. Repro (instance of GenomicReport):
 `* extension[GenomicReportNote][+].valueAnnotation.extension[AnnotationCode].valueCodeableConcept = CodedAnnotationTypesCS#test-disclaimer`.
@@ -23,7 +23,7 @@ We resolve `$`-aliases but not bare local CS names (`C4BBIdentifierType#um`). SU
 `replaceReferences` fishes name→canonical. Also breaks instance pattern-coding merge
 (duplicate codings). Hits carinbb(all 31), pas, genomics, ndh.
 
-**G3 — [HIGH, biggest by file count] extension `value[x]` dropped when the datatype
+**G3 — [MOSTLY FIXED 2026-06-30 T1: SD-driven TypeResolver replaced BOTH hardcoded tables (caret_schema.rs deleted); add_extension_slice double-wrap fixed; soft-index on VS/CS carets] extension `value[x]` dropped when the datatype
 isn't in our embedded caret/instance schema.** ROOT CAUSE: the Phase-4 shortcut — a
 hardcoded datatype table instead of fishing the REAL datatype SD from package_store.
 Fails on ContactDetail, Expression, Attachment, Markdown, Coding(some), nested
