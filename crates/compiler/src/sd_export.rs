@@ -515,20 +515,43 @@ impl<'a> SdContext<'a> {
     }
 
     fn export_local_deps(&mut self, def: &StructureDef) {
+        // Pre-export local definitions that this SD's rules will *fish for FHIR* (and
+        // unfold) during rule application — i.e. extensions named by a `contains`
+        // rule. Stock exports these lazily inside `handleExtensionContainsRule`/
+        // `unfold` via `fishForFHIRBestVersion(this, ...)`; our immutable fisher view
+        // can't trigger export mid-rule, so we pre-export them here.
+        //
+        // A non-Reference `Only`-rule target is pre-exported so `constrain_type`
+        // can read its resolved `sdType` (the output element's type `code` comes
+        // from `metadata.sd_type`; a tank-only profile has `sd_type: None`, which
+        // would wrongly collapse `resource only DTRQuestionnaireResponse` to the
+        // base `Resource` code). Reference (and CodeableReference) targets are NOT
+        // pre-exported: stock resolves them through `fishForMetadata`
+        // (`findTypeMatch`/`getTypeLineage`) using only the target's URL, never a
+        // full export. Eagerly exporting Reference targets caused a re-entrancy
+        // cascade — e.g. Plan-Net's `qualification` extension (a `contains` dep of
+        // PractitionerRole/OrganizationAffiliation) has
+        // `value[x] only Reference(PlannetOrganization)`, whose target transitively
+        // pulled those profiles back in *while qualification was still in-progress*,
+        // so they unfolded an empty qualification (base `Extension`) and dropped its
+        // sub-extension constraints.
         let mut deps: Vec<String> = Vec::new();
         for r in &def.rules {
             match r {
-                Rule::Only { types, .. } => {
-                    for t in types {
-                        let base = t.type_.split('|').next().unwrap_or(&t.type_).to_string();
-                        deps.push(base);
-                    }
-                }
                 Rule::Contains { items, .. } => {
                     for it in items {
                         if let Some(t) = &it.type_ {
                             deps.push(t.split('|').next().unwrap_or(t).to_string());
                         }
+                    }
+                }
+                Rule::Only { types, .. } => {
+                    for t in types {
+                        if t.is_reference || t.is_codeable_reference {
+                            continue;
+                        }
+                        let base = t.type_.split('|').next().unwrap_or(&t.type_).to_string();
+                        deps.push(base);
                     }
                 }
                 _ => {}
