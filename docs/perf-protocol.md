@@ -13,6 +13,10 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | **1.052** |
 
 ### Integration log
+- **mimalloc REVERTED** (user decision: avoid the C-toolchain build dependency).
+  Kept all pure-Rust changes. Current main (no mimalloc) best-of-5:
+  **ips 1.009 / epi 0.757 / mcode 1.457 / crd 0.995** (−23..−35% vs initial).
+
 - **perf/B** (3 commits → main): exp1 **mimalloc** global allocator (~30% alone;
   ⚠️ adds C build-dep `libmimalloc-sys` — isolated/revertible, flagged for review);
   exp2 **Rc<Map> copy-on-write** element maps in fhir_model (killed IndexMap::clone,
