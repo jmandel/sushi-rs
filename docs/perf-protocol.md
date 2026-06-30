@@ -13,6 +13,14 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | **1.052** |
 
 ### Integration log
+- **perf/B** (3 commits → main): exp1 **mimalloc** global allocator (~30% alone;
+  ⚠️ adds C build-dep `libmimalloc-sys` — isolated/revertible, flagged for review);
+  exp2 **Rc<Map> copy-on-write** element maps in fhir_model (killed IndexMap::clone,
+  ~halved SipHash); exp3 **cache parsed InstanceOf snapshot** per base type (instance
+  reuse). One trivial fhir_model conflict (A fmt-buffer vs B Rc) resolved.
+  **A+B combined best-of-5: ips 0.682 / epi 0.543 / mcode 1.123 / crd 0.781**
+  (~-50% vs initial; ~-95% vs the pre-Phase-9 14s). Parity 665/665, tests green.
+
 - **perf/A** (3 commits, cherry-picked → main 98762d8): package_store byte-scan name
   extractor (verified equiv over 281k cache files) — crd -32%; reuse `_`-sibling
   buffer in fhir_model hot loops (all IGs); move (not clone) index-entry fields.
