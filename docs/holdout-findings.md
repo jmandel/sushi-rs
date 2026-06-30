@@ -39,7 +39,7 @@ Our local resolution only uses instances with an explicit `* url =`; conformance
 instances (Questionnaire/CapabilityStatement) whose url is `{canonical}/{Type}/{id}`
 stay bare. dtr, pas.
 
-**G6 — [MED] package with empty/missing `.index.json` not directory-scanned.**
+**G6 — [FIXED 2026-06-30 — stock NEVER reads .index.json; always dir-scans; we now reconcile dir vs index] package with empty/missing `.index.json` not directory-scanned.**
 `hl7.fhir.uv.subscriptions-backport.r4#1.1.0` has `files:[]` despite 24 resources; FPL
 rebuilds by scanning, we trust the empty index → parent unfishable. pas drops 2
 resources; ndh dependsOn.uri wrong. 14 cached pkgs have near-empty indexes.
