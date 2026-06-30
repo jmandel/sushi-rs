@@ -1,0 +1,417 @@
+{
+  "resourcesDir": "/home/jmandel/periodicity/temp/mcode-ig/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 53,
+    "harvested": 46,
+    "skipped": 7
+  },
+  "entries": [
+    {
+      "id": "mcode-body-location-qualifier",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-body-location-qualifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-body-location-qualifier.json",
+      "fixture": "fixtures/mcode-body-location-qualifier.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-body-structure-identifier",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-body-structure-identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-mcode-body-structure-identifier.json",
+      "fixture": "fixtures/mcode-body-structure-identifier.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "mcode-body-surface-area",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-body-surface-area",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-mcode-body-surface-area.json",
+      "fixture": "fixtures/mcode-body-surface-area.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "mcode-cancer-disease-status-evidence-type",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-disease-status-evidence-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-cancer-disease-status-evidence-type.json",
+      "fixture": "fixtures/mcode-cancer-disease-status-evidence-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-cancer-disease-status",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-disease-status",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-mcode-cancer-disease-status.json",
+      "fixture": "fixtures/mcode-cancer-disease-status.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "mcode-cancer-patient",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-patient",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient",
+      "source": "StructureDefinition-mcode-cancer-patient.json",
+      "fixture": "fixtures/mcode-cancer-patient.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "mcode-cancer-related-medication-administration",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-administration",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationAdministration",
+      "source": "StructureDefinition-mcode-cancer-related-medication-administration.json",
+      "fixture": "fixtures/mcode-cancer-related-medication-administration.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "mcode-cancer-related-medication-request",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-request",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "source": "StructureDefinition-mcode-cancer-related-medication-request.json",
+      "fixture": "fixtures/mcode-cancer-related-medication-request.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "mcode-cancer-related-surgical-procedure",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-surgical-procedure",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "source": "StructureDefinition-mcode-cancer-related-surgical-procedure.json",
+      "fixture": "fixtures/mcode-cancer-related-surgical-procedure.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "mcode-cancer-risk-assessment",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-risk-assessment",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-cancer-risk-assessment.json",
+      "fixture": "fixtures/mcode-cancer-risk-assessment.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "mcode-cancer-stage",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-stage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-cancer-stage.json",
+      "fixture": "fixtures/mcode-cancer-stage.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "mcode-comorbidities",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-comorbidities",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-comorbidities.json",
+      "fixture": "fixtures/mcode-comorbidities.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "mcode-deauville-scale",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-deauville-scale",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-mcode-deauville-scale.json",
+      "fixture": "fixtures/mcode-deauville-scale.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "mcode-ecog-performance-status",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-ecog-performance-status",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-mcode-ecog-performance-status.json",
+      "fixture": "fixtures/mcode-ecog-performance-status.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "mcode-genomic-region-studied",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-genomic-region-studied",
+      "baseDefinition": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/region-studied",
+      "source": "StructureDefinition-mcode-genomic-region-studied.json",
+      "fixture": "fixtures/mcode-genomic-region-studied.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "mcode-genomic-variant",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-genomic-variant",
+      "baseDefinition": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/variant",
+      "source": "StructureDefinition-mcode-genomic-variant.json",
+      "fixture": "fixtures/mcode-genomic-variant.json",
+      "differentialElements": 54
+    },
+    {
+      "id": "mcode-genomics-report",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-genomics-report",
+      "baseDefinition": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/genomics-report",
+      "source": "StructureDefinition-mcode-genomics-report.json",
+      "fixture": "fixtures/mcode-genomics-report.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "mcode-histologic-behavior-and-type",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-histologic-behavior-and-type",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "source": "StructureDefinition-mcode-histologic-behavior-and-type.json",
+      "fixture": "fixtures/mcode-histologic-behavior-and-type.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "mcode-histologic-grade",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-histologic-grade",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "source": "StructureDefinition-mcode-histologic-grade.json",
+      "fixture": "fixtures/mcode-histologic-grade.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "mcode-histology-morphology-behavior",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-histology-morphology-behavior",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-histology-morphology-behavior.json",
+      "fixture": "fixtures/mcode-histology-morphology-behavior.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-history-of-metastatic-cancer",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-history-of-metastatic-cancer",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-history-of-metastatic-cancer.json",
+      "fixture": "fixtures/mcode-history-of-metastatic-cancer.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-human-specimen",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-human-specimen",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-specimen",
+      "source": "StructureDefinition-mcode-human-specimen.json",
+      "fixture": "fixtures/mcode-human-specimen.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "mcode-karnofsky-performance-status",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-karnofsky-performance-status",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-mcode-karnofsky-performance-status.json",
+      "fixture": "fixtures/mcode-karnofsky-performance-status.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "mcode-lansky-play-performance-status",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-lansky-play-performance-status",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-mcode-lansky-play-performance-status.json",
+      "fixture": "fixtures/mcode-lansky-play-performance-status.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "mcode-laterality-qualifier",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-laterality-qualifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-laterality-qualifier.json",
+      "fixture": "fixtures/mcode-laterality-qualifier.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-normalization-basis",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-normalization-basis",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-normalization-basis.json",
+      "fixture": "fixtures/mcode-normalization-basis.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-patient-bundle",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-patient-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-mcode-patient-bundle.json",
+      "fixture": "fixtures/mcode-patient-bundle.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "mcode-patient-group",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-patient-group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Group",
+      "source": "StructureDefinition-mcode-patient-group.json",
+      "fixture": "fixtures/mcode-patient-group.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "mcode-primary-cancer-condition",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-primary-cancer-condition",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+      "source": "StructureDefinition-mcode-primary-cancer-condition.json",
+      "fixture": "fixtures/mcode-primary-cancer-condition.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "mcode-procedure-intent",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-procedure-intent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-procedure-intent.json",
+      "fixture": "fixtures/mcode-procedure-intent.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-radiotherapy-course-summary",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-course-summary",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "source": "StructureDefinition-mcode-radiotherapy-course-summary.json",
+      "fixture": "fixtures/mcode-radiotherapy-course-summary.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "mcode-radiotherapy-dose-delivered-to-volume",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-dose-delivered-to-volume",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-radiotherapy-dose-delivered-to-volume.json",
+      "fixture": "fixtures/mcode-radiotherapy-dose-delivered-to-volume.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "mcode-radiotherapy-modality-and-technique",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-modality-and-technique",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-radiotherapy-modality-and-technique.json",
+      "fixture": "fixtures/mcode-radiotherapy-modality-and-technique.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "mcode-radiotherapy-modality",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-modality",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-radiotherapy-modality.json",
+      "fixture": "fixtures/mcode-radiotherapy-modality.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-radiotherapy-sessions",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-sessions",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-radiotherapy-sessions.json",
+      "fixture": "fixtures/mcode-radiotherapy-sessions.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-radiotherapy-technique",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-technique",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-radiotherapy-technique.json",
+      "fixture": "fixtures/mcode-radiotherapy-technique.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-radiotherapy-volume",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-volume",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/BodyStructure",
+      "source": "StructureDefinition-mcode-radiotherapy-volume.json",
+      "fixture": "fixtures/mcode-radiotherapy-volume.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "mcode-related-condition-absent",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-related-condition-absent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-related-condition-absent.json",
+      "fixture": "fixtures/mcode-related-condition-absent.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-related-condition",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-related-condition",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-related-condition.json",
+      "fixture": "fixtures/mcode-related-condition.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-secondary-cancer-condition",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-secondary-cancer-condition",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+      "source": "StructureDefinition-mcode-secondary-cancer-condition.json",
+      "fixture": "fixtures/mcode-secondary-cancer-condition.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "mcode-tnm-category",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tnm-category",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-tnm-category.json",
+      "fixture": "fixtures/mcode-tnm-category.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "mcode-treatment-termination-reason",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-treatment-termination-reason",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-mcode-treatment-termination-reason.json",
+      "fixture": "fixtures/mcode-treatment-termination-reason.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mcode-tumor-marker-test",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tumor-marker-test",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "source": "StructureDefinition-mcode-tumor-marker-test.json",
+      "fixture": "fixtures/mcode-tumor-marker-test.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "mcode-tumor-morphology",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tumor-morphology",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-mcode-tumor-morphology.json",
+      "fixture": "fixtures/mcode-tumor-morphology.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "mcode-tumor-size",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tumor-size",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-mcode-tumor-size.json",
+      "fixture": "fixtures/mcode-tumor-size.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "mcode-tumor",
+      "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tumor",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/BodyStructure",
+      "source": "StructureDefinition-mcode-tumor.json",
+      "fixture": "fixtures/mcode-tumor.json",
+      "differentialElements": 9
+    }
+  ],
+  "skipped": [
+    {
+      "id": "mcode-ALL-risk-assessment",
+      "source": "StructureDefinition-mcode-ALL-risk-assessment.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-risk-assessment"
+    },
+    {
+      "id": "mcode-lymphoma-stage",
+      "source": "StructureDefinition-mcode-lymphoma-stage.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-stage"
+    },
+    {
+      "id": "mcode-rhabdomyosarcoma-risk-assessment",
+      "source": "StructureDefinition-mcode-rhabdomyosarcoma-risk-assessment.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-risk-assessment"
+    },
+    {
+      "id": "mcode-tnm-distant-metastases-category",
+      "source": "StructureDefinition-mcode-tnm-distant-metastases-category.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tnm-category"
+    },
+    {
+      "id": "mcode-tnm-primary-tumor-category",
+      "source": "StructureDefinition-mcode-tnm-primary-tumor-category.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tnm-category"
+    },
+    {
+      "id": "mcode-tnm-regional-nodes-category",
+      "source": "StructureDefinition-mcode-tnm-regional-nodes-category.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-tnm-category"
+    },
+    {
+      "id": "mcode-tnm-stage-group",
+      "source": "StructureDefinition-mcode-tnm-stage-group.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-stage"
+    }
+  ]
+}

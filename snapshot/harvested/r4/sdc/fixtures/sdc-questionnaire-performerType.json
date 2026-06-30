@@ -1,0 +1,63 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-performerType",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-performerType",
+  "version": "3.0.0",
+  "name": "PerformerTypeExtension",
+  "title": "Performer type",
+  "status": "active",
+  "description": "Indicates the types of resources that can record answers to a Questionnaire. Open Issue: Should this extension be moved to core?",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Resource that can record answers to this Questionnaire",
+        "definition": "Indicates the types of resources that can record answers to a Questionnaire. Open Issue: Should this extension be moved to core?"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-performerType"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/sdc/ValueSet/performerType",
+          "description": "Resources that can record answers to a questionnaire."
+        }
+      }
+    ]
+  }
+}

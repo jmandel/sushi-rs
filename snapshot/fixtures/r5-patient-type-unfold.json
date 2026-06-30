@@ -1,0 +1,27 @@
+{
+  "resourceType": "StructureDefinition",
+  "url": "http://example.org/StructureDefinition/MyPatientTypeUnfold",
+  "name": "MyPatientTypeUnfold",
+  "status": "draft",
+  "fhirVersion": "5.0.0",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient"
+      },
+      {
+        "id": "Patient.identifier.system",
+        "path": "Patient.identifier.system",
+        "min": 1,
+        "fixedUri": "http://example.org/patient-id"
+      }
+    ]
+  }
+}
+

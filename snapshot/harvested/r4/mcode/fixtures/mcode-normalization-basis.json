@@ -1,0 +1,80 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "mcode-normalization-basis",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-normalization-basis",
+  "name": "NormalizationBasis",
+  "title": "Normalization Basis Extension",
+  "status": "active",
+  "description": "The method (e.g., body weight, body surface area, flat dose, age) used to normalize the medication dosage.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DomainResource"
+    },
+    {
+      "type": "element",
+      "expression": "Extension"
+    },
+    {
+      "type": "element",
+      "expression": "MedicationRequest"
+    },
+    {
+      "type": "element",
+      "expression": "MedicationAdministration"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Normalization Basis Extension",
+        "definition": "The method (e.g., body weight, body surface area, flat dose, age) used to normalize the medication dosage."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-normalization-basis"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-normalization-basis-vs"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-rendering-criticalExtension",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-rendering-criticalExtension",
+  "name": "RenderingCriticalExtension",
+  "title": "Rendering Critical Extension",
+  "status": "active",
+  "description": "Indicates an extension that must be supported by the system presenting the instance for data capture or end-user consumption. If a system does not recognize the extension or cannot implement the functionality defined by the extension, it should display an error message or warning and refrain from presenting the instance to the user or using it when capturing data.",
+  "purpose": "Allows systems to identify extensions that are critical for rendering or interacting with the resource in data capture or consumption scenarios.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Resource"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Extension that must be supported",
+        "definition": "Indicates an extension that must be supported by the system presenting the instance for data capture or end-user consumption. If a system does not recognize the extension or cannot implement the functionality defined by the extension, it should display an error message or warning and refrain from presenting the instance to the user or using it when capturing data.",
+        "comment": "This may point to extensions that control the appearance of data elements, control what value elements have, what elements are or are not available, what elements can or cannot be edited, or rules about how editing may occur. This extension does NOT apply when simply rendering a resource for publication purposes or for other purposes not intended for end-user data capture or data consumption.",
+        "isModifier": true,
+        "isModifierReason": "Indicates that the Questionnaire can't be safely rendered in certain situations"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-rendering-criticalExtension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "canonical"
+          }
+        ]
+      }
+    ]
+  }
+}

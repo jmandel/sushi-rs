@@ -1,0 +1,66 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-openLabel",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-openLabel",
+  "name": "SDCOpenLabel",
+  "title": "Label for 'open' items",
+  "status": "active",
+  "description": "The label text to display beside free-text and/or unrestricted type values for an 'open' choice element.  E.g. 'Other, please specify', or 'Additional condition', or 'More reason(s)', etc.",
+  "purpose": "Gives control to the questionnaire designer rather than leaving it up to the Form Filler.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "contextInvariant": [
+    "ofType(ElementDefinition).type.exists(code='Coding') or where(%resource.is(Questionnaire)).exists(type.first()='open-choice')"
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Image to display",
+        "definition": "The label text to display beside free-text and/or unrestricted type values for an 'open' choice element.  E.g. 'Other, please specify', or 'Additional condition', or 'More reason(s)', etc.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-openLabel"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

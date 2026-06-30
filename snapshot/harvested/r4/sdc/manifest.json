@@ -1,0 +1,698 @@
+{
+  "resourcesDir": "/home/jmandel/periodicity/temp/sdc-ig/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 93,
+    "harvested": 73,
+    "skipped": 20
+  },
+  "entries": [
+    {
+      "id": "parameters-questionnaire-assemble-in",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-assemble-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-assemble-in.json",
+      "fixture": "fixtures/parameters-questionnaire-assemble-in.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "parameters-questionnaire-assemble-out",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-assemble-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-assemble-out.json",
+      "fixture": "fixtures/parameters-questionnaire-assemble-out.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "parameters-questionnaire-next-question-in",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-next-question-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-next-question-in.json",
+      "fixture": "fixtures/parameters-questionnaire-next-question-in.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "parameters-questionnaire-next-question-out",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-next-question-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-next-question-out.json",
+      "fixture": "fixtures/parameters-questionnaire-next-question-out.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "parameters-questionnaire-populate-html-out",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-populate-html-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-populate-html-out.json",
+      "fixture": "fixtures/parameters-questionnaire-populate-html-out.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "parameters-questionnaire-populate-in",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-populate-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-populate-in.json",
+      "fixture": "fixtures/parameters-questionnaire-populate-in.json",
+      "differentialElements": 46
+    },
+    {
+      "id": "parameters-questionnaire-populate-link-out",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-populate-link-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-populate-link-out.json",
+      "fixture": "fixtures/parameters-questionnaire-populate-link-out.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "parameters-questionnaire-populate-out",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-populate-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-populate-out.json",
+      "fixture": "fixtures/parameters-questionnaire-populate-out.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "parameters-questionnaire-process-response-in",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-process-response-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaire-process-response-in.json",
+      "fixture": "fixtures/parameters-questionnaire-process-response-in.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "parameters-questionnaireresponse-extract-in",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaireresponse-extract-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-parameters-questionnaireresponse-extract-in.json",
+      "fixture": "fixtures/parameters-questionnaireresponse-extract-in.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "sdc-codesystem",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-codesystem",
+      "baseDefinition": "http://hl7.org/fhir/5.0/StructureDefinition/profile-CodeSystem",
+      "source": "StructureDefinition-sdc-codesystem.json",
+      "fixture": "fixtures/sdc-codesystem.json",
+      "differentialElements": 35
+    },
+    {
+      "id": "sdc-library",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/cqllibrary",
+      "source": "StructureDefinition-sdc-library.json",
+      "fixture": "fixtures/sdc-library.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "sdc-questionnaire-answerExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-answerExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-answerExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-answerKey",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerKey",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-answerKey.json",
+      "fixture": "fixtures/sdc-questionnaire-answerKey.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-answerOptionsToggleExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerOptionsToggleExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-answerOptionsToggleExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-answerOptionsToggleExpression.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "sdc-questionnaire-assemble-expectation",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-assemble-expectation.json",
+      "fixture": "fixtures/sdc-questionnaire-assemble-expectation.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-assembleContext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleContext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-assembleContext.json",
+      "fixture": "fixtures/sdc-questionnaire-assembleContext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-assembleDefinitionRoot",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleDefinitionRoot",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-assembleDefinitionRoot.json",
+      "fixture": "fixtures/sdc-questionnaire-assembleDefinitionRoot.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-assembledFrom",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-assembledFrom.json",
+      "fixture": "fixtures/sdc-questionnaire-assembledFrom.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-calculatedExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-calculatedExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-calculatedExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-candidateExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-candidateExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-candidateExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-candidateExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-choiceColumn",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-choiceColumn",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-choiceColumn.json",
+      "fixture": "fixtures/sdc-questionnaire-choiceColumn.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "sdc-questionnaire-collapsible",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-collapsible.json",
+      "fixture": "fixtures/sdc-questionnaire-collapsible.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-columnCount",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-columnCount",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-columnCount.json",
+      "fixture": "fixtures/sdc-questionnaire-columnCount.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-contextExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-contextExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-contextExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-contextExpression.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "sdc-questionnaire-definitionExtract",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-definitionExtract",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-definitionExtract.json",
+      "fixture": "fixtures/sdc-questionnaire-definitionExtract.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "sdc-questionnaire-definitionExtractValue",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-definitionExtractValue",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-definitionExtractValue.json",
+      "fixture": "fixtures/sdc-questionnaire-definitionExtractValue.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "sdc-questionnaire-enableWhenExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-enableWhenExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-enableWhenExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-enableWhenExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-endpoint",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-endpoint",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-endpoint.json",
+      "fixture": "fixtures/sdc-questionnaire-endpoint.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-entryMode",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-entryMode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-entryMode.json",
+      "fixture": "fixtures/sdc-questionnaire-entryMode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-extractAllocateId",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-extractAllocateId",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-extractAllocateId.json",
+      "fixture": "fixtures/sdc-questionnaire-extractAllocateId.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-initialExpression",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-initialExpression.json",
+      "fixture": "fixtures/sdc-questionnaire-initialExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-isSubject",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-isSubject",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-isSubject.json",
+      "fixture": "fixtures/sdc-questionnaire-isSubject.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-item-answerAssessment",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-item-answerAssessment",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-item-answerAssessment.json",
+      "fixture": "fixtures/sdc-questionnaire-item-answerAssessment.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-itemAnswerMedia",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemAnswerMedia",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-itemAnswerMedia.json",
+      "fixture": "fixtures/sdc-questionnaire-itemAnswerMedia.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-itemExtractionContext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemExtractionContext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-itemExtractionContext.json",
+      "fixture": "fixtures/sdc-questionnaire-itemExtractionContext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-itemMedia",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemMedia",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-itemMedia.json",
+      "fixture": "fixtures/sdc-questionnaire-itemMedia.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-itemPopulationContext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemPopulationContext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-itemPopulationContext.json",
+      "fixture": "fixtures/sdc-questionnaire-itemPopulationContext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-keyboard",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-keyboard",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-keyboard.json",
+      "fixture": "fixtures/sdc-questionnaire-keyboard.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-launchContext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-launchContext.json",
+      "fixture": "fixtures/sdc-questionnaire-launchContext.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "sdc-questionnaire-lookupQuestionnaire",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-lookupQuestionnaire",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-lookupQuestionnaire.json",
+      "fixture": "fixtures/sdc-questionnaire-lookupQuestionnaire.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-maxQuantity",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-maxQuantity",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-maxQuantity.json",
+      "fixture": "fixtures/sdc-questionnaire-maxQuantity.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-minQuantity",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-minQuantity",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-minQuantity.json",
+      "fixture": "fixtures/sdc-questionnaire-minQuantity.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-observation-extract-category",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observation-extract-category",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-observation-extract-category.json",
+      "fixture": "fixtures/sdc-questionnaire-observation-extract-category.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-observationExtract",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtract",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-observationExtract.json",
+      "fixture": "fixtures/sdc-questionnaire-observationExtract.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-observationExtractEntry",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtractEntry",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-observationExtractEntry.json",
+      "fixture": "fixtures/sdc-questionnaire-observationExtractEntry.json",
+      "differentialElements": 27
+    },
+    {
+      "id": "sdc-questionnaire-observationLinkPeriod",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationLinkPeriod",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-observationLinkPeriod.json",
+      "fixture": "fixtures/sdc-questionnaire-observationLinkPeriod.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-openLabel",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-openLabel",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-openLabel.json",
+      "fixture": "fixtures/sdc-questionnaire-openLabel.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-optionalDisplay",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-optionalDisplay",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-optionalDisplay.json",
+      "fixture": "fixtures/sdc-questionnaire-optionalDisplay.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-performerType",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-performerType",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-performerType.json",
+      "fixture": "fixtures/sdc-questionnaire-performerType.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-preferredTerminologyServer",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-preferredTerminologyServer",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-preferredTerminologyServer.json",
+      "fixture": "fixtures/sdc-questionnaire-preferredTerminologyServer.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-questionnaireAdaptive",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-questionnaireAdaptive",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-questionnaireAdaptive.json",
+      "fixture": "fixtures/sdc-questionnaire-questionnaireAdaptive.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-shortText",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-shortText.json",
+      "fixture": "fixtures/sdc-questionnaire-shortText.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-sourceQueries",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sourceQueries",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-sourceQueries.json",
+      "fixture": "fixtures/sdc-questionnaire-sourceQueries.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-sourceStructureMap",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sourceStructureMap",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-sourceStructureMap.json",
+      "fixture": "fixtures/sdc-questionnaire-sourceStructureMap.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-subQuestionnaire",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-subQuestionnaire.json",
+      "fixture": "fixtures/sdc-questionnaire-subQuestionnaire.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-targetStructureMap",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-targetStructureMap",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-targetStructureMap.json",
+      "fixture": "fixtures/sdc-questionnaire-targetStructureMap.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-templateExtract",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtract",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-templateExtract.json",
+      "fixture": "fixtures/sdc-questionnaire-templateExtract.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "sdc-questionnaire-templateExtractBundle",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractBundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-templateExtractBundle.json",
+      "fixture": "fixtures/sdc-questionnaire-templateExtractBundle.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-templateExtractContext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractContext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-templateExtractContext.json",
+      "fixture": "fixtures/sdc-questionnaire-templateExtractContext.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-templateExtractValue",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractValue",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-templateExtractValue.json",
+      "fixture": "fixtures/sdc-questionnaire-templateExtractValue.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-unitOpen",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-unitOpen",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-unitOpen.json",
+      "fixture": "fixtures/sdc-questionnaire-unitOpen.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-unitSupplementalSystem",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-unitSupplementalSystem",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-unitSupplementalSystem.json",
+      "fixture": "fixtures/sdc-questionnaire-unitSupplementalSystem.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaire-width",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-width",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaire-width.json",
+      "fixture": "fixtures/sdc-questionnaire-width.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnairecommon",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Questionnaire",
+      "source": "StructureDefinition-sdc-questionnairecommon.json",
+      "fixture": "fixtures/sdc-questionnairecommon.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "sdc-questionnaireresponse-isSubject",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse-isSubject",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-questionnaireresponse-isSubject.json",
+      "fixture": "fixtures/sdc-questionnaireresponse-isSubject.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-questionnaireresponsecommon",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/QuestionnaireResponse",
+      "source": "StructureDefinition-sdc-questionnaireresponsecommon.json",
+      "fixture": "fixtures/sdc-questionnaireresponsecommon.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "sdc-rendering-criticalExtension",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-rendering-criticalExtension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-rendering-criticalExtension.json",
+      "fixture": "fixtures/sdc-rendering-criticalExtension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-servicerequest-questionnaire",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-servicerequest-questionnaire",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-sdc-servicerequest-questionnaire.json",
+      "fixture": "fixtures/sdc-servicerequest-questionnaire.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "sdc-servicerequest",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ServiceRequest",
+      "source": "StructureDefinition-sdc-servicerequest.json",
+      "fixture": "fixtures/sdc-servicerequest.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "sdc-task",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-task",
+      "baseDefinition": "http://hl7.org/fhir/5.0/StructureDefinition/profile-Task",
+      "source": "StructureDefinition-sdc-task.json",
+      "fixture": "fixtures/sdc-task.json",
+      "differentialElements": 21
+    },
+    {
+      "id": "sdc-usagecontext",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-usagecontext",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/UsageContext",
+      "source": "StructureDefinition-sdc-usagecontext.json",
+      "fixture": "fixtures/sdc-usagecontext.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "sdc-valueset",
+      "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-valueset",
+      "baseDefinition": "http://hl7.org/fhir/5.0/StructureDefinition/profile-ValueSet",
+      "source": "StructureDefinition-sdc-valueset.json",
+      "fixture": "fixtures/sdc-valueset.json",
+      "differentialElements": 67
+    }
+  ],
+  "skipped": [
+    {
+      "id": "ProfileExample",
+      "source": "StructureDefinition-ProfileExample.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "SdcQuestionLibrary",
+      "source": "StructureDefinition-SdcQuestionLibrary.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "sdc-questionnaire-adapt-srch",
+      "source": "StructureDefinition-sdc-questionnaire-adapt-srch.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-search"
+    },
+    {
+      "id": "sdc-questionnaire-adapt",
+      "source": "StructureDefinition-sdc-questionnaire-adapt.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+    },
+    {
+      "id": "sdc-questionnaire-behave",
+      "source": "StructureDefinition-sdc-questionnaire-behave.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-extr-defn",
+      "source": "StructureDefinition-sdc-questionnaire-extr-defn.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-extr-obsn",
+      "source": "StructureDefinition-sdc-questionnaire-extr-obsn.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-extr-smap",
+      "source": "StructureDefinition-sdc-questionnaire-extr-smap.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-extr-template",
+      "source": "StructureDefinition-sdc-questionnaire-extr-template.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-modular-library",
+      "source": "StructureDefinition-sdc-questionnaire-modular-library.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-modular",
+      "source": "StructureDefinition-sdc-questionnaire-modular.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-pop-exp",
+      "source": "StructureDefinition-sdc-questionnaire-pop-exp.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-pop-obsn",
+      "source": "StructureDefinition-sdc-questionnaire-pop-obsn.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-pop-smap",
+      "source": "StructureDefinition-sdc-questionnaire-pop-smap.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-render",
+      "source": "StructureDefinition-sdc-questionnaire-render.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+    },
+    {
+      "id": "sdc-questionnaire-search",
+      "source": "StructureDefinition-sdc-questionnaire-search.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+    },
+    {
+      "id": "sdc-questionnaire",
+      "source": "StructureDefinition-sdc-questionnaire.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+    },
+    {
+      "id": "sdc-questionnaireresponse-adapt",
+      "source": "StructureDefinition-sdc-questionnaireresponse-adapt.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon"
+    },
+    {
+      "id": "sdc-questionnaireresponse",
+      "source": "StructureDefinition-sdc-questionnaireresponse.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon"
+    },
+    {
+      "id": "sdc-usagecontext-questionnaire-library",
+      "source": "StructureDefinition-sdc-usagecontext-questionnaire-library.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-usagecontext"
+    }
+  ]
+}

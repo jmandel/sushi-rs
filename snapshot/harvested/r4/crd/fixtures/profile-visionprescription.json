@@ -1,0 +1,303 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-visionprescription",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-visionprescription",
+  "name": "CRDVisionPrescription",
+  "title": "CRD Vision Prescription",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile defines an initial profile on the VisionPrescription resource to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "VisionPrescription",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/VisionPrescription",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "VisionPrescription.contained",
+        "path": "VisionPrescription.contained",
+        "comment": "Any references found in this resource, with the exception of 'Patient' could potentially be resource-specific and thus transmitted as contained resources.",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.extension",
+        "path": "VisionPrescription.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            },
+            {
+              "type": "value",
+              "path": "value"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "VisionPrescription.extension:Coverage-Information",
+        "path": "VisionPrescription.extension",
+        "sliceName": "Coverage-Information",
+        "short": "Coverage Info",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.extension:EncounterCategory",
+        "path": "VisionPrescription.extension",
+        "sliceName": "EncounterCategory",
+        "short": "Encounter Category",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.extension:EncounterCategory.value[x]",
+        "path": "VisionPrescription.extension.value[x]",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActEncounterCode"
+        }
+      },
+      {
+        "id": "VisionPrescription.extension:ServiceCategory",
+        "path": "VisionPrescription.extension",
+        "sliceName": "ServiceCategory",
+        "short": "Service Category",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.extension:ServiceCategory.value[x]",
+        "path": "VisionPrescription.extension.value[x]",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/X12ServiceType"
+        }
+      },
+      {
+        "id": "VisionPrescription.identifier",
+        "path": "VisionPrescription.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.status",
+        "path": "VisionPrescription.status",
+        "comment": "This will be 'draft' when using order-select or an initial order-sign, but may be 'active' or other values for order-sign representing edits to the order or for order-dispatch.",
+        "example": [
+          {
+            "label": "General",
+            "valueCode": "draft"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.created",
+        "path": "VisionPrescription.created",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.patient",
+        "path": "VisionPrescription.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.encounter",
+        "path": "VisionPrescription.encounter",
+        "comment": "potentially relevant for CRD in some situations.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.dateWritten",
+        "path": "VisionPrescription.dateWritten",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.prescriber",
+        "path": "VisionPrescription.prescriber",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-practitioner",
+              "http://hl7.org/fhir/us/davinci-hrex/StructureDefinition/hrex-practitionerrole"
+            ],
+            "_targetProfile": [
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": true
+                  }
+                ]
+              },
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": true
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification",
+        "path": "VisionPrescription.lensSpecification",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.extension",
+        "path": "VisionPrescription.lensSpecification.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.extension:BillingOptions",
+        "path": "VisionPrescription.lensSpecification.extension",
+        "sliceName": "BillingOptions",
+        "short": "Expected Billing Code(s)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.product",
+        "path": "VisionPrescription.lensSpecification.product",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.eye",
+        "path": "VisionPrescription.lensSpecification.eye",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.sphere",
+        "path": "VisionPrescription.lensSpecification.sphere",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.cylinder",
+        "path": "VisionPrescription.lensSpecification.cylinder",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.axis",
+        "path": "VisionPrescription.lensSpecification.axis",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.prism",
+        "path": "VisionPrescription.lensSpecification.prism",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.prism.amount",
+        "path": "VisionPrescription.lensSpecification.prism.amount",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.prism.base",
+        "path": "VisionPrescription.lensSpecification.prism.base",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.add",
+        "path": "VisionPrescription.lensSpecification.add",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.power",
+        "path": "VisionPrescription.lensSpecification.power",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.backCurve",
+        "path": "VisionPrescription.lensSpecification.backCurve",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.diameter",
+        "path": "VisionPrescription.lensSpecification.diameter",
+        "mustSupport": true
+      },
+      {
+        "id": "VisionPrescription.lensSpecification.duration",
+        "path": "VisionPrescription.lensSpecification.duration",
+        "mustSupport": true
+      }
+    ]
+  }
+}

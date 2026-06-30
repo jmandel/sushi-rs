@@ -1,0 +1,39 @@
+{
+  "resourceType": "StructureDefinition",
+  "url": "http://example.org/StructureDefinition/MyPatientMergeAdditive",
+  "name": "MyPatientMergeAdditive",
+  "status": "draft",
+  "fhirVersion": "5.0.0",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient"
+      },
+      {
+        "id": "Patient.active",
+        "path": "Patient.active",
+        "short": "Custom active flag",
+        "definition": "... Additional active definition.",
+        "comment": "... Additional active comment.",
+        "alias": ["currently active", "usable record"],
+        "condition": ["act-1"],
+        "constraint": [
+          {
+            "key": "act-1",
+            "severity": "error",
+            "human": "Active invariant",
+            "expression": "true"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}
+

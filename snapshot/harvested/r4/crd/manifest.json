@@ -1,0 +1,215 @@
+{
+  "resourcesDir": "/home/jmandel/periodicity/temp/crd-ig/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 27,
+    "harvested": 22,
+    "skipped": 5
+  },
+  "entries": [
+    {
+      "id": "ext-billing-options",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ext-billing-options.json",
+      "fixture": "fixtures/ext-billing-options.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ext-coverage-information",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ext-coverage-information.json",
+      "fixture": "fixtures/ext-coverage-information.json",
+      "differentialElements": 84
+    },
+    {
+      "id": "ext-request-category",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ext-request-category.json",
+      "fixture": "fixtures/ext-request-category.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "profile-appointment-base",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-base",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Appointment",
+      "source": "StructureDefinition-profile-appointment-base.json",
+      "fixture": "fixtures/profile-appointment-base.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "profile-bundle-base",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-bundle-base",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-profile-bundle-base.json",
+      "fixture": "fixtures/profile-bundle-base.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "profile-communicationrequest",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-communicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CommunicationRequest",
+      "source": "StructureDefinition-profile-communicationrequest.json",
+      "fixture": "fixtures/profile-communicationrequest.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "profile-coverage",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-coverage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|7.0.0",
+      "source": "StructureDefinition-profile-coverage.json",
+      "fixture": "fixtures/profile-coverage.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "profile-device",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-profile-device.json",
+      "fixture": "fixtures/profile-device.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "profile-devicerequest",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-devicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+      "source": "StructureDefinition-profile-devicerequest.json",
+      "fixture": "fixtures/profile-devicerequest.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "profile-encounter",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|7.0.0",
+      "source": "StructureDefinition-profile-encounter.json",
+      "fixture": "fixtures/profile-encounter.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "profile-location",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-location",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|7.0.0",
+      "source": "StructureDefinition-profile-location.json",
+      "fixture": "fixtures/profile-location.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "profile-medication",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medication",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication",
+      "source": "StructureDefinition-profile-medication.json",
+      "fixture": "fixtures/profile-medication.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "profile-medicationrequest",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|7.0.0",
+      "source": "StructureDefinition-profile-medicationrequest.json",
+      "fixture": "fixtures/profile-medicationrequest.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "profile-nutritionorder",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-nutritionorder",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+      "source": "StructureDefinition-profile-nutritionorder.json",
+      "fixture": "fixtures/profile-nutritionorder.json",
+      "differentialElements": 38
+    },
+    {
+      "id": "profile-organization",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-hrex/StructureDefinition/hrex-organization",
+      "source": "StructureDefinition-profile-organization.json",
+      "fixture": "fixtures/profile-organization.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-patient",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+      "source": "StructureDefinition-profile-patient.json",
+      "fixture": "fixtures/profile-patient.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "profile-practitioner",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+      "source": "StructureDefinition-profile-practitioner.json",
+      "fixture": "fixtures/profile-practitioner.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "profile-servicerequest",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest|7.0.0",
+      "source": "StructureDefinition-profile-servicerequest.json",
+      "fixture": "fixtures/profile-servicerequest.json",
+      "differentialElements": 30
+    },
+    {
+      "id": "profile-task-dispatch",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-task-dispatch",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-profile-task-dispatch.json",
+      "fixture": "fixtures/profile-task-dispatch.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "profile-taskquestionnaire",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-taskquestionnaire",
+      "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-task",
+      "source": "StructureDefinition-profile-taskquestionnaire.json",
+      "fixture": "fixtures/profile-taskquestionnaire.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "profile-timing",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-timing",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Timing",
+      "source": "StructureDefinition-profile-timing.json",
+      "fixture": "fixtures/profile-timing.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "profile-visionprescription",
+      "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-visionprescription",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/VisionPrescription",
+      "source": "StructureDefinition-profile-visionprescription.json",
+      "fixture": "fixtures/profile-visionprescription.json",
+      "differentialElements": 30
+    }
+  ],
+  "skipped": [
+    {
+      "id": "CRDMetricData",
+      "source": "StructureDefinition-CRDMetricData.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "profile-appointment-no-order",
+      "source": "StructureDefinition-profile-appointment-no-order.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-base"
+    },
+    {
+      "id": "profile-appointment-with-order",
+      "source": "StructureDefinition-profile-appointment-with-order.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-base"
+    },
+    {
+      "id": "profile-bundle-appointment",
+      "source": "StructureDefinition-profile-bundle-appointment.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-bundle-base"
+    },
+    {
+      "id": "profile-bundle-request",
+      "source": "StructureDefinition-profile-bundle-request.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-bundle-base"
+    }
+  ]
+}

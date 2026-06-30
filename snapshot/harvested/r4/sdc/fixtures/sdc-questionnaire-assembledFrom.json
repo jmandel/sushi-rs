@@ -1,0 +1,57 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-assembledFrom",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom",
+  "name": "AssembledFromExtension",
+  "title": "Assembled From Questionnaire",
+  "status": "active",
+  "description": "This extension will appear on the root of an assembled Questionnaire and identifies the subQuestionnaires (including version) that were used as part of the assembly process.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Identifies subQuestionnaires used in the assembly process",
+        "definition": "This extension will appear on the root of an assembled Questionnaire and identifies the subQuestionnaires (including version) that were used as part of the assembly process."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembledFrom"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "canonical"
+          }
+        ]
+      }
+    ]
+  }
+}

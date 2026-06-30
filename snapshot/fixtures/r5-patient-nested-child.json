@@ -1,0 +1,27 @@
+{
+  "resourceType": "StructureDefinition",
+  "url": "http://example.org/StructureDefinition/MyPatientNestedChild",
+  "name": "MyPatientNestedChild",
+  "status": "draft",
+  "fhirVersion": "5.0.0",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient"
+      },
+      {
+        "id": "Patient.contact.name",
+        "path": "Patient.contact.name",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}
+

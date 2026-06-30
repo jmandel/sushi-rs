@@ -1,0 +1,69 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-lookupQuestionnaire",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-lookupQuestionnaire",
+  "name": "LookupQuestionnaireExtension",
+  "title": "Lookup questionnaire",
+  "status": "active",
+  "description": "For items of type reference, the reference can be populated either by picking an existing entity or by creating a new one.  In the latter case, this Questionnaire allows specifying the Questionnaire to use in creating the target instance.  Typically this will result in a QuestionnaireResponse that can be [extracted](extraction.html) to produce the desired resource.  However, if the target resource for the reference is a QuestionnaireResponse, then the QuestionnaireResponse resulting from the Questionnaire can be referenced directly.",
+  "purpose": "Allows creation of references to be Questionnaire-based.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "contextInvariant": [
+    "ofType(ElementDefinition).type.exists(code='Reference') or where(%resource.is(Questionnaire)).exists(type.first()='reference')"
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Questionnaire to populate a reference",
+        "definition": "For items of type reference, the reference can be populated either by picking an existing entity or by creating a new one.  In the latter case, this Questionnaire allows specifying the Questionnaire to use in creating the target instance.  Typically this will result in a QuestionnaireResponse that can be [extracted](extraction.html) to produce the desired resource.  However, if the target resource for the reference is a QuestionnaireResponse, then the QuestionnaireResponse resulting from the Questionnaire can be referenced directly.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-lookupQuestionnaire"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Questionnaire"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

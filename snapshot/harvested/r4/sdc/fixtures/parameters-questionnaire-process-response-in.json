@@ -1,0 +1,79 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "parameters-questionnaire-process-response-in",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-process-response-in",
+  "name": "SDCParametersQuestionnaireProcessResponseIn",
+  "title": "Questionnaire process response operation input parameters",
+  "status": "active",
+  "description": "Profile used to validate the parameters that are the input of the 'process response' questionnaire operation",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Parameters.parameter:in",
+        "path": "Parameters.parameter",
+        "sliceName": "in",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:in.name",
+        "path": "Parameters.parameter.name",
+        "fixedString": "in"
+      },
+      {
+        "id": "Parameters.parameter:in.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:in.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "QuestionnaireResponse",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:in.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

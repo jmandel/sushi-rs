@@ -1,0 +1,232 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-observationExtractEntry",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtractEntry",
+  "name": "ObservationExtractEntry",
+  "title": "Observation Extract Entry",
+  "status": "active",
+  "description": "Allows defining the expectations for the Observation entry to allow cross-referencing across extracted resources.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    },
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Allows defining the expectations for the Observation entry to allow cross-referencing across extracted resources.",
+        "definition": "Allows defining the expectations for the Observation entry to allow cross-referencing across extracted resources."
+      },
+      {
+        "id": "Extension.extension:fullUrl",
+        "path": "Extension.extension",
+        "sliceName": "fullUrl",
+        "short": "A fhirpath expression to evaluate to populate the fullUrl property in the `Bundle.entry` (uri/string result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the fullUrl property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:fullUrl.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:fullUrl.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "fullUrl"
+      },
+      {
+        "id": "Extension.extension:fullUrl.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:resourceId",
+        "path": "Extension.extension",
+        "sliceName": "resourceId",
+        "short": "A fhirpath expression to evaluate to populate the resourceId property (string result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the ifNoneMatch property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:resourceId.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:resourceId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "resourceId"
+      },
+      {
+        "id": "Extension.extension:resourceId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ifNoneMatch",
+        "path": "Extension.extension",
+        "sliceName": "ifNoneMatch",
+        "short": "A fhirpath expression to evaluate to populate the ifNoneMatch property (string result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the ifNoneMatch property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ifNoneMatch.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ifNoneMatch.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ifNoneMatch"
+      },
+      {
+        "id": "Extension.extension:ifNoneMatch.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ifModifiedSince",
+        "path": "Extension.extension",
+        "sliceName": "ifModifiedSince",
+        "short": "A fhirpath expression to evaluate to populate the ifModifiedSince property (instant result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the ifModifiedSince property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ifModifiedSince.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ifModifiedSince.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ifModifiedSince"
+      },
+      {
+        "id": "Extension.extension:ifModifiedSince.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ifMatch",
+        "path": "Extension.extension",
+        "sliceName": "ifMatch",
+        "short": "A fhirpath expression to evaluate to populate the ifMatch property (string result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the ifMatch property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ifMatch.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ifMatch.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ifMatch"
+      },
+      {
+        "id": "Extension.extension:ifMatch.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ifNoneExist",
+        "path": "Extension.extension",
+        "sliceName": "ifNoneExist",
+        "short": "A fhirpath expression to evaluate to populate the ifNoneExist property (string result)",
+        "definition": "A fhirpath expression to evaluate to extract the value into the ifNoneExist property. If no value is evaluated, then the element is not extracted.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ifNoneExist.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ifNoneExist.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ifNoneExist"
+      },
+      {
+        "id": "Extension.extension:ifNoneExist.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Fhirpath Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-observationExtractEntry"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

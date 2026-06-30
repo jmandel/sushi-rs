@@ -1,0 +1,99 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ext-billing-options",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options",
+  "name": "CRDBillingOptions",
+  "title": "Billing Options",
+  "status": "active",
+  "experimental": false,
+  "description": "Identifies billing codes that could potentially be used for this clinical code",
+  "purpose": "Used to allow conveying multiple (possibly conflicting) billing codes that cannot be provided as translations because they do not necessarily all represent the same ordering concept.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Appointment.serviceType"
+    },
+    {
+      "type": "fhirpath",
+      "expression": "CommunicationRequest.payload.content.extension('http://hl7.org/fhir/5.0/StructureDefinition/extension-CommunicationRequest.payload.content')"
+    },
+    {
+      "type": "element",
+      "expression": "Device"
+    },
+    {
+      "type": "fhirpath",
+      "expression": "DeviceRequest.code.ofType(CodeableConcept)"
+    },
+    {
+      "type": "element",
+      "expression": "Encounter.serviceType"
+    },
+    {
+      "type": "element",
+      "expression": "Medication.code"
+    },
+    {
+      "type": "fhirpath",
+      "expression": "MedicationRequest.medication.ofType(CodeableConcept)"
+    },
+    {
+      "type": "element",
+      "expression": "NutritionOrder"
+    },
+    {
+      "type": "element",
+      "expression": "ServiceRequest.code"
+    },
+    {
+      "type": "element",
+      "expression": "VisionPrescription.lensSpecification.product"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Billing Options",
+        "definition": "Identifies billing codes that could potentially be used for this clinical code",
+        "comment": "This will typically only be populated if the ordering and performing systems are the same"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/billingCodes"
+        }
+      }
+    ]
+  }
+}

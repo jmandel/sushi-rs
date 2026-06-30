@@ -1,0 +1,37 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-medication",
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medication",
+  "name": "CRDMedication",
+  "title": "CRD Medication",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional constraints on the US Core Medication Profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Medication",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Medication.code.extension:BillingOptions",
+        "path": "Medication.code.extension",
+        "sliceName": "BillingOptions",
+        "short": "Expected Billing Code(s)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

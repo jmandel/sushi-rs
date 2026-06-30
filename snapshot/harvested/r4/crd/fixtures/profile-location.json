@@ -1,0 +1,88 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-location",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|6.1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|3.1.1"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-location",
+  "name": "CRDLocation",
+  "title": "CRD Location",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies constraints on the US Core Location profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Location",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Location",
+        "path": "Location",
+        "constraint": [
+          {
+            "key": "crd-loc1",
+            "severity": "error",
+            "human": "Must either have a type or must have a parent (meaning there must be a type somewhere in the hierarchy)",
+            "expression": "type.exists() or partOf.exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-location"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.type",
+        "path": "Location.address.type",
+        "short": "physical | both",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/locationAddressType",
+          "description": "Address Type for CRD"
+        }
+      },
+      {
+        "id": "Location.managingOrganization",
+        "path": "Location.managingOrganization",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Location.partOf",
+        "path": "Location.partOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-location"
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ],
+        "condition": [
+          "crd-loc1"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-patient",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|6.1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|3.1.1"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient",
+  "name": "CRDPatient",
+  "title": "CRD Patient",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional constraints on the US Core Patient profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient",
+        "definition": "This profile specifies additional constraints on the US Core Patient profile to support coverage requirements discovery."
+      },
+      {
+        "id": "Patient.address.country",
+        "path": "Patient.address.country",
+        "mustSupport": true
+      }
+    ]
+  }
+}

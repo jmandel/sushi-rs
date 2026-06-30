@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[41]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/codeOptions cannot be checked as the profile is not known"}
+  ]
+}

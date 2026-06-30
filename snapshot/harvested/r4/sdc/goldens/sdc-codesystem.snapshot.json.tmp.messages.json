@@ -1,0 +1,16 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[8]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[9]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-copyrightLabel|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[10]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-approvalDate|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[11]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-lastReviewDate|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[12]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-effectivePeriod|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[13]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-topic|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[14]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-author|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[15]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-editor|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[16]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-reviewer|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[17]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-endorser|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[18]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-relatedArtifact|5.2.0 cannot be checked as the profile is not known"}
+  ]
+}

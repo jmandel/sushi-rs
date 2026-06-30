@@ -1,0 +1,202 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "mcode-cancer-related-medication-request",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 3
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-request",
+  "name": "CancerRelatedMedicationRequest",
+  "title": "Cancer-Related Medication Request Profile",
+  "status": "active",
+  "description": "A record of a medication prescription or consumption associated with cancer treatment. The medication may reported by the prescriber, prescribing organization, or patient. It does not have to be directly observed.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "script10.6",
+      "uri": "http://ncpdp.org/SCRIPT10_6",
+      "name": "Mapping to NCPDP SCRIPT 10.6"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationRequest",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationRequest",
+        "path": "MedicationRequest",
+        "constraint": [
+          {
+            "key": "mcode-reason-required",
+            "severity": "warning",
+            "human": "One of reasonCode or reasonReference SHALL be present",
+            "expression": "reasonCode.exists() or reasonReference.exists()",
+            "source": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-request"
+          },
+          {
+            "key": "termination-reason-code-invariant",
+            "severity": "error",
+            "human": "When status is stopped, only certain statusReason values are allowed",
+            "source": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-request",
+            "expression": "status = 'stopped' and statusReason.exists() and statusReason.coding.exists() implies statusReason.coding.exists(system = 'http://snomed.info/sct' and (code = '182992009' or code = '266721009' or code = '407563006' or code = '160932005' or code = '105480006' or code = '184081006' or code = '309846006' or code = '399307001' or code = '419620001' or code = '7058009' or code = '443729008' or code = '77386006'))"
+          },
+          {
+            "key": "termination-reason-invariant",
+            "severity": "error",
+            "human": "Certain statusReason values are allowed only when status is stopped",
+            "source": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-related-medication-request",
+            "expression": "statusReason.exists() and statusReason.coding.exists(\n      system = 'http://snomed.info/sct' and (code = '182992009' or code = '266721009' or code = '407563006' or code = '160932005' or\n code = '105480006' or code = '184081006' or code = '309846006' or code = '399307001' or  code = '419620001' or code = '7058009' or code = '443729008' or code = '77386006')) implies status = 'stopped'"
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.extension",
+        "path": "MedicationRequest.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:treatmentIntent",
+        "path": "MedicationRequest.extension",
+        "sliceName": "treatmentIntent",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-procedure-intent"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:normalizationBasis",
+        "path": "MedicationRequest.extension",
+        "sliceName": "normalizationBasis",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-normalization-basis"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.statusReason",
+        "path": "MedicationRequest.statusReason",
+        "mustSupport": true,
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-treatment-termination-reason-vs"
+        }
+      },
+      {
+        "id": "MedicationRequest.subject",
+        "path": "MedicationRequest.subject",
+        "definition": "The patient receiving the medication.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.requester",
+        "path": "MedicationRequest.requester",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-patient"
+            ],
+            "_targetProfile": [
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": true
+                  }
+                ]
+              },
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": false
+                  }
+                ]
+              },
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.reasonCode",
+        "path": "MedicationRequest.reasonCode",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-cancer-disorder-vs"
+        }
+      },
+      {
+        "id": "MedicationRequest.reasonReference",
+        "path": "MedicationRequest.reasonReference",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

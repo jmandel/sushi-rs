@@ -1,0 +1,76 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-extractAllocateId",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "draft"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 0
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-extractAllocateId",
+  "name": "ExtractAllocateIdExtension",
+  "title": "Extract - Allocate new uuid",
+  "status": "draft",
+  "description": "Allocate a new uuid in a named variable for use in extraction. This is usually used to set the `fullUrl` for a resource in the output extraction bundle, and then referenced in other resources within that transaction bundle (via fhirpath expressions).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    },
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Variable name for the new uuid.",
+        "definition": "Allocate a new uuid in a named variable for use in extraction. This is usually used to set the `fullUrl` for a resource in the output extraction bundle, and then referenced in other resources in that bundle (via fhirpath expressions). The format of the uuid will be `urn:uuid:(uuid)`. e.g. urn:uuid:6f6177d2-13ee-4d27-b0e8-3eaf663dd031"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-extractAllocateId"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

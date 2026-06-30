@@ -1,0 +1,63 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-initialExpression",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression",
+  "name": "InitialExpressionExtension",
+  "title": "Initial Expression",
+  "status": "active",
+  "description": "Initial value for a question answer as determined by an evaluated expression.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Expression-determined initial value",
+        "definition": "Initial value for a question answer as determined by an evaluated expression.",
+        "comment": "Initial value is only calculated at the time the QuestionnaireResponse is first generated.  If the expression returns coded data, it **SHALL* return the information as either code or Coding, not CodeableConcept.  If the expression returns elements of type 'code', when the user selects one or more candidates, the code will be matched against the allowed Codings (from answerValueSet, answerOptions, or answerExpression).  In this case, it is an error if there is more than one Coding with the same code.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Expression"
+          }
+        ]
+      }
+    ]
+  }
+}

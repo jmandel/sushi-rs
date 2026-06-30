@@ -1,0 +1,31 @@
+{
+  "resourceType": "StructureDefinition",
+  "url": "http://example.org/StructureDefinition/MyPatientFixedPattern",
+  "name": "MyPatientFixedPattern",
+  "status": "draft",
+  "fhirVersion": "5.0.0",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient"
+      },
+      {
+        "id": "Patient.active",
+        "path": "Patient.active",
+        "fixedBoolean": true
+      },
+      {
+        "id": "Patient.birthDate",
+        "path": "Patient.birthDate",
+        "minValueDate": "1900-01-01"
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,71 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-templateExtractContext",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "draft"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 0
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractContext",
+  "name": "TemplateExtractContextExtension",
+  "title": "Extract Template - Context",
+  "status": "draft",
+  "description": "Establishes mapping context for replacing template content based on a fhirpath expression. This will be used by any child properties as the context for any other templateExtractContext or templateExtractValue extensions. If the name property on an expression is included, it will be also available to child extension evaluation. If the expression evaluates to no results, then this element in the templated resource will be removed, and futher processing of it's children is not required.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "FhirPath expression",
+        "definition": "If value is of type 'string', then it is to be evaluated as a fhirpath expression. If a value of type 'Expression' is provided, only fhirpath expressions are supported, and the language MAY be omitted.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-templateExtractContext"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          },
+          {
+            "code": "Expression"
+          }
+        ]
+      }
+    ]
+  }
+}

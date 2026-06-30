@@ -1,0 +1,412 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-nutritionorder",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-nutritionorder",
+  "name": "CRDNutritionOrder",
+  "title": "CRD Nutrition Order",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies extensions and constraints on the NutritionOrder resource to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "NutritionOrder",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "NutritionOrder.contained",
+        "path": "NutritionOrder.contained",
+        "comment": "Any references found in this resource, with the exception of 'Patient' could potentially be resource-specific and thus transmitted as contained resources.",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.extension",
+        "path": "NutritionOrder.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            },
+            {
+              "type": "value",
+              "path": "value"
+            }
+          ],
+          "rules": "open"
+        }
+      },
+      {
+        "id": "NutritionOrder.extension:Coverage-Information",
+        "path": "NutritionOrder.extension",
+        "sliceName": "Coverage-Information",
+        "short": "Coverage Info",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.extension:EncounterCategory",
+        "path": "NutritionOrder.extension",
+        "sliceName": "EncounterCategory",
+        "short": "Encounter Category",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.extension:EncounterCategory.value[x]",
+        "path": "NutritionOrder.extension.value[x]",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActEncounterCode"
+        }
+      },
+      {
+        "id": "NutritionOrder.extension:ServiceCategory",
+        "path": "NutritionOrder.extension",
+        "sliceName": "ServiceCategory",
+        "short": "Service Category",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.extension:ServiceCategory.value[x]",
+        "path": "NutritionOrder.extension.value[x]",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/X12ServiceType"
+        }
+      },
+      {
+        "id": "NutritionOrder.identifier",
+        "path": "NutritionOrder.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.status",
+        "path": "NutritionOrder.status",
+        "comment": "This will be 'draft' when using order-select or an initial order-sign, but may be 'active' or other values for order-sign representing edits to the order or for order-dispatch.",
+        "example": [
+          {
+            "label": "General",
+            "valueCode": "draft"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.patient",
+        "path": "NutritionOrder.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.encounter",
+        "path": "NutritionOrder.encounter",
+        "comment": "potentially relevant for CRD in some situations.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.dateTime",
+        "path": "NutritionOrder.dateTime",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.orderer",
+        "path": "NutritionOrder.orderer",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-practitioner",
+              "http://hl7.org/fhir/us/davinci-hrex/StructureDefinition/hrex-practitionerrole"
+            ],
+            "_targetProfile": [
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": true
+                  }
+                ]
+              },
+              {
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                    "valueBoolean": true
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.allergyIntolerance",
+        "path": "NutritionOrder.allergyIntolerance",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.foodPreferenceModifier",
+        "path": "NutritionOrder.foodPreferenceModifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/edible-substance-type"
+        }
+      },
+      {
+        "id": "NutritionOrder.excludeFoodModifier",
+        "path": "NutritionOrder.excludeFoodModifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/edible-substance-type"
+        }
+      },
+      {
+        "id": "NutritionOrder.oralDiet",
+        "path": "NutritionOrder.oralDiet",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.type",
+        "path": "NutritionOrder.oralDiet.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/diet-type"
+        }
+      },
+      {
+        "id": "NutritionOrder.oralDiet.schedule",
+        "path": "NutritionOrder.oralDiet.schedule",
+        "type": [
+          {
+            "code": "Timing",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-timing"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.nutrient",
+        "path": "NutritionOrder.oralDiet.nutrient",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.nutrient.modifier",
+        "path": "NutritionOrder.oralDiet.nutrient.modifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/nutrient-code"
+        }
+      },
+      {
+        "id": "NutritionOrder.oralDiet.texture",
+        "path": "NutritionOrder.oralDiet.texture",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.texture.modifier",
+        "path": "NutritionOrder.oralDiet.texture.modifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/texture-code"
+        }
+      },
+      {
+        "id": "NutritionOrder.oralDiet.texture.foodType",
+        "path": "NutritionOrder.oralDiet.texture.foodType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/modified-foodtype"
+        }
+      },
+      {
+        "id": "NutritionOrder.supplement",
+        "path": "NutritionOrder.supplement",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.supplement.type",
+        "path": "NutritionOrder.supplement.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/supplement-type"
+        }
+      },
+      {
+        "id": "NutritionOrder.supplement.schedule",
+        "path": "NutritionOrder.supplement.schedule",
+        "type": [
+          {
+            "code": "Timing",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-timing"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.supplement.quantity",
+        "path": "NutritionOrder.supplement.quantity",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula",
+        "path": "NutritionOrder.enteralFormula",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.baseFormulaType",
+        "path": "NutritionOrder.enteralFormula.baseFormulaType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/entformula-type"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.additiveType",
+        "path": "NutritionOrder.enteralFormula.additiveType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/entformula-additive"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.caloricDensity",
+        "path": "NutritionOrder.enteralFormula.caloricDensity",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.routeofAdministration",
+        "path": "NutritionOrder.enteralFormula.routeofAdministration",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/enteral-route"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.administration",
+        "path": "NutritionOrder.enteralFormula.administration",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.administration.schedule",
+        "path": "NutritionOrder.enteralFormula.administration.schedule",
+        "type": [
+          {
+            "code": "Timing",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-timing"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.administration.quantity",
+        "path": "NutritionOrder.enteralFormula.administration.quantity",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.administration.rate[x]",
+        "path": "NutritionOrder.enteralFormula.administration.rate[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.administration.rate[x]:rateRatio",
+        "path": "NutritionOrder.enteralFormula.administration.rate[x]",
+        "sliceName": "rateRatio",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Ratio"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

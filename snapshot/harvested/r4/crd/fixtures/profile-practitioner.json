@@ -1,0 +1,43 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-practitioner",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|6.1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|3.1.1"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-practitioner",
+  "name": "CRDPractitioner",
+  "title": "CRD Practitioner",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional constraints on the US Core Practitioner profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Practitioner",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Practitioner.identifier:tin",
+        "path": "Practitioner.identifier",
+        "sliceName": "tin",
+        "short": "U.S. Personal Tax Id Number",
+        "comment": "This is used only for TIN's that are specific to the individual.  TINs for groups **SHALL** only be communicated on Organization.",
+        "min": 0,
+        "max": "1",
+        "patternIdentifier": {
+          "system": "urn:oid:2.16.840.1.113883.4.4"
+        },
+        "mustSupport": true
+      }
+    ]
+  }
+}

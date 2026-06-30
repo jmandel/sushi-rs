@@ -1,0 +1,64 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-assemble-expectation",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation",
+  "name": "AssembleExpectation",
+  "title": "Assembly Expectations for Questionnaire",
+  "status": "active",
+  "description": "If present, indicates that this questionnaire has expectations with respect to assembly.  Specifically, indicates whether this form requires assembly (i.e. it can't be used directly without invoking the [$assemble](OperationDefinition-Questionnaire-assemble.html) operation operation on it) and/or whether it is intended for use only as a 'child' in an assembly process.  The assembly processs might mean filling in item metadata based on information looked up from item.definitions and/or retrieving sub-questionnaires pointed to by [sub-questionnaire](StructureDefinition-sdc-questionnaire-subQuestionnaire.html) extensions.",
+  "purpose": "Allows Form Fillers to differentiate forms that require pre-processing prior to display.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Questionnaire is modular",
+        "definition": "If present, indicates that this questionnaire has expectations with respect to assembly.  Specifically, indicates whether this form requires assembly (i.e. it can't be used directly without invoking the [$assemble](OperationDefinition-Questionnaire-assemble.html) operation operation on it) and/or whether it is intended for use only as a 'child' in an assembly process.  The assembly processs might mean filling in item metadata based on information looked up from item.definitions and/or retrieving sub-questionnaires pointed to by [sub-questionnaire](StructureDefinition-sdc-questionnaire-subQuestionnaire.html) extensions.",
+        "comment": "SDC-conformant Questionnaires **SHALL** declare this extension if they require an assembly process prior to use.  If not declared, then the Questionnaire is not necessarily safe for use as a child form and does not require assembly prior to use.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assemble-expectation"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/sdc/ValueSet/assemble-expectation"
+        }
+      }
+    ]
+  }
+}

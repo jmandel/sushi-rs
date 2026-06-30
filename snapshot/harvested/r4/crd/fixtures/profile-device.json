@@ -1,0 +1,82 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-device",
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-device",
+  "name": "CRDDevice",
+  "title": "CRD Device",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional constraints on the US Core Device Profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Device",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Device.extension",
+        "path": "Device.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Device.extension:BillingOptions",
+        "path": "Device.extension",
+        "sliceName": "BillingOptions",
+        "short": "Expected Billing Code(s)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Device.udiCarrier",
+        "path": "Device.udiCarrier",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.udiCarrier.deviceIdentifier",
+        "path": "Device.udiCarrier.deviceIdentifier",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.property",
+        "path": "Device.property",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.property.type",
+        "path": "Device.property.type",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.property.valueQuantity",
+        "path": "Device.property.valueQuantity",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.property.valueCode",
+        "path": "Device.property.valueCode",
+        "mustSupport": true
+      }
+    ]
+  }
+}

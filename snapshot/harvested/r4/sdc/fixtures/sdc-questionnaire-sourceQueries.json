@@ -1,0 +1,61 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-sourceQueries",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sourceQueries",
+  "name": "SourceQueriesExtension",
+  "title": "Source queries for population mapping",
+  "status": "active",
+  "description": "A Batch Bundle containing a set of queries that should be executed to provide source data for a StructureMap to create a populated QuestionnaireResponse.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Bundle of queries to populate from",
+        "definition": "A Batch Bundle containing a set of queries that should be executed to provide source data for a StructureMap to create a populated QuestionnaireResponse.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-sourceQueries"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Bundle"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

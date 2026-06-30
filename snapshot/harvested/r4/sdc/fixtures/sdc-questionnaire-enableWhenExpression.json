@@ -1,0 +1,85 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-enableWhenExpression",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-enableWhenExpression",
+  "version": "3.0.0",
+  "name": "EnableWhenExpressionExtension",
+  "title": "Enable when expression",
+  "status": "active",
+  "experimental": false,
+  "description": "An expression that returns a boolean value for whether to enable the item. If the expression resolves to an empty set, it is interpretted as false.  Otherwise, if the expression does not resolve to a boolean, it is considered an error in the design of the Questionnaire.  Form renderer behavior is undefined.  Systems SHOULD present a warning to the user if a non-boolean valued expression result does not trigger an all-out error.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "code": "001",
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Expression for when to enable the item",
+        "definition": "An expression that returns a boolean value for whether to enable the item.",
+        "comment": "This is only permitted when the containing item does NOT have any enableWhen elements.\r\n\r\nIf the expression involves comparisons between elements that have different precisions but are otherwise equal, FHIRPath will resolve the expression to an empty set, which will in turn evaluate to false (meaning the item won't be enabled).  If this is not the desired behavior, the author should add a `.allTrue()` to the end of the expression, which will result in an indeterminate outcome because of precision differences being handled as 'true' and the item being enabled.  Questionnaires SHOULD be designed to take into account challenges around varying precision to minimize non-deterministic situations by setting constraints around expected precision, etc.\r\n\r\nIf the expression evaluates to something other than a boolean true or false, the Form Filler SHOULD still display the form, and if it does so, SHOULD treat the element as 'enabled' and display a warning to the user that the questionnaire logic was faulty and it's possible that the item shouldn't be enabled.",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-enableWhenExpression"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Expression"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "sdc-inv1",
+            "severity": "error",
+            "human": "FHIR query language not allowed.",
+            "expression": "language!='application/x-fhir-query'",
+            "xpath": "not(f:language/@value='application/x-fhir-query')",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-enableWhenExpression"
+          }
+        ]
+      }
+    ]
+  }
+}

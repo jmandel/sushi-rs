@@ -1,0 +1,408 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-codesystem",
+  "extension": [
+    {
+      "extension": [
+        {
+          "url": "packageId",
+          "valueId": "hl7.fhir.uv.xver-r5.r4"
+        },
+        {
+          "url": "version",
+          "valueString": "0.1.0"
+        }
+      ],
+      "url": "http://hl7.org/fhir/StructureDefinition/package-source"
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-codesystem",
+  "name": "SDCCodeSystem",
+  "title": "SDC Code System",
+  "status": "active",
+  "description": "Defines how CodeSystem is used to reflect code lists found in data element defintions and form definitions.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ihesdc",
+      "name": "IHE SDC"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "objimpl",
+      "uri": "http://hl7.org/fhir/object-implementation",
+      "name": "Object Implementation Information"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "CodeSystem",
+  "baseDefinition": "http://hl7.org/fhir/5.0/StructureDefinition/profile-CodeSystem",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "CodeSystem",
+        "path": "CodeSystem",
+        "definition": "Sets expectations for SDC-conformant systems around value set support for representing permitted question answers.",
+        "constraint": [
+          {
+            "key": "sdc-2",
+            "severity": "error",
+            "human": "If version is present, versionAlgorithm must be present.",
+            "expression": "version.exists() implies extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').exists()",
+            "xpath": "not(exists(f:version)) or exists(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm'])",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-codesystem"
+          },
+          {
+            "key": "sdc-3",
+            "severity": "warning",
+            "human": "Semver is the preferred version algorithm - package machinery doesn't work well with artifacts using alternate versioning schemes",
+            "expression": "extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').all(value.ofType(Coding).where(system='http://hl7.org/fhir/version-algorithm' and code='semver').exists())",
+            "xpath": "not(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm' and not(exists(f:valueCoding[f:system/@value='http://hl7.org/fhir/version-algorithm' and f:code/@value='semver'])))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-codesystem"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "Form_Package//list_field"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.extension:versionAlgorithm",
+        "path": "CodeSystem.extension",
+        "sliceName": "versionAlgorithm",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.modifierExtension",
+        "path": "CodeSystem.modifierExtension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "CodeSystem.modifierExtension:rendering-criticalExtension",
+        "path": "CodeSystem.modifierExtension",
+        "sliceName": "rendering-criticalExtension",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-rendering-criticalExtension"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "N/A (new requirement)"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.url",
+        "path": "CodeSystem.url",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.version",
+        "path": "CodeSystem.version",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.name",
+        "path": "CodeSystem.name",
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "IHE SDC"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.status",
+        "path": "CodeSystem.status",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.experimental",
+        "path": "CodeSystem.experimental",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.date",
+        "path": "CodeSystem.date",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.description",
+        "path": "CodeSystem.description",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.caseSensitive",
+        "path": "CodeSystem.caseSensitive",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.compositional",
+        "path": "CodeSystem.compositional",
+        "max": "0"
+      },
+      {
+        "id": "CodeSystem.versionNeeded",
+        "path": "CodeSystem.versionNeeded",
+        "max": "0"
+      },
+      {
+        "id": "CodeSystem.content",
+        "path": "CodeSystem.content",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.property",
+        "path": "CodeSystem.property",
+        "requirements": "...  Property is mustSupport because it is used to express weights as well as elements that may be relevant for rendering or performing logic on codes",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.property.code",
+        "path": "CodeSystem.property.code",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.property.uri",
+        "path": "CodeSystem.property.uri",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.property.type",
+        "path": "CodeSystem.property.type",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.concept",
+        "path": "CodeSystem.concept",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "list_item"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.code",
+        "path": "CodeSystem.concept.code",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "value"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.display",
+        "path": "CodeSystem.concept.display",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "item_prompt"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.display.extension",
+        "path": "CodeSystem.concept.display.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "CodeSystem.concept.display.extension:conceptDisplayLabel-renderingStyle",
+        "path": "CodeSystem.concept.display.extension",
+        "sliceName": "conceptDisplayLabel-renderingStyle",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-style"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.display.extension:conceptDisplayLabel-markdown",
+        "path": "CodeSystem.concept.display.extension",
+        "sliceName": "conceptDisplayLabel-markdown",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-markdown"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.display.extension:conceptDisplayLabel-xhtml",
+        "path": "CodeSystem.concept.display.extension",
+        "sliceName": "conceptDisplayLabel-xhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "item_prompt_html"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.definition",
+        "path": "CodeSystem.concept.definition",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "value_meaning/label"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.designation.value.extension",
+        "path": "CodeSystem.concept.designation.value.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "CodeSystem.concept.designation.value.extension:conceptDisplayLabel-renderingStyle",
+        "path": "CodeSystem.concept.designation.value.extension",
+        "sliceName": "conceptDisplayLabel-renderingStyle",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-style"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.designation.value.extension:conceptDisplayLabel-markdown",
+        "path": "CodeSystem.concept.designation.value.extension",
+        "sliceName": "conceptDisplayLabel-markdown",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-markdown"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.designation.value.extension:conceptDisplayLabel-xhtml",
+        "path": "CodeSystem.concept.designation.value.extension",
+        "sliceName": "conceptDisplayLabel-xhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihesdc",
+            "map": "item_prompt_html"
+          }
+        ]
+      },
+      {
+        "id": "CodeSystem.concept.property",
+        "path": "CodeSystem.concept.property",
+        "requirements": "...  Property is mustSupport because it is used to express weights as well as elements that may be relevant for rendering or performing logic on codes",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.concept.property.code",
+        "path": "CodeSystem.concept.property.code",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.concept.property.value[x]",
+        "path": "CodeSystem.concept.property.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "CodeSystem.concept.concept",
+        "path": "CodeSystem.concept.concept",
+        "mustSupport": true
+      }
+    ]
+  }
+}

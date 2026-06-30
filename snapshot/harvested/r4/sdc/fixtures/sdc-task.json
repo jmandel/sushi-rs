@@ -1,0 +1,268 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-task",
+  "extension": [
+    {
+      "extension": [
+        {
+          "url": "packageId",
+          "valueId": "hl7.fhir.uv.xver-r5.r4"
+        },
+        {
+          "url": "version",
+          "valueString": "0.1.0"
+        }
+      ],
+      "url": "http://hl7.org/fhir/StructureDefinition/package-source"
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-task",
+  "name": "SDCTaskQuestionnaire",
+  "title": "Task Questionnaire",
+  "status": "active",
+  "description": "Defines how Task is used to ask for a Questionnaire to be completed",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Task",
+  "baseDefinition": "http://hl7.org/fhir/5.0/StructureDefinition/profile-Task",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Task",
+        "path": "Task",
+        "constraint": [
+          {
+            "key": "sdc-t1",
+            "severity": "error",
+            "human": "Either code is 'fulfill', focus is ServiceRequest and no 'questionnaire' input; or code is 'complete-questionnaire', focus is omitted and 'questionnaire' input is present",
+            "expression": "(code.coding.exists(code='fulfill' and system='http://hl7.org/fhir/CodeSystem/task-code') and \r\n                            (focus.resolve() is ServiceRequest) and \r\n                            input.exists(type.coding.exists(system='http://hl7.org/fhir/uv/sdc/CodeSystem/temp' and code='questionnaire')).not())\r\n                        or (code.coding.exists(code='complete-questionnaire' and system='http://hl7.org/fhir/uv/sdc/CodeSystem/temp') and \r\n                            focus.exists().not() and \r\n                            input.exists(type.coding.exists(system='http://hl7.org/fhir/uv/sdc/CodeSystem/temp' and code='questionnaire')))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-task"
+          }
+        ],
+        "mustSupport": false
+      },
+      {
+        "id": "Task.status",
+        "path": "Task.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.intent",
+        "path": "Task.intent",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.code",
+        "path": "Task.code",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/sdc/ValueSet/task-code"
+        }
+      },
+      {
+        "id": "Task.focus",
+        "path": "Task.focus",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-servicerequest"
+            ]
+          }
+        ],
+        "condition": [
+          "sdc-t1"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.for",
+        "path": "Task.for",
+        "short": "Patient or other Questionnaire is for",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.authoredOn",
+        "path": "Task.authoredOn",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.requester",
+        "path": "Task.requester",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.owner",
+        "path": "Task.owner",
+        "short": "Who should complete questionnaire",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.reasonCode",
+        "path": "Task.reasonCode",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input",
+        "path": "Task.input",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:questionnaire",
+        "path": "Task.input",
+        "sliceName": "questionnaire",
+        "definition": "Indicates the questionnaire to be completed.",
+        "min": 0,
+        "max": "1",
+        "condition": [
+          "sdc-t1"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:questionnaire.type",
+        "path": "Task.input.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "questionnaire",
+              "system": "http://hl7.org/fhir/uv/sdc/CodeSystem/temp"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:questionnaire.value[x]",
+        "path": "Task.input.value[x]",
+        "short": "url",
+        "type": [
+          {
+            "code": "canonical"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:responseEndpoint",
+        "path": "Task.input",
+        "sliceName": "responseEndpoint",
+        "definition": "Indicates an endpoint the form should be posted to on completion.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:responseEndpoint.type",
+        "path": "Task.input.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "response-endpoint",
+              "system": "http://hl7.org/fhir/uv/sdc/CodeSystem/temp"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:responseEndpoint.value[x]",
+        "path": "Task.input.value[x]",
+        "short": "url",
+        "type": [
+          {
+            "code": "url"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.output",
+        "path": "Task.output",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.output:response",
+        "path": "Task.output",
+        "sliceName": "response",
+        "definition": "Indicates the questionnaire response resulting from the request.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.output:response.type",
+        "path": "Task.output.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "questionnaire-response",
+              "system": "http://hl7.org/fhir/uv/sdc/CodeSystem/temp"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.output:response.value[x]",
+        "path": "Task.output.value[x]",
+        "short": "url",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/QuestionnaireResponse"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

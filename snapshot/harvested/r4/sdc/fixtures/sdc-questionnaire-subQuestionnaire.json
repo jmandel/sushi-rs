@@ -1,0 +1,65 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-subQuestionnaire",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire",
+  "name": "SubQuestionnaireExtension",
+  "title": "Sub-questionnaire",
+  "status": "active",
+  "description": "Indicates that the display item on which this extension appears should be replaced with the referenced Questionnaire",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "contextInvariant": [
+    "where(%resource.is(Questionnaire)).exists(type.first()='display') or ofType(ElementDefinition).type.exists().allTrue()"
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Questionnaire to substitute here",
+        "definition": "Indicates that the display item on which this extension appears should be replaced with the referenced Questionnaire",
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-subQuestionnaire"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "canonical"
+          }
+        ]
+      }
+    ]
+  }
+}

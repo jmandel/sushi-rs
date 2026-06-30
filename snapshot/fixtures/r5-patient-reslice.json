@@ -1,0 +1,56 @@
+{
+  "resourceType": "StructureDefinition",
+  "url": "http://example.org/StructureDefinition/MyPatientReslice",
+  "name": "MyPatientReslice",
+  "status": "draft",
+  "fhirVersion": "5.0.0",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient",
+        "path": "Patient"
+      },
+      {
+        "id": "Patient.identifier",
+        "path": "Patient.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Patient.identifier:mrn",
+        "path": "Patient.identifier",
+        "sliceName": "mrn",
+        "min": 0,
+        "max": "*",
+        "short": "Medical record numbers"
+      },
+      {
+        "id": "Patient.identifier:mrn/local",
+        "path": "Patient.identifier",
+        "sliceName": "mrn/local",
+        "min": 1,
+        "max": "1",
+        "short": "Local medical record number"
+      },
+      {
+        "id": "Patient.identifier:mrn/local.system",
+        "path": "Patient.identifier.system",
+        "min": 1,
+        "fixedUri": "http://example.org/local-mrn"
+      }
+    ]
+  }
+}

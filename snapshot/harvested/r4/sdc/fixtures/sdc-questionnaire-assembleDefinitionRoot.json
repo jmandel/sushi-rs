@@ -1,0 +1,67 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-assembleDefinitionRoot",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleDefinitionRoot",
+  "name": "AssembleDefinitionRoot",
+  "title": "Assemble Definition Root",
+  "status": "active",
+  "description": "Indicates that the assembly process SHALL only use definitions that have the specified URI as their root. Can also be set to false to disable assembly.",
+  "purpose": "Supports modular assembly by filtering which definitions to consider during composition of the Questionnaire structure.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    },
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Assemble Definition Root",
+        "definition": "Indicates that the assembly process SHALL only use definitions that have the specified URI as their root. Can also be set to false to disable assembly."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-assembleDefinitionRoot"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "URI root of definitions to use or false to disable",
+        "definition": "If present, indicates that the assembly process SHALL only use definitions that have the specified URI as their root. If false, disables assembly for the element and its descendants.",
+        "type": [
+          {
+            "code": "boolean"
+          },
+          {
+            "code": "uri"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,658 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ImagingStudy-uv-ips",
+  "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/ImagingStudy-uv-ips",
+  "version": "1.1.0",
+  "name": "ImagingStudyUvIps",
+  "title": "ImagingStudy (IPS)",
+  "status": "active",
+  "date": "2024-06-19T10:50:07-05:00",
+  "publisher": "HL7 International / Patient Care",
+  "contact": [
+    {
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/patientcare"
+        }
+      ]
+    }
+  ],
+  "description": "This profile represents the constraints applied to the ImagingStudy resource by the IPS project, which specifies the information on a DICOM imaging study this imaging result is part of.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "code": "001",
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "ImagingStudy",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ImagingStudy",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ImagingStudy.identifier",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.status",
+        "path": "ImagingStudy.status",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/ips/ValueSet/imaging-study-status-uv-ips",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+              "valueString": "ImagingStudyStatus"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ImagingStudy.subject",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint",
+            "valueString": "dicom=http://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.2.2.html"
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips",
+              "http://hl7.org/fhir/StructureDefinition/Group"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.subject.reference",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.subject.reference",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.started",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint",
+            "valueString": "dicom=http://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.7.2.html#sect_C.7.2.1"
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.started",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.procedureCode",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.procedureCode",
+        "type": [
+          {
+            "code": "CodeableConcept",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/tools/StructureDefinition/additional-binding",
+              "valueString": "ImagingProcedureCode",
+              "extension": [
+                {
+                  "url": "key",
+                  "valueId": "results-radiology-observations-uv-ips"
+                },
+                {
+                  "url": "purpose",
+                  "valueCode": "candidate"
+                },
+                {
+                  "url": "valueSet",
+                  "valueCanonical": "http://hl7.org/fhir/uv/ips/ValueSet/results-radiology-observations-uv-ips"
+                },
+                {
+                  "url": "documentation",
+                  "valueMarkdown": "Radiology codes from LOINC."
+                }
+              ]
+            }
+          ],
+          "strength": "extensible",
+          "description": "The performed procedure type.",
+          "valueSet": "http://www.rsna.org/RadLex_Playbook.aspx"
+        }
+      },
+      {
+        "id": "ImagingStudy.reasonCode",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.reasonCode",
+        "type": [
+          {
+            "code": "CodeableConcept",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series.uid",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series.uid",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series.modality",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series.modality",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series.instance",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series.instance",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series.instance.uid",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series.instance.uid",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.series.instance.sopClass",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          },
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation",
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ]
+          }
+        ],
+        "path": "ImagingStudy.series.instance.sopClass",
+        "mustSupport": true
+      }
+    ]
+  }
+}

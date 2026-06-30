@@ -1,0 +1,854 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ext-coverage-information",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information",
+  "name": "CRDCoverageInformation",
+  "title": "Coverage Information",
+  "status": "active",
+  "experimental": false,
+  "description": "Captures assertions from a payer about the coverage rules for a service - in particular, whether it is covered and/or requires prior authorization.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Appointment"
+    },
+    {
+      "type": "element",
+      "expression": "CommunicationRequest"
+    },
+    {
+      "type": "element",
+      "expression": "Encounter"
+    },
+    {
+      "type": "element",
+      "expression": "DeviceRequest"
+    },
+    {
+      "type": "element",
+      "expression": "MedicationRequest"
+    },
+    {
+      "type": "element",
+      "expression": "NutritionOrder"
+    },
+    {
+      "type": "element",
+      "expression": "QuestionnaireResponse"
+    },
+    {
+      "type": "element",
+      "expression": "ServiceRequest"
+    },
+    {
+      "type": "element",
+      "expression": "VisionPrescription"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "CoverageInfo",
+        "definition": "Indicates coverage information.",
+        "constraint": [
+          {
+            "key": "crd-ci-q1",
+            "severity": "error",
+            "human": "Questionnaire is only allowed when doc-needed exists",
+            "expression": "extension.where(url='questionnaire').exists() implies extension.where(url = 'doc-needed').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q2",
+            "severity": "error",
+            "human": "If covered is set to 'not-covered', then 'pa-needed' must not exist.",
+            "expression": "extension.where(url = 'covered' and value = 'not-covered').exists() implies extension.where(url = 'pa-needed').exists().not()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q3",
+            "severity": "error",
+            "human": "'info-needed' SHALL exist if and only if at least one of 'covered', 'pa-needed', or 'doc-needed' is set to 'conditional'.",
+            "expression": "extension.where((url = 'covered' or url = 'pa-needed' or url = 'doc-needed') and value = 'conditional').count() >= 1 implies extension.where(url = 'info-needed').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q4",
+            "severity": "error",
+            "human": "If 'pa-needed' is 'satisfied', 'noauth', or 'not-covered', then 'Doc-purpose' cannot be 'withpa'.",
+            "expression": "extension.where(url = 'pa-needed' and (value = 'satisfied' or value = 'noauth' or value = 'not-covered')) and extension.where(url = 'doc-purpose').exists() implies extension.where(url = 'doc-purpose').all(value != 'withpa')",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q5",
+            "severity": "error",
+            "human": "'satisfied-pa-id' must exist if and only if 'pa-needed' is set to 'satisfied'.",
+            "expression": "extension.where(url = 'pa-needed' and value = 'satisfied').exists() = extension.where(url = 'satisfied-pa-id').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q6",
+            "severity": "error",
+            "human": "If 'info-needed' is OTH, then reason must be specified",
+            "expression": "extension.where(url = 'info-needed' and value = 'OTH').exists() implies extension.where(url = 'reason').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q7",
+            "severity": "error",
+            "human": "If reason.coding is present and is not from the extensible value set, then reason.text must be present",
+            "expression": "extension.where(url = 'reason').empty() or extension.where(url = 'reason').value.text.exists() or extension.where(url = 'reason').value.memberOf('http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageAssertionReasons')",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q8",
+            "severity": "error",
+            "human": "If doc-purpose is present with a value other than 'conditional', then reason must be present",
+            "expression": "extension.where(url = 'doc-purpose' and value != 'conditional').exists() implies extension.where(url = 'reason').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          },
+          {
+            "key": "crd-ci-q9",
+            "severity": "error",
+            "human": "If any of 'covered', 'pa-needed', or 'doc-needed' is set to 'indeterminate', then reason must be present to explain the issue that is preventing the payer from making a coverage determination.",
+            "expression": "extension.where((url = 'covered' or url = 'pa-needed' or url = 'doc-needed') and value = 'indeterminate').count() >= 1 implies extension.where(url = 'reason').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 4
+      },
+      {
+        "id": "Extension.extension:coverage",
+        "path": "Extension.extension",
+        "sliceName": "coverage",
+        "short": "Reference to Coverage",
+        "definition": "Reference to Coverage that assertion applies to.",
+        "comment": "This will always be a link to a Coverage resource on the CRD client's system - typically accessed via prefetch or direct query using the CDS-Hooks token.  If no coverage instance is available, the coverage-information extension cannot be returned.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:coverage.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:coverage.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "coverage"
+      },
+      {
+        "id": "Extension.extension:coverage.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-coverage"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:covered",
+        "path": "Extension.extension",
+        "sliceName": "covered",
+        "short": "covered | not-covered | conditional | indeterminate",
+        "definition": "Indicates whether the ordered/requested service is covered under patient's plan.  This includes checking whether the proposed service is a benefit under the patient's plan.  It **MAY** also involve checking whether the patient has reached their limits under the current plan period but is not required to.",
+        "comment": "Details on why coverage does not exist would be conveyed in the 'reason' element.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:covered.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:covered.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "covered"
+      },
+      {
+        "id": "Extension.extension:covered.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageInfo"
+        }
+      },
+      {
+        "id": "Extension.extension:pa-needed",
+        "path": "Extension.extension",
+        "sliceName": "pa-needed",
+        "short": "no-auth | auth-needed | satisfied | performpa | conditional | indeterminate",
+        "definition": "Indicates whether prior auth will be needed for coverage to be provided",
+        "min": 0,
+        "max": "1",
+        "condition": [
+          "crd-ci-q2",
+          "crd-ci-q5"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:pa-needed.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:pa-needed.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "pa-needed"
+      },
+      {
+        "id": "Extension.extension:pa-needed.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coveragePaDetail"
+        }
+      },
+      {
+        "id": "Extension.extension:doc-needed",
+        "path": "Extension.extension",
+        "sliceName": "doc-needed",
+        "short": "clinical | admin | patient | conditional | indeterminate",
+        "definition": "Indicates whether additional documentation needs to be captured (purpose in next element)",
+        "comment": "See additional guidance in the [notes](StructureDefinition-ext-coverage-information.html#doc-needed-vs-info-needed)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:doc-needed.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:doc-needed.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "doc-needed"
+      },
+      {
+        "id": "Extension.extension:doc-needed.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/AdditionalDocumentation"
+        }
+      },
+      {
+        "id": "Extension.extension:doc-purpose",
+        "path": "Extension.extension",
+        "sliceName": "doc-purpose",
+        "short": "withpa | withclaim | withorder | retain-doc | OTH",
+        "definition": "Indicates the reason(s) for the additional documentation that needs to be captured",
+        "requirements": "Knowing what the information will be used for may influence who will fill out the form(s) and how quickly the organization will get around to filling them out",
+        "min": 0,
+        "max": "*",
+        "condition": [
+          "crd-ci-q4"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:doc-purpose.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:doc-purpose.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "doc-purpose"
+      },
+      {
+        "id": "Extension.extension:doc-purpose.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/DocReason"
+        }
+      },
+      {
+        "id": "Extension.extension:info-needed",
+        "path": "Extension.extension",
+        "sliceName": "info-needed",
+        "short": "performer | location | timeframe | contract-window | detail-code | OTH",
+        "definition": "Indicates whether information about the performer, location, and/or performance date is needed to determine coverage information",
+        "comment": "See additional guidance in the [notes](StructureDefinition-ext-coverage-information.html#doc-needed-vs-info-needed)\nIf this element is set to OTH, then there must be at least one detail element the explains the nature of the additional information needed to determine coverage, prior authorization, and/or documentation requirements.  There **SHOULD** also be a doc-needed element indicating that DTR can be used to gather additional information.",
+        "min": 0,
+        "max": "*",
+        "condition": [
+          "crd-ci-q3"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:info-needed.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:info-needed.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "info-needed"
+      },
+      {
+        "id": "Extension.extension:info-needed.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/informationNeeded"
+        }
+      },
+      {
+        "id": "Extension.extension:billingCode",
+        "path": "Extension.extension",
+        "sliceName": "billingCode",
+        "short": "Billing code",
+        "definition": "Billing code(s) that must be used in the eventual claim for the coverage assertion to hold",
+        "comment": "Codes may include modifier codes, leveraging [CPT's post-coordination syntax](https://terminology.hl7.org/CPT.html)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:billingCode.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:billingCode.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "billingCode"
+      },
+      {
+        "id": "Extension.extension:billingCode.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/ValueSet/service-uscls"
+        }
+      },
+      {
+        "id": "Extension.extension:reason",
+        "path": "Extension.extension",
+        "sliceName": "reason",
+        "short": "Reason for assertion",
+        "definition": "Indicates the 'reason' for the coverage assertion",
+        "comment": "This can be used whenever the reason may not be obvious to the practitioner.  E.g. prior authorization is waived because the provider is gold-carded; patient is no longer a minor and has not been registered as an adult dependent; patient has reached their limit for this type of service this year; etc.  Additional standard reason codes may be introduced in the future.  If no standard code applies, use text.",
+        "min": 0,
+        "max": "*",
+        "condition": [
+          "crd-ci-q7",
+          "crd-ci-q8",
+          "crd-ci-q6"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:reason.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:reason.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "reason"
+      },
+      {
+        "id": "Extension.extension:reason.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageAssertionReasons"
+        }
+      },
+      {
+        "id": "Extension.extension:detail",
+        "path": "Extension.extension",
+        "sliceName": "detail",
+        "short": "detail for assertion",
+        "definition": "Indicates the 'detail' for the coverage assertion",
+        "comment": "Additional information that qualifies, describes, or provides additional guidance about coverage or documentation requirements.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:detail.extension",
+        "path": "Extension.extension.extension",
+        "min": 3
+      },
+      {
+        "id": "Extension.extension:detail.extension:category",
+        "path": "Extension.extension.extension",
+        "sliceName": "category",
+        "short": "Type of detail",
+        "definition": "Indicates the nature of the detail, which in turn provides guidance for when it should be displayed.",
+        "comment": "CRD clients **SHOULD** make both limitation and decisional details available to clinical users.",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:detail.extension:category.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:detail.extension:category.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "category"
+      },
+      {
+        "id": "Extension.extension:detail.extension:category.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageDetailCategories"
+        }
+      },
+      {
+        "id": "Extension.extension:detail.extension:code",
+        "path": "Extension.extension.extension",
+        "sliceName": "code",
+        "short": "Name of name-value pair",
+        "definition": "The type of detail or qualification expressed.",
+        "comment": "The binding to the old temporary code system is retained for now for backward compatibility",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:detail.extension:code.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:detail.extension:code.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "code"
+      },
+      {
+        "id": "Extension.extension:detail.extension:code.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageDetailNew",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/tools/StructureDefinition/additional-binding",
+              "extension": [
+                {
+                  "url": "key",
+                  "valueId": "ci-detailold"
+                },
+                {
+                  "url": "purpose",
+                  "valueCode": "extensible"
+                },
+                {
+                  "url": "valueSet",
+                  "valueCanonical": "http://hl7.org/fhir/us/davinci-crd/ValueSet/coverageDetail"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "Extension.extension:detail.extension:value",
+        "path": "Extension.extension.extension",
+        "sliceName": "value",
+        "short": "Value of name-value pair",
+        "definition": "The detail or qualification that applies to this coverage assertion.",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:detail.extension:value.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:detail.extension:value.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "value"
+      },
+      {
+        "id": "Extension.extension:detail.extension:value.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "type": [
+          {
+            "code": "boolean"
+          },
+          {
+            "code": "string"
+          },
+          {
+            "code": "url"
+          },
+          {
+            "code": "Period"
+          },
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:detail.extension:qualification",
+        "path": "Extension.extension.extension",
+        "sliceName": "qualification",
+        "short": "Additional info about detail",
+        "definition": "Additional text that qualifies/expands on the computable detail.  E.g. 'Provided coverage is renewed' or 'Does not account for deductible'",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:detail.extension:qualification.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:detail.extension:qualification.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "qualification"
+      },
+      {
+        "id": "Extension.extension:detail.extension:qualification.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:detail.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "detail"
+      },
+      {
+        "id": "Extension.extension:detail.value[x]",
+        "path": "Extension.extension.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:dependency",
+        "path": "Extension.extension",
+        "sliceName": "dependency",
+        "short": "Resources that impact this assertion",
+        "definition": "If present, indicates that the determination represented here is dependent on the content, determination, and possibly execution of the referenced order(s)",
+        "requirements": "For example, the authorization decision on a request for post-surgical physiotherapy might be dependent on the order for the surgery itself.  If coverage for the surgery is not approved or the order for the surgery is cancelled, that might impact the decision on covering the physiotherapy.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:dependency.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:dependency.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "dependency"
+      },
+      {
+        "id": "Extension.extension:dependency.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-with-order",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-no-order",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-communicationrequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-devicerequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medicationrequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-nutritionorder",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-servicerequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-visionprescription"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:questionnaire",
+        "path": "Extension.extension",
+        "sliceName": "questionnaire",
+        "short": "Questionnaire to complete",
+        "definition": "A form to be filled out to gather more information.",
+        "comment": "If using DTR, this will be used by DTR to determine the Questionnaire packages to be returned.  If empty, DTR will determine the questionnaire packages itself.  If not using DTR, providing a Questionnaire url is the only way to indicate what form to complete.",
+        "min": 0,
+        "max": "*",
+        "condition": [
+          "crd-ci-q1"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:questionnaire.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:questionnaire.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "questionnaire"
+      },
+      {
+        "id": "Extension.extension:questionnaire.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Questionnaire"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:date",
+        "path": "Extension.extension",
+        "sliceName": "date",
+        "short": "Assertion date",
+        "definition": "Date on which assertion was made.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:date.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:date.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "date"
+      },
+      {
+        "id": "Extension.extension:date.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "date"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:coverage-assertion-id",
+        "path": "Extension.extension",
+        "sliceName": "coverage-assertion-id",
+        "short": "Coverage assertion trace number",
+        "definition": "Trace identifier to allow tracking the guidance in source system.  This identifier can also be used to re-establish cached context information when subsequently launching DTR.",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:coverage-assertion-id.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:coverage-assertion-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "coverage-assertion-id"
+      },
+      {
+        "id": "Extension.extension:coverage-assertion-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:satisfied-pa-id",
+        "path": "Extension.extension",
+        "sliceName": "satisfied-pa-id",
+        "short": "Satisfied prior auth number",
+        "definition": "An identifier indicating that prior authorization requirements have been met",
+        "comment": "When operating under the CMS enforcement discretion, this element is a prior authorization number and can be submitted in the corresponding X12 element when submitting an eventual claim",
+        "min": 0,
+        "max": "1",
+        "condition": [
+          "crd-ci-q5"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:satisfied-pa-id.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:satisfied-pa-id.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "satisfied-pa-id"
+      },
+      {
+        "id": "Extension.extension:satisfied-pa-id.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:contact",
+        "path": "Extension.extension",
+        "sliceName": "contact",
+        "short": "Contact information",
+        "definition": "Name, phone number, fax number, email address, website, or other contact information that can be used to ask questions/escalate issues related to a coverage assertion.",
+        "comment": "This **SHOULD** only be populated if the contact information is context-specific rather than a generic contact for the payer as a whole.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:contact.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:contact.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "contact"
+      },
+      {
+        "id": "Extension.extension:contact.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "ContactDetail"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:expiry-date",
+        "path": "Extension.extension",
+        "sliceName": "expiry-date",
+        "short": "Expiration date",
+        "definition": "Date after which the coverage assertion would no longer be valid.",
+        "comment": "In this case, mustSupport means that if the payer knows of an expiry date, they must share it.  However, if the payer never has expiry dates for their assertions, it is fine to omit.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:expiry-date.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:expiry-date.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "expiry-date"
+      },
+      {
+        "id": "Extension.extension:expiry-date.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "date"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

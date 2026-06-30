@@ -1,0 +1,402 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaireresponsecommon",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon",
+  "name": "SDCQuestionnaireResponseCommon",
+  "title": "SDC Questionnaire Response Common Elements",
+  "status": "active",
+  "description": "Defines common elements for all SDC Questionnaire Responses (regular or adaptive).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": true,
+  "type": "QuestionnaireResponse",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/QuestionnaireResponse",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "QuestionnaireResponse",
+        "path": "QuestionnaireResponse",
+        "short": "Generic Questionnaire Response",
+        "definition": "Sets expectations for supported capabilities for questionnaire responses for SDC-conformant systems.",
+        "alias": [
+          "Form Data",
+          "QuestionnaireAnswers"
+        ],
+        "constraint": [
+          {
+            "key": "sdcqr-1",
+            "severity": "warning",
+            "human": "Subject SHOULD be present (searching is difficult without subject).  Almost all QuestionnaireResponses should be with respect to some sort of subject.",
+            "expression": "subject.exists()",
+            "xpath": "exists(f:subject)",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon",
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestpractice",
+                "valueBoolean": true
+              }
+            ]
+          },
+          {
+            "key": "sdcqr-2",
+            "severity": "error",
+            "human": "When repeats=true for a group, it'll be represented with multiple items with the same linkId in the QuestionnaireResponse.  For a question, it'll be represented by a single item with that linkId with multiple answers.",
+            "expression": "(QuestionnaireResponse|repeat(answer|item)).select(item.where(answer.value.exists()).linkId.isDistinct()).allTrue()",
+            "xpath": "not(exists(for $item in descendant::f:item[f:answer] return $item/preceding-sibling::f:item[f:linkId/@value=$item/f:linkId/@value]))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon",
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestpractice",
+                "valueBoolean": true
+              }
+            ]
+          },
+          {
+            "key": "sdcqr-3",
+            "severity": "error",
+            "human": "Can either have source or source extension, but not both",
+            "expression": "source.count() + extension.where(url='http://hl7.org/fhir/5.0/StructureDefinition/extension-QuestionnaireResponse.source').count() <=1",
+            "xpath": "count(f:source | f:extension[@url='http://hl7.org/fhir/5.0/StructureDefinition/extension-QuestionnaireResponse.source']) <= 1",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon"
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension",
+        "path": "QuestionnaireResponse.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "QuestionnaireResponse.extension:adheresTo",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "adheresTo",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/workflow-adheresTo"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension:adheresTo.value[x]",
+        "path": "QuestionnaireResponse.extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ActivityDefinition",
+              "http://hl7.org/fhir/StructureDefinition/PlanDefinition"
+            ]
+          },
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ActivityDefinition",
+              "http://hl7.org/fhir/StructureDefinition/PlanDefinition"
+            ]
+          },
+          {
+            "code": "uri"
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension:triggeredBy",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "triggeredBy",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/workflow-triggeredBy"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension:triggeredBy.value[x]",
+        "path": "QuestionnaireResponse.extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ActivityDefinition",
+              "http://hl7.org/fhir/StructureDefinition/PlanDefinition"
+            ]
+          },
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ActivityDefinition",
+              "http://hl7.org/fhir/StructureDefinition/PlanDefinition"
+            ]
+          },
+          {
+            "code": "uri"
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension:signature",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "signature",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaireresponse-signature"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.extension:completionMode",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "completionMode",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaireresponse-completionMode"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.identifier",
+        "path": "QuestionnaireResponse.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.questionnaire",
+        "path": "QuestionnaireResponse.questionnaire",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.status",
+        "path": "QuestionnaireResponse.status",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.subject",
+        "path": "QuestionnaireResponse.subject",
+        "comment": "...  If subject is omitted - because the QuestionnaireResponse is not associated with a specific subject, ensure that QuestionnaireRsponse.identifier is present or the QuestionnaireResponse is referenced somewhere (e.g. Task.output, Composition.section.entry, etc.) to allow tracking and retrieval of the QuestionnaireResponse",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.authored",
+        "path": "QuestionnaireResponse.authored",
+        "definition": "Identifies when this version of the answer set was created.  Changes whenever the answers are updated.",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.author",
+        "path": "QuestionnaireResponse.author",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.source.extension:r5Source",
+        "path": "QuestionnaireResponse.source.extension",
+        "sliceName": "r5Source",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/alternate-reference"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.source.extension:r5Source.value[x]",
+        "path": "QuestionnaireResponse.source.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Device",
+              "http://hl7.org/fhir/StructureDefinition/Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item",
+        "path": "QuestionnaireResponse.item",
+        "constraint": [
+          {
+            "key": "qrs-2",
+            "severity": "error",
+            "human": "Repeated answers are combined in the answers array of a single item",
+            "expression": "repeat(answer|item).select(item.where(answer.value.exists()).linkId.isDistinct()).allTrue()",
+            "xpath": "true()",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponsecommon"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension",
+        "path": "QuestionnaireResponse.item.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension:itemMedia",
+        "path": "QuestionnaireResponse.item.extension",
+        "sliceName": "itemMedia",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemMedia"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension:ItemSignature",
+        "path": "QuestionnaireResponse.item.extension",
+        "sliceName": "ItemSignature",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaireresponse-signature"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item.linkId",
+        "path": "QuestionnaireResponse.item.linkId",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.text",
+        "path": "QuestionnaireResponse.item.text",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer",
+        "path": "QuestionnaireResponse.item.answer",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:itemAnswerMedia",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "itemAnswerMedia",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemAnswerMedia"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:itemWeight",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "itemWeight",
+        "comment": "Inclusion of weights in QRs can increase performance when calculating based on weights.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/itemWeight"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.value[x]",
+        "path": "QuestionnaireResponse.item.answer.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.item",
+        "path": "QuestionnaireResponse.item.answer.item",
+        "contentReference": "http://hl7.org/fhir/StructureDefinition/QuestionnaireResponse#QuestionnaireResponse.item",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.item",
+        "path": "QuestionnaireResponse.item.item",
+        "contentReference": "http://hl7.org/fhir/StructureDefinition/QuestionnaireResponse#QuestionnaireResponse.item",
+        "mustSupport": true
+      }
+    ]
+  }
+}

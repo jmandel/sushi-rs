@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-endpoint",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-endpoint",
+  "name": "EndpointExtension",
+  "title": "Endpoint",
+  "status": "active",
+  "description": "The base URL for the server(s) to which questionnaire response associated with this questionnaire should be submitted. If multiple repetitions are present, the completed form should be sent to all listed endpoints.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Where to send answers",
+        "definition": "The base URL for the server to which questionnaire response associated with this questionnaire should be submitted. If multiple repetitions are present, the completed form should be sent to all listed endpoints.",
+        "comment": "Indicates that the form has been designed with an expectation that it will be submitted to the specified URI.  If multiple endpoints are specified, expectation is that answers are submitted to all endpoints.\n\nIf no end-point is specified, then the form is not exclusively designed to be submitted to a specific site.  If and where the form needs to be submitted or how the form should be internally processed must be inferred from external context or system business rules.\n\nEndpoints may have expectations around authorization, etc.  Some of this may be learned by consulting the CapabilityStatement associated with the endpoint."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-endpoint"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "uri"
+          }
+        ]
+      }
+    ]
+  }
+}

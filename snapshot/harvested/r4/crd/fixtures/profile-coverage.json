@@ -1,0 +1,102 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-coverage",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-coverage",
+  "name": "CRDCoverage",
+  "title": "CRD Coverage",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies constraints on the Coverage resource to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Coverage",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Coverage",
+        "path": "Coverage",
+        "definition": "This profile specifies constraints on the Coverage resource to support coverage requirements discovery."
+      },
+      {
+        "id": "Coverage.policyHolder",
+        "path": "Coverage.policyHolder",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.subscriber",
+        "path": "Coverage.subscriber",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.beneficiary",
+        "path": "Coverage.beneficiary",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Coverage.dependent",
+        "path": "Coverage.dependent",
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.payor",
+        "path": "Coverage.payor",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Coverage.order",
+        "path": "Coverage.order",
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.network",
+        "path": "Coverage.network",
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.costToBeneficiary",
+        "path": "Coverage.costToBeneficiary",
+        "max": "0"
+      }
+    ]
+  }
+}

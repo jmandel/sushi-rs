@@ -1,0 +1,130 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-taskquestionnaire",
+  "extension": [
+    {
+      "extension": [
+        {
+          "url": "packageId",
+          "valueId": "hl7.fhir.uv.xver-r5.r4"
+        },
+        {
+          "url": "version",
+          "valueString": "0.1.0"
+        }
+      ],
+      "url": "http://hl7.org/fhir/StructureDefinition/package-source"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-taskquestionnaire",
+  "name": "CRDTaskQuestionnaire",
+  "title": "CRD Questionnaire Task",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies constraints on the Task resource to support requests for form (Questionnaire) completion.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Task",
+  "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-task",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Task.basedOn",
+        "path": "Task.basedOn",
+        "requirements": "Allows linking the Questionnaire to the particular 'request' that triggered its creation.",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.status",
+        "path": "Task.status",
+        "patternCode": "ready"
+      },
+      {
+        "id": "Task.intent",
+        "path": "Task.intent",
+        "patternCode": "order"
+      },
+      {
+        "id": "Task.focus",
+        "path": "Task.focus",
+        "requirements": "Questionnaire tasks resulting from decision support are never orders, merely to-dos",
+        "max": "0"
+      },
+      {
+        "id": "Task.for",
+        "path": "Task.for",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Task.encounter",
+        "path": "Task.encounter",
+        "comment": "This should be set to the same encounter as specified in the launch context (if any).",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.requester",
+        "path": "Task.requester",
+        "short": "Payer requesting form completion",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Task.owner",
+        "path": "Task.owner",
+        "comment": "This can be populated within the CRD client to delegate responsibility for filling out the form to someone else.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-practitioner"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Task.reasonCode.text",
+        "path": "Task.reasonCode.text",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input",
+        "path": "Task.input",
+        "min": 1
+      },
+      {
+        "id": "Task.input:questionnaire",
+        "path": "Task.input",
+        "sliceName": "questionnaire",
+        "min": 1
+      }
+    ]
+  }
+}

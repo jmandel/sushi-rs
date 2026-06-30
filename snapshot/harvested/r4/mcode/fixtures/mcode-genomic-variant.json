@@ -1,0 +1,384 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "mcode-genomic-variant",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-genomic-variant",
+  "name": "GenomicVariant",
+  "title": "Genomic Variant Profile",
+  "status": "active",
+  "description": "Details about a set of changes in the tested sample compared to a reference sequence. The term variant can be used to describe an alteration that may be benign, pathogenic, or of unknown significance. The term variant is increasingly being used in place of the term mutation. Variants can be computed relative to reference sequence assembly from which it was identified.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/uv/genomics-reporting/StructureDefinition/variant",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.status",
+        "path": "Observation.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.category:labCategory",
+        "path": "Observation.category",
+        "sliceName": "labCategory",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "laboratory",
+              "system": "http://terminology.hl7.org/CodeSystem/observation-category"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.category:labCategory.coding",
+        "path": "Observation.category.coding",
+        "max": "1"
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]:effectiveDateTime",
+        "path": "Observation.effective[x]",
+        "sliceName": "effectiveDateTime",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.dataAbsentReason",
+        "path": "Observation.dataAbsentReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.method",
+        "path": "Observation.method",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.specimen",
+        "path": "Observation.specimen",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-human-specimen"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.referenceRange",
+        "path": "Observation.referenceRange",
+        "short": "Not used in this profile",
+        "definition": "Not used in this profile"
+      },
+      {
+        "id": "Observation.hasMember",
+        "path": "Observation.hasMember",
+        "short": "Not used in this profile",
+        "definition": "Not used in this profile"
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:gene-studied",
+        "path": "Observation.component",
+        "sliceName": "gene-studied",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:gene-studied.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:gene-studied.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenetic-location",
+        "path": "Observation.component",
+        "sliceName": "cytogenetic-location",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenetic-location.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenetic-location.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-hgvs",
+        "path": "Observation.component",
+        "sliceName": "genomic-hgvs",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-hgvs.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-hgvs.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenomic-nomenclature",
+        "path": "Observation.component",
+        "sliceName": "cytogenomic-nomenclature",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenomic-nomenclature.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:cytogenomic-nomenclature.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:coding-change-type",
+        "path": "Observation.component",
+        "sliceName": "coding-change-type",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:coding-change-type.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:coding-change-type.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-source-class",
+        "path": "Observation.component",
+        "sliceName": "genomic-source-class",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-source-class.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:genomic-source-class.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sample-allelic-frequency",
+        "path": "Observation.component",
+        "sliceName": "sample-allelic-frequency",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sample-allelic-frequency.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:sample-allelic-frequency.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:allelic-state",
+        "path": "Observation.component",
+        "sliceName": "allelic-state",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:allelic-state.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:allelic-state.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:variation-code",
+        "path": "Observation.component",
+        "sliceName": "variation-code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:variation-code.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:variation-code.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:protein-hgvs",
+        "path": "Observation.component",
+        "sliceName": "protein-hgvs",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:protein-hgvs.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:protein-hgvs.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:amino-acid-change-type",
+        "path": "Observation.component",
+        "sliceName": "amino-acid-change-type",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:amino-acid-change-type.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:amino-acid-change-type.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:molecular-consequence",
+        "path": "Observation.component",
+        "sliceName": "molecular-consequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:molecular-consequence.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:molecular-consequence.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:copy-number",
+        "path": "Observation.component",
+        "sliceName": "copy-number",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:copy-number.code",
+        "path": "Observation.component.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:copy-number.value[x]",
+        "path": "Observation.component.value[x]",
+        "mustSupport": true
+      }
+    ]
+  }
+}

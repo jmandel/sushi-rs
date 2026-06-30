@@ -1,3 +1,7 @@
 /target
 /temp
 **/*.rs.bk
+
+# snapshot-gen: regenerable Rust test outputs + scratch (goldens ARE committed)
+snapshot/harvested/**/rust/
+snapshot-fodder-work/

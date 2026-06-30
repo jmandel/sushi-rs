@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "information", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[9]", "line": -1, "col": -1, "message": "The slice definition for Patient.identifier has a minimum of 0 but the slices add up to a minimum of 1"}
+  ]
+}

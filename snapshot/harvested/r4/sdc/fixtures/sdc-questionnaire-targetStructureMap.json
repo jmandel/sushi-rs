@@ -1,0 +1,61 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-targetStructureMap",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-targetStructureMap",
+  "name": "TargetStructureMapExtension",
+  "title": "Extract StructureMap - Target structure map",
+  "status": "active",
+  "description": "StructureMaps that have QuestionnaireResponses of this Questionnaire as 'source'- i.e. that can be used to create other artifacts from QuestionnaireResponses that are valid against this Questionnaire. If multiple maps are specified, then multiple extraction outputs will be produced.  Authors can choose between a single output 'transaction' Bundle or multiple outputs depending on the desired behavior and maintenance process.",
+  "purpose": "While it's possible to query for StructureMaps associated with a Questionnaire, it might not be obvious what repository to query.  This allows a Questionnaire to specifically identify known relevant maps.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Map to artifacts that can be populated from this Questionnaire",
+        "definition": "StructureMaps that have QuestionnaireResponses of this Questionnaire as 'source'- i.e. that can be used to create other artifacts from QuestionnaireResponses that are valid against this Questionnaire."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-targetStructureMap"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/StructureMap"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

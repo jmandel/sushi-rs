@@ -1,0 +1,65 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ext-request-category",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category",
+  "name": "RequestCategory",
+  "title": "Request Category",
+  "status": "active",
+  "experimental": false,
+  "description": "A high-level categorization of the type of request",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "DeviceRequest"
+    },
+    {
+      "type": "element",
+      "expression": "NutritionOrder"
+    },
+    {
+      "type": "element",
+      "expression": "VisionPrescription"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Request Category",
+        "definition": "A high-level categorization of the type of request"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-request-category"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ]
+      }
+    ]
+  }
+}

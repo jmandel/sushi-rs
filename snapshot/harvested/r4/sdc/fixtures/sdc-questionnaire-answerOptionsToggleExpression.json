@@ -1,0 +1,149 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnaire-answerOptionsToggleExpression",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerOptionsToggleExpression",
+  "name": "AnswerOptionsToggleExpressionExtension",
+  "title": "Answer Options Toggle Expression",
+  "status": "active",
+  "description": "A complex expression that provides a list of the allowed options that should be enabled or disabled based on the evaluation of a provided expression.  It allows toggling of allowed answers based on context, including the answers provided to other expressions.  Any options not listed by one of the answerOptionsToggleExpression occurrences are presumed to be 'enabled'.  This expression should evaluate to a boolean.  If it evaluates to an empty set, it will be interpretted as 'false'.  If it evaluates to something other than a boolean, it is considered an error in the design of the Questionnaire.  Form renderer behavior is undefined.  Systems SHOULD present a warning to the user if a non-boolean valued expression result does not trigger an all-out error.",
+  "purpose": "This is used when the set of options are fixed, but there is a need to toggle some of them on or off (as opposed to having the entire set of options dynamic, as is supported by answerExpression).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire.item"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Expression constraining allowed answers",
+        "definition": "A complex expression that provides a list of the allowed options that should be enabled or disabled based on the evaluation of a provided expression.  It allows toggling of allowed answers based on context, including the answers provided to other expressions.",
+        "comment": "For example, this allows a list of conditions to be modified based on the gender of the patient"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 2
+      },
+      {
+        "id": "Extension.extension:option",
+        "path": "Extension.extension",
+        "sliceName": "option",
+        "short": "Option(s) to toggle",
+        "definition": "Each repetition is an option to toggle based on the expression",
+        "min": 1,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:option.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:option.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "option"
+      },
+      {
+        "id": "Extension.extension:option.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "The option value to control",
+        "min": 1,
+        "type": [
+          {
+            "code": "date"
+          },
+          {
+            "code": "dateTime"
+          },
+          {
+            "code": "decimal"
+          },
+          {
+            "code": "integer"
+          },
+          {
+            "code": "string"
+          },
+          {
+            "code": "time"
+          },
+          {
+            "code": "uri"
+          },
+          {
+            "code": "Coding"
+          },
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          },
+          {
+            "code": "Reference"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:expression",
+        "path": "Extension.extension",
+        "sliceName": "expression",
+        "short": "The expression to toggle on",
+        "definition": "If this expression evaluate's to 'true', then the specified options should be enabled, otherwise they should be disabled.",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:expression.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:expression.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "expression"
+      },
+      {
+        "id": "Extension.extension:expression.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Expression value",
+        "min": 1,
+        "type": [
+          {
+            "code": "Expression"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerOptionsToggleExpression"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

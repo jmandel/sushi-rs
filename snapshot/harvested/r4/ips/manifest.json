@@ -1,0 +1,261 @@
+{
+  "resourcesDir": "/home/jmandel/periodicity/temp/ips-ig/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 32,
+    "harvested": 29,
+    "skipped": 3
+  },
+  "entries": [
+    {
+      "id": "AllergyIntolerance-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/AllergyIntolerance-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AllergyIntolerance",
+      "source": "StructureDefinition-AllergyIntolerance-uv-ips.json",
+      "fixture": "fixtures/AllergyIntolerance-uv-ips.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "Bundle-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Bundle-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-Bundle-uv-ips.json",
+      "fixture": "fixtures/Bundle-uv-ips.json",
+      "differentialElements": 71
+    },
+    {
+      "id": "CodeableConcept-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CodeableConcept",
+      "source": "StructureDefinition-CodeableConcept-uv-ips.json",
+      "fixture": "fixtures/CodeableConcept-uv-ips.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "Coding-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Coding-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Coding",
+      "source": "StructureDefinition-Coding-uv-ips.json",
+      "fixture": "fixtures/Coding-uv-ips.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "Composition-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Composition-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Composition",
+      "source": "StructureDefinition-Composition-uv-ips.json",
+      "fixture": "fixtures/Composition-uv-ips.json",
+      "differentialElements": 116
+    },
+    {
+      "id": "Condition-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Condition-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-Condition-uv-ips.json",
+      "fixture": "fixtures/Condition-uv-ips.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "Device-observer-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Device-observer-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-Device-observer-uv-ips.json",
+      "fixture": "fixtures/Device-observer-uv-ips.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "Device-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Device-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-Device-uv-ips.json",
+      "fixture": "fixtures/Device-uv-ips.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "DeviceUseStatement-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/DeviceUseStatement-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceUseStatement",
+      "source": "StructureDefinition-DeviceUseStatement-uv-ips.json",
+      "fixture": "fixtures/DeviceUseStatement-uv-ips.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "DiagnosticReport-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/DiagnosticReport-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-DiagnosticReport-uv-ips.json",
+      "fixture": "fixtures/DiagnosticReport-uv-ips.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "Flag-alert-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Flag-alert-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Flag",
+      "source": "StructureDefinition-Flag-alert-uv-ips.json",
+      "fixture": "fixtures/Flag-alert-uv-ips.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "ImagingStudy-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/ImagingStudy-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ImagingStudy",
+      "source": "StructureDefinition-ImagingStudy-uv-ips.json",
+      "fixture": "fixtures/ImagingStudy-uv-ips.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "Immunization-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Immunization-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "source": "StructureDefinition-Immunization-uv-ips.json",
+      "fixture": "fixtures/Immunization-uv-ips.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "Medication-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Medication-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-Medication-uv-ips.json",
+      "fixture": "fixtures/Medication-uv-ips.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "MedicationRequest-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/MedicationRequest-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-MedicationRequest-uv-ips.json",
+      "fixture": "fixtures/MedicationRequest-uv-ips.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "MedicationStatement-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/MedicationStatement-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "source": "StructureDefinition-MedicationStatement-uv-ips.json",
+      "fixture": "fixtures/MedicationStatement-uv-ips.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "Observation-alcoholuse-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-alcoholuse-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-alcoholuse-uv-ips.json",
+      "fixture": "fixtures/Observation-alcoholuse-uv-ips.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "Observation-pregnancy-edd-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-pregnancy-edd-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-pregnancy-edd-uv-ips.json",
+      "fixture": "fixtures/Observation-pregnancy-edd-uv-ips.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "Observation-pregnancy-outcome-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-pregnancy-outcome-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-pregnancy-outcome-uv-ips.json",
+      "fixture": "fixtures/Observation-pregnancy-outcome-uv-ips.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "Observation-pregnancy-status-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-pregnancy-status-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-pregnancy-status-uv-ips.json",
+      "fixture": "fixtures/Observation-pregnancy-status-uv-ips.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "Observation-results-laboratory-pathology-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-results-laboratory-pathology-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-results-laboratory-pathology-uv-ips.json",
+      "fixture": "fixtures/Observation-results-laboratory-pathology-uv-ips.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "Observation-results-radiology-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-results-radiology-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-results-radiology-uv-ips.json",
+      "fixture": "fixtures/Observation-results-radiology-uv-ips.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "Observation-tobaccouse-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-tobaccouse-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-tobaccouse-uv-ips.json",
+      "fixture": "fixtures/Observation-tobaccouse-uv-ips.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "Organization-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Organization-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Organization",
+      "source": "StructureDefinition-Organization-uv-ips.json",
+      "fixture": "fixtures/Organization-uv-ips.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "Patient-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+      "source": "StructureDefinition-Patient-uv-ips.json",
+      "fixture": "fixtures/Patient-uv-ips.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "Practitioner-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Practitioner-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Practitioner",
+      "source": "StructureDefinition-Practitioner-uv-ips.json",
+      "fixture": "fixtures/Practitioner-uv-ips.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "PractitionerRole-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/PractitionerRole-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+      "source": "StructureDefinition-PractitionerRole-uv-ips.json",
+      "fixture": "fixtures/PractitionerRole-uv-ips.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "Procedure-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Procedure-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-Procedure-uv-ips.json",
+      "fixture": "fixtures/Procedure-uv-ips.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "Specimen-uv-ips",
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Specimen-uv-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Specimen",
+      "source": "StructureDefinition-Specimen-uv-ips.json",
+      "fixture": "fixtures/Specimen-uv-ips.json",
+      "differentialElements": 5
+    }
+  ],
+  "skipped": [
+    {
+      "id": "Document",
+      "source": "StructureDefinition-Document.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "DocumentSection",
+      "source": "StructureDefinition-DocumentSection.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "IPSSectionsLM",
+      "source": "StructureDefinition-IPSSectionsLM.json",
+      "reason": "not derivation=constraint: specialization"
+    }
+  ]
+}

@@ -1,0 +1,507 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-questionnairecommon",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon",
+  "name": "SDCQuestionnaireCommon",
+  "title": "SDC Questionnaire Common Elements",
+  "status": "active",
+  "description": "Defines common elements for all SDC Questionnaires (regular or adaptive).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ihe-sdc",
+      "name": "IHE SDC"
+    },
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "objimpl",
+      "uri": "http://hl7.org/fhir/object-implementation",
+      "name": "Object Implementation Information"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": true,
+  "type": "Questionnaire",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Questionnaire",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Questionnaire",
+        "path": "Questionnaire",
+        "constraint": [
+          {
+            "key": "cnl-0",
+            "severity": "warning",
+            "human": "Name should be usable as an identifier for the module by machine processing applications such as code generation",
+            "expression": "name.exists() implies name.matches('^[A-Z]([A-Za-z0-9_]){1,254}$')",
+            "xpath": "not(f:name) or matches(f:name/@value, '^[A-Z]([A-Za-z0-9_]){1,254}$')",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "sdc-2",
+            "severity": "error",
+            "human": "If version is present, versionAlgorithm must be present.",
+            "expression": "version.exists() implies extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').exists()",
+            "xpath": "not(exists(f:version)) or exists(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm'])",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "sdc-3",
+            "severity": "warning",
+            "human": "Semver is the preferred version algorithm - package machinery doesn't work well with artifacts using alternate versioning schemes",
+            "expression": "extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').all(value.ofType(Coding).where(system='http://hl7.org/fhir/version-algorithm' and code='semver').exists())",
+            "xpath": "not(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm' and not(exists(f:valueCoding[f:system/@value='http://hl7.org/fhir/version-algorithm' and f:code/@value='semver'])))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon",
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestpractice",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "Form_Package"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension",
+        "path": "Questionnaire.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.extension:terminologyServer",
+        "path": "Questionnaire.extension",
+        "sliceName": "terminologyServer",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/preferredTerminologyServer"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:versionAlgorithm",
+        "path": "Questionnaire.extension",
+        "sliceName": "versionAlgorithm",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:copyrightLabel",
+        "path": "Questionnaire.extension",
+        "sliceName": "copyrightLabel",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/artifact-copyrightLabel"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.url",
+        "path": "Questionnaire.url",
+        "constraint": [
+          {
+            "key": "cnl-1",
+            "severity": "warning",
+            "human": "Warning\tQuestionnaire.url\tURL should not contain | or # - these characters make processing canonical references problematic",
+            "expression": "exists() implies matches('^[^|# ]+$')",
+            "xpath": "not(@value) or matches(@value, '^[^|# ]+$')",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.version",
+        "path": "Questionnaire.version",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "Not currently in schema"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.title",
+        "path": "Questionnaire.title",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.status",
+        "path": "Questionnaire.status",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./administration_package/registration/state/registration_status"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.subjectType",
+        "path": "Questionnaire.subjectType",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.subjectType.extension",
+        "path": "Questionnaire.subjectType.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.subjectType.extension:subjectType",
+        "path": "Questionnaire.subjectType.extension",
+        "sliceName": "subjectType",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-Questionnaire.subjectType"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item",
+        "path": "Questionnaire.item",
+        "constraint": [
+          {
+            "key": "sdc-1",
+            "severity": "error",
+            "human": "An item cannot have an answerExpression if answerOption or answerValueSet is already present.",
+            "expression": "extension('http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression').empty().not() implies (answerOption.empty() and answerValueSet.empty())",
+            "xpath": "f:extension[@url='http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression'] and (not(f:answerOption) and not(f:answerValueSet))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "que-1a",
+            "severity": "error",
+            "human": "Group items must have nested items when Questionnaire is complete",
+            "expression": "(type='group' and %resource.status='complete') implies item.empty().not()",
+            "xpath": "not(f:type/@value='group' and ancestor::f:Questionnaire/f:status/@value='complete') or exists(f:item)",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "que-1b",
+            "severity": "warning",
+            "human": "Groups should have items",
+            "expression": "type='group' implies item.empty().not()",
+            "xpath": "not(f:type='group') or exists(f:item)",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "que-1c",
+            "severity": "error",
+            "human": "Display items cannot have child items",
+            "expression": "type='display' implies item.empty()",
+            "xpath": "not(f:type/@value='display') or not(exists(f:item))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          },
+          {
+            "key": "que-14",
+            "severity": "warning",
+            "human": "Can only have answerConstraint if answerOption, answerValueSet, or answerExpression are present. (This is a warning because other extensions may serve the same purpose)",
+            "expression": "extension('http://hl7.org/fhir/5.0/StructureDefinition/extension-Questionnaire.item.answerConstraint').exists() implies answerOption.exists() or answerValueSet.exists() or extension('http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression').exists()",
+            "xpath": "not(exists(f:extension[@url='http://hl7.org/fhir/5.0/StructureDefinition/extension-Questionnaire.item.answerConstraint'])) or exists(f:answerOption) or exists(f:answerValueSet) or exists(f:extension[@url='http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression'])",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./form_design/*[self::header or self::footer or self::section]"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension",
+        "path": "Questionnaire.item.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.item.extension:hidden",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "hidden",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-hidden"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:terminologyServer",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "terminologyServer",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/preferredTerminologyServer"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:disabledDisplay",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "disabledDisplay",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-Questionnaire.item.disabledDisplay"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:answerConstraint",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "answerConstraint",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-Questionnaire.item.answerConstraint"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.linkId",
+        "path": "Questionnaire.item.linkId",
+        "constraint": [
+          {
+            "key": "que-15",
+            "severity": "error",
+            "human": "Link ids must be 255 characters or less",
+            "expression": "$this.length() <= 255",
+            "xpath": "string-length(@value) <= 255",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnairecommon"
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./section_identifier"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.prefix",
+        "path": "Questionnaire.item.prefix",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./section_number/label"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.text",
+        "path": "Questionnaire.item.text",
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "Form Design/designation[context=\"primary?\"/definition/  ./section_instruction/label"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.type",
+        "path": "Questionnaire.item.type",
+        "comment": "Time is handled using \"string\".  File is handled using Attachment.  (Content can be sent as a contained binary).",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./*/datatype"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.required",
+        "path": "Questionnaire.item.required",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./cardinality/minimum!=0"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.repeats",
+        "path": "Questionnaire.item.repeats",
+        "definition": "An indication, if true, that a QuestionnaireResponse for this item may include multiple answers associated with a single instance of this item (for question-type items) or multiple repetitions of the item (for group-type items)",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./cardinality/maximum!=1"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.readOnly",
+        "path": "Questionnaire.item.readOnly",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./*_Field/default_value_read_only  ./default_element/read_only"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.maxLength",
+        "path": "Questionnaire.item.maxLength",
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./*_Field/maximum_character_quantity | ./*_Field/datatype/string/maximum_characters"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.answerValueSet",
+        "path": "Questionnaire.item.answerValueSet",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-valueset"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./list_field | ./lookup_field/endpoint"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.answerOption",
+        "path": "Questionnaire.item.answerOption",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.answerOption.value[x]",
+        "path": "Questionnaire.item.answerOption.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.initial",
+        "path": "Questionnaire.item.initial",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.initial.value[x]",
+        "path": "Questionnaire.item.initial.value[x]",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./default_value  ./default_element/default/value  ./default_element/list_item_identifier (resolve)"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.item",
+        "path": "Questionnaire.item.item",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ihe-sdc",
+            "map": "./contained_section"
+          }
+        ]
+      }
+    ]
+  }
+}

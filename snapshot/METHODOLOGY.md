@@ -10,15 +10,17 @@ behavior**: `org.hl7.fhir.r5.conformance.profile.ProfileUtilities.generateSnapsh
 the de-facto normative algorithm and it is **callable in isolation**, which is what makes this tractable.
 
 - `snapshot/oracle/SnapOracle.java` builds a `SimpleWorkerContext` from the package cache and calls
-  `generateSnapshot(base, derived, …)` directly — **nothing else**. Because we bypass the IG Publisher,
-  we get **Layer A only**: no version pinning, no narrative, no validation edits (`SPECIFICATION.md`
-  Part 0). The emitted `derived.snapshot` is the *pure* target.
+  `generateSnapshot(base, derived, …)` directly. The shell wrapper defaults to an explicit
+  `sortDifferential` input-normalization step before that call; `--direct` skips it for raw Java behavior.
+  Because we bypass the IG Publisher, we get **Layer A only**: no version pinning, no narrative, no
+  validation edits (`SPECIFICATION.md` Part 0). The emitted `derived.snapshot` is the *pure* target.
 - Purity is structural, not magic: Layer A is a pure function of *(base, derived, knobs, context)*. We
   pin the context (fixed package set, isolated cache) so the same fixture always yields the same golden.
 
 ## 2. The closed loop (per change)
 1. **Pick the smallest fixture** that exercises the one behavior under test (one spec pass).
-2. **Pre-compute its pure snapshot** with the oracle → commit as a golden (`snapshot/goldens/<name>.snap.json`).
+2. **Pre-compute its pure snapshot** with the oracle → commit as a golden
+   (`snapshot/goldens/<name>.snapshot.json`) plus captured messages.
 3. **Implement / extend** the Rust generator (`crates/snapshot_gen`).
 4. **Gate**: Rust snapshot vs golden, **semantic element diff** — `snapshot.element[]` compared in order,
    field-by-field. Pass = identical.
@@ -31,8 +33,9 @@ Same discipline as the SUSHI port: every claim is verified against the oracle on
 ## 3. Fixture ladder (isolate one pass at a time)
 Each fixture targets exactly one mechanism so a failure points at one pass:
 cardinality/flags → type/`[x]` slicing → profiled types → `contains`/slicing+reslicing → contentReference
-→ unfold/complex-type expansion → mappings → real profiles (strip `snapshot`, regenerate, diff). Start
-**R5** (matches the fodder exactly — no R4↔R5 conversion); add R4 later via the publisher's conversion path.
+→ unfold/complex-type expansion → mappings → real profiles (strip `snapshot`, regenerate, diff). The
+target is the **Publisher native internal path**: R4 inputs are converted into the R5 model for snapshot
+generation, and any R4 artifact shape is a separate downconversion/projection concern.
 
 ## 4. Layering discipline (what we do and don't build)
 - **In scope: Layer A** — the structural merge (inheritance, slicing, type expansion, contentReference).
@@ -53,7 +56,11 @@ line anchors) and `NON-OBVIOUS-BEHAVIORS.md` (the load-bearing helpers + `userDa
 When the spec and our output disagree, the **oracle** decides; the spec tells us *why* and *where to look*.
 
 ## 7. Status / next
-- Done: worktree, oracle driver compiles + runs, R5 context loads from the isolated cache.
-- Immediate Phase-0 fix: `setAllowLoadingDuplicates(true)` before package load (r5.core ships a dup
-  `spdx-license` CodeSystem; the validator sets this too). Then generate the first golden and scaffold
-  `crates/snapshot_gen` + the diff gate. See `PLAN.md` for phases.
+- Done: worktree, oracle driver compiles + runs, R5/R4 Publisher-path contexts load from the isolated
+  cache, goldens are generated, and `crates/snapshot_gen` gates strict semantic `snapshot.element[]`
+  parity for the fixture ladder plus harvested real R4 profiles: IPS 29/29, mCODE 46/46,
+  CRD 22/22, and SDC 73/73.
+- Next: keep broadening real profile coverage and close remaining Java pass structure gaps
+  (richer slicing/reslicing, type-slice groups, mapping/userData side-channel behavior, and structural
+  self-validation). Transitional output flags should be cleaned up once the migration no longer needs
+  old R4 fixture comparisons. See `PLAN.md` for phases.

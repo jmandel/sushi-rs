@@ -1,0 +1,79 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "parameters-questionnaire-next-question-in",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-next-question-in",
+  "name": "SDCParametersQuestionnaireNextQuestionnaireIn",
+  "title": "Next question operation input parameters",
+  "status": "active",
+  "description": "Profile used to validate the parameters that are the input of the 'next question' adaptive questionnaire operation",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Parameters.parameter:questionnaire-response",
+        "path": "Parameters.parameter",
+        "sliceName": "questionnaire-response",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:questionnaire-response.name",
+        "path": "Parameters.parameter.name",
+        "fixedString": "questionnaire-response"
+      },
+      {
+        "id": "Parameters.parameter:questionnaire-response.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:questionnaire-response.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "QuestionnaireResponse",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse-adapt"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:questionnaire-response.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

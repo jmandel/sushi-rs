@@ -1,0 +1,86 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-timing",
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-timing",
+  "name": "CRDTiming",
+  "title": "CRD Timing Data Type",
+  "status": "active",
+  "description": "This profile specifies CRD-specific expectations on the use of the Timing data type",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Timing",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Timing",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Timing.event",
+        "path": "Timing.event",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat",
+        "path": "Timing.repeat",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.bounds[x]",
+        "path": "Timing.repeat.bounds[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Timing.repeat.bounds[x]:boundsPeriod",
+        "path": "Timing.repeat.bounds[x]",
+        "sliceName": "boundsPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.count",
+        "path": "Timing.repeat.count",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.duration",
+        "path": "Timing.repeat.duration",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.durationUnit",
+        "path": "Timing.repeat.durationUnit",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.frequency",
+        "path": "Timing.repeat.frequency",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.period",
+        "path": "Timing.repeat.period",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.periodUnit",
+        "path": "Timing.repeat.periodUnit",
+        "mustSupport": true
+      }
+    ]
+  }
+}

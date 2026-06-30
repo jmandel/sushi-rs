@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-organization",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|3.1.1"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization",
+  "name": "CRDOrganization",
+  "title": "CRD Organization",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional constraints on the US Core Organization profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "http://hl7.org/fhir/us/davinci-hrex/StructureDefinition/hrex-organization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization.identifier",
+        "path": "Organization.identifier",
+        "comment": "If the organization has an NPI, it **SHALL** be one of the identifiers."
+      },
+      {
+        "id": "Organization.address",
+        "path": "Organization.address",
+        "comment": "...  Addresses conveyed here are 'contact' addresses for the organization, not (necessarily) a physical address.  Physical address are usually conveyed on the Location resource."
+      },
+      {
+        "id": "Organization.partOf",
+        "path": "Organization.partOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization"
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

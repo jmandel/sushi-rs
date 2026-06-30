@@ -1,0 +1,150 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "mcode-radiotherapy-volume",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 3
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-volume",
+  "name": "RadiotherapyVolume",
+  "title": "Radiotherapy Volume Profile",
+  "status": "active",
+  "description": "A volume of the body used in radiotherapy planning or treatment delivery.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "openehr",
+      "uri": "http://openehr.org",
+      "name": "Open EHR Archetype Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "BodyStructure",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/BodyStructure",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "BodyStructure",
+        "path": "BodyStructure",
+        "constraint": [
+          {
+            "key": "mcode-description-or-id-required",
+            "severity": "error",
+            "human": "One of description or identifier MUST be present",
+            "expression": "description.exists() or identifier.exists()",
+            "source": "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-radiotherapy-volume"
+          }
+        ]
+      },
+      {
+        "id": "BodyStructure.identifier",
+        "path": "BodyStructure.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "use"
+            }
+          ],
+          "rules": "open"
+        },
+        "short": "Volume Identifier",
+        "definition": "Unique identifier to reliably identify the same target volume in different requests and procedures, for example, the Conceptual Volume UID used in DICOM.",
+        "mustSupport": true
+      },
+      {
+        "id": "BodyStructure.identifier:displayName",
+        "path": "BodyStructure.identifier",
+        "sliceName": "displayName",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "BodyStructure.identifier:displayName.use",
+        "path": "BodyStructure.identifier.use",
+        "min": 1,
+        "patternCode": "usual"
+      },
+      {
+        "id": "BodyStructure.identifier:displayName.value",
+        "path": "BodyStructure.identifier.value",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "BodyStructure.morphology",
+        "path": "BodyStructure.morphology",
+        "short": "Type of Radiotherapy Volume",
+        "comment": "The type of radiotherapy volume this resource represents. Although the name of the element is 'morphology', this element is defined in the base resource as 'The kind of structure being represented by the body structure'. The name is somewhat of a misnomer, and might be better interpreted simply as 'type' or 'kind'.",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-radiotherapy-volume-type-vs"
+        }
+      },
+      {
+        "id": "BodyStructure.location",
+        "path": "BodyStructure.location",
+        "short": "Body Location Code.",
+        "definition": "The location and locationQualifier codes specify a TG263 body structure comprising the irradiated volume.",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-radiotherapy-treatment-location-vs"
+        }
+      },
+      {
+        "id": "BodyStructure.locationQualifier",
+        "path": "BodyStructure.locationQualifier",
+        "short": "Qualifiers on location used to specify a TG263 body structure comprising the irradiated volume.",
+        "definition": "Qualifiers that together with the associated location code specify the TG263 body structure comprising the irradiated volume.",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-radiotherapy-treatment-location-qualifier-vs"
+        }
+      },
+      {
+        "id": "BodyStructure.description",
+        "path": "BodyStructure.description",
+        "short": "Volume Description",
+        "definition": "A text description of the radiotherapy volume, which SHOULD contain any additional information above and beyond the location and locationQualifier that describe the volume.",
+        "mustSupport": true
+      },
+      {
+        "id": "BodyStructure.patient",
+        "path": "BodyStructure.patient",
+        "definition": "The patient for which a radiotherapy procedure is planned or performed.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/mcode/StructureDefinition/mcode-cancer-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

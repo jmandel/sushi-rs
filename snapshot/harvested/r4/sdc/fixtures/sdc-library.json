@@ -1,0 +1,216 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-library",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library",
+  "name": "SDCLibrary",
+  "title": "SDC Library",
+  "status": "active",
+  "description": "Defines how a Library is used as a logic computable library.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "objimpl",
+      "uri": "http://hl7.org/fhir/object-implementation",
+      "name": "Object Implementation Information"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Library",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/cqllibrary",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Library",
+        "path": "Library",
+        "definition": "Sets expectations for SDC-conformant systems around use of libraries.",
+        "constraint": [
+          {
+            "key": "sdc-2",
+            "severity": "error",
+            "human": "If version is present, versionAlgorithm must be present.",
+            "expression": "version.exists() implies extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').exists()",
+            "xpath": "not(exists(f:version)) or exists(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm'])",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library"
+          },
+          {
+            "key": "sdc-3",
+            "severity": "warning",
+            "human": "Semver is the preferred version algorithm - package machinery doesn't work well with artifacts using alternate versioning schemes",
+            "expression": "extension.where(url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm').all(value.ofType(Coding).where(system='http://hl7.org/fhir/version-algorithm' and code='semver').exists())",
+            "xpath": "not(f:extension[@url='http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm' and not(exists(f:valueCoding[f:system/@value='http://hl7.org/fhir/version-algorithm' and f:code/@value='semver'])))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library"
+          }
+        ]
+      },
+      {
+        "id": "Library.extension",
+        "path": "Library.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Library.extension:versionAlgorithm",
+        "path": "Library.extension",
+        "sliceName": "versionAlgorithm",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Library.url",
+        "path": "Library.url",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.version",
+        "path": "Library.version",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.name",
+        "path": "Library.name",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.subject[x]",
+        "path": "Library.subject[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.relatedArtifact",
+        "path": "Library.relatedArtifact",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.relatedArtifact.display",
+        "path": "Library.relatedArtifact.display",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.relatedArtifact.url",
+        "path": "Library.relatedArtifact.url",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content",
+        "path": "Library.content",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "contentType"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:cqlContent",
+        "path": "Library.content",
+        "sliceName": "cqlContent",
+        "short": "CQL Content",
+        "definition": "The CQL content represented as base-64 encoded data.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:cqlContent.contentType",
+        "path": "Library.content.contentType",
+        "min": 1,
+        "patternCode": "text/cql",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:cqlContent.data",
+        "path": "Library.content.data",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:fhirpathContent",
+        "path": "Library.content",
+        "sliceName": "fhirpathContent",
+        "short": "FHIRPath Content",
+        "definition": "The FHIRPath content represented as base-64 encoded data.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:fhirpathContent.contentType",
+        "path": "Library.content.contentType",
+        "min": 1,
+        "patternCode": "text/fhirpath",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:fhirpathContent.data",
+        "path": "Library.content.data",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:queryContent",
+        "path": "Library.content",
+        "sliceName": "queryContent",
+        "short": "Query Content",
+        "definition": "The query content represented as base-64 encoded data.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:queryContent.contentType",
+        "path": "Library.content.contentType",
+        "min": 1,
+        "patternCode": "application/x-fhir-query",
+        "mustSupport": true
+      },
+      {
+        "id": "Library.content:queryContent.data",
+        "path": "Library.content.data",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

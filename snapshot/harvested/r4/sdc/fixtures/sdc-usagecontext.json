@@ -1,0 +1,113 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "sdc-usagecontext",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-usagecontext",
+  "name": "SDCUsageContext",
+  "title": "SDC Usage Context",
+  "status": "active",
+  "date": "2019-03-15T20:02:49+10:00",
+  "description": "Constraints on the codes and values of UsageContext to help ensure consistent usage in SDC Questionnaires",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "UsageContext",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/UsageContext",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "UsageContext",
+        "path": "UsageContext",
+        "constraint": [
+          {
+            "key": "sdc-uc-1",
+            "severity": "error",
+            "human": "If code is gender, focus, user, venue or species, value must be CodeableConcept.  If code is age, value must be Range.  If code is workflow, task or program, value must be CodeableConcept or Reference",
+            "expression": "code.system!='http://terminology.hl7.org/CodeSystem/usage-context-type' or (((code.code='gender' or code.code='focus' or code.code='user' or code.code='venue' or code.code='species') implies value.exists() and value is CodeableConcept) and (code.code='age' implies value.exists() and value is Range) and ((code.code='workflow' or code.code='task' or code.code='program') implies (value.exists() and (value is CodeableConcept or value is Reference))))",
+            "xpath": "not(f:code/:system='http://terminology.hl7.org/CodeSystem/usage-context-type') or ((not(f:code/f:code=('gender', 'focus', 'user', 'venue', 'species')) or exists(f:valueCodeableConcept) and (not(f:code/f:code='age') or exists(f:valueRange) and (not(f:code/f:code=('workflow', 'task', 'program')) or exists(f:valueCodeableConcept)or exists(f:valueReference))",
+            "source": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-usagecontext"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.code",
+        "path": "UsageContext.code",
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]",
+        "path": "UsageContext.value[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueCodeableConcept",
+        "path": "UsageContext.value[x]",
+        "sliceName": "valueCodeableConcept",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueCodeableConcept.coding",
+        "path": "UsageContext.value[x].coding",
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueCodeableConcept.coding.system",
+        "path": "UsageContext.value[x].coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueCodeableConcept.coding.code",
+        "path": "UsageContext.value[x].coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueRange",
+        "path": "UsageContext.value[x]",
+        "sliceName": "valueRange",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Range"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueRange.low",
+        "path": "UsageContext.value[x].low",
+        "mustSupport": true
+      },
+      {
+        "id": "UsageContext.value[x]:valueRange.high",
+        "path": "UsageContext.value[x].high",
+        "mustSupport": true
+      }
+    ]
+  }
+}

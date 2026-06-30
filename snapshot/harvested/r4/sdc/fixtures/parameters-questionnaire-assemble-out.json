@@ -1,0 +1,110 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "parameters-questionnaire-assemble-out",
+  "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/parameters-questionnaire-assemble-out",
+  "name": "SDCParametersQuestionnaireAssembleOut",
+  "title": "Questionnaire assemble output Parameters profile",
+  "status": "active",
+  "description": "Profile used to validate the parameters that are the output of the 'assemble' questionnaire operation",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Parameters.parameter:return",
+        "path": "Parameters.parameter",
+        "sliceName": "return",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:return.name",
+        "path": "Parameters.parameter.name",
+        "fixedString": "return"
+      },
+      {
+        "id": "Parameters.parameter:return.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:return.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "Questionnaire",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:return.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:outcome",
+        "path": "Parameters.parameter",
+        "sliceName": "outcome",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:outcome.name",
+        "path": "Parameters.parameter.name",
+        "fixedString": "outcome"
+      },
+      {
+        "id": "Parameters.parameter:outcome.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:outcome.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "OperationOutcome"
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:outcome.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

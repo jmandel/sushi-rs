@@ -1,0 +1,196 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-encounter",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|6.1.0"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|3.1.1"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter",
+  "name": "CRDEncounter",
+  "title": "CRD Encounter",
+  "status": "active",
+  "experimental": false,
+  "description": "This profile specifies additional extensions and constraints on the US Core Encounter profile to support coverage requirements discovery.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Encounter",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Encounter.contained",
+        "path": "Encounter.contained",
+        "comment": "Any references found in this resource, with the exception of 'Patient' could potentially be resource-specific and thus transmitted as contained resources.",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.extension",
+        "path": "Encounter.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Encounter.extension:Coverage-Information",
+        "path": "Encounter.extension",
+        "sliceName": "Coverage-Information",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.serviceType",
+        "path": "Encounter.serviceType",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.serviceType.extension:BillingOptions",
+        "path": "Encounter.serviceType.extension",
+        "sliceName": "BillingOptions",
+        "short": "Expected Billing Code(s)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-billing-options"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.subject",
+        "path": "Encounter.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Encounter.basedOn",
+        "path": "Encounter.basedOn",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-servicerequest"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Encounter.participant.individual",
+        "path": "Encounter.participant.individual",
+        "comment": "...  While the package for US Core 3.1.1 limits references to only Practitioner, there is a patch that indicates that PractitionerRole is also permitted"
+      },
+      {
+        "id": "Encounter.appointment",
+        "path": "Encounter.appointment",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-with-order",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-no-order"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.length",
+        "path": "Encounter.length",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.diagnosis",
+        "path": "Encounter.diagnosis",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.diagnosis.condition",
+        "path": "Encounter.diagnosis.condition",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.location.location",
+        "path": "Encounter.location.location",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-location"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Encounter.location.status",
+        "path": "Encounter.location.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.location.period",
+        "path": "Encounter.location.period",
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.partOf",
+        "path": "Encounter.partOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter"
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
