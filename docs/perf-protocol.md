@@ -5,14 +5,22 @@ worktree. The curator (main session) evaluates and integrates selectively based 
 measured gain vs maintenance cost. **Parity is sacred** — speed never trades correctness.
 
 ## Baseline (best-of-5 warm; curator re-baselines after each integration)
-| IG | initial (8b7fb77) | after round-1 A (98762d8) |
+| IG | initial | r1 lock (A+B) | r2 (A+B+E+D) |
 |---|--:|--:|
-| ips | 1.374 | 1.289 |
-| epi | 1.056 | 0.983 |
-| mcode | 1.898 | 1.881 |
-| crd | 1.538 | **1.052** |
+| ips | 1.374 | 1.289 | **0.850** |
+| epi | 1.056 | 0.983 | **0.640** |
+| mcode | 1.898 | 1.881 | **1.212** |
+| crd | 1.538 | 1.052 | **0.755** |
 
 ### Integration log
+- **perf/D INTEGRATED** (→ main): StructIndex cache replaces O(n^2) children_direct/
+  get_slices scans in the instance BFS. +88 LOC, instance_export only. Marginal gain
+  ON TOP OF A+B+E: mcode -8.4% (bigger than its -3.6% standalone — E shrank the
+  fishing cost so the scans matter proportionally more), epi -3.8% crd -4.4% ips -2.3%.
+  Parity 665/665, tests green.
+- **ROUND 2 CLOSE = A+B+E+D.** vs round-1 lock: ips -16% epi -15% mcode -17% crd -24%.
+  vs original 8b7fb77: ips 1.374->0.850, mcode 1.898->1.212, crd 1.538->0.755.
+
 - **perf/E INTEGRATED** (→ main bfaaa1d): `fish_for_fhir` returns `Rc<Value>`
   (memoized parse, no deep clone); callers read via deref, clone only at the one
   owning site. +10 LOC across package_store/fhir_model(Fisher trait)/sd_export/
