@@ -1930,8 +1930,10 @@ fn build_context(ec: &ExtensionContext, _fisher: &dyn Fisher) -> Option<J> {
     if ec.is_quoted {
         Some(json!({ "expression": ec.value, "type": "fhirpath" }))
     } else {
-        // simplistic: treat as element expression
-        Some(json!({ "type": "element", "expression": ec.value }))
+        // G4: the `Context:` keyword emits source order `expression` then `type`
+        // (stock SUSHI). The default-context literal and `^context` caret rules
+        // are separate paths and keep their own (type-first) ordering.
+        Some(json!({ "expression": ec.value, "type": "element" }))
     }
 }
 
