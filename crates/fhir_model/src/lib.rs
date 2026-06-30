@@ -409,7 +409,10 @@ pub struct StructureDefinition {
 impl StructureDefinition {
     pub fn from_json(json: &Value, capture: bool) -> StructureDefinition {
         let mut body = Map::new();
-        let obj = json.as_object().cloned().unwrap_or_default();
+        // Borrow the object — we only `.get()` fields out of it; cloning the whole
+        // SD (incl. the large snapshot) here was pure waste, re-dropped immediately.
+        let empty = Map::new();
+        let obj = json.as_object().unwrap_or(&empty);
         let mut uk = String::new();
         for prop in SD_PROPS {
             if let Some(v) = obj.get(*prop) {

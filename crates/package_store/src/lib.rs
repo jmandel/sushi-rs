@@ -464,6 +464,136 @@ fn probe_name(b: &[u8]) -> Option<String> {
     }
 }
 
+/// Outcome of scanning a (possibly truncated) prefix for the top-level `name`.
+enum PrefixScan {
+    /// Definitive: the top-level `name` was found (unescaped string value).
+    Found(String),
+    /// Definitive: the object closed, or the `name` slot held a non-string, so
+    /// `NameProbe` would yield `None` — no need to read further.
+    Absent,
+    /// Inconclusive within this prefix (ran out of bytes mid-structure, or an
+    /// escape we don't decode here): the caller must read the whole file and
+    /// fall back to the exact `probe_name`.
+    NeedMore,
+}
+
+/// Like `fast_top_level_name`, but treats running off the end of the buffer as
+/// `NeedMore` (the buffer is a prefix, not necessarily the whole file) rather than
+/// as a definitive "no name". Only a genuine `}` close or a non-string `name`
+/// value is reported as `Absent`. This lets `for_project` read just a small prefix
+/// of each (often very large, snapshot-bearing) resource file: the top-level
+/// `name` of a FHIR conformance resource sits in its metadata header, within the
+/// first few KB, so the snapshot tail is never touched.
+fn scan_prefix_name(b: &[u8]) -> PrefixScan {
+    let n = b.len();
+    let mut p = 0usize;
+    skip_ws(b, &mut p);
+    if p >= n {
+        return PrefixScan::NeedMore;
+    }
+    if b[p] != b'{' {
+        return PrefixScan::Absent; // not a JSON object → no top-level name
+    }
+    p += 1;
+    loop {
+        skip_ws(b, &mut p);
+        if p >= n {
+            return PrefixScan::NeedMore;
+        }
+        if b[p] == b'}' {
+            return PrefixScan::Absent; // end of object, no name
+        }
+        if b[p] != b'"' {
+            return PrefixScan::Absent; // malformed key position → serde None too
+        }
+        let key_start = p + 1;
+        let had_escape = match skip_string(b, &mut p) {
+            Some(e) => e,
+            None => return PrefixScan::NeedMore, // unterminated within prefix
+        };
+        let key_end = p - 1;
+        let is_name = !had_escape && &b[key_start..key_end] == b"name";
+        skip_ws(b, &mut p);
+        if p >= n {
+            return PrefixScan::NeedMore;
+        }
+        if b[p] != b':' {
+            return PrefixScan::Absent;
+        }
+        p += 1;
+        skip_ws(b, &mut p);
+        if p >= n {
+            return PrefixScan::NeedMore;
+        }
+        if is_name {
+            if b[p] != b'"' {
+                return PrefixScan::Absent; // name present but not a string → None
+            }
+            let vstart = p + 1;
+            match skip_string(b, &mut p) {
+                Some(false) => {
+                    let vend = p - 1;
+                    return match std::str::from_utf8(&b[vstart..vend]) {
+                        Ok(s) => PrefixScan::Found(s.to_string()),
+                        Err(_) => PrefixScan::NeedMore,
+                    };
+                }
+                // escaped value (let serde decode exactly) or unterminated prefix
+                Some(true) | None => return PrefixScan::NeedMore,
+            }
+        }
+        if skip_value(b, &mut p).is_none() {
+            return PrefixScan::NeedMore; // value spilled past the prefix
+        }
+        skip_ws(b, &mut p);
+        if p >= n {
+            return PrefixScan::NeedMore;
+        }
+        match b[p] {
+            b',' => p += 1,
+            _ => return PrefixScan::Absent, // '}' or malformed
+        }
+    }
+}
+
+/// Bytes of each resource file read up front to locate the top-level `name`.
+/// FHIR conformance resources carry `name` in their header (well within a few KB);
+/// the rare file whose header exceeds this triggers a full read + exact reparse.
+const NAME_PREFIX_BYTES: usize = 16 * 1024;
+
+/// Read a resource file's top-level `name` with minimal I/O: pull only a prefix,
+/// scan it, and read the remainder only when the prefix is inconclusive. Exactly
+/// equivalent to `probe_name(&fs::read(path))`, just without dragging each file's
+/// (often large) snapshot through memory when the answer is in the header.
+fn probe_name_from_path(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut buf = vec![0u8; NAME_PREFIX_BYTES];
+    let mut filled = 0usize;
+    while filled < buf.len() {
+        match file.read(&mut buf[filled..]) {
+            Ok(0) => break,
+            Ok(k) => filled += k,
+            Err(_) => return None,
+        }
+    }
+    let reached_eof = filled < buf.len();
+    buf.truncate(filled);
+    match scan_prefix_name(&buf) {
+        PrefixScan::Found(s) => Some(s),
+        PrefixScan::Absent => None,
+        PrefixScan::NeedMore => {
+            if !reached_eof {
+                // Pull the rest of the file, then defer to the exact probe.
+                if file.read_to_end(&mut buf).is_err() {
+                    return None;
+                }
+            }
+            probe_name(&buf)
+        }
+    }
+}
+
 /// Classify an index entry into a `FishType`, mirroring how FPL/FHIRDefinitions
 /// derive the searchable type for SD/VS/CS. Returns `None` for resources that are
 /// not fishable as one of the conformance types (instances, examples, etc.).
@@ -575,8 +705,9 @@ impl PackageStore {
                     continue;
                 };
                 let path = pkg_dir.join(&e.filename);
-                // name is not in .index.json — read it eagerly (cheap probe).
-                let name = std::fs::read(&path).ok().and_then(|b| probe_name(&b));
+                // name is not in .index.json — probe it from the file header only
+                // (prefix read; full read only if the header is inconclusive).
+                let name = probe_name_from_path(&path);
                 let idx = store.entries.len();
                 // Insert lookup keys (cloned — maps own their keys), then MOVE the
                 // remaining owned fields into the entry to avoid per-field clones.
@@ -947,6 +1078,46 @@ mod tests {
         assert_eq!(root_id("hl7.fhir.uv.extensions.r4"), "hl7.fhir.uv.extensions");
         assert_eq!(root_id("hl7.terminology.r5"), "hl7.terminology");
         assert_eq!(root_id("hl7.fhir.uv.ipa"), "hl7.fhir.uv.ipa");
+    }
+
+    #[test]
+    fn prefix_scan_matches_full_probe() {
+        // For each case, scan_prefix_name on the full bytes must agree with the
+        // exact probe_name, and a write-then-read round trip through
+        // probe_name_from_path (which only reads a prefix) must match too.
+        let cases: &[(&str, Option<&str>)] = &[
+            (r#"{"resourceType":"X","name":"Foo","other":1}"#, Some("Foo")),
+            (r#"{"name":"Bar"}"#, Some("Bar")),
+            (r#"{"resourceType":"X","id":"y"}"#, None),
+            (r#"{}"#, None),
+            (r#"[1,2,3]"#, None),
+            (r#"{"name":42}"#, None),
+            (r#"{"a":{"name":"nested"},"name":"Top"}"#, Some("Top")),
+            (r#"{"name":"with \"escape\""}"#, Some(r#"with "escape""#)),
+            (r#"{"a":"x\"y","name":"After"}"#, Some("After")),
+        ];
+        let dir = std::env::temp_dir();
+        for (i, (json, want)) in cases.iter().enumerate() {
+            assert_eq!(probe_name(json.as_bytes()).as_deref(), *want, "probe {json}");
+            // round-trip through the prefix reader on a real file
+            let p = dir.join(format!("pkgstore_probe_test_{i}.json"));
+            std::fs::write(&p, json).unwrap();
+            assert_eq!(probe_name_from_path(&p).as_deref(), *want, "from_path {json}");
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    #[test]
+    fn prefix_scan_falls_back_when_name_past_prefix() {
+        // A top-level `name` sitting beyond NAME_PREFIX_BYTES must still be found
+        // via the full-read fallback (exact equivalence to a single full read).
+        let filler = "x".repeat(NAME_PREFIX_BYTES + 5000);
+        let json = format!(r#"{{"pad":"{filler}","name":"DeepName"}}"#);
+        assert_eq!(probe_name(json.as_bytes()).as_deref(), Some("DeepName"));
+        let p = std::env::temp_dir().join("pkgstore_probe_deep.json");
+        std::fs::write(&p, &json).unwrap();
+        assert_eq!(probe_name_from_path(&p).as_deref(), Some("DeepName"));
+        let _ = std::fs::remove_file(&p);
     }
 
     #[test]
