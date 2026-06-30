@@ -13,6 +13,12 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | **1.052** |
 
 ### Integration log
+- **perf/E INTEGRATED** (→ main bfaaa1d): `fish_for_fhir` returns `Rc<Value>`
+  (memoized parse, no deep clone); callers read via deref, clone only at the one
+  owning site. +10 LOC across package_store/fhir_model(Fisher trait)/sd_export/
+  instance_export. Parity 665/665 + pkg-fish 90-query parity + tests green.
+  Gain (my machine): ips -14% epi -12% mcode -10% crd -22%.
+
 - **ROUND 2:** **perf/F REJECTED** — emission-path `ordered_clone_deep` removal was
   clean (byte-parity, 1 file) but within run-to-run noise (~0.5%, below the ~5% bar)
   and adds ~55 LOC custom Serialize. KEY FINDING (retarget next round): the ~16%
