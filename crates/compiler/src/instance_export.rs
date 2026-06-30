@@ -3311,9 +3311,13 @@ impl<'a> Exporter<'a> {
         let pt = sd.path_type();
         let has = |suffix: &str| sd.elements.iter().any(|e| e.id() == format!("{pt}.{suffix}"));
         if has("url") {
+            // Stock uses `fshDefinition.id` (InstanceExporter.ts:853), whose getter
+            // resolves a `* id = ...` rule before falling back to the instance name
+            // (Instance.ts:26-32). `inst.id` is only the name default here, so use
+            // the effective id to match (app-feature: feature-query vs FeatureQuery).
             obj.insert(
                 "url".into(),
-                J::String(format!("{}/{}/{}", self.cfg.canonical, pt, inst.id)),
+                J::String(format!("{}/{}/{}", self.cfg.canonical, pt, effective_instance_id(inst))),
             );
         }
         if let Some(t) = &inst.title {
