@@ -7,14 +7,18 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
-**SCORE = the full 12-IG `harness/full-dashboard.sh` total. LEAD WITH IT.** Currently
-**2041/2065 (98.9%)** (`main` ~`a9746be`+; investigate-then-align tail: VS/CS carets, multi-type choice unfold, IG normalize). Session start was 1800. The "665"
-(ips/epi/mcode/crd) is only the 4-IG **non-regression FLOOR** — a guard rail that must
-never drop, NOT the headline. During parallel fixes the fast `harness/gate1.sh` runs
-floor + a fix's target IGs only (to keep worktrees cheap); ALWAYS re-run the FULL
-dashboard after integrating and report the 2065 total. Some fixes are
-**corpus-invisible** (no dashboard IG exercises them) and don't move the 2065 number even
-when correct — verify those via `temp/sushi-tests/` fixtures and say so (e.g. N1, N7).
+**THE VALIDATION CORPUS IS THE 12 IGs (2065 resources) in `harness/full-dashboard.sh`.
+SCORE = that total; LEAD WITH IT.** Currently **2042/2065 (98.9%)** (`main` ~`b7515b7`+).
+Session start was 1800. **Non-regression = none of the 12 IGs may drop** (ips/epi/mcode/crd/
+carinbb/sdc/pas/dtr/genomics/ecr/cmc/ndh — an R4 + R5 + R4B mix). Do NOT single out the old
+4-IG "665" subset as a "floor"/headline — that framing is RETIRED; all 12 are the corpus.
+(Historical "665/665" notes in the Phase 6-8 logs below refer to the original 4-IG tuning
+set, now just a subset of the 12.) During parallel fixes the fast `harness/gate1.sh` runs a
+chosen subset of IGs for speed, but ALWAYS re-run the FULL 12-IG dashboard after integrating
+and report the 2065 total. Some fixes are **corpus-invisible** (no dashboard IG exercises
+them) and don't move the 2065 number even when correct — verify those via
+`temp/sushi-tests/` fixtures and say so (e.g. N1, N7). The top-20 IG validation
+(`docs/top20-findings.md`, in progress) is expanding the corpus further.
 
 **SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
 `package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build
