@@ -883,12 +883,22 @@ fn classify(e: &IndexEntry) -> Option<FishType> {
         Some("ValueSet") => Some(FishType::ValueSet),
         Some("CodeSystem") => Some(FishType::CodeSystem),
         Some("StructureDefinition") => {
-            if e.derivation.as_deref() == Some("constraint") {
-                if e.sd_type.as_deref() == Some("Extension") {
-                    Some(FishType::Extension)
-                } else {
-                    Some(FishType::Profile)
-                }
+            // Mirror fhir-package-loader's `getSDFlavor(resourceJSON)`
+            // (BasePackageLoader.ts): the Extension-flavor test comes FIRST and is
+            // keyed on `type == "Extension"` — NOT on `derivation`. This matters
+            // because the FHIR R4 core `.index.json` omits `derivation`, so an
+            // older keying on `derivation == "constraint"` mis-flavored core
+            // extensions as `Type`. That tied them (by fishing rank) with same-name
+            // datatypes and let LIFO win: e.g. fishing `markdown` returned the
+            // `rendering-markdown` Extension (name == "markdown") instead of the
+            // `markdown` primitive, so markdown-typed caret leaves were dropped.
+            // (The base `Extension` SD derives from `Element`; stock excludes it
+            // here, but it has no name/id/url fishing collision, so omitting that
+            // sub-check is safe — verified against the 18-IG core.)
+            if e.sd_type.as_deref() == Some("Extension") {
+                Some(FishType::Extension)
+            } else if e.derivation.as_deref() == Some("constraint") {
+                Some(FishType::Profile)
             } else {
                 // specialization (or absent, e.g. base `Resource`)
                 match e.kind.as_deref() {
