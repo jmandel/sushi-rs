@@ -105,6 +105,10 @@ fn el_slice_name(sd: &StructureDefinition, idx: usize) -> Option<String> {
 fn el_id(sd: &StructureDefinition, idx: usize) -> String {
     sd.elements[idx].id().to_string()
 }
+/// Borrowing variant of `el_id` (no String allocation) for read-only callers.
+fn el_id_ref(sd: &StructureDefinition, idx: usize) -> &str {
+    sd.elements[idx].id()
+}
 fn el_path(sd: &StructureDefinition, idx: usize) -> String {
     sd.elements[idx].path().to_string()
 }
@@ -225,7 +229,7 @@ fn get_slices(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> Vec<usi
 
 /// `parent()` — element at id without the trailing `.segment`.
 fn parent_idx(sd: &StructureDefinition, idx: usize) -> Option<usize> {
-    let id = el_id(sd, idx);
+    let id = el_id_ref(sd, idx);
     let cut = id.rfind('.')?;
     let pid = &id[..cut];
     sd.find_element(pid)
@@ -1114,8 +1118,7 @@ fn calc_slice_tree(sd: &StructureDefinition, node: &mut SliceNode, known: &HashM
         calc_slice_tree(sd, c, known, key_start);
     }
     let elem_min = el_min(sd, node.idx) - node.children.iter().map(slice_tree_sum).sum::<i64>();
-    let id = el_id(sd, node.idx);
-    let seg = reslice_brackets(last_seg(&id));
+    let seg = reslice_brackets(last_seg(el_id_ref(sd, node.idx)));
     let slice_path = format!("{key_start}{seg}");
     let slice_min = known.get(&slice_path).copied().unwrap_or(0);
     node.count = elem_min.max(slice_min);
@@ -1190,7 +1193,7 @@ fn set_implied_properties_on_instance(
             Some(i) => i,
             None => continue,
         };
-        let mut next_trace = last_seg(&el_id(sd, cur_idx)).to_string();
+        let mut next_trace = last_seg(el_id_ref(sd, cur_idx)).to_string();
         let types = el_type_codes(sd, cur_idx);
         if next_trace.contains("[x]") && types.len() == 1 {
             let has_slices = !get_slices(sd, cur_idx, &ix).is_empty();
@@ -1382,7 +1385,7 @@ fn compute_requirement_root(sd: &StructureDefinition, idx: usize) -> String {
     if el_min(sd, idx) > 0 {
         return String::new();
     }
-    let mut rr = last_seg(&el_id(sd, idx)).to_string();
+    let mut rr = last_seg(el_id_ref(sd, idx)).to_string();
     let types = el_type_codes(sd, idx);
     if rr.contains("[x]") && types.len() == 1 {
         rr = replace_x(&rr, &upper_first(&types[0]));
@@ -1437,13 +1440,13 @@ fn find_connected_elements_post(
         if el_max(sd, s) == Some("0") {
             continue;
         }
-        let target = format!("{}{}", el_id(sd, s), post);
+        let target = format!("{}{}", el_id_ref(sd, s), post);
         if let Some(e) = sd.find_element(&target) {
             out.push(e);
         }
     }
     if let Some(p) = parent_idx(sd, idx) {
-        let parent_path = last_seg(&el_id(sd, idx)).to_string();
+        let parent_path = last_seg(el_id_ref(sd, idx)).to_string();
         let mut more = find_connected_elements_post(sd, p, &format!(".{parent_path}{post}"), ix);
         out.append(&mut more);
     }
