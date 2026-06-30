@@ -286,25 +286,106 @@ fn reference_from(r: &FshReference) -> Map<String, J> {
 }
 
 /// Port of SUSHI's xhtml handling: `minify(value, {collapseWhitespace:true,
-/// html5:false, keepClosingSlash:true})` (ElementDefinition.assignString). Two
-/// transforms: normalize attribute value quotes to `"`, and collapse whitespace
-/// with block-element awareness.
+/// html5:false, keepClosingSlash:true})` (ElementDefinition.assignString,
+/// ElementDefinition.ts:2385-2393). This faithfully reimplements the relevant
+/// subset of html-minifier-terser 5.1.1's `collapseWhitespace:true` state
+/// machine (`src/htmlminifier.js`), including the cross-element trailing-trim
+/// (`squashTrailingWhitespace`) and the `inlineTextTags` leading-trim that keys
+/// on accumulated `currentChars`. All other minifier options are at SUSHI's
+/// defaults (no decodeEntities, removeComments, conservativeCollapse, etc.).
 fn minify_xhtml(input: &str) -> String {
-    #[derive(Clone)]
-    enum Tok {
-        Tag(String, String), // (rendered tag, lowercase element name)
-        Text(String),
+    let tokens = tokenize_xhtml(input);
+    let mut st = MinState::default();
+    // html-minifier's parser `prevTag`: None = undefined (doc start), Some("")
+    // for a preceding comment/doctype, Some(name)/Some("/name") for a tag.
+    let mut prev_tag: Option<String> = None;
+    for idx in 0..tokens.len() {
+        match tokens[idx].kind {
+            TokKind::Start => {
+                st.start(&tokens[idx]);
+                prev_tag = Some(tokens[idx].name.clone());
+            }
+            TokKind::End => {
+                st.end(&tokens[idx]);
+                prev_tag = Some(format!("/{}", tokens[idx].name));
+            }
+            TokKind::Comment => {
+                st.buffer.push(tokens[idx].rendered.clone());
+                prev_tag = Some(String::new());
+            }
+            TokKind::Text => {
+                // nextTag: peek the following token the way the parser does.
+                let next_tag: String = match tokens.get(idx + 1) {
+                    Some(t) => match t.kind {
+                        TokKind::Start => t.name.clone(),
+                        TokKind::End => format!("/{}", t.name),
+                        TokKind::Comment | TokKind::Text => String::new(),
+                    },
+                    None => String::new(),
+                };
+                st.chars(&tokens[idx].rendered, prev_tag.as_deref(), &next_tag);
+                prev_tag = Some(String::new());
+            }
+        }
     }
-    // Tokenize into tags vs text (respecting quotes inside tags).
+    st.buffer.concat()
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum TokKind {
+    Start,
+    End,
+    Text,
+    Comment,
+}
+
+struct XTok {
+    kind: TokKind,
+    rendered: String,
+    name: String,
+    unary: bool,
+}
+
+fn tokenize_xhtml(input: &str) -> Vec<XTok> {
     let chars: Vec<char> = input.chars().collect();
-    let mut toks: Vec<Tok> = Vec::new();
+    let mut toks: Vec<XTok> = Vec::new();
+    let n = chars.len();
     let mut i = 0;
-    while i < chars.len() {
+    let starts_with = |i: usize, pat: &str| -> bool {
+        let p: Vec<char> = pat.chars().collect();
+        i + p.len() <= n && chars[i..i + p.len()] == p[..]
+    };
+    while i < n {
         if chars[i] == '<' {
-            // read until matching '>' (skip over quoted attr values)
+            if starts_with(i, "<!--") {
+                // Comment: up to and including "-->".
+                let mut j = i + 4;
+                while j < n && !(chars[j] == '-' && starts_with(j, "-->")) {
+                    j += 1;
+                }
+                let end = (j + 3).min(n);
+                let raw: String = chars[i..end].iter().collect();
+                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                i = end;
+                continue;
+            }
+            if starts_with(i, "<!") {
+                // Doctype / conditional: up to next '>'.
+                let mut j = i + 2;
+                while j < n && chars[j] != '>' {
+                    j += 1;
+                }
+                let end = (j + 1).min(n);
+                let raw: String = chars[i..end].iter().collect();
+                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                i = end;
+                continue;
+            }
+            // Read until matching '>' (skipping over quoted attribute values).
+            let is_end = starts_with(i, "</");
             let mut j = i + 1;
             let mut quote: Option<char> = None;
-            while j < chars.len() {
+            while j < n {
                 let c = chars[j];
                 match quote {
                     Some(q) => {
@@ -322,66 +403,460 @@ fn minify_xhtml(input: &str) -> String {
                 }
                 j += 1;
             }
-            let raw: String = chars[i..=j.min(chars.len() - 1)].iter().collect();
+            let raw: String = chars[i..=j.min(n - 1)].iter().collect();
             let name = tag_element_name(&raw);
-            toks.push(Tok::Tag(rewrite_tag_quotes(&raw), name));
+            if is_end {
+                toks.push(XTok { kind: TokKind::End, rendered: String::new(), name, unary: false });
+            } else {
+                let body = raw.strip_suffix('>').unwrap_or(&raw);
+                let unary = body.trim_end().ends_with('/') || is_void_element(&name);
+                toks.push(XTok { kind: TokKind::Start, rendered: rewrite_tag_quotes(&raw), name, unary });
+            }
             i = j + 1;
         } else {
             let mut j = i;
-            while j < chars.len() && chars[j] != '<' {
+            while j < n && chars[j] != '<' {
                 j += 1;
             }
             let raw: String = chars[i..j].iter().collect();
-            toks.push(Tok::Text(raw));
+            toks.push(XTok { kind: TokKind::Text, rendered: raw, name: String::new(), unary: false });
             i = j;
         }
     }
-    // Collapse whitespace on text tokens with block-awareness.
+    toks
+}
+
+/// html-minifier-terser handler state for `collapseWhitespace:true`.
+#[derive(Default)]
+struct MinState {
+    buffer: Vec<String>,
+    current_chars: String,
+    chars_prev_tag: String,
+    current_tag: String,
+    has_chars: bool,
+    stack_no_trim: Vec<String>,
+    stack_no_collapse: Vec<String>,
+}
+
+impl MinState {
+    fn start(&mut self, tok: &XTok) {
+        let tag = &tok.name;
+        self.current_tag = tag.clone();
+        self.chars_prev_tag = tag.clone();
+        if !is_inline_text_tag(tag) {
+            self.current_chars.clear();
+        }
+        self.has_chars = false;
+        if self.stack_no_trim.is_empty() {
+            self.squash_trailing_whitespace(tag);
+        }
+        if !tok.unary {
+            if !can_trim_ws(tag) || !self.stack_no_trim.is_empty() {
+                self.stack_no_trim.push(tag.clone());
+            }
+            if !can_collapse_ws(tag) || !self.stack_no_collapse.is_empty() {
+                self.stack_no_collapse.push(tag.clone());
+            }
+        }
+        self.buffer.push(tok.rendered.clone());
+    }
+
+    fn end(&mut self, tok: &XTok) {
+        let tag = &tok.name;
+        if !self.stack_no_trim.is_empty() {
+            if self.stack_no_trim.last().map(String::as_str) == Some(tag.as_str()) {
+                self.stack_no_trim.pop();
+            }
+        } else {
+            self.squash_trailing_whitespace(&format!("/{tag}"));
+        }
+        if !self.stack_no_collapse.is_empty()
+            && self.stack_no_collapse.last().map(String::as_str) == Some(tag.as_str())
+        {
+            self.stack_no_collapse.pop();
+        }
+        let mut is_empty = false;
+        if self.current_tag == *tag {
+            self.current_tag.clear();
+            is_empty = !self.has_chars;
+        }
+        self.buffer.push(format!("</{tag}>"));
+        self.chars_prev_tag = format!("/{tag}");
+        if !is_inline_tag(tag) {
+            self.current_chars.clear();
+        } else if is_empty {
+            self.current_chars.push('|');
+        }
+    }
+
+    fn squash_trailing_whitespace(&mut self, next_tag: &str) {
+        let mut chars_index: isize = self.buffer.len() as isize - 1;
+        if self.buffer.len() > 1 {
+            let item = &self.buffer[self.buffer.len() - 1];
+            // last buffer item is a comment (`<!`) or empty string -> skip it.
+            if item.is_empty() || item.starts_with("<!") {
+                chars_index -= 1;
+            }
+        }
+        self.trim_trailing_whitespace(chars_index, next_tag);
+    }
+
+    // Walk backwards, bypassing closing tags, to trim the trailing whitespace of
+    // the most recent text node (html-minifier `trimTrailingWhitespace`).
+    fn trim_trailing_whitespace(&mut self, mut index: isize, next_tag: &str) {
+        let mut end_tag: Option<String> = None;
+        while index >= 0 && can_trim_ws_opt(end_tag.as_deref()) {
+            let s = &self.buffer[index as usize];
+            if let Some(name) = match_end_tag(s) {
+                end_tag = Some(name);
+            } else if s.ends_with('>') {
+                break;
+            } else {
+                let r = collapse_whitespace_smart(s, None, Some(next_tag));
+                let nonempty = !r.is_empty();
+                self.buffer[index as usize] = r;
+                if nonempty {
+                    break;
+                }
+            }
+            index -= 1;
+        }
+    }
+
+    fn chars(&mut self, text_in: &str, prev_tag_in: Option<&str>, next_tag_in: &str) {
+        // Map empty-string tags (preceding comment / next is comment-or-eof) to
+        // the 'comment' sentinel, matching html-minifier.
+        let prev_mapped: Option<String> = match prev_tag_in {
+            None => None,
+            Some("") => Some("comment".to_string()),
+            Some(t) => Some(t.to_string()),
+        };
+        let next_tag: String = if next_tag_in.is_empty() {
+            "comment".to_string()
+        } else {
+            next_tag_in.to_string()
+        };
+        let mut text = text_in.to_string();
+        // collapseWhitespace is always true here.
+        let mut prev_eff = prev_mapped;
+        if self.stack_no_trim.is_empty() {
+            if prev_eff.as_deref() == Some("comment") {
+                if let Some(prev_comment) = self.buffer.last().cloned() {
+                    let prev_comment_empty = prev_comment.is_empty();
+                    if prev_comment_empty {
+                        prev_eff = Some(self.chars_prev_tag.clone());
+                    }
+                    if self.buffer.len() > 1
+                        && (prev_comment_empty || self.current_chars.ends_with(' '))
+                    {
+                        let ci = self.buffer.len() - 2;
+                        let b = &self.buffer[ci];
+                        let kept = b.trim_end_matches(|c: char| c.is_whitespace());
+                        let trailing = &b[kept.len()..];
+                        if !trailing.is_empty() {
+                            text = format!("{trailing}{text}");
+                            let kept = kept.to_string();
+                            self.buffer[ci] = kept;
+                        }
+                    }
+                }
+            }
+            if let Some(pt) = prev_eff.clone() {
+                if !pt.is_empty() {
+                    if pt == "/nobr" || pt == "wbr" {
+                        if text.starts_with(|c: char| c.is_whitespace()) {
+                            let bare = pt.trim_start_matches('/');
+                            let needle = format!("<{bare}");
+                            let mut tag_index = self.buffer.len() as isize - 1;
+                            while tag_index > 0
+                                && self.buffer[tag_index as usize].find(&needle) != Some(0)
+                            {
+                                tag_index -= 1;
+                            }
+                            self.trim_trailing_whitespace(tag_index - 1, "br");
+                        }
+                    } else {
+                        let stripped = pt.strip_prefix('/').unwrap_or(&pt);
+                        if is_inline_text_tag(stripped) {
+                            let trim_left = self.current_chars.is_empty()
+                                || self.current_chars.ends_with(is_ws6);
+                            text = collapse_whitespace(&text, trim_left, false, false);
+                        }
+                    }
+                }
+            }
+            // prevTag || nextTag (nextTag is always truthy here).
+            text = collapse_whitespace_smart(&text, prev_eff.as_deref(), Some(&next_tag));
+            if text.is_empty()
+                && self.current_chars.ends_with(is_ws6)
+                && prev_eff.as_deref().is_some_and(|s| s.starts_with('/'))
+            {
+                self.trim_trailing_whitespace(self.buffer.len() as isize - 1, &next_tag);
+            }
+        }
+        if self.stack_no_collapse.is_empty() && next_tag != "html" && prev_eff.is_none() {
+            text = collapse_whitespace(&text, false, false, true);
+        }
+        self.chars_prev_tag = if text.chars().all(|c| c.is_whitespace()) {
+            prev_eff.clone().unwrap_or_default()
+        } else {
+            "comment".to_string()
+        };
+        self.current_chars.push_str(&text);
+        if !text.is_empty() {
+            self.has_chars = true;
+        }
+        self.buffer.push(text);
+    }
+}
+
+// ---- html-minifier whitespace primitives ----
+
+/// The six whitespace chars html-minifier's regexes treat as collapsible:
+/// space, newline, carriage-return, tab, form-feed, and non-breaking space.
+fn is_ws6(c: char) -> bool {
+    matches!(c, ' ' | '\n' | '\r' | '\t' | '\u{0C}' | '\u{A0}')
+}
+
+fn collapse_whitespace_smart(s: &str, prev: Option<&str>, next: Option<&str>) -> String {
+    let mut trim_left = prev.is_some_and(|p| !is_self_closing_inline(p));
+    if trim_left {
+        let p = prev.unwrap();
+        trim_left = match p.strip_prefix('/') {
+            Some(rest) => !is_inline_tag(rest),
+            None => !is_inline_text_tag(p),
+        };
+    }
+    let mut trim_right = next.is_some_and(|x| !is_self_closing_inline(x));
+    if trim_right {
+        let x = next.unwrap();
+        trim_right = match x.strip_prefix('/') {
+            Some(rest) => !is_inline_text_tag(rest),
+            None => !is_inline_tag(x),
+        };
+    }
+    let collapse_all = prev.is_some() && next.is_some();
+    collapse_whitespace(s, trim_left, trim_right, collapse_all)
+}
+
+fn collapse_whitespace(s: &str, trim_left: bool, trim_right: bool, collapse_all: bool) -> String {
+    let mut out = s.to_string();
+    if trim_left {
+        out = ws_trim_left(&out);
+    }
+    if trim_right {
+        out = ws_trim_right(&out);
+    }
+    if collapse_all {
+        out = ws_collapse_all(&out);
+    }
+    out
+}
+
+fn ws_trim_left(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut end = 0;
+    while end < chars.len() && is_ws6(chars[end]) {
+        end += 1;
+    }
+    if end == 0 {
+        return s.to_string();
+    }
+    let run: String = chars[..end].iter().collect();
+    let rest: String = chars[end..].iter().collect();
+    format!("{}{rest}", ws_transform_leading(&run))
+}
+
+fn ws_trim_right(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut start = chars.len();
+    while start > 0 && is_ws6(chars[start - 1]) {
+        start -= 1;
+    }
+    if start == chars.len() {
+        return s.to_string();
+    }
+    let head: String = chars[..start].iter().collect();
+    let run: String = chars[start..].iter().collect();
+    format!("{head}{}", ws_transform_trailing(&run))
+}
+
+const NBSP: char = '\u{A0}';
+
+// JS: spaces.replace(/^[^\xA0]+/, '').replace(/(\xA0+)[^\xA0]+/g, '$1 ')
+fn ws_transform_leading(run: &str) -> String {
+    let chars: Vec<char> = run.chars().collect();
+    let mut i = 0;
+    while i < chars.len() && chars[i] != NBSP {
+        i += 1; // drop leading non-nbsp whitespace
+    }
     let mut out = String::new();
-    for idx in 0..toks.len() {
-        match &toks[idx] {
-            Tok::Tag(t, _) => out.push_str(t),
-            Tok::Text(s) => {
-                let collapsed = collapse_ws(s);
-                let trim_left = match idx.checked_sub(1).and_then(|p| toks.get(p)) {
-                    None => true,
-                    Some(Tok::Tag(_, name)) => !is_inline_element(name),
-                    Some(Tok::Text(_)) => false,
-                };
-                let trim_right = match toks.get(idx + 1) {
-                    None => true,
-                    Some(Tok::Tag(_, name)) => !is_inline_element(name),
-                    Some(Tok::Text(_)) => false,
-                };
-                let mut v = collapsed.as_str();
-                if trim_left {
-                    v = v.trim_start_matches(' ');
-                }
-                if trim_right {
-                    v = v.trim_end_matches(' ');
-                }
-                out.push_str(v);
+    while i < chars.len() {
+        while i < chars.len() && chars[i] == NBSP {
+            out.push(NBSP);
+            i += 1;
+        }
+        if i < chars.len() && chars[i] != NBSP {
+            out.push(' ');
+            while i < chars.len() && chars[i] != NBSP {
+                i += 1;
             }
         }
     }
     out
 }
 
-fn collapse_ws(s: &str) -> String {
+// JS: spaces.replace(/[^\xA0]+(\xA0+)/g, ' $1').replace(/[^\xA0]+$/, '')
+fn ws_transform_trailing(run: &str) -> String {
+    let chars: Vec<char> = run.chars().collect();
     let mut out = String::new();
-    let mut in_ws = false;
-    for c in s.chars() {
-        if c.is_whitespace() {
-            if !in_ws {
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != NBSP {
+            let start = i;
+            while i < chars.len() && chars[i] != NBSP {
+                i += 1;
+            }
+            if i < chars.len() && chars[i] == NBSP {
                 out.push(' ');
-                in_ws = true;
+                while i < chars.len() && chars[i] == NBSP {
+                    out.push(NBSP);
+                    i += 1;
+                }
+            } else {
+                for &c in &chars[start..i] {
+                    out.push(c);
+                }
             }
         } else {
-            out.push(c);
-            in_ws = false;
+            out.push(NBSP);
+            i += 1;
+        }
+    }
+    // .replace(/[^\xA0]+$/, '') — drop the trailing non-nbsp run.
+    let kept: String = {
+        let oc: Vec<char> = out.chars().collect();
+        let mut e = oc.len();
+        while e > 0 && oc[e - 1] != NBSP {
+            e -= 1;
+        }
+        oc[..e].iter().collect()
+    };
+    kept
+}
+
+// JS: str.replace(/[ \n\r\t\f\xA0]+/g, fn) where each run collapses via
+// (^|\xA0+)[^\xA0]+ -> '$1 ', except a lone '\t' run is preserved.
+fn ws_collapse_all(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if is_ws6(chars[i]) {
+            let start = i;
+            while i < chars.len() && is_ws6(chars[i]) {
+                i += 1;
+            }
+            let run = &chars[start..i];
+            if run == ['\t'] {
+                out.push('\t');
+            } else {
+                out.push_str(&ws_collapse_run(run));
+            }
+        } else {
+            out.push(chars[i]);
+            i += 1;
         }
     }
     out
+}
+
+fn ws_collapse_run(run: &[char]) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+    if i < run.len() && run[i] != NBSP {
+        out.push(' ');
+        while i < run.len() && run[i] != NBSP {
+            i += 1;
+        }
+    }
+    while i < run.len() {
+        while i < run.len() && run[i] == NBSP {
+            out.push(NBSP);
+            i += 1;
+        }
+        if i < run.len() && run[i] != NBSP {
+            out.push(' ');
+            while i < run.len() && run[i] != NBSP {
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn match_end_tag(s: &str) -> Option<String> {
+    let inner = s.strip_prefix("</")?.strip_suffix('>')?;
+    if !inner.is_empty()
+        && inner
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '-')
+    {
+        Some(inner.to_string())
+    } else {
+        None
+    }
+}
+
+fn can_trim_ws(tag: &str) -> bool {
+    !matches!(tag, "pre" | "textarea")
+}
+
+fn can_trim_ws_opt(tag: Option<&str>) -> bool {
+    match tag {
+        None => true,
+        Some(t) => can_trim_ws(t),
+    }
+}
+
+fn can_collapse_ws(tag: &str) -> bool {
+    !matches!(tag, "script" | "style" | "pre" | "textarea")
+}
+
+fn is_void_element(name: &str) -> bool {
+    matches!(
+        name,
+        "area" | "base" | "basefont" | "br" | "col" | "embed" | "frame" | "hr" | "img"
+            | "input" | "isindex" | "keygen" | "link" | "meta" | "param" | "source" | "track"
+            | "wbr"
+    )
+}
+
+// html-minifier `inlineTags`: maintain whitespace AROUND these elements.
+fn is_inline_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr" | "acronym" | "b" | "bdi" | "bdo" | "big" | "button" | "cite" | "code"
+            | "del" | "dfn" | "em" | "font" | "i" | "ins" | "kbd" | "label" | "mark" | "math"
+            | "nobr" | "object" | "q" | "rp" | "rt" | "rtc" | "ruby" | "s" | "samp" | "select"
+            | "small" | "span" | "strike" | "strong" | "sub" | "sup" | "svg" | "textarea"
+            | "time" | "tt" | "u" | "var"
+    )
+}
+
+// html-minifier `inlineTextTags`: maintain whitespace WITHIN these elements.
+fn is_inline_text_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr" | "acronym" | "b" | "big" | "del" | "em" | "font" | "i" | "ins" | "kbd"
+            | "mark" | "nobr" | "rp" | "s" | "samp" | "small" | "span" | "strike" | "strong"
+            | "sub" | "sup" | "time" | "tt" | "u" | "var"
+    )
+}
+
+// html-minifier `selfClosingInlineTags`: maintain whitespace around these.
+fn is_self_closing_inline(name: &str) -> bool {
+    matches!(name, "comment" | "img" | "input" | "wbr")
 }
 
 fn tag_element_name(tag: &str) -> String {
@@ -392,22 +867,11 @@ fn tag_element_name(tag: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn is_inline_element(name: &str) -> bool {
-    // Matches html-minifier-terser's whitespace handling: surrounding whitespace
-    // is preserved (collapsed to one space) only for inline elements. `br` is a
-    // void element whose adjacent whitespace html-minifier trims, so it is NOT
-    // treated as inline here (stock emits `x<br/>y`, never `x <br/> y`).
-    matches!(
-        name,
-        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "button" | "cite" | "code"
-            | "dfn" | "em" | "i" | "img" | "input" | "kbd" | "label" | "map" | "object" | "q"
-            | "samp" | "select" | "small" | "span" | "strong" | "sub" | "sup" | "textarea"
-            | "time" | "tt" | "u" | "var"
-    )
-}
-
-/// Within a tag, convert single-quoted attribute values to double-quoted
-/// (matching html-minifier's default `"` quoting), when the value has no `"`.
+/// Re-render a start tag the way html-minifier rebuilds it from parsed
+/// attributes: tag name and attributes joined by single spaces, attribute
+/// values double-quoted, no whitespace before the closing `>`/`/>`. Whitespace
+/// *outside* quoted attribute values (between the tag name and attributes, and
+/// between attributes — even multi-line) collapses to a single space.
 fn rewrite_tag_quotes(tag: &str) -> String {
     let chars: Vec<char> = tag.chars().collect();
     let mut out = String::new();
@@ -436,14 +900,23 @@ fn rewrite_tag_quotes(tag: &str) -> String {
                 continue;
             }
         }
+        // Collapse any run of ASCII whitespace (outside quoted values) to a
+        // single space — html-minifier separates rebuilt tokens with one space.
+        if matches!(chars[i], ' ' | '\n' | '\r' | '\t' | '\u{0C}') {
+            while i < chars.len() && matches!(chars[i], ' ' | '\n' | '\r' | '\t' | '\u{0C}') {
+                i += 1;
+            }
+            out.push(' ');
+            continue;
+        }
         out.push(chars[i]);
         i += 1;
     }
-    // Collapse whitespace before a trailing self-closing `/>`.
-    if out.ends_with("/>") {
-        let body = &out[..out.len() - 2];
-        let trimmed = body.trim_end();
-        out = format!("{trimmed}/>");
+    // No whitespace before the closing `>` or self-closing `/>`.
+    if let Some(body) = out.strip_suffix("/>") {
+        out = format!("{}/>", body.trim_end());
+    } else if let Some(body) = out.strip_suffix('>') {
+        out = format!("{}>", body.trim_end());
     }
     out
 }
