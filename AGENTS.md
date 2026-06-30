@@ -5,6 +5,48 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
+## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
+
+**Where we are:** the port emits **byte-identical FHIR output** vs stock SUSHI v3.20.0
+for the 4 tuning IGs (ips/epi/mcode/crd = **665/665**, the non-regression floor). Perf
+week DONE — sub-second warm builds (ips 0.74 / epi 0.58 / mcode 0.84 / crd 0.66s; ~50×
+stock). **Now: generalization hardening** against 8 *holdout* IGs (unseen), gated by
+`harness/full-dashboard.sh` (12 IGs). Post-T2 verified score **1719/2065 (~83%)**;
+holdout bugs catalogued in `docs/holdout-findings.md` (G1..G12). `main` HEAD ~`fd100f3`.
+(Live `full-dashboard` runs are noisy while background agents hammer the CPU; trust the
+verified 1719 from the clean T2 integration.)
+
+**ACTIVE BACKGROUND AGENTS — do NOT re-launch; await their completion notifications:**
+- **T1** (`a483bfa74e93b176b`, worktree `../sushi-rs-perf/T1` branch `fix/T1`): the big
+  fix — **SD-driven type resolver** (replaces the two hardcoded datatype tables in
+  `compiler/src/export.rs` + `caret_schema.rs`; descends datatypes/extensions via
+  `package_store`, reads `value[x]` choices from the SD) = bug **G3 (~90+ files)** +
+  the **G1 genomics crash** (`instance_export.rs:859` unwrap). When it lands: build its
+  worktree, run `full-dashboard.sh` (corpus MUST stay 665, holdout must climb),
+  cherry-pick onto `main`. NO-HARDCODING mandate from the owner.
+- **SUSHI-test mining pilot** (`a7ff86b73555f331d`, `temp/sushi-tests/`): extracts FSH
+  snippets from `sushi-ts/test/` → builds stock-vs-port → reports a divergence-rate +
+  new bug groups (a finer correctness gate). Read its report, decide scale-or-not.
+
+**USER-OWNED parallel worktrees — DO NOT TOUCH (separate efforts):**
+- `../sushi-rs-diagnostics` (`diagnostics-parity`) — diagnostics feature; plan
+  `docs/designs/diagnostics-plan.md`.
+- `../sushi-rs-package-acquisition` (`feat/package-acquisition`) — self-reliant CAS +
+  materialize; plan `docs/designs/package-acquisition-plan.md`. (Their materialize step
+  lets us delete the `package_store` deep-scan fallback — see
+  `TODO(remove-when-we-own-indexing)` in `package_store/src/lib.rs`.)
+- `../sushi-rs-snapshot` (`snapshot-gen`) — owner's experiment.
+`main` advanced (holdout gate, index heuristic, design docs); those worktrees should
+rebase on `main`.
+
+**NEXT STEPS when resuming:** (1) integrate T1 vs `full-dashboard.sh`; (2) then drive
+the remaining holdout clusters SERIALLY (they share `export.rs`/`instance_export.rs`
+with T1): **G2** bare-local-CodeSystem-name fishing in `replaceReferences`, **G4**
+`^context` key order, then G5/G7–G12 (findings doc, ROI-ordered). **G6 FIXED** (T2:
+`package_store` directory-reconcile; stock never reads `.index.json`). (3) assess the
+mining-pilot yield; (4) diagnostics is the owner's worktree, not ours. **Gate every fix
+with `full-dashboard.sh`: corpus 665 must never drop; holdout must climb.**
+
 ## 1. What we are doing
 
 Porting **SUSHI** (FHIR Shorthand compiler) from TypeScript to Rust, targeting
