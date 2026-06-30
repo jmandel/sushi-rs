@@ -23,6 +23,10 @@ pub struct ConformanceRes {
     pub reference_key: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    /// The resource's actual `name` element (FSH name), used for fishing by name.
+    pub fhir_name: Option<String>,
+    /// The resource's canonical `url`, returned when normalizing a reference.
+    pub url: Option<String>,
 }
 
 /// Inputs gathered during `build_project`.
@@ -647,6 +651,40 @@ fn find_package_canonical(cache_dir: &str, package_id: &str, version: &str) -> O
 }
 
 // ---------------------------------------------------------------------------
+// normalizeResourceReference (IGExporter.ts:1375-1399).
+// ---------------------------------------------------------------------------
+
+/// Port of `normalizeResourceReference`. If `name` is already a relative URL or
+/// canonical (contains `/` or `:`) it is returned unchanged. Otherwise we fish
+/// the local conformance resources by name/id/url and replace with the relative
+/// reference (`Type/id`) when `use_relative`, else the canonical `url`. Falls
+/// back to the original string if nothing is found.
+fn normalize_resource_reference(
+    name: &str,
+    use_relative: bool,
+    conformance: &[ConformanceRes],
+) -> String {
+    if name.contains('/') || name.contains(':') {
+        return name.to_string();
+    }
+    for c in conformance {
+        let id = c.reference_key.split_once('/').map(|(_, id)| id);
+        let matches = c.fhir_name.as_deref() == Some(name)
+            || id == Some(name)
+            || c.url.as_deref() == Some(name);
+        if matches {
+            if use_relative {
+                // reference_key is always `ResourceType/id`.
+                return c.reference_key.clone();
+            } else if let Some(url) = &c.url {
+                return url.clone();
+            }
+        }
+    }
+    name.to_string()
+}
+
+// ---------------------------------------------------------------------------
 // definition.
 // ---------------------------------------------------------------------------
 
@@ -667,7 +705,15 @@ fn build_definition(
     }
 
     // Build resources + grouping.
-    let config_resources = parse_config_resources(cfg_yaml);
+    let mut config_resources = parse_config_resources(cfg_yaml);
+    // normalizeResourceReferences: config.resources[].exampleCanonical (a bare
+    // profile name) is replaced with its canonical url (useRelative=false).
+    for cr in &mut config_resources {
+        if let Some(ec) = &cr.example_canonical {
+            cr.example_canonical =
+                Some(normalize_resource_reference(ec, false, &inputs.conformance));
+        }
+    }
     let groups = parse_groups(cfg_yaml);
     let (resources, grouping) =
         build_resources(cfg_yaml, inputs, &config_resources, &groups, is_r4, cfg);

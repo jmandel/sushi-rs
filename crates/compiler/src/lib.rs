@@ -623,6 +623,8 @@ fn build_project_inner(
             reference_key: format!("StructureDefinition/{id}"),
             name,
             description,
+            fhir_name: e.sd.get_str("name").map(str::to_string),
+            url: url.clone(),
         });
     }
     for exported in sd_export::exported_files(&ctx) {
@@ -679,6 +681,8 @@ fn conformance_from_body(body: &serde_json::Value) -> Option<ig_export::Conforma
         reference_key: format!("{rt}/{id}"),
         name,
         description,
+        fhir_name: body.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        url: body.get("url").and_then(|v| v.as_str()).map(str::to_string),
     })
 }
 
