@@ -7,8 +7,12 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
-**THE VALIDATION CORPUS IS THE 12 IGs (2065 resources) in `harness/full-dashboard.sh`.
-SCORE = that total; LEAD WITH IT.** Currently **2061/2065 byte-identical + 4 tracked compat-breaks = EQUIVALENT 2065/2065 (100%) on the 12-IG corpus** (`main` ~`35e3839`+); now driving the 20-IG set.
+**SCORE — LEAD WITH IT.** The validation corpus is now **18 IGs** (12 + 6 top-20 FSH IGs),
+gated by `harness/gate1.sh <all 18>` (the 6 new built vs materialized `temp/top20-cache`).
+Current: **18-IG = 2490/2491 byte-identical + 4 tracked compat-breaks** (`main` ~`7926a37`+).
+The 12-IG subset is **2065/2065 EQUIVALENT (100%)**. ONLY 1 real fail left in the whole set:
+`subscriptions/CapabilityStatement-backport-subscription-server-r4` (agent `fix/lastfile`
+running — multi-cause: G13 instance-order + X6 `_mode` primitive-sibling extension).
 Session start was 1800. **Non-regression = none of the 12 IGs may drop** (ips/epi/mcode/crd/
 carinbb/sdc/pas/dtr/genomics/ecr/cmc/ndh — an R4 + R5 + R4B mix). Do NOT single out the old
 4-IG "665" subset as a "floor"/headline — that framing is RETIRED; all 12 are the corpus.
@@ -37,62 +41,37 @@ RESOLVED (stock now matches). Dashboard reports both **byte-identical** AND **EQ
 required-extension scaffold (`{url}`-only, violates FHIR **ext-1**) as an order-dependent side-
 effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit valid FHIR. So
 **Root Cause C is RESOLVED via compat-break, NOT the risky shared-cache work** (which existed
-only to reproduce invalid output). Score: **byte-identical 2052/2065, EQUIVALENT 2056/2065
-(99.6%)**, 9 REAL fails left (sdc 3 + dtr 4 + ecr 2 — genuine bugs, separate root causes).
+only to reproduce invalid output where stock violates ext-1).
 
-**PHASE 1 (12-IG) COMPLETE — 2065/2065 EQUIVALENT (100%). PHASE 2 (20-IG) NEAR-COMPLETE:**
-the 4 pas compat-breaks. **PHASE 2 (20-IG set) IN PROGRESS:** 6 new FSH IGs added to
-`gate1.sh` (bulk/pdex/plannet/formulary/cdshooks/subscriptions, built vs materialized
-`temp/top20-cache`); at 417/430, 13 real fails being fixed by agents `fix/xext` (cross-version
-`extension contains <URL>` unfold) + `fix/xig` (IG X1 dependsOn-xver + X5 copyrightLabel).
-Root Cause C RESOLVED via compat-break (see above). The acquisition leniency fix (skip
-unresolvable non-core deps, match stock) let all 6 new IGs build self-reliantly.
+**WHERE WE ARE (this session: 1800 → 2490/2491 + 4 compat-breaks):** the 12-IG corpus is 100%
+equivalent; the 6 new top-20 IGs (bulk 13/13, pdex 179/179, plannet 110/110, formulary 86/86,
+cdshooks 8/8, subscriptions 33/34) are all complete except the 1 file above. Fixed this
+session via the **investigate-then-align loop** (deep-dive stock's algorithm → port it; NEVER
+spot-fix): N7, G4, N1, G2 (carinbb perfect, genomics +64), G14/G11, G9, G5, narrative, G13
+(instance order = InstanceOf snapshot order), VS/CS carets via replaceReferences/Canonical,
+`unfoldChoiceElementTypes` for multi-type `value[x]`, underscore-sibling diff, IG
+`normalizeResourceReference` + `.x`-version maxSatisfying + R5→R4 copyrightLabel translation,
+SD inline-instance→pattern, strict soft-indexing (`convertSoftIndicesStrict`), cross-slice
+extension scoping, DefIndex instance-CS url, xhtml attr whitespace, ecr `entry.resource`
+full-resource embedding, sdc/dtr extension fixedUri on unfold (`profileToUse` guard), and the
+**top-20 X-family** (X1 `fixCrossVersionDependencies` legacy `extensions.r5`→xver at load +
+dependsOn; X2/X3 fish+unfold the SD behind `extension contains <URL>`, skip-if-unfishable; X5
+copyrightLabel; the `findConnectedSliceElement` instance path) — PLUS the package-acquisition
+merge + acquisition leniency. Catalogs: `docs/holdout-findings.md` (G1-G14), `docs/mining-
+findings.md` (N1-N7), `docs/top20-findings.md` (X1-X6).
 
-**(historical) 8/12 IGs were byte-identical mid-session:** ips, epi, mcode, crd, carinbb, genomics, cmc, ndh.
-Fixed & integrated this session via the **investigate-then-align loop** (deep-dive stock's
-algorithm → port it; NEVER spot-fix): N7, G4, N1, **G2** (carinbb perfect, genomics +64),
-G14/G11, G9, G5, narrative, G13 (instance order = InstanceOf snapshot order), VS/CS carets
-through replaceReferences/Canonical, `unfoldChoiceElementTypes` for multi-type `value[x]`,
-underscore-sibling diff, IG `normalizeResourceReference` + `.x`-version maxSatisfying, SD
-inline-instance→pattern, strict soft-indexing (`convertSoftIndicesStrict`), cross-slice
-extension scoping, DefIndex instance-CS url, xhtml attr whitespace — PLUS the
-package-acquisition merge. Detailed catalog: `docs/holdout-findings.md` (G1-G14 + tail),
-`docs/mining-findings.md` (N1-N7).
-
-**REMAINING 13 fails (the deep tail — see holdout-findings.md "Remaining 13"):**
-- **Root Cause C (the big one)** — pas 4 + dtr ~3-4 + sdc Questionnaires: stock's
-  `InstanceExporter.sdCache` shares ONE mutable SD per profile url across instances, so
-  unfold/constrainCardinality mutations PERSIST (order-dependent BY DESIGN) and let a
-  value-less instance see required value-less extension scaffolds. We clone a pristine
-  template per instance → scaffolds dropped. Aligned fix = adopt the shared per-url cache,
-  but a direct attempt regressed sdc −7/cmc −1 because our `unfold`/`createUsefulSlices`/
-  `validateValueAtPath` SD-mutations aren't yet byte-equal to stock's (the clone was masking
-  it). So C = FIRST reconcile SD-mutation helpers with stock, THEN share the cache.
-  Substantial/high-risk; sequence as its own careful effort. **NEXT BIG ITEM.**
-- **ecr 2** (`Bundle-bundle-ersd-{specification,supplemental}`) + **sdc 3** Questionnaire
-  content — may be separate sub-causes; re-triage after C.
-
-**RUNNING NOW (our-owned):** the **top-20 validation** agent (`a3d98bf`) — clones the full
-top-20 IGs (`docs/igs-to-test-with.json`), builds stock(isolated HOME) vs ours, reports new
-gaps → `docs/top20-findings.md`. Integrate/triage its findings when it lands.
+**REMAINING:**
+- **1 real fail** — `subscriptions/CapabilityStatement-backport-subscription-server-r4` (agent
+  `fix/lastfile`): two causes, BOTH needed to flip it — (a) X6 dropped `_mode` primitive-
+  sibling extension (`capabilitystatement-expectation`); (b) G13 instance property order (stock
+  emits CapStmt metadata AFTER `rest`). Cause (b) is the delicate snapshot-order code that
+  touches every instance — agent is under HARD orders not to regress the 12 to flip 1 file.
+- **6 of the top-20 are NOT FSH** on their default branch (US Core/CDex/IPA/QI-Core/AU Core/
+  SMART author conformance JSON directly) — need an FSH branch/tag to test the SD exporter on
+  national base profiles. Future expansion.
 
 **USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
-`../sushi-rs-snapshot` (`snapshot-gen`). (`../sushi-rs-package-acquisition` is merged + removed.)
-
-**TOP-20 VALIDATION DONE (`docs/top20-findings.md`) — next front after C.** 6 new IGs are
-FSH-buildable (Bulk Data 13/13 ✅, PDex 176/179, Plan Net 107/110, Drug Formulary 84/86,
-CDS Hooks 7/8, Subscriptions-backport 28/34); 6 aren't FSH on default branch (US Core/CDex/
-IPA/QI-Core/AU Core/SMART author conformance JSON directly — need an FSH branch/tag to test).
-Clones+oracles preserved in `temp/top20/<slug>{,-stock,-rust}` (reuse as a gate; consider
-adding the 6 buildable to `full-dashboard.sh` → 18-IG corpus). **New root-cause family X1-X6
-(cross-version extensions + extension-slice unfolding):** X2/X3 (HIGH, one surface) = fish &
-unfold the SD behind an `extension contains <URL>` slice — fixes both under-production (drop
-real sub-ext constraints: Plan Net, PDex) AND over-production (synthesize slices for
-UNRESOLVABLE exts that stock errors-and-skips: Subscriptions — note stock emits 43 diagnostics
-there, we emit 0 → ties to the diagnostics worktree); X1 legacy `extensions.r5`→`xver-r5.r4`
-substitution (`fixCrossVersionDependencies`, Drug Formulary); X5 `translateR5PropertiesToR4`
-(`copyrightLabel`, CDS Hooks); X4 named-soft-index + `[+]/[=]` shared sequence on unsliced
-array (PDex); X6 absolute-URL-token ext slice (Subscriptions). Detail in top20-findings.md.
+`../sushi-rs-snapshot` (`snapshot-gen`).
 
 **Longer-tail backlog:** N2/N4/N5 (decimal/empty-value/id-sanitization — mining, corpus-
 invisible), **L1** leniency (reject invalid FSH like stock — tie to diagnostics worktree),
