@@ -654,7 +654,7 @@ pub fn export_value_set(
     // `^extension[=]`), exactly as the SD/instance exporters do. Without this a
     // `[=]` would be emitted literally as a slice url.
     let mut resolved_rules = vs.rules.clone();
-    crate::paths::resolve_soft_indexing(&mut resolved_rules);
+    crate::paths::resolve_soft_indexing(&mut resolved_rules, false);
 
     // partition caret rules: concept-level (pathArray non-empty) vs other.
     let other_carets: Vec<&Rule> = resolved_rules
@@ -1005,7 +1005,7 @@ pub fn export_code_system(
 
     // Resolve `[+]`/`[=]` soft indices on caret paths (keyed per concept-path).
     let mut resolved_rules = cs.rules.clone();
-    crate::paths::resolve_soft_indexing(&mut resolved_rules);
+    crate::paths::resolve_soft_indexing(&mut resolved_rules, false);
 
     // setCaretPathRules (`CodeSystemExporter.ts:108`): both top-level carets
     // (empty pathArray) and concept-level carets (pathArray of concept codes →

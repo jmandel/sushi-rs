@@ -2786,7 +2786,7 @@ fn set_assigned_values(
     let manual_slice_ordering = self.cfg.manual_slice_ordering();
     // 1. resolve soft indexing on a clone of the rules.
     let mut rules: Vec<Rule> = inst.rules.clone();
-    crate::paths::resolve_soft_indexing(&mut rules);
+    crate::paths::resolve_soft_indexing(&mut rules, manual_slice_ordering);
 
     // 2. normalize [0] indices away; replaceReferences.
     let mut assign_rules: Vec<AssignRule> = Vec::new();

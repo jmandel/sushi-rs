@@ -421,7 +421,7 @@ impl<'a> SdContext<'a> {
 
         // setMappingRules
         let mut rules = mapping.rules.clone();
-        resolve_soft_indexing(&mut rules);
+        resolve_soft_indexing(&mut rules, false);
         // Take the source SD out so we can mutate it while the fisher borrows the
         // rest of `self.exported` (needed for the findMatchingSlice fishForFHIR
         // fallback, which resolves an extension bracket — e.g. a locally-defined
@@ -999,7 +999,7 @@ fn set_rules(
     diag: &mut Vec<String>,
     ctx: &SdContext,
 ) {
-    resolve_soft_indexing(&mut def.rules);
+    resolve_soft_indexing(&mut def.rules, false);
     let rules = def.rules.clone();
     // One SD-driven type resolver for all caret rules of this SD (cache reused
     // across segments/rules). Fishes StructureDefinition/ElementDefinition + every
