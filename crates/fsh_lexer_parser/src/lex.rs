@@ -508,31 +508,14 @@ fn seq_exact(s: &[char], a: usize, b: usize) -> bool {
 // REFERENCE / CODEABLE_REFERENCE / CANONICAL:
 //   kw WS* '(' WS* SEQUENCE WS* (WS 'or' WS+ SEQUENCE WS*)* ')'
 // (CANONICAL's '|' version is absorbed by NONWS+ so the same matcher applies.)
-fn valid_ref_content(s: &[char], a: usize, b: usize) -> bool {
-    let mut words: Vec<(usize, usize)> = Vec::new();
-    let mut m = a;
-    while m < b {
-        if is_ws(s[m]) {
-            m += 1;
-            continue;
-        }
-        let st = m;
-        while m < b && is_nonws(s[m]) {
-            m += 1;
-        }
-        words.push((st, m));
-    }
-    if words.is_empty() || words.len().is_multiple_of(2) {
-        return false;
-    }
-    for (idx, &(st, en)) in words.iter().enumerate() {
-        if idx % 2 == 1 && !(en - st == 2 && s[st] == 'o' && s[st + 1] == 'r') {
-            return false;
-        }
-    }
-    true
-}
-
+// Content grammar: `SEQUENCE (WS+ 'or' WS+ SEQUENCE)*` (WS = any whitespace incl
+// newlines; SEQUENCE = NONWS+, so `)`/`|` may appear inside a word). Greedy: the
+// token ends at the RIGHTMOST `)` whose preceding content is valid (an odd number
+// of whitespace-separated words where every odd-index word is exactly `or`).
+//
+// Single forward pass, O(content) with early termination — the previous version
+// re-tokenized content_start..k for every `)` up to EOF (O(n²), unbounded), which
+// dominated CPU on Reference/Canonical-heavy IGs (~26% on mCODE).
 fn m_ref(s: &[char], i: usize, kw: &str) -> Option<usize> {
     let l = starts_with(s, i, kw)?;
     let j = ws_run(s, i + l);
@@ -541,10 +524,43 @@ fn m_ref(s: &[char], i: usize, kw: &str) -> Option<usize> {
     }
     let content_start = j + 1;
     let mut best = None;
+
+    // Incremental state: words completed before the cursor, whether all completed
+    // odd-index words are `or`, and the start of the in-progress word (if any).
+    let mut completed = 0usize;
+    let mut odd_ok = true;
+    let mut word_start: Option<usize> = None;
+    let is_or = |st: usize, en: usize| en - st == 2 && s[st] == 'o' && s[st + 1] == 'r';
+
     let mut k = content_start;
     while k < s.len() {
-        if s[k] == ')' && valid_ref_content(s, content_start, k) {
-            best = Some(k + 1 - i);
+        let c = s[k];
+        if c == ')' {
+            // Candidate terminator: content is content_start..k (excludes this `)`).
+            let (count, last_ok) = match word_start {
+                Some(ws_) => (completed + 1, completed % 2 == 0 || is_or(ws_, k)),
+                None => (completed, true),
+            };
+            if count % 2 == 1 && odd_ok && last_ok {
+                best = Some(k + 1 - i);
+            }
+            // `)` is also a NONWS word char — keep extending the current word.
+            if word_start.is_none() {
+                word_start = Some(k);
+            }
+        } else if is_ws(c) {
+            if let Some(ws_) = word_start {
+                if completed % 2 == 1 && !is_or(ws_, k) {
+                    odd_ok = false; // odd-index word != "or" → permanently invalid
+                }
+                completed += 1;
+                word_start = None;
+                if !odd_ok {
+                    break;
+                }
+            }
+        } else if word_start.is_none() {
+            word_start = Some(k);
         }
         k += 1;
     }
