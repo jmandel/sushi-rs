@@ -370,19 +370,20 @@ impl<'a> SdContext<'a> {
         // setMappingRules
         let mut rules = mapping.rules.clone();
         resolve_soft_indexing(&mut rules);
+        // Take the source SD out so we can mutate it while the fisher borrows the
+        // rest of `self.exported` (needed for the findMatchingSlice fishForFHIR
+        // fallback, which resolves an extension bracket — e.g. a locally-defined
+        // extension referenced by name — to the matching inherited slice).
+        let mut sd = std::mem::take(&mut self.exported[si].sd);
         let fisher = FisherView {
             store: self.store,
-            exported: &[],
+            exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
             predefined_vs: &self.predefined_vs,
         };
-        // We need the SD mutably and a fisher over the package + in-progress meta.
-        // The mapping source SD is already exported; element lookups only need the
-        // package fisher (types) and the SD's own elements.
-        let sd = &mut self.exported[si].sd;
         for rule in &rules {
             let Rule::Mapping { path, map, comment, language, .. } = rule else { continue };
-            let Some(ei) = sd.find_element_by_path(path, &fisher) else {
+            let Some(ei) = find_element_with_ext_fallback(&mut sd, path, &fisher) else {
                 self.diag.push(format!(
                     "No element found at path {path} for {}, skipping rule",
                     mapping.name
@@ -406,6 +407,8 @@ impl<'a> SdContext<'a> {
                 a.push(J::Object(entry));
             }
         }
+        drop(fisher);
+        self.exported[si].sd = sd;
     }
 
     fn export_sd(&mut self, name: &str) {
