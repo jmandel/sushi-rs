@@ -151,6 +151,24 @@ pub(crate) fn split_caret_path(path: &str) -> Vec<String> {
 }
 
 
+/// Port of the `FshCode` branch of `replaceReferences` (`fhirtypes/common.ts`):
+/// fish the system name (the part before any `|version`) as a CodeSystem and, if
+/// found, substitute its canonical url while preserving the version suffix
+/// (`value.system.replace(/^[^|]+/, codeSystemMeta.url)`). Unresolvable systems —
+/// including bare names with no matching CodeSystem and systems that are already
+/// urls of no known CodeSystem — are left untouched. `resolve_cs` mirrors
+/// `fishForMetadata(base, Type.CodeSystem)?.url` (local CodeSystems first, then
+/// dependency packages). Returns `Some(new_system)` only when resolution changes
+/// (or confirms) the system; `None` when nothing was found.
+pub(crate) fn replace_code_system(
+    system: &str,
+    resolve_cs: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let base = system.split('|').next().unwrap_or(system);
+    let url = resolve_cs(base)?;
+    Some(system.replacen(base, &url, 1))
+}
+
 /// Build a FHIR Coding JSON object from an FshCode (key order: code, system,
 /// version, display) — mirrors `FshCode.toFHIRCoding`.
 pub(crate) fn coding_from(fc: &FshCode) -> J {

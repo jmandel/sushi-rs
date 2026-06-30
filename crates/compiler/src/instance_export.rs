@@ -2169,9 +2169,18 @@ fn replace_references(
         }
         FshValue::Code(fc) => {
             if let Some(sys) = &fc.system {
-                let base = sys.split('|').next().unwrap_or(sys).to_string();
-                if let Some(url) = def_idx.cs_url.get(&base) {
-                    fc.system = Some(sys.replacen(&base, url, 1));
+                // `replaceReferences` FshCode branch: fish the system name as a
+                // CodeSystem (local FSH CodeSystems first, then dependency packages)
+                // and substitute its canonical url, preserving any |version.
+                let resolve_cs = |base: &str| {
+                    def_idx
+                        .cs_url
+                        .get(base)
+                        .cloned()
+                        .or_else(|| fisher.fish_for_metadata_cs(base).and_then(|m| m.url))
+                };
+                if let Some(new_sys) = crate::export::replace_code_system(sys, resolve_cs) {
+                    fc.system = Some(new_sys);
                 }
             }
         }
@@ -2276,6 +2285,9 @@ impl Fisher for AliasFisher<'_> {
     }
     fn fish_for_metadata(&self, name: &str) -> Option<fhir_model::Metadata> {
         self.inner.fish_for_metadata(&self.resolve(name))
+    }
+    fn fish_for_metadata_cs(&self, name: &str) -> Option<fhir_model::Metadata> {
+        self.inner.fish_for_metadata_cs(&self.resolve(name))
     }
 }
 

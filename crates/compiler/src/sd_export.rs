@@ -148,6 +148,17 @@ impl Fisher for FisherView<'_> {
             .fish_for_metadata(name, &[package_store::FishType::ValueSet])?;
         Some(metadata_from_json(&m))
     }
+
+    fn fish_for_metadata_cs(&self, name: &str) -> Option<Metadata> {
+        // Restrict the package fish to CodeSystem definitions, mirroring
+        // `fishForMetadata(_, Type.CodeSystem)`. Local FSH CodeSystems are not
+        // StructureDefinitions, so they are resolved by callers via the tank's
+        // `cs_url`; here we only cover dependency-package CodeSystems.
+        let m = self
+            .store
+            .fish_for_metadata(name, &[package_store::FishType::CodeSystem])?;
+        Some(metadata_from_json(&m))
+    }
 }
 
 fn metadata_from_sd(sd: &StructureDefinition) -> Metadata {
@@ -960,7 +971,12 @@ fn set_rules(
                 is_instance: false,
                 ..
             } => {
-                assign_value(sd, ei, value, *exactly, fisher);
+                // `replaceReferences` resolves a FshCode's bare CodeSystem-name
+                // system to its canonical url before the value is assigned
+                // (pattern/fixed). Applies to local and dependency-package
+                // CodeSystems alike.
+                let resolved = resolve_code_system_in_value(value, fisher, cs_url);
+                assign_value(sd, ei, resolved.as_ref().unwrap_or(value), *exactly, fisher);
             }
             Rule::Flag { flags, .. } => {
                 apply_flags(&mut sd.elements[ei], flags, sd_derivation_specialization(kind), diag);
@@ -2000,7 +2016,32 @@ fn resolve_canonical_caret(
             }
         }
     }
+    // `replaceReferences` FshCode branch: resolve a bare CodeSystem name (local or
+    // package) to its canonical url.
+    if let Some(resolved) = resolve_code_system_in_value(value, fisher, cs_url) {
+        return resolved;
+    }
     value.clone()
+}
+
+/// `replaceReferences` FshCode-system branch as a standalone resolver: if `value`
+/// is a FshCode whose system fishes to a CodeSystem (local FSH CodeSystems via
+/// `cs_url` first, then dependency-package CodeSystems), return a clone with the
+/// system rewritten to that canonical url (preserving any `|version`). Returns
+/// `None` when nothing changed, so callers can keep using the original value.
+fn resolve_code_system_in_value(
+    value: &FshValue,
+    fisher: &dyn Fisher,
+    cs_url: &dyn Fn(&str) -> Option<String>,
+) -> Option<FshValue> {
+    let FshValue::Code(fc) = value else { return None };
+    let sys = fc.system.as_ref()?;
+    let resolve_cs =
+        |base: &str| cs_url(base).or_else(|| fisher.fish_for_metadata_cs(base).and_then(|m| m.url));
+    let new_sys = crate::export::replace_code_system(sys, resolve_cs)?;
+    let mut fc2 = fc.clone();
+    fc2.system = Some(new_sys);
+    Some(FshValue::Code(fc2))
 }
 
 fn apply_caret_fhir(

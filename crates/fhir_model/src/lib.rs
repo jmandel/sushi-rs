@@ -46,6 +46,12 @@ pub trait Fisher {
     fn fish_for_metadata_vs(&self, name: &str) -> Option<Metadata> {
         self.fish_for_metadata(name)
     }
+    /// Metadata restricted to CodeSystem definitions (`fishForMetadata(_, Type.CodeSystem)`).
+    /// Used by the `replaceReferences` FshCode-system resolution. Default falls back
+    /// to the untyped fish.
+    fn fish_for_metadata_cs(&self, name: &str) -> Option<Metadata> {
+        self.fish_for_metadata(name)
+    }
 }
 
 // ---------------------------------------------------------------------------
