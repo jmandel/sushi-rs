@@ -601,17 +601,34 @@ fn validate_value_at_path(
                         // alias/url/id that doesn't equal the slice's sliceName
                         // (e.g. `extension[USCoreRace]` -> inherited `race` slice).
                         if let Some(existing_sn) = find_ext_slice_by_profile(sd, ext_idx, url) {
-                            // Replace the path to use the sliceName (StructureDefinition.ts:671-681).
-                            let new_brackets: Vec<String> =
+                            // Replace ONLY the matched (first) bracket with the slice
+                            // name, preserving any following brackets such as a
+                            // numeric index (`extension[Name][1]`). The original code
+                            // overwrote the whole bracket list, dropping the trailing
+                            // index — which made a soft-indexed slice rule look like a
+                            // scalar assignment and corrupted the `extension` array
+                            // (G1 crash). StructureDefinition.ts:671-681 rewrites only
+                            // the matched bracket and leaves the rest of the path.
+                            let mut new_brackets: Vec<String> =
                                 existing_sn.split('/').map(|s| s.to_string()).collect();
+                            new_brackets.extend(path_parts[i].brackets.iter().skip(1).cloned());
                             path_parts[i].brackets = new_brackets;
-                            // Rebuild currentPath with the rewritten bracket.
+                            // Rebuild currentPath, excluding the trailing numeric index
+                            // when this part is an array element (mirrors the step-2
+                            // reconstruction above that drops the last bracket when
+                            // `array_index` is present).
                             current_path = previous_path.clone();
                             if !current_path.is_empty() {
                                 current_path.push('.');
                             }
                             current_path.push_str(&path_parts[i].base);
-                            for b in &path_parts[i].brackets {
+                            let bk = &path_parts[i].brackets;
+                            let upto = if array_index.is_some() {
+                                bk.len().saturating_sub(1)
+                            } else {
+                                bk.len()
+                            };
+                            for b in &bk[..upto] {
                                 current_path.push('[');
                                 current_path.push_str(b);
                                 current_path.push(']');
@@ -1611,8 +1628,14 @@ fn determine_known_slices(
     fisher: &dyn Fisher,
 ) -> HashMap<String, i64> {
     let mut known = HashMap::new();
-    for (path, parts) in rule_map {
-        let non_numeric = strip_numeric_brackets(path);
+    for (_path, parts) in rule_map {
+        // Gate on the REWRITTEN parts (which carry the resolved sliceName), not the
+        // raw rule path. When a bracket was an extension name/url/alias that differs
+        // from the slice's sliceName (e.g. `extension[RecommendedAction]` -> the
+        // inherited `recommended-action` slice), the raw path won't resolve via
+        // find_element_by_path and the slice would be miscounted — dropping implied
+        // urls and corrupting slice order. Mirrors stock rewriting `rule.path`.
+        let non_numeric = strip_numeric_brackets(&assemble_fsh_path(parts));
         if sd.find_element_by_path(&non_numeric, fisher).is_some() {
             let mut current_path = String::new();
             for pp in parts {
