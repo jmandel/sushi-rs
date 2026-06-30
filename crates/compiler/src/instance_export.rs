@@ -1232,12 +1232,20 @@ fn set_implied_properties_on_instance(
         let mut found_assigned = assigned_value_key
             .as_ref()
             .and_then(|k| sd.elements[cur_idx].get(k).cloned());
+        let had_assigned = found_assigned.is_some();
 
-        let connected_ids: Vec<String> = find_connected_elements(sd, cur_idx, &ix)
-            .iter()
-            .map(|&i| el_id(sd, i))
-            .collect();
-        if found_assigned.is_none() {
+        // `connected_ids` (an ancestor-chain slice walk) is only consumed when this
+        // element carries an assigned value or `min > 0`; skip the walk otherwise.
+        let cur_min = el_min(sd, cur_idx);
+        let connected_ids: Vec<String> = if had_assigned || cur_min > 0 {
+            find_connected_elements(sd, cur_idx, &ix)
+                .iter()
+                .map(|&i| el_id(sd, i))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !had_assigned {
             found_assigned = assigned_value_storage.get(&current.id).cloned();
         } else {
             for ce in &connected_ids {
@@ -1246,7 +1254,6 @@ fn set_implied_properties_on_instance(
         }
 
         // propagate min to connected
-        let cur_min = el_min(sd, cur_idx);
         if cur_min > 0 {
             for ce_id in &connected_ids {
                 if let Some(ce) = sd.find_element(ce_id) {
