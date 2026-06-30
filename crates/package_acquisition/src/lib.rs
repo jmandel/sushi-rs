@@ -381,7 +381,16 @@ impl PackageCas {
                     // (the `logger.warn("Failed to load ...")`) in
                     // `sushi-ts/src/utils/Processing.ts`. FHIR core stays fatal — stock
                     // cannot build without it.
-                    if is_core_package(&coord.name) || is_build_server_version(&coord.version) {
+                    //
+                    // This also covers `current`/`dev` build-server coordinates: stock's
+                    // BasePackageLoader.loadPackage downloads current builds via
+                    // build.fhir.org's `qas.json` and, when no matching entry exists,
+                    // returns FAILED (logging "Failed to load ...") rather than throwing,
+                    // so the build continues. `temp/top20/subscriptions` requests
+                    // `hl7.fhir.uv.tools.r4#current`, but qas.json only publishes the CI
+                    // build under package-id `hl7.fhir.uv.tools` (no `.r4` variant), so
+                    // neither stock nor we can resolve it — we skip it like stock.
+                    if is_core_package(&coord.name) {
                         return Err(error);
                     }
                     eprintln!("warn  Failed to load {requested_label}: {error:#}");
