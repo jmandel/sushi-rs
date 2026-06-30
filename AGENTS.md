@@ -8,7 +8,7 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE = the full 12-IG `harness/full-dashboard.sh` total. LEAD WITH IT.** Currently
-**1842/2065 (89.2%)**. The "665" (ips/epi/mcode/crd) is only the 4-IG **non-regression
+**1966/2065 (95.2%)** (`main` `8551545`). Session start was 1800. The "665" (ips/epi/mcode/crd) is only the 4-IG **non-regression
 FLOOR** — a guard rail that must never drop, NOT the headline. During parallel fixes the
 fast `harness/gate1.sh` runs floor + a fix's target IGs only (to keep worktrees cheap);
 always re-run the FULL dashboard after integrating and report the 2065 total.
