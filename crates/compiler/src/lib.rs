@@ -619,21 +619,25 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     }
 
     // ImplementationGuide resource (last — references all of the above).
-    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
-    let mut conformance = sd_conformance;
-    conformance.append(&mut vs_conformance);
-    conformance.append(&mut cs_conformance);
-    let inputs = IgInputs {
-        conformance,
-        instances: instances.iter().map(|i| &i.ig).collect(),
-        local_profile_logical,
-        has_custom_resources,
-        cache_dir: cache_dir.clone(),
-        ig_dir: ig_dir.to_string(),
-    };
-    if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
-        let text = json_emit::to_fhir_json_string(&ig.body);
-        std::fs::write(resources_dir.join(&ig.filename), text)?;
+    // If FSHOnly is true in the config, do not generate IG content (matches
+    // stock SUSHI app.ts: the IGExporter block is skipped entirely under FSHOnly).
+    if !cfg.fsh_only {
+        let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
+        let mut conformance = sd_conformance;
+        conformance.append(&mut vs_conformance);
+        conformance.append(&mut cs_conformance);
+        let inputs = IgInputs {
+            conformance,
+            instances: instances.iter().map(|i| &i.ig).collect(),
+            local_profile_logical,
+            has_custom_resources,
+            cache_dir: cache_dir.clone(),
+            ig_dir: ig_dir.to_string(),
+        };
+        if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
+            let text = json_emit::to_fhir_json_string(&ig.body);
+            std::fs::write(resources_dir.join(&ig.filename), text)?;
+        }
     }
     Ok(())
 }
