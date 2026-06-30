@@ -778,9 +778,21 @@ fn find_ext_slice_by_profile(
     ext_idx: usize,
     url: &str,
 ) -> Option<String> {
+    // Scope candidates to DIRECT slices of THIS extension element, matching
+    // stock's `findMatchingSlice`, whose fishForFHIR-Extension branch
+    // (StructureDefinition.ts:908-913) searches only the scoped child candidate
+    // set. A slice element's `path` equals the unsliced path, so matching by
+    // path alone wrongly pulls in a slice that lives under a DIFFERENT generic
+    // slice (e.g. `component:repeat-motif.extension:...` shares the path of the
+    // generic `component.extension`). A real slice of `ext_idx` has an id of the
+    // form `{ext_id}:{sliceName}`, so require that id prefix instead.
     let ext_path = el_path(sd, ext_idx);
+    let ext_id = el_id_ref(sd, ext_idx);
+    let id_prefix = format!("{ext_id}:");
     for el in &sd.elements {
-        if el.path() != ext_path {
+        // Same path (a direct slice, not a deeper sub-element) AND an id that is
+        // a slice of THIS extension element (`{ext_id}:...`).
+        if el.path() != ext_path || !el.id().starts_with(&id_prefix) {
             continue;
         }
         let Some(sn) = el.slice_name() else { continue };
