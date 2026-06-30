@@ -33,7 +33,7 @@ pub struct TankIndex {
 }
 
 impl TankIndex {
-    fn build(docs: &[FshDocument], cfg: &Config) -> TankIndex {
+    pub(crate) fn build(docs: &[FshDocument], cfg: &Config) -> TankIndex {
         let mut code_systems = Vec::new();
         let mut value_sets = Vec::new();
         for doc in docs {
@@ -56,7 +56,7 @@ impl TankIndex {
 
     /// `fisher.fishForMetadata(system, Type.CodeSystem)?.url` (first hit, version
     /// stripped). Returns `None` if not a local CodeSystem.
-    fn cs_url(&self, system: &str) -> Option<String> {
+    pub(crate) fn cs_url(&self, system: &str) -> Option<String> {
         let base = system.split('|').next().unwrap_or(system);
         self.code_systems
             .iter()
@@ -65,7 +65,7 @@ impl TankIndex {
     }
 
     /// `fishForMetadataBestVersion(vs, Type.ValueSet)?.url`.
-    fn vs_url(&self, vs: &str) -> Option<String> {
+    pub(crate) fn vs_url(&self, vs: &str) -> Option<String> {
         let base = vs.split('|').next().unwrap_or(vs);
         self.value_sets
             .iter()
@@ -301,14 +301,15 @@ fn resolve_choice(type_name: &str, base: &str) -> Option<&'static str> {
 // Caret path parsing + application.
 // ---------------------------------------------------------------------------
 
-struct Seg {
-    key: String,
-    array: bool,
-    slice_url: Option<String>,
+pub(crate) struct Seg {
+    pub key: String,
+    pub array: bool,
+    pub slice_url: Option<String>,
+    pub index: Option<usize>,
 }
 
 /// Split a caret path on `.` that are outside `[...]` brackets.
-fn split_caret_path(path: &str) -> Vec<String> {
+pub(crate) fn split_caret_path(path: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut depth = 0i32;
     let mut cur = String::new();
@@ -335,7 +336,7 @@ fn split_caret_path(path: &str) -> Vec<String> {
 }
 
 /// Parse a path part into `(base, bracket_content)`.
-fn parse_part(part: &str) -> (String, Option<String>) {
+pub(crate) fn parse_part(part: &str) -> (String, Option<String>) {
     if let Some(open) = part.find('[') {
         let base = part[..open].to_string();
         let inner = part[open + 1..]
@@ -368,15 +369,20 @@ fn resolve_path(resource_type: &str, caret_path: &str) -> Option<(Vec<Seg>, Stri
                 (choice, false)
             }
         };
+        let mut index = None;
         let slice_url = match &bracket {
-            Some(b) if b.chars().all(|c| c.is_ascii_digit()) => None,
-            Some(b) if base == "extension" => Some(b.clone()),
+            Some(b) if b.chars().all(|c| c.is_ascii_digit()) => {
+                index = b.parse::<usize>().ok();
+                None
+            }
+            Some(b) if base == "extension" || base == "modifierExtension" => Some(b.clone()),
             _ => None,
         };
         segs.push(Seg {
             key: base,
             array,
             slice_url,
+            index,
         });
         if i == n - 1 {
             leaf_ty = ty.to_string();
@@ -389,7 +395,7 @@ fn resolve_path(resource_type: &str, caret_path: &str) -> Option<(Vec<Seg>, Stri
 
 /// Build a FHIR Coding JSON object from an FshCode (key order: code, system,
 /// version, display) — mirrors `FshCode.toFHIRCoding`.
-fn coding_from(fc: &FshCode) -> J {
+pub(crate) fn coding_from(fc: &FshCode) -> J {
     let mut m = Map::new();
     if !fc.code.is_empty() {
         m.insert("code".into(), J::String(fc.code.clone()));
@@ -410,7 +416,7 @@ fn coding_from(fc: &FshCode) -> J {
 
 /// Coerce an FSH caret value to JSON according to the resolved leaf element type
 /// (port of the relevant `assignValue` / `assignFshCode` branches).
-fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
+pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
     if is_primitive(leaf_ty) {
         Some(match value {
             // For a code/string/uri leaf, a FshCode contributes only its code.
@@ -447,7 +453,7 @@ fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
     }
 }
 
-fn set_value(target: &mut J, leaf: J) {
+pub(crate) fn set_value(target: &mut J, leaf: J) {
     if target.is_object() && leaf.is_object() {
         let (J::Object(t), J::Object(l)) = (target, leaf) else {
             unreachable!()
@@ -460,7 +466,7 @@ fn set_value(target: &mut J, leaf: J) {
     }
 }
 
-fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
+pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
     let seg = &segs[0];
     let last = segs.len() == 1;
     if seg.array {
@@ -472,23 +478,28 @@ fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
         }
         let arr = arr.as_array_mut().unwrap();
         let idx = if let Some(url) = &seg.slice_url {
-            match arr
+            // n-th occurrence of this url (default 0); create entries as needed.
+            let want = seg.index.unwrap_or(0);
+            let positions: Vec<usize> = arr
                 .iter()
-                .position(|e| e.get("url") == Some(&J::String(url.clone())))
-            {
-                Some(i) => i,
-                None => {
-                    let mut m = Map::new();
-                    m.insert("url".into(), J::String(url.clone()));
-                    arr.push(J::Object(m));
-                    arr.len() - 1
-                }
+                .enumerate()
+                .filter(|(_, e)| e.get("url") == Some(&J::String(url.clone())))
+                .map(|(i, _)| i)
+                .collect();
+            if let Some(&p) = positions.get(want) {
+                p
+            } else {
+                let mut m = Map::new();
+                m.insert("url".into(), J::String(url.clone()));
+                arr.push(J::Object(m));
+                arr.len() - 1
             }
         } else {
-            if arr.is_empty() {
+            let n = seg.index.unwrap_or(0);
+            while arr.len() <= n {
                 arr.push(J::Null);
             }
-            0
+            n
         };
         if last {
             set_value(&mut arr[idx], leaf);

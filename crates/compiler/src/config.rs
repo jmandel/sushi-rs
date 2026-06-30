@@ -16,6 +16,14 @@ pub struct Config {
     pub status: Option<String>,
     #[serde(default, rename = "FSHOnly")]
     pub fsh_only: bool,
+    #[serde(default = "default_true", rename = "applyExtensionMetadataToRoot")]
+    pub apply_extension_metadata_to_root: bool,
+    #[serde(default, rename = "fhirVersion")]
+    pub fhir_version: Option<serde_yaml::Value>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Config {

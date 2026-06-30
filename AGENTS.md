@@ -297,8 +297,63 @@ Phases from the plan (0–9). Current state:
     `ConditionCategoryCodes` (THO `condition-category`); stock fishes its url
     from packages, we fall back to the literal name. The only IPS VS that needs
     an external (non-local, non-alias) CodeSystem-name→url resolution.
-- [ ] **Phase 5 — SD arena + simple profiles**
-- [ ] **Phase 6 — full SD compatibility**
+- [~] **Phase 5/6 — StructureDefinition export** — IN PROGRESS (byte parity:
+  **epi 26/28, ips 27/32, crd 19/27 SD = 72/87**). VS/CS gates stay green; `cargo
+  test --workspace` green. Differential-only output.
+  - `fhir_model` (`lib.rs`+`props.rs`): `StructureDefinition`/`ElementDefinition`
+    modeled as **ordered `serde_json` maps** (not typed structs) with a captured
+    `_original` map. `path` derived from `id`. Ports `fromJSON` (PROPS filter),
+    `findElementByPath` (fast-path + unfold + `findMatchingSlice` + `sliceMatchingValueX`
+    + no-bracket slice filter), `unfold` (contentReference + sliceName + type-fish
+    branches), `addElement` (regex-style slice/child insertion ordering), `addSlice`,
+    `sliceIt`, `hasDiff`/`calculateDiff` (PROPS order, ADDITIVE mapping/constraint,
+    choice-slice `type`), `toJSON` differential. ED type objects re-ordered to
+    `ElementDefinitionType.toJSON` order (code first, extension last).
+  - `compiler/src/sd_export.rs`: `SdContext` exports SDs on demand in tank order
+    (profiles→extensions→logicals→resources). `FisherView` = exported locals +
+    in-progress **early-push metadata** (circular fishing) + package_store. Ports
+    getStructureDefinition, setMetadata (UNINHERITED_SD_EXTENSIONS, ext root short/
+    definition, url.fixedUri), resetParentElements, preprocess (ext 0..0 inference),
+    setRules dispatch: Card (w/ slice→parent min propagation), Flag, **OnlyRule**
+    (constrainType: getTypeLineage + findTypeMatch + applyTypeIntersection + applyProfiles,
+    Reference>CodeableReference preference), Binding (bindToVS REPLACES binding),
+    Assignment (assignValue + discriminator-path min→1), Obeys (constraint +
+    invariant-rules-as-`constraint[i].*` carets), ContainsRule (extension + plain
+    slicing), CaretValue (element + SD-body). setContext (default Element).
+  - `compiler/src/caret_schema.rs`: embedded FHIR element-type table (SD + ElementDefinition
+    + datatypes) → reuses `export.rs` `apply`/`coerce`. Handles `[x]` choice keys,
+    extension-by-url slices, numeric indices, and **primitive-sibling `_targetProfile`/
+    `_profile`** redirect for `^type[n].targetProfile[m].extension`. Alias brackets
+    (`extension[$fmm]`) resolved via a global alias map.
+  - `compiler/src/paths.rs`: `resolveSoftIndexing` (`[+]/[=]`→numbers on path+caretPath),
+    `parseFSHPath`/`splitOnPathPeriods`.
+  - **Cache wiring**: `build_project` resolves the cache via `FHIR_CACHE` env or
+    `temp/fhir-home/.fhir/packages` (cwd-relative), fail-loud, never `~/.fhir`.
+  - **PARITY TRAPS that bit**: (1) ED type-object key order = `ElementDefinitionType.toJSON`
+    (code first), not FHIR/PROPS order. (2) `hasDiff` slice/child walk uses `.`-children
+    ONLY (slices excluded) — counting slices as children put spurious `{id,path}` sliced
+    elements in the diff. (3) bindToVS REPLACES the whole binding `{strength,valueSet}`
+    (drops inherited description/extension). (4) assigning a value/pattern discriminator
+    path forces the element min→1. (5) invariant Severity/Expression/XPath come from the
+    invariant's **assignment rules** (→`constraint[i].*` carets), not just keywords. (6)
+    constrainCardinality on a slice bumps the sliced element's min to the sum of slice mins.
+    (7) `^extension[url][n]` is the n-th occurrence of that url. (8) circular SD refs need
+    early-push metadata so an in-progress SD's url is fishable. (9) primitive `.extension`
+    children go to the `_x` sibling array.
+  - **NOT-YET / KNOWN GAPS** (the remaining 15 SD failures): (a) **AddElementRule**
+    (logicals/resources) is a stub → ips Document/DocumentSection/IPSSectionsLM + crd
+    CRDMetricData MISSING (also need the bundled **R5-in-R4 `Base`** def, package_store
+    gap a). (b) **predefined `input/resources/*.{xml,json}`** not loaded → crd bindings to
+    those VS (nutritionorder etc.) resolve to wrong/literal urls. (c) deep **nested entry
+    slicing** (ips Bundle/Composition, epi composition/MedicinalProductDefinition,
+    crd servicerequest/medicationrequest) — reslicing + `_profile`/`_targetProfile`
+    rebuild on constrainType not fully ported. (d) nested **contentReference ordering**
+    (epi composition section.section). (e) `setContext` only does the default/quoted
+    cases (no fishing-based element/url contexts). (f) VS/CS caret rules still don't
+    resolve `$alias` brackets (pre-existing Phase-4 gap; shows up only in crd VS, which
+    was never gated). (g) AssignmentRule of an Instance / deferred `^contained` carets
+    not handled.
+- [ ] **Phase 6 — full SD compatibility** (continue from the gaps above)
 - [ ] **Phase 7 — instance export + required QA**
 - [ ] **Phase 8 — full corpus parity**
 - [ ] **Phase 9 — optimization loop**

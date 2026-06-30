@@ -7,8 +7,11 @@
 use fsh_lexer_parser::{dump, parser};
 use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 
+pub mod caret_schema;
 pub mod config;
 pub mod export;
+pub mod paths;
+pub mod sd_export;
 
 /// Entity-type discriminant (mirrors TS `constructorName`) used for the
 /// `isAllowedRule` table and diagnostic messages.
@@ -520,12 +523,47 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let mut diag: Vec<String> = Vec::new();
     run_global_expansion(&mut docs, &mut diag);
 
-    // 4. Export ValueSets + CodeSystems and write byte-identical JSON.
+    // 4. Export resources and write byte-identical JSON.
     let resources_dir = Path::new(out_dir).join("fsh-generated").join("resources");
     std::fs::create_dir_all(&resources_dir)?;
+
+    // ValueSets + CodeSystems (Phase 4).
     for exported in export::export_all(&docs, &cfg) {
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
     }
+
+    // StructureDefinitions (Phase 5/6): needs the FHIR package cache.
+    let cache_dir = resolve_cache_dir()?;
+    let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
+    let tank = export::TankIndex::build(&docs, &cfg);
+    let vs_url = |s: &str| tank.vs_url(s);
+    let cs_url = |s: &str| tank.cs_url(s);
+    for exported in
+        sd_export::export_structure_definitions(&docs, &cfg, &store, &vs_url, &cs_url)
+    {
+        let text = json_emit::to_fhir_json_string(&exported.body);
+        std::fs::write(resources_dir.join(&exported.filename), text)?;
+    }
     Ok(())
+}
+
+/// Locate the explicit FHIR package cache. Honors `FHIR_CACHE`, else the repo's
+/// isolated cache under `temp/fhir-home/.fhir/packages` relative to cwd. NEVER
+/// falls back to `~/.fhir` (hard rule). Fails loud if missing.
+fn resolve_cache_dir() -> anyhow::Result<String> {
+    use std::path::Path;
+    if let Ok(c) = std::env::var("FHIR_CACHE") {
+        if Path::new(&c).is_dir() {
+            return Ok(c);
+        }
+        anyhow::bail!("FHIR_CACHE={c} is not a directory");
+    }
+    let default = "temp/fhir-home/.fhir/packages";
+    if Path::new(default).is_dir() {
+        return Ok(default.to_string());
+    }
+    anyhow::bail!(
+        "FHIR package cache not found. Set FHIR_CACHE or create {default} (never use ~/.fhir)."
+    )
 }
