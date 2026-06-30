@@ -765,7 +765,12 @@ fn slice_it_value_url(sd: &mut StructureDefinition, idx: usize) {
 
 /// Add an extension slice (`addSlice`) carrying `type[0].profile=[url]`.
 fn add_extension_slice(sd: &mut StructureDefinition, parent_idx: usize, name: &str, url: &str) {
-    let ty = serde_json::json!([{ "code": "Extension", "profile": [url] }]);
+    // `add_slice` takes a SINGLE ElementDefinitionType object and wraps it in the
+    // `type` array itself. Passing an array here produced a doubly-nested
+    // `type:[[{...}]]`, so the slice's type code resolved to "" and `unfold`
+    // couldn't fish the extension profile to expose its sub-extension slices
+    // (e.g. ndh `extension[qualification].extension[code]` was dropped).
+    let ty = serde_json::json!({ "code": "Extension", "profile": [url] });
     sd.add_slice(parent_idx, name, Some(ty));
 }
 
