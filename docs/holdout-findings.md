@@ -86,16 +86,21 @@ KEY-ORDER class (58, semantically identical to stock — mechanical ordering fix
 - **G4 `^context` (type/expression) — 42** (ndh 35, ecr 6, cmc 1). Stock source order
   `expression` then `type`; we emit FHIR element order. Fix in `sd_export` caret-context
   emission.
-- **G13 (NEW) instance `extension` property position — 16** (all sdc). Stock places
-  `extension` right after `meta` (DomainResource order); we shove it down past the
-  content elements (e.g. after `item`/`parameter`). Affects Questionnaire/Library
-  instances. **Fix:** `order_instance` (`instance_export.rs:2811`) pins only
-  `[resourceType,id,meta]` then keeps insertion order; extend the prefix to the full
-  Resource/DomainResource leading block in FHIR order —
-  `resourceType,id,meta,implicitRules,language,text,contained,extension,modifierExtension`
-  (each with its `_`-sibling). Verified stock order from sdc `render` example:
-  `...meta, contained, extension, modifierExtension, item ...` (contained BEFORE
-  extension). Gate corpus — only MOVES these keys earlier; corpus must hold.
+- **G13 (NEW) instance property order = InstanceOf snapshot element order — 16** (all
+  sdc Library/Questionnaire). NOT a simple prefix (a "force DomainResource block early"
+  attempt REGRESSED ndh −74/genomics −26/corpus −30: stock does NOT put extension early
+  universally — ndh Endpoint stock is `...meta,status,extension,connectionType`,
+  extension AFTER status). The REAL rule: stock orders instance properties by the
+  **InstanceOf profile's SNAPSHOT element order**. sdc-CHF (`InstanceOf: SDCLibrary`):
+  FSH sets url,version,extension,name,... but stock emits
+  `extension,contact,jurisdiction,relatedArtifact,parameter,dataRequirement,content,type,
+  url,version,name,...` = the profile's differential-constrained elements first, then
+  unconstrained base elements — i.e. snapshot order. Our `order_instance`
+  (`instance_export.rs:~2823`) keeps rule-application order, which only diverges when a
+  profile heavily reorders via its differential. **Fix = structural** (Wave B): emit
+  instance properties walking the InstanceOf snapshot element order (study
+  `sushi-ts/src/export/InstanceExporter.ts` / `fhirtypes/InstanceDefinition.ts`). Gate
+  corpus HARD — this touches every instance.
 
 SEMANTIC class (207) by IG:
 - **carinbb 31 — ALL G2** (system bare-name + duplicate-coding merge).
