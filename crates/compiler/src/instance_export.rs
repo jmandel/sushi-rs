@@ -3687,10 +3687,16 @@ fn order_instance(instance: &J) -> J {
     json_emit::ordered_clone_deep(&J::Object(ordered))
 }
 
-fn sanitize(name: &str) -> String {
+/// Port of the npm `sanitize-filename` package (used by every `getFileName()`,
+/// e.g. `ValueSet.ts:67`) with `{ replacement: '-' }`. Replaces the package's
+/// `illegalRe` characters (`/ \ ? < > : * | "`) plus ASCII control characters
+/// with `-`. (Reserved Windows names / trailing-dot handling are not reachable
+/// for FHIR `<Type>-<id>.json` names.)
+pub(crate) fn sanitize(name: &str) -> String {
     name.chars()
         .map(|c| match c {
-            '/' | '\\' | '?' | '%' | '*' | ':' | '|' | '"' | '<' | '>' => '-',
+            '/' | '\\' | '?' | '*' | ':' | '|' | '"' | '<' | '>' => '-',
+            c if (c as u32) < 0x20 || ((c as u32) >= 0x80 && (c as u32) <= 0x9f) => '-',
             _ => c,
         })
         .collect()

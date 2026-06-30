@@ -761,7 +761,7 @@ fn effective_sd_id(def: &StructureDef) -> String {
             }
         }
     }
-    def.id.clone()
+    crate::export::sanitize_fhir_id(&def.id)
 }
 
 fn type_from_def_or_parent(def: &StructureDef, kind: StructureKind, parent: &StructureDefinition) -> String {
@@ -2518,7 +2518,7 @@ pub fn exported_files(ctx: &SdContext) -> Vec<crate::export::Exported> {
     for e in &ctx.exported {
         let id = e.sd.get_str("id").unwrap_or("").to_string();
         out.push(crate::export::Exported {
-            filename: format!("StructureDefinition-{}.json", id),
+            filename: crate::instance_export::sanitize(&format!("StructureDefinition-{}.json", id)),
             body: e.sd.to_json_differential(),
         });
     }

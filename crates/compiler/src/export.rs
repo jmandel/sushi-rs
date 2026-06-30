@@ -244,13 +244,51 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
                 && caret_path.as_deref() == Some("id")
                 && !is_instance
             {
+                // An explicit `^id` assignment is stock's `idRule`: it is used
+                // verbatim (no name→id sanitization, `mixins.ts:60-71`).
                 if let Some(FshValue::Str(s)) = value {
                     return s.clone();
                 }
             }
         }
     }
-    declared.to_string()
+    sanitize_fhir_id(declared)
+}
+
+/// `idRegex` from `primitiveTypes.ts:29`: `^[A-Za-z0-9\-\.]{1,64}$`.
+fn id_regex_ok(s: &str) -> bool {
+    let n = s.chars().count();
+    n >= 1 && n <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+}
+
+/// `nameRegex` from `mixins.ts:6`: `^[A-Z]([A-Za-z0-9_]){0,254}$`.
+fn name_regex_ok(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_uppercase() => {}
+        _ => return false,
+    }
+    let rest: Vec<char> = chars.collect();
+    rest.len() <= 254 && rest.iter().all(|c| c.is_ascii_alphanumeric() || *c == '_')
+}
+
+/// Port of `HasId.validateId`'s name→id sanitization (`mixins.ts:59-74`): when an
+/// id (from the `Id:` keyword or the entity name, i.e. no `^id` rule) is not a
+/// valid FHIR id but IS a valid FHIR name, replace `_` with `-` and slice to 64
+/// chars (e.g. `SimpleVS_ID` → `SimpleVS-ID`). Otherwise the id is left as-is
+/// (stock logs an error but still exports the original, e.g. colon-bearing ids).
+/// The Instance branch is excluded by stock and handled via `instance_effective_id`.
+pub(crate) fn sanitize_fhir_id(id: &str) -> String {
+    if id_regex_ok(id) {
+        return id.to_string();
+    }
+    if name_regex_ok(id) {
+        let sanitized: String = id.replace('_', "-").chars().take(64).collect();
+        if id_regex_ok(&sanitized) {
+            return sanitized;
+        }
+    }
+    id.to_string()
 }
 
 /// Effective canonical url from a `* ^url = "..."` caret override (findLast,
@@ -827,7 +865,7 @@ pub fn export_value_set(
     clean_resource_map(&mut obj);
 
     Some(Exported {
-        filename: format!("ValueSet-{}.json", id),
+        filename: crate::instance_export::sanitize(&format!("ValueSet-{}.json", id)),
         body: J::Object(obj),
     })
 }
@@ -1348,7 +1386,7 @@ pub fn export_code_system(
     }
 
     Exported {
-        filename: format!("CodeSystem-{}.json", id),
+        filename: crate::instance_export::sanitize(&format!("CodeSystem-{}.json", id)),
         body: J::Object(obj),
     }
 }
