@@ -76,6 +76,14 @@ index; plain stock is the ~39s baseline. Our Rust target is 1.5–2.5s.)
 | crd | 27 | 28 | 3 | 27 | 85 |
 Export gate: `harness/diff-resources-glob.sh temp/<ig>-stock temp/rust-<ig> <Prefix...>`.
 
+**Rust port performance (perf week, best-of-5 warm, main):** ips 0.74 / epi 0.58 /
+mcode 0.84 / crd 0.66s — vs stock SUSHI ~39s (~50x) and ~-95% vs the pre-Phase-9 14s.
+**No maintained warm artifact:** package_store builds its index in-memory from each
+package's `.index.json` every run (no SQLite/persisted index); a build writes ONLY to
+the output dir; cold vs warm OS page cache is ~3% (CPU-bound). Needs only a normal
+extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/perf-map.md.
+
+
 ## 5. Commands / methodology (the closed loop)
 
 Per-change loop (from the plan): hypothesize → smallest corpus slice →
