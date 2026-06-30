@@ -347,9 +347,17 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
 fn resolve_choice_key(prop: &str, map: &Map<String, Value>) -> Option<String> {
     if let Some(base) = prop.strip_suffix("[x]") {
         for k in map.keys() {
-            if let Some(rest) = k.strip_prefix(base) {
+            // A choice prop like `maxValue[x]` matches both the value key
+            // (`maxValueDate`) and its primitive sibling (`_maxValueDate`).
+            // Stock SUSHI carries `maxValue[x]` and `_maxValue[x]` as separate
+            // PROPS_AND_UNDERPROPS entries; we instead resolve the base key here
+            // and let the caller's `_`-sibling logic emit the underscore form.
+            // So strip an optional leading `_` before testing, and always return
+            // the non-underscore base key.
+            let bare = k.strip_prefix('_').unwrap_or(k);
+            if let Some(rest) = bare.strip_prefix(base) {
                 if rest.chars().next().map(|c| c.is_ascii_uppercase()) == Some(true) {
-                    return Some(k.clone());
+                    return Some(bare.to_string());
                 }
             }
         }
