@@ -558,6 +558,11 @@ fn build_project_inner(
     let mut cs_conformance: Vec<ConformanceRes> = Vec::new();
 
     // ValueSets + CodeSystems (Phase 4).
+    // Retain the fully-exported VS/CS bodies so the instance exporter can embed
+    // them whole when a Bundle/instance assigns one by name (stock: MasterFisher
+    // fishes the exported `pkg` first — InstanceExporter.fishForFHIR). These are
+    // exported before instances, matching stock's FHIRExporter order.
+    let mut exported_conformance: Vec<std::rc::Rc<serde_json::Value>> = Vec::new();
     for exported in export::export_all(&docs, &cfg, Some(&store)) {
         let rt = exported
             .body
@@ -576,6 +581,7 @@ fn build_project_inner(
         }
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
+        exported_conformance.push(std::rc::Rc::new(exported.body));
     }
 
     // StructureDefinitions (Phase 5/6).
@@ -633,7 +639,7 @@ fn build_project_inner(
     }
 
     // Instances (Phase 7).
-    let instances = instance_export::export_instances(&docs, &cfg, &ctx);
+    let instances = instance_export::export_instances(&docs, &cfg, &ctx, &exported_conformance);
     for inst in &instances {
         let text = json_emit::to_fhir_json_string(&inst.exported.body);
         std::fs::write(resources_dir.join(&inst.exported.filename), text)?;

@@ -2383,6 +2383,11 @@ struct Exporter<'a> {
     /// FSH alias name -> value (first-wins), resolved on every fish like FSHTank.fish.
     aliases: HashMap<String, String>,
     memo: std::cell::RefCell<HashMap<String, Option<ExportedInst>>>,
+    /// Fully-exported ValueSet/CodeSystem bodies (exported in Phase 4 before
+    /// instances), keyed by name, id, and url. Stock's MasterFisher fishes the
+    /// exported `pkg` first, so an `entry.resource = <SomeValueSet>` assignment
+    /// embeds the whole exported ValueSet rather than a stub.
+    exported_conformance: HashMap<String, Rc<J>>,
     /// Cache of freshly-parsed (unmutated) InstanceOf snapshots keyed by base
     /// type name. Many instances share a profile (mcode: 209 instances → 64
     /// distinct InstanceOf), and fishing+parsing the snapshot per instance is
@@ -2421,10 +2426,64 @@ impl Fisher for AliasFisher<'_> {
     }
 }
 
+/// Index already-exported conformance bodies (ValueSets/CodeSystems) by name,
+/// id, and url so the inline-instance fisher can resolve `entry.resource =
+/// <Name>` to the whole exported resource. Lower-indexed (earlier-exported)
+/// entries win on key collision, matching first-found package fishing.
+fn index_conformance(conformance: &[Rc<J>]) -> HashMap<String, Rc<J>> {
+    let mut map: HashMap<String, Rc<J>> = HashMap::new();
+    for body in conformance {
+        for key in ["name", "id", "url"] {
+            if let Some(k) = body.get(key).and_then(|v| v.as_str()) {
+                map.entry(k.to_string()).or_insert_with(|| body.clone());
+            }
+        }
+    }
+    map
+}
+
+/// Reorder a fished resource body the way `InstanceDefinition.toJSON` does
+/// (`fhirtypes/InstanceDefinition.ts:34-41` + `orderedCloneDeep`): move
+/// `resourceType`, `id`, `meta` (with their `_`-prefixed siblings) to the
+/// front in that order, keep all other keys in their original order. Stock
+/// applies `value.toJSON()` to every inline-instance value at
+/// `StructureDefinition.validateValueAtPath` (StructureDefinition.ts:777),
+/// so an embedded ValueSet is reordered from its standalone key order.
+fn instance_definition_json_order(body: &J) -> J {
+    let obj = match body.as_object() {
+        Some(o) => o,
+        None => return body.clone(),
+    };
+    let mut ordered: Vec<String> = Vec::new();
+    for base in ["resourceType", "id", "meta"] {
+        if obj.get(base).map(|v| !v.is_null()).unwrap_or(false) {
+            ordered.push(base.to_string());
+        }
+        let us = format!("_{base}");
+        if obj.get(&us).map(|v| !v.is_null()).unwrap_or(false) {
+            ordered.push(us);
+        }
+    }
+    for k in obj.keys() {
+        if k == "_instanceMeta" || ordered.contains(k) {
+            continue;
+        }
+        ordered.push(k.clone());
+    }
+    let mut out = Map::new();
+    for k in ordered {
+        if let Some(v) = obj.get(&k) {
+            out.insert(k, v.clone());
+        }
+    }
+    J::Object(out)
+}
+
 pub fn export_instances(
     docs: &[FshDocument],
     cfg: &Config,
     ctx: &SdContext,
+    conformance: &[Rc<J>],
 ) -> Vec<InstanceExport> {
     let mut by_name: HashMap<String, &Instance> = HashMap::new();
     let mut id_to_name: HashMap<String, String> = HashMap::new();
@@ -2460,6 +2519,7 @@ pub fn export_instances(
         id_to_name,
         aliases,
         memo: std::cell::RefCell::new(HashMap::new()),
+        exported_conformance: index_conformance(conformance),
         sd_cache: std::cell::RefCell::new(HashMap::new()),
     };
 
@@ -2522,6 +2582,7 @@ pub fn export_inline_instance(ctx: &SdContext, name: &str) -> Option<(J, String)
         id_to_name,
         aliases,
         memo: std::cell::RefCell::new(HashMap::new()),
+        exported_conformance: HashMap::new(),
         sd_cache: std::cell::RefCell::new(HashMap::new()),
     };
     exporter.fish_instance_typed(name)
@@ -2538,6 +2599,10 @@ impl<'a> Exporter<'a> {
         if let Some(real) = self.id_to_name.get(base) {
             return self.export(real).map(|e| e.body);
         }
+        // Locally-exported ValueSet/CodeSystem (the "package"): embed whole.
+        if let Some(body) = self.exported_conformance.get(base) {
+            return Some((**body).clone());
+        }
         // External instance: fish raw FHIR JSON from packages. This body is owned
         // by the AssignRule and mutated downstream, so clone out of the shared Rc.
         self.ctx.fisher().fish_for_fhir(base).map(|rc| (*rc).clone())
@@ -2553,6 +2618,15 @@ impl<'a> Exporter<'a> {
         }
         if let Some(real) = self.id_to_name.get(base) {
             return self.export(real).map(|e| (e.body, e.type_name));
+        }
+        // Locally-exported ValueSet/CodeSystem (the "package"): embed whole.
+        if let Some(body) = self.exported_conformance.get(base) {
+            let tn = body
+                .get("resourceType")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            return Some(((**body).clone(), tn));
         }
         // External instance: type comes from the raw FHIR JSON's resourceType.
         let body = (*self.ctx.fisher().fish_for_fhir(base)?).clone();
@@ -2950,7 +3024,10 @@ fn set_assigned_values(
         if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), &inline_types, fisher) {
             // skip choice [x] unresolved
             let av = if let Some(body) = &ar.inline {
-                body.clone()
+                // Stock applies `value.toJSON()` to inline-instance values
+                // (StructureDefinition.ts:777), reordering resourceType/id/meta
+                // to the front. No-op for our already-ordered FSH-instance bodies.
+                instance_definition_json_order(body)
             } else {
                 validated.assigned_value.clone().unwrap_or(J::Null)
             };
