@@ -7,20 +7,26 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
-**SCORE — LEAD WITH IT.** The validation corpus is now **18 IGs** (12 + 6 top-20 FSH IGs),
-gated by `harness/gate1.sh <all 18>` (the 6 new built vs materialized `temp/top20-cache`).
-Current: **18-IG = 2491/2491 byte-identical (100%) + 4 tracked compat-breaks** (`main` ~HEAD). ZERO real fails across all 18.
-The 12-IG subset is **2065/2065 EQUIVALENT (100%)**. NO real fails remain (the last one, subscriptions CapabilityStatement X6+ordering, is fixed).
-Session start was 1800. **Non-regression = none of the 12 IGs may drop** (ips/epi/mcode/crd/
-carinbb/sdc/pas/dtr/genomics/ecr/cmc/ndh — an R4 + R5 + R4B mix). Do NOT single out the old
-4-IG "665" subset as a "floor"/headline — that framing is RETIRED; all 12 are the corpus.
-(Historical "665/665" notes in the Phase 6-8 logs below refer to the original 4-IG tuning
-set, now just a subset of the 12.) During parallel fixes the fast `harness/gate1.sh` runs a
-chosen subset of IGs for speed, but ALWAYS re-run the FULL 12-IG dashboard after integrating
-and report the 2065 total. Some fixes are **corpus-invisible** (no dashboard IG exercises
-them) and don't move the 2065 number even when correct — verify those via
-`temp/sushi-tests/` fixtures and say so (e.g. N1, N7). The top-20 IG validation
-(`docs/top20-findings.md`, in progress) is expanding the corpus further.
+**SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
+13 next-20), all in `harness/gate1.sh`. Current: **31-IG = 3393/3401 byte-identical
+(99.8%) + 4 tracked compat-breaks** (`main` ~HEAD). The **18-IG core (12+6top20) = 100%
+byte-identical** — the hard non-regression floor; NONE may drop. PLUS a **permanent
+326-case harvest of SUSHI's own unit tests** (`tests/sushi-harvest/`, gate
+`harness/harvest-gate.sh`) at **239/256 resources (93.4%) / 246/326 cases**. Session
+started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/top20-cache`;
+13 next-20 → `temp/next20/fhir-home` (gate1.sh routes per-IG via IGCACHE/N20ROOT).
+Validation reports: `docs/{holdout,top20,next20,harvest}-findings.md`. Don't single out
+the old 4-IG "665" — retired.
+
+**THE ONE REMAINING REAL GAP (8 files: safr 1 + application-feature 7):** load **predefined
+resources as a fishable virtual package** — stock's `DiskBasedVirtualPackage`
+(`predefinedResources.ts`) converts `input/resources/*.{xml,json}` → fishable defs. We only
+load predefined VS metadata + a lightweight XML tokenizer. Closing it needs: FHIR-aware
+XML→JSON converter + predefined-SD fishing into the core type-resolver + logical-model
+instance→`Binary-*` export + IG `resource-format` extension form + XML entity decode. It's
+ONE coherent feature (G9-safr + B6 a/b/c/d share it). Its own effort. Everything else real
+is closed. The rest of the harvest tail (~63 cases) is **L1 leniency** (we accept invalid FSH
+stock rejects) — owned by the diagnostics worktree, NOT output parity.
 
 **SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
 `package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build
