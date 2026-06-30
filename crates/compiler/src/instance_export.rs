@@ -1074,6 +1074,13 @@ fn last_seg(s: &str) -> &str {
     crate::paths::last_path_period_segment(s)
 }
 
+/// `p == base || p.starts_with(&format!("{base}."))` with no allocation: `p`
+/// equals `base` or is a deeper path (`base` immediately followed by `.`).
+fn path_eq_or_under(p: &str, base: &str) -> bool {
+    p == base
+        || (p.len() > base.len() && p.as_bytes()[base.len()] == b'.' && p.starts_with(base))
+}
+
 /// Build slice tree counts feeding `effective_mins` (sliceTree.ts).
 struct SliceNode {
     idx: usize,
@@ -1217,10 +1224,9 @@ fn set_implied_properties_on_instance(
         }
         let final_min = *effective_mins.get(&trace_path).unwrap_or(&0);
 
-        let trace_path_dot = format!("{trace_path}.");
         let matching_rule = paths
             .iter()
-            .find(|p| **p == trace_path || p.starts_with(&trace_path_dot))
+            .find(|p| path_eq_or_under(p, &trace_path))
             .cloned();
 
         // assigned value (fixed*/pattern*)
@@ -1513,7 +1519,7 @@ fn stable_sort_rule_paths(
         if a_root == b_root {
             let first_rule = rule_paths
                 .iter()
-                .find(|p| **p == a_root || p.starts_with(&format!("{a_root}.")));
+                .find(|p| path_eq_or_under(p, &a_root));
             if let Some(fr) = first_rule {
                 let fr_split = crate::paths::split_on_path_periods_borrowed(fr);
                 let a_split = crate::paths::split_on_path_periods_borrowed(a);
@@ -1545,10 +1551,10 @@ fn stable_sort_rule_paths(
         }
         let first_a = rule_paths
             .iter()
-            .position(|p| *p == a_root || p.starts_with(&format!("{a_root}.")));
+            .position(|p| path_eq_or_under(p, &a_root));
         let first_b = rule_paths
             .iter()
-            .position(|p| *p == b_root || p.starts_with(&format!("{b_root}.")));
+            .position(|p| path_eq_or_under(p, &b_root));
         if first_a == first_b {
             return b_root.len().cmp(&a_root.len());
         }
