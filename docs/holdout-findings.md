@@ -74,3 +74,38 @@ The 4-IG corpus (ips/epi/mcode/crd) was overfit. The biggest gap (G3) is the Pha
 "embedded datatype table" shortcut — it should be replaced with real SD-driven typing
 now that package_store exists. The holdout `*-stock` outputs are the oracle for the fix
 cycle (same byte-diff loop).
+
+## Failure taxonomy (2026-06-30, 265 holdout byte-fails @ main `f7f7f29`)
+Built all 8 holdout to `/tmp/taxo`, classified each failing file (scripts:
+`/tmp/taxo.py`, `/tmp/split.py`, `/tmp/ko.py`, `/tmp/gen.py`). Key split: **byte-fail
+vs semantic-fail** (parse JSON both sides; equal ⇒ pure KEY-ORDER bug).
+
+**Byte-fails = 265 → 58 key-order-only + 207 semantic.**
+
+KEY-ORDER class (58, semantically identical to stock — mechanical ordering fixes):
+- **G4 `^context` (type/expression) — 42** (ndh 35, ecr 6, cmc 1). Stock source order
+  `expression` then `type`; we emit FHIR element order. Fix in `sd_export` caret-context
+  emission.
+- **G13 (NEW) instance `extension` property position — 16** (all sdc). Stock places
+  `extension` right after `meta` (DomainResource order); we shove it down past the
+  content elements (e.g. after `item`/`parameter`). Affects Questionnaire/Library
+  instances. Fix in `instance_export` property ordering.
+
+SEMANTIC class (207) by IG:
+- **carinbb 31 — ALL G2** (system bare-name + duplicate-coding merge).
+- **genomics 95 — 64 G2-system (instances!) + 11 SD-diff (G3/G10/context) + 9 G9
+  (Parameters contained truncated) + 8 Bundle + 2 VS + 1 instance.** G2 is genomics'
+  dominant bug too — the G2 fix should clear ~64 here.
+- **pas 21** — G2 + G5 (derived url on conformance instances) + a few SD.
+- **sdc 15 (semantic; +16 key-order above)** — G9 (Bundle/contained truncation),
+  valueCanonical, profile[].
+- **ecr 13 (semantic; +6 key-order)** — G9 (ersd Bundle contained), div, url.
+- **cmc 12** — valueCanonical, CS concept `property` (G8), R5 reslices (G10).
+- **dtr 9** — G5 (Canonical/Reference to local Questionnaire w/ derived url), questionnaire/url.
+- **ndh 11 (semantic; +35 key-order)** — G2 + targetProfile.
+
+**Round-1 in flight:** G2 (≈ carinbb 31 + genomics 64 + pas/ndh chunks), N1 (Quantity/
+Ratio pattern — corpus-invisible, mining fixtures), N7 (FSHOnly IG — DONE, integrated).
+**Round-2 (after R1 lands + rebase):** G4 (42, sd_export), G13 (16, instance_export),
+then G9 (contained/Parameters truncation — sdc/ecr/genomics Bundles), G5 (derived url —
+dtr/pas), G8/G10 tail. G4+G13 are pure-ordering, ~58 fails, very high ROI for round 2.
