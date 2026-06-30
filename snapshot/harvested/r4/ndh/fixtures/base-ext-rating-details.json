@@ -1,0 +1,128 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-rating-details",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating-details",
+  "name": "RatingDetails",
+  "title": "NDH Rating Details",
+  "status": "active",
+  "description": "This extension enables NDH to carry supplemental rating metadata, including rating system, rating type, and rating value, so implementer-defined scoring models can be represented with clearer provenance and meaning; it is used as a nested extension within base-ext-rating.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "extension",
+      "expression": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Rating Details",
+        "definition": "This extension enables NDH to carry supplemental rating metadata, including rating system, rating type, and rating value, so implementer-defined scoring models can be represented with clearer provenance and meaning; it is used as a nested extension within base-ext-rating."
+      },
+      {
+        "id": "Extension.extension:ratingSystem",
+        "path": "Extension.extension",
+        "sliceName": "ratingSystem",
+        "short": "URL to a specific rating system",
+        "comment": "The rating system can be any URL that defines the semantics of the rating, such as a specific scoring rubric or evaluation framework. By providing a URL, you can link to a detailed definition of the rating system being used, allowing for better understanding and interoperability when sharing ratings across different systems or organizations.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ratingSystem.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ratingSystem.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ratingSystem"
+      },
+      {
+        "id": "Extension.extension:ratingSystem.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "url"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ratingType",
+        "path": "Extension.extension",
+        "sliceName": "ratingType",
+        "short": "URL to a specific rating type",
+        "comment": "The rating type can be any URL that specifies the particular aspect or dimension being rated, such as quality, satisfaction, or performance. By using a URL, you can provide a clear and standardized reference to the specific rating type, enabling consistent interpretation and comparison of ratings across different contexts and systems.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ratingType.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ratingType.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ratingType"
+      },
+      {
+        "id": "Extension.extension:ratingType.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "url"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:ratingValue",
+        "path": "Extension.extension",
+        "sliceName": "ratingValue",
+        "short": "Rating Value either Text or Number",
+        "comment": "The rating value can be either a textual description or a quantitative measure, depending on the nature of the rating system and type.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ratingValue.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ratingValue.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ratingValue"
+      },
+      {
+        "id": "Extension.extension:ratingValue.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          },
+          {
+            "code": "Quantity"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating-details"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

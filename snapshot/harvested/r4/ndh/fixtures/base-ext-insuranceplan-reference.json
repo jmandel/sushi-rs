@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-insuranceplan-reference",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-insuranceplan-reference",
+  "name": "InsurancePlanReference",
+  "title": "NDH InsurancePlan Reference",
+  "status": "active",
+  "description": "This extension enables NDH to link organizations to accepted NDH InsurancePlan resources, providing explicit plan participation references for accurate plan-organization discovery; it is used in Organization.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Organization",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH InsurancePlan Reference",
+        "definition": "This extension enables NDH to link organizations to accepted NDH InsurancePlan resources, providing explicit plan participation references for accurate plan-organization discovery; it is used in Organization."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-insuranceplan-reference"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-InsurancePlan"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

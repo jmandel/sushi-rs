@@ -1,0 +1,399 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-PractitionerRole",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole",
+  "name": "NdhPractitionerRole",
+  "title": "NDH PractitionerRole",
+  "status": "active",
+  "description": "This profile enables NDH to express how practitioners function within organizations, locations, services, and networks so users can understand role-specific participation and route patients to the right provider context for care and coverage; it adds extensions for ratings, new-patient intake, network references, and verification, and uses ValueSet bindings for practitioner-role and specialty coding to support consistent downstream matching and routing.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-practitionerrole",
+      "name": "NDH to Plan-Net PractitionerRole Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH PractitionerRole profile to the Plan-Net PractitionerRole profile, noting elements not present in Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "PractitionerRole",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole|6.1.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "PractitionerRole",
+        "path": "PractitionerRole",
+        "constraint": [
+          {
+            "key": "practitioner-or-organization-or-healthcareservice-or-location",
+            "severity": "error",
+            "human": "If NdhPractitionerRole.practitioner is absent  ( NdhPractitionerRole.organization, NdhPractitionerRole.healthcareservice, NdhPractitionerRole.location) \nmust be present",
+            "expression": "practitioner.exists() or (organization.exists() or healthcareService.exists() or location.exists())",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.meta.lastUpdated",
+        "path": "PractitionerRole.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.extension",
+        "path": "PractitionerRole.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "PractitionerRole.extension:rating",
+        "path": "PractitionerRole.extension",
+        "sliceName": "rating",
+        "short": "Rating",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.extension:newpatients",
+        "path": "PractitionerRole.extension",
+        "sliceName": "newpatients",
+        "short": "New Patients",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "PractitionerRole.extension:network",
+        "path": "PractitionerRole.extension",
+        "sliceName": "network",
+        "short": "NetworkReference",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-network-reference"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.network",
+            "comment": ", using NDH Network Profile"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.extension:verification-status",
+        "path": "PractitionerRole.extension",
+        "sliceName": "verification-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.identifier",
+        "path": "PractitionerRole.identifier",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.identifier"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.identifier.extension:identifier-status",
+        "path": "PractitionerRole.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.identifier.assigner",
+        "path": "PractitionerRole.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.active",
+        "path": "PractitionerRole.active",
+        "min": 1,
+        "patternBoolean": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.active"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.period",
+        "path": "PractitionerRole.period",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.period"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.practitioner",
+        "path": "PractitionerRole.practitioner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Practitioner"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.practitioner"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.organization",
+        "path": "PractitionerRole.organization",
+        "short": "Organization where the role is available",
+        "definition": "The organization where this role is available",
+        "comment": "Some relationships (represented as PractitionerRoles) that may exist between practitioners and organizations include:\n - A practitioner may act as a pediatrician when associated with an organization that runs a family clinic.  PractitionerRole.organization would represent the family clinic.\n - The same practitioner may act as a physician when providing physicals for an athletics department at a school.  PractitionerRole.organization would represent the school.\n - A practitioner may perform coumadin anticoagulation services for a clinic run by a health system.   PractitionerRole.organization would represent the coumadin clinic.\n - A practitioner may act as an inpatient pharmacist reviewing and dispensing medications.  PractitionerRole.organization would represent the hospital pharmacy.\n - A practitioner may perform medication management and adherence services for an internal medicine clinic.  PractitionerRole.organization would represent the internal medicine clinic.\n - A practitioner is part of a payer's network such as a preferred provider organization (PPO), or health maintenance organizations (HMO)).  \nPractitionerRole.organization would represent the payer's network.\nEach of the examples above, would be represented as different PractitionerRole instances, each with a different values for PractitionerRole.organization.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.organization"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.code",
+        "path": "PractitionerRole.code",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "$this"
+            }
+          ],
+          "rules": "open",
+          "description": "NDH PractitionerRole Code",
+          "ordered": false
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.code"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.code:NDHPractitionerRoleCode",
+        "path": "PractitionerRole.code",
+        "sliceName": "NDHPractitionerRoleCode",
+        "short": "NDH PractitionerRole Code",
+        "min": 0,
+        "max": "*",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/PractitionerRoleVS"
+        }
+      },
+      {
+        "id": "PractitionerRole.specialty",
+        "path": "PractitionerRole.specialty",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/HealthcareIndividualTaxonomyVS"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.specialty"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.location",
+        "path": "PractitionerRole.location",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.location"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.healthcareService",
+        "path": "PractitionerRole.healthcareService",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-HealthcareService"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.healthcareService",
+            "comment": ", using NDH HealthcareService Profile"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.telecom",
+        "path": "PractitionerRole.telecom",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.telecom"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.availableTime",
+        "path": "PractitionerRole.availableTime",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.availableTime"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.notAvailable",
+        "path": "PractitionerRole.notAvailable",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.notAvailable"
+          }
+        ]
+      },
+      {
+        "id": "PractitionerRole.endpoint",
+        "path": "PractitionerRole.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-practitionerrole",
+            "map": "PractitionerRole.endpoint",
+            "comment": ", using NDH Endpoint Profile"
+          }
+        ]
+      }
+    ]
+  }
+}

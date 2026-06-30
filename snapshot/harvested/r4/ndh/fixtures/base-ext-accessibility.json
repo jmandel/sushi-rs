@@ -1,0 +1,60 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-accessibility",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-accessibility",
+  "name": "Accessibility",
+  "title": "NDH Accessibility",
+  "status": "active",
+  "description": "This extension enables NDH to communicate accessibility accommodations for practitioners and locations in a consistent, computable form, using a coded value with extensible binding to AccessibilityVS for interoperable discovery and filtering; it is used in Location and Practitioner.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Location",
+      "type": "element"
+    },
+    {
+      "expression": "Practitioner",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Accessibility",
+        "definition": "This extension enables NDH to communicate accessibility accommodations for practitioners and locations in a consistent, computable form, using a coded value with extensible binding to AccessibilityVS for interoperable discovery and filtering; it is used in Location and Practitioner."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-accessibility"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/AccessibilityVS"
+        }
+      }
+    ]
+  }
+}

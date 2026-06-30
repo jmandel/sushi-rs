@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-service-offered",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-offered",
+  "name": "ServiceOffered",
+  "title": "Service Offered for a Group",
+  "status": "active",
+  "description": "This extension represents a service offered by a group, which can be used to describe the types of services provided by a multidisciplinary provider group in the context of coordinated care delivery. It allows for the inclusion of multiple services, each represented as a CodeableConcept, to capture the range of services that a group may offer to patients or clients.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Group",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Service Offered for a Group",
+        "definition": "This extension represents a service offered by a group, which can be used to describe the types of services provided by a multidisciplinary provider group in the context of coordinated care delivery. It allows for the inclusion of multiple services, each represented as a CodeableConcept, to capture the range of services that a group may offer to patients or clients."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-offered"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/NdhHealthcareServiceCategoryVS"
+        }
+      }
+    ]
+  }
+}

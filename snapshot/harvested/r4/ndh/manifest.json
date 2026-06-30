@@ -1,0 +1,413 @@
+{
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs/temp/holdout/ndh-stock/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 50,
+    "harvested": 50,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "base-ext-accessibility",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-accessibility",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-accessibility.json",
+      "fixture": "fixtures/base-ext-accessibility.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-aligned-with-cms-data-network",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-aligned-with-cms-data-network",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-aligned-with-cms-data-network.json",
+      "fixture": "fixtures/base-ext-aligned-with-cms-data-network.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-associatedServers",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-associatedServers",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-associatedServers.json",
+      "fixture": "fixtures/base-ext-associatedServers.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-cms-enrollment-in-good-standing",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-enrollment-in-good-standing",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-cms-enrollment-in-good-standing.json",
+      "fixture": "fixtures/base-ext-cms-enrollment-in-good-standing.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-cms-ial2-verified",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-ial2-verified",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-cms-ial2-verified.json",
+      "fixture": "fixtures/base-ext-cms-ial2-verified.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-communication-proficiency",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-communication-proficiency",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-communication-proficiency.json",
+      "fixture": "fixtures/base-ext-communication-proficiency.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-delivery-method",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-delivery-method",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-delivery-method.json",
+      "fixture": "fixtures/base-ext-delivery-method.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-dynamicRegistration",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-dynamicRegistration",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-dynamicRegistration.json",
+      "fixture": "fixtures/base-ext-dynamicRegistration.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "base-ext-endpoint-environment-type",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-environment-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-environment-type.json",
+      "fixture": "fixtures/base-ext-endpoint-environment-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-endpoint-ihe-specific-connection-type",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-ihe-specific-connection-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-ihe-specific-connection-type.json",
+      "fixture": "fixtures/base-ext-endpoint-ihe-specific-connection-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-endpoint-rank",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-rank",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-rank.json",
+      "fixture": "fixtures/base-ext-endpoint-rank.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-endpoint-reference",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-reference.json",
+      "fixture": "fixtures/base-ext-endpoint-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-endpoint-testing-certification",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-testing-certification",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-testing-certification.json",
+      "fixture": "fixtures/base-ext-endpoint-testing-certification.json",
+      "differentialElements": 35
+    },
+    {
+      "id": "base-ext-endpointAccessControlMechanism",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpointAccessControlMechanism",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpointAccessControlMechanism.json",
+      "fixture": "fixtures/base-ext-endpointAccessControlMechanism.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-fundingSource",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-fundingSource",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-fundingSource.json",
+      "fixture": "fixtures/base-ext-fundingSource.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "base-ext-identifier-status",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-identifier-status.json",
+      "fixture": "fixtures/base-ext-identifier-status.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-implementation-guide",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-implementation-guide",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-implementation-guide.json",
+      "fixture": "fixtures/base-ext-implementation-guide.json",
+      "differentialElements": 27
+    },
+    {
+      "id": "base-ext-insuranceplan-reference",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-insuranceplan-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-insuranceplan-reference.json",
+      "fixture": "fixtures/base-ext-insuranceplan-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-language-speak",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-language-speak.json",
+      "fixture": "fixtures/base-ext-language-speak.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-location-reference",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-location-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-location-reference.json",
+      "fixture": "fixtures/base-ext-location-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-logo",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-logo.json",
+      "fixture": "fixtures/base-ext-logo.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-ndh-age-group",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-ndh-age-group.json",
+      "fixture": "fixtures/base-ext-ndh-age-group.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-ndh-age-range",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-ndh-age-range.json",
+      "fixture": "fixtures/base-ext-ndh-age-range.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-network-reference",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-network-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-network-reference.json",
+      "fixture": "fixtures/base-ext-network-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-newpatients-characteristics",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients-characteristics",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-newpatients-characteristics.json",
+      "fixture": "fixtures/base-ext-newpatients-characteristics.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-newpatients",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-newpatients.json",
+      "fixture": "fixtures/base-ext-newpatients.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "base-ext-org-alias-period",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-period",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-org-alias-period.json",
+      "fixture": "fixtures/base-ext-org-alias-period.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-org-alias-type",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-org-alias-type.json",
+      "fixture": "fixtures/base-ext-org-alias-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-org-description",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-description",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-org-description.json",
+      "fixture": "fixtures/base-ext-org-description.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-paymentAccepted",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-paymentAccepted",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-paymentAccepted.json",
+      "fixture": "fixtures/base-ext-paymentAccepted.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-practitioner-qualification-scope",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-practitioner-qualification-scope",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-practitioner-qualification-scope.json",
+      "fixture": "fixtures/base-ext-practitioner-qualification-scope.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-rating-details",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating-details",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-rating-details.json",
+      "fixture": "fixtures/base-ext-rating-details.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "base-ext-rating",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-rating.json",
+      "fixture": "fixtures/base-ext-rating.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-requiredDocument",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-requiredDocument",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-requiredDocument.json",
+      "fixture": "fixtures/base-ext-requiredDocument.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-secureExchangeArtifacts",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-secureExchangeArtifacts",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-secureExchangeArtifacts.json",
+      "fixture": "fixtures/base-ext-secureExchangeArtifacts.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "base-ext-security-details",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-security-details",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-security-details.json",
+      "fixture": "fixtures/base-ext-security-details.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "base-ext-service-offered",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-offered",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-service-offered.json",
+      "fixture": "fixtures/base-ext-service-offered.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-service-or-program-requirement",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-service-or-program-requirement.json",
+      "fixture": "fixtures/base-ext-service-or-program-requirement.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "base-ext-verification-status",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-verification-status.json",
+      "fixture": "fixtures/base-ext-verification-status.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ndh-Endpoint",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Endpoint",
+      "source": "StructureDefinition-ndh-Endpoint.json",
+      "fixture": "fixtures/ndh-Endpoint.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "ndh-Group",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Group",
+      "source": "StructureDefinition-ndh-Group.json",
+      "fixture": "fixtures/ndh-Group.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "ndh-HealthcareService",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-HealthcareService",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/HealthcareService",
+      "source": "StructureDefinition-ndh-HealthcareService.json",
+      "fixture": "fixtures/ndh-HealthcareService.json",
+      "differentialElements": 49
+    },
+    {
+      "id": "ndh-InsurancePlan",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-InsurancePlan",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+      "source": "StructureDefinition-ndh-InsurancePlan.json",
+      "fixture": "fixtures/ndh-InsurancePlan.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "ndh-Location",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|6.1.0",
+      "source": "StructureDefinition-ndh-Location.json",
+      "fixture": "fixtures/ndh-Location.json",
+      "differentialElements": 45
+    },
+    {
+      "id": "ndh-Network",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0",
+      "source": "StructureDefinition-ndh-Network.json",
+      "fixture": "fixtures/ndh-Network.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "ndh-Organization",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0",
+      "source": "StructureDefinition-ndh-Organization.json",
+      "fixture": "fixtures/ndh-Organization.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "ndh-OrganizationAffiliation",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-OrganizationAffiliation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OrganizationAffiliation",
+      "source": "StructureDefinition-ndh-OrganizationAffiliation.json",
+      "fixture": "fixtures/ndh-OrganizationAffiliation.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "ndh-Practitioner",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|6.1.0",
+      "source": "StructureDefinition-ndh-Practitioner.json",
+      "fixture": "fixtures/ndh-Practitioner.json",
+      "differentialElements": 35
+    },
+    {
+      "id": "ndh-PractitionerRole",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole|6.1.0",
+      "source": "StructureDefinition-ndh-PractitionerRole.json",
+      "fixture": "fixtures/ndh-PractitionerRole.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "ndh-Verification",
+      "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Verification",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/VerificationResult",
+      "source": "StructureDefinition-ndh-Verification.json",
+      "fixture": "fixtures/ndh-Verification.json",
+      "differentialElements": 36
+    }
+  ],
+  "skipped": []
+}

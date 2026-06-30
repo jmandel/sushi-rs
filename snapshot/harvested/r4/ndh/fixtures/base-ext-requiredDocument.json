@@ -1,0 +1,98 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-requiredDocument",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-requiredDocument",
+  "name": "RequiredDocument",
+  "title": "NDH Required Document",
+  "status": "active",
+  "description": "This extension enables NDH to enumerate documents required to access or use a service, using structured identifier and document sub-extensions to support intake readiness and pre-visit transparency; it is used in HealthcareService.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Required Document",
+        "definition": "This extension enables NDH to enumerate documents required to access or use a service, using structured identifier and document sub-extensions to support intake readiness and pre-visit transparency; it is used in HealthcareService."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 2
+      },
+      {
+        "id": "Extension.extension:requiredDocumentId",
+        "path": "Extension.extension",
+        "sliceName": "requiredDocumentId",
+        "min": 1,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:requiredDocumentId.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:requiredDocumentId.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "requiredDocumentId"
+      },
+      {
+        "id": "Extension.extension:requiredDocumentId.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:document",
+        "path": "Extension.extension",
+        "sliceName": "document",
+        "min": 1,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:document.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:document.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "document"
+      },
+      {
+        "id": "Extension.extension:document.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-requiredDocument"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

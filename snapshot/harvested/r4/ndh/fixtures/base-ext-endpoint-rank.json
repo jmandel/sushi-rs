@@ -1,0 +1,51 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-endpoint-rank",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-rank",
+  "name": "EndpointRank",
+  "title": "NDH Endpoint Rank",
+  "status": "active",
+  "description": "This extension enables NDH to express preferred ordering among functionally equivalent endpoints, using a required positive integer so clients can deterministically select connection priority; it is used in Endpoint.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Endpoint",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Endpoint Rank",
+        "definition": "This extension enables NDH to express preferred ordering among functionally equivalent endpoints, using a required positive integer so clients can deterministically select connection priority; it is used in Endpoint."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-rank"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "positiveInt"
+          }
+        ]
+      }
+    ]
+  }
+}

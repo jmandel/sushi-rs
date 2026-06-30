@@ -1,0 +1,63 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-language-speak",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak",
+  "name": "LanguageSpeak",
+  "title": "NDH Language Speak",
+  "status": "active",
+  "description": "This extension enables NDH to represent spoken language capability at telecom contact points, using extensible binding to LanguagesVS to improve language-concordant access and communication routing; it is used in HealthcareService.telecom, Location.telecom, and Organization.telecom.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService.telecom",
+      "type": "element"
+    },
+    {
+      "expression": "Location.telecom",
+      "type": "element"
+    },
+    {
+      "expression": "Organization.telecom",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Language Speak",
+        "definition": "This extension enables NDH to represent spoken language capability at telecom contact points, using extensible binding to LanguagesVS to improve language-concordant access and communication routing; it is used in HealthcareService.telecom, Location.telecom, and Organization.telecom."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,506 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-InsurancePlan",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-InsurancePlan",
+  "name": "NdhInsurancePlan",
+  "title": "NDH InsurancePlan Profile",
+  "status": "active",
+  "description": "This profile enables NDH to publish normalized insurance product and plan details, including coverage, network relationships, and administration, so users can compare options and accurately match plans to participating providers and service areas; it adds verification and identifier-status extensions and uses ValueSet bindings to normalize product type, coverage type, benefit type, and plan type classifications.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-insuranceplan",
+      "name": "NDH to Plan-Net InsurancePlan Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH InsurancePlan profile to the Plan-Net InsurancePlan profile, noting elements not present in Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "InsurancePlan",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "InsurancePlan",
+        "path": "InsurancePlan",
+        "constraint": [
+          {
+            "key": "network-or-NatlDirwork",
+            "severity": "error",
+            "human": "If an insuranceplan does not define a network, then each plan must define one",
+            "expression": "network.exists() or coverage.network.exists() or plan.network.exists()",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-InsurancePlan"
+          },
+          {
+            "key": "plan-type-is-distinct",
+            "severity": "error",
+            "human": "Each InsurancePlan.plan should have a distinct plan.type.",
+            "expression": "plan.type.coding.code.isDistinct()",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-InsurancePlan"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.meta",
+        "path": "InsurancePlan.meta",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.meta",
+            "comment": ", optional in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.meta.lastUpdated",
+        "path": "InsurancePlan.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.language",
+        "path": "InsurancePlan.language",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.language",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.extension",
+        "path": "InsurancePlan.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "InsurancePlan.extension:verification-status",
+        "path": "InsurancePlan.extension",
+        "sliceName": "verification-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.identifier",
+        "path": "InsurancePlan.identifier",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.identifier"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.identifier.extension:identifier-status",
+        "path": "InsurancePlan.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.identifier.assigner",
+        "path": "InsurancePlan.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.status",
+        "path": "InsurancePlan.status",
+        "min": 1,
+        "fixedCode": "active",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.status",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.type",
+        "path": "InsurancePlan.type",
+        "short": "Product Type",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/insurance-product-type"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.type",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.name",
+        "path": "InsurancePlan.name",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.name",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.alias",
+        "path": "InsurancePlan.alias",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.alias",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.period",
+        "path": "InsurancePlan.period",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.period",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.ownedBy",
+        "path": "InsurancePlan.ownedBy",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.ownedBy",
+            "comment": ", required in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.administeredBy",
+        "path": "InsurancePlan.administeredBy",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.administeredBy",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.coverageArea",
+        "path": "InsurancePlan.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.coverageArea",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.contact",
+        "path": "InsurancePlan.contact",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.contact",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.contact.name",
+        "path": "InsurancePlan.contact.name",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.contact.name",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.contact.telecom",
+        "path": "InsurancePlan.contact.telecom",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.contact.telecom",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.endpoint",
+        "path": "InsurancePlan.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.endpoint",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.network",
+        "path": "InsurancePlan.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.network",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.coverage",
+        "path": "InsurancePlan.coverage",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.coverage",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.coverage.type",
+        "path": "InsurancePlan.coverage.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/insurance-coverage-type"
+        }
+      },
+      {
+        "id": "InsurancePlan.coverage.network",
+        "path": "InsurancePlan.coverage.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.coverage.network",
+            "comment": ", optional in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.coverage.benefit.type",
+        "path": "InsurancePlan.coverage.benefit.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/BenefitTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan",
+        "path": "InsurancePlan.plan",
+        "short": "Cost sharing details for the plan",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.plan",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan.identifier.extension:identifier-status",
+        "path": "InsurancePlan.plan.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan.identifier.assigner",
+        "path": "InsurancePlan.plan.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan.type",
+        "path": "InsurancePlan.plan.type",
+        "short": "Categorization of the cost sharing for the plan",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/insuranceplan-plan-type"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.plan.type",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan.coverageArea",
+        "path": "InsurancePlan.plan.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.plan.coverageArea",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan.network",
+        "path": "InsurancePlan.plan.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-insuranceplan",
+            "map": "InsurancePlan.plan.network",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-network-reference",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-network-reference",
+  "name": "NetworkReference",
+  "title": "NDH Network Reference",
+  "status": "active",
+  "description": "This extension enables NDH to explicitly link practitioner roles and services to participating NDH Network resources, improving network participation discovery and filtering; it is used in PractitionerRole and HealthcareService.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "PractitionerRole",
+      "type": "element"
+    },
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Network Reference",
+        "definition": "This extension enables NDH to explicitly link practitioner roles and services to participating NDH Network resources, improving network participation discovery and filtering; it is used in PractitionerRole and HealthcareService."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-network-reference"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

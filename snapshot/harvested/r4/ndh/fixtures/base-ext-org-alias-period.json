@@ -1,0 +1,53 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-org-alias-period",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-period",
+  "name": "OrgAliasPeriod",
+  "title": "NDH Organization Alias Period",
+  "status": "active",
+  "description": "This extension enables NDH to time-bound organization alias validity with a Period value so consumers can distinguish current from historical alternate names; it is used in Organization.alias.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Organization.alias",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Organization Alias Period",
+        "definition": "This extension enables NDH to time-bound organization alias validity with a Period value so consumers can distinguish current from historical alternate names; it is used in Organization.alias."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-period"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Alias Period",
+        "min": 1,
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

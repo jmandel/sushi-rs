@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-logo",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo",
+  "name": "Logo",
+  "title": "NDH Logo",
+  "status": "active",
+  "description": "This extension enables NDH to attach a canonical visual identity artifact for services and organizations using an Attachment value, supporting recognizable presentation across directory consumers; it is used in HealthcareService, Organization, and OrganizationAffiliation.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    },
+    {
+      "expression": "Organization",
+      "type": "element"
+    },
+    {
+      "expression": "OrganizationAffiliation",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Logo",
+        "definition": "This extension enables NDH to attach a canonical visual identity artifact for services and organizations using an Attachment value, supporting recognizable presentation across directory consumers; it is used in HealthcareService, Organization, and OrganizationAffiliation."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Attachment"
+          }
+        ]
+      }
+    ]
+  }
+}

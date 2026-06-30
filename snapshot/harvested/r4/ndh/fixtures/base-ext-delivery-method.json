@@ -1,0 +1,111 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-delivery-method",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-delivery-method",
+  "name": "DeliveryMethod",
+  "title": "NDH Delivery Method",
+  "status": "active",
+  "description": "This extension enables NDH to declare how a service is delivered and, when virtual, which modalities are supported, using structured sub-extensions and ValueSet bindings to DeliveryMethodVS and VirtualModalitiesVS for predictable service-access routing; it is used in HealthcareService.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Delivery Method",
+        "definition": "This extension enables NDH to declare how a service is delivered and, when virtual, which modalities are supported, using structured sub-extensions and ValueSet bindings to DeliveryMethodVS and VirtualModalitiesVS for predictable service-access routing; it is used in HealthcareService."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:deliveryMethodtype",
+        "path": "Extension.extension",
+        "sliceName": "deliveryMethodtype",
+        "short": "Physical or Virtual Service Delivery",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:deliveryMethodtype.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:deliveryMethodtype.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "deliveryMethodtype"
+      },
+      {
+        "id": "Extension.extension:deliveryMethodtype.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://terminology.hl7.org/ValueSet/service-delivery-method"
+        }
+      },
+      {
+        "id": "Extension.extension:virtualModalities",
+        "path": "Extension.extension",
+        "sliceName": "virtualModalities",
+        "short": "Modalities of Virtual Delivery",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:virtualModalities.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:virtualModalities.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "virtualModalities"
+      },
+      {
+        "id": "Extension.extension:virtualModalities.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/VirtualModalitiesVS"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-delivery-method"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

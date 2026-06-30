@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-aligned-with-cms-data-network",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-aligned-with-cms-data-network",
+  "name": "AlignedWithCMSDataNetwork",
+  "title": "NDH Aligned with CMS Data Network",
+  "status": "active",
+  "description": "This extension enables NDH to assert alignment with the CMS data network using a required boolean indicator for straightforward policy and participation checks; it is used in Practitioner and Organization.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Practitioner",
+      "type": "element"
+    },
+    {
+      "expression": "Organization",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Aligned with CMS Data Network",
+        "definition": "This extension enables NDH to assert alignment with the CMS data network using a required boolean indicator for straightforward policy and participation checks; it is used in Practitioner and Organization."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-aligned-with-cms-data-network"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      }
+    ]
+  }
+}

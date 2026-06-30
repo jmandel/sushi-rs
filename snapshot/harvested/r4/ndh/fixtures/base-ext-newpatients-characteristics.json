@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-newpatients-characteristics",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients-characteristics",
+  "name": "NewPatientsCharacteristics",
+  "title": "NDH New Patients Characteristics",
+  "status": "active",
+  "description": "This extension enables NDH to capture additional qualifiers about accepted new-patient populations as textual characteristics, complementing structured acceptance indicators in NewPatients workflows; it is used as a nested extension within base-ext-newpatients.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "extension",
+      "expression": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH New Patients Characteristics",
+        "definition": "This extension enables NDH to capture additional qualifiers about accepted new-patient populations as textual characteristics, complementing structured acceptance indicators in NewPatients workflows; it is used as a nested extension within base-ext-newpatients."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients-characteristics"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Characteristics of accepted patients",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

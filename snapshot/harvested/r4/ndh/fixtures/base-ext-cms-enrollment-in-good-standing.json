@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-cms-enrollment-in-good-standing",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-enrollment-in-good-standing",
+  "name": "CmsEnrollmentInGoodStanding",
+  "title": "NDH CMS Enrollment In Good Standing",
+  "status": "active",
+  "description": "This extension enables NDH to assert whether an artifact is enrolled with CMS and currently in good standing, using a required boolean for unambiguous compliance signaling; it is used in Practitioner, Organization, and VerificationResult.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Practitioner",
+      "type": "element"
+    },
+    {
+      "expression": "Organization",
+      "type": "element"
+    },
+    {
+      "expression": "VerificationResult",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH CMS Enrollment In Good Standing",
+        "definition": "This extension enables NDH to assert whether an artifact is enrolled with CMS and currently in good standing, using a required boolean for unambiguous compliance signaling; it is used in Practitioner, Organization, and VerificationResult."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-enrollment-in-good-standing"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      }
+    ]
+  }
+}

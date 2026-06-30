@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-paymentAccepted",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-paymentAccepted",
+  "name": "PaymentAccepted",
+  "title": "NDH Payment Accepted",
+  "status": "active",
+  "description": "This extension enables NDH to state accepted payment methods for services or organizations, using required binding to paymentTypeVS for interoperable financial-access signaling; it is used in HealthcareService and Organization.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    },
+    {
+      "expression": "Organization",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Payment Accepted",
+        "definition": "This extension enables NDH to state accepted payment methods for services or organizations, using required binding to paymentTypeVS for interoperable financial-access signaling; it is used in HealthcareService and Organization."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-paymentAccepted"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v2-0570|2.0.0"
+        }
+      }
+    ]
+  }
+}

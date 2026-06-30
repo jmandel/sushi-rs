@@ -1,0 +1,145 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-newpatients",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients",
+  "name": "NewPatients",
+  "title": "NDH New Patients",
+  "status": "active",
+  "description": "This extension enables NDH to represent new-patient acceptance policy with optional network specificity and contextual characteristics, using structured sub-extensions and required binding to AcceptingPatientsVS so access status can be compared consistently across roles, services, and locations; it is used in HealthcareService, Location, and PractitionerRole.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    },
+    {
+      "expression": "Location",
+      "type": "element"
+    },
+    {
+      "expression": "PractitionerRole",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH New Patients",
+        "definition": "This extension enables NDH to represent new-patient acceptance policy with optional network specificity and contextual characteristics, using structured sub-extensions and required binding to AcceptingPatientsVS so access status can be compared consistently across roles, services, and locations; it is used in HealthcareService, Location, and PractitionerRole.",
+        "constraint": [
+          {
+            "key": "new-patients-characteristics",
+            "severity": "error",
+            "human": "If no new patients are accepted, no characteristics are allowed",
+            "expression": "extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients').value.coding.exists(code = 'nopt') implies extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients-characteristics').empty()",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:acceptingPatients",
+        "path": "Extension.extension",
+        "sliceName": "acceptingPatients",
+        "short": "Accepting Patients",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:acceptingPatients.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:acceptingPatients.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "acceptingPatients"
+      },
+      {
+        "id": "Extension.extension:acceptingPatients.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/AcceptingPatientsVS"
+        }
+      },
+      {
+        "id": "Extension.extension:fromNetwork",
+        "path": "Extension.extension",
+        "sliceName": "fromNetwork",
+        "short": "From Network",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.extension:fromNetwork.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:fromNetwork.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "fromNetwork"
+      },
+      {
+        "id": "Extension.extension:fromNetwork.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:characteristics",
+        "path": "Extension.extension",
+        "sliceName": "characteristics",
+        "short": "Characteristics of accepted patients",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients-characteristics"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

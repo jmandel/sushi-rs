@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-endpoint-environment-type",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-environment-type",
+  "name": "EndpointEnvironmentType",
+  "title": "NDH Endpoint EnvironmentType",
+  "status": "active",
+  "description": "This extension enables NDH to classify endpoint environment context, using a CodeableConcept with extensible binding to NdhEndpointEnvironmentVS so consumers can distinguish operational deployment targets consistently; it is used in Endpoint.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Endpoint",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Endpoint EnvironmentType",
+        "definition": "This extension enables NDH to classify endpoint environment context, using a CodeableConcept with extensible binding to NdhEndpointEnvironmentVS so consumers can distinguish operational deployment targets consistently; it is used in Endpoint."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-environment-type"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/NdhEndpointEnvironmentVS"
+        }
+      }
+    ]
+  }
+}

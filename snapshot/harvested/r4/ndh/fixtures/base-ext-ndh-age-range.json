@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-ndh-age-range",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range",
+  "name": "NdhAgeRange",
+  "title": "NDH Age Range",
+  "status": "active",
+  "description": "This extension enables NDH to represent age-based eligibility as a structured Range value for service and program requirement evaluation; it is used as a nested extension within base-ext-service-or-program-requirement.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "extension",
+      "expression": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Age Range",
+        "definition": "This extension enables NDH to represent age-based eligibility as a structured Range value for service and program requirement evaluation; it is used as a nested extension within base-ext-service-or-program-requirement."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Age Range",
+        "min": 1,
+        "type": [
+          {
+            "code": "Range"
+          }
+        ]
+      }
+    ]
+  }
+}

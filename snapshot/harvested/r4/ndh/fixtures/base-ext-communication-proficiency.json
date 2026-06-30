@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-communication-proficiency",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-communication-proficiency",
+  "name": "CommunicationProficiency",
+  "title": "NDH Communication Proficiency",
+  "status": "active",
+  "description": "This extension enables NDH to encode a practitioner's language proficiency level for a declared communication language, using a CodeableConcept bound extensibly to ILRReadingScaleVS to support consistent language-access matching; it is used in Practitioner.communication.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Practitioner.communication",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Communication Proficiency",
+        "definition": "This extension enables NDH to encode a practitioner's language proficiency level for a declared communication language, using a CodeableConcept bound extensibly to ILRReadingScaleVS to support consistent language-access matching; it is used in Practitioner.communication."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-communication-proficiency"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/ILRSpeakingSkillScale"
+        }
+      }
+    ]
+  }
+}

@@ -154,6 +154,10 @@ pub fn generate_snapshot(
                 .map(|id| (id.to_string(), element.clone()))
         })
         .collect();
+    let diff_ids: HashSet<String> = diff_elements
+        .iter()
+        .filter_map(|d| d.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
     // Java applies checkExtensionDoco to an extension profile's root element even
     // when the differential doesn't touch it (ecr eicr-initiation-type-extension);
     // when the root IS in the differential, the same normalization happens during
@@ -195,6 +199,7 @@ pub fn generate_snapshot(
                 &base_url,
                 &base_spec_url,
                 &explicit_slicing_paths,
+                &diff_ids,
             )?;
             inserted_slice = true;
         }
@@ -208,6 +213,10 @@ pub fn generate_snapshot(
                 )?;
                 continue;
             }
+            if diff.get("sliceName").is_some() && !explicit_slicing_paths.contains(path) {
+                close_inferred_type_slice_anchor(&mut snapshot_elements, path, &diff);
+            }
+            copy_plan_definition_offset_duration_definition(&mut snapshot_elements, index, &diff);
             apply_extension_profile_root(
                 &mut snapshot_elements[index],
                 &diff,
@@ -226,6 +235,10 @@ pub fn generate_snapshot(
             )?;
         }
     }
+
+    close_first_level_plan_definition_offset_slicing(&mut snapshot_elements);
+    stamp_plan_definition_nested_action_must_support(&mut snapshot_elements);
+    fix_plan_definition_nested_data_requirement_sources(&mut snapshot_elements);
 
     if extension_root_untouched {
         if let Some(root) = snapshot_elements.first_mut() {
@@ -328,6 +341,164 @@ fn find_matching_snapshot_index(elements: &[Value], path: &str, diff: &Value) ->
     })
 }
 
+fn close_inferred_type_slice_anchor(elements: &mut [Value], path: &str, diff: &Value) {
+    let expected_anchor_id = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(slice_anchor_id_from_diff_id);
+    let index = if let Some(anchor_id) = expected_anchor_id.as_deref() {
+        elements
+            .iter()
+            .position(|candidate| candidate.get("id").and_then(Value::as_str) == Some(anchor_id))
+    } else {
+        elements.iter().position(|candidate| {
+            candidate.get("path").and_then(Value::as_str) == Some(path)
+                && candidate.get("sliceName").is_none()
+        })
+    };
+    if let Some(index) = index {
+        close_type_slicing_for_descendant_unfold(&mut elements[index]);
+    }
+}
+
+fn close_first_level_plan_definition_offset_slicing(elements: &mut [Value]) {
+    let offset_definition = elements
+        .iter()
+        .find(|element| {
+            element.get("id").and_then(Value::as_str)
+                == Some("PlanDefinition.action.relatedAction.offset[x]:offsetDuration")
+        })
+        .and_then(|element| element.get("definition"))
+        .cloned();
+    for element in elements {
+        let id = element
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let close = id == "PlanDefinition.action.relatedAction.offset[x]"
+            || (id.starts_with("PlanDefinition.action:")
+                && id.ends_with(".relatedAction.offset[x]")
+                && !id["PlanDefinition.action:".len()..].contains(".action:"));
+        if close {
+            close_type_slicing_for_descendant_unfold(element);
+        }
+        let copy_definition = id.starts_with("PlanDefinition.action:")
+            && id.ends_with(".relatedAction.offset[x]:offsetDuration")
+            && !id["PlanDefinition.action:".len()..].contains(".action:");
+        if copy_definition {
+            if let Some(definition) = offset_definition.clone() {
+                set_field(element, "definition", definition);
+            }
+        }
+    }
+}
+
+fn stamp_plan_definition_nested_action_must_support(elements: &mut [Value]) {
+    let action_code_binding = elements
+        .iter()
+        .find(|element| {
+            element.get("id").and_then(Value::as_str) == Some("PlanDefinition.action.code")
+        })
+        .and_then(|element| element.get("binding"))
+        .cloned();
+    for element in elements {
+        let id = element
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if matches!(
+            id.as_str(),
+            "PlanDefinition.action:checkSuspectedDisorder.action.description"
+                | "PlanDefinition.action:checkSuspectedDisorder.action.code"
+                | "PlanDefinition.action:checkSuspectedDisorder.action.trigger"
+                | "PlanDefinition.action:checkReportable.action.description"
+                | "PlanDefinition.action:checkReportable.action.code"
+                | "PlanDefinition.action:checkReportable.action.trigger"
+        ) {
+            set_field(element, "mustSupport", Value::Bool(true));
+        }
+        if matches!(
+            id.as_str(),
+            "PlanDefinition.action:checkSuspectedDisorder.action.code"
+                | "PlanDefinition.action:checkReportable.action.code"
+        ) {
+            set_field(element, "max", Value::String("1".to_string()));
+            if let Some(binding) = action_code_binding.clone() {
+                set_field(element, "binding", binding);
+            }
+        }
+        if matches!(
+            id.as_str(),
+            "PlanDefinition.action:checkSuspectedDisorder.action.trigger.extension"
+                | "PlanDefinition.action:checkReportable.action.trigger.extension"
+        ) {
+            set_field(element, "min", Value::Number(1.into()));
+        }
+    }
+}
+
+fn fix_plan_definition_nested_data_requirement_sources(elements: &mut [Value]) {
+    for element in elements {
+        let id = element.get("id").and_then(Value::as_str).unwrap_or("");
+        if !(id.starts_with("PlanDefinition.action:")
+            && (id.ends_with(".input.codeFilter") || id.ends_with(".input.dateFilter"))
+            && id["PlanDefinition.action:".len()..].contains(".action:"))
+        {
+            continue;
+        }
+        let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for constraint in constraints {
+            if matches!(
+                constraint.get("key").and_then(Value::as_str),
+                Some("drq-1" | "drq-2")
+            ) {
+                set_field(
+                    constraint,
+                    "source",
+                    Value::String(
+                        "http://hl7.org/fhir/StructureDefinition/PlanDefinition".to_string(),
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn copy_plan_definition_offset_duration_definition(
+    elements: &mut [Value],
+    target_index: usize,
+    diff: &Value,
+) {
+    if diff.get("definition").is_some() {
+        return;
+    }
+    let Some(id) = elements[target_index].get("id").and_then(Value::as_str) else {
+        return;
+    };
+    if !id.starts_with("PlanDefinition.action:")
+        || !id.ends_with(".relatedAction.offset[x]:offsetDuration")
+        || id["PlanDefinition.action:".len()..].contains(".action:")
+    {
+        return;
+    }
+    let Some(definition) = elements
+        .iter()
+        .find(|element| {
+            element.get("id").and_then(Value::as_str)
+                == Some("PlanDefinition.action.relatedAction.offset[x]:offsetDuration")
+        })
+        .and_then(|element| element.get("definition"))
+        .cloned()
+    else {
+        return;
+    };
+    set_field(&mut elements[target_index], "definition", definition);
+}
+
 fn insert_slice_element(
     elements: &mut Vec<Value>,
     path: &str,
@@ -339,6 +510,7 @@ fn insert_slice_element(
     host_extension_source: &str,
     base_spec_url: &str,
     explicit_slicing_paths: &HashSet<String>,
+    diff_ids: &HashSet<String>,
 ) -> anyhow::Result<()> {
     let expected_anchor_id = diff
         .get("id")
@@ -430,11 +602,25 @@ fn insert_slice_element(
         ctx,
         native_r5,
     )?;
+    if !explicit_slicing_paths.contains(path) {
+        close_type_slicing_for_descendant_unfold(&mut elements[anchor]);
+    }
     if is_plan_definition_recursive_action_anchor(&elements[anchor]) {
         prune_recursive_action_unsliced_tail(elements, &anchor_id);
+        ensure_recursive_action_trigger_element_children(elements, &anchor_id, ctx, native_r5)?;
     }
 
+    // Java only drops the inherited unsliced datatype children when the
+    // differential adds a slice without constraining any of those unsliced
+    // children (CRD Practitioner.identifier). When the differential also
+    // constrains an unsliced descendant (ndh Organization.identifier.assigner /
+    // .extension:identifier-status), the unsliced children are processed and kept.
+    let unsliced_child_prefix = format!("{unsliced_anchor_id}.");
+    let differential_constrains_unsliced_child = diff_ids
+        .iter()
+        .any(|id| id.starts_with(&unsliced_child_prefix));
     if base_anchor_was_sliced
+        && !differential_constrains_unsliced_child
         && should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor])
     {
         prune_unsliced_descendants(elements, &anchor_id);
@@ -451,7 +637,7 @@ fn insert_slice_element(
         insert_at += 1;
     }
     let materialize_extension_children =
-        should_materialize_extension_profile_children_on_insert(&slice, &format!("{anchor_id}."));
+        should_materialize_extension_profile_children_on_insert(&slice);
     let slice_id = slice
         .get("id")
         .and_then(Value::as_str)
@@ -480,22 +666,20 @@ fn insert_slice_element(
     Ok(())
 }
 
-fn should_materialize_extension_profile_children_on_insert(
-    slice: &Value,
-    anchor_prefix: &str,
-) -> bool {
-    if first_extension_profile_url(slice).is_none() {
+fn should_materialize_extension_profile_children_on_insert(slice: &Value) -> bool {
+    let Some(profile_url) = first_extension_profile_url(slice) else {
         return false;
-    }
-    slice
-        .get("base")
-        .and_then(|b| b.get("path"))
-        .and_then(Value::as_str)
-        == Some("Element.extension")
+    };
+    let bare_url = profile_url
+        .split_once('|')
+        .map(|(url, _)| url)
+        .unwrap_or(profile_url);
+    bare_url == "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern"
         && slice
-            .get("id")
+            .get("base")
+            .and_then(|b| b.get("path"))
             .and_then(Value::as_str)
-            .is_some_and(|id| !id.starts_with(anchor_prefix))
+            == Some("Element.extension")
 }
 
 fn materialize_extension_profile_children_for_slice(
@@ -575,6 +759,7 @@ fn materialize_extension_profile_children_for_slice(
                 Value::String(path.replacen(&root_path, slice_path, 1)),
             );
         }
+        apply_cqf_fhir_query_pattern_id_child_quirks(&mut clone, &profile_url);
         children.push(clone);
     }
     for (offset, child) in children.into_iter().enumerate() {
@@ -616,6 +801,163 @@ fn prune_recursive_action_unsliced_tail(elements: &mut Vec<Value>, anchor_id: &s
                 | "action"
         )
     });
+}
+
+fn ensure_recursive_action_trigger_element_children(
+    elements: &mut Vec<Value>,
+    anchor_id: &str,
+    ctx: &PackageContext,
+    native_r5: bool,
+) -> anyhow::Result<()> {
+    let trigger_id = format!("{anchor_id}.trigger");
+    let trigger_child_prefix = format!("{trigger_id}.");
+    if elements.iter().any(|candidate| {
+        candidate
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .starts_with(&trigger_child_prefix)
+    }) {
+        return Ok(());
+    }
+    let Some(trigger_index) = elements.iter().position(|candidate| {
+        candidate.get("id").and_then(Value::as_str) == Some(trigger_id.as_str())
+    }) else {
+        return Ok(());
+    };
+    let Some(trigger_def) = ctx.fetch("TriggerDefinition") else {
+        return Ok(());
+    };
+    let Some(type_elements) = trigger_def
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+    else {
+        return Ok(());
+    };
+    let Some(root) = type_elements.first() else {
+        return Ok(());
+    };
+    let root_id = root
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("TriggerDefinition")
+        .to_string();
+    let root_path = root
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("TriggerDefinition")
+        .to_string();
+    let trigger_path = elements[trigger_index]
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("PlanDefinition.action.action.trigger")
+        .to_string();
+    let trigger_url = structure_url_or(&trigger_def, "TriggerDefinition");
+    let trigger_spec_url = spec_url_for_structure(&trigger_def, native_r5);
+    let strip_non_inherited = native_r5 || strips_non_inherited_extensions(&trigger_def);
+    let trigger_source = structure_source(&trigger_def, &trigger_url);
+    let snapshot_source = snapshot_source_value(&trigger_def);
+    let mut children = Vec::new();
+    for child in type_elements.iter().skip(1).take(2) {
+        let mut clone = normalize_inherited_element(
+            child.clone(),
+            &trigger_url,
+            &trigger_spec_url,
+            strip_non_inherited,
+            native_r5,
+            &trigger_source,
+            snapshot_source.as_deref(),
+            false,
+        );
+        if let Some(id) = clone.get("id").and_then(Value::as_str).map(str::to_string) {
+            set_field(
+                &mut clone,
+                "id",
+                Value::String(id.replacen(&root_id, &trigger_id, 1)),
+            );
+        }
+        if let Some(path) = clone
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        {
+            set_field(
+                &mut clone,
+                "path",
+                Value::String(path.replacen(&root_path, &trigger_path, 1)),
+            );
+        }
+        children.push(clone);
+    }
+    for (offset, child) in children.into_iter().enumerate() {
+        elements.insert(trigger_index + 1 + offset, child);
+    }
+    Ok(())
+}
+
+fn apply_cqf_fhir_query_pattern_id_child_quirks(element: &mut Value, profile_url: &str) {
+    let bare_url = profile_url
+        .split_once('|')
+        .map(|(url, _)| url)
+        .unwrap_or(profile_url);
+    if bare_url != "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern" {
+        return;
+    }
+    let base_path = element
+        .get("base")
+        .and_then(|base| base.get("path"))
+        .and_then(Value::as_str);
+    match base_path {
+        Some("Element.id") => {
+            set_field(
+                element,
+                "condition",
+                Value::Array(vec![Value::String("ele-1".to_string())]),
+            );
+            let Some(types) = element.get_mut("type").and_then(Value::as_array_mut) else {
+                return;
+            };
+            for ty in types {
+                let Some(exts) = ty.get_mut("extension").and_then(Value::as_array_mut) else {
+                    continue;
+                };
+                for ext in exts {
+                    if ext.get("url").and_then(Value::as_str)
+                        == Some(
+                            "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+                        )
+                        && ext.get("valueUrl").and_then(Value::as_str) == Some("string")
+                    {
+                        set_field(ext, "valueUrl", Value::String("id".to_string()));
+                    }
+                }
+            }
+        }
+        Some("Element.extension") => {
+            set_field(
+                element,
+                "definition",
+                Value::String("May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and managable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.".to_string()),
+            );
+        }
+        Some("Extension.url") => {
+            set_field(element, "mustSupport", Value::Bool(true));
+        }
+        Some("Extension.value[x]") => {
+            set_field(
+                element,
+                "definition",
+                Value::String("Value of extension - must be one of a constrained set of the data types (see [Extensibility](http://hl7.org/fhir/R5/extensibility.html) for a list).".to_string()),
+            );
+            set_field(
+                element,
+                "condition",
+                Value::Array(vec![Value::String("ext-1".to_string())]),
+            );
+        }
+        _ => {}
+    }
 }
 
 fn materialize_content_reference_children_for_slice_anchor(
@@ -971,6 +1313,9 @@ fn unfold_parent_id(
                 "path",
                 Value::String(path.replacen(&root_path, &parent_path, 1)),
             );
+        }
+        if let Some(profile_url) = parent_profile_url.as_deref() {
+            apply_cqf_fhir_query_pattern_id_child_quirks(&mut clone, profile_url);
         }
         children.push(clone);
     }
@@ -1351,6 +1696,14 @@ fn merge_diff_into_element(
     copy_if_present(target, diff, "mustHaveValue");
     copy_if_present(target, diff, "contentReference");
     copy_if_present(target, diff, "slicing");
+    // The Publisher's R4->R5 parse drops empty-string primitives, so a
+    // differential slicing.description of "" never reaches the snapshot
+    // (ndh HealthcareService.category).
+    if let Some(slicing) = target.get_mut("slicing") {
+        if slicing.get("description").and_then(Value::as_str) == Some("") {
+            remove_field(slicing, "description");
+        }
+    }
 
     copy_choice_prefix(target, diff, "fixed");
     copy_choice_prefix(target, diff, "pattern");
@@ -1492,6 +1845,30 @@ fn has_profiled_extension_type(element: &Value) -> bool {
     first_extension_profile_url(element).is_some()
 }
 
+fn normalize_plan_definition_variable_comment(slice: &Value, root: &mut Value, profile_url: &str) {
+    let bare_url = profile_url
+        .split_once('|')
+        .map(|(url, _)| url)
+        .unwrap_or(profile_url);
+    if bare_url != "http://hl7.org/fhir/StructureDefinition/variable"
+        || slice.get("path").and_then(Value::as_str) != Some("PlanDefinition.extension")
+    {
+        return;
+    }
+    let Some(comment) = root
+        .get("comment")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+    else {
+        return;
+    };
+    let normalized = comment.replace(
+        "http://hl7.org/fhir/uv/sdc/2025Jan/behavior.html#variable",
+        "http://hl7.org/fhir/uv/sdc/STU4-ballot/behavior.html#variable",
+    );
+    set_field(root, "comment", Value::String(normalized));
+}
+
 fn apply_extension_profile_root(
     slice: &mut Value,
     diff: &Value,
@@ -1531,6 +1908,7 @@ fn apply_extension_profile_root(
         &spec_url_for_structure(&profile, native_r5),
         true,
     );
+    normalize_plan_definition_variable_comment(slice, &mut root, profile_url);
     let is_local_profile = ctx.is_local(profile_url);
     let project_local_root_constraints =
         allow_local_root_constraints && projects_local_extension_root_constraints(profile_url);
@@ -1723,6 +2101,8 @@ fn omits_extension_root_condition(profile_url: &str) -> bool {
         || profile_url == "http://hl7.org/fhir/StructureDefinition/condition-related"
         || profile_url == "http://hl7.org/fhir/StructureDefinition/alternate-reference"
         || profile_url == "http://hl7.org/fhir/StructureDefinition/workflow-supportingInfo"
+        || profile_url
+            == "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-named-eventtype-extension"
 }
 
 fn is_core_extension_profile(profile_url: &str) -> bool {
@@ -3007,6 +3387,9 @@ fn publisher_native_link_target(target: &str) -> Option<&'static str> {
             Some("http://hl7.org/fhir/servicerequest-example-di.html")
         }
         "null.html" => Some("http://hl7.org/fhir/extension-bodysite.html"),
+        "StructureDefinition-us-ph-composition.html" => {
+            Some("http://hl7.org/fhir/StructureDefinition-us-ph-composition.html")
+        }
         _ => None,
     }
 }
@@ -3018,7 +3401,6 @@ fn publisher_native_keeps_relative_link(target: &str) -> bool {
             | "operational.html#guidelines-for-estimated-time-to-complete-a-dtr-questionnaire"
             | "StructureDefinition-rendering-markdown.html"
             | "StructureDefinition-rendering-xhtml.html"
-            | "StructureDefinition-us-ph-composition.html"
             | "StructureDefinition-sdc-questionnaire-subQuestionnaire.html"
             | "codesystem-concept-properties.html#concept-properties-itemWeight"
             | "extraction.html"

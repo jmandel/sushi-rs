@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-location-reference",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-location-reference",
+  "name": "LocationReference",
+  "title": "NDH Location Reference",
+  "status": "active",
+  "description": "This extension enables NDH to declare NDH Location-based coverage areas, supporting clear network and organizational service-geography linkage for downstream eligibility and routing decisions; it is used in Organization.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Organization",
+      "type": "element"
+    },
+    {
+      "expression": "Group",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Location Reference",
+        "definition": "This extension enables NDH to declare NDH Location-based coverage areas, supporting clear network and organizational service-geography linkage for downstream eligibility and routing decisions; it is used in Organization."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-location-reference"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

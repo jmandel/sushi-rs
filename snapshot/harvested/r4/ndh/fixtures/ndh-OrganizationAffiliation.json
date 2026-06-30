@@ -1,0 +1,346 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-OrganizationAffiliation",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-OrganizationAffiliation",
+  "name": "NdhOrganizationAffiliation",
+  "title": "NDH OrganizationAffiliation Profile",
+  "status": "active",
+  "description": "This profile enables NDH to describe formal affiliations between organizations in a computable way so consumers can understand delegated services, shared networks, service locations, and endpoint relationships that drive referral and access pathways; it adds extensions for verification, and branding, and uses ValueSet bindings for affiliation role and specialty coding to improve consistent role interpretation across implementations.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-organizationaffiliation",
+      "name": "NDH to Plan-Net OrganizationAffiliation Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH OrganizationAffiliation profile to the Plan-Net OrganizationAffiliation profile, noting elements not present in Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "OrganizationAffiliation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OrganizationAffiliation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "OrganizationAffiliation",
+        "path": "OrganizationAffiliation",
+        "constraint": [
+          {
+            "key": "organization-or-participatingOrganization",
+            "severity": "error",
+            "human": "NdhOrganizationAffiliation.organization or  NdhOrganizationAffiliation.participatingOrganization",
+            "expression": "organization.exists() or participatingOrganization.exists()",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-OrganizationAffiliation"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.meta.lastUpdated",
+        "path": "OrganizationAffiliation.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.extension",
+        "path": "OrganizationAffiliation.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "OrganizationAffiliation.extension:verification-status",
+        "path": "OrganizationAffiliation.extension",
+        "sliceName": "verification-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.extension:logo",
+        "path": "OrganizationAffiliation.extension",
+        "sliceName": "logo",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH Network-specific"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.identifier",
+        "path": "OrganizationAffiliation.identifier",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.identifier"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.identifier.extension:identifier-status",
+        "path": "OrganizationAffiliation.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.identifier.assigner",
+        "path": "OrganizationAffiliation.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.active",
+        "path": "OrganizationAffiliation.active",
+        "min": 1,
+        "patternBoolean": true
+      },
+      {
+        "id": "OrganizationAffiliation.period",
+        "path": "OrganizationAffiliation.period",
+        "mustSupport": true
+      },
+      {
+        "id": "OrganizationAffiliation.organization",
+        "path": "OrganizationAffiliation.organization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.organization",
+            "comment": ", using NDH Organization Profile"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.participatingOrganization",
+        "path": "OrganizationAffiliation.participatingOrganization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.participatingOrganization",
+            "comment": ", using NDH Organization Profile"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.network",
+        "path": "OrganizationAffiliation.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Network"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.network",
+            "comment": ", using NDH Network Profile"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.code",
+        "path": "OrganizationAffiliation.code",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/OrganizationAffiliationRoleVS"
+        }
+      },
+      {
+        "id": "OrganizationAffiliation.specialty",
+        "path": "OrganizationAffiliation.specialty",
+        "binding": {
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/tools/StructureDefinition/additional-binding",
+              "valueString": "OrganizationSpecialty",
+              "extension": [
+                {
+                  "url": "key",
+                  "valueId": "NDH-OrganizationAffiliation-specialty"
+                },
+                {
+                  "url": "purpose",
+                  "valueCode": "extensible"
+                },
+                {
+                  "url": "valueSet",
+                  "valueCanonical": "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.114222.4.11.1066"
+                },
+                {
+                  "url": "documentation",
+                  "valueMarkdown": "The specialty(ies) of the participating organization in this affiliation."
+                },
+                {
+                  "url": "shortDoco",
+                  "valueString": "The specialty(ies) at the organization in this affiliation."
+                }
+              ]
+            }
+          ],
+          "strength": "preferred",
+          "description": "Specific specialty associated with the participating organization.",
+          "valueSet": "http://hl7.org/fhir/ValueSet/c80-practice-codes"
+        }
+      },
+      {
+        "id": "OrganizationAffiliation.location",
+        "path": "OrganizationAffiliation.location",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.location",
+            "comment": ", using NDH Location Profile"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.healthcareService",
+        "path": "OrganizationAffiliation.healthcareService",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-HealthcareService"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.healthcareService",
+            "comment": ", using NDH HealthcareService Profile"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.telecom",
+        "path": "OrganizationAffiliation.telecom",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.telecom"
+          }
+        ]
+      },
+      {
+        "id": "OrganizationAffiliation.endpoint",
+        "path": "OrganizationAffiliation.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organizationaffiliation",
+            "map": "OrganizationAffiliation.endpoint",
+            "comment": ", using NDH Endpoint Profile"
+          }
+        ]
+      }
+    ]
+  }
+}

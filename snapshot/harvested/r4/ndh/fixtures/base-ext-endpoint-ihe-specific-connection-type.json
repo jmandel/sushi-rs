@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-endpoint-ihe-specific-connection-type",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-ihe-specific-connection-type",
+  "name": "EndpointIheSpecificConnectionType",
+  "title": "NDH Endpoint IHE Specific Connection Type",
+  "status": "active",
+  "description": "This extension enables NDH to represent IHE-specific endpoint connection semantics when base connectionType coding is insufficiently granular, using a preferred binding to EndpointIheSpecificConnectionTypeVS for more precise interoperability declarations; it is used in Endpoint.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Endpoint",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Endpoint IHE Specific Connection Type",
+        "definition": "This extension enables NDH to represent IHE-specific endpoint connection semantics when base connectionType coding is insufficiently granular, using a preferred binding to EndpointIheSpecificConnectionTypeVS for more precise interoperability declarations; it is used in Endpoint."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-ihe-specific-connection-type"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EndpointIheSpecificConnectionTypeVS"
+        }
+      }
+    ]
+  }
+}

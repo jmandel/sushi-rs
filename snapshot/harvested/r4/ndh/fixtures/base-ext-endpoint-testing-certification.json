@@ -1,0 +1,264 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-endpoint-testing-certification",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-testing-certification",
+  "name": "EndpointTestingCertification",
+  "title": "NDH Endpoint Testing Certification",
+  "status": "active",
+  "description": "This extension enables NDH to document endpoint testing and certification evidence, including tester, method, certificate artifact, and relevant timestamps, using structured sub-extensions and an extensible binding to EndpointTestingMethodVS for harmonized test-method representation; it is used in Endpoint.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "Endpoint",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Endpoint Testing Certification",
+        "definition": "This extension enables NDH to document endpoint testing and certification evidence, including tester, method, certificate artifact, and relevant timestamps, using structured sub-extensions and an extensible binding to EndpointTestingMethodVS for harmonized test-method representation; it is used in Endpoint."
+      },
+      {
+        "id": "Extension.extension:testBy",
+        "path": "Extension.extension",
+        "sliceName": "testBy",
+        "short": "Organization conducting or providing the testing",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:testBy.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:testBy.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "testBy"
+      },
+      {
+        "id": "Extension.extension:testBy.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:element",
+        "path": "Extension.extension",
+        "sliceName": "element",
+        "short": "FHIRPath expression to the element being tested/verified",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:element.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:element.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "element"
+      },
+      {
+        "id": "Extension.extension:element.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Expression"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:when",
+        "path": "Extension.extension",
+        "sliceName": "when",
+        "short": "Date and time the test was performed",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:when.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:when.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "when"
+      },
+      {
+        "id": "Extension.extension:when.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:testName",
+        "path": "Extension.extension",
+        "sliceName": "testName",
+        "short": "Name of the test",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:testName.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:testName.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "testName"
+      },
+      {
+        "id": "Extension.extension:testName.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:method",
+        "path": "Extension.extension",
+        "sliceName": "method",
+        "short": "Method used to perform the test",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:method.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:method.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "method"
+      },
+      {
+        "id": "Extension.extension:method.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EndpointTestingMethodVS"
+        }
+      },
+      {
+        "id": "Extension.extension:certificate",
+        "path": "Extension.extension",
+        "sliceName": "certificate",
+        "short": "X509 V3 identity Certificate issued and signed by Testing/Certification entity",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:certificate.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:certificate.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "certificate"
+      },
+      {
+        "id": "Extension.extension:certificate.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "base64Binary"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:expirationDate",
+        "path": "Extension.extension",
+        "sliceName": "expirationDate",
+        "short": "Expiration date of the certificate",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:expirationDate.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:expirationDate.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "expirationDate"
+      },
+      {
+        "id": "Extension.extension:expirationDate.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "date"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:lastUpdated",
+        "path": "Extension.extension",
+        "sliceName": "lastUpdated",
+        "short": "Timestamp of the last update for the Endpoint instance during certificate testing",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:lastUpdated.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:lastUpdated.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "lastUpdated"
+      },
+      {
+        "id": "Extension.extension:lastUpdated.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-testing-certification"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

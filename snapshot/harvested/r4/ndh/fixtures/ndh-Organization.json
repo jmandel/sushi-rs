@@ -1,0 +1,494 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-Organization",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization",
+  "name": "NdhOrganization",
+  "title": "NDH Organization Profile",
+  "status": "active",
+  "description": "This profile enables NDH to publish authoritative organizational identities, attributes, and contact channels so directory consumers can verify entities, understand what they offer, and connect organizations to plans, networks, services, and exchange endpoints; it adds extensions for ratings, funding, accepted payments, organization description, insurance-plan linkage, CMS-alignment indicators, verification, logos, and alias metadata, and applies ValueSet constraints for organization type and state/address semantics.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-organization",
+      "name": "NDH to Plan-Net Organization Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH Organization profile to the Plan-Net Organization profile, noting elements not present\nin Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization",
+        "path": "Organization",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          },
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization.extension[org-period]",
+            "comment": "Not in NDH, only in Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "Organization.meta.lastUpdated",
+        "path": "Organization.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension",
+        "path": "Organization.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Organization.extension:rating",
+        "path": "Organization.extension",
+        "sliceName": "rating",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:paymentaccepted",
+        "path": "Organization.extension",
+        "sliceName": "paymentaccepted",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-paymentAccepted"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:fundingSource",
+        "path": "Organization.extension",
+        "sliceName": "fundingSource",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-fundingSource"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:org-description",
+        "path": "Organization.extension",
+        "sliceName": "org-description",
+        "short": "Organization Description",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-description"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:insuranceplan",
+        "path": "Organization.extension",
+        "sliceName": "insuranceplan",
+        "short": "Insurance plan(s) offered to the organization's employees",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-insuranceplan-reference"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:cms-enrollment-in-good-standing",
+        "path": "Organization.extension",
+        "sliceName": "cms-enrollment-in-good-standing",
+        "short": "CMS Enrollment In Good Standing",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-enrollment-in-good-standing"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:ial2-verified",
+        "path": "Organization.extension",
+        "sliceName": "ial2-verified",
+        "short": "IAL2 Verified",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-ial2-verified"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:aligned-with-cms-data-network",
+        "path": "Organization.extension",
+        "sliceName": "aligned-with-cms-data-network",
+        "short": "Aligned with CMS Data Network",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-aligned-with-cms-data-network"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:verification-status",
+        "path": "Organization.extension",
+        "sliceName": "verification-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.extension:logo",
+        "path": "Organization.extension",
+        "sliceName": "logo",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier",
+        "path": "Organization.identifier",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization.identifier"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier.extension:identifier-status",
+        "path": "Organization.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier.assigner",
+        "path": "Organization.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier:TID",
+        "path": "Organization.identifier",
+        "sliceName": "TID",
+        "short": "Tax Identifier",
+        "min": 0,
+        "max": "1",
+        "patternIdentifier": {
+          "system": "http://hl7.org/fhir/sid/us-ssn"
+        }
+      },
+      {
+        "id": "Organization.active",
+        "path": "Organization.active",
+        "patternBoolean": true
+      },
+      {
+        "id": "Organization.type",
+        "path": "Organization.type",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/OrgTypeVS"
+        }
+      },
+      {
+        "id": "Organization.alias",
+        "path": "Organization.alias",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization.alias"
+          }
+        ]
+      },
+      {
+        "id": "Organization.alias.extension",
+        "path": "Organization.alias.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Organization.alias.extension:org-alias-type",
+        "path": "Organization.alias.extension",
+        "sliceName": "org-alias-type",
+        "short": "Organization Alias Type",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-type"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.alias.extension:org-alias-period",
+        "path": "Organization.alias.extension",
+        "sliceName": "org-alias-period",
+        "short": "Organization Alias Period",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-period"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.telecom",
+        "path": "Organization.telecom",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Organization.telecom"
+          }
+        ]
+      },
+      {
+        "id": "Organization.telecom.extension:language-speak",
+        "path": "Organization.telecom.extension",
+        "sliceName": "language-speak",
+        "short": "Language Speak",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-organization",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Organization.address.extension:geolocation",
+        "path": "Organization.address.extension",
+        "sliceName": "geolocation",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/geolocation|4.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.address.state",
+        "path": "Organization.address.state",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/us-core-usps-state|6.1.0"
+        }
+      },
+      {
+        "id": "Organization.partOf",
+        "path": "Organization.partOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Organization.endpoint",
+        "path": "Organization.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

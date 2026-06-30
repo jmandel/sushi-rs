@@ -1,0 +1,317 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-Verification",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Verification",
+  "name": "NdhVerification",
+  "title": "NDH Verification",
+  "status": "active",
+  "date": "2023-01-22T12:42:47.483-05:00",
+  "description": "This profile enables NDH to capture verification provenance, status, and timing for directory data so consumers can assess trust, recency, and validation method when making decisions based on published provider, organization, and role information; it adds CMS-focused verification extensions and applies ValueSet bindings for validation type, process, primary-source type, and communication method to normalize attestation workflows.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-verification",
+      "name": "There is no mapping between NDH and Plan-Net for Verification structure, since Plan-Net does not have a direct equivalent.",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Plan-Net does not have a direct equivalent for NDH Verification."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "VerificationResult",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/VerificationResult",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "VerificationResult",
+        "path": "VerificationResult",
+        "short": "Verification",
+        "definition": "Describes Verification requirements, source(s), status and dates for one or more elements"
+      },
+      {
+        "id": "VerificationResult.extension",
+        "path": "VerificationResult.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "VerificationResult.extension:cms-enrollment-in-good-standing",
+        "path": "VerificationResult.extension",
+        "sliceName": "cms-enrollment-in-good-standing",
+        "short": "CMS Enrollment In Good Standing",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-enrollment-in-good-standing"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "VerificationResult.extension:cms-ial2-verified",
+        "path": "VerificationResult.extension",
+        "sliceName": "cms-ial2-verified",
+        "short": "CMS IAL2 Verified",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-cms-ial2-verified"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "VerificationResult.target",
+        "path": "VerificationResult.target",
+        "short": "The resource instance was verified or attested",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.targetLocation",
+        "path": "VerificationResult.targetLocation",
+        "short": "The fhirpath location(s) within the resource instance that was verified or attested",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.need",
+        "path": "VerificationResult.need",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.status",
+        "path": "VerificationResult.status",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.statusDate",
+        "path": "VerificationResult.statusDate",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.validationType",
+        "path": "VerificationResult.validationType",
+        "short": "Whether the target was verified against primary source(s), mutually attested between resource(s), or nothing",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/verificationresult-validation-type"
+        }
+      },
+      {
+        "id": "VerificationResult.validationProcess",
+        "path": "VerificationResult.validationProcess",
+        "short": "The process(es) by which the target was verified",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/VerificationProcessVS"
+        }
+      },
+      {
+        "id": "VerificationResult.frequency",
+        "path": "VerificationResult.frequency",
+        "short": "Frequency of verification",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.lastPerformed",
+        "path": "VerificationResult.lastPerformed",
+        "short": "The date/time verification was last completed (including failed verifications)",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.nextScheduled",
+        "path": "VerificationResult.nextScheduled",
+        "short": "The date when target is next verified, if appropriate",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.failureAction",
+        "path": "VerificationResult.failureAction",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource",
+        "path": "VerificationResult.primarySource",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource.who",
+        "path": "VerificationResult.primarySource.who",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Practitioner",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource.type",
+        "path": "VerificationResult.primarySource.type",
+        "definition": "Type of primary source",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/verificationresult-primary-source-type"
+        }
+      },
+      {
+        "id": "VerificationResult.primarySource.communicationMethod",
+        "path": "VerificationResult.primarySource.communicationMethod",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/verificationresult-communication-method|1.0.0"
+        }
+      },
+      {
+        "id": "VerificationResult.primarySource.validationStatus",
+        "path": "VerificationResult.primarySource.validationStatus",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource.validationDate",
+        "path": "VerificationResult.primarySource.validationDate",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource.canPushUpdates",
+        "path": "VerificationResult.primarySource.canPushUpdates",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.primarySource.pushTypeAvailable",
+        "path": "VerificationResult.primarySource.pushTypeAvailable",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation",
+        "path": "VerificationResult.attestation",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.who",
+        "path": "VerificationResult.attestation.who",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Practitioner",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.onBehalfOf",
+        "path": "VerificationResult.attestation.onBehalfOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Practitioner",
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-PractitionerRole"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.communicationMethod",
+        "path": "VerificationResult.attestation.communicationMethod",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/verificationresult-communication-method|1.0.0"
+        }
+      },
+      {
+        "id": "VerificationResult.attestation.date",
+        "path": "VerificationResult.attestation.date",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.sourceIdentityCertificate",
+        "path": "VerificationResult.attestation.sourceIdentityCertificate",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.proxyIdentityCertificate",
+        "path": "VerificationResult.attestation.proxyIdentityCertificate",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.proxySignature",
+        "path": "VerificationResult.attestation.proxySignature",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.attestation.sourceSignature",
+        "path": "VerificationResult.attestation.sourceSignature",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.validator",
+        "path": "VerificationResult.validator",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.validator.organization",
+        "path": "VerificationResult.validator.organization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.validator.identityCertificate",
+        "path": "VerificationResult.validator.identityCertificate",
+        "mustSupport": true
+      },
+      {
+        "id": "VerificationResult.validator.attestationSignature",
+        "path": "VerificationResult.validator.attestationSignature",
+        "mustSupport": true
+      }
+    ]
+  }
+}

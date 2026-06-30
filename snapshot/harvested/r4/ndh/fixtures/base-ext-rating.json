@@ -1,0 +1,133 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-rating",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating",
+  "name": "Rating",
+  "title": "NDH Rating",
+  "status": "active",
+  "description": "This extension enables NDH to represent ratings for services, organizations, practitioners, and roles, with structured support for rating type, quantitative or textual values, and optional nested RatingDetails for richer comparative quality signals; it is used in HealthcareService, Organization, Practitioner, and PractitionerRole.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    },
+    {
+      "expression": "Organization",
+      "type": "element"
+    },
+    {
+      "expression": "Practitioner",
+      "type": "element"
+    },
+    {
+      "expression": "PractitionerRole",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Rating",
+        "definition": "This extension enables NDH to represent ratings for services, organizations, practitioners, and roles, with structured support for rating type, quantitative or textual values, and optional nested RatingDetails for richer comparative quality signals; it is used in HealthcareService, Organization, Practitioner, and PractitionerRole."
+      },
+      {
+        "id": "Extension.extension:ratingType",
+        "path": "Extension.extension",
+        "sliceName": "ratingType",
+        "short": "Rating type",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ratingType.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ratingType.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ratingType"
+      },
+      {
+        "id": "Extension.extension:ratingType.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "Rating type value set will be defined by the implementer",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/ndh-example-rating-type-vs"
+        }
+      },
+      {
+        "id": "Extension.extension:ratingValue",
+        "path": "Extension.extension",
+        "sliceName": "ratingValue",
+        "short": "Rating Value either Text or Number",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:ratingValue.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:ratingValue.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "ratingValue"
+      },
+      {
+        "id": "Extension.extension:ratingValue.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          },
+          {
+            "code": "Quantity"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:rating-details",
+        "path": "Extension.extension",
+        "sliceName": "rating-details",
+        "short": "Rating Details",
+        "comment": "This is a nested extension to provide additional details about the rating, such as the rating system used, specific criteria evaluated, or any other relevant information that can help interpret the rating value in context.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating-details"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

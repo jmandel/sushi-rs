@@ -1,0 +1,515 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-Endpoint",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint",
+  "name": "NdhEndpoint",
+  "title": "NDH Endpoint Profile",
+  "status": "active",
+  "description": "This profile enables NDH to publish trusted, implementation-ready technical endpoints so directory consumers can reliably discover, evaluate, and connect to electronic exchange services including APIs and messaging; it adds endpoint-focused extensions for trust, registration, access control, testing, and environment context, and applies ValueSet bindings that standardize connection type, payload type, and MIME-type semantics.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-endpoint",
+      "name": "NDH to Plan-Net Endpoint Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH Endpoint profile to the Plan-Net Endpoint profile, noting elements not present in Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Endpoint",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Endpoint",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Endpoint",
+        "path": "Endpoint",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.meta.lastUpdated",
+        "path": "Endpoint.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension",
+        "path": "Endpoint.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Endpoint.extension:implementation-guide",
+        "path": "Endpoint.extension",
+        "sliceName": "implementation-guide",
+        "short": "Implementation guide supported",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-implementation-guide"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:secure-exchange-artifacts",
+        "path": "Endpoint.extension",
+        "sliceName": "secure-exchange-artifacts",
+        "short": "Secure Exchange Artifacts store information about the type of public certificate, the certificate itself, \nand its expiration date. Issued by Certificate Authorities, public certificates are meant for sharing and verification in digital communications. Each certificate \nincludes an expiration date, essential for validating its current validity and maintaining security. This extension is used when the exchange standard requires the discovery of the public key.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-secureExchangeArtifacts"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:security-details",
+        "path": "Endpoint.extension",
+        "sliceName": "security-details",
+        "short": "Security details for an endpoint, including trust framework information, signed artifacts, and public certificates.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-security-details"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:dynamic-registration",
+        "path": "Endpoint.extension",
+        "sliceName": "dynamic-registration",
+        "short": "Dynamic registration within a trust framework refers to a process where clients can register with a server or service provider \ndynamically and securely at runtime, rather than being pre-registered manually. This approach is often used in environments where scalability, flexibility, and security \nare crucial. Currently, dynamic registration is used in SMART and UDAP.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-dynamicRegistration"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:associated-servers",
+        "path": "Endpoint.extension",
+        "sliceName": "associated-servers",
+        "short": "Store information about servers that may be associated with the current endpoint. It defines a set of servers that could be linked \nto this endpoint. If a server is associated, its type and URL will be included",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-associatedServers"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:access-control-mechanism",
+        "path": "Endpoint.extension",
+        "sliceName": "access-control-mechanism",
+        "short": "Access control mechanisms are designed to protect and manage access to healthcare endpoints, ensuring that data exchange \nbetween systems adheres to specific security protocols when needed.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpointAccessControlMechanism"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:endpoint-rank",
+        "path": "Endpoint.extension",
+        "sliceName": "endpoint-rank",
+        "short": "Preferred order for connecting to the endpoint",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-rank"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:ihe-specific-connection-type",
+        "path": "Endpoint.extension",
+        "sliceName": "ihe-specific-connection-type",
+        "short": "IHE Specific Connection Type",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-ihe-specific-connection-type"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:verification-status",
+        "path": "Endpoint.extension",
+        "sliceName": "verification-status",
+        "short": "Verification Status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:testing-certification",
+        "path": "Endpoint.extension",
+        "sliceName": "testing-certification",
+        "short": "Endpoint Testing Certification",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-testing-certification"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.extension:environmentType",
+        "path": "Endpoint.extension",
+        "sliceName": "environmentType",
+        "short": "The type of environment exposed at this endpoint",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-endpoint-environment-type"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.identifier",
+        "path": "Endpoint.identifier",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.identifier"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.identifier.extension:identifier-status",
+        "path": "Endpoint.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.identifier.assigner",
+        "path": "Endpoint.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.identifier.assigner",
+            "comment": ", using NDH Organization Profile"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.status",
+        "path": "Endpoint.status",
+        "fixedCode": "active",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.status",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.connectionType",
+        "path": "Endpoint.connectionType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EndpointConnectionTypeVS"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.connectionType",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.name",
+        "path": "Endpoint.name",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.name",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.managingOrganization",
+        "path": "Endpoint.managingOrganization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.managingOrganization",
+            "comment": ", using NDH Organization Profile"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.contact.system",
+        "path": "Endpoint.contact.system",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.contact.system"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.contact.value",
+        "path": "Endpoint.contact.value",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.contact.value"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.period",
+        "path": "Endpoint.period",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.period",
+            "comment": ", optional in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.payloadType",
+        "path": "Endpoint.payloadType",
+        "max": "1",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EndpointPayloadTypeVS"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.payloadType",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.payloadMimeType",
+        "path": "Endpoint.payloadMimeType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EndpointFhirMimeTypeVS"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.payloadMimeType",
+            "comment": ", recommended in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.address",
+        "path": "Endpoint.address",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.address",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Endpoint.header",
+        "path": "Endpoint.header",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-endpoint",
+            "map": "Endpoint.header",
+            "comment": ", optional in Plan-Net and NDH"
+          }
+        ]
+      }
+    ]
+  }
+}

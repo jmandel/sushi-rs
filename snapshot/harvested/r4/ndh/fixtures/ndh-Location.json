@@ -1,0 +1,667 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ndh-Location",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location",
+  "name": "NdhLocation",
+  "title": "NDH Location Profile",
+  "status": "active",
+  "description": "This profile enables NDH to define service locations with consistent operational and geographic details so consumers can accurately discover where care is delivered, understand access characteristics, and link locations to organizations, services, and endpoints; it adds extensions for geospatial boundaries, accessibility, new-patient status, and verification, and applies ValueSet constraints for status, mode, location type, address use and type, state, and days-of-week availability.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "ndh-to-plannet-location",
+      "name": "NDH to Plan-Net Location Mapping",
+      "uri": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+      "comment": "Maps NDH Location profile to the Plan-Net Location profile, noting elements not present in Plan-Net."
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Location",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|6.1.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Location",
+        "path": "Location",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location",
+            "comment": "Top-level mapping from NDH to Plan-Net"
+          }
+        ]
+      },
+      {
+        "id": "Location.meta.lastUpdated",
+        "path": "Location.meta.lastUpdated",
+        "min": 1,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.meta.lastUpdated",
+            "comment": ", is required in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.extension",
+        "path": "Location.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Location.extension:location-boundary-geojson",
+        "path": "Location.extension",
+        "sliceName": "location-boundary-geojson",
+        "short": "Associated Region (GeoJSON)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/location-boundary-geojson|4.0.1"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.extension[region]",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.extension:accessibility",
+        "path": "Location.extension",
+        "sliceName": "accessibility",
+        "short": "Accessibility",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-accessibility"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.extension[accessibility]",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.extension:newpatients",
+        "path": "Location.extension",
+        "sliceName": "newpatients",
+        "short": "New Patients",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.extension[newpatients]",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.extension:verification-status",
+        "path": "Location.extension",
+        "sliceName": "verification-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Location.identifier",
+        "path": "Location.identifier",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.identifier"
+          }
+        ]
+      },
+      {
+        "id": "Location.identifier.extension:identifier-status",
+        "path": "Location.identifier.extension",
+        "sliceName": "identifier-status",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Location.identifier.assigner",
+        "path": "Location.identifier.assigner",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.identifier.assigner",
+            "comment": ", using NDH Organization Profile"
+          }
+        ]
+      },
+      {
+        "id": "Location.status",
+        "path": "Location.status",
+        "min": 1,
+        "fixedCode": "active",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.status",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.operationalStatus",
+        "path": "Location.operationalStatus",
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v2-0116|2.0.0"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.operationalStatus",
+            "comment": ", optional in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.name",
+        "path": "Location.name",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.name",
+            "comment": ", required in Plan-Net and NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.alias",
+        "path": "Location.alias",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.alias",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.description",
+        "path": "Location.description",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.description",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.mode",
+        "path": "Location.mode",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/location-mode|4.0.1"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Location.type",
+        "path": "Location.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v3-ServiceDeliveryLocationRoleType|3.0.0"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.type",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.telecom",
+        "path": "Location.telecom",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.telecom"
+          }
+        ]
+      },
+      {
+        "id": "Location.telecom.extension:language-speak",
+        "path": "Location.telecom.extension",
+        "sliceName": "language-speak",
+        "short": "Language Speak",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Not in Plan-Net",
+            "comment": ", NDH-specific"
+          }
+        ]
+      },
+      {
+        "id": "Location.telecom.system",
+        "path": "Location.telecom.system",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.telecom.system",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.telecom.value",
+        "path": "Location.telecom.value",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.telecom.value",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address",
+        "path": "Location.address",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.use",
+        "path": "Location.address.use",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/address-use|4.0.1"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.use",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.type",
+        "path": "Location.address.type",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/address-type|4.0.1"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.type",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.line",
+        "path": "Location.address.line",
+        "max": "4",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.line",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.city",
+        "path": "Location.address.city",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.city",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.district",
+        "path": "Location.address.district",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.district",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.state",
+        "path": "Location.address.state",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/us-core-usps-state|6.1.0"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.state",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.postalCode",
+        "path": "Location.address.postalCode",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.postalCode",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.country",
+        "path": "Location.address.country",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.country",
+            "comment": ", optional in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.address.period",
+        "path": "Location.address.period",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.address.period",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.physicalType",
+        "path": "Location.physicalType",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.physicalType",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.position",
+        "path": "Location.position",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.position",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.position.longitude",
+        "path": "Location.position.longitude",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.position.longitude",
+            "comment": ", required if position is present in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.position.latitude",
+        "path": "Location.position.latitude",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.position.latitude",
+            "comment": ", required if position is present in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.position.altitude",
+        "path": "Location.position.altitude",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.position.altitude",
+            "comment": ", optional in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.managingOrganization",
+        "path": "Location.managingOrganization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"
+            ]
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.managingOrganization",
+            "comment": ", optional in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.partOf",
+        "path": "Location.partOf",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.partOf",
+            "comment": ", recommended in Plan-Net and recommended in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.hoursOfOperation",
+        "path": "Location.hoursOfOperation",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.hoursOfOperation",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.hoursOfOperation.daysOfWeek",
+        "path": "Location.hoursOfOperation.daysOfWeek",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/days-of-week|4.0.1"
+        },
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.hoursOfOperation.daysOfWeek",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.hoursOfOperation.allDay",
+        "path": "Location.hoursOfOperation.allDay",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.hoursOfOperation.allDay",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.hoursOfOperation.openingTime",
+        "path": "Location.hoursOfOperation.openingTime",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.hoursOfOperation.openingTime",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.hoursOfOperation.closingTime",
+        "path": "Location.hoursOfOperation.closingTime",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.hoursOfOperation.closingTime",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.availabilityExceptions",
+        "path": "Location.availabilityExceptions",
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.availabilityExceptions",
+            "comment": ", recommended in Plan-Net and optional in NDH"
+          }
+        ]
+      },
+      {
+        "id": "Location.endpoint",
+        "path": "Location.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "ndh-to-plannet-location",
+            "map": "Location.endpoint",
+            "comment": ", using NDH Endpoint Profile"
+          }
+        ]
+      }
+    ]
+  }
+}

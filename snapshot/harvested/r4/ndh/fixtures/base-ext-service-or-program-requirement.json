@@ -1,0 +1,236 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-service-or-program-requirement",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement",
+  "name": "ServiceOrProgramRequirement",
+  "title": "NDH HealthcareService or Program Requirement",
+  "status": "active",
+  "description": "This extension enables NDH to encode participation criteria for services and programs using structured demographic and coverage-related sub-extensions, including age range/group, birth sex, employment, insurance, veteran status, and preferred language, with ValueSet bindings that support consistent eligibility interpretation; it is used in HealthcareService.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "expression": "HealthcareService",
+      "type": "element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH HealthcareService or Program Requirement",
+        "definition": "This extension enables NDH to encode participation criteria for services and programs using structured demographic and coverage-related sub-extensions, including age range/group, birth sex, employment, insurance, veteran status, and preferred language, with ValueSet bindings that support consistent eligibility interpretation; it is used in HealthcareService.",
+        "constraint": [
+          {
+            "key": "agerange-or-agegroup",
+            "severity": "error",
+            "human": "a service or program only allow to have either age-range or age-group but not both",
+            "expression": "extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range').empty() or extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group').empty() or (extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range').empty() and extension('http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group').empty())",
+            "source": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:age-range",
+        "path": "Extension.extension",
+        "sliceName": "age-range",
+        "short": "Age Range",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-range"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:age-group",
+        "path": "Extension.extension",
+        "sliceName": "age-group",
+        "short": "Age Group",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:birthsex",
+        "path": "Extension.extension",
+        "sliceName": "birthsex",
+        "short": "Birth Sex",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:birthsex.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:birthsex.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "birthsex"
+      },
+      {
+        "id": "Extension.extension:birthsex.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/birthsex|6.1.0"
+        }
+      },
+      {
+        "id": "Extension.extension:employment-status",
+        "path": "Extension.extension",
+        "sliceName": "employment-status",
+        "short": "Employment Status",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:employment-status.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:employment-status.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "employment-status"
+      },
+      {
+        "id": "Extension.extension:employment-status.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/EmploymentStatusVS"
+        }
+      },
+      {
+        "id": "Extension.extension:insurance-status",
+        "path": "Extension.extension",
+        "sliceName": "insurance-status",
+        "short": "Insurance Status",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:insurance-status.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:insurance-status.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "insurance-status"
+      },
+      {
+        "id": "Extension.extension:insurance-status.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/InsuranceStatusVS"
+        }
+      },
+      {
+        "id": "Extension.extension:va-status",
+        "path": "Extension.extension",
+        "sliceName": "va-status",
+        "short": "Veteran Status",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:va-status.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:va-status.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "va-status"
+      },
+      {
+        "id": "Extension.extension:va-status.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:preferred-language",
+        "path": "Extension.extension",
+        "sliceName": "preferred-language",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:preferred-language.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:preferred-language.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "preferred-language"
+      },
+      {
+        "id": "Extension.extension:preferred-language.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/languages"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

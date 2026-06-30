@@ -1,0 +1,56 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "base-ext-ndh-age-group",
+  "url": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group",
+  "name": "NdhAgeGroup",
+  "title": "NDH Age Group",
+  "status": "active",
+  "description": "This extension enables NDH to represent age-based eligibility categories as coded concepts with extensible binding to AgeGroupVS for consistent age-group filtering; it is used as a nested extension within base-ext-service-or-program-requirement.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "extension",
+      "expression": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "NDH Age Group",
+        "definition": "This extension enables NDH to represent age-based eligibility categories as coded concepts with extensible binding to AgeGroupVS for consistent age-group filtering; it is used as a nested extension within base-ext-service-or-program-requirement."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-ndh-age-group"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Age Group",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/ndh/ValueSet/AgeGroupVS"
+        }
+      }
+    ]
+  }
+}
