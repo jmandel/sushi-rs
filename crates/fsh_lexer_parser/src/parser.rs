@@ -2202,7 +2202,8 @@ impl Importer {
                 vr.value = Some(self.parse_code(cur));
             }
             K::UNIT => {
-                vr.value = Some(self.parse_quantity(cur));
+                let q = self.parse_quantity(cur);
+                vr.value = Some(self.maybe_ratio(cur, q));
             }
             K::NUMBER => {
                 vr.value = Some(self.parse_number_value(cur, &mut vr.raw_value));

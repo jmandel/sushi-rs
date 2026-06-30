@@ -1278,25 +1278,66 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
             Some(("canonical".to_string(), J::String(url)))
         }
         FshValue::Quantity(q) => {
+            // Mirror `FshQuantity.toFHIRQuantity` for key order: value, code, system, unit.
+            // Like TS, support compatible Quantity specializations (Age, Distance, ...) by
+            // keeping the element's actual type as the assigned type when it derives from
+            // Quantity; otherwise fall back to plain "Quantity".
+            let provided_type = if etype != "Quantity" && is_quantity_type(&etype) {
+                etype.clone()
+            } else {
+                "Quantity".to_string()
+            };
+            Some((provided_type, J::Object(quantity_to_json(q))))
+        }
+        FshValue::Ratio(r) => {
+            // `FshRatio.toFHIRRatio`: numerator then denominator, each a Quantity.
             let mut m = Map::new();
-            if let Some(v) = q.value {
-                if let Some(n) = serde_json::Number::from_f64(v) {
-                    m.insert("value".into(), J::Number(n));
-                }
-            }
-            if let Some(u) = &q.unit {
-                if let Some(sys) = &u.system {
-                    m.insert("system".into(), J::String(sys.clone()));
-                }
-                m.insert("code".into(), J::String(u.code.clone()));
-            }
-            Some(("Quantity".to_string(), J::Object(m)))
+            m.insert("numerator".into(), J::Object(quantity_to_json(&r.numerator)));
+            m.insert("denominator".into(), J::Object(quantity_to_json(&r.denominator)));
+            Some(("Ratio".to_string(), J::Object(m)))
         }
         _ => None,
     };
     if let Some((type_name, jv)) = assigned {
         set_pattern(ed, &type_name, jv, exactly);
     }
+}
+
+/// Build a FHIR Quantity JSON object from an `FshQuantity`, mirroring
+/// `FshQuantity.toFHIRQuantity` exactly (key order: value, code, system, unit).
+/// Each field is only emitted when truthy (non-empty), matching the TS guards.
+fn quantity_to_json(q: &fsh_model::FshQuantity) -> Map<String, J> {
+    let mut m = Map::new();
+    if let Some(v) = q.value {
+        // FshQuantity.value is a plain JS number, so it serializes the JS way:
+        // whole numbers drop the trailing ".0" (155.0 -> 155, but 1.5 -> 1.5).
+        let jv = if v.fract() == 0.0 && v.abs() < 1e15 {
+            J::Number((v as i64).into())
+        } else if let Some(n) = serde_json::Number::from_f64(v) {
+            J::Number(n)
+        } else {
+            J::Null
+        };
+        if !jv.is_null() {
+            m.insert("value".into(), jv);
+        }
+    }
+    if let Some(u) = &q.unit {
+        if !u.code.is_empty() {
+            m.insert("code".into(), J::String(u.code.clone()));
+        }
+        if let Some(sys) = &u.system {
+            if !sys.is_empty() {
+                m.insert("system".into(), J::String(sys.clone()));
+            }
+        }
+        if let Some(d) = &u.display {
+            if !d.is_empty() {
+                m.insert("unit".into(), J::String(d.clone()));
+            }
+        }
+    }
+    m
 }
 
 fn resolve_reference(reference: &str, _fisher: &dyn Fisher) -> String {
