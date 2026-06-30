@@ -17,3 +17,4 @@ fsh_model.workspace = true
 diagnostics.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+mimalloc = { version = "0.1", default-features = false }
