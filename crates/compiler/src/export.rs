@@ -723,7 +723,7 @@ pub fn export_value_set(
     tank: &TankIndex,
     store: Option<&PackageStore>,
     resolver: &TypeResolver,
-) -> Exported {
+) -> Option<Exported> {
     let id = effective_id(&vs.rules, &vs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -809,9 +809,88 @@ pub fn export_value_set(
         .collect();
     set_concept_caret_rules(&mut obj, &concept_carets, tank, store, resolver);
 
-    Exported {
+    // Port of `ValueSetExporter.ts:603`: a compose with an empty `include` is a
+    // `ValueSetComposeError`; stock logs it and skips the whole ValueSet (no file
+    // emitted). `compose` is only present when there were component rules.
+    if let Some(J::Object(compose)) = obj.get("compose") {
+        let include_empty = compose
+            .get("include")
+            .and_then(|v| v.as_array())
+            .map_or(true, |a| a.is_empty());
+        if include_empty {
+            return None;
+        }
+    }
+
+    // Port of `cleanResource` (`common.ts:1192`): collapse empty objects/arrays
+    // (e.g. an empty compose element `{}` → `compose: null`).
+    clean_resource_map(&mut obj);
+
+    Some(Exported {
         filename: format!("ValueSet-{}.json", id),
         body: J::Object(obj),
+    })
+}
+
+/// Returns true iff `v` is an empty object or empty array (lodash `isEmpty`
+/// restricted to the `typeof === 'object' && !== null` case in `cleanResource`).
+fn is_empty_container(v: &J) -> bool {
+    matches!(v, J::Object(m) if m.is_empty()) || matches!(v, J::Array(a) if a.is_empty())
+}
+
+/// Port of `cleanResource`'s "change any {} to null" pass (`common.ts:1204` via
+/// `replaceField`): recursively replace empty containers with `null`, delete an
+/// object key whose value became an all-`null` array, then re-check whether the
+/// emptied parent is now itself an empty container (and null it). Mirrors
+/// `replaceField`'s depth-first traversal and post-recursion re-check so nested
+/// emptiness propagates upward (`{include:[{}]}` → `compose: null`).
+fn clean_resource_empties(v: &mut J) {
+    match v {
+        J::Object(map) => clean_resource_map(map),
+        J::Array(arr) => {
+            let mut i = 0;
+            while i < arr.len() {
+                if is_empty_container(&arr[i]) {
+                    arr[i] = J::Null;
+                } else if matches!(arr[i], J::Object(_) | J::Array(_)) {
+                    clean_resource_empties(&mut arr[i]);
+                    // A nested array that became all-null, or a now-empty
+                    // container, collapses to a `null` hole (JS `delete arr[i]`).
+                    let collapse = match &arr[i] {
+                        J::Array(a) => a.iter().all(J::is_null),
+                        other => is_empty_container(other),
+                    };
+                    if collapse {
+                        arr[i] = J::Null;
+                    }
+                }
+                i += 1;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn clean_resource_map(map: &mut Map<String, J>) {
+    let keys: Vec<String> = map.keys().cloned().collect();
+    for k in keys {
+        let child = map.get(&k).expect("key from snapshot");
+        if is_empty_container(child) {
+            map.insert(k, J::Null);
+            continue;
+        }
+        if matches!(child, J::Object(_) | J::Array(_)) {
+            clean_resource_empties(map.get_mut(&k).unwrap());
+            if let Some(J::Array(a)) = map.get(&k) {
+                if a.iter().all(J::is_null) {
+                    map.shift_remove(&k); // delete key, preserving order
+                    continue;
+                }
+            }
+            if is_empty_container(map.get(&k).unwrap()) {
+                map.insert(k, J::Null);
+            }
+        }
     }
 }
 
@@ -1142,10 +1221,17 @@ fn push_component(
                 add_concept_compose_element(ce, include);
             }
         } else {
-            // push if it has any valueSet or a defined system.
-            let has_vs = ce.contains_key("valueSet");
-            let has_system = ce.contains_key("system");
-            if has_vs || has_system {
+            // Port of `ValueSetExporter.ts:254`:
+            //   if (composeElement.valueSet?.length !== 0 || composeElement.system != undefined)
+            // For an absent `valueSet`, `undefined?.length` is `undefined` and
+            // `undefined !== 0` is `true`, so even a fully empty `{}` element is
+            // pushed (it is later collapsed to `compose: null` by cleanResource).
+            // The ONLY non-push case is a present-but-empty `valueSet` with no system.
+            let value_set_len_ne_zero = match ce.get("valueSet") {
+                Some(J::Array(a)) => !a.is_empty(),
+                _ => true,
+            };
+            if value_set_len_ne_zero || ce.contains_key("system") {
                 include.push(J::Object(ce));
             }
         }
@@ -1416,7 +1502,9 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_vs.push(vs.name.clone());
-            out.push(export_value_set(vs, cfg, &tank, store, &resolver));
+            if let Some(exported) = export_value_set(vs, cfg, &tank, store, &resolver) {
+                out.push(exported);
+            }
         }
     }
     out
