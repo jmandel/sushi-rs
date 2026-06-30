@@ -97,10 +97,20 @@ KEY-ORDER class (58, semantically identical to stock — mechanical ordering fix
   url,version,name,...` = the profile's differential-constrained elements first, then
   unconstrained base elements — i.e. snapshot order. Our `order_instance`
   (`instance_export.rs:~2823`) keeps rule-application order, which only diverges when a
-  profile heavily reorders via its differential. **Fix = structural** (Wave B): emit
-  instance properties walking the InstanceOf snapshot element order (study
-  `sushi-ts/src/export/InstanceExporter.ts` / `fhirtypes/InstanceDefinition.ts`). Gate
-  corpus HARD — this touches every instance.
+  profile heavily reorders via its differential. **Fix = structural** — the ordering lives in stock's
+  `setImpliedPropertiesOnInstance` (`common.ts:336-595`): it walks the InstanceOf
+  snapshot elements (BFS via `children(true)`), inserting paths into `sdRuleMap` in
+  snapshot order, then postfix-tree-traverses (`buildPathTree`/`traverseRulePathTree`)
+  and stable-sorts by `requirementRoots` (the `!manualSliceOrdering` sort at 552). NB
+  `cleanResource` does NOT reorder. Our port ALREADY has this (instance_export.rs
+  ~1380-1445: the `while queue` element walk → `sd_rule_map`, `build_path_tree`,
+  `traverse_rule_path_tree`, `stable_sort_rule_paths`). So G13 is NOT a missing walk —
+  it's a subtle divergence in how a profile-CONSTRAINED element (e.g. SDCLibrary
+  reorders extension/contact/jurisdiction ahead of base url/version via its
+  differential) enters `sd_rule_map` / gets its `requirement_root`. DEBUG approach:
+  trace one case (`sdc-CHF`, `InstanceOf: SDCLibrary`) — dump our `sorted` path order vs
+  stock's emitted key order, find the first divergence. Gate corpus HARD (touches every
+  instance; the naive "force DomainResource prefix" attempt regressed −130).
 
 SEMANTIC class (207) by IG:
 - **carinbb 31 — ALL G2** (system bare-name + duplicate-coding merge).
