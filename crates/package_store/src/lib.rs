@@ -134,6 +134,38 @@ struct ProjectConfig {
     dependencies: Vec<DepEntry>,
 }
 
+/// If `package_id` is a legacy cross-version extensions package
+/// (`^hl7\.fhir\.extensions\.r\d+b?$`), return its source FHIR token (e.g. `r5`).
+fn legacy_xver_source(package_id: &str) -> Option<String> {
+    let rest = package_id.strip_prefix("hl7.fhir.extensions.")?;
+    let rest = rest.strip_prefix('r')?;
+    let (digits, suffix) = match rest.strip_suffix('b') {
+        Some(d) => (d, "b"),
+        None => (rest, ""),
+    };
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!("r{digits}{suffix}"))
+}
+
+/// Port of `fixCrossVersionDependencies` (Processing.ts:540-568): rewrite a legacy
+/// `hl7.fhir.extensions.r{N}` dependency to the official xver package
+/// `hl7.fhir.uv.xver-{source}.{target}#latest`, where `target` is derived from the
+/// declared FHIR version of the legacy package (e.g. `4.0.1` -> `r4`).
+fn fix_cross_version_dep(package_id: &str, version: Option<String>) -> (String, Option<String>) {
+    if let (Some(source), Some(ver)) = (legacy_xver_source(package_id), version.as_deref()) {
+        // getFHIRVersionInfo(version).name.replace(/D?STU/, 'r').toLowerCase()
+        let name = fhir_version_info(ver).1;
+        let target = name.replace("DSTU", "r").replace("STU", "r").to_lowercase();
+        return (
+            format!("hl7.fhir.uv.xver-{source}.{target}"),
+            Some("latest".to_string()),
+        );
+    }
+    (package_id.to_string(), version)
+}
+
 fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
     let cfg_path = Path::new(ig_dir).join("sushi-config.yaml");
     let text = std::fs::read_to_string(&cfg_path)
@@ -171,6 +203,11 @@ fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
                 Some((_alias, real)) => real.to_string(),
                 None => id.clone(),
             };
+            // Replace an old-style cross-version extensions package
+            // (`hl7.fhir.extensions.r5#4.0.1`) with the official xver package
+            // (`hl7.fhir.uv.xver-r5.r4#latest`) so its extensions become fishable —
+            // port of `fixCrossVersionDependencies` (Processing.ts:540-568).
+            let (package_id, version) = fix_cross_version_dep(&package_id, version);
             dependencies.push(DepEntry {
                 package_id,
                 version,
