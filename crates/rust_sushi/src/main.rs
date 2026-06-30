@@ -68,6 +68,24 @@ fn main() -> anyhow::Result<()> {
             }
             compiler::build_project(ig, &out)?;
         }
+        Some("pkg-fish") => {
+            // rust_sushi pkg-fish <ig-dir> <cache-dir> <query...>  -> package-oracle JSON shape
+            let ig = args.get(2).ok_or_else(|| anyhow::anyhow!("usage: pkg-fish <ig> <cache> <query...>"))?;
+            let cache = args.get(3).ok_or_else(|| anyhow::anyhow!("need <cache-dir>"))?;
+            let queries = &args[4.min(args.len())..];
+            let store = package_store::PackageStore::for_project(ig, cache)?;
+            let mut qout = Vec::new();
+            for q in queries {
+                let fhir = store.fish_for_fhir(q, package_store::ALL_FISH_TYPES);
+                let meta = store.fish_for_metadata(q, package_store::ALL_FISH_TYPES);
+                let fhir_summary = fhir.as_ref().map(|v| serde_json::json!({
+                    "resourceType": v.get("resourceType"), "id": v.get("id"),
+                    "url": v.get("url"), "version": v.get("version"),
+                }));
+                qout.push(serde_json::json!({"query": q, "fhir": fhir_summary, "meta": meta}));
+            }
+            println!("{}", serde_json::to_string_pretty(&serde_json::json!({"queries": qout}))?);
+        }
         _ => {
             eprintln!("rust_sushi {}: compile pipeline under construction", env!("CARGO_PKG_VERSION"));
             eprintln!("usage: rust_sushi <lex <file.fsh> | ast <file.fsh> | --version>");

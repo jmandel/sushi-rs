@@ -147,6 +147,7 @@ dependencies = [
  "diagnostics",
  "fsh_lexer_parser",
  "fsh_model",
+ "package_store",
  "serde_json",
 ]
 
