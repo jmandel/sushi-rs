@@ -116,6 +116,15 @@ impl Fisher for FisherView<'_> {
         let m = self.store.fish_for_metadata(name, package_store::ALL_FISH_TYPES)?;
         Some(metadata_from_json(&m))
     }
+
+    fn fish_for_metadata_vs(&self, name: &str) -> Option<Metadata> {
+        // Local ValueSets are resolved by the exporter's `vs_url` closure; here
+        // we only restrict the package fish to ValueSet definitions.
+        let m = self
+            .store
+            .fish_for_metadata(name, &[package_store::FishType::ValueSet])?;
+        Some(metadata_from_json(&m))
+    }
 }
 
 fn metadata_from_sd(sd: &StructureDefinition) -> Metadata {
@@ -237,6 +246,125 @@ impl<'a> SdContext<'a> {
         self.exported.iter().any(|e| e.name == name)
     }
 
+    /// Port of `MappingExporter` — applied last, mutating already-exported SDs.
+    pub fn export_mappings(&mut self, docs: &[FshDocument]) {
+        let mappings: Vec<fsh_model::Mapping> =
+            docs.iter().flat_map(|d| d.mappings.iter().map(|(_, m)| m.clone())).collect();
+        for mapping in &mappings {
+            self.export_mapping(mapping);
+        }
+    }
+
+    fn export_mapping(&mut self, mapping: &fsh_model::Mapping) {
+        let Some(source) = &mapping.source else { return };
+        let Some(si) = self
+            .exported
+            .iter()
+            .position(|e| &e.name == source || e.sd.get_str("id") == Some(source.as_str()))
+        else {
+            self.diag.push(format!("Unable to find mapping source {source}"));
+            return;
+        };
+        // Determine whether the parent already carries a mapping with this identity.
+        let base_def = self.exported[si].sd.get_str("baseDefinition").map(String::from);
+        let parent_match: Option<(Option<String>, Option<String>)> = base_def.and_then(|bd| {
+            let parent = self.fisher().fish_for_fhir(&bd)?;
+            let maps = parent.get("mapping")?.as_array()?;
+            maps.iter()
+                .find(|m| m.get("identity").and_then(|v| v.as_str()) == Some(mapping.id.as_str()))
+                .map(|m| {
+                    (
+                        m.get("name").and_then(|v| v.as_str()).map(String::from),
+                        m.get("uri").and_then(|v| v.as_str()).map(String::from),
+                    )
+                })
+        });
+
+        let sd = &mut self.exported[si].sd;
+        if let Some((p_name, p_uri)) = parent_match {
+            let title_ok = mapping.title.as_ref().map(|t| Some(t) == p_name.as_ref()).unwrap_or(true);
+            let target_ok = mapping.target.as_ref().map(|t| Some(t) == p_uri.as_ref()).unwrap_or(true);
+            if !title_ok || !target_ok {
+                self.diag.push(format!(
+                    "Unable to add Mapping {} because it conflicts with one already on the parent of {source}.",
+                    mapping.name
+                ));
+                return;
+            }
+            // Update inherited mapping's comment (only mergeable metadata).
+            if let Some(desc) = &mapping.description {
+                if let Some(maps) = sd.body.get_mut("mapping").and_then(|v| v.as_array_mut()) {
+                    if let Some(m) = maps.iter_mut().find(|m| {
+                        m.get("identity").and_then(|v| v.as_str()) == Some(mapping.id.as_str())
+                    }) {
+                        if let Some(o) = m.as_object_mut() {
+                            o.insert("comment".into(), J::String(desc.clone()));
+                        }
+                    }
+                }
+            }
+        } else {
+            // setMetadata: push a new SD-level mapping entry.
+            let mut entry = Map::new();
+            entry.insert("identity".into(), J::String(mapping.id.clone()));
+            if let Some(t) = &mapping.title {
+                entry.insert("name".into(), J::String(t.clone()));
+            }
+            if let Some(t) = &mapping.target {
+                entry.insert("uri".into(), J::String(t.clone()));
+            }
+            if let Some(d) = &mapping.description {
+                entry.insert("comment".into(), J::String(d.clone()));
+            }
+            let arr = sd
+                .body
+                .entry("mapping".to_string())
+                .or_insert_with(|| J::Array(vec![]));
+            if let Some(a) = arr.as_array_mut() {
+                a.push(J::Object(entry));
+            }
+        }
+
+        // setMappingRules
+        let mut rules = mapping.rules.clone();
+        resolve_soft_indexing(&mut rules);
+        let fisher = FisherView {
+            store: self.store,
+            exported: &[],
+            in_progress_meta: &self.in_progress_meta,
+        };
+        // We need the SD mutably and a fisher over the package + in-progress meta.
+        // The mapping source SD is already exported; element lookups only need the
+        // package fisher (types) and the SD's own elements.
+        let sd = &mut self.exported[si].sd;
+        for rule in &rules {
+            let Rule::Mapping { path, map, comment, language, .. } = rule else { continue };
+            let Some(ei) = sd.find_element_by_path(path, &fisher) else {
+                self.diag.push(format!(
+                    "No element found at path {path} for {}, skipping rule",
+                    mapping.name
+                ));
+                continue;
+            };
+            let mut entry = Map::new();
+            entry.insert("identity".into(), J::String(mapping.id.clone()));
+            entry.insert("map".into(), J::String(map.clone()));
+            if let Some(c) = comment {
+                entry.insert("comment".into(), J::String(c.clone()));
+            }
+            if let Some(l) = language {
+                entry.insert("language".into(), J::String(l.code.clone()));
+            }
+            let arr = sd.elements[ei]
+                .map
+                .entry("mapping".to_string())
+                .or_insert_with(|| J::Array(vec![]));
+            if let Some(a) = arr.as_array_mut() {
+                a.push(J::Object(entry));
+            }
+        }
+    }
+
     fn export_sd(&mut self, name: &str) {
         if self.already_exported(name) || self.in_progress.contains(name) {
             return;
@@ -342,6 +470,18 @@ impl<'a> SdContext<'a> {
         sd.body.insert("url".into(), J::String(url.clone()));
         let type_ = type_from_def_or_parent(def, kind, &sd);
         sd.body.insert("type".into(), J::String(type_));
+        // Fix fhirVersion for R4/R4B logicals whose parent is the time-traveling
+        // Base (R5-in-R4 bundle). The bundled Base carries fhirVersion "5.0.0";
+        // SUSHI overrides it with the configured/default FHIR version.
+        if parent_url == "http://hl7.org/fhir/StructureDefinition/Base" {
+            if let Some(default_ver) = self.cfg.fhir_version() {
+                let cur = sd.body.get("fhirVersion").and_then(|v| v.as_str());
+                if cur != Some(default_ver.as_str()) {
+                    sd.body
+                        .insert("fhirVersion".into(), J::String(default_ver));
+                }
+            }
+        }
         // resetParentElements
         reset_parent_elements(&mut sd, def, kind);
         Some(sd)
@@ -669,6 +809,57 @@ fn preprocess_structure_definition(def: &mut StructureDef, is_extension: bool) {
 // ---------------------------------------------------------------------------
 
 #[allow(clippy::too_many_arguments)]
+/// Resolve a rule path, with the `findMatchingSlice` fishForFHIR fallback for
+/// extension brackets that name an extension by alias/url/id rather than by its
+/// inherited `sliceName` (e.g. `extension[us-core-birthsex]` -> `birthsex`).
+/// Rewrites such brackets to the matching inherited slice's sliceName and
+/// retries. (Stock does this inside findElementByPath; our generic
+/// find_element_by_path leaves it to callers to avoid instance-path churn.)
+fn find_element_with_ext_fallback(
+    sd: &mut StructureDefinition,
+    path: &str,
+    fisher: &dyn Fisher,
+) -> Option<usize> {
+    if let Some(ei) = sd.find_element_by_path(path, fisher) {
+        return Some(ei);
+    }
+    let mut parts = crate::paths::parse_fsh_path(path);
+    let mut changed = false;
+    for i in 0..parts.len() {
+        if parts[i].base != "extension" && parts[i].base != "modifierExtension" {
+            continue;
+        }
+        if parts[i].brackets.len() != 1 {
+            continue;
+        }
+        let b0 = parts[i].brackets[0].clone();
+        if b0.is_empty() || b0.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        let cum = crate::paths::assemble_fsh_path(&parts[..=i]);
+        if sd.find_element_by_path(&cum, fisher).is_some() {
+            continue;
+        }
+        let mut parent_parts = parts[..=i].to_vec();
+        parent_parts[i].brackets.clear();
+        let parent_path = crate::paths::assemble_fsh_path(&parent_parts);
+        if sd.find_element_by_path(&parent_path, fisher).is_none() {
+            continue;
+        }
+        if let Some(url) = fisher.fish_for_metadata(&b0).and_then(|m| m.url) {
+            if let Some(sn) = sd.find_slice_by_profile_url(&url) {
+                parts[i].brackets = vec![sn];
+                changed = true;
+            }
+        }
+    }
+    if changed {
+        let new_path = crate::paths::assemble_fsh_path(&parts);
+        return sd.find_element_by_path(&new_path, fisher);
+    }
+    None
+}
+
 fn set_rules(
     sd: &mut StructureDefinition,
     def: &mut StructureDef,
@@ -691,7 +882,7 @@ fn set_rules(
             continue;
         }
         let path = rule.path();
-        let Some(ei) = sd.find_element_by_path(path, fisher) else {
+        let Some(ei) = find_element_with_ext_fallback(sd, path, fisher) else {
             diag.push(format!(
                 "No element found at path {path} for {} in {}, skipping rule",
                 rule.constructor_name(),
@@ -721,7 +912,7 @@ fn set_rules(
             Rule::Binding { value_set, strength, .. } => {
                 let base = value_set.split('|').next().unwrap_or(value_set);
                 let vs_meta_url = (vs_url)(value_set).or_else(|| {
-                    let m = fisher.fish_for_metadata(base)?;
+                    let m = fisher.fish_for_metadata_vs(base)?;
                     // For a URL-valued binding, only accept an exact-url match
                     // (SUSHI replaces only the name part with the fished url).
                     match &m.url {
@@ -755,6 +946,9 @@ fn set_rules(
                 is_instance,
                 ..
             } => {
+                // Resolve `Canonical(localName)` against the fisher (SD) then
+                // local ValueSet/CodeSystem urls, mirroring replaceReferences.
+                let value = &resolve_canonical_caret(value, fisher, vs_url, cs_url);
                 if rpath.is_empty() {
                     // SD-body instance carets (e.g. ^contained) are deferred — skip.
                     if !is_instance {
@@ -948,6 +1142,15 @@ fn enforce_discriminator_min(sd: &mut StructureDefinition, ei: usize) {
     }
 }
 
+/// `ElementDefinition.isQuantityType` — Quantity or any FHIR type derived from
+/// it (baseDefinition == .../Quantity).
+fn is_quantity_type(t: &str) -> bool {
+    matches!(
+        t,
+        "Quantity" | "Age" | "Count" | "Distance" | "Duration" | "MoneyQuantity" | "SimpleQuantity"
+    )
+}
+
 fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: bool, fisher: &dyn Fisher) {
     let types = ed.type_codes();
     if types.len() != 1 {
@@ -971,6 +1174,19 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
                 Some(("CodeableConcept".to_string(), J::Object(m)))
             }
             "Coding" => Some(("Coding".to_string(), crate::export::coding_from(fc))),
+            // A FshCode assigned to a Quantity-typed element maps to the code +
+            // system parts of the Quantity (`FshCode.toFHIRQuantity`).
+            t if is_quantity_type(t) => {
+                let mut m = Map::new();
+                m.insert("code".into(), J::String(fc.code.clone()));
+                if let Some(sys) = &fc.system {
+                    m.insert("system".into(), J::String(sys.clone()));
+                }
+                if let Some(d) = &fc.display {
+                    m.insert("unit".into(), J::String(d.clone()));
+                }
+                Some((etype.clone(), J::Object(m)))
+            }
             _ => None,
         },
         FshValue::Reference(r) => {
@@ -1347,14 +1563,16 @@ fn constrain_type(
         }
         for (group_code, gmatches) in groups {
             let mut new_type = et.clone();
-            let actual = type_code(et);
+            // `getActualCode()` is the raw `code` field (NOT the fhir-type-ext
+            // resolved code); FHIRPath System primitives keep their raw code.
+            let actual = et.get("code").and_then(|v| v.as_str()).unwrap_or("");
             let fhirpath_primitive = actual.starts_with("http://hl7.org/fhirpath/System.");
             if !fhirpath_primitive {
                 if let Some(o) = new_type.as_object_mut() {
                     o.insert("code".into(), J::String(group_code.clone()));
                 }
             }
-            apply_profiles(&mut new_type, &gmatches);
+            apply_profiles(&mut new_type, &gmatches, &kind);
             new_types.push(new_type);
         }
     }
@@ -1407,7 +1625,7 @@ fn constrain_type(
 }
 
 /// `applyProfiles` (targetType == None branch).
-fn apply_profiles(new_type: &mut J, matches: &[&Match]) {
+fn apply_profiles(new_type: &mut J, matches: &[&Match], kind: &str) {
     let mut matched_profiles: Vec<String> = Vec::new();
     let mut matched_target_profiles: Vec<String> = Vec::new();
     let new_code = type_code(new_type).to_string();
@@ -1415,6 +1633,10 @@ fn apply_profiles(new_type: &mut J, matches: &[&Match]) {
         let md_url = m.metadata.url.clone().unwrap_or_default();
         let md_sdtype = m.metadata.sd_type.clone().unwrap_or_default();
         if m.metadata.id == new_code && matches.len() == 1 {
+            continue;
+        } else if kind == "logical" && new_code == md_sdtype && md_sdtype == md_url {
+            // A logical model's newType code is a URL; do not add it as a
+            // profile/targetProfile (ElementDefinition.ts:1582-1589).
             continue;
         } else if is_reference_type(&m.code) && !is_reference_type(&md_sdtype) {
             matched_target_profiles.push(md_url);
@@ -1444,8 +1666,107 @@ fn apply_profiles(new_type: &mut J, matches: &[&Match]) {
 // AddElementRule / ContainsRule (minimal)
 // ---------------------------------------------------------------------------
 
-fn apply_add_element(_sd: &mut StructureDefinition, _rule: &Rule, _fisher: &dyn Fisher, diag: &mut Vec<String>) {
-    diag.push("AddElementRule not yet implemented".to_string());
+/// `ElementDefinition.initializeElementType` — build the initial type array
+/// from the AddElementRule's declared types.
+fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Vec<J> {
+    let mut ref_cnt = 0;
+    let mut can_cnt = 0;
+    let mut codeable_ref_cnt = 0;
+    let mut initial: Vec<J> = Vec::new();
+    for t in types {
+        if t.is_reference {
+            ref_cnt += 1;
+        } else if t.is_canonical {
+            can_cnt += 1;
+        } else if t.is_codeable_reference {
+            codeable_ref_cnt += 1;
+        } else {
+            let sd_type = fisher
+                .fish_for_metadata(&t.type_)
+                .and_then(|m| m.sd_type)
+                .unwrap_or_else(|| t.type_.clone());
+            let mut o = Map::new();
+            o.insert("code".into(), J::String(sd_type));
+            let cand = J::Object(o);
+            if !initial.contains(&cand) {
+                initial.push(cand);
+            }
+        }
+    }
+    let mk = |code: &str| {
+        let mut o = Map::new();
+        o.insert("code".into(), J::String(code.to_string()));
+        J::Object(o)
+    };
+    if ref_cnt > 0 {
+        initial.push(mk("Reference"));
+    }
+    if can_cnt > 0 {
+        initial.push(mk("canonical"));
+    }
+    if codeable_ref_cnt > 0 {
+        initial.push(mk("CodeableReference"));
+    }
+    initial
+}
+
+/// `StructureDefinition.newElement` + `ElementDefinition.applyAddElementRule`.
+fn apply_add_element(sd: &mut StructureDefinition, rule: &Rule, fisher: &dyn Fisher, diag: &mut Vec<String>) {
+    let Rule::AddElement {
+        path,
+        min,
+        max,
+        flags,
+        types,
+        content_reference,
+        short,
+        definition,
+        ..
+    } = rule
+    else {
+        return;
+    };
+    let path_type = sd.path_type();
+    let id = format!("{path_type}.{path}");
+    // newElement: error if an ancestor already defines this element.
+    if sd.find_element(&id).is_some() {
+        diag.push(format!("Element already defined: {id}"));
+        return;
+    }
+    let mut ed = ElementDefinition::new(&id);
+    // base + Element root constraints are set before captureOriginal in stock and
+    // thus excluded from the differential; we skip them (no observable effect on
+    // the differential, and they are not referenced downstream for these models).
+    // type / contentReference, then card / flags / short / definition all appear
+    // in the differential because there is no captured original for a new element.
+    if !types.is_empty() {
+        ed.set("type", J::Array(initialize_element_type(types, fisher)));
+    } else if let Some(cr) = content_reference {
+        ed.set("contentReference", J::String(cr.clone()));
+    }
+    sd.add_element(ed);
+    let Some(ei) = sd.index_of_id(&id) else {
+        return;
+    };
+    if !types.is_empty() {
+        constrain_type(sd, ei, types, None, fisher, diag);
+    }
+    constrain_cardinality(&mut sd.elements[ei], *min, max);
+    apply_flags(&mut sd.elements[ei], flags, false, diag);
+    let short = short.clone().filter(|s| !s.is_empty());
+    let definition = definition.clone().filter(|s| !s.is_empty());
+    if let Some(s) = &short {
+        sd.elements[ei].set("short", J::String(s.clone()));
+    }
+    match &definition {
+        Some(d) => sd.elements[ei].set("definition", J::String(d.clone())),
+        None => {
+            // sdf-3: default definition to short when definition is empty.
+            if let Some(s) = &short {
+                sd.elements[ei].set("definition", J::String(s.clone()));
+            }
+        }
+    }
 }
 
 fn handle_contains(
@@ -1557,6 +1878,27 @@ fn build_context(ec: &ExtensionContext, _fisher: &dyn Fisher) -> Option<J> {
 // Caret application (FHIR schema)
 // ---------------------------------------------------------------------------
 
+/// Resolve a `Canonical(localName)` caret value to its url. Stock fishes SD
+/// types first (`ElementDefinition.ts:2006`); fall back to local ValueSet /
+/// CodeSystem names when the fisher can't resolve an SD url.
+fn resolve_canonical_caret(
+    value: &FshValue,
+    fisher: &dyn Fisher,
+    vs_url: &dyn Fn(&str) -> Option<String>,
+    cs_url: &dyn Fn(&str) -> Option<String>,
+) -> FshValue {
+    if let FshValue::Canonical(c) = value {
+        if fisher.fish_for_metadata(&c.entity_name).and_then(|m| m.url).is_none() {
+            if let Some(url) = vs_url(&c.entity_name).or_else(|| cs_url(&c.entity_name)) {
+                let mut c2 = c.clone();
+                c2.entity_name = url;
+                return FshValue::Canonical(c2);
+            }
+        }
+    }
+    value.clone()
+}
+
 fn apply_caret_fhir(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, value: &FshValue, _cfg: &Config) {
     let caret_path = resolve_caret_aliases(caret_path);
     if let Some((segs, leaf_ty)) = crate::caret_schema::resolve_path(resource_type, &caret_path) {
@@ -1592,6 +1934,7 @@ pub fn build_sd_context<'a>(
     set_aliases(docs);
     let mut ctx = SdContext::new(store, cfg, docs, vs_url, cs_url);
     ctx.export_all();
+    ctx.export_mappings(docs);
     ctx
 }
 

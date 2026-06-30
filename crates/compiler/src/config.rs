@@ -63,4 +63,17 @@ impl Config {
     pub fn status(&self) -> &str {
         self.status.as_deref().unwrap_or("draft")
     }
+
+    /// `tank.config.fhirVersion?.[0]` — the configured FHIR version string.
+    /// In sushi-config.yaml `fhirVersion` may be a scalar (`4.0.1`) or a
+    /// sequence; we take the first element / the scalar.
+    pub fn fhir_version(&self) -> Option<String> {
+        match self.fhir_version.as_ref()? {
+            serde_yaml::Value::String(s) => Some(s.trim().to_string()),
+            serde_yaml::Value::Sequence(seq) => seq
+                .first()
+                .and_then(|v| v.as_str().map(|s| s.trim().to_string())),
+            _ => None,
+        }
+    }
 }

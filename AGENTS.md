@@ -380,10 +380,54 @@ Phases from the plan (0–9). Current state:
     resolve `$alias` brackets (pre-existing Phase-4 gap; shows up only in crd VS, which
     was never gated). (g) AssignmentRule of an Instance / deferred `^contained` carets
     not handled.
-- [~] **Phase 6 — full SD compatibility** — 79/87 SDs byte-identical (epi 27/28,
-  ips 28/32, mcode 45/53, crd 24/27). Remaining: AddElementRule (logicals, +R5 Base
-  unbundle), predefined input/resources, deep reslicing (ips Composition), nested
-  contentReference min ordering (epi). Serial cleanup after Phase 7.
+- [~] **Phase 6 — full SD compatibility** — **137/140 SDs byte-identical (mcode
+  53/53, ips 31/32, crd 26/27, epi 27/28)** after the 2026-06-29 SD-parity pass
+  (dashboard 638→654/665). Remaining 3 SD: ips `Composition-uv-ips` + epi
+  `composition-epi-type1` (deep `section.section` reslicing + nested
+  contentReference min ordering — hardest, not started); crd `profile-nutritionorder`
+  (binds to ValueSets defined as **predefined `input/resources/*.xml`** — needs
+  predefined-resource (incl. XML) loading, out of sd_export scope).
+  - **2026-06-29 SD-parity pass fixes (16 resources: 13 SD + 3 SD-blocked instances):**
+    1. **fhirVersion for Base-parented logicals** (`get_structure_definition`): when
+       `baseDefinition == .../StructureDefinition/Base` (the time-traveling R5-in-R4
+       bundle, fhirVersion 5.0.0), override with `config.fhir_version()` (4.0.1).
+       Propagates through the export chain (Document fixed → IPSSectionsLM inherits).
+       Fixed ips Document/DocumentSection.
+    2. **maxValueSet `valueCanonical`** (6 mcode): `resolve_canonical_caret` resolves
+       `Canonical(localName)` in element/SD-body caret values against the fisher (SD)
+       then local `vs_url`/`cs_url` closures (mirrors replaceReferences). Was emitting
+       the bare name.
+    3. **patternQuantity from a FshCode on a Quantity `value[x]`** (mcode radiotherapy
+       + unblocks 3 instances: Procedure×2 + Bundle-jenny-m): `is_quantity_type` branch
+       in `assign_value_inner` coerce → `{code,system,unit}` (`FshCode.toFHIRQuantity`).
+    4. **`extension[alias/url/id]` → inherited sliceName** (mcode cancer-patient
+       birthsex): `find_element_with_ext_fallback` in `set_rules` (findMatchingSlice
+       fishForFHIR branch) + `StructureDefinition::find_slice_by_profile_url`. Kept the
+       generic `find_matching_slice` UNTOUCHED (instance_export relies on it returning
+       None to trigger its own bracket-rewrite — changing it regressed 9 mcode instances).
+    5. **AddElementRule** (ips IPSSectionsLM, crd CRDMetricData): `apply_add_element` +
+       `initialize_element_type` (port of newElement + applyAddElementRule). base +
+       Element root constraint are SKIPPED (excluded from the differential anyway — a
+       new element has no captured original, so set keys = type/min/max/short/definition
+       all show; base/constraint would spuriously show, so don't set them).
+    6. **Binding fishes ValueSet only** (`fish_for_metadata_vs`, new Fisher-trait method
+       w/ default): `* type from ResourceType` was matching a StructureDefinition; stock
+       does `fishForMetadata(_, Type.ValueSet)`.
+    7. **matchesLogicalType profile suppression** (`apply_profiles` logical branch): a
+       logical-model type code is a URL; do NOT add it as profile/targetProfile
+       (`ElementDefinition.ts:1582-1589`). Fixed the spurious `profile:[url]` on
+       IPSSectionsLM section elements.
+    8. **Mapping export** (`SdContext::export_mappings`/`export_mapping`, run after
+       export_all): port of MappingExporter — SD-level `mapping` (identity/name/uri/
+       comment, with parent-merge check) + element-level `mapping` (identity/map/
+       comment/language) via findElementByPath. `original_mapping` diff infra already
+       existed. (element lookups use an empty local-exported fisher to dodge the
+       &mut/&borrow conflict — fine since mapping paths are direct element names.)
+    9. **getActualCode for the FHIRPath-primitive check** (`constrain_type`): the
+       `fhirPathPrimitive` guard must use the RAW `code` field (`getActualCode`), NOT the
+       fhir-type-ext-resolved `type_code`. `* url only uri` was rewriting Extension.url's
+       `code` from `System.String` to `uri`. Fixed crd ext-coverage-information.
+       **GENERIC change to constrain_type — re-ran full dashboard, no regression.**
 - [~] **Phase 7 — instance export** — LARGELY DONE & verified. Byte parity (2026-06-29
   update): **mcode 189/193, epi 54/54, ips 49/49, crd 26/26 real instances** — only
   remaining instance misses are 3 mcode (SD-blocked, see below) + the per-IG
@@ -466,13 +510,13 @@ Phases from the plan (0–9). Current state:
     QA/diagnostics (validateRequiredElements/checkForMultipleChoice/nameless-slice)
     collected-as-wording but NOT emitted/gated.
 - [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
-  **Current: 638/665 byte-identical** (was 620 before the 2026-06-29 instance
-  nested-extension/canonical fixes; 547 pre-Phase-4.1; 247 pre-SD). VS/CS now ips
-  35/36, epi 29/29, mcode 104/104, crd 28/31. Remaining gaps: 8 mcode + 4 ips + 1 epi
-  + 3 crd SDs (AddElementRule, predefined input/resources, deep reslicing,
-  patternQuantity-on-value[x]-choice), 4 VS (external bare-name CS/VS→url), 3 mcode
-  instances (SD-blocked patternQuantity, see Phase 7), and the 4 per-IG
-  ImplementationGuide resources (no IGExporter).
+  **Current: 654/665 byte-identical** (was 638 before the 2026-06-29 SD-parity pass;
+  620 pre instance nested-ext/canonical; 547 pre-Phase-4.1; 247 pre-SD). SD now mcode
+  53/53, ips 31/32, crd 26/27, epi 27/28 (137/140). VS/CS ips 35/36, epi 29/29, mcode
+  104/104, crd 28/31. Instances all clean (only the per-IG ImplementationGuide misses).
+  **Remaining 11 gaps**: 3 SD (ips Composition-uv-ips + epi composition-epi-type1 deep
+  reslicing/contentReference; crd profile-nutritionorder needs predefined-XML loading),
+  4 VS (external bare-name CS/VS→url), 4 per-IG ImplementationGuide (no IGExporter).
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps

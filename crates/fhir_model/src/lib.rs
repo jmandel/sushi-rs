@@ -34,6 +34,11 @@ pub trait Fisher {
     fn fish_for_fhir(&self, name: &str) -> Option<Value>;
     /// Metadata for a name|id|url.
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata>;
+    /// Metadata restricted to ValueSet definitions (`fishForMetadata(_, Type.ValueSet)`).
+    /// Default falls back to the untyped fish.
+    fn fish_for_metadata_vs(&self, name: &str) -> Option<Metadata> {
+        self.fish_for_metadata(name)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -658,6 +663,27 @@ impl StructureDefinition {
                         .unwrap_or(false)
             })
             .cloned()
+    }
+
+    /// `findMatchingSlice` fishForFHIR branch (StructureDefinition.ts:907-913):
+    /// match an existing slice whose `type[0].profile[0]` equals `url`. Used by
+    /// callers that resolve an extension bracket which is not a sliceName.
+    pub fn find_slice_by_profile_url(&self, url: &str) -> Option<String> {
+        self.elements
+            .iter()
+            .find(|ed| {
+                ed.slice_name().is_some()
+                    && ed
+                        .get("type")
+                        .and_then(|v| v.as_array())
+                        .and_then(|a| a.first())
+                        .and_then(|t| t.get("profile"))
+                        .and_then(|p| p.as_array())
+                        .and_then(|a| a.first())
+                        .and_then(|v| v.as_str())
+                        == Some(url)
+            })
+            .and_then(|ed| ed.slice_name().map(String::from))
     }
 
     /// `unfold` by id. Returns the ids of newly added children.
