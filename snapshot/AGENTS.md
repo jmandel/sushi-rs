@@ -110,6 +110,26 @@ bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/crd \
 bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/sdc \
   hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 \
   hl7.fhir.r4.examples#4.0.1 hl7.fhir.uv.extensions.r4#5.3.0
+
+bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/carinbb \
+  hl7.fhir.r4.core#4.0.1 hl7.fhir.us.core#7.0.0 \
+  hl7.fhir.uv.extensions.r4#5.3.0 hl7.fhir.us.carin-bb#dev
+
+bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/dtr \
+  hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 \
+  hl7.fhir.us.core#7.0.0 hl7.fhir.us.core.v610#6.1.0 \
+  hl7.fhir.us.core.v311#3.1.1 hl7.fhir.uv.sdc#4.0.0 \
+  hl7.fhir.us.davinci-hrex#1.2.0 \
+  hl7.fhir.uv.extensions.r4#5.3.0-ballot-tc1 \
+  hl7.fhir.us.davinci-crd#2.2.1 hl7.fhir.uv.tools.r4#1.1.2
+
+bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/ecr \
+  hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 \
+  hl7.fhir.us.core#6.1.0 us.nlm.vsac#0.23.0 \
+  us.cdc.phinvads#0.12.0 hl7.fhir.us.bfdr#2.0.0 \
+  hl7.fhir.us.odh#1.3.0 hl7.fhir.us.ph-library#2.0.0-snapshot \
+  hl7.fhir.uv.cql#2.0.0 hl7.fhir.uv.crmi#1.0.0 \
+  hl7.fhir.uv.extensions.r4#5.3.0-ballot-tc1 hl7.fhir.uv.tools.r4#1.1.2
 ```
 
 The Rust generator now gates strict semantic `snapshot.element[]` parity against
@@ -144,6 +164,52 @@ Current strict full-snapshot tests compare stable JSON for the complete
 
 ## Java Parity Notes
 
+- Holdout-IG corpus expansion (2026-06-30): harvested six previously-unseen IGs
+  from the stock-SUSHI outputs under
+  `/home/jmandel/hobby/sushi-rs/temp/holdout/<ig>-stock/...` and gated Rust against
+  the Java native-R5 oracle. Results: **CARIN BB 6/6**, **Genomics Reporting 33/33**,
+  **DTR 21/21**, **eCR 28/28**, **NDH 47/50**, **PAS 64/73**. Missing dependency
+  packages (bfdr/odh/ph-library/cql/crmi for eCR, davinci-pas/subscriptions-backport
+  for PAS) were hardlinked into the isolated cache from the main repo's cache,
+  never `~/.fhir`. Generator behaviors discovered/fixed while closing these:
+  - `constraint.source` is stamped with the base/source-SD URL during the
+    per-element merge (`updateFromDefinition` ~PU:3085) for base constraints that
+    lack a source — but only for merged (differential-touched) elements. CARIN BB
+    `Organization.identifier:NPI` stamps `us-core-organization`; CRD leaves the same
+    `us-core-16..19` sourceless because it only touches the unsliced parent. The old
+    `preserves_missing_constraint_source` hack is gone from the merge path (kept on
+    the projection path).
+  - Inherited unsliced datatype children under a sliced anchor are dropped only when
+    the base was already sliced AND the differential constrains none of them. Base
+    unsliced (CARIN BB `Patient.identifier`, introduces slicing) keeps them; base
+    sliced + no unsliced-child diff (CRD `Practitioner.identifier`) prunes; base
+    sliced + unsliced-child diff (NDH `Organization.identifier.assigner`) keeps.
+  - The profiled-resource root overlay copies short/definition/comment/requirements/
+    alias/mapping always, but condition/isModifier/isModifierReason/isSummary only
+    when the element narrows to a **single** profiled type. Multi-typed
+    `Parameters.parameter.resource` (DTR order.resource, 9 CRD profiles) keeps its
+    inherited inv-1/isSummary.
+  - Local-base chains without stored snapshots are generated on demand
+    (`structure_with_r4_snapshot`, plus a `profile_root_element` full-snapshot
+    fallback) so a profiled-type root like DTR `dtr-questionnaireresponse-adapt`
+    resolves.
+  - Extension-slice `isSummary` is never stripped by the root overlay (it keeps the
+    inherited value: none for stored us-core birthsex, false for a fresh clone).
+  - `checkExtensionDoco` normalizes an extension profile's untouched root
+    (short=Extension, definition="An Extension", clearing comment/req/alias/mapping)
+    — but only for the top-level profile, never a dependency extension consumed as a
+    slice/overlay source. Gated by `SnapshotOptions.apply_extension_root_doco`
+    (true only at the public entry point).
+  - Markdown known-relative links (workflow-extensions.html#instantiation,
+    questionnaire.html, rendering-markdown/xhtml, itemWeight) stay relative only in
+    freshly-applied extension-root doco; inherited copies are rewritten to the spec
+    URL. Empty-string `slicing.description` is dropped (R4->R5 parse drops empty
+    primitives).
+  - Still open (documented in the per-IG commits): eCR none (28/28); NDH 3
+    (extension-slice alias clear, local extension root condition keep, near-duplicate
+    mapping collapse); PAS 9 (choice/type slice rules closed-vs-open, Bundle.entry
+    alias, prune-on-merge-into-existing-slice for re-sliced identifier, one
+    cardinality).
 - Real R4 IPS coverage (2026-06-30): harvested 29 constraint
   StructureDefinitions from `/home/jmandel/periodicity/temp/ips-ig/fsh-generated/resources`.
   Publisher-path native R5 Java oracle generated **29/29** goldens, and Rust
@@ -168,6 +234,23 @@ Current strict full-snapshot tests compare stable JSON for the complete
   R4 core, xver-r5.r4, R4 examples, and extensions.r4 as listed above. The
   Publisher-path native R5 Java oracle generated **73/73** goldens, and Rust now
   matches **73/73**.
+- Real R4 CARIN BB coverage (2026-06-30): harvested 6 constraint
+  StructureDefinitions. Package context must include R4 core, US Core 7.0.0,
+  extensions.r4 5.3.0, and the local CARIN BB dev package. The Publisher-path
+  native R5 Java oracle generated **6/6** goldens, and Rust now matches **6/6**.
+- Real R4 DTR coverage (2026-06-30): harvested 21 constraint
+  StructureDefinitions. Package context must match the DTR command above,
+  including `hl7.fhir.uv.extensions.r4#5.3.0-ballot-tc1`; using plain
+  `5.3.0` is a false context and causes diffs such as the qpackage input
+  parameter profiles. The Publisher-path native R5 Java oracle generated
+  **21/21** goldens, and Rust now matches **21/21**.
+- Real R4 eCR coverage (2026-06-30): harvested 28 constraint
+  StructureDefinitions. Package context must match the eCR command above,
+  including US Core 6.1.0, VSAC 0.23.0, PHIN VADS 0.12.0, BFDR 2.0.0,
+  ODH 1.3.0, PH Library 2.0.0-snapshot, CQL 2.0.0, CRMI 1.0.0,
+  extensions.r4 5.3.0-ballot-tc1, tools.r4 1.1.2, and xver-r5.r4 0.1.0.
+  The Publisher-path native R5 Java oracle generated **28/28** goldens, and
+  Rust now matches **28/28**.
 - Native R5 internal output for R4 resources keeps `fhirVersion: "4.0.1"` but
   follows R5 model conversion behavior, e.g. R4 constraint `xpath` fields are
   absent.
@@ -208,7 +291,16 @@ Current strict full-snapshot tests compare stable JSON for the complete
   `StructureDefinition-rendering-markdown.html`,
   `StructureDefinition-rendering-xhtml.html`,
   `codesystem-concept-properties.html#concept-properties-itemWeight`, and
-  `workflow-extensions.html#instantiation`.
+  `workflow-extensions.html#instantiation`. DTR adds
+  `OperationDefinition-Questionnaire-assemble.html`,
+  `StructureDefinition-sdc-questionnaire-subQuestionnaire.html`,
+  `operational.html#guidelines-for-estimated-time-to-complete-a-dtr-questionnaire`,
+  and `extraction.html` as relative links. eCR/PH-library adds a quirk where
+  `StructureDefinition-us-ph-composition.html` rewrites to the unversioned
+  absolute `http://hl7.org/fhir/StructureDefinition-us-ph-composition.html`.
+  The SDC variable link rewrite to `STU4-ballot` is path-sensitive: eCR
+  PlanDefinition variable extensions get the rewritten comment, but DTR
+  Questionnaire variable extensions keep the original `2025Jan` link.
 - Binding overlay fixtures should include `strength` when setting
   `binding.description`; Java can throw a null dereference for a
   description-only binding differential on a required base binding.
@@ -246,12 +338,27 @@ Current strict full-snapshot tests compare stable JSON for the complete
   (`QuestionnaireResponse.item.extension:itemMedia`) also projects local root
   XPath constraints and uses the host profile as the missing `ext-1.source`.
   Non-local extension slices under inherited slicing copy root doco but keep
-  inherited/base constraints and omit root `condition`.
+  inherited/base constraints and omit root `condition`. eCR shows additional
+  Publisher-native root condition omissions for `workflow-supportingInfo` and
+  PH-library `us-ph-named-eventtype-extension`.
   Observed exceptions still need root-cause cleanup:
   `mcode-histology-morphology-behavior`, core `condition-related`,
   `alternate-reference` condition omission, core `codeOptions`, and versioned
   `artifact-versionAlgorithm|5.2.0` generic Extension doco differ from the
   general overlay rule.
+- eCR `cqf-fhirQueryPattern` inserted under PlanDefinition materializes
+  extension-profile children even without explicit descendant differentials.
+  Publisher projects `id`, `extension`, `url`, and `value[x]` descendants with
+  special id/condition/definition/MS quirks, including the historical
+  "managable" spelling in the `Element.extension` definition and
+  `Extension.url.mustSupport = true`.
+- eCR PlanDefinition recursive action handling has observed Publisher quirks:
+  first-level `PlanDefinition.action(.slice)?.relatedAction.offset[x]` inferred
+  type-slice anchors are closed and copy the `offsetDuration` definition, while
+  nested recursive action slices stay open. Nested `checkSuspectedDisorder` and
+  `checkReportable` action rows get MS/binding/max/min stamps, and nested
+  DataRequirement filter constraint sources reset to the core PlanDefinition
+  URL for `drq-1`/`drq-2`.
 - Mapping arrays are differential-first in Publisher snapshots: derived
   `mapping[]` entries precede inherited mappings while exact duplicates are
   suppressed. SDC `CodeSystem`, `Questionnaire`, and `ValueSet` root/element
@@ -272,9 +379,19 @@ Current strict full-snapshot tests compare stable JSON for the complete
   open `$this` choice slicing open (IPS timing/effective/value[x], CRD
   Timing/NutritionOrder), but CRD's Reference-vs-CodeableConcept choice slices
   (`DeviceRequest.code[x]`, `MedicationRequest.medication[x]`) come out closed.
+  For descendant unfolding under a multi-type `[x]` choice, Publisher uses
+  `Element` children when the narrowed type has no profile, and closes the
+  `$this` type slicing on the descendant-unfolded choice row. Exact `[x]` rows
+  that are not descendant-unfolded can remain open.
 - When a non-Backbone datatype element is sliced, Java removes inherited
   unsliced datatype children under that anchor before inserting the slices
   (CRD `Practitioner.identifier`). Backbone slices keep their unsliced children.
 - Current native R5 projection preserves missing `constraint.source` for the US
   Core identifier check constraints `us-core-16` through `us-core-19`; Java does
   not stamp those with the containing profile URL in CRD.
+- Extension profile root overlay includes root cardinality. Derived `max="*"`
+  must not widen an inherited/profile `max="1"` after the overlay. Publisher
+  also omits root `condition` for prohibited extension slices (`max=0`).
+- Unfolded type constraints from a non-core base profile use that base profile
+  as `constraint.source`, not the raw datatype URL. DTR Narrative descendants
+  exercise this with `txt-1`/`txt-2`.
