@@ -1,0 +1,51 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Escape",
+  "url": "http://example.org/StructureDefinition/Escape",
+  "version": "0.1.0",
+  "name": "Escape",
+  "title": "Just going to ✎ in some unicode",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.category.text",
+        "path": "Observation.category.text",
+        "patternString": "When there is a sign of ❄, often school is canceled.\nKids can stay home and play with 🀱 or do anything!"
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Observation.value[x]:valueString",
+        "path": "Observation.value[x]",
+        "sliceName": "valueString",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "patternString": "This cool ☃ can read music in 𝄞!"
+      }
+    ]
+  }
+}

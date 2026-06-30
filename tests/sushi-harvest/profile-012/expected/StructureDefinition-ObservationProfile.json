@@ -1,0 +1,34 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ObservationProfile",
+  "url": "http://example.org/StructureDefinition/ObservationProfile",
+  "version": "0.1.0",
+  "name": "ObservationProfile",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "min": 1,
+        "max": "5"
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "min": 1
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "min": 2
+      }
+    ]
+  }
+}

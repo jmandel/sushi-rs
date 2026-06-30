@@ -1,0 +1,26 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "ZOO",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/ZOO",
+  "concept": [
+    {
+      "code": "goat",
+      "concept": [
+        {
+          "code": "mountaingoat"
+        }
+      ]
+    },
+    {
+      "code": "bat"
+    },
+    {
+      "code": "jackalope"
+    }
+  ],
+  "count": 4
+}

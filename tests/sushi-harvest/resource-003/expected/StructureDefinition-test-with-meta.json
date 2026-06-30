@@ -1,0 +1,26 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "test-with-meta",
+  "url": "http://example.org/StructureDefinition/test-with-meta",
+  "version": "0.1.0",
+  "name": "TestWithMeta",
+  "title": "A Test with Meta Resource",
+  "status": "active",
+  "description": "Test resource with meta",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "test-with-meta",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "test-with-meta",
+        "path": "test-with-meta",
+        "short": "A Test with Meta Resource",
+        "definition": "Test resource with meta"
+      }
+    ]
+  }
+}

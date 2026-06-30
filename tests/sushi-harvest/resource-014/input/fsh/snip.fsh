@@ -1,0 +1,4 @@
+
+        Resource: TestResource
+        * valueBoolean = true
+        

@@ -1,0 +1,30 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "2000-01",
+  "url": "http://example.org/StructureDefinition/2000-01",
+  "version": "0.1.0",
+  "name": "2000-01",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "constraint": [
+          {
+            "key": "2000-10-31T00:01:02.000+00:00",
+            "severity": "error",
+            "human": "It shall not defy the laws of physics nor the laws of men",
+            "source": "http://example.org/StructureDefinition/2000-01"
+          }
+        ]
+      }
+    ]
+  }
+}

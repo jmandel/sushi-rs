@@ -1,0 +1,61 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TestResource",
+  "url": "http://example.org/StructureDefinition/TestResource",
+  "version": "0.1.0",
+  "name": "TestResource",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "TestResource",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "TestResource",
+        "path": "TestResource",
+        "short": "TestResource",
+        "definition": "TestResource"
+      },
+      {
+        "id": "TestResource.isValid",
+        "path": "TestResource.isValid",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "TestResource.stuff",
+        "path": "TestResource.stuff",
+        "short": "just stuff",
+        "definition": "a list of some stuff",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "TestResource.address",
+        "path": "TestResource.address",
+        "short": "Just an address",
+        "definition": "This definition for address includes markdown for unordered lists:\n* Level 1 list item 1\n  * Level 2 list item 1a\n  * Level 2 list item 1b\n* Level 1 list item 2",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Address"
+          }
+        ]
+      }
+    ]
+  }
+}

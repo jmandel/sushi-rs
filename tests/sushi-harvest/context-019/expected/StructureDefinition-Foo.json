@@ -1,0 +1,22 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Foo",
+  "url": "http://example.org/StructureDefinition/Foo",
+  "version": "0.1.0",
+  "name": "Foo",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Questionnaire",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Questionnaire",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Questionnaire",
+        "path": "Questionnaire"
+      }
+    ]
+  }
+}

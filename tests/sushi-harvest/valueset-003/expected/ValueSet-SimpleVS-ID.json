@@ -1,0 +1,10 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "SimpleVS",
+  "id": "SimpleVS-ID",
+  "title": "Simple Value Set",
+  "description": "A simple value set for testing metadata",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/SimpleVS-ID"
+}

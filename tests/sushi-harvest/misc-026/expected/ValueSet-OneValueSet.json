@@ -1,0 +1,8 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "OneValueSet",
+  "id": "OneValueSet",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/OneValueSet"
+}

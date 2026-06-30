@@ -1,0 +1,42 @@
+{
+  "resourceType": "Observation",
+  "id": "MyObservation",
+  "component": [
+    {
+      "valueQuantity": {
+        "value": 230000000000,
+        "code": "kg",
+        "system": "http://unitsofmeasure.org"
+      }
+    },
+    {
+      "valueQuantity": {
+        "value": 6.453e+25,
+        "code": "s",
+        "system": "http://unitsofmeasure.org"
+      }
+    },
+    {
+      "valueInteger": 4500
+    },
+    {
+      "valueSampledData": {
+        "period": 0.0015,
+        "dimensions": 880000,
+        "origin": {
+          "value": 0.00000155,
+          "code": "m",
+          "system": "http://unitsofmeasure.org"
+        }
+      }
+    },
+    {
+      "valueInteger": 30
+    }
+  ],
+  "extension": [
+    {
+      "valueDecimal": 0.48
+    }
+  ]
+}

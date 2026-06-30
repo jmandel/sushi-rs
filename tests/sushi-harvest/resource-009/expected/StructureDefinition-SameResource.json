@@ -1,0 +1,25 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "SameResource",
+  "url": "http://example.org/StructureDefinition/SameResource",
+  "version": "0.1.0",
+  "name": "SameResource",
+  "title": "Second Resource",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "SameResource",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "SameResource",
+        "path": "SameResource",
+        "short": "Second Resource",
+        "definition": "Second Resource"
+      }
+    ]
+  }
+}

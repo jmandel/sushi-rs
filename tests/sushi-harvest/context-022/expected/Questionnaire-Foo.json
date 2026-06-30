@@ -1,0 +1,18 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "Foo",
+  "item": [
+    {
+      "item": [
+        {
+          "linkId": "foo",
+          "item": [
+            {
+              "linkId": "bar"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

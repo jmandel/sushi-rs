@@ -1,0 +1,23 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ObservationProfile",
+  "url": "http://example.org/StructureDefinition/ObservationProfile",
+  "version": "0.1.0",
+  "name": "ObservationProfile",
+  "status": "active",
+  "description": "Here is a \n new line with some \t tabbed information. \r The end.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation"
+      }
+    ]
+  }
+}

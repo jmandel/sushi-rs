@@ -1,0 +1,27 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "ZOO",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/ZOO",
+  "concept": [
+    {
+      "code": "anteater",
+      "display": "Anteater",
+      "concept": [
+        {
+          "code": "northern",
+          "display": "Northern tamandua",
+          "property": [
+            {
+              "valueString": "They are strong climbers."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "count": 2
+}

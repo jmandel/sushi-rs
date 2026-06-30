@@ -1,0 +1,23 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "StaircaseObservation",
+  "url": "http://example.org/StructureDefinition/StaircaseObservation",
+  "version": "0.1.0",
+  "name": "StaircaseObservation",
+  "status": "active",
+  "description": "This\n  Description\n\n    Looks\n      Like\n\n        A\n          Staircase",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation"
+      }
+    ]
+  }
+}

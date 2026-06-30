@@ -1,0 +1,25 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TestWithMultiStringDesc",
+  "url": "http://example.org/StructureDefinition/TestWithMultiStringDesc",
+  "version": "0.1.0",
+  "name": "TestWithMultiStringDesc",
+  "status": "active",
+  "description": "This is a multi-string description\nwith a couple of paragraphs.\n\nThis is the second paragraph.  It has bullet points w/ indentation:\n\n* Bullet 1\n  * Bullet A\n  * Bullet B\n    * Bullet i\n  * Bullet C\n* Bullet 2",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "TestWithMultiStringDesc",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "TestWithMultiStringDesc",
+        "path": "TestWithMultiStringDesc",
+        "short": "TestWithMultiStringDesc",
+        "definition": "This is a multi-string description\nwith a couple of paragraphs.\n\nThis is the second paragraph.  It has bullet points w/ indentation:\n\n* Bullet 1\n  * Bullet A\n  * Bullet B\n    * Bullet i\n  * Bullet C\n* Bullet 2"
+      }
+    ]
+  }
+}

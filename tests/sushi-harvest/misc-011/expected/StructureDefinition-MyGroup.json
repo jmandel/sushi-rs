@@ -1,0 +1,23 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MyGroup",
+  "url": "http://example.org/StructureDefinition/MyGroup",
+  "version": "0.1.0",
+  "name": "MyGroup",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Group",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Group",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Group.characteristic.exclude",
+        "path": "Group.characteristic.exclude",
+        "mustSupport": true
+      }
+    ]
+  }
+}

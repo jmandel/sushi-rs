@@ -1,0 +1,17 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "ZOO",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/ZOO",
+  "concept": [
+    {
+      "code": "gorilla",
+      "display": "Gorilla",
+      "definition": "Let there be no mistake\nabout the greatest ape of all."
+    }
+  ],
+  "count": 1
+}

@@ -1,0 +1,9 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "SimpleVS",
+  "id": "SimpleVS",
+  "title": "First Value Set",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/SimpleVS"
+}

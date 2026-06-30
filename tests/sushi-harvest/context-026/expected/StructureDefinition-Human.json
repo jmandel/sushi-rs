@@ -1,0 +1,63 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Human",
+  "url": "http://example.org/StructureDefinition/Human",
+  "version": "0.1.0",
+  "name": "Human",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/Human",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "Human",
+        "path": "Human",
+        "short": "Human",
+        "definition": "Human"
+      },
+      {
+        "id": "Human.family",
+        "path": "Human.family",
+        "short": "Family",
+        "definition": "Family",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ]
+      },
+      {
+        "id": "Human.family.mother",
+        "path": "Human.family.mother",
+        "short": "Mother",
+        "definition": "Mother",
+        "min": 0,
+        "max": "2",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Human.family.father",
+        "path": "Human.family.father",
+        "short": "Father",
+        "definition": "Father",
+        "min": 0,
+        "max": "2",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

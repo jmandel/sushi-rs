@@ -1,0 +1,2284 @@
+[
+  {
+    "slug": "errorlistener-001",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should not log any errors for valid FSH",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-002",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should report mismatched input errors from antlr",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-003",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should report extraneous input errors from antlr",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-004",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space before = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-005",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space before = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-006",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space after = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-007",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space after = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-008",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space around = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-009",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space around = in an assignment rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-010",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space before = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-011",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space before = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-012",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space after = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-013",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space after = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-014",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space around = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-015",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space around = in a caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "errorlistener-016",
+    "sourceFile": "test/import/FSHErrorListener.test.ts",
+    "describe": "FSHErrorListener",
+    "it": "should make sense of errors due to no space after * in a rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-001",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should collect and return aliases in result",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-002",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should translate an alias when the alias is defined before its use",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-003",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should translate an alias when the alias is defined after its use",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-004",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should not translate an alias when the alias does not match",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-005",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should translate an alias from any input file",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-006",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased code prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-007",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased value set rule prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-008",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased reference prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-009",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an assignment rule aliased reference prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-010",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should not log an error when a contains rule aliased extension prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-011",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased contains rule type prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-012",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased value set system prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-013",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an aliased value set prefixed with $ does not resolve",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-014",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve an alias while accounting for a version",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-015",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve an alias while ignoring an empty version",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-016",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should log an error when an alias contains reserved characters",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-017",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve an alias with all supported characters",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-018",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve but log a warning when an alias contains unsupported characters",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-019",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve but log a warning when an alias contains unsupported characters and starts with $",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "alias-020",
+    "sourceFile": "test/import/FSHImporter.Alias.test.ts",
+    "describe": "Alias",
+    "it": "should resolve but log a warning when an alias contains ONLY a $",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-001",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should parse the simplest possible code system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-002",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should parse a code system with additional metadata",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-003",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should parse numeric code system name and id",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-004",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should parse a code system with a multi-line description",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-005",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-006",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should log an error and skip the code system when encountering a code system with a name used by another code system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-007",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should log an error and skip the code system when encountering an code system with a name used by another code system in another file",
+    "callee": null
+  },
+  {
+    "slug": "codesystem-008",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#csMetadata",
+    "it": "should log an error and skip the code system when encountering an code system with a name used by another code system in another file",
+    "callee": null
+  },
+  {
+    "slug": "codesystem-009",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a code system with one concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-010",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a code system with one concept with a display string",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-011",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a code system with one concept with display and definition strings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-012",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a concept with a multi-line definition string",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-013",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a code system with more than one concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-014",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should parse a code system with hierarchical codes",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-015",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#concept",
+    "it": "should log an error when a concept includes a system declaration",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-016",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#CaretValueRule",
+    "it": "should parse a code system that uses a CaretValueRule with no codes",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-017",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#CaretValueRule",
+    "it": "should parse a code system that uses CaretValueRules with no codes alongside rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-018",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#CaretValueRule",
+    "it": "should parse a code system that uses a CaretValueRule on a top-level concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-019",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#CaretValueRule",
+    "it": "should parse a code system that uses a CaretValueRule on a nested concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-020",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#CaretValueRule",
+    "it": "should keep the raw value of a code caret value rule when the value is a number or boolean",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-021",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "codesystem-022",
+    "sourceFile": "test/import/FSHImporter.CodeSystem.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet and a code path",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "extension-001",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse the simplest possible extension",
+    "callee": null
+  },
+  {
+    "slug": "extension-002",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse profile with additional metadata properties",
+    "callee": null
+  },
+  {
+    "slug": "extension-003",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse numeric extension name, parent, and id",
+    "callee": null
+  },
+  {
+    "slug": "extension-004",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse an extension with multiple contexts",
+    "callee": null
+  },
+  {
+    "slug": "extension-005",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": null
+  },
+  {
+    "slug": "extension-006",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when encountering a duplicate metadata attribute",
+    "callee": null
+  },
+  {
+    "slug": "extension-007",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the extension when encountering an extension with a name used by another extension",
+    "callee": null
+  },
+  {
+    "slug": "extension-008",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the extension when encountering an extension with a name used by another extension in another file",
+    "callee": null
+  },
+  {
+    "slug": "extension-009",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the extension when encountering an extension with a name used by another extension in another file",
+    "callee": null
+  },
+  {
+    "slug": "extension-010",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when the deprecated Mixins keyword is used",
+    "callee": null
+  },
+  {
+    "slug": "extension-011",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse simple card rules",
+    "callee": null
+  },
+  {
+    "slug": "extension-012",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse card rules w/ flags",
+    "callee": null
+  },
+  {
+    "slug": "extension-013",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#flagRule",
+    "it": "should parse single-path single-value flag rules",
+    "callee": null
+  },
+  {
+    "slug": "extension-014",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#BindingRule",
+    "it": "should parse value set rules w/ names and strength",
+    "callee": null
+  },
+  {
+    "slug": "extension-015",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule",
+    "callee": null
+  },
+  {
+    "slug": "extension-016",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule with (exactly) modifier",
+    "callee": null
+  },
+  {
+    "slug": "extension-017",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#onlyRule",
+    "it": "should parse an only rule with one type",
+    "callee": null
+  },
+  {
+    "slug": "extension-018",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with one item",
+    "callee": null
+  },
+  {
+    "slug": "extension-019",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with reserved word (code)",
+    "callee": null
+  },
+  {
+    "slug": "extension-020",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with item declaring a type",
+    "callee": null
+  },
+  {
+    "slug": "extension-021",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#caretValueRule",
+    "it": "should parse a caret value rule with a path",
+    "callee": null
+  },
+  {
+    "slug": "extension-022",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#obeysRule",
+    "it": "should parse an obeys rule with a path and multiple invariants",
+    "callee": null
+  },
+  {
+    "slug": "extension-023",
+    "sourceFile": "test/import/FSHImporter.Extension.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": null
+  },
+  {
+    "slug": "instance-001",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceOf",
+    "it": "should parse the simplest possible instance",
+    "callee": null
+  },
+  {
+    "slug": "instance-002",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceOf",
+    "it": "should parse numeric instance name and numeric instanceOf",
+    "callee": null
+  },
+  {
+    "slug": "instance-003",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceOf",
+    "it": "should parse an instance with an aliased type",
+    "callee": null
+  },
+  {
+    "slug": "instance-004",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceOf",
+    "it": "should not parse an instance that has no type",
+    "callee": null
+  },
+  {
+    "slug": "instance-005",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#title",
+    "it": "should parse an instance with a title",
+    "callee": null
+  },
+  {
+    "slug": "instance-006",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#description",
+    "it": "should parse an instance with a description",
+    "callee": null
+  },
+  {
+    "slug": "instance-007",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#usage",
+    "it": "should parse an instance with a usage",
+    "callee": null
+  },
+  {
+    "slug": "instance-008",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#usage",
+    "it": "should log an error for invalid usage and set default usage to example",
+    "callee": null
+  },
+  {
+    "slug": "instance-009",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#usage",
+    "it": "should log a warning if a system is specified on usage",
+    "callee": null
+  },
+  {
+    "slug": "instance-010",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#usage",
+    "it": "should log a warning if a conformance or terminology resource does not have a usage (and therefore will default to example)",
+    "callee": null
+  },
+  {
+    "slug": "instance-011",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#mixins",
+    "it": "should log an error when the deprecated Mixins keyword is used",
+    "callee": null
+  },
+  {
+    "slug": "instance-012",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse an instance with assigned value rules",
+    "callee": null
+  },
+  {
+    "slug": "instance-013",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse an instance with assigned values that are an alias",
+    "callee": null
+  },
+  {
+    "slug": "instance-014",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse an instance with assigned value resource rules",
+    "callee": null
+  },
+  {
+    "slug": "instance-015",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#pathRule",
+    "it": "should parse a pathRule",
+    "callee": null
+  },
+  {
+    "slug": "instance-016",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": null
+  },
+  {
+    "slug": "instance-017",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with an empty parameter value",
+    "callee": null
+  },
+  {
+    "slug": "instance-018",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": null
+  },
+  {
+    "slug": "instance-019",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceMetadata",
+    "it": "should log an error and skip the instance when encountering an instance with a name used by another instance",
+    "callee": null
+  },
+  {
+    "slug": "instance-020",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceMetadata",
+    "it": "should log an error and skip the instance when encountering an instance with a name used by another instance in another file",
+    "callee": null
+  },
+  {
+    "slug": "instance-021",
+    "sourceFile": "test/import/FSHImporter.Instance.test.ts",
+    "describe": "#instanceMetadata",
+    "it": "should log an error and skip the instance when encountering an instance with a name used by another instance in another file",
+    "callee": null
+  },
+  {
+    "slug": "logical-001",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse the simplest possible logical model",
+    "callee": null
+  },
+  {
+    "slug": "logical-002",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when encountering the mixins metadata attribute",
+    "callee": null
+  },
+  {
+    "slug": "logical-003",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse logical model with additional metadata properties",
+    "callee": null
+  },
+  {
+    "slug": "logical-004",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse logical model with numeric name, parent, and id",
+    "callee": null
+  },
+  {
+    "slug": "logical-005",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should properly parse a multi-string description",
+    "callee": null
+  },
+  {
+    "slug": "logical-006",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should accept and translate an alias for the parent",
+    "callee": null
+  },
+  {
+    "slug": "logical-007",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse a list of multiple characteristics",
+    "callee": null
+  },
+  {
+    "slug": "logical-008",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": null
+  },
+  {
+    "slug": "logical-009",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the logical model when encountering a logical model with a name used by another logical model",
+    "callee": null
+  },
+  {
+    "slug": "logical-010",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the logical when encountering an logical with a name used by another logical in another file",
+    "callee": null
+  },
+  {
+    "slug": "logical-011",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the logical when encountering an logical with a name used by another logical in another file",
+    "callee": null
+  },
+  {
+    "slug": "logical-012",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse simple card rules",
+    "callee": null
+  },
+  {
+    "slug": "logical-013",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse card rules w/ multiple flags",
+    "callee": null
+  },
+  {
+    "slug": "logical-014",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#flagRule",
+    "it": "should parse single-path single-value flag rules",
+    "callee": null
+  },
+  {
+    "slug": "logical-015",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#BindingRule",
+    "it": "should parse value set rules w/ names and strengths",
+    "callee": null
+  },
+  {
+    "slug": "logical-016",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule",
+    "callee": null
+  },
+  {
+    "slug": "logical-017",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule with (exactly) modifier",
+    "callee": null
+  },
+  {
+    "slug": "logical-018",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#onlyRule",
+    "it": "should parse an only rule with one type",
+    "callee": null
+  },
+  {
+    "slug": "logical-019",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with one item",
+    "callee": null
+  },
+  {
+    "slug": "logical-020",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with one item declaring an aliased type",
+    "callee": null
+  },
+  {
+    "slug": "logical-021",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#caretValueRule",
+    "it": "should parse caret value rules with a path",
+    "callee": null
+  },
+  {
+    "slug": "logical-022",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#obeysRule",
+    "it": "should parse an obeys rule with multiple invariants and a path",
+    "callee": null
+  },
+  {
+    "slug": "logical-023",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#obeysRule",
+    "it": "should parse an obeys rule on an element named obeys",
+    "callee": null
+  },
+  {
+    "slug": "logical-024",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": null
+  },
+  {
+    "slug": "logical-025",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse complete add element rules",
+    "callee": null
+  },
+  {
+    "slug": "logical-026",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse add element rules where the element name is numeric",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "logical-027",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse add element rules where the element name is a FSH keyword",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "logical-028",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse content reference add element rules",
+    "callee": null
+  },
+  {
+    "slug": "logical-029",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse content reference add element rules that use an alias",
+    "callee": null
+  },
+  {
+    "slug": "logical-030",
+    "sourceFile": "test/import/FSHImporter.Logical.test.ts",
+    "describe": "#addElementRule",
+    "it": "should log a warning when a data type is defined with a flag value",
+    "callee": null
+  },
+  {
+    "slug": "paramruleset-001",
+    "sourceFile": "test/import/FSHImporter.ParamRuleSet.test.ts",
+    "describe": "ParamRuleSet",
+    "it": "should stop parsing ParamRuleSet contents when the next entity is defined",
+    "callee": null
+  },
+  {
+    "slug": "profile-001",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse the simplest possible profile",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-002",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse profile with additional metadata properties",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-003",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse profile with numeric name, parent, and id",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-004",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should properly parse a multi-string description",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-005",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should accept and translate an alias for the parent",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-006",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-007",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when encountering a duplicate metadata attribute",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-008",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the profile when encountering a profile with a name used by another profile",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-009",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the profile when encountering an profile with a name used by another profile in another file",
+    "callee": null
+  },
+  {
+    "slug": "profile-010",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the profile when encountering an profile with a name used by another profile in another file",
+    "callee": null
+  },
+  {
+    "slug": "profile-011",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when the deprecated Mixins keyword is used",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-012",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse simple card rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-013",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse card rule with only min",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-014",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse card rule with only max",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "profile-015",
+    "sourceFile": "test/import/FSHImporter.Profile.test.ts",
+    "describe": "#cardRule",
+    "it": "should log an error if neither side is specified",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "resource-001",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse the simplest possible resource",
+    "callee": null
+  },
+  {
+    "slug": "resource-002",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error when encountering the mixins metadata attribute",
+    "callee": null
+  },
+  {
+    "slug": "resource-003",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse resource with additional metadata properties",
+    "callee": null
+  },
+  {
+    "slug": "resource-004",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should parse resource with numeric name and id",
+    "callee": null
+  },
+  {
+    "slug": "resource-005",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should properly parse a multi-string description",
+    "callee": null
+  },
+  {
+    "slug": "resource-006",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": null
+  },
+  {
+    "slug": "resource-007",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the resource when encountering a resource with a name used by another resource",
+    "callee": null
+  },
+  {
+    "slug": "resource-008",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the resource when encountering an resource with a name used by another resource in another file",
+    "callee": null
+  },
+  {
+    "slug": "resource-009",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#sdMetadata",
+    "it": "should log an error and skip the resource when encountering an resource with a name used by another resource in another file",
+    "callee": null
+  },
+  {
+    "slug": "resource-010",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse simple card rules",
+    "callee": null
+  },
+  {
+    "slug": "resource-011",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#cardRule",
+    "it": "should parse card rules w/ multiple flags",
+    "callee": null
+  },
+  {
+    "slug": "resource-012",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#flagRule",
+    "it": "should parse single-path single-value flag rules",
+    "callee": null
+  },
+  {
+    "slug": "resource-013",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#BindingRule",
+    "it": "should parse value set rules w/ names and strengths",
+    "callee": null
+  },
+  {
+    "slug": "resource-014",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule",
+    "callee": null
+  },
+  {
+    "slug": "resource-015",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#assignmentRule",
+    "it": "should parse assigned value boolean rule with (exactly) modifier",
+    "callee": null
+  },
+  {
+    "slug": "resource-016",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#onlyRule",
+    "it": "should parse an only rule with one type",
+    "callee": null
+  },
+  {
+    "slug": "resource-017",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with one item",
+    "callee": null
+  },
+  {
+    "slug": "resource-018",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#containsRule",
+    "it": "should parse contains rule with one item declaring an aliased type",
+    "callee": null
+  },
+  {
+    "slug": "resource-019",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#caretValueRule",
+    "it": "should parse caret value rules with a path",
+    "callee": null
+  },
+  {
+    "slug": "resource-020",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#caretValueRule",
+    "it": "should parse caret value rules with triple-quoted string",
+    "callee": null
+  },
+  {
+    "slug": "resource-021",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#obeysRule",
+    "it": "should parse an obeys rule with multiple invariants and a path",
+    "callee": null
+  },
+  {
+    "slug": "resource-022",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": null
+  },
+  {
+    "slug": "resource-023",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse complete add element rules",
+    "callee": null
+  },
+  {
+    "slug": "resource-024",
+    "sourceFile": "test/import/FSHImporter.Resource.test.ts",
+    "describe": "#addElementRule",
+    "it": "should parse complete add element rules with triple-quoted string for definition",
+    "callee": null
+  },
+  {
+    "slug": "valueset-001",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should parse a value set with additional metadata",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-002",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should parse a value set with numeric name and id",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-003",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should only apply each metadata attribute the first time it is declared",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-004",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should log an error and skip the value set when encountering a value set with a name used by another value set",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-005",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should log an error and skip the value set when encountering an value set with a name used by another value set in another file",
+    "callee": null
+  },
+  {
+    "slug": "valueset-006",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#vsMetadata",
+    "it": "should log an error and skip the value set when encountering an value set with a name used by another value set in another file",
+    "callee": null
+  },
+  {
+    "slug": "valueset-007",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should parse a value set with a concept specified as SYSTEM#code",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-008",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should ignore optional include for code components",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-009",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should parse a value set with a concept specified as #code from SYSTEM",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-010",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should parse a value set with a concept specified from an aliased system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-011",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should parse a value set with a concept specified as #code from numeric named SYSTEM",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-012",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should merge concept rules when possible",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-013",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should log an error when a concept component with one concept does not have a system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-014",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should log an error when a concept component has a system specified more than once",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-015",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetConceptComponent",
+    "it": "should log an error when both include and exclude are used on the same line",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-016",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that includes all codes from a system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-017",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should ignore optional include for filter components",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-018",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that includes all codes from other value sets",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-019",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that includes all codes from an aliased value set",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-020",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that includes all codes from numeric named value sets",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-021",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that includes all codes from a system and other value sets",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-022",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when valuesets are listed with commas",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-023",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator = with string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-024",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator = with code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-025",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator with numeric property name",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-026",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the = filter has a non-string and non-code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-027",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator is-a with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-028",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator is-a with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-029",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the is-a filter has a non-code and non-string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-030",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator descendent-of with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-031",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator descendant-of, which is the same as descendent-of, but spelled correctly",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-032",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator descendent-of with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-033",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the descendent-of filter has a non-code and non-string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-034",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator is-not-a with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-035",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator is-not-a with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-036",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the is-not-a filter has a non-code and non-string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-037",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator regex with a regex value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-038",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator regex with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-039",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the regex filter has a non-regex and non-string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-040",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator in with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-041",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that use filter operator in with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-042",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the in filter has a non-string or non-code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-043",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator not-in with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-044",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator not-in with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-045",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the not-in filter has a non-string and non-code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-046",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator generalizes with a code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-047",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator generalizes with a string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-048",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the generalizes filter has a non-code value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-049",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator exists with a boolean value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-050",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that chains filter operators",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-051",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses filter operator exists with a string value that looks like a boolean",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-052",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the exists filter has a string value that does not look like a boolean",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-053",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when the exists filter has a non-boolean and non-string value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-054",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set that uses multiple filters on a single component",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-055",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should parse a value set with an excluded component",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-056",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when a filter has an invalid operator",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-057",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when a filter (other than the exists filter) has no value",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-058",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetFilterComponent",
+    "it": "should log an error when a filter component has at least one filter, but no system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-059",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetCaretValueRule",
+    "it": "should parse a value set that uses a CaretValueRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-060",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetCaretValueRule",
+    "it": "should parse a value set that uses CaretValueRules alongside rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-061",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetCaretValueRule",
+    "it": "should log an error when a CaretValueRule contains a path before ^",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-062",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetCodeCaretRule",
+    "it": "should parse a value set with a code caret rule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-063",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#ValueSetCodeCaretRule",
+    "it": "should log an error when a caret rule has more than one concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-064",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule with a single RuleSet",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-065",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#insertRule",
+    "it": "should parse an insert rule at a concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "valueset-066",
+    "sourceFile": "test/import/FSHImporter.ValueSet.test.ts",
+    "describe": "#insertRule",
+    "it": "should log an error when an insert rule has more than one concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-001",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse non-indented rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-002",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse a rule that has context while ignoring whitespace lines",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-003",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse a rule that has context",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-004",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse multiple rules at the same level of context",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-005",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should preserve higher level context when decreasing indent",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-006",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse a rule that only sets a path context on a StructureDefinition",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-007",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse a rule that only sets a path context on an Instance",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-008",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should use context from rules that only set context on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-009",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should use context from rules that only set context on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-010",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on children of soft indexed rules on StructureDefs",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-011",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on children of soft indexed rules on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-012",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should keep + on consecutive path rules when setting context on first child of soft indexed rules on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-013",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = on consecutive path rules when setting context on first child of soft indexed rules on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-014",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log a warning for path rules that increment the index but then do not use it on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-015",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse path rules that increment the index but then do not use it on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-016",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should not log a warning for non-path rules that increment the index",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-017",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on children of soft indexed rules which are not path rules on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-018",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on children of soft indexed rules which are not path rules on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-019",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on grandchildren of soft indexed rules which are not path rules on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-020",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change + to = when setting context on grandchildren of soft indexed rules which are not path rules on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-021",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change nested + to = when setting context on children of soft indexed rules on StructureDefinitions",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-022",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should change nested + to = when setting context on children of soft indexed rules on Instances",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-023",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should parse child rules that have a blank path",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-024",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should apply context to multiple paths",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-025",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should apply the last path in a list when multiple paths are used to set context",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-026",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should apply context to AddElement rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-027",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should set the context correctly when a rule with . path is followed by a caret rule with no path",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-028",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a . rule is indented",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-029",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a rule is indented below a rule without a path",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-030",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a rule is indented an invalid amount of spaces",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-031",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when the first rule of a definition is indented",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-032",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a rule is indented too deeply",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-033",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a ValueSetFilterComponentRule is indented",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-034",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "context",
+    "it": "should log an error when a ValueSetConceptComponentRule is indented",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-035",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a code system with indented hierarchical rules",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-036",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a code system that uses an indented CaretValueRule on a top-level concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-037",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a code system that uses an indented CaretValueRule on a nested concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-038",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a code system that uses an indented InsertRule on a top-level concept",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-039",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should allow code path context to be set by referencing an existing top-level code",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-040",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should allow code path context to be set by referencing an existing nested code",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-041",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a value set that uses an indented CaretValueRule after a ValueSetConceptComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-042",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a value set that uses an indented CaretValueRule after a ValueSetConceptComponentRule with the from keyword",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-043",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a value set that uses an indented InsertRule after a ValueSetConceptComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-044",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a value set that uses a root-level CaretValueRule after a ValueSetConceptComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-045",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should parse a value set that uses a root-level CaretValueRule after a concept-level CaretValueRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-046",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should log an error when parsing a value set that uses an indented CaretValueRule after a ValueSetFilterComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-047",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should log an error when parsing a value set that uses an indented InsertRule after a ValueSetFilterComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "context-048",
+    "sourceFile": "test/import/FSHImporter.context.test.ts",
+    "describe": "code context",
+    "it": "should log an error when parsing a value set that uses an indented InsertRule with a concept after a ValueSetConceptComponentRule",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-001",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should recover from extraneous input errors from antlr",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-002",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse escaped double-quote and backslash characters in strings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-003",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse escaped hash and backslash characters in system identifiers in codings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-004",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse escaped unicode characters in strings and multiline strings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-005",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse unescaped unicode characters in strings and multiline strings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-006",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse a code that has an unmatched quote (\") at the start of the code",
+    "callee": null
+  },
+  {
+    "slug": "misc-007",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse a rule that uses non-breaking spaces in a concept string",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-008",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should log an error when a concept string starts with whitespace",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-009",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse a rule on an element named system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-010",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse rules on a list of paths that includes system",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-011",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse a rule on an element named exclude",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-012",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse entity names that look like dates or times",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-013",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should allow a FSH document with a line comment at EOF without newline",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-014",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should allow a FSH document with a block comment at EOF without newline",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-015",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should allow a FSH document with a single-line block comment",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-016",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should allow a FSH document with a block comment containing no whitespace",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-017",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should adjust indentation of multi-line strings that include blank lines",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-018",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should not change indentation of multi-line strings when there is at least one unindented non-blank line",
+    "callee": null
+  },
+  {
+    "slug": "misc-019",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should truncate whitespace lines in multi-line strings",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-020",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse multi-line strings that only occupy one line",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-021",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse non-breaking space characters as whitespace",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-022",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should properly parse a string with newline, return, and tab characters",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-023",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should properly parse a string with an escaped newline",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-024",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should properly parse a multiline string with newline, return, and tab characters",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-025",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should parse numbers using exponential notation",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-026",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should log info messages during import",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-027",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should avoid crashing and log error messages because of mismatched input",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "misc-028",
+    "sourceFile": "test/import/FSHImporter.test.ts",
+    "describe": "FSHImporter",
+    "it": "should log no error when two entities of different types have the same name",
+    "callee": null
+  },
+  {
+    "slug": "fshtofhir-001",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should convert valid FSH into FHIR with a single input",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-002",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should convert valid FSH into FHIR with several inputs",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-003",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should convert valid FSH into FHIR with several inputs",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-004",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-005",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-006",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-007",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-008",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-009",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should throw error when converting FSH into FHIR with several inputs of different entity types with duplicate names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-010",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should not throw error when converting FSH into FHIR with several inputs of different entity types with different names",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-011",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should trace errors back to the originating input when multiple inputs are given",
+    "callee": "leftAlign"
+  },
+  {
+    "slug": "fshtofhir-012",
+    "sourceFile": "test/run/FshToFhir.test.ts",
+    "describe": "#Conversion",
+    "it": "should trace errors back to the originating input when multiple inputs are given",
+    "callee": "leftAlign"
+  }
+]

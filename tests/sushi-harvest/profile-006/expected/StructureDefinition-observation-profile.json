@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "observation-profile",
+  "url": "http://example.org/StructureDefinition/observation-profile",
+  "version": "0.1.0",
+  "name": "ObservationProfile",
+  "title": "An Observation Profile",
+  "status": "active",
+  "description": "A profile on Observation",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation"
+      }
+    ]
+  }
+}

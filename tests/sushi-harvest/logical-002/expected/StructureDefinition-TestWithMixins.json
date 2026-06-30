@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TestWithMixins",
+  "url": "http://example.org/StructureDefinition/TestWithMixins",
+  "version": "0.1.0",
+  "name": "TestWithMixins",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/TestWithMixins",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "TestWithMixins",
+        "path": "TestWithMixins",
+        "short": "TestWithMixins",
+        "definition": "TestWithMixins"
+      }
+    ]
+  }
+}

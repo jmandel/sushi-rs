@@ -1,0 +1,30 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "ZOO",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/ZOO",
+  "concept": [
+    {
+      "code": "bear",
+      "display": "Bear",
+      "definition": "A member of family Ursidae.",
+      "concept": [
+        {
+          "code": "sunbear",
+          "display": "Sun bear",
+          "definition": "Helarctos malayanus",
+          "concept": [
+            {
+              "code": "ursula",
+              "display": "Ursula the sun bear"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "count": 3
+}

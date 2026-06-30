@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Simple",
+  "url": "http://example.org/StructureDefinition/Simple",
+  "version": "0.1.0",
+  "name": "Simple",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Simple",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "Simple",
+        "path": "Simple",
+        "short": "Simple",
+        "definition": "Simple"
+      }
+    ]
+  }
+}

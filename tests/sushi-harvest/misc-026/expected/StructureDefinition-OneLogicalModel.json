@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "OneLogicalModel",
+  "url": "http://example.org/StructureDefinition/OneLogicalModel",
+  "version": "0.1.0",
+  "name": "OneLogicalModel",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/OneLogicalModel",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "OneLogicalModel",
+        "path": "OneLogicalModel",
+        "short": "OneLogicalModel",
+        "definition": "OneLogicalModel"
+      }
+    ]
+  }
+}

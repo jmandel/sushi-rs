@@ -1,0 +1,4 @@
+
+        Extension: MyExtension
+        * insert MyRuleSet
+        

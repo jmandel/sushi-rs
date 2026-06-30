@@ -1,0 +1,17 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "2000-10-31T00",
+  "id": "2000-10-31T00",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/2000-10-31T00",
+  "concept": [
+    {
+      "code": "2001-01",
+      "display": "Jan 2001",
+      "definition": "January 2001"
+    }
+  ],
+  "count": 1
+}

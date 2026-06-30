@@ -1,0 +1,30 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Escape",
+  "url": "http://example.org/StructureDefinition/Escape",
+  "version": "0.1.0",
+  "name": "Escape",
+  "title": "Can \"you\" escape \\ this \\ string?",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "This \\ code \"is quite\" challenging \\to escape"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

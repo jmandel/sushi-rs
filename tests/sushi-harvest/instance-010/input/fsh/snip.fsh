@@ -1,0 +1,4 @@
+
+        Instance: MyCapabilityStatementDefinition
+        InstanceOf: CapabilityStatement
+        

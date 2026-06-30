@@ -1,0 +1,24 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "ZOO",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/ZOO",
+  "concept": [
+    {
+      "code": "lion"
+    },
+    {
+      "code": "tiger",
+      "display": "Tiger"
+    },
+    {
+      "code": "bear",
+      "display": "Bear",
+      "definition": "A member of family Ursidae."
+    }
+  ],
+  "count": 3
+}

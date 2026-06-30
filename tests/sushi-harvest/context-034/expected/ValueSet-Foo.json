@@ -1,0 +1,23 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "Foo",
+  "id": "Foo",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/Foo",
+  "compose": {
+    "include": [
+      {
+        "system": "http://example.org",
+        "concept": [
+          {
+            "code": "foo"
+          },
+          {
+            "code": "bar"
+          }
+        ]
+      }
+    ]
+  }
+}

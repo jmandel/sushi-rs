@@ -1,0 +1,11 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "zoo-codes",
+  "title": "Zoo Animals",
+  "description": "Animals that may be present at the zoo. This includes\nanimals that have been classified by biologists, as\nwell as certain cryptids, such as:\n* quadrapedal cryptids\n  * jackalope\n  * hodag\n* bipedal cryptids\n  * swamp ape\n  * hopkinsville goblin",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/zoo-codes"
+}
