@@ -4,14 +4,19 @@ A pool of subagents propose performance improvements, each in its OWN git
 worktree. The curator (main session) evaluates and integrates selectively based on
 measured gain vs maintenance cost. **Parity is sacred** — speed never trades correctness.
 
-## Baseline (best-of-5 warm, HEAD 8b7fb77, 2026-06-30)
-| IG | seconds | (stock SUSHI ~39s) |
-|---|--:|---|
-| ips | 1.374 | |
-| epi | 1.056 | |
-| mcode | 1.898 | |
-| crd | 1.538 | |
-Re-baseline after each integration (the curator updates this table).
+## Baseline (best-of-5 warm; curator re-baselines after each integration)
+| IG | initial (8b7fb77) | after round-1 A (98762d8) |
+|---|--:|--:|
+| ips | 1.374 | 1.289 |
+| epi | 1.056 | 0.983 |
+| mcode | 1.898 | 1.881 |
+| crd | 1.538 | **1.052** |
+
+### Integration log
+- **perf/A** (3 commits, cherry-picked → main 98762d8): package_store byte-scan name
+  extractor (verified equiv over 281k cache files) — crd -32%; reuse `_`-sibling
+  buffer in fhir_model hot loops (all IGs); move (not clone) index-entry fields.
+  Parity 665/665, tests green.
 
 ## HARD GATES (every agent, every change — non-negotiable)
 1. **665/665 byte parity** — all 4 IGs `diff-resources.sh` print PARITY:
