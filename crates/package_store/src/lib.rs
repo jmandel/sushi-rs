@@ -569,8 +569,8 @@ impl PackageStore {
             let Ok(index): Result<IndexFile, _> = serde_json::from_slice(&bytes) else {
                 continue;
             };
-            for e in &index.files {
-                let Some(fish_type) = classify(e) else {
+            for e in index.files {
+                let Some(fish_type) = classify(&e) else {
                     seq += 1;
                     continue;
                 };
@@ -578,29 +578,31 @@ impl PackageStore {
                 // name is not in .index.json — read it eagerly (cheap probe).
                 let name = std::fs::read(&path).ok().and_then(|b| probe_name(&b));
                 let idx = store.entries.len();
-                let entry = ResEntry {
-                    seq,
-                    resource_type: e.resource_type.clone().unwrap_or_default(),
-                    id: e.id.clone().unwrap_or_default(),
-                    url: e.url.clone(),
-                    version: e.version.clone(),
-                    sd_type: e.sd_type.clone(),
-                    kind: e.kind.clone(),
-                    name: name.clone(),
-                    fish_type,
-                    path,
-                    embedded: None,
-                };
-                if !entry.id.is_empty() {
-                    store.by_id.entry(entry.id.clone()).or_default().push(idx);
+                // Insert lookup keys (cloned — maps own their keys), then MOVE the
+                // remaining owned fields into the entry to avoid per-field clones.
+                let id = e.id.unwrap_or_default();
+                if !id.is_empty() {
+                    store.by_id.entry(id.clone()).or_default().push(idx);
                 }
-                if let Some(u) = &entry.url {
+                if let Some(u) = &e.url {
                     store.by_url.entry(u.clone()).or_default().push(idx);
                 }
                 if let Some(n) = &name {
                     store.by_name.entry(n.clone()).or_default().push(idx);
                 }
-                store.entries.push(entry);
+                store.entries.push(ResEntry {
+                    seq,
+                    resource_type: e.resource_type.unwrap_or_default(),
+                    id,
+                    url: e.url,
+                    version: e.version,
+                    sd_type: e.sd_type,
+                    kind: e.kind,
+                    name,
+                    fish_type,
+                    path,
+                    embedded: None,
+                });
                 seq += 1;
             }
         }
