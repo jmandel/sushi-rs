@@ -8,63 +8,52 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE = the full 12-IG `harness/full-dashboard.sh` total. LEAD WITH IT.** Currently
-**1966/2065 (95.2%)** (`main` `8551545`). Session start was 1800. The "665" (ips/epi/mcode/crd) is only the 4-IG **non-regression
-FLOOR** — a guard rail that must never drop, NOT the headline. During parallel fixes the
-fast `harness/gate1.sh` runs floor + a fix's target IGs only (to keep worktrees cheap);
-always re-run the FULL dashboard after integrating and report the 2065 total.
-NOTE: some fixes are **corpus-invisible** (no dashboard IG exercises them) and don't move
-the 2065 number even when correct — verify those via their `temp/sushi-tests/` fixtures
-and say so explicitly (e.g. N1 Quantity/Ratio profile pattern, N7 FSHOnly).
+**1987/2065 (96.2%)** (`main` ~`77d32d9`+). Session start was 1800. The "665"
+(ips/epi/mcode/crd) is only the 4-IG **non-regression FLOOR** — a guard rail that must
+never drop, NOT the headline. During parallel fixes the fast `harness/gate1.sh` runs
+floor + a fix's target IGs only (to keep worktrees cheap); ALWAYS re-run the FULL
+dashboard after integrating and report the 2065 total. Some fixes are
+**corpus-invisible** (no dashboard IG exercises them) and don't move the 2065 number even
+when correct — verify those via `temp/sushi-tests/` fixtures and say so (e.g. N1, N7).
 
-**Where we are:** byte-identical vs stock SUSHI v3.20.0 on the 4 tuning IGs (665/665).
-Perf week DONE — sub-second warm builds (ips 0.74 / epi 0.58 / mcode 0.84 / crd 0.66s;
-~50× stock). **Now: generalization hardening** against 8 *holdout* IGs (unseen). holdout
-bugs in `docs/holdout-findings.md` (G1..G13 + failure taxonomy); mining bugs in
-`docs/mining-findings.md` (N1..N7, L1). `main` HEAD `4949b82`.
-FIXED & integrated this round: **N7** (FSHOnly suppresses IG, corpus-invisible), **G4**
-(`Context:` keyword source order, +42: ndh/ecr/cmc), **N1** (Quantity/Ratio→pattern[x],
-corpus-invisible, 12/12 fixtures). **G2 in flight** (worktree `../sushi-rs-g2`, biggest
-lever ≈100 fails). Round-2 queued: **G13** (instance `extension` position, 16 sdc),
-then G9/G5/G8/G10 tail (see taxonomy in holdout-findings.md).
+**SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
+`package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build
+<ig> --materialize` is the canonical self-reliant build. `harness/acquisition-dashboard.sh`
+= **2065/2065, 0 mismatches** (our-acquired cache == stock-seeded cache, all 12 IGs). We no
+longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
+`reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
-**NO OUR-OWNED background agents running right now** (T1 + the mining pilot both DONE
-and integrated/recorded). Both were:
-- **T1 (DONE, integrated)** — SD-driven `TypeResolver` (`compiler/src/type_resolver.rs`)
-  replaced BOTH hardcoded datatype tables (`caret_schema.rs` DELETED); fixed G1 crash +
-  most of G3. +219 holdout. NO-HARDCODING mandate met.
-- **SUSHI-test mining pilot (DONE)** — 18.3% divergence over 273 extracted snippets,
-  surfaced 6 NEW true-bug groups (N1-N7) + a leniency class (L1), recommended scaling.
-  Fixtures in `temp/sushi-tests/`; report in `docs/mining-findings.md`.
+**Fixed & integrated THIS session (1800→1987):** N7 (FSHOnly suppress IG), G4 (`Context:`
+keyword source order, +42), N1 (Quantity/Ratio→pattern[x]), **G2** (bare-local-CS-name→url,
+carinbb perfect + genomics +64), **G14/G11** (local CS/VS `^url` override, genomics +16),
+**G9** (inline/contained resource truncation), **G5** (derived url for local instances),
+ecr narrative `<br/>` whitespace, + the package-acquisition merge.
 
-**USER-OWNED parallel worktrees — DO NOT TOUCH (separate efforts):**
-- `../sushi-rs-diagnostics` (`diagnostics-parity`) — diagnostics feature; plan
-  `docs/designs/diagnostics-plan.md`.
-- `../sushi-rs-package-acquisition` (`feat/package-acquisition`) — self-reliant CAS +
-  materialize; plan `docs/designs/package-acquisition-plan.md`. (Their materialize step
-  lets us delete the `package_store` deep-scan fallback — see
-  `TODO(remove-when-we-own-indexing)` in `package_store/src/lib.rs`.)
-- `../sushi-rs-snapshot` (`snapshot-gen`) — owner's experiment.
-`main` advanced (holdout gate, index heuristic, design docs); those worktrees should
-rebase on `main`.
+**RUNNING NOW (our-owned):** the **SD-tail** agent (worktree `../sushi-rs-sdtail`, branch
+`fix/sdtail`) — sd_export.rs cluster (sdc `^mapping`, ndh `type.profile[]`, genomics
+targetProfile, cmc R5 reslices, pas/dtr). Integrate its commits when it reports; it's
+disjoint from instance_export.rs.
 
-**NEXT STEPS when resuming (ROI-ordered):** drive remaining bugs (each gated by
-`full-dashboard.sh`: corpus 665 must never drop; holdout must climb). Fixes touch
-`export.rs`/`instance_export.rs`/`sd_export.rs` — run them SERIALLY or in disjoint
-worktrees to avoid conflicts.
-1. **G2** bare-local-CodeSystem-name → url in `replaceReferences` (carinbb all 31 +
-   genomics Observations + ndh/pas; overlaps mining **N3** Canonical-on-uri). Biggest.
-2. **N1** Quantity/Ratio literal → `pattern[x]` in profiles (key order; valueRatio
-   dropped) — isolated, oracles in `temp/sushi-tests/`.
-3. **G4** `^context` key order (`expression` before `type`) — ~40 ndh SDs.
-4. **N2/N4/N5** decimal serialization, empty-value omission, id/filename sanitization.
-5. **N7** `FSHOnly:true` must suppress the ImplementationGuide resource.
-6. **G5/G9/G10** + remaining holdout tail; **L1** leniency (reject invalid FSH like
-   stock) — tie to the diagnostics effort.
-7. **Scale the mining** to the EXPORT test suite (needs a builder→FSH transpiler or
-   driving stock `fshToFhir`) — deepest untested instance/SD behavior.
-FIXED already: **G1, G3** (T1), **G6** (T2: stock never reads `.index.json`;
-`package_store` directory-reconciles). Diagnostics + acquisition are the owner's
-worktrees, not ours.
+**REMAINING ~78 fails (gated by full-dashboard; complete census in holdout-findings.md):**
+- **G13** instance property order = InstanceOf SNAPSHOT element order (~15 sdc, pure
+  key-order). Delicate — a naive "force DomainResource prefix" REGRESSED −130. Real fix is
+  in our `setImpliedPropertiesOnInstance` port (instance_export.rs ~1380-1445); we already
+  have the walk, subtle divergence on profile-constrained elements. Trace `sdc-CHF`. MINE NEXT.
+- **cmc R5 reslices** (~9, MedicinalProductDefinition/SubstanceDefinition) — hard; SD-tail
+  may defer.
+- **ndh** Instance-of-CodeSystem url fill (4) — stock fills via a separate InstanceExporter
+  mechanism; left bare correctly for now.
+- SD-tail targets (in flight) + misc OTHER tail.
+
+**USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
+`../sushi-rs-snapshot` (`snapshot-gen`). The `../sushi-rs-package-acquisition` worktree is
+now MERGED (safe to remove). `main` advanced; those worktrees should rebase on `main`.
+
+**Longer-tail backlog (after the above):** N2/N4/N5 (decimal serialization, empty-value
+omission, id/filename sanitization — mining bugs, corpus-invisible), G8/G10 tail, **L1**
+leniency (reject invalid FSH like stock — tie to the diagnostics worktree), and **scaling
+the SUSHI-test mining** to the EXPORT suite (deepest untested instance/SD behavior).
+FIXED earlier: G1/G3 (T1 SD-driven TypeResolver), G6 (T2 dir-reconcile).
 
 ## 1. What we are doing
 
@@ -108,7 +97,15 @@ edit it.
 - `cargo`/`rustc` **1.96.0**. `node` v24, `bun`, `npm` available.
 - **Stock SUSHI binary** (the oracle): `/home/jmandel/periodicity/node_modules/fsh-sushi/dist/app.js`, **v3.20.0** — matches the submodule. Run via `node <app.js> build <ig> -o <out>`.
 - **Benchmark IG (IPS)**: `/home/jmandel/periodicity/temp/ips-ig` (123 .fsh files).
-- Shared warm FHIR cache: `~/.fhir/packages` (~145 packages already present).
+- **FHIR packages — WE ARE SELF-RELIANT (since 2026-06-30).** The `package_acquisition`
+  crate acquires packages itself from the FHIR registry → content-addressed store
+  (CAS, default `~/.cache/fhir-rs/cas`, NEVER `~/.fhir`) → `materialize` a `.fhir/packages`
+  tree → build. `rust_sushi build <ig> --materialize` is the canonical self-reliant build.
+  PROVEN byte-identical: `harness/acquisition-dashboard.sh` = **2065/2065, 0 mismatches**
+  across all 12 IGs (registry-acquired cache == stock-seeded cache). The isolated
+  stock-seeded cache `temp/fhir-home/.fhir/packages` is now ONLY a convenience/offline
+  cache + the speed path for the correctness gates; it is NOT a build dependency. The
+  real `~/.fhir/packages` (~145 pkgs) is the user's and is NEVER read/written by us.
 - **GOTCHA:** `/usr/bin/time` is NOT installed. Use bash/`date` timing.
 - **GOTCHA:** `sushi build <ig> -o <OUT>` writes resources to **`<OUT>/fsh-generated/resources`** (SUSHI appends its own `fsh-generated`). So pass `-o temp/ips-stock`, then look in `temp/ips-stock/fsh-generated/resources`.
 - This repo dir (`/home/jmandel/hobby/sushi-rs`) is its own git repo; `sushi-ts` is a submodule. The env banner "Is a git repository: false" is stale — it IS a git repo now.
