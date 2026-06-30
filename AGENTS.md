@@ -180,12 +180,39 @@ Phases from the plan (0–9). Current state:
 
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
 - [x] **Phase 0 — harness** — DONE: `run-stock.sh` (isolated cache), `diff-resources.sh`, `diag.cjs` (diagnostic normalize/diff), `lex-oracle.cjs` + `parse-oracle.cjs`, timing.json schema, IPS oracle. Remaining (deferred, not blocking): add SDC/CRD/US Core/mCODE/Cycle IGs when available locally (only IPS present now); full `compile` candidate wrapper grows with the compiler.
-- [~] **Phase 1 — package_store + JSON emitter** — json_emit DONE (Phase 4).
-  package_store IN PROGRESS (delegated): reads isolated cache `.index.json`,
-  resolves dep graph, `fish_for_fhir`/`fish_for_metadata`. Oracle
-  `harness/package-oracle.cjs` (run under HOME=temp/fhir-home); gate
-  `rust_sushi pkg-fish <ig> <cache> <q...>` vs oracle via `harness/diff-pkg.cjs`.
-  Notes: `docs/specs/package-store-notes.md`.
+- [x] **Phase 1 — package_store + JSON emitter** — DONE & verified. json_emit
+  landed in Phase 4; `package_store` now complete.
+  - `crates/package_store/src/lib.rs`: `PackageStore::for_project(ig_dir, cache_dir)`
+    resolves the dep graph exactly like `Processing.ts loadExternalDependencies`
+    and indexes every resolved `<cache>/<id>#<ver>/package/.index.json`. Fishes via
+    `fish_for_fhir` / `fish_for_metadata`. CLI: `rust_sushi pkg-fish <ig> <cache> <q...>`.
+  - **Gate**: `harness/package-oracle.cjs` (HOME=isolated) vs `pkg-fish`, diffed by
+    `harness/diff-pkg.cjs` → **PARITY 22/22** (core resources/datatypes, dep profile
+    ipa-patient by url+id+name, transitive THO CS, high-auto extension @5.3.0,
+    versioned url, negative). Resolves in ~0.1s. `cargo test --workspace` green.
+  - **Dep resolution** (matches oracle's exact 6-package load order, confirmed via
+    FPL `findPackageInfos`): `[sushi-r5forR4 virtual (SKIPPED, see gap)] → low auto
+    (tools.r4@latest, terminology.r4@latest) → configured (ipa#1.1.0; extensions.r4
+    SKIPPED here as it matches a High auto-dep) → FHIR core (last in configured pass)
+    → high auto (extensions.r4 — substituted with the configured 5.3.0)`. `latest`
+    = highest cached semver (terminology.r4 → 7.2.0). Fishing = gather id|name|url
+    candidates, filter by type (+version), sort by `FISHING_ORDER` rank then LIFO
+    (reverse global load seq); first wins. SD classification from `.index.json`
+    `derivation`/`kind`/`type`. Metadata key order/falsy-omission ports
+    `convertInfoToMetadata`.
+  - **SURPRISE vs the task brief**: SUSHI's `defs.loadPackage(id,ver)` does **NOT**
+    walk transitive `package.json` deps — the oracle loads exactly the 6 packages
+    above; ipa's own deps (THO 6.2.0, ext 5.2.0, smart-app-launch 2.0.0) are NOT
+    pulled in (smart-app-launch isn't even in cache). So no transitive walk is
+    implemented (it would diverge from stock).
+  - **KNOWN GAPS** (deferred, don't affect the gate): (a) bundled R5-in-R4 virtual
+    package (`sushi-r5forR4#1.0.0`, 7 R5 type defs) not loaded — JSONs live in
+    `sushi-ts/src/fhirdefs/R5DefsForR4/`, not the cache; queries for
+    Base/CodeableReference/SubscriptionTopic/etc. would miss. (b) predefined/local
+    `sushi-local#LOCAL` + MasterFisher precedence not here (compiler-side). (c) xver
+    `[x]` URL fallback, npm-alias warnings, fixCrossVersionDependencies rewrite not
+    ported. (d) name index is eager over all SD/VS/CS (fine now; revisit Phase 9).
+  - Notes: `docs/specs/package-store-notes.md`, `06-package-fhirdefs.md`.
 - [x] **Phase 2 — FSH parser + AST** — DONE & verified.
   - **Lexer**: `lex.rs` (~900 lines, FSHLexer.g4 port). Byte-exact vs ANTLR oracle
     on 423 files. Gate: `cargo test -p fsh_lexer_parser` (lex_parity 8/8).
