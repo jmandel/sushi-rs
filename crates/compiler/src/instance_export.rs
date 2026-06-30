@@ -1119,8 +1119,11 @@ fn build_slice_tree(sd: &StructureDefinition, idx: usize, ix: &StructIndex) -> S
 fn insert_slice_tree(sd: &StructureDefinition, parent: &mut SliceNode, add: usize) {
     let add_name = el_slice_name(sd, add).unwrap_or_default();
     if let Some(child) = parent.children.iter_mut().find(|c| {
-        let cn = el_slice_name(sd, c.idx).unwrap_or_default();
-        add_name.starts_with(&format!("{cn}/"))
+        // add_name.starts_with(&format!("{cn}/")) without allocating cn or the key.
+        let cn = sd.elements[c.idx].slice_name().unwrap_or("");
+        add_name.len() > cn.len()
+            && add_name.as_bytes()[cn.len()] == b'/'
+            && add_name.starts_with(cn)
     }) {
         insert_slice_tree(sd, child, add);
     } else {
