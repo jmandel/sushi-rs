@@ -13,6 +13,13 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | 1.052 | **0.755** |
 
 ### Integration log
+- **INTERMEDIATE perf/G INTEGRATED** (single-agent round): killed instance-hot-path
+  string/path churn — allocation-free split_on_path_periods (SmallVec<&str>),
+  borrowing el_id, gated find_connected_elements, and (biggest) a no-alloc
+  path_eq_or_under replacing two format!s in an O(n^2) comparator. +61 LOC
+  (instance_export+paths). mcode -15%, ips -3%, no regressions. Rejected 2 negatives
+  (FxHashMap regressed epi/crd; manual buffer regressed all). Parity 665/665, tests green.
+
 - **perf/D INTEGRATED** (→ main): StructIndex cache replaces O(n^2) children_direct/
   get_slices scans in the instance BFS. +88 LOC, instance_export only. Marginal gain
   ON TOP OF A+B+E: mcode -8.4% (bigger than its -3.6% standalone — E shrank the
