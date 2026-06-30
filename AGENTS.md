@@ -353,9 +353,19 @@ Phases from the plan (0–9). Current state:
     resolve `$alias` brackets (pre-existing Phase-4 gap; shows up only in crd VS, which
     was never gated). (g) AssignmentRule of an Instance / deferred `^contained` carets
     not handled.
-- [ ] **Phase 6 — full SD compatibility** (continue from the gaps above)
-- [ ] **Phase 7 — instance export + required QA**
-- [ ] **Phase 8 — full corpus parity**
+- [~] **Phase 6 — full SD compatibility** — 79/87 SDs byte-identical (epi 27/28,
+  ips 28/32, mcode 45/53, crd 24/27). Remaining: AddElementRule (logicals, +R5 Base
+  unbundle), predefined input/resources, deep reslicing (ips Composition), nested
+  contentReference min ordering (epi). Serial cleanup after Phase 7.
+- [~] **Phase 7 — instance export + required QA** — IN PROGRESS (delegated).
+  Gate `harness/diff-instances.sh <stock> <cand>` (non-SD/VS/CS resources);
+  stock instances: ips 50, epi 55, crd 27, mcode 193. Reuses sd_export (instanceOf
+  SD typing) + package_store. InstanceDefinition JSON order = resourceType,id,meta
+  then insertion.
+- [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
+  **Current: 247/665 byte-identical** (was 123 pre-SD). Known VS follow-ups: mcode
+  43/103, crd 15/28 + CS 0/3 (external-name/$alias resolution via package_store —
+  wire into VS/CS exporter after Phase 7).
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps
