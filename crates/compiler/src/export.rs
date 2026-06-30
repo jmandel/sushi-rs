@@ -531,6 +531,10 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
 
 /// Apply one top-level caret rule (`path == ''`) onto the resource object.
 fn apply_caret(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, value: &FshValue) {
+    // Resolve aliases inside path brackets (e.g. `^extension[FMM]` where FMM is a
+    // global Alias) — same export-time resolution the SD exporter does.
+    let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
+    let caret_path = caret_path.as_str();
     let Some((segs, leaf_ty)) = resolve_path(resource_type, caret_path) else {
         return;
     };
@@ -1022,6 +1026,9 @@ fn insert_into_hierarchy(container: &mut Vec<J>, hierarchy: &[String], concept: 
 
 /// Export every ValueSet and CodeSystem from the (already insert-expanded) tank.
 pub fn export_all(docs: &[FshDocument], cfg: &Config) -> Vec<Exported> {
+    // Populate the global alias table so caret-path brackets resolve (shared with
+    // the SD exporter). Idempotent; safe to call before/after SD export.
+    crate::sd_export::set_aliases(docs);
     let tank = TankIndex::build(docs, cfg);
     let mut out = Vec::new();
     // CodeSystems export before ValueSets (FHIRExporter order), though it does

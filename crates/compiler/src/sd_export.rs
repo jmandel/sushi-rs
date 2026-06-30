@@ -1115,7 +1115,7 @@ thread_local! {
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
-fn set_aliases(docs: &[FshDocument]) {
+pub(crate) fn set_aliases(docs: &[FshDocument]) {
     ALIASES.with(|m| {
         let mut map = m.borrow_mut();
         map.clear();
@@ -1128,7 +1128,7 @@ fn set_aliases(docs: &[FshDocument]) {
 }
 
 /// Resolve alias bracket tokens in a caret path (`extension[$fmm]` -> url).
-fn resolve_caret_aliases(caret_path: &str) -> String {
+pub(crate) fn resolve_caret_aliases(caret_path: &str) -> String {
     if !caret_path.contains('[') {
         return caret_path.to_string();
     }
