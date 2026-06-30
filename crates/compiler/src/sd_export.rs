@@ -262,7 +262,7 @@ impl<'a> SdContext<'a> {
                 id: id.clone(),
                 name: ts.def.name.clone(),
                 sd_type: None,
-                url: Some(url),
+                url: Some(url.clone()),
                 parent: ts.def.parent.clone(),
                 abstract_: None,
                 version: None,
@@ -271,8 +271,14 @@ impl<'a> SdContext<'a> {
                 can_be_target: false,
                 instance_usage: None,
             };
+            // Key by name, id, AND url so a local SD referenced by its canonical url
+            // (e.g. `extension contains <local-url> named x`) resolves before export,
+            // mirroring `FSHTank.fishForMetadata` matching on url. Without the url key,
+            // an existence check on a not-yet-exported local extension referenced by
+            // url would miss and wrongly skip the slice.
             tank_sd_meta.entry(ts.def.name.clone()).or_insert_with(|| md.clone());
-            tank_sd_meta.entry(id).or_insert(md);
+            tank_sd_meta.entry(id).or_insert_with(|| md.clone());
+            tank_sd_meta.entry(url).or_insert(md);
         }
         SdContext {
             store,
@@ -2299,28 +2305,44 @@ fn handle_extension_contains(
         );
     }
     for item in items {
-        let Some(slice_id) = sd.add_slice(ei, &item.name, None) else {
-            diag.push(format!("Could not add extension slice {}", item.name));
-            continue;
-        };
-        let si = sd.index_of_id(&slice_id).unwrap();
         if let Some(type_name) = &item.type_ {
-            // named extension: type = [{code:Extension, profile:[url]}], url fixed.
+            // named extension: fish the referenced extension definition FIRST. If it
+            // cannot be located, stock logs an error and SKIPS the ContainsRule item
+            // — the slice is never created (StructureDefinitionExporter.ts:1243-1250).
+            // We previously fell back to the literal `type_name`, synthesizing a slice
+            // for an unresolvable extension (e.g. the R5-in-R4 cross-version
+            // `http://hl7.org/fhir/5.0/StructureDefinition/extension-Subscription.content`
+            // URLs that are absent from the xver package) and over-producing slices
+            // stock omits.
+            let Some(ext_url) = fisher.fish_for_metadata(type_name).and_then(|m| m.url) else {
+                diag.push(format!(
+                    "Cannot create {} extension; unable to locate extension definition for: {}.",
+                    item.name, type_name
+                ));
+                continue;
+            };
+            let Some(slice_id) = sd.add_slice(ei, &item.name, None) else {
+                diag.push(format!("Could not add extension slice {}", item.name));
+                continue;
+            };
+            let si = sd.index_of_id(&slice_id).unwrap();
+            // named extension: type = [{code:Extension, profile:[url]}].
             // Stock computes `item.type.replace(/^[^|]+/, extension.url)`, i.e. it
             // keeps any `|version` suffix that was on the (possibly aliased) type
             // and only swaps the canonical part for the fished extension url.
-            let url = match fisher.fish_for_metadata(type_name).and_then(|m| m.url) {
-                Some(ext_url) => match type_name.find('|') {
-                    Some(idx) => format!("{ext_url}{}", &type_name[idx..]),
-                    None => ext_url,
-                },
-                None => type_name.clone(),
+            let url = match type_name.find('|') {
+                Some(idx) => format!("{ext_url}{}", &type_name[idx..]),
+                None => ext_url,
             };
             sd.elements[si].set(
                 "type",
                 json!([{ "code": "Extension", "profile": [url] }]),
             );
         } else {
+            let Some(slice_id) = sd.add_slice(ei, &item.name, None) else {
+                diag.push(format!("Could not add extension slice {}", item.name));
+                continue;
+            };
             // inline extension: auto-fix the sub-extension's url to the slice name.
             sd.unfold_by_id(&slice_id, fisher);
             let url_id = format!("{slice_id}.url");
