@@ -39,6 +39,13 @@ for ig in bulk pdex plannet formulary cdshooks subscriptions; do
   IG[$ig]="$MAIN/temp/top20/$ig|$MAIN/temp/top20/$ig-stock"
   IGCACHE[$ig]="$MAIN/temp/top20-cache"
 done
+# next-20 expansion IGs (built against the stock-seeded temp/next20/fhir-home cache).
+N20C="$MAIN/temp/next20/fhir-home/.fhir/packages"
+declare -A N20ROOT=([ccda-cda]="ccda-cda/fsh-tank")
+for ig in application-feature be-vaccination ccda-cda deid eu-eps eu-mpd mhd pacio-toc ph-query radiation-dose safr tw-pas vhl; do
+  IG[$ig]="$MAIN/temp/next20/${N20ROOT[$ig]:-$ig}|$MAIN/temp/next20/$ig-stock"
+  IGCACHE[$ig]="$N20C"
+done
 
 sel=("$@"); [ ${#sel[@]} -eq 0 ] && sel=(ips epi mcode crd)
 
