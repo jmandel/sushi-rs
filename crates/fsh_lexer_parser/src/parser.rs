@@ -155,21 +155,44 @@ fn split_path(path: &str) -> Vec<String> {
 // ----- string unescaping -----
 
 fn unescape_unicode(seg: &str) -> String {
-    // replace \uXXXX
-    let mut out = String::new();
+    // Replace \uXXXX (matching stock SUSHI's /\\(u[A-Fa-f0-9]{4})/g + JSON.parse).
+    // Stock relies on JS UTF-16 strings: each \uXXXX becomes a code unit, and two
+    // adjacent surrogate code units naturally combine into the astral character.
+    // Rust `char` cannot hold a lone surrogate, so we detect a high surrogate
+    // followed by a low surrogate and combine them into the real code point.
     let chars: Vec<char> = seg.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '\\' && i + 1 < chars.len() && chars[i + 1] == 'u' && i + 5 < chars.len() {
+    // Returns Some(code_unit) if chars[i..] begins with a \uXXXX escape.
+    let read_escape = |i: usize| -> Option<u32> {
+        if i + 5 < chars.len() && chars[i] == '\\' && chars[i + 1] == 'u' {
             let hex: String = chars[i + 2..i + 6].iter().collect();
             if hex.chars().all(|c| c.is_ascii_hexdigit()) {
-                if let Ok(cp) = u32::from_str_radix(&hex, 16) {
-                    if let Some(ch) = char::from_u32(cp) {
-                        out.push(ch);
-                        i += 6;
-                        continue;
+                return u32::from_str_radix(&hex, 16).ok();
+            }
+        }
+        None
+    };
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if let Some(cp) = read_escape(i) {
+            // High surrogate possibly followed by a low surrogate -> astral char.
+            if (0xD800..=0xDBFF).contains(&cp) {
+                if let Some(low) = read_escape(i + 6) {
+                    if (0xDC00..=0xDFFF).contains(&low) {
+                        let combined =
+                            0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                        if let Some(ch) = char::from_u32(combined) {
+                            out.push(ch);
+                            i += 12;
+                            continue;
+                        }
                     }
                 }
+            }
+            if let Some(ch) = char::from_u32(cp) {
+                out.push(ch);
+                i += 6;
+                continue;
             }
         }
         out.push(chars[i]);
