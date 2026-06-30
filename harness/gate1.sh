@@ -33,6 +33,12 @@ done
 for ig in carinbb sdc pas dtr genomics ecr cmc ndh; do
   IG[$ig]="$MAIN/temp/holdout/$ig|$MAIN/temp/holdout/$ig-stock"
 done
+# top-20 expansion IGs (built against the materialized top20-cache, NOT temp/fhir-home).
+declare -A IGCACHE
+for ig in bulk pdex plannet formulary cdshooks subscriptions; do
+  IG[$ig]="$MAIN/temp/top20/$ig|$MAIN/temp/top20/$ig-stock"
+  IGCACHE[$ig]="$MAIN/temp/top20-cache"
+done
 
 sel=("$@"); [ ${#sel[@]} -eq 0 ] && sel=(ips epi mcode crd)
 
@@ -43,7 +49,8 @@ for ig in "${sel[@]}"; do
   IFS='|' read -r src stock <<< "${IG[$ig]:-}"
   [ -n "$src" ] && [ -d "$stock/fsh-generated/resources" ] || { printf "%-9s  (missing src/stock)\n" "$ig"; continue; }
   out="$OUT/$ig"; rm -rf "$out"
-  status="ok"; FHIR_CACHE="$CACHE" "$BIN" build "$src" -o "$out" >"$OUT/$ig.log" 2>&1 || status="BUILD-ERR"
+  igcache="${IGCACHE[$ig]:-$CACHE}"
+  status="ok"; FHIR_CACHE="$igcache" "$BIN" build "$src" -o "$out" >"$OUT/$ig.log" 2>&1 || status="BUILD-ERR"
   A="$stock/fsh-generated/resources"; B="$out/fsh-generated/resources"
   p=0; f=0; m=0
   for sf in "$A"/*.json; do
