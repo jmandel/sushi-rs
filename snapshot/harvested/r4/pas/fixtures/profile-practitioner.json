@@ -1,0 +1,50 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-practitioner",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitioner",
+  "name": "PASPractitioner",
+  "title": "PAS Practitioner",
+  "status": "active",
+  "description": "PAS constraints on Practitioner resource mandating support for elements relevant to the care team involved in a prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Practitioner",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Practitioner.identifier",
+        "path": "Practitioner.identifier",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Practitioner.identifier:NPI",
+        "path": "Practitioner.identifier",
+        "sliceName": "NPI",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

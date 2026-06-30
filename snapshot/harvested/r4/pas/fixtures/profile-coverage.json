@@ -1,0 +1,118 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-coverage",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-coverage",
+  "name": "PASCoverage",
+  "title": "PAS Coverage",
+  "status": "active",
+  "description": "PAS constraints on Coverage resource mandating support for insurance elements relevant to the prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Coverage",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Coverage",
+        "path": "Coverage",
+        "constraint": [
+          {
+            "key": "self-beneficiary",
+            "severity": "error",
+            "human": "If relationship does not equal 'self', then subscriber SHALL be present.",
+            "expression": "$this.relationship.coding.where(code='18').count() = 0 implies $this.subscriber.exists()",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-coverage"
+          }
+        ]
+      },
+      {
+        "id": "Coverage.identifier",
+        "path": "Coverage.identifier",
+        "min": 1
+      },
+      {
+        "id": "Coverage.identifier:memberid",
+        "path": "Coverage.identifier",
+        "sliceName": "memberid",
+        "min": 1
+      },
+      {
+        "id": "Coverage.status",
+        "path": "Coverage.status",
+        "patternCode": "active"
+      },
+      {
+        "id": "Coverage.subscriber",
+        "path": "Coverage.subscriber",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscriber"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Coverage.beneficiary",
+        "path": "Coverage.beneficiary",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Coverage.relationship.coding",
+        "path": "Coverage.relationship.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "$this"
+            }
+          ],
+          "rules": "open",
+          "description": "Send an X12 code along with the FHIR code."
+        }
+      },
+      {
+        "id": "Coverage.relationship.coding:X12Code",
+        "path": "Coverage.relationship.coding",
+        "sliceName": "X12Code",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000D/INS/1/02/00/1069",
+          "description": "Codes indicating the relationship between two individuals or entities. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      },
+      {
+        "id": "Coverage.payor",
+        "path": "Coverage.payor",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-insurer"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

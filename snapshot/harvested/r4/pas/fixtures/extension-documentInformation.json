@@ -1,0 +1,162 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-documentInformation",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-documentInformation",
+  "name": "DocumentInformation",
+  "title": "Document Information",
+  "status": "active",
+  "description": "Information about the document being included such as the type, transmission method, and identifier.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim.supportingInfo"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Document Information",
+        "definition": "Information about the document being included such as the type, transmission method, and identifier."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:reportTypeCode",
+        "path": "Extension.extension",
+        "sliceName": "reportTypeCode",
+        "short": "The type of additional information being provided",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:reportTypeCode.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:reportTypeCode.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "reportTypeCode"
+      },
+      {
+        "id": "Extension.extension:reportTypeCode.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/pas-pwk01-attachment-report-type-code"
+        }
+      },
+      {
+        "id": "Extension.extension:transmissionMethod",
+        "path": "Extension.extension",
+        "sliceName": "transmissionMethod",
+        "short": "How the additional information is being provided",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:transmissionMethod.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:transmissionMethod.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "transmissionMethod"
+      },
+      {
+        "id": "Extension.extension:transmissionMethod.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/PWK/1/02/00/756"
+        }
+      },
+      {
+        "id": "Extension.extension:controlNumber",
+        "path": "Extension.extension",
+        "sliceName": "controlNumber",
+        "short": "A control number that identifies the document",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:controlNumber.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:controlNumber.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "controlNumber"
+      },
+      {
+        "id": "Extension.extension:controlNumber.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:description",
+        "path": "Extension.extension",
+        "sliceName": "description",
+        "short": "Special information about the additional information provided",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:description.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:description.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "description"
+      },
+      {
+        "id": "Extension.extension:description.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-documentInformation"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

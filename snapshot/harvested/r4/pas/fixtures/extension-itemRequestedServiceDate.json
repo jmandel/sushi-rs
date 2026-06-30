@@ -1,0 +1,57 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemRequestedServiceDate",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemRequestedServiceDate",
+  "name": "ItemRequestedServiceDate",
+  "title": "Item Requested Service Date",
+  "status": "active",
+  "description": "The original date/period that was requested by the submitter for this item.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Item Requested Service Date",
+        "definition": "The original date/period that was requested by the submitter for this item."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemRequestedServiceDate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "dateTime"
+          },
+          {
+            "code": "Period"
+          }
+        ]
+      }
+    ]
+  }
+}

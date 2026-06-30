@@ -1,0 +1,75 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-medicationrequest",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-medicationrequest",
+  "name": "PASMedicationRequest",
+  "title": "PAS Medication Request",
+  "status": "active",
+  "description": "PAS constraints on MedicationRequest resource mandating support for elements relevant to the prescriptions being requested on a prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationRequest",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationRequest.extension:coverage",
+        "path": "MedicationRequest.extension",
+        "sliceName": "coverage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.status",
+        "path": "MedicationRequest.status",
+        "fixedCode": "active"
+      },
+      {
+        "id": "MedicationRequest.intent",
+        "path": "MedicationRequest.intent",
+        "fixedCode": "order"
+      },
+      {
+        "id": "MedicationRequest.subject",
+        "path": "MedicationRequest.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing",
+        "path": "MedicationRequest.dosageInstruction.timing",
+        "type": [
+          {
+            "code": "Timing",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-datatype-timing"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

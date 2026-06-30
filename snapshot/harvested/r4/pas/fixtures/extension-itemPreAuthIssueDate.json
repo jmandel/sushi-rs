@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemPreAuthIssueDate",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthIssueDate",
+  "name": "ItemPreAuthIssueDate",
+  "title": "Item Preauthorization Issue Date",
+  "status": "active",
+  "description": "The date when this item's preauthorization was issued.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Item Preauthorization Issue Date",
+        "definition": "The date when this item's preauthorization was issued."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthIssueDate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "date"
+          }
+        ]
+      }
+    ]
+  }
+}

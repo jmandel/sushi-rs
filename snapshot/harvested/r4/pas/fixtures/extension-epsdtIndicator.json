@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-epsdtIndicator",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator",
+  "name": "EPSDTIndicator",
+  "title": "EPSDT Indicator",
+  "status": "active",
+  "description": "An indicator of whether early and periodic screen for diagnosis and treatment of children is involved.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "EPSDT Indicator",
+        "definition": "An indicator of whether early and periodic screen for diagnosis and treatment of children is involved."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      }
+    ]
+  }
+}

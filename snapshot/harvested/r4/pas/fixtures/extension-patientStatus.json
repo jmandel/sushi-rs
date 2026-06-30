@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-patientStatus",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-patientStatus",
+  "name": "PatientStatus",
+  "title": "Patient Status",
+  "status": "active",
+  "description": "A code representing the status of the patient when being admitted",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Encounter"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Patient Status",
+        "definition": "A code representing the status of the patient when being admitted"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-patientStatus"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/CL1/1/03/00/1352",
+          "description": "Codes indicating patient status as of the 'statement covers through date'.  These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

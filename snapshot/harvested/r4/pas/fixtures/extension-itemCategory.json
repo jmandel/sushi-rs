@@ -1,0 +1,55 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemCategory",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCategory",
+  "name": "ClaimResponseItemCategory",
+  "title": "Claim Response Item Category",
+  "status": "active",
+  "description": "The claim item category being responded to.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Claim Response Item Category",
+        "definition": "The claim item category being responded to."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCategory"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000F/UM/1/03/00/1365",
+          "description": "Codes identifying the classification of service. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-subscriber",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|3.1.1"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscriber",
+  "name": "PASSubscriber",
+  "title": "PAS Subscriber Patient",
+  "status": "active",
+  "description": "A patient who is the subscriber of an insurance plan.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Patient",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Patient.extension:militaryStatus",
+        "path": "Patient.extension",
+        "sliceName": "militaryStatus",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-militaryStatus"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Patient.name.prefix",
+        "path": "Patient.name.prefix",
+        "mustSupport": true
+      },
+      {
+        "id": "Patient.name.suffix",
+        "path": "Patient.name.suffix",
+        "mustSupport": true
+      },
+      {
+        "id": "Patient.birthDate",
+        "path": "Patient.birthDate",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscriber"
+          }
+        ]
+      },
+      {
+        "id": "Patient.address.district",
+        "path": "Patient.address.district",
+        "mustSupport": true
+      },
+      {
+        "id": "Patient.address.country",
+        "path": "Patient.address.country",
+        "mustSupport": true
+      }
+    ]
+  }
+}

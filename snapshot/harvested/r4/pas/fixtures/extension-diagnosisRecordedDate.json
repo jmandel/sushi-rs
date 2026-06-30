@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-diagnosisRecordedDate",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate",
+  "name": "DiagnosisRecordedDate",
+  "title": "Diagnosis Recorded Date",
+  "status": "active",
+  "description": "The date that a diagnosis was recorded. (HIxx-4)",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim.diagnosis"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Diagnosis Recorded Date",
+        "definition": "The date that a diagnosis was recorded. (HIxx-4)"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-documentreference",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-documentreference",
+  "name": "PASDocumentReference",
+  "title": "PAS Document Reference",
+  "status": "active",
+  "description": "PAS constraints on US Core DocumentReference to require the document content to be included and not referenced externally.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "DocumentReference",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DocumentReference.content.attachment.data",
+        "path": "DocumentReference.content.attachment.data",
+        "min": 1
+      },
+      {
+        "id": "DocumentReference.content.attachment.url",
+        "path": "DocumentReference.content.attachment.url",
+        "max": "0"
+      }
+    ]
+  }
+}

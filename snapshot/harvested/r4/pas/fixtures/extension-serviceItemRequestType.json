@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-serviceItemRequestType",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceItemRequestType",
+  "name": "ServiceItemRequestType",
+  "title": "Service Item Request Type",
+  "status": "active",
+  "description": "A code that identifies the type of service being requested.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Service Item Request Type",
+        "definition": "A code that identifies the type of service being requested."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceItemRequestType"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/UM/1/01/00/1525",
+          "description": "Codes indicating a type of request. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

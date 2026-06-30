@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-timingdeliverypattern",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingdeliverypattern",
+  "name": "DeliveryPattern",
+  "title": "Delivery Pattern",
+  "status": "active",
+  "description": "A code representing the specific delivery of a service being requested",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Request"
+    },
+    {
+      "type": "element",
+      "expression": "Dosage.timing"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Delivery Pattern",
+        "definition": "A code representing the specific delivery of a service being requested"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingdeliverypattern"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000F/HSD/1/08/00/679",
+          "description": "Codes which specifies the time for routine shipments or deliveries\n. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

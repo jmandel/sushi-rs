@@ -1,0 +1,126 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemCertificationExpirationDate",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate",
+  "name": "CertificationExpirationDate",
+  "title": "Certification Expiration Date",
+  "status": "active",
+  "description": "The specific date or period within which this item's preauthorization expires.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    },
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Certification Expiration Date",
+        "definition": "The specific date or period within which this item's preauthorization expires."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "type": [
+          {
+            "code": "date"
+          },
+          {
+            "code": "Period"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valueDate",
+        "path": "Extension.value[x]",
+        "sliceName": "valueDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod",
+        "path": "Extension.value[x]",
+        "sliceName": "valuePeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod.start",
+        "path": "Extension.value[x].start",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod.end",
+        "path": "Extension.value[x].end",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate"
+          }
+        ]
+      }
+    ]
+  }
+}

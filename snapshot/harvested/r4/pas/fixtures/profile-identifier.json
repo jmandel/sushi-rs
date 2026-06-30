@@ -1,0 +1,63 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-identifier",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier",
+  "name": "PASIdentifier",
+  "title": "PAS Identifier",
+  "status": "active",
+  "description": "Constraints and extensions on Identifier allowing for a common datatype across all resource profiles.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Identifier",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Identifier.extension:subDepartment",
+        "path": "Identifier.extension",
+        "sliceName": "subDepartment",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierSubDepartment"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Identifier.extension:jurisdiction",
+        "path": "Identifier.extension",
+        "sliceName": "jurisdiction",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierJurisdiction"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Identifier.system",
+        "path": "Identifier.system",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Identifier.value",
+        "path": "Identifier.value",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

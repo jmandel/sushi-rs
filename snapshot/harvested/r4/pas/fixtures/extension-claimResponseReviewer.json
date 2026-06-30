@@ -1,0 +1,131 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-claimResponseReviewer",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-claimResponseReviewer",
+  "name": "ClaimResponseReviewer",
+  "title": "Claim Response Reviewer",
+  "status": "active",
+  "description": "The responsible practitioner who reviewed to the request.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Claim Response Reviewer",
+        "definition": "The responsible practitioner who reviewed to the request."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:wasHumanReviewedFlag",
+        "path": "Extension.extension",
+        "sliceName": "wasHumanReviewedFlag",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:wasHumanReviewedFlag.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:wasHumanReviewedFlag.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "wasHumanReviewedFlag"
+      },
+      {
+        "id": "Extension.extension:wasHumanReviewedFlag.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:reviewerNPI",
+        "path": "Extension.extension",
+        "sliceName": "reviewerNPI",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:reviewerNPI.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:reviewerNPI.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "reviewerNPI"
+      },
+      {
+        "id": "Extension.extension:reviewerNPI.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:reviewerSpecialty",
+        "path": "Extension.extension",
+        "sliceName": "reviewerSpecialty",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:reviewerSpecialty.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:reviewerSpecialty.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "reviewerSpecialty"
+      },
+      {
+        "id": "Extension.extension:reviewerSpecialty.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.114222.4.11.1066"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-claimResponseReviewer"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

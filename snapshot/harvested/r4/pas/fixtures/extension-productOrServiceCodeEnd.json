@@ -1,0 +1,66 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-productOrServiceCodeEnd",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd",
+  "name": "ProductOrServiceCodeEnd",
+  "title": "Product or Service Code End",
+  "status": "active",
+  "description": "Used to provide the last code in a series of codes for the service being requested.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse"
+    },
+    {
+      "type": "element",
+      "expression": "ServiceRequest"
+    },
+    {
+      "type": "extension",
+      "expression": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedDetail"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Product or Service Code End",
+        "definition": "Used to provide the last code in a series of codes for the service being requested."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceType"
+        }
+      }
+    ]
+  }
+}

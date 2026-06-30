@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-revenueCode",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueCode",
+  "name": "RevenueCode",
+  "title": "Revenue Code",
+  "status": "active",
+  "description": "A revenue code that expresses what was approved which maps to X12 SV201",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Revenue Code",
+        "definition": "A revenue code that expresses what was approved which maps to X12 SV201"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueCode"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/AHANUBCRevenueCodes"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-datatype-timing",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-datatype-timing",
+  "name": "PASTiming",
+  "title": "PAS Timing",
+  "status": "active",
+  "description": "PAS constraints on the Timing datatype used in the various service requests.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Timing",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Timing",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Timing.extension:calendarPattern",
+        "path": "Timing.extension",
+        "sliceName": "calendarPattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingcalendarpattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.extension:deliveryPattern",
+        "path": "Timing.extension",
+        "sliceName": "deliveryPattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingdeliverypattern"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat",
+        "path": "Timing.repeat",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.bounds[x]",
+        "path": "Timing.repeat.bounds[x]",
+        "short": "The number of periods over which the service is delivered.",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.count",
+        "path": "Timing.repeat.count",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.countMax",
+        "path": "Timing.repeat.countMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.frequency",
+        "path": "Timing.repeat.frequency",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.frequencyMax",
+        "path": "Timing.repeat.frequencyMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.period",
+        "path": "Timing.repeat.period",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.periodMax",
+        "path": "Timing.repeat.periodMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.periodUnit",
+        "path": "Timing.repeat.periodUnit",
+        "mustSupport": true
+      }
+    ]
+  }
+}

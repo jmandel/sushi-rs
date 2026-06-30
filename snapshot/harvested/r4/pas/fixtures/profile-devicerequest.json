@@ -1,0 +1,95 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-devicerequest",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-devicerequest",
+  "name": "PASDeviceRequest",
+  "title": "PAS Device Request",
+  "status": "active",
+  "description": "PAS constraints on DeviceRequest resource mandating support for elements relevant to the devices being requested on a prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "DeviceRequest",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DeviceRequest.extension",
+        "path": "DeviceRequest.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "DeviceRequest.extension:coverage",
+        "path": "DeviceRequest.extension",
+        "sliceName": "coverage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DeviceRequest.intent",
+        "path": "DeviceRequest.intent",
+        "fixedCode": "order",
+        "mustSupport": true
+      },
+      {
+        "id": "DeviceRequest.code[x]",
+        "path": "DeviceRequest.code[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceType"
+        }
+      },
+      {
+        "id": "DeviceRequest.subject",
+        "path": "DeviceRequest.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DeviceRequest.occurrence[x]",
+        "path": "DeviceRequest.occurrence[x]",
+        "type": [
+          {
+            "code": "Timing",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-datatype-timing"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

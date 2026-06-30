@@ -1,0 +1,163 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemAuthorizedProvider",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider",
+  "name": "ItemAuthorizedProvider",
+  "title": "Item Authorized Provider",
+  "status": "active",
+  "description": "The specific provider who has been authorized to provide this item.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Item Authorized Provider",
+        "definition": "The specific provider who has been authorized to provide this item."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:provider",
+        "path": "Extension.extension",
+        "sliceName": "provider",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:provider.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:provider.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "provider"
+      },
+      {
+        "id": "Extension.extension:provider.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitioner",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:providerType",
+        "path": "Extension.extension",
+        "sliceName": "providerType",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:role",
+        "path": "Extension.extension",
+        "sliceName": "role",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:role.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:role.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "role"
+      },
+      {
+        "id": "Extension.extension:role.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/ValueSet/claim-careteamrole"
+        }
+      },
+      {
+        "id": "Extension.extension:qualification",
+        "path": "Extension.extension",
+        "sliceName": "qualification",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:qualification.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:qualification.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "qualification"
+      },
+      {
+        "id": "Extension.extension:qualification.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "http://hl7.org/fhir/ValueSet/provider-qualification"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

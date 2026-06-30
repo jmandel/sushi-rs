@@ -1,0 +1,121 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-encounter",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|3.1.1"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-compliesWithProfile",
+      "valueCanonical": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|6.1.0"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-encounter",
+  "name": "PASEncounter",
+  "title": "PAS Encounter",
+  "status": "active",
+  "description": "PAS constraints on the Encounter resource mandating support for elements relevant to details of a requested institutional stay on the prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Encounter",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Encounter.extension",
+        "path": "Encounter.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Encounter.extension:patientStatus",
+        "path": "Encounter.extension",
+        "sliceName": "patientStatus",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-patientStatus"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.extension:nursingHomeResidentialStatus",
+        "path": "Encounter.extension",
+        "sliceName": "nursingHomeResidentialStatus",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeResidentialStatus"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Encounter.extension:nursingHomeResidentialStatus.value[x]",
+        "path": "Encounter.extension.value[x]",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/CL1/1/04/00/1345",
+          "description": "Codes specifying the status of a nursing home resident at the time of service. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      },
+      {
+        "id": "Encounter.status",
+        "path": "Encounter.status",
+        "fixedCode": "planned"
+      },
+      {
+        "id": "Encounter.type",
+        "path": "Encounter.type",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/CL1/1/01/00/1315",
+          "description": "Codes indicating the priority of this admission. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      },
+      {
+        "id": "Encounter.subject",
+        "path": "Encounter.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Encounter.hospitalization.admitSource",
+        "path": "Encounter.hospitalization.admitSource",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/CL1/1/02/00/1314",
+          "description": "Codes indicating the source of this admission. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

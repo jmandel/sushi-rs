@@ -1,0 +1,54 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-identifierJurisdiction",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierJurisdiction",
+  "name": "IdentifierJurisdiction",
+  "title": "Identifier Jurisdiction",
+  "status": "active",
+  "description": "An additional element that provides the assigning jurisdiction of the identifier (i.e., provider state license number or state driver's license) so that it does not need to be mapped from the identifier system.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Identifier"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Identifier Jurisdiction",
+        "definition": "An additional element that provides the assigning jurisdiction of the identifier (i.e., provider state license number or state driver's license) so that it does not need to be mapped from the identifier system."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierJurisdiction"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/us-core-usps-state|7.0.0"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,359 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-task",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-task",
+  "name": "PASTask",
+  "title": "PAS Task",
+  "status": "active",
+  "description": "PAS constraints on Task resource that is used to request additional documentation for prior authorizations.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Task",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Task",
+        "path": "Task",
+        "constraint": [
+          {
+            "key": "AttachmentNeeded",
+            "severity": "error",
+            "human": "If task.code is attachment-request-code, then attachments needed slice is required.",
+            "expression": "$this.code.coding.where(code='attachment-request-code').count() > 0 implies $this.input.type.coding.where(code='attachments-needed').count() > 0",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-task"
+          },
+          {
+            "key": "QuestionnaireContext",
+            "severity": "error",
+            "human": "If task.code is attachment-request-questionnaire, then questionnaire context slice is required.",
+            "expression": "$this.code.coding.where(code='attachment-request-questionnaire').count() > 0 implies $this.input.type.coding.where(code='questionnaire-context').count() > 0",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-task"
+          }
+        ]
+      },
+      {
+        "id": "Task.identifier",
+        "path": "Task.identifier",
+        "short": "Payers tracking identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.status",
+        "path": "Task.status",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-hrex/ValueSet/hrex-task-status|1.1.0"
+        }
+      },
+      {
+        "id": "Task.statusReason",
+        "path": "Task.statusReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.intent",
+        "path": "Task.intent",
+        "patternCode": "order",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.code",
+        "path": "Task.code",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/PASTaskCodes"
+        }
+      },
+      {
+        "id": "Task.for",
+        "path": "Task.for",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.requester",
+        "path": "Task.requester",
+        "short": "Provider ID - only send the identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.requester.identifier",
+        "path": "Task.requester.identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.owner",
+        "path": "Task.owner",
+        "short": "Provider ID - only send the identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.owner.identifier",
+        "path": "Task.owner.identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.reasonCode",
+        "path": "Task.reasonCode",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "priorAuthorization",
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.reasonReference",
+        "path": "Task.reasonReference",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.restriction.period",
+        "path": "Task.restriction.period",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input",
+        "path": "Task.input",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type"
+            }
+          ],
+          "rules": "open",
+          "description": "Different slices for identifying different types of information for the Task."
+        },
+        "min": 2,
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:PayerURL",
+        "path": "Task.input",
+        "sliceName": "PayerURL",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:PayerURL.type",
+        "path": "Task.input.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "payer-url",
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Task.input:PayerURL.value[x]",
+        "path": "Task.input.value[x]",
+        "type": [
+          {
+            "code": "url"
+          }
+        ]
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded",
+        "path": "Task.input",
+        "sliceName": "AttachmentsNeeded",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded.extension",
+        "path": "Task.input.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded.extension:paLineNumber",
+        "path": "Task.input.extension",
+        "sliceName": "paLineNumber",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceLineNumber"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded.extension:contentModifier",
+        "path": "Task.input.extension",
+        "sliceName": "contentModifier",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-contentModifier"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded.type",
+        "path": "Task.input.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "attachments-needed",
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:AttachmentsNeeded.value[x]",
+        "path": "Task.input.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://loinc.org/vs/valid-hl7-attachment-requests",
+          "extension": [
+            {
+              "url": "http://hl7.org/fhir/tools/StructureDefinition/additional-binding",
+              "extension": [
+                {
+                  "url": "key",
+                  "valueId": "attachmentsNeededLoinc"
+                },
+                {
+                  "url": "purpose",
+                  "valueCode": "extensible"
+                },
+                {
+                  "url": "valueSet",
+                  "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ValueSet/pas-pwk01-attachment-report-type-code"
+                },
+                {
+                  "url": "documentation",
+                  "valueMarkdown": "X12 codes that can be used to request additional information to support a prior authorization request."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "Task.input:QuestionnaireContext",
+        "path": "Task.input",
+        "sliceName": "QuestionnaireContext",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:QuestionnaireContext.extension",
+        "path": "Task.input.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Task.input:QuestionnaireContext.extension:paLineNumber",
+        "path": "Task.input.extension",
+        "sliceName": "paLineNumber",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceLineNumber"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:QuestionnaireContext.type",
+        "path": "Task.input.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "code": "questionnaire-context",
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Task.input:QuestionnaireContext.value[x]",
+        "path": "Task.input.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

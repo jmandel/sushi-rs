@@ -1,0 +1,113 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-homeHealthCareInformation",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-homeHealthCareInformation",
+  "name": "HomeHealthCareInformation",
+  "title": "Home Health Care Information",
+  "status": "active",
+  "description": "Information needed for home health care requests.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Home Health Care Information",
+        "definition": "Information needed for home health care requests."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 2
+      },
+      {
+        "id": "Extension.extension:prognosis",
+        "path": "Extension.extension",
+        "sliceName": "prognosis",
+        "short": "Prognosis Code (CR601)",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:prognosis.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:prognosis.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "prognosis"
+      },
+      {
+        "id": "Extension.extension:prognosis.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/CR6/1/01/00/923"
+        }
+      },
+      {
+        "id": "Extension.extension:date",
+        "path": "Extension.extension",
+        "sliceName": "date",
+        "short": "Home Health Start Date",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:date.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:date.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "date"
+      },
+      {
+        "id": "Extension.extension:date.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-homeHealthCareInformation"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-homeHealthCareInformation"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

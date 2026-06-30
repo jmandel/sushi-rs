@@ -1,0 +1,29 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-location",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-location",
+  "name": "PASLocation",
+  "title": "PAS Location Profile",
+  "status": "active",
+  "description": "A profile on US-Core location to allow for specifying where a practitioner is working at.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Location",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Location.status",
+        "path": "Location.status",
+        "patternCode": "active"
+      },
+      {
+        "id": "Location.address",
+        "path": "Location.address",
+        "min": 1
+      }
+    ]
+  }
+}

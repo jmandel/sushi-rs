@@ -1,0 +1,135 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-conditionCode",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-conditionCode",
+  "name": "ConditionCode",
+  "title": "Condition Code",
+  "status": "active",
+  "description": "Information to supply various patient conditions.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Condition Code",
+        "definition": "Information to supply various patient conditions."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 3
+      },
+      {
+        "id": "Extension.extension:category",
+        "path": "Extension.extension",
+        "sliceName": "category",
+        "short": "Condition Code Category (CRC01)",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:category.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:category.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "category"
+      },
+      {
+        "id": "Extension.extension:category.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278ConditionCategory"
+        }
+      },
+      {
+        "id": "Extension.extension:indicator",
+        "path": "Extension.extension",
+        "sliceName": "indicator",
+        "short": "Certification Condition Indicator (CRC02)",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:indicator.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:indicator.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "indicator"
+      },
+      {
+        "id": "Extension.extension:indicator.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:code",
+        "path": "Extension.extension",
+        "sliceName": "code",
+        "short": "Condition Code (CRC03)",
+        "min": 1,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:code.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:code.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "code"
+      },
+      {
+        "id": "Extension.extension:code.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278ConditionCode"
+        }
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-conditionCode"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

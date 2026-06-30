@@ -1,0 +1,67 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-certificationType",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType",
+  "name": "CertificationType",
+  "title": "Certification Type",
+  "status": "active",
+  "description": "A code representing the type of certification being requested (UM02)",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit"
+    },
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Certification Type",
+        "definition": "A code representing the type of certification being requested (UM02)"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000F/UM/1/02/00/1322",
+          "description": "Codes indicating the type of certification. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-administrationReferenceNumber",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber",
+  "name": "AdministrationReferenceNumber",
+  "title": "Administration Reference Number",
+  "status": "active",
+  "description": "A string assigned by the UMO to the original disallowed review outcome associated with this service item.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    },
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Administration Reference Number",
+        "definition": "A string assigned by the UMO to the original disallowed review outcome associated with this service item."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

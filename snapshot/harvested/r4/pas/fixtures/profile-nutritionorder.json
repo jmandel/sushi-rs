@@ -1,0 +1,96 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-nutritionorder",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-nutritionorder",
+  "name": "PASNutritionOrder",
+  "title": "PAS Nutrition Order",
+  "status": "active",
+  "description": "PAS constraint on Nutrition Order resource for elements relevant to the ordering of nutrition on a prior authorization request",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "NutritionOrder",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "NutritionOrder.extension",
+        "path": "NutritionOrder.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "NutritionOrder.extension:coverage",
+        "path": "NutritionOrder.extension",
+        "sliceName": "coverage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.intent",
+        "path": "NutritionOrder.intent",
+        "fixedCode": "order",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.patient",
+        "path": "NutritionOrder.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet",
+        "path": "NutritionOrder.oralDiet",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.type",
+        "path": "NutritionOrder.oralDiet.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278NutritionOralDietType"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula",
+        "path": "NutritionOrder.enteralFormula",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.baseFormulaType",
+        "path": "NutritionOrder.enteralFormula.baseFormulaType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278NutritionEnteralFormulaType"
+        }
+      }
+    ]
+  }
+}

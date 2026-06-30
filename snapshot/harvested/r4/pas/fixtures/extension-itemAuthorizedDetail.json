@@ -1,0 +1,254 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemAuthorizedDetail",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedDetail",
+  "name": "ItemAuthorizedDetail",
+  "title": "Item Authorized Detail",
+  "status": "active",
+  "description": "The details of what has been authorized for this item.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit.item"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Item Authorized Detail",
+        "definition": "The details of what has been authorized for this item."
+      },
+      {
+        "id": "Extension.extension:productOrServiceCode",
+        "path": "Extension.extension",
+        "sliceName": "productOrServiceCode",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:productOrServiceCode.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:productOrServiceCode.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "productOrServiceCode"
+      },
+      {
+        "id": "Extension.extension:productOrServiceCode.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceType"
+        }
+      },
+      {
+        "id": "Extension.extension:productOrServiceCodeEnd",
+        "path": "Extension.extension",
+        "sliceName": "productOrServiceCodeEnd",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:modifier",
+        "path": "Extension.extension",
+        "sliceName": "modifier",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:modifier.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:modifier.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "modifier"
+      },
+      {
+        "id": "Extension.extension:modifier.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceModifierType"
+        }
+      },
+      {
+        "id": "Extension.extension:unitPrice",
+        "path": "Extension.extension",
+        "sliceName": "unitPrice",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:unitPrice.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:unitPrice.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "unitPrice"
+      },
+      {
+        "id": "Extension.extension:unitPrice.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Money"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:quantity",
+        "path": "Extension.extension",
+        "sliceName": "quantity",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:quantity.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:quantity.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "quantity"
+      },
+      {
+        "id": "Extension.extension:quantity.value[x]",
+        "path": "Extension.extension.value[x]",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-quantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:epsdtIndicator",
+        "path": "Extension.extension",
+        "sliceName": "epsdtIndicator",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:nursingHomeLevelOfCare",
+        "path": "Extension.extension",
+        "sliceName": "nursingHomeLevelOfCare",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeLevelOfCare"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:revenue",
+        "path": "Extension.extension",
+        "sliceName": "revenue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueCode"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:revenueUnitRateLimit",
+        "path": "Extension.extension",
+        "sliceName": "revenueUnitRateLimit",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueUnitRateLimit"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:authorizedService",
+        "path": "Extension.extension",
+        "sliceName": "authorizedService",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-requestedService"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedDetail"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

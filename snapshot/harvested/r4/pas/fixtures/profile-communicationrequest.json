@@ -1,0 +1,201 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-communicationrequest",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-communicationrequest",
+  "name": "PASCommunicationRequest",
+  "title": "PAS CommunicationRequest",
+  "status": "active",
+  "description": "PAS constraints on CommunicationRequest resource mandating support for elements relevant to the prior authorization response.\nFor DTR submit-attachment use, the identifer will always be present since the medium will not be VOICE and thus the identifiers can be used as the tracking control number. ",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "CommunicationRequest",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CommunicationRequest",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "CommunicationRequest",
+        "path": "CommunicationRequest",
+        "constraint": [
+          {
+            "key": "IdentifierUnlessVO",
+            "severity": "error",
+            "human": "CommunicationRequest.identifier is required unless CommunicationRequest.medium is 'VO'.",
+            "expression": "$this.medium.coding.where(code='VO').count() = 0 implies $this.identifier.count() > 0",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-communicationrequest"
+          }
+        ]
+      },
+      {
+        "id": "CommunicationRequest.extension",
+        "path": "CommunicationRequest.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "CommunicationRequest.extension:serviceLineNumber",
+        "path": "CommunicationRequest.extension",
+        "sliceName": "serviceLineNumber",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceLineNumber"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.identifier",
+        "path": "CommunicationRequest.identifier",
+        "short": "Unique Identifier used in linking the Communication Request to the response (X12's Attachment Control Number).",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.status",
+        "path": "CommunicationRequest.status",
+        "fixedCode": "active"
+      },
+      {
+        "id": "CommunicationRequest.category",
+        "path": "CommunicationRequest.category",
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/response/2000D/PWK/1/01/00/755",
+          "description": "Codes indicating the title or contents of a document, report or supporting item. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      },
+      {
+        "id": "CommunicationRequest.medium",
+        "path": "CommunicationRequest.medium",
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/PASCommunicationRequestMedium"
+        }
+      },
+      {
+        "id": "CommunicationRequest.payload",
+        "path": "CommunicationRequest.payload",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.payload.extension",
+        "path": "CommunicationRequest.payload.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "CommunicationRequest.payload.extension:communicatedDiagnosis",
+        "path": "CommunicationRequest.payload.extension",
+        "sliceName": "communicatedDiagnosis",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-communicatedDiagnosis"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.payload.extension:contentModifier",
+        "path": "CommunicationRequest.payload.extension",
+        "sliceName": "contentModifier",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-contentModifier"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.payload.content[x]",
+        "path": "CommunicationRequest.payload.content[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://loinc.org/vs/valid-hl7-attachment-requests"
+        }
+      },
+      {
+        "id": "CommunicationRequest.requester",
+        "path": "CommunicationRequest.requester",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-insurer"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.recipient",
+        "path": "CommunicationRequest.recipient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitioner",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "CommunicationRequest.sender",
+        "path": "CommunicationRequest.sender",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-requestor"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

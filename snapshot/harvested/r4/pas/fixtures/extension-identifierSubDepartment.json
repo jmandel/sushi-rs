@@ -1,0 +1,50 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-identifierSubDepartment",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierSubDepartment",
+  "name": "IdentifierSubDepartment",
+  "title": "Identifier Sub-Department",
+  "status": "active",
+  "description": "An additional element that provides a further subdivision within the organization granting the identifier.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Identifier"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Identifier Sub-Department",
+        "definition": "An additional element that provides a further subdivision within the organization granting the identifier."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierSubDepartment"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      }
+    ]
+  }
+}

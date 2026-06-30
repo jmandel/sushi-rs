@@ -1,0 +1,59 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-authorizedProviderType",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType",
+  "name": "AuthorizedProviderType",
+  "title": "Authorized Provider Type",
+  "status": "active",
+  "description": "The type of provider who has been authorized to provide this item.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.addItem.provider"
+    },
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item.extension"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Authorized Provider Type",
+        "definition": "The type of provider who has been authorized to provide this item."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/response/2010EA/NM1/1/01/00/98",
+          "description": "Code identifying an organization entity, a physical location, property or an individual. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions."
+        }
+      }
+    ]
+  }
+}

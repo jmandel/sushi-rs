@@ -1,0 +1,66 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-communicatedDiagnosis",
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-communicatedDiagnosis",
+  "name": "CommunicatedDiagnosis",
+  "title": "Communicated Diagnosis",
+  "status": "active",
+  "description": "A code representing the diagnosis that is the subject of the communication",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse.item"
+    },
+    {
+      "type": "element",
+      "expression": "ExplanationOfBenefit.item"
+    },
+    {
+      "type": "element",
+      "expression": "CommunicationRequest.payload"
+    },
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Communicated Diagnosis",
+        "definition": "A code representing the diagnosis that is the subject of the communication"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-communicatedDiagnosis"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278DiagnosisCodes"
+        }
+      }
+    ]
+  }
+}
