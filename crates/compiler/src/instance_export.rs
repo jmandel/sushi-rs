@@ -2072,7 +2072,7 @@ pub struct InstanceIndex {
 }
 
 impl InstanceIndex {
-    fn build(docs: &[FshDocument]) -> InstanceIndex {
+    fn build(docs: &[FshDocument], cfg: &Config, fisher: &dyn Fisher) -> InstanceIndex {
         let mut by_ref = HashMap::new();
         let mut inst_url = HashMap::new();
         for doc in docs {
@@ -2085,7 +2085,24 @@ impl InstanceIndex {
                     by_ref
                         .entry(id.clone())
                         .or_insert((io.clone(), id.clone()));
-                    if let Some(url) = effective_instance_url(inst) {
+                    // The canonical url used when this instance is referenced via
+                    // Canonical()/Reference(): an explicit `* url = "..."` wins,
+                    // else — for any non-Inline instance — it is derived as
+                    // `{canonical}/{resourceType}/{id}` exactly like
+                    // MasterFisher.fixMetadata (utils/MasterFisher.ts:134-136),
+                    // where resourceType is the InstanceOf SD's `type`.
+                    let derived = if let Some(url) = effective_instance_url(inst) {
+                        Some(url)
+                    } else if inst.usage != "Inline" {
+                        let base = io.split('|').next().unwrap_or(io);
+                        fisher
+                            .fish_for_metadata(base)
+                            .and_then(|m| m.sd_type)
+                            .map(|rt| format!("{}/{}/{}", cfg.canonical, rt, id))
+                    } else {
+                        None
+                    };
+                    if let Some(url) = derived {
                         inst_url.entry(inst.name.clone()).or_insert(url.clone());
                         inst_url.entry(id).or_insert(url);
                     }
@@ -2361,10 +2378,15 @@ pub fn export_instances(
             aliases.entry(k.clone()).or_insert_with(|| v.clone());
         }
     }
+    let inst_idx = {
+        let inner_fisher = ctx.fisher();
+        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        InstanceIndex::build(docs, cfg, &index_fisher)
+    };
     let exporter = Exporter {
         cfg,
         ctx,
-        inst_idx: InstanceIndex::build(docs),
+        inst_idx,
         def_idx: DefIndex::build(docs, cfg),
         by_name,
         id_to_name,
