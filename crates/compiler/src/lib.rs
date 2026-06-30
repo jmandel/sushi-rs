@@ -483,6 +483,25 @@ pub fn expand_to_json(files: &[(&str, &str)]) -> serde_json::Value {
 /// first). Gate: `harness/diff-resources-glob.sh`.
 ///
 pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
+    build_project_inner(ig_dir, out_dir, None)
+}
+
+/// Build a SUSHI project against an explicit materialized FHIR package cache
+/// (e.g. one produced by `package_acquisition` materialize). The explicit cache
+/// is validated to exist; we still NEVER fall back to `~/.fhir`.
+pub fn build_project_with_cache(
+    ig_dir: &str,
+    out_dir: &str,
+    cache_dir: &str,
+) -> anyhow::Result<()> {
+    build_project_inner(ig_dir, out_dir, Some(cache_dir))
+}
+
+fn build_project_inner(
+    ig_dir: &str,
+    out_dir: &str,
+    explicit_cache_dir: Option<&str>,
+) -> anyhow::Result<()> {
     use std::path::{Path, PathBuf};
 
     // 1. Config.
@@ -530,7 +549,7 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(&resources_dir)?;
 
     // The FHIR package cache (needed by VS external-name resolution + SD export).
-    let cache_dir = resolve_cache_dir()?;
+    let cache_dir = resolve_cache_dir(explicit_cache_dir)?;
     let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
 
     // Collect IG `definition.resource` metadata as we export.
@@ -674,8 +693,14 @@ fn sd_ig_name(sd: &fhir_model::StructureDefinition) -> Option<String> {
 /// Locate the explicit FHIR package cache. Honors `FHIR_CACHE`, else the repo's
 /// isolated cache under `temp/fhir-home/.fhir/packages` relative to cwd. NEVER
 /// falls back to `~/.fhir` (hard rule). Fails loud if missing.
-fn resolve_cache_dir() -> anyhow::Result<String> {
+fn resolve_cache_dir(explicit: Option<&str>) -> anyhow::Result<String> {
     use std::path::Path;
+    if let Some(c) = explicit {
+        if Path::new(c).is_dir() {
+            return Ok(c.to_string());
+        }
+        anyhow::bail!("FHIR package cache {c} is not a directory");
+    }
     if let Ok(c) = std::env::var("FHIR_CACHE") {
         if Path::new(&c).is_dir() {
             return Ok(c);

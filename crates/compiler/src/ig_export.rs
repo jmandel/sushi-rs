@@ -601,20 +601,33 @@ fn merge_or_set_extension(entry: &mut Vec<(String, J)>, ext: J) {
     entry.push(("extension".into(), ext));
 }
 
-/// Read a dependency package's ImplementationGuide `url` from its `.index.json`.
+/// Read a dependency package's ImplementationGuide `url`.
+///
+/// FPL loads IG resources by scanning package JSON files, so packages with an
+/// empty `.index.json` can still contribute an IG URL. Use package_store's shared
+/// package-resource listing helper so this path follows the same index-vs-scan
+/// rules as package fishing.
 fn find_dependency_ig_url(cache_dir: &str, package_id: &str, version: &str) -> Option<String> {
-    let index_path = Path::new(cache_dir)
+    let package_dir = Path::new(cache_dir)
         .join(format!("{package_id}#{version}"))
-        .join("package")
-        .join(".index.json");
-    let bytes = std::fs::read(&index_path).ok()?;
-    let index: J = serde_json::from_slice(&bytes).ok()?;
-    let files = index.get("files")?.as_array()?;
-    for f in files {
-        if f.get("resourceType").and_then(|v| v.as_str()) == Some("ImplementationGuide") {
-            if let Some(u) = f.get("url").and_then(|v| v.as_str()) {
-                return Some(u.to_string());
-            }
+        .join("package");
+    for record in package_store::package_resource_entries(&package_dir) {
+        let entry = record.entry;
+        if entry.resource_type.as_deref() != Some("ImplementationGuide") {
+            continue;
+        }
+        let package_matches = entry
+            .package_id
+            .as_deref()
+            .map(|id| id == package_id)
+            .unwrap_or(true);
+        let version_matches = entry
+            .version
+            .as_deref()
+            .map(|v| v == version || version == "current" || version == "dev")
+            .unwrap_or(true);
+        if package_matches && version_matches {
+            return entry.url;
         }
     }
     None
@@ -2399,4 +2412,37 @@ fn build_parameters(
             J::Object(o)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dependency_ig_url_scans_package_when_index_is_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let package_dir = temp.path().join("example.fhir.pkg#1.0.0").join("package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join(".index.json"),
+            r#"{"index-version":2,"files":[]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"example.fhir.pkg","version":"1.0.0","canonical":"http://example.org/pkg"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package_dir.join("ImplementationGuide-example.fhir.pkg.json"),
+            r#"{"resourceType":"ImplementationGuide","id":"example.fhir.pkg","packageId":"example.fhir.pkg","version":"1.0.0","url":"http://example.org/pkg/ImplementationGuide/example.fhir.pkg"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_dependency_ig_url(temp.path().to_str().unwrap(), "example.fhir.pkg", "1.0.0")
+                .as_deref(),
+            Some("http://example.org/pkg/ImplementationGuide/example.fhir.pkg")
+        );
+    }
 }

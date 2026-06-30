@@ -1,0 +1,19 @@
+{
+  "buildServerBase": "https://build.fhir.org/ig",
+  "defaultRegistries": [
+    {
+      "url": "https://packages.fhir.org",
+      "metadataUrl": "{registry}/{name}",
+      "fallbackTarballUrl": "{registry}/{name}/{version}"
+    },
+    {
+      "url": "https://packages2.fhir.org/packages",
+      "metadataUrl": "{registry}/{name}",
+      "fallbackTarballUrl": "{registry}/{name}/{version}"
+    }
+  ],
+  "customRegistry": {
+    "metadataUrl": "{registry}/{name}",
+    "fallbackTarballUrl": "{registry}/{name}/-/{name}-{version}.tgz"
+  }
+}

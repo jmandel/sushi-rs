@@ -21,8 +21,15 @@ of `fhir-package-loader` that SUSHI's `FHIRDefinitions` exposes).
 ## Dependency graph (what to load)
 SUSHI loads: the auto FHIR core for `fhirVersion` (4.0.1 → `hl7.fhir.r4.core#4.0.1`),
 plus `sushi-config.yaml` `dependencies:` (e.g. IPS: `hl7.fhir.uv.ipa#1.1.0`,
-`hl7.fhir.uv.extensions.r4#5.3.0`), plus their transitive `package.json` deps.
-Resolution + auto-core in `sushi-ts/src/utils/Processing.ts` / `run` (loadExternalDependencies).
+`hl7.fhir.uv.extensions.r4#5.3.0`) and the low/high automatic dependencies from
+`sushi-ts/src/utils/Processing.ts`. Stock SUSHI v3.20.0 does **not** walk
+transitive `package.json` dependencies from those loaded packages.
+
+Read-side `PackageStore::for_project` resolves `latest`/`current` against the
+explicit cache, and resolves `M.N.x` to the highest matching concrete cached
+directory (for example `ihe.iti.mcsd#4.0.x` -> `ihe.iti.mcsd#4.0.0` in the NDH
+holdout cache). Acquisition keeps those mutable coordinates unresolved until it
+records a lock.
 
 ## Oracle (drive stock FHIRDefinitions from the dist)
 ```js
@@ -36,8 +43,10 @@ Methods: `fishForFHIR`, `fishForMetadata(s)`, `fishForPredefinedResource(Metadat
 Run with `HOME=<repo>/temp/fhir-home` so it uses the ISOLATED cache (never real ~/.fhir).
 
 ## Rust mapping
-- `package_store` reads `.index.json` per resolved package, builds maps by
-  `url` (+ versioned url), `(resourceType,id)`, and lazily `name` (read file once).
+- `package_store` uses `package_resource_entries` per resolved package: trust a
+  non-empty `.index.json` as complete, otherwise sorted FPL-style directory scan.
+  It builds maps by `url` (+ versioned url), `(resourceType,id)`, and `name`
+  (prefix-read from the resource file when using `.index.json` metadata).
 - `fish_for_fhir(item, &[Type])`: alias/version split, search package resources in
   the SUSHI type order, return the resource JSON (`serde_json::Value`).
 - Gate: a `package-oracle.cjs` (load IPS dep set, fish a query list, dump JSON) vs
@@ -57,9 +66,13 @@ Run with `HOME=<repo>/temp/fhir-home` so it uses the ISOLATED cache (never real 
   (Base id `...subscriptions-backport` is a DIFFERENT package with a populated index.)
 - Index ENTRIES accurate for fields we use (resourceType/id/url/version,+SD type/kind):
   0 mismatches in 394 sampled.
-- THEREFORE: keep `.index.json` as a metadata fast-path but ALWAYS reconcile vs the
-  directory (cheap readdir+diff; read only uncovered files). Never trust it for WHICH
-  files exist. Perf: trusting index metadata vs full FPL scan ~8x (0.6s vs 4.8s over a
-  57k-file closure); residual 0.6s = forced per-file open for `name` (not indexed).
-- Self-reliance gap: WE don't download (read-only); stock/FPL populated the cache. Plan
-  to fix: `docs/designs/package-acquisition-plan.md` (CAS + materialize).
+- Current policy: trust a non-empty index as a metadata fast path, and fall back to
+  the sorted FPL scan only when `.index.json` is missing or `files:[]`. Materialized
+  acquisition caches rewrite `.index.json` from actual package files, so the fast
+  path is authoritative there. `PackageStore::index_package` and IG dependency URL
+  lookup both use the same shared listing helper.
+- Stale-cache warning: the older isolated stock cache used for build parity is
+  missing three current `hl7.fhir.r4.core#4.0.1` helper definitions
+  (`structuredefinition-{json,rdf,xml}-type`). A fresh stock FPL download and
+  acquisition both include them, so package-fishing parity uses stock SUSHI backed
+  by the same acquisition-materialized cache content.
