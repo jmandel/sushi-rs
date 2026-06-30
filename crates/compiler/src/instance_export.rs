@@ -2217,6 +2217,38 @@ impl DefIndex {
                 vs_url.insert(id.clone(), url);
             }
         }
+        // Instance-defined conformance CodeSystems/ValueSets (`InstanceOf:
+        // CodeSystem` / `ValueSet`, `Usage` other than Inline). Stock's
+        // MasterFisher.fixMetadata (MasterFisher.ts:133-136) synthesizes a url
+        // `{canonical}/{resourceType}/{id}` for tank metadata lacking a url, so a
+        // coding `system` referencing such an instance by name/id resolves to the
+        // synthesized canonical instead of staying bare. Added AFTER the
+        // keyword-defined CS/VS so those win on name clash (`or_insert`),
+        // mirroring TankIndex::build (entities before instances).
+        for doc in docs {
+            for (_k, inst) in &doc.instances {
+                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
+                let (target_url, fhir_type): (&mut HashMap<String, String>, &str) = match instance_of {
+                    "CodeSystem" => (&mut cs_url, "CodeSystem"),
+                    "ValueSet" => (&mut vs_url, "ValueSet"),
+                    _ => continue,
+                };
+                if inst.usage == "Inline" {
+                    continue;
+                }
+                let id = crate::export::instance_effective_id(inst);
+                let url = crate::export::instance_assigned_url(inst)
+                    .unwrap_or_else(|| format!("{}/{}/{}", cfg.canonical, fhir_type, id));
+                by_ref
+                    .entry(inst.name.clone())
+                    .or_insert((fhir_type.to_string(), id.clone()));
+                by_ref
+                    .entry(id.clone())
+                    .or_insert((fhir_type.to_string(), id.clone()));
+                target_url.entry(inst.name.clone()).or_insert(url.clone());
+                target_url.entry(id).or_insert(url);
+            }
+        }
         DefIndex { by_ref, cs_url, vs_url }
     }
 }

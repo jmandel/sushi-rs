@@ -201,7 +201,7 @@ impl TankIndex {
 
 /// Effective instance id: the last `* id = "..."` AssignmentRule's value, else
 /// the declared id (which defaults to the instance name).
-fn instance_effective_id(inst: &fsh_model::Instance) -> String {
+pub(crate) fn instance_effective_id(inst: &fsh_model::Instance) -> String {
     for r in inst.rules.iter().rev() {
         if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
             if path == "url" {
@@ -217,7 +217,7 @@ fn instance_effective_id(inst: &fsh_model::Instance) -> String {
 
 /// An explicit `* url = "..."` AssignmentRule on an instance, if present
 /// (mirrors `getNonInstanceValueFromRules(entity, 'url')`).
-fn instance_assigned_url(inst: &fsh_model::Instance) -> Option<String> {
+pub(crate) fn instance_assigned_url(inst: &fsh_model::Instance) -> Option<String> {
     for r in inst.rules.iter().rev() {
         if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
             if path == "url" {
