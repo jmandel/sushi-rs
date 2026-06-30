@@ -1065,6 +1065,11 @@ fn split_periods(s: &str) -> Vec<String> {
     crate::paths::split_on_path_periods(s)
 }
 
+/// Last '.'-segment of an element id, borrowed (no Vec/String allocation).
+fn last_seg(s: &str) -> &str {
+    crate::paths::last_path_period_segment(s)
+}
+
 /// Build slice tree counts feeding `effective_mins` (sliceTree.ts).
 struct SliceNode {
     idx: usize,
@@ -1109,8 +1114,8 @@ fn calc_slice_tree(sd: &StructureDefinition, node: &mut SliceNode, known: &HashM
         calc_slice_tree(sd, c, known, key_start);
     }
     let elem_min = el_min(sd, node.idx) - node.children.iter().map(slice_tree_sum).sum::<i64>();
-    let last_seg = split_periods(&el_id(sd, node.idx)).pop().unwrap_or_default();
-    let seg = reslice_brackets(&last_seg);
+    let id = el_id(sd, node.idx);
+    let seg = reslice_brackets(last_seg(&id));
     let slice_path = format!("{key_start}{seg}");
     let slice_min = known.get(&slice_path).copied().unwrap_or(0);
     node.count = elem_min.max(slice_min);
@@ -1185,7 +1190,7 @@ fn set_implied_properties_on_instance(
             Some(i) => i,
             None => continue,
         };
-        let mut next_trace = split_periods(&el_id(sd, cur_idx)).pop().unwrap_or_default();
+        let mut next_trace = last_seg(&el_id(sd, cur_idx)).to_string();
         let types = el_type_codes(sd, cur_idx);
         if next_trace.contains("[x]") && types.len() == 1 {
             let has_slices = !get_slices(sd, cur_idx, &ix).is_empty();
@@ -1377,7 +1382,7 @@ fn compute_requirement_root(sd: &StructureDefinition, idx: usize) -> String {
     if el_min(sd, idx) > 0 {
         return String::new();
     }
-    let mut rr = split_periods(&el_id(sd, idx)).pop().unwrap_or_default();
+    let mut rr = last_seg(&el_id(sd, idx)).to_string();
     let types = el_type_codes(sd, idx);
     if rr.contains("[x]") && types.len() == 1 {
         rr = replace_x(&rr, &upper_first(&types[0]));
@@ -1438,7 +1443,7 @@ fn find_connected_elements_post(
         }
     }
     if let Some(p) = parent_idx(sd, idx) {
-        let parent_path = split_periods(&el_id(sd, idx)).pop().unwrap_or_default();
+        let parent_path = last_seg(&el_id(sd, idx)).to_string();
         let mut more = find_connected_elements_post(sd, p, &format!(".{parent_path}{post}"), ix);
         out.append(&mut more);
     }
@@ -1500,9 +1505,9 @@ fn stable_sort_rule_paths(
                 .iter()
                 .find(|p| **p == a_root || p.starts_with(&format!("{a_root}.")));
             if let Some(fr) = first_rule {
-                let fr_split = split_periods(fr);
-                let a_split = split_periods(a);
-                let b_split = split_periods(b);
+                let fr_split = crate::paths::split_on_path_periods_borrowed(fr);
+                let a_split = crate::paths::split_on_path_periods_borrowed(a);
+                let b_split = crate::paths::split_on_path_periods_borrowed(b);
                 let maxlen = fr_split.len().max(a_split.len()).max(b_split.len());
                 for i in 0..maxlen {
                     let fp = fr_split.get(i);

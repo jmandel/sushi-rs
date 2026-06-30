@@ -15,25 +15,48 @@ pub struct PathPart {
 
 /// `splitOnPathPeriods`: split on '.' not inside `[...]`.
 pub fn split_on_path_periods(path: &str) -> Vec<String> {
-    let mut parts = Vec::new();
+    split_on_path_periods_borrowed(path).iter().map(|s| s.to_string()).collect()
+}
+
+/// Allocation-free `splitOnPathPeriods`: yields `&str` slices borrowing `path`.
+/// Each segment is an exact substring (only the depth-0 '.' separators are
+/// removed), so no per-segment `String` is allocated. `[`/`]`/`.` are all ASCII,
+/// so the slice boundaries always land on char boundaries.
+pub fn split_on_path_periods_borrowed(path: &str) -> smallvec::SmallVec<[&str; 8]> {
+    let mut parts = smallvec::SmallVec::new();
+    let bytes = path.as_bytes();
     let mut depth = 0i32;
-    let mut cur = String::new();
-    for c in path.chars() {
-        match c {
-            '[' => {
-                depth += 1;
-                cur.push(c);
+    let mut start = 0usize;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'[' => depth += 1,
+            b']' => depth -= 1,
+            b'.' if depth == 0 => {
+                parts.push(&path[start..i]);
+                start = i + 1;
             }
-            ']' => {
-                depth -= 1;
-                cur.push(c);
-            }
-            '.' if depth == 0 => parts.push(std::mem::take(&mut cur)),
-            _ => cur.push(c),
+            _ => {}
         }
     }
-    parts.push(cur);
+    parts.push(&path[start..]);
     parts
+}
+
+/// Last depth-0 '.'-separated segment of `path`, borrowed (no allocation). Equal
+/// to `split_on_path_periods(path).pop().unwrap()` but without building the Vec.
+pub fn last_path_period_segment(path: &str) -> &str {
+    let bytes = path.as_bytes();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'[' => depth += 1,
+            b']' => depth -= 1,
+            b'.' if depth == 0 => start = i + 1,
+            _ => {}
+        }
+    }
+    &path[start..]
 }
 
 fn is_numeric(s: &str) -> bool {
@@ -44,10 +67,10 @@ fn is_numeric(s: &str) -> bool {
 pub fn parse_fsh_path(fsh_path: &str) -> Vec<PathPart> {
     let mut parts = Vec::new();
     let mut seen_slices: Vec<String> = Vec::new();
-    let split: Vec<String> = if fsh_path == "." {
-        vec![".".to_string()]
+    let split: smallvec::SmallVec<[&str; 8]> = if fsh_path == "." {
+        smallvec::smallvec!["."]
     } else {
-        split_on_path_periods(fsh_path)
+        split_on_path_periods_borrowed(fsh_path)
     };
     for part in split {
         // base = leading non-'[' run, plus a trailing literal "[x]" if present.
