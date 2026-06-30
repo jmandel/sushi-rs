@@ -699,50 +699,67 @@ impl PackageStore {
     /// and reads each one (`BasePackageLoader.loadResourcesFromCache`). The
     /// `.index.json` is a legacy artifact FPL ignores entirely.
     ///
-    /// We use `.index.json` purely as a metadata CACHE for the files it lists (to
-    /// avoid re-parsing thousands of large core SDs), then **reconcile against the
-    /// directory**: any resource file present on disk but missing from (or absent
-    /// because the whole index is) `files:[]` is still indexed by reading it — this
-    /// is the empty/stale-index case (e.g. `hl7.fhir.uv.subscriptions-backport.r4
-    /// #1.1.0`, whose `.index.json` is `files:[]` despite 23 resources). Scanned
-    /// files are processed in sorted filename order, matching FPL's sorted scan, so
-    /// the load/seq order (and thus LIFO fishing precedence) matches stock.
+    /// We keep `.index.json` as a metadata CACHE (to avoid re-parsing thousands of
+    /// large core SDs) under a HEURISTIC: a NON-EMPTY index is trusted as complete
+    /// and used directly (no directory scan); a MISSING or `files:[]` index triggers
+    /// the FPL-style directory scan (sorted, read each file) to recover resources.
+    /// See the body for why the heuristic is safe here and the TODO to remove the
+    /// fallback once we control indexing ourselves. Both paths process files in
+    /// sorted order, so load/seq order (LIFO fishing precedence) matches stock.
     fn index_package(&mut self, pkg_dir: &Path, seq: &mut usize) {
         if !pkg_dir.is_dir() {
             // Package not present — FPL would fail to load it.
             return;
         }
 
-        // -- Fast path: trust the metadata already in `.index.json`. -----------
-        let mut indexed: std::collections::HashSet<String> = std::collections::HashSet::new();
-        if let Ok(bytes) = std::fs::read(pkg_dir.join(".index.json")) {
-            if let Ok(index) = serde_json::from_slice::<IndexFile>(&bytes) {
-                for e in index.files {
-                    // Record coverage even for non-fishable entries so the
-                    // directory reconcile below doesn't re-read them.
-                    indexed.insert(e.filename.clone());
-                    if classify(&e).is_none() {
-                        *seq += 1;
-                        continue;
-                    }
-                    let path = pkg_dir.join(&e.filename);
-                    // name is not in .index.json — probe it from the file header
-                    // only (prefix read; full read only if header is inconclusive).
-                    let name = probe_name_from_path(&path);
-                    self.add_entry(e, name, path, None, *seq);
+        let index: Option<IndexFile> = std::fs::read(pkg_dir.join(".index.json"))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<IndexFile>(&b).ok());
+
+        // HEURISTIC: "index is valid" == `.index.json` exists with a NON-EMPTY
+        // `files` array. When valid we trust it as COMPLETE and index straight from
+        // it (no directory scan). Only when the index is missing or `files:[]` do we
+        // fall back to a full directory scan.
+        //
+        // Why this holds in practice: across the whole 7.6G cache (154 packages),
+        // indexes are all-or-nothing — either complete or `files:[]`. The IG-Publisher
+        // either runs its index step or ships an empty placeholder (e.g.
+        // hl7.fhir.uv.subscriptions-backport.r4#1.1.0 — verified empty in the
+        // published tarball itself). A *partially* populated index was never observed.
+        // Stock SUSHI/FPL sidestep the question by ALWAYS directory-scanning; we trade
+        // that for a real speedup (skip the readdir + re-reading covered files),
+        // knowingly accepting only the empty-index failure mode.
+        //
+        // TODO(remove-when-we-own-indexing): once packages are acquired through our
+        // own content-addressed store + materialize step (see
+        // docs/designs/package-acquisition-plan.md), we can GUARANTEE a correct,
+        // complete `.index.json` at materialize time and DELETE the directory-scan
+        // fallback entirely (always trust the index). This dual path exists ONLY
+        // because upstream tarballs ship unreliable indexes.
+        if let Some(idx) = index.filter(|i| !i.files.is_empty()) {
+            for e in idx.files {
+                if classify(&e).is_none() {
                     *seq += 1;
+                    continue;
                 }
+                let path = pkg_dir.join(&e.filename);
+                // name is not in .index.json — probe it from the file header only
+                // (prefix read; full read only if the header is inconclusive).
+                let name = probe_name_from_path(&path);
+                self.add_entry(e, name, path, None, *seq);
+                *seq += 1;
             }
+            return;
         }
 
-        // -- Reconcile with the directory (FPL's actual source of truth). ------
-        // FPL's filter is `^[^.].*\.json$`, sorted. Files the index already
-        // covered are skipped; the rest are read from disk and indexed — this is
-        // what recovers resources from an empty/stale `.index.json`.
+        // -- Deep-scan fallback: index missing or `files:[]` (stale/empty). -----
+        // Mirror FPL's `getPotentialResourcePaths`: every `^[^.].*\.json$` file
+        // (except package.json), SORTED, read from disk and indexed. Recovers
+        // resources from packages whose index is broken/empty.
         let Ok(rd) = std::fs::read_dir(pkg_dir) else {
             return;
         };
-        let mut extra: Vec<String> = Vec::new();
+        let mut files: Vec<String> = Vec::new();
         for ent in rd.flatten() {
             if !ent.file_type().map(|t| t.is_file()).unwrap_or(false) {
                 continue;
@@ -751,21 +768,18 @@ impl PackageStore {
             if fname.starts_with('.') || !fname.to_ascii_lowercase().ends_with(".json") {
                 continue; // dotfiles (incl. .index.json) and non-json excluded.
             }
-            // package.json carries no resourceType — FPL reads then rejects it.
-            if fname == "package.json" || indexed.contains(&fname) {
-                continue;
+            if fname == "package.json" {
+                continue; // carries no resourceType — FPL reads then rejects it.
             }
-            extra.push(fname);
+            files.push(fname);
         }
-        extra.sort(); // FPL `getPotentialResourcePaths` sorts the paths.
-        for fname in extra {
+        files.sort(); // FPL `getPotentialResourcePaths` sorts the paths.
+        for fname in files {
             let path = pkg_dir.join(&fname);
-            // Read the resource directly (the metadata FPL extracts from the JSON
-            // is exactly the subset `.index.json` would have precomputed).
-            let entry = std::fs::read(&path)
+            let json = std::fs::read(&path)
                 .ok()
                 .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
-            if let Some(json) = entry {
+            if let Some(json) = json {
                 let ie = index_entry_from_json(&json, fname);
                 if classify(&ie).is_some() {
                     let name = json.get("name").and_then(|v| v.as_str()).map(str::to_string);
