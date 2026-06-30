@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "request-specific",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/request-specific",
+  "name": "RequestSpecific",
+  "title": "Request Specific Flag",
+  "status": "active",
+  "description": "If this flag is 'true' then a distinct QuestionnaireResponse is needed for each request where that Questionnaire is solicited.  If false, then a single QuestionnaireResponse can be used across all requests where the specified Questionnaire url and version was solicited.  (i.e., You can fill out the form once and re-use rather than completing multiple times.  Typically, re-use of a form is limited to the scope of a single encounter)",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Request Specific Flag",
+        "definition": "If this flag is 'true' then a distinct QuestionnaireResponse is needed for each request where that Questionnaire is solicited.  If false, then a single QuestionnaireResponse can be used across all requests where the specified Questionnaire url and version was solicited.  (i.e., You can fill out the form once and re-use rather than completing multiple times.  Typically, re-use of a form is limited to the scope of a single encounter)"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/request-specific"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Is the Questionnaire specific to a request?",
+        "min": 1,
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      }
+    ]
+  }
+}

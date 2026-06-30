@@ -1,0 +1,225 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-qpackage-input-parameters",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-qpackage-input-parameters",
+  "name": "DTRQuestionnairePackageInputParameters",
+  "title": "DTR Questionnaire Package Input Parameters",
+  "status": "active",
+  "description": "The Parameters profile used to define the inputs of the [$questionnaire-package](OperationDefinition-questionnaire-package.html) operation (also see ['Retrieving Questionnaire Packages'](specification.html#retrieving-questionnaire-packages)).  \nIf both orders and a context id are present, then the context id can be used to link to additional information retrieved during CRD and to expedite re-processing of which Questionnaires are needed.  §prof-1^dtr-server^exchange:However, the system should check that the passed orders are the same as was processed at CRD time before presuming that the questionnaires needed will be the same and if the orders have changed, or there's a possibility that the rules governing which Questionnaires are needed might have changed, the system **SHOULD** re-check to determine the needed Questionnaires.§  If specific Questionnaires are requested as part of the DTR invocation, such additional checking is not expected.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters",
+        "path": "Parameters",
+        "constraint": [
+          {
+            "key": "dtr-1",
+            "severity": "error",
+            "human": "At least one of 'order', 'questionnaire' and 'context' SHALL be present",
+            "expression": "parameter.exists(name='order' or name='questionnaire' or name='context')",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-qpackage-input-parameters"
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "name"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on $this pattern"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:coverage",
+        "path": "Parameters.parameter",
+        "sliceName": "coverage",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:coverage.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "coverage"
+      },
+      {
+        "id": "Parameters.parameter:coverage.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coverage",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-coverage"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:order",
+        "path": "Parameters.parameter",
+        "sliceName": "order",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:order.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "order"
+      },
+      {
+        "id": "Parameters.parameter:order.resource",
+        "path": "Parameters.parameter.resource",
+        "short": "One or more Order resource instances, e.g., DeviceRequest, ServiceRequest, MedicationRequest, ... Encounter, Appointment, or prior-auth Claim, etc.",
+        "min": 1,
+        "type": [
+          {
+            "code": "Appointment",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-base"
+            ]
+          },
+          {
+            "code": "Encounter",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter"
+            ]
+          },
+          {
+            "code": "CommunicationRequest",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-communicationrequest"
+            ]
+          },
+          {
+            "code": "DeviceRequest",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-devicerequest"
+            ]
+          },
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medicationrequest"
+            ]
+          },
+          {
+            "code": "NutritionOrder",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-nutritionorder"
+            ]
+          },
+          {
+            "code": "ServiceRequest",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-servicerequest"
+            ]
+          },
+          {
+            "code": "SupplyRequest"
+          },
+          {
+            "code": "VisionPrescription",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-visionprescription"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:questionnaire",
+        "path": "Parameters.parameter",
+        "sliceName": "questionnaire",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:questionnaire.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "questionnaire"
+      },
+      {
+        "id": "Parameters.parameter:questionnaire.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:context",
+        "path": "Parameters.parameter",
+        "sliceName": "context",
+        "short": "CRD, CDex, or PAS-provided context",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:context.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "context"
+      },
+      {
+        "id": "Parameters.parameter:context.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:changedsince",
+        "path": "Parameters.parameter",
+        "sliceName": "changedsince",
+        "short": "When the Questionnaire package was last retrieved",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:changedsince.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "changedsince"
+      },
+      {
+        "id": "Parameters.parameter:changedsince.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "instant"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "activeRole",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/activeRole",
+  "name": "ActiveRole",
+  "title": "Active Role",
+  "status": "active",
+  "description": "An extension to indicate the active role(s) a practitioner is currently functioning in.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Practitioner"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Active Role",
+        "definition": "An extension to indicate the active role(s) a practitioner is currently functioning in."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/activeRole"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "The active role(s) of the practitioner.",
+        "definition": "The active role of the practitioner.",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/us-core-provider-role|3.1.1"
+        }
+      }
+    ]
+  }
+}

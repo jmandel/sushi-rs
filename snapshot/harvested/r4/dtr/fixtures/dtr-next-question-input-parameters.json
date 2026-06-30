@@ -1,0 +1,93 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-next-question-input-parameters",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 3,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/uv/sdc/ImplementationGuide/hl7.fhir.uv.sdc"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/uv/sdc/ImplementationGuide/hl7.fhir.uv.sdc"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-next-question-input-parameters",
+  "name": "DTRQuestionnaireNextQuestionnaireInputParameters",
+  "title": "DTR Next Question Input Parameters",
+  "status": "active",
+  "description": "Profile used to validate the parameters that are the input of the 'next question' adaptive questionnaire operation",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Parameters.parameter:QuestionnaireResponse",
+        "path": "Parameters.parameter",
+        "sliceName": "QuestionnaireResponse",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:QuestionnaireResponse.name",
+        "path": "Parameters.parameter.name",
+        "fixedString": "questionnaire-response"
+      },
+      {
+        "id": "Parameters.parameter:QuestionnaireResponse.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:QuestionnaireResponse.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "QuestionnaireResponse",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaireresponse-adapt"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:QuestionnaireResponse.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

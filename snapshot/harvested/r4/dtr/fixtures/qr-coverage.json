@@ -1,0 +1,53 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "qr-coverage",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-coverage",
+  "name": "QuestionnaireResponseCoverage",
+  "title": "Questionnaire Response Coverage",
+  "status": "active",
+  "description": "Identifies the coverages associated with the specified QuestionnaireResponse.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "QuestionnaireResponse"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "definition": "Identifies the coverages associated with the specified QuestionnaireResponse."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-coverage"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-coverage"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

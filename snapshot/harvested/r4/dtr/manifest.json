@@ -1,0 +1,202 @@
+{
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs/temp/holdout/dtr-stock/fsh-generated/resources",
+  "includeLocalBase": false,
+  "limit": 0,
+  "counts": {
+    "scanned": 25,
+    "harvested": 21,
+    "skipped": 4
+  },
+  "entries": [
+    {
+      "id": "DTR-QPackageBundle",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/DTR-QPackageBundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-DTR-QPackageBundle.json",
+      "fixture": "fixtures/DTR-QPackageBundle.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "DTR-QRBundle",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/DTR-QRBundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-DTR-QRBundle.json",
+      "fixture": "fixtures/DTR-QRBundle.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "activeRole",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/activeRole",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-activeRole.json",
+      "fixture": "fixtures/activeRole.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "alternativeExpression",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-alternativeExpression.json",
+      "fixture": "fixtures/alternativeExpression.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "containedReference",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/containedReference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-containedReference.json",
+      "fixture": "fixtures/containedReference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "dtr-base-questionnaire",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire",
+      "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire",
+      "source": "StructureDefinition-dtr-base-questionnaire.json",
+      "fixture": "fixtures/dtr-base-questionnaire.json",
+      "differentialElements": 77
+    },
+    {
+      "id": "dtr-log-errors-input-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-log-errors-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-dtr-log-errors-input-parameters.json",
+      "fixture": "fixtures/dtr-log-errors-input-parameters.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "dtr-next-question-input-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-next-question-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-dtr-next-question-input-parameters.json",
+      "fixture": "fixtures/dtr-next-question-input-parameters.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "dtr-next-question-output-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-next-question-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-dtr-next-question-output-parameters.json",
+      "fixture": "fixtures/dtr-next-question-output-parameters.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "dtr-qpackage-input-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-qpackage-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-dtr-qpackage-input-parameters.json",
+      "fixture": "fixtures/dtr-qpackage-input-parameters.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "dtr-qpackage-output-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-qpackage-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-dtr-qpackage-output-parameters.json",
+      "fixture": "fixtures/dtr-qpackage-output-parameters.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "dtr-questionnaire-adapt-search",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaire-adapt-search",
+      "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire",
+      "source": "StructureDefinition-dtr-questionnaire-adapt-search.json",
+      "fixture": "fixtures/dtr-questionnaire-adapt-search.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "dtr-questionnaireresponse",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaireresponse",
+      "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse",
+      "source": "StructureDefinition-dtr-questionnaireresponse.json",
+      "fixture": "fixtures/dtr-questionnaireresponse.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "dtr-supported-Payers",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-supported-Payers",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/List",
+      "source": "StructureDefinition-dtr-supported-Payers.json",
+      "fixture": "fixtures/dtr-supported-Payers.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "estimated-completion-time",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/estimated-completion-time",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-estimated-completion-time.json",
+      "fixture": "fixtures/estimated-completion-time.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "information-origin",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/information-origin",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-information-origin.json",
+      "fixture": "fixtures/information-origin.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "intendedUse",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/intendedUse",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-intendedUse.json",
+      "fixture": "fixtures/intendedUse.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qr-context",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-context",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qr-context.json",
+      "fixture": "fixtures/qr-context.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qr-coverage",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-coverage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qr-coverage.json",
+      "fixture": "fixtures/qr-coverage.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "questionnaireAudience",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/questionnaireAudience",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-questionnaireAudience.json",
+      "fixture": "fixtures/questionnaireAudience.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "request-specific",
+      "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/request-specific",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-request-specific.json",
+      "fixture": "fixtures/request-specific.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": [
+    {
+      "id": "DTRMetricData",
+      "source": "StructureDefinition-DTRMetricData.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "dtr-questionnaire-adapt",
+      "source": "StructureDefinition-dtr-questionnaire-adapt.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+    },
+    {
+      "id": "dtr-questionnaireresponse-adapt",
+      "source": "StructureDefinition-dtr-questionnaireresponse-adapt.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaireresponse"
+    },
+    {
+      "id": "dtr-std-questionnaire",
+      "source": "StructureDefinition-dtr-std-questionnaire.json",
+      "reason": "local baseDefinition: http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+    }
+  ]
+}

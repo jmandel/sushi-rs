@@ -1,0 +1,172 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "information-origin",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/information-origin",
+  "name": "InformationOrigin",
+  "title": "Information Origin",
+  "status": "active",
+  "description": "Identifies the origin of the information in the answer and how it came to exist.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "QuestionnaireResponse.item.answer"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "definition": "Identifies the origin of the information in the answer and how it came to exist.",
+        "constraint": [
+          {
+            "key": "dtrx-1",
+            "severity": "error",
+            "human": "If source is 'override' or 'manual' then an author SHALL be supplied, otherwise author is prohibited.",
+            "expression": "extension.exists(url = 'source' and (value = 'auto-client' or value = 'auto-server')) != extension.exists(url = 'author')",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/information-origin"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:source",
+        "path": "Extension.extension",
+        "sliceName": "source",
+        "short": "The origination of information",
+        "definition": "The origination of information",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:source.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:source.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "source"
+      },
+      {
+        "id": "Extension.extension:source.value[x]",
+        "path": "Extension.extension.value[x]",
+        "short": "auto-client | auto-server | override | manual",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-dtr/ValueSet/informationOrigins"
+        }
+      },
+      {
+        "id": "Extension.extension:author",
+        "path": "Extension.extension",
+        "sliceName": "author",
+        "short": "The author of the information adjustment",
+        "definition": "The author of the information adjustment",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:author.extension:role",
+        "path": "Extension.extension.extension",
+        "sliceName": "role",
+        "short": "The role of the final human who authored the information adjustment",
+        "definition": "The role of the final human who authored the information adjustment",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Extension.extension:author.extension:role.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:author.extension:role.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "role"
+      },
+      {
+        "id": "Extension.extension:author.extension:role.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/core/ValueSet/us-core-provider-role|3.1.1"
+        }
+      },
+      {
+        "id": "Extension.extension:author.extension:practitioner",
+        "path": "Extension.extension.extension",
+        "sliceName": "practitioner",
+        "short": "The final practitioner who authored the information adjustment",
+        "definition": "The final practitioner who authored the information adjustment",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:author.extension:practitioner.extension",
+        "path": "Extension.extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:author.extension:practitioner.url",
+        "path": "Extension.extension.extension.url",
+        "fixedUri": "practitioner"
+      },
+      {
+        "id": "Extension.extension:author.extension:practitioner.value[x]",
+        "path": "Extension.extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:author.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "author"
+      },
+      {
+        "id": "Extension.extension:author.value[x]",
+        "path": "Extension.extension.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/information-origin"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

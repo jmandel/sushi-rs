@@ -90,8 +90,7 @@ pub fn generate_snapshot(
         .and_then(Value::as_str)
         .context("StructureDefinition.baseDefinition is required")?
         .to_string();
-    let base = ctx
-        .fetch(&base_url)
+    let base = structure_with_r4_snapshot(&base_url, ctx)?
         .with_context(|| format!("base not found: {base_url}"))?;
     let base_spec_url = spec_url_for_structure(&base, options.native_r5);
     let base_strip_non_inherited = options.native_r5 || strips_non_inherited_extensions(&base);
@@ -226,6 +225,37 @@ pub fn generate_snapshot(
     }
 
     Ok(derived)
+}
+
+// Returns the structure identified by `url` with an R4-form (un-projected)
+// snapshot, recursively generating it when the stored resource only has a
+// differential. SUSHI emits local profiles without snapshots, so a local-base
+// chain (e.g. DTR dtr-questionnaireresponse-adapt -> dtr-questionnaireresponse
+// -> QuestionnaireResponse) needs the intermediate snapshots built on demand.
+fn structure_with_r4_snapshot(
+    url: &str,
+    ctx: &PackageContext,
+) -> anyhow::Result<Option<Value>> {
+    let Some(profile) = ctx.fetch(url) else {
+        return Ok(None);
+    };
+    if profile
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+        .is_some()
+    {
+        return Ok(Some(profile));
+    }
+    let generated = generate_snapshot(
+        profile,
+        ctx,
+        SnapshotOptions {
+            sort_differential: true,
+            native_r5: false,
+        },
+    )?;
+    Ok(Some(generated))
 }
 
 fn profile_with_snapshot(
@@ -1251,7 +1281,11 @@ fn apply_extension_profile_root(
         return Ok(());
     };
     let mut root = root.clone();
-    rewrite_markdown_links(&mut root, &spec_url_for_structure(&profile, native_r5));
+    // Extension-root doco keeps Publisher's known-relative links (e.g.
+    // workflow-extensions.html#instantiation) as-is; only freshly applied
+    // extension slices reach here. Inherited copies of the same slice go through
+    // normalize_inherited_element, which rewrites them to the spec URL.
+    rewrite_markdown_links(&mut root, &spec_url_for_structure(&profile, native_r5), true);
     let is_local_profile = ctx.is_local(profile_url);
     let project_local_root_constraints =
         allow_local_root_constraints && projects_local_extension_root_constraints(profile_url);
@@ -1298,7 +1332,6 @@ fn apply_extension_profile_root(
         "condition",
         "isModifier",
         "isModifierReason",
-        "isSummary",
         "mapping",
     ] {
         if let Some(value) = root.get(key) {
@@ -1306,6 +1339,13 @@ fn apply_extension_profile_root(
         } else {
             remove_field(slice, key);
         }
+    }
+    // isSummary is never stripped by Java's root overlay: the slice keeps whatever
+    // it inherits (a stored slice like us-core birthsex carries none; a fresh slice
+    // cloned from the unsliced extension element carries false). Only overwrite it
+    // when the (core/local) root explicitly carries an isSummary value.
+    if let Some(value) = root.get("isSummary") {
+        set_field(slice, "isSummary", value.clone());
     }
 
     if let Some(root_constraints) = root.get("constraint").and_then(Value::as_array) {
@@ -1479,18 +1519,22 @@ fn apply_type_profile_root(
     }
     fill_missing_constraint_sources_on_constrained_element(&mut root, profile_url);
 
-    for key in [
-        "short",
-        "definition",
-        "comment",
-        "requirements",
-        "alias",
-        "condition",
-        "isModifier",
-        "isModifierReason",
-        "isSummary",
-        "mapping",
-    ] {
+    // The short/definition/comment/requirements/alias/mapping overlay always
+    // applies (ProfileUtilities.updateFromDefinition PU:2657-2671). The
+    // isModifier/isModifierReason/isSummary/condition root values only carry over
+    // when the element narrows to a single profiled type (the type-redirect path);
+    // a multi-typed element (e.g. DTR Parameters.parameter:order.resource with 9
+    // candidate profiles) keeps its inherited isSummary/condition.
+    let single_type = diff
+        .get("type")
+        .and_then(Value::as_array)
+        .map(|types| types.len() == 1)
+        .unwrap_or(false);
+    let mut keys: Vec<&str> = vec!["short", "definition", "comment", "requirements", "alias", "mapping"];
+    if single_type {
+        keys.extend(["condition", "isModifier", "isModifierReason", "isSummary"]);
+    }
+    for key in keys {
         if let Some(value) = root.get(key) {
             set_field(target, key, value.clone());
         } else if key != "comment" {
@@ -1553,7 +1597,27 @@ fn profile_root_element(profile: &Value, ctx: &PackageContext) -> anyhow::Result
         (None, Some(diff_root)) if is_profile_root_diff(profile, diff_root) => {
             Ok(Some(diff_root.clone()))
         }
-        _ => Ok(None),
+        _ => {
+            // No usable root via the shallow path (e.g. a local profile whose
+            // differential has no root element and whose base also lacks a stored
+            // snapshot). Generate the profile's full R4 snapshot recursively and
+            // take its root, matching the Java oracle which resolves the fully
+            // generated profile before overlaying its root.
+            let generated = generate_snapshot(
+                profile.clone(),
+                ctx,
+                SnapshotOptions {
+                    sort_differential: true,
+                    native_r5: false,
+                },
+            )?;
+            Ok(generated
+                .get("snapshot")
+                .and_then(|s| s.get("element"))
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .cloned())
+        }
     }
 }
 
@@ -1923,7 +1987,7 @@ fn normalize_inherited_element(
     if strip_non_inherited {
         remove_non_inherited_extensions(&mut element);
     }
-    rewrite_markdown_links(&mut element, spec_url);
+    rewrite_markdown_links(&mut element, spec_url, false);
     if native_r5 || spec_url.contains("/R5/") {
         absolutize_content_reference(&mut element, source_url);
     }
@@ -2558,33 +2622,33 @@ fn remove_extension_urls(parent: &mut Value, key: &str) {
     }
 }
 
-fn rewrite_markdown_links(element: &mut Value, spec_url: &str) {
+fn rewrite_markdown_links(element: &mut Value, spec_url: &str, keep_known_relative: bool) {
     for key in [
         "definition",
         "comment",
         "requirements",
         "meaningWhenMissing",
     ] {
-        rewrite_string_field(element, key, spec_url);
+        rewrite_string_field(element, key, spec_url, keep_known_relative);
     }
     if let Some(binding) = element.get_mut("binding") {
-        rewrite_string_field(binding, "description", spec_url);
+        rewrite_string_field(binding, "description", spec_url, keep_known_relative);
     }
     if let Some(Value::Array(exts)) = element.get_mut("extension") {
         for ext in exts {
-            rewrite_string_field(ext, "valueMarkdown", spec_url);
+            rewrite_string_field(ext, "valueMarkdown", spec_url, keep_known_relative);
         }
     }
 }
 
-fn rewrite_string_field(value: &mut Value, key: &str, spec_url: &str) {
+fn rewrite_string_field(value: &mut Value, key: &str, spec_url: &str, keep_known_relative: bool) {
     let Some(obj) = value.as_object_mut() else {
         return;
     };
     let Some(Value::String(text)) = obj.get_mut(key) else {
         return;
     };
-    *text = process_relative_markdown_urls(text, spec_url);
+    *text = process_relative_markdown_urls(text, spec_url, keep_known_relative);
     if let Some(normalized) = publisher_native_text_quirk(text) {
         *text = normalized.to_string();
     }
@@ -2599,7 +2663,7 @@ fn publisher_native_text_quirk(text: &str) -> Option<&'static str> {
     }
 }
 
-fn process_relative_markdown_urls(input: &str, spec_url: &str) -> String {
+fn process_relative_markdown_urls(input: &str, spec_url: &str, keep_known_relative: bool) -> String {
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
     let mut i = 0;
@@ -2616,7 +2680,7 @@ fn process_relative_markdown_urls(input: &str, spec_url: &str) -> String {
             }
             let target = &input[start..i];
             if is_relative_spec_link(target) {
-                if publisher_native_keeps_relative_link(target) {
+                if keep_known_relative && publisher_native_keeps_relative_link(target) {
                     out.push_str(target);
                 } else {
                     match publisher_native_link_target(target) {
@@ -2672,6 +2736,7 @@ fn publisher_native_keeps_relative_link(target: &str) -> bool {
             | "StructureDefinition-rendering-xhtml.html"
             | "codesystem-concept-properties.html#concept-properties-itemWeight"
             | "workflow-extensions.html#instantiation"
+            | "questionnaire.html"
     )
 }
 

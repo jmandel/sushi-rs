@@ -1,0 +1,214 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-questionnaire-adapt-search",
+  "meta": {
+    "versionId": "1",
+    "lastUpdated": "2024-08-24T17:01:59.000+00:00"
+  },
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaire-adapt-search",
+  "version": "1.0.0",
+  "name": "DTRQuestionnaireAdaptSearch",
+  "title": "DTR Questionnaire for adaptive form Search",
+  "status": "active",
+  "description": "The DTR adaptive Questionnaire is used to represent an adaptive Questionnaire when returning the empty Questionnaire in a Questionnaire package.",
+  "purpose": "While aligned with the [SDC Adaptive Questionnaire Search](http://hl7.org/fhir/uv/sdc/STU3/StructureDefinition-sdc-questionnaire-adapt-srch.html) profile, this profile does not derive from that profile because elements that SDC make mustSupport for search purposes are not needed for the DTR use case.  (EHRs do not need to search for relevant Questionnaires).",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Questionnaire",
+  "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Questionnaire.extension",
+        "path": "Questionnaire.extension",
+        "min": 1
+      },
+      {
+        "id": "Questionnaire.extension:terminologyServer",
+        "path": "Questionnaire.extension",
+        "sliceName": "terminologyServer",
+        "comment": "Multiple repetitions are available to support availability (one server might be down) as well as to accommodate the possibility that different servers might be needed for different value sets.  In either case, client behavior is to try different servers from the available list until one is successful.  There is no implication to the order in which the servers are listed.  If no service is listed and terminology services are needed, the $expand operation should be invoked on the base URL for the payer.",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:assemble-expectation",
+        "path": "Questionnaire.extension",
+        "sliceName": "assemble-expectation",
+        "max": "0"
+      },
+      {
+        "id": "Questionnaire.extension:questionnaireAdaptive",
+        "path": "Questionnaire.extension",
+        "sliceName": "questionnaireAdaptive",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-questionnaireAdaptive"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:questionnaireAdaptive.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "type": [
+          {
+            "code": "url"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:styleSensitive",
+        "path": "Questionnaire.extension",
+        "sliceName": "styleSensitive",
+        "comment": "If set to true, all systems that claim to support this extension and that render elements from the resource SHALL either render the content as required by the style extensions (style, xhtml and markdown or shall indicate to the user that the resource (or specific elements in the resource) cannot be appropriately rendered by the system.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-styleSensitive"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:styleSensitive.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "patternBoolean": false
+      },
+      {
+        "id": "Questionnaire.extension:entryMode",
+        "path": "Questionnaire.extension",
+        "sliceName": "entryMode",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-entryMode"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:entryMode.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/sdc/ValueSet/entryMode"
+        }
+      },
+      {
+        "id": "Questionnaire.extension:signatureRequired",
+        "path": "Questionnaire.extension",
+        "sliceName": "signatureRequired",
+        "short": "There's a cost to support this.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-signatureRequired"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:cqf-library",
+        "path": "Questionnaire.extension",
+        "sliceName": "cqf-library",
+        "short": "The library can contain CQL, FHIRPath or x-fhir-query. The implementers must handle any of the above.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-library"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:cqf-library.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.title.extension",
+        "path": "Questionnaire.title.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.title.extension:titleRenderingStyle",
+        "path": "Questionnaire.title.extension",
+        "sliceName": "titleRenderingStyle",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-style"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.title.extension:titleRenderingXhtml",
+        "path": "Questionnaire.title.extension",
+        "sliceName": "titleRenderingXhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.effectivePeriod",
+        "path": "Questionnaire.effectivePeriod",
+        "short": "Validity period for the Questionnaire",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item",
+        "path": "Questionnaire.item",
+        "max": "0"
+      }
+    ]
+  }
+}

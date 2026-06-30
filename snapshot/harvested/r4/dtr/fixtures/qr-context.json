@@ -1,0 +1,58 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "qr-context",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-context",
+  "name": "QuestionnaireResponseContext",
+  "title": "Questionnaire Response Context",
+  "status": "active",
+  "description": "Identifies the orders and/or other resources associated with the specified QuestionnaireResponse.  Allows finding the DTR responses associated with a particular Order/Encounter/Appointment for a particular insurance coverage.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "QuestionnaireResponse"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "definition": "Identifies the orders and/or other resources associated with the specified QuestionnaireResponse.  Allows finding the DTR responses associated with a particular Order/Encounter/Appointment for a particular insurance coverage."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-context"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-devicerequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-medicationrequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-nutritionorder",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-servicerequest",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-encounter",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-appointment-base"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

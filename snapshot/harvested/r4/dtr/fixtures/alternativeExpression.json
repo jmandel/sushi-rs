@@ -1,0 +1,52 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "alternativeExpression",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression",
+  "name": "AlternativeExpression",
+  "title": "Alternative Expression",
+  "status": "active",
+  "description": "Provides an alternate expression containing the compiled JSON ELM for an expression. (NOTE: The expectation is that this extension will transition to the core extensions pack)",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Expression"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Alternative Expression",
+        "definition": "Provides an alternate expression containing the compiled JSON ELM for an expression. (NOTE: The expectation is that this extension will transition to the core extensions pack)"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Alternate expression containing compiled JSON ELM.",
+        "min": 1,
+        "type": [
+          {
+            "code": "Expression"
+          }
+        ]
+      }
+    ]
+  }
+}

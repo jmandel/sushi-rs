@@ -1,0 +1,86 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-log-errors-input-parameters",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-log-errors-input-parameters",
+  "name": "DTRLogErrorsInputParameters",
+  "title": "DTR Log Questionnaire Errors Input Parameters",
+  "status": "active",
+  "description": "The Parameters profile used to define the inputs to the [$log-questionnaire-errors](OperationDefinition-log-questionnaire-errors.html) operation.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "name"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on $this pattern"
+        },
+        "min": 2,
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:questionnaire",
+        "path": "Parameters.parameter",
+        "sliceName": "questionnaire",
+        "short": "The Questionnaire generating the errors (The reference SHOULD be version-specific)",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:questionnaire.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "questionnaire"
+      },
+      {
+        "id": "Parameters.parameter:questionnaire.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Questionnaire"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Parameters.parameter:outcome",
+        "path": "Parameters.parameter",
+        "sliceName": "outcome",
+        "short": "Operation Outcome associated with the Questionnaire/CQL",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:outcome.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "operationOutcome"
+      },
+      {
+        "id": "Parameters.parameter:outcome.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "OperationOutcome"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-qpackage-output-parameters",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-qpackage-output-parameters",
+  "name": "DTRQuestionnairePackageOutputParameters",
+  "title": "DTR Questionnaire Package Output Parameters",
+  "status": "active",
+  "description": "A profile on Parameters indicating the expected response content of a [$questionnaire-package](OperationDefinition-questionnaire-package.html) operation.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "name"
+            }
+          ],
+          "rules": "open",
+          "description": "Slice based on $this pattern"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:packagebundle",
+        "path": "Parameters.parameter",
+        "sliceName": "packagebundle",
+        "short": "The QuestionnairePackage bundle that was retrieved",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:packagebundle.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "packagebundle"
+      },
+      {
+        "id": "Parameters.parameter:packagebundle.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Bundle",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/DTR-QPackageBundle"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:outcome",
+        "path": "Parameters.parameter",
+        "sliceName": "outcome",
+        "short": "Operation Outcome from this execution",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:outcome.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "outcome"
+      },
+      {
+        "id": "Parameters.parameter:outcome.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:outcome.resource",
+        "path": "Parameters.parameter.resource",
+        "type": [
+          {
+            "code": "OperationOutcome"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

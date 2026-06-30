@@ -1,0 +1,57 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "intendedUse",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/intendedUse",
+  "name": "IntendedUse",
+  "title": "Intended Use",
+  "status": "active",
+  "description": "Indicates how the EHR is to use the information with respect to the associated orders/records.  If the Adaptive QuestionnaireResponse includes a prior authorization number the `intendedUse` element should be set to 'retain-doc' and/or 'withorder'.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "QuestionnaireResponse"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Intended Use",
+        "definition": "Indicates how the EHR is to use the information with respect to the associated orders/records.  If the Adaptive QuestionnaireResponse includes a prior authorization number the `intendedUse` element should be set to 'retain-doc' and/or 'withorder'."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/intendedUse"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Reference to the pertinent order associated with this QuestionnaireResponse.",
+        "definition": "This contains references to the pertinent orders associated with this QuestionnaireResponse.",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-crd/ValueSet/DocReason"
+        }
+      }
+    ]
+  }
+}

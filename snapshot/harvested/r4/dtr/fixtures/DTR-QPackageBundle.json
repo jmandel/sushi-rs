@@ -1,0 +1,134 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "DTR-QPackageBundle",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/DTR-QPackageBundle",
+  "name": "DTRQuestionnairePackageBundle",
+  "title": "DTR Questionnaire Package Bundle",
+  "status": "active",
+  "description": "This profile represents the Bundle of Questionnaires and Libraries returned in a [$questionnaire-package](OperationDefinition-questionnaire-package.html) response.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Bundle",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Bundle",
+        "path": "Bundle",
+        "constraint": [
+          {
+            "key": "dtrb-1",
+            "severity": "error",
+            "human": "The first resource in bundle must be a Questionnaire.",
+            "expression": "entry.first().resource.is(Questionnaire)",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/DTR-QPackageBundle"
+          }
+        ]
+      },
+      {
+        "id": "Bundle.type",
+        "path": "Bundle.type",
+        "patternCode": "collection"
+      },
+      {
+        "id": "Bundle.entry",
+        "path": "Bundle.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "resource"
+            }
+          ],
+          "rules": "closed",
+          "description": "Slice different resources included in the bundle"
+        },
+        "min": 2
+      },
+      {
+        "id": "Bundle.entry:questionnaire",
+        "path": "Bundle.entry",
+        "sliceName": "questionnaire",
+        "short": "SHALL have one and only one Questionnaire",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:questionnaire.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Questionnaire",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:questionnaireResponse",
+        "path": "Bundle.entry",
+        "sliceName": "questionnaireResponse",
+        "short": "SHALL have one and only one QuestionnaireResponse",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:questionnaireResponse.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "QuestionnaireResponse",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaireresponse"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:valueSet",
+        "path": "Bundle.entry",
+        "sliceName": "valueSet",
+        "short": "MAY have ValueSets",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:valueSet.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "ValueSet"
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:library",
+        "path": "Bundle.entry",
+        "sliceName": "library",
+        "short": "MAY have Libraries",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:library.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Library"
+          }
+        ]
+      }
+    ]
+  }
+}

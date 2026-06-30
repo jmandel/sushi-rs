@@ -1,0 +1,1119 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-base-questionnaire",
+  "meta": {
+    "versionId": "1",
+    "lastUpdated": "2021-11-12T17:01:59.000+00:00"
+  },
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire",
+  "version": "1.0.0",
+  "name": "DTRBaseQuestionnaire",
+  "title": "DTR Base Questionnaire",
+  "status": "active",
+  "date": "2021-11-12T02:27:35+00:00",
+  "description": "Takes a subset of extensions and constraints from the SDC [rendering](http://hl7.org/fhir/uv/sdc/STU3/StructureDefinition-sdc-questionnaire-render.html), [behavior](http://hl7.org/fhir/uv/sdc/STU3/StructureDefinition-sdc-questionnaire-behave.html), and [population](http://hl7.org/fhir/uv/sdc/STU3/StructureDefinition-sdc-questionnaire-pop-exp.html) profiles, reflecting agreed expectations around which data elements might be relevant as well as which must be supported for DTR purposes.",
+  "purpose": "Elements that are not mustSupport are presented here as elements that may be of interest to certain payers, but can only be used if the payer is aware that the invoking EHR or SMART App can support them.  Further guidance on the use of these elements should be found in the underlying [SDC](http://hl7.org/fhir/uv/sdc/STU3/) specification.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": true,
+  "type": "Questionnaire",
+  "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Questionnaire",
+        "path": "Questionnaire",
+        "constraint": [
+          {
+            "key": "dtrq-6",
+            "severity": "error",
+            "human": "If audience is 'clinical' or 'patient' then estimatedCompletionTime must contain clinicalTime.",
+            "expression": "extension.exists(url = 'http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/questionnaireAudience' and (value = 'clinical' or value = 'patient')) and extension.exists(url = 'http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/estimated-completion-time') implies extension.where(url = 'http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/estimated-completion-time').extension.where(url = 'clinicalTime').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.text.div",
+        "path": "Questionnaire.text.div",
+        "comment": "The contents of the html element are an XHTML fragment containing only the basic html formatting elements described in chapters 7-11 and 15 of the HTML 4.0 standard, 'anchor' elements (either name or href), images and internally contained stylesheets. The XHTML content SHALL NOT contain a head, a body, external stylesheet references, scripts, forms, base/link/xlink, frames, iframes and objects."
+      },
+      {
+        "id": "Questionnaire.extension:terminologyServer",
+        "path": "Questionnaire.extension",
+        "sliceName": "terminologyServer",
+        "comment": "Multiple repetitions are available to support availability (one server might be down) as well as to accommodate the possibility that different servers might be needed for different value sets.  In either case, client behavior is to try different servers from the available list until one is successful.  There is no implication to the order in which the servers are listed.  If no service is listed and terminology services are needed, the $expand operation should be invoked on the base URL for the payer.",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:assemble-expectation",
+        "path": "Questionnaire.extension",
+        "sliceName": "assemble-expectation",
+        "max": "0"
+      },
+      {
+        "id": "Questionnaire.extension:estimatedCompletionTime",
+        "path": "Questionnaire.extension",
+        "sliceName": "estimatedCompletionTime",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/estimated-completion-time"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:audience",
+        "path": "Questionnaire.extension",
+        "sliceName": "audience",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/questionnaireAudience"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:RequestSpecific",
+        "path": "Questionnaire.extension",
+        "sliceName": "RequestSpecific",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/request-specific"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:styleSensitive",
+        "path": "Questionnaire.extension",
+        "sliceName": "styleSensitive",
+        "comment": "If set to true, all systems that claim to support this extension and that render elements from the resource SHALL either render the content as required by the style extensions (style, xhtml and markdown or shall indicate to the user that the resource (or specific elements in the resource) cannot be appropriately rendered by the system.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-styleSensitive"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:styleSensitive.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "patternBoolean": false
+      },
+      {
+        "id": "Questionnaire.extension:signatureRequired",
+        "path": "Questionnaire.extension",
+        "sliceName": "signatureRequired",
+        "short": "There's a cost to support this.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-signatureRequired"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:variable",
+        "path": "Questionnaire.extension",
+        "sliceName": "variable",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/variable"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:constraint",
+        "path": "Questionnaire.extension",
+        "sliceName": "constraint",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/targetConstraint"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:cqf-library",
+        "path": "Questionnaire.extension",
+        "sliceName": "cqf-library",
+        "short": "The library can contain CQL, FHIRPath or x-fhir-query. The implementers must handle any of the above.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/cqf-library"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:cqf-library.value[x]",
+        "path": "Questionnaire.extension.value[x]",
+        "type": [
+          {
+            "code": "canonical",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-library"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.extension:launchContext",
+        "path": "Questionnaire.extension",
+        "sliceName": "launchContext",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-launchContext"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:itemPopulationContext",
+        "path": "Questionnaire.extension",
+        "sliceName": "itemPopulationContext",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemPopulationContext"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:entryMode",
+        "path": "Questionnaire.extension",
+        "sliceName": "entryMode",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-entryMode"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.extension:endpoint",
+        "path": "Questionnaire.extension",
+        "sliceName": "endpoint",
+        "min": 0,
+        "max": "0",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-endpoint"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.subjectType",
+        "path": "Questionnaire.subjectType",
+        "min": 1,
+        "max": "1",
+        "patternCode": "Patient"
+      },
+      {
+        "id": "Questionnaire.effectivePeriod",
+        "path": "Questionnaire.effectivePeriod",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item",
+        "path": "Questionnaire.item",
+        "constraint": [
+          {
+            "key": "dtrq-2",
+            "severity": "warning",
+            "human": "if item type is 'choice' or 'open-choice', then it should have either the answerOption, answerValueSet, or answerExpression extension",
+            "expression": "(type='choice' or type='open-choice') implies answerOption.exists() or answerValueSet.exists() or extension('http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-answerExpression').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+          },
+          {
+            "key": "dtrq-3",
+            "severity": "warning",
+            "human": "if item type is Quantity, then it should have either the unitOption or unitValueSet extension",
+            "expression": "(type='quantity') implies extension.where(url='http://hl7.org/fhir/StructureDefinition/questionnaire-unitOption').exists() or extension.where(url='http://hl7.org/fhir/StructureDefinition/questionnaire-unitValueSet').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+          },
+          {
+            "key": "dtrq-4",
+            "severity": "error",
+            "human": "if item type is Reference, then it must have a referenceResource extension",
+            "expression": "(type='reference') implies extension.where(url='http://hl7.org/fhir/StructureDefinition/questionnaire-referenceResource').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+          },
+          {
+            "key": "dtrq-5",
+            "severity": "warning",
+            "human": "if item type is Reference, then it should have a candidateExpression extension",
+            "expression": "(type='reference') implies extension.where(url='http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-candidateExpression').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-base-questionnaire"
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:itemOptionalDisplay",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "itemOptionalDisplay",
+        "max": "0"
+      },
+      {
+        "id": "Questionnaire.item.extension:itemControl",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "itemControl",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:choiceOrientation",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "choiceOrientation",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:displayCategory",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "displayCategory",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:supportHyperlink",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "supportHyperlink",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-supportHyperlink"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:sliderStepValue",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "sliderStepValue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-sliderStepValue"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:entryFormat",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "entryFormat",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/entryFormat"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:usageMode",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "usageMode",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-usageMode"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:itemSignatureRequired",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "itemSignatureRequired",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-signatureRequired"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:minOccurs",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "minOccurs",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-minOccurs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:maxOccurs",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "maxOccurs",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-maxOccurs"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:minLength",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "minLength",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/minLength"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:regex",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "regex",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/regex"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:minValue",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "minValue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/minValue"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:maxValue",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "maxValue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/maxValue"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:maxDecimalPlaces",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "maxDecimalPlaces",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/maxDecimalPlaces"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:mimeType",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "mimeType",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/mimeType"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:maxSize",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "maxSize",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/maxSize"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:unitOption",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "unitOption",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-unitOption"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:referenceResource",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "referenceResource",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-referenceResource"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:referenceProfile",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "referenceProfile",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-referenceProfile"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:itemConstraint",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "itemConstraint",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/targetConstraint"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:unit",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "unit",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-unit"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:unitValueSet",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "unitValueSet",
+        "comment": "Provide either unitOption(s) or unitValueSet. If either of the extensions are present, the units for a Quantity element are constrained to only the units listed by the extensions - i.e. it is treated as a \"required\", not an \"extensible\" binding. In the absence of either, any unit is valid. See additional guidance and examples in the [SDC implementation guide](http://hl7.org/fhir/uv/sdc/behavior.html#unitValueSet). If this extension present and an answer is provided for the question item in the QuestionnaireResponse, then the valueQuantity **SHALL** have a Quantity.code and Quantity.system that match the Coding.code and system of one of the allowed values if the Coding has a code and/or system. If the Coding only has a display, then the Quantity.unit must match. (Note that Coding with only a display is strongly discouraged.) If there is a match on code and system, but no match on display/unit, systems MAY raise a warning. However, because of translation and bandwidth considerations, some systems **MAY** opt to drop the unit or express it in an alternate language. Validation of the Quantity unit **MAY** be performed by using the $validateCode operation, populating the elements passed into the operation from the Quantity.code, system and unit elements.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-unitValueSet"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:itemMedia",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "itemMedia",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemMedia"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:shortText",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "shortText",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-shortText"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:openLabel",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "openLabel",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-openLabel"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:choiceColumn",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "choiceColumn",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-choiceColumn"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:width",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "width",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-width"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:collapsible",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "collapsible",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-collapsible"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:minQuantity",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "minQuantity",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-minQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:maxQuantity",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "maxQuantity",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-maxQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.extension:lookupQuestionnaire",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "lookupQuestionnaire",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-lookupQuestionnaire"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:candidateExpression",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "candidateExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-candidateExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:candidateExpression.value[x].extension:alternativeExpression",
+        "path": "Questionnaire.item.extension.value[x].extension",
+        "sliceName": "alternativeExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:initialExpression",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "initialExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-initialExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:initialExpression.value[x].extension:alternativeExpression",
+        "path": "Questionnaire.item.extension.value[x].extension",
+        "sliceName": "alternativeExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:calculatedExpression",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "calculatedExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:calculatedExpression.value[x].extension:alternativeExpression",
+        "path": "Questionnaire.item.extension.value[x].extension",
+        "sliceName": "alternativeExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:contextExpression",
+        "path": "Questionnaire.item.extension",
+        "sliceName": "contextExpression",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-contextExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.extension:contextExpression.extension:expression",
+        "path": "Questionnaire.item.extension.extension",
+        "sliceName": "expression"
+      },
+      {
+        "id": "Questionnaire.item.extension:contextExpression.extension:expression.value[x].extension:alternativeExpression",
+        "path": "Questionnaire.item.extension.extension.value[x].extension",
+        "sliceName": "alternativeExpression",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/alternativeExpression"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.prefix.extension",
+        "path": "Questionnaire.item.prefix.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.item.prefix.extension:itemPrefixRenderingStyle",
+        "path": "Questionnaire.item.prefix.extension",
+        "sliceName": "itemPrefixRenderingStyle",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-style"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.prefix.extension:itemPrefixRenderingXhtml",
+        "path": "Questionnaire.item.prefix.extension",
+        "sliceName": "itemPrefixRenderingXhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.text",
+        "path": "Questionnaire.item.text",
+        "min": 1
+      },
+      {
+        "id": "Questionnaire.item.text.extension",
+        "path": "Questionnaire.item.text.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.item.text.extension:itemTextRenderingStyle",
+        "path": "Questionnaire.item.text.extension",
+        "sliceName": "itemTextRenderingStyle",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-style"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.text.extension:itemTextRenderingXhtml",
+        "path": "Questionnaire.item.text.extension",
+        "sliceName": "itemTextRenderingXhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.enableBehavior",
+        "path": "Questionnaire.item.enableBehavior",
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.answerOption.extension",
+        "path": "Questionnaire.item.answerOption.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Questionnaire.item.answerOption.extension:optionExclusive",
+        "path": "Questionnaire.item.answerOption.extension",
+        "sliceName": "optionExclusive",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/questionnaire-optionExclusive"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Questionnaire.item.answerOption.extension:ordinalValue",
+        "path": "Questionnaire.item.answerOption.extension",
+        "sliceName": "ordinalValue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/ordinalValue"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.answerOption.extension:itemAnswerMedia",
+        "path": "Questionnaire.item.answerOption.extension",
+        "sliceName": "itemAnswerMedia",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-itemAnswerMedia"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Questionnaire.item.answerOption.value[x]",
+        "path": "Questionnaire.item.answerOption.value[x]"
+      },
+      {
+        "id": "Questionnaire.item.answerOption.value[x].extension:answerOptionRenderingXhtml",
+        "path": "Questionnaire.item.answerOption.value[x].extension",
+        "sliceName": "answerOptionRenderingXhtml",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/rendering-xhtml"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

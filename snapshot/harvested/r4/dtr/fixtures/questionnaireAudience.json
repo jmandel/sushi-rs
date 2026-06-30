@@ -1,0 +1,57 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "questionnaireAudience",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/questionnaireAudience",
+  "name": "QuestionnaireAudience",
+  "title": "Questionnaire Audience",
+  "status": "active",
+  "description": "Provides a code to express the intended audience for the Questionnaire form.",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Questionnaire"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Questionnaire Audience",
+        "definition": "Provides a code to express the intended audience for the Questionnaire form."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/questionnaireAudience"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "clinical | admin | patient",
+        "definition": "Intended audience for the Questionnaire form.",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-dtr/ValueSet/questionnaireAudience"
+        }
+      }
+    ]
+  }
+}

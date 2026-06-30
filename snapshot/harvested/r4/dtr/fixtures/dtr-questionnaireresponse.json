@@ -1,0 +1,200 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-questionnaireresponse",
+  "meta": {
+    "versionId": "10",
+    "lastUpdated": "2023-08-21T11:10:05.000-07:00"
+  },
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-questionnaireresponse",
+  "version": "1.0.0",
+  "name": "DTRQuestionnaireResponse",
+  "title": "DTR Questionnaire Response",
+  "status": "active",
+  "date": "2023-08-21T02:27:35+00:00",
+  "description": "Enforces DTR requirements on a completed or partially completed QuestionnaireResponse, including allowing the response to be linked to the relevant order, coverage, etc. and enforcing constraints applicable to the DTR context.",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "QuestionnaireResponse",
+  "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "QuestionnaireResponse.extension",
+        "path": "QuestionnaireResponse.extension",
+        "min": 2
+      },
+      {
+        "id": "QuestionnaireResponse.extension:signature",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "signature",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.extension:coverage",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "coverage",
+        "short": "Identifies the coverages associated with the specified QuestionnaireResponse.",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-coverage"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.extension:context",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "context",
+        "short": "Identifies the orders and/or other resources associated with the specified QuestionnaireResponse.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/qr-context"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.extension:coverage-information",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "coverage-information",
+        "short": "Coverage Info",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.extension:intendedUse",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "intendedUse",
+        "short": "Indicates how the EHR is to use the information with respect to the associated orders/records.",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/intendedUse"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.basedOn",
+        "path": "QuestionnaireResponse.basedOn",
+        "max": "0"
+      },
+      {
+        "id": "QuestionnaireResponse.partOf",
+        "path": "QuestionnaireResponse.partOf",
+        "max": "0"
+      },
+      {
+        "id": "QuestionnaireResponse.subject",
+        "path": "QuestionnaireResponse.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.author",
+        "path": "QuestionnaireResponse.author",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Device",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-patient",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+              "http://hl7.org/fhir/us/davinci-hrex/StructureDefinition/hrex-practitionerrole",
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/profile-organization",
+              "http://hl7.org/fhir/StructureDefinition/RelatedPerson"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension:ItemSignature",
+        "path": "QuestionnaireResponse.item.extension",
+        "sliceName": "ItemSignature",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "min": 1
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:itemAnswerMedia",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "itemAnswerMedia",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:itemWeight",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "itemWeight",
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:origin",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "origin",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/information-origin"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "QuestionnaireResponse.item.answer.extension:containedReference",
+        "path": "QuestionnaireResponse.item.answer.extension",
+        "sliceName": "containedReference",
+        "short": "Contain the reference?",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/containedReference"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

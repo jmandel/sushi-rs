@@ -1,0 +1,72 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "dtr-supported-Payers",
+  "url": "http://hl7.org/fhir/us/davinci-dtr/StructureDefinition/dtr-supported-Payers",
+  "name": "DTRSupportedPayers",
+  "title": "DTR Supported Payers",
+  "status": "active",
+  "description": "A listing of payer organizations currently supported by the DTR app.  §prof-2^dtr-client^exchange:The Payer Identifier used **SHALL** be the same as the ones that are returned by the [endpoint discovery mechanism](https://build.fhir.org/ig/HL7/davinci-ehrx/endpoint-discovery.html) defined in HRex.§",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "List",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/List",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "List.code",
+        "path": "List.code",
+        "max": "0"
+      },
+      {
+        "id": "List.subject",
+        "path": "List.subject",
+        "max": "0"
+      },
+      {
+        "id": "List.encounter",
+        "path": "List.encounter",
+        "max": "0"
+      },
+      {
+        "id": "List.entry",
+        "path": "List.entry",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "List.entry.flag",
+        "path": "List.entry.flag",
+        "max": "0"
+      },
+      {
+        "id": "List.entry.deleted",
+        "path": "List.entry.deleted",
+        "max": "0"
+      },
+      {
+        "id": "List.entry.item",
+        "path": "List.entry.item",
+        "short": "Reference to the supported Organization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Organization"
+            ],
+            "aggregation": [
+              "contained"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "List.emptyReason",
+        "path": "List.emptyReason",
+        "max": "0"
+      }
+    ]
+  }
+}
