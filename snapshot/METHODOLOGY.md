@@ -59,7 +59,8 @@ When the spec and our output disagree, the **oracle** decides; the spec tells us
 - Done: worktree, oracle driver compiles + runs, R5/R4 Publisher-path contexts load from the isolated
   cache, goldens are generated, and `crates/snapshot_gen` gates strict semantic `snapshot.element[]`
   parity for the fixture ladder plus harvested real R4 profiles: IPS 29/29, mCODE 46/46,
-  CRD 22/22, and SDC 73/73.
+  CRD 22/22, SDC 73/73, plus holdout IGs CARIN BB 6/6, Genomics 33/33, DTR 21/21,
+  eCR 28/28, NDH 47/50, and PAS 64/73.
 - Next: keep broadening real profile coverage and close remaining Java pass structure gaps
   (richer slicing/reslicing, type-slice groups, mapping/userData side-channel behavior, and structural
   self-validation). Transitional output flags should be cleaned up once the migration no longer needs
