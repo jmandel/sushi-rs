@@ -297,6 +297,33 @@ Phases from the plan (0–9). Current state:
     `ConditionCategoryCodes` (THO `condition-category`); stock fishes its url
     from packages, we fall back to the literal name. The only IPS VS that needs
     an external (non-local, non-alias) CodeSystem-name→url resolution.
+  - **Phase 4.1 — caret key-ordering parity (DONE, 2026-06-29).** VS/CS now
+    **ips 35/36, epi 29/29, mcode 104/104, crd 28/31** (was mcode 44, crd 15).
+    Root cause (confirmed): NOT class-field declaration order. The compiled dist
+    constructors only seed resourceType+status(+content), so key order is JS
+    insertion order. Stock's `setCaretRules`/`setCaretPathRules` run
+    `setImpliedPropertiesOnInstance` BEFORE the caret value-assignment loop; the
+    only implied/fixed value for VS/CS metadata carets is an
+    `extension`/`modifierExtension` slice's fixed `url`. Setting that url in the
+    pre-pass inserts the `extension` key in element order (early), ahead of later
+    metadata caret keys (`copyright`/`experimental`/…) even when the extension
+    rule appears AFTER them in source (e.g. an inserted RuleSet sets copyright+
+    experimental, then `^extension[FMM]`). Fix in `export.rs`: `precreate_implied`
+    pre-pass (creates extension slice urls) runs before the value loop in both
+    `export_value_set` and `export_code_system`.
+  - **CRD CS (0/3 → 3/3, DONE):** ported `^property[0].*` (top-level
+    CodeSystemProperty) + **concept-level caret rules** via `find_concept_path`
+    (`CodeSystemExporter.findConceptPath`: pathArray of `#code`s →
+    `concept[i].concept[j]` prefix into the built concept tree; concept-level
+    `^property.valueBoolean` → CodeSystemConceptProperty value[x]). Added
+    CodeSystem `property`/`concept`/`filter` + the concept/property/designation
+    datatypes to `field_def`, and CodeSystemConceptProperty to `resolve_choice`.
+  - **REMAINING VS failures (4)** — all the same external-name-resolution class
+    (needs package_store fishing wired into the VS exporter; out of export.rs-only
+    scope): ips `problem-type-uv-ips`; crd `locationAddressType` (AddressType),
+    `orderDetail` (ServiceType / ExampleVisionPrescriptionProductCodes),
+    `serviceRequestCodes` (SNOMED_CT) — bare external CS/VS names, no local def,
+    no alias.
 - [~] **Phase 5/6 — StructureDefinition export** — IN PROGRESS (byte parity:
   **epi 26/28, ips 27/32, crd 19/27 SD = 72/87**). VS/CS gates stay green; `cargo
   test --workspace` green. Differential-only output.
@@ -400,9 +427,11 @@ Phases from the plan (0–9). Current state:
     QA/diagnostics (validateRequiredElements/checkForMultipleChoice/nameless-slice)
     collected-as-wording but NOT emitted/gated.
 - [ ] **Phase 8 — full corpus parity** — scorecard `harness/parity-dashboard.sh`.
-  **Current: 247/665 byte-identical** (was 123 pre-SD). Known VS follow-ups: mcode
-  43/103, crd 15/28 + CS 0/3 (external-name/$alias resolution via package_store —
-  wire into VS/CS exporter after Phase 7).
+  **Current: 620/665 byte-identical** (was 547 before the Phase 4.1 caret
+  key-ordering fix; 247 pre-SD). VS/CS now ips 35/36, epi 29/29, mcode 104/104,
+  crd 28/31. Remaining VS follow-ups (4) are all external bare-name CS/VS→url
+  resolution via package_store (wire the fisher into the VS exporter) — see
+  Phase 4.1 note.
 - [ ] **Phase 9 — optimization loop**
 
 ## 7b. Porting specs + cross-cutting parity traps

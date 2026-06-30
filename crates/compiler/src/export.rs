@@ -189,7 +189,45 @@ fn field_def(type_name: &str, base: &str) -> Option<(&'static str, bool)> {
             "content" => Some(("code", false)),
             "supplements" => Some(("canonical", false)),
             "count" => Some(("unsignedInt", false)),
+            "filter" => Some(("CodeSystemFilter", true)),
+            "property" => Some(("CodeSystemProperty", true)),
+            "concept" => Some(("CodeSystemConcept", true)),
             _ => None,
+        }),
+        "CodeSystemFilter" => Some(match base {
+            "code" => ("code", false),
+            "description" => ("string", false),
+            "operator" => ("code", true),
+            "value" => ("string", false),
+            _ => return None,
+        }),
+        "CodeSystemProperty" => Some(match base {
+            "code" => ("code", false),
+            "uri" => ("uri", false),
+            "description" => ("string", false),
+            "type" => ("code", false),
+            _ => return None,
+        }),
+        "CodeSystemConcept" => Some(match base {
+            "code" => ("code", false),
+            "display" => ("string", false),
+            "definition" => ("string", false),
+            "designation" => ("CodeSystemConceptDesignation", true),
+            "property" => ("CodeSystemConceptProperty", true),
+            "concept" => ("CodeSystemConcept", true),
+            "extension" => ("Extension", true),
+            _ => return None,
+        }),
+        "CodeSystemConceptDesignation" => Some(match base {
+            "language" => ("code", false),
+            "use" => ("Coding", false),
+            "value" => ("string", false),
+            _ => return None,
+        }),
+        // CodeSystemConceptProperty: code + value[x] (handled via resolve_choice).
+        "CodeSystemConceptProperty" => Some(match base {
+            "code" => ("code", false),
+            _ => return None,
         }),
         "Meta" => Some(match base {
             "versionId" => ("id", false),
@@ -251,7 +289,10 @@ fn field_def(type_name: &str, base: &str) -> Option<(&'static str, bool)> {
 /// Resolve a `value[x]` choice key (e.g. `valueCode`) on a type that has a
 /// choice element (Extension / UsageContext) to its concrete element type.
 fn resolve_choice(type_name: &str, base: &str) -> Option<&'static str> {
-    if !matches!(type_name, "Extension" | "UsageContext") {
+    if !matches!(
+        type_name,
+        "Extension" | "UsageContext" | "CodeSystemConceptProperty"
+    ) {
         return None;
     }
     let suffix = base.strip_prefix("value")?;
@@ -544,6 +585,92 @@ fn apply_caret(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, 
     apply(obj, &segs, leaf);
 }
 
+/// Pre-pass mirroring stock SUSHI's `setImpliedPropertiesOnInstance`, which runs
+/// BEFORE the caret value-assignment loop (`ValueSetExporter.setCaretRules`,
+/// `CodeSystemExporter.setCaretPathRules`). It materializes the *implied* (fixed)
+/// values that a caret path entails — for VS/CS metadata carets the only such
+/// implied value is an `extension`/`modifierExtension` slice's fixed `url`. By
+/// creating those entries here, the `extension` top-level key is inserted in
+/// element order (early), ahead of later metadata caret keys like `copyright`/
+/// `experimental` — even when the extension caret rule appears AFTER them in
+/// source. Without this, key insertion order would follow raw rule order and
+/// diverge from stock (e.g. mCODE/CRD `^copyright`/`^experimental` set by an
+/// inserted RuleSet, followed by `^extension[FMM]`).
+fn precreate_implied(obj: &mut Map<String, J>, segs: &[Seg]) {
+    // Only materialize paths that carry at least one extension-slice url; other
+    // VS/CS metadata carets have no implied (fixed) child values.
+    if !segs.iter().any(|s| s.slice_url.is_some()) {
+        return;
+    }
+    let seg = &segs[0];
+    let remaining_has_slice = segs.len() > 1 && segs[1..].iter().any(|s| s.slice_url.is_some());
+    if seg.array {
+        if let Some(url) = &seg.slice_url {
+            let arr = obj
+                .entry(seg.key.clone())
+                .or_insert_with(|| J::Array(vec![]));
+            if !arr.is_array() {
+                *arr = J::Array(vec![]);
+            }
+            let arr = arr.as_array_mut().unwrap();
+            let want = seg.index.unwrap_or(0);
+            let positions: Vec<usize> = arr
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| e.get("url") == Some(&J::String(url.clone())))
+                .map(|(i, _)| i)
+                .collect();
+            let idx = if let Some(&p) = positions.get(want) {
+                p
+            } else {
+                let mut m = Map::new();
+                m.insert("url".into(), J::String(url.clone()));
+                arr.push(J::Object(m));
+                arr.len() - 1
+            };
+            if remaining_has_slice {
+                if !arr[idx].is_object() {
+                    arr[idx] = J::Object(Map::new());
+                }
+                precreate_implied(arr[idx].as_object_mut().unwrap(), &segs[1..]);
+            }
+        } else if remaining_has_slice {
+            // Non-slice array segment with a deeper slice: descend to reach it.
+            let n = seg.index.unwrap_or(0);
+            let arr = obj
+                .entry(seg.key.clone())
+                .or_insert_with(|| J::Array(vec![]));
+            if !arr.is_array() {
+                *arr = J::Array(vec![]);
+            }
+            let arr = arr.as_array_mut().unwrap();
+            while arr.len() <= n {
+                arr.push(J::Null);
+            }
+            if !arr[n].is_object() {
+                arr[n] = J::Object(Map::new());
+            }
+            precreate_implied(arr[n].as_object_mut().unwrap(), &segs[1..]);
+        }
+    } else if remaining_has_slice {
+        let child = obj
+            .entry(seg.key.clone())
+            .or_insert_with(|| J::Object(Map::new()));
+        if !child.is_object() {
+            *child = J::Object(Map::new());
+        }
+        precreate_implied(child.as_object_mut().unwrap(), &segs[1..]);
+    }
+}
+
+/// Run the implied-properties pre-pass for one caret rule path.
+fn precreate_implied_for_path(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str) {
+    let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
+    if let Some((segs, _)) = resolve_path(resource_type, caret_path.as_str()) {
+        precreate_implied(obj, &segs);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ValueSet export.
 // ---------------------------------------------------------------------------
@@ -590,6 +717,22 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex) -> Exp
         .iter()
         .filter(|r| matches!(r, Rule::CaretValue { path_array, .. } if path_array.is_empty()))
         .collect();
+
+    // setImpliedPropertiesOnInstance pre-pass: create extension/modifierExtension
+    // slice urls (the only implied/fixed values for VS metadata carets) BEFORE the
+    // value loop, so the `extension` key lands in element order ahead of later
+    // metadata caret keys regardless of source rule order.
+    for r in &other_carets {
+        if let Rule::CaretValue {
+            caret_path: Some(cp),
+            value: Some(_),
+            is_instance: false,
+            ..
+        } = r
+        {
+            precreate_implied_for_path(&mut obj, "ValueSet", cp);
+        }
+    }
 
     // setCaretRules (otherCaretRules) in source order.
     for r in &other_carets {
@@ -908,22 +1051,45 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
     // setConcepts.
     set_concepts(&mut obj, cs);
 
-    // setCaretPathRules: top-level carets only (pathArray empty -> rule.path '').
-    for r in &cs.rules {
-        if let Rule::CaretValue {
-            path_array,
-            caret_path,
-            value: Some(value),
-            is_instance: false,
-            ..
-        } = r
-        {
-            if path_array.is_empty() {
-                if let Some(cp) = caret_path {
-                    apply_caret(&mut obj, "CodeSystem", cp, value);
-                }
+    // setCaretPathRules (`CodeSystemExporter.ts:108`): both top-level carets
+    // (empty pathArray) and concept-level carets (pathArray of concept codes →
+    // `concept[i]...` prefix via findConceptPath). The full caret path is the
+    // concept prefix joined with the rule's caret path. Concepts must already be
+    // built (set_concepts above) so the indices resolve.
+    let cs_carets: Vec<(String, &FshValue)> = cs
+        .rules
+        .iter()
+        .filter_map(|r| {
+            if let Rule::CaretValue {
+                path_array,
+                caret_path: Some(cp),
+                value: Some(value),
+                is_instance: false,
+                ..
+            } = r
+            {
+                let prefix = find_concept_path(&obj, path_array)?;
+                let full = if prefix.is_empty() {
+                    cp.clone()
+                } else {
+                    format!("{prefix}.{cp}")
+                };
+                Some((full, value))
+            } else {
+                None
             }
-        }
+        })
+        .collect();
+
+    // setImpliedPropertiesOnInstance pre-pass (see export_value_set): hoist
+    // extension/modifierExtension slice urls ahead of later metadata caret keys.
+    for (full, _) in &cs_carets {
+        precreate_implied_for_path(&mut obj, "CodeSystem", full);
+    }
+
+    // value loop, in source order.
+    for (full, value) in &cs_carets {
+        apply_caret(&mut obj, "CodeSystem", full, value);
     }
 
     // updateCount: only when content == 'complete'.
@@ -940,6 +1106,41 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
         filename: format!("CodeSystem-{}.json", id),
         body: J::Object(obj),
     }
+}
+
+/// `CodeSystemExporter.findConceptPath`: resolve a concept-code path array
+/// (e.g. `["#_HookType"]`) to a `concept[i].concept[j]` prefix into the built
+/// concept tree. Returns `Some("")` for an empty path array (top-level caret),
+/// or `None` if a code step can't be resolved (rule is skipped, matching stock's
+/// `CannotResolvePathError`).
+fn find_concept_path(obj: &Map<String, J>, path_array: &[String]) -> Option<String> {
+    if path_array.is_empty() {
+        return Some(String::new());
+    }
+    let mut indices: Vec<usize> = Vec::new();
+    let mut list: Option<&Vec<J>> = match obj.get("concept") {
+        Some(J::Array(a)) => Some(a),
+        _ => None,
+    };
+    for step in path_array {
+        let arr = list?;
+        let want = step.strip_prefix('#').unwrap_or(step);
+        let idx = arr
+            .iter()
+            .position(|c| c.get("code").and_then(|v| v.as_str()) == Some(want))?;
+        indices.push(idx);
+        list = match arr[idx].get("concept") {
+            Some(J::Array(a)) => Some(a),
+            _ => None,
+        };
+    }
+    Some(
+        indices
+            .iter()
+            .map(|i| format!("concept[{i}]"))
+            .collect::<Vec<_>>()
+            .join("."),
+    )
 }
 
 fn count_concepts(concepts: &[J]) -> u64 {
