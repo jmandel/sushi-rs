@@ -66,6 +66,16 @@ Stock SUSHI baseline for IPS (warm shared cache), recorded in
 (The plan's ~5.2s figure is a *strengthened* TS spike with a SQLite package
 index; plain stock is the ~39s baseline. Our Rust target is 1.5–2.5s.)
 
+**Stock oracles generated (in `temp/<ig>-stock/`, gitignored — regen via
+`run-stock.sh`):** resource counts by type —
+| IG | SD | VS | CS | Instances | total |
+|---|--:|--:|--:|--:|--:|
+| ips | 32 | 36 | 0 | 50 | 118 |
+| epi | 28 | 24 | 5 | 55 | 112 |
+| mcode | 53 | 103 | 1 | 193 | 350 |
+| crd | 27 | 28 | 3 | 27 | 85 |
+Export gate: `harness/diff-resources-glob.sh temp/<ig>-stock temp/rust-<ig> <Prefix...>`.
+
 ## 5. Commands / methodology (the closed loop)
 
 Per-change loop (from the plan): hypothesize → smallest corpus slice →
@@ -170,7 +180,12 @@ Phases from the plan (0–9). Current state:
 
 - [x] **Scaffold** — workspace builds green, diagnostics + interner done, submodule pinned.
 - [x] **Phase 0 — harness** — DONE: `run-stock.sh` (isolated cache), `diff-resources.sh`, `diag.cjs` (diagnostic normalize/diff), `lex-oracle.cjs` + `parse-oracle.cjs`, timing.json schema, IPS oracle. Remaining (deferred, not blocking): add SDC/CRD/US Core/mCODE/Cycle IGs when available locally (only IPS present now); full `compile` candidate wrapper grows with the compiler.
-- [ ] **Phase 1 — package store + JSON emitter skeleton**
+- [~] **Phase 1 — package_store + JSON emitter** — json_emit DONE (Phase 4).
+  package_store IN PROGRESS (delegated): reads isolated cache `.index.json`,
+  resolves dep graph, `fish_for_fhir`/`fish_for_metadata`. Oracle
+  `harness/package-oracle.cjs` (run under HOME=temp/fhir-home); gate
+  `rust_sushi pkg-fish <ig> <cache> <q...>` vs oracle via `harness/diff-pkg.cjs`.
+  Notes: `docs/specs/package-store-notes.md`.
 - [x] **Phase 2 — FSH parser + AST** — DONE & verified.
   - **Lexer**: `lex.rs` (~900 lines, FSHLexer.g4 port). Byte-exact vs ANTLR oracle
     on 423 files. Gate: `cargo test -p fsh_lexer_parser` (lex_parity 8/8).
