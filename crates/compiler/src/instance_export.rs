@@ -10,6 +10,7 @@ use fhir_model::{Fisher, StructureDefinition};
 use fsh_model::{FshCode, FshDocument, FshQuantity, FshReference, Instance, Rule, Value as FshValue};
 use serde_json::{Map, Value as J};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 // ---------------------------------------------------------------------------
 // Path parts (instance engine; richer than fhir_model::PathPart).
@@ -2075,6 +2076,13 @@ struct Exporter<'a> {
     /// FSH alias name -> value (first-wins), resolved on every fish like FSHTank.fish.
     aliases: HashMap<String, String>,
     memo: std::cell::RefCell<HashMap<String, Option<ExportedInst>>>,
+    /// Cache of freshly-parsed (unmutated) InstanceOf snapshots keyed by base
+    /// type name. Many instances share a profile (mcode: 209 instances → 64
+    /// distinct InstanceOf), and fishing+parsing the snapshot per instance is
+    /// redundant. The template is never mutated; each export gets a copy-on-write
+    /// clone (cheap: element maps are shared `Rc`s until a write forks them, and
+    /// the template's lazy id-index stays `None` so clones don't copy it).
+    sd_cache: std::cell::RefCell<HashMap<String, Option<Rc<StructureDefinition>>>>,
 }
 
 /// Wraps a fisher so that the queried name is alias-resolved first, mirroring
@@ -2137,6 +2145,7 @@ pub fn export_instances(
         id_to_name,
         aliases,
         memo: std::cell::RefCell::new(HashMap::new()),
+        sd_cache: std::cell::RefCell::new(HashMap::new()),
     };
 
     let mut out = Vec::new();
@@ -2182,14 +2191,28 @@ impl<'a> Exporter<'a> {
         result
     }
 
+    /// Fish + parse the InstanceOf snapshot for `base`, memoizing the unmutated
+    /// template and returning a copy-on-write clone for this export to mutate.
+    fn fish_sd_template(&self, base: &str) -> Option<StructureDefinition> {
+        if let Some(cached) = self.sd_cache.borrow().get(base) {
+            return cached.as_ref().map(|rc| (**rc).clone());
+        }
+        let parsed = self
+            .ctx
+            .fish_sd_json(base)
+            .map(|json| Rc::new(StructureDefinition::from_json(&json, false)));
+        let out = parsed.as_ref().map(|rc| (**rc).clone());
+        self.sd_cache.borrow_mut().insert(base.to_string(), parsed);
+        out
+    }
+
     fn export_compute(&self, name: &str) -> Option<ExportedInst> {
         let inst = *self.by_name.get(name)?;
         let inner_fisher = self.ctx.fisher();
         let fisher = AliasFisher { inner: &inner_fisher, aliases: &self.aliases };
         let instance_of = inst.instance_of.as_ref()?;
         let base = instance_of.split('|').next().unwrap_or(instance_of);
-        let json = self.ctx.fish_sd_json(base)?;
-        let mut sd = StructureDefinition::from_json(&json, false);
+        let mut sd = self.fish_sd_template(base)?;
         if sd.elements.is_empty() {
             return None;
         }
