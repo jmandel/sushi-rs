@@ -13,6 +13,13 @@ measured gain vs maintenance cost. **Parity is sacred** — speed never trades c
 | crd | 1.538 | **1.052** |
 
 ### Integration log
+- **ROUND 2:** **perf/F REJECTED** — emission-path `ordered_clone_deep` removal was
+  clean (byte-parity, 1 file) but within run-to-run noise (~0.5%, below the ~5% bar)
+  and adds ~55 LOC custom Serialize. KEY FINDING (retarget next round): the ~16%
+  SipHash/IndexMap is in the **build path** (`find_element_by_path` map lookups +
+  `set_property_on_instance` map construction), NOT serialization. mcode is partly
+  lexer-bound. (perf/D instance-algo + perf/E Rc-fish still running.)
+
 - **ROUND 1 LOCKED = A+B (no mimalloc).** **perf/C REJECTED**: head-to-head A+B vs
   A+C (C = transient String/Vec/format allocs) — A+B won every IG (ips 1.01 vs 1.26,
   epi 0.76 vs 0.95, mcode 1.46 vs 1.71, crd 1.00 vs 1.03). B and C compete on the
