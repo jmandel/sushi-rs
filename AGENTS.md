@@ -9,10 +9,8 @@
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **18 IGs** (12 + 6 top-20 FSH IGs),
 gated by `harness/gate1.sh <all 18>` (the 6 new built vs materialized `temp/top20-cache`).
-Current: **18-IG = 2490/2491 byte-identical + 4 tracked compat-breaks** (`main` ~`7926a37`+).
-The 12-IG subset is **2065/2065 EQUIVALENT (100%)**. ONLY 1 real fail left in the whole set:
-`subscriptions/CapabilityStatement-backport-subscription-server-r4` (agent `fix/lastfile`
-running — multi-cause: G13 instance-order + X6 `_mode` primitive-sibling extension).
+Current: **18-IG = 2491/2491 byte-identical (100%) + 4 tracked compat-breaks** (`main` ~HEAD). ZERO real fails across all 18.
+The 12-IG subset is **2065/2065 EQUIVALENT (100%)**. NO real fails remain (the last one, subscriptions CapabilityStatement X6+ordering, is fixed).
 Session start was 1800. **Non-regression = none of the 12 IGs may drop** (ips/epi/mcode/crd/
 carinbb/sdc/pas/dtr/genomics/ecr/cmc/ndh — an R4 + R5 + R4B mix). Do NOT single out the old
 4-IG "665" subset as a "floor"/headline — that framing is RETIRED; all 12 are the corpus.
