@@ -536,9 +536,16 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
         }
 
         // fixDependsOn: version required, else drop.
-        let Some(resolved_version) = version.clone() else {
+        let Some(raw_version) = version.clone() else {
             continue;
         };
+
+        // Resolve the version used for the URI lookup (fixDependsOn,
+        // IGExporter.ts:289-315): `latest` -> a matching installed version (also
+        // mutating the emitted version, as stock does); `M.m.x` -> maxSatisfying
+        // over installed versions (emitted version kept as the raw config value).
+        let resolved_version =
+            resolve_depends_on_version(cache_dir, &package_id, &raw_version, &mut entry);
 
         // uri: resolve if missing.
         if uri.is_none() {
@@ -603,6 +610,123 @@ fn merge_or_set_extension(entry: &mut Vec<(String, J)>, ext: J) {
         }
     }
     entry.push(("extension".into(), ext));
+}
+
+/// Enumerate installed versions of `package_id` by scanning the cache for
+/// `{package_id}#<version>` directories (the FHIR cache layout). Mirrors the
+/// set of cached IGs stock filters by `packageId` in fixDependsOn.
+fn installed_versions(cache_dir: &str, package_id: &str) -> Vec<String> {
+    let prefix = format!("{package_id}#");
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(cache_dir) else { return out };
+    for entry in rd.flatten() {
+        if let Some(name) = entry.file_name().to_str() {
+            if let Some(ver) = name.strip_prefix(&prefix) {
+                if !ver.is_empty() {
+                    out.push(ver.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Compare two dotted numeric versions (zero-padded to equal length).
+fn version_cmp(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    let n = a.len().max(b.len());
+    for i in 0..n {
+        let av = a.get(i).copied().unwrap_or(0);
+        let bv = b.get(i).copied().unwrap_or(0);
+        match av.cmp(&bv) {
+            std::cmp::Ordering::Equal => {}
+            other => return other,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+/// `maxSatisfying(versions, range)` for an x-range like `4.0.x` or `4.x`.
+/// The numeric components before the first `x`/`*` are fixed; the matching
+/// version with the greatest remaining components is returned. Prerelease
+/// versions (containing `-`) are excluded, matching node-semver defaults.
+fn max_satisfying_x(installed: &[String], range: &str) -> Option<String> {
+    let mut fixed: Vec<u64> = Vec::new();
+    for p in range.split('.') {
+        if p == "x" || p == "X" || p == "*" {
+            break;
+        }
+        fixed.push(p.parse::<u64>().ok()?);
+    }
+    let mut best: Option<(Vec<u64>, String)> = None;
+    for v in installed {
+        if v.contains('-') {
+            continue;
+        }
+        let Ok(vp) = v
+            .split('.')
+            .map(|s| s.parse::<u64>())
+            .collect::<Result<Vec<u64>, _>>()
+        else {
+            continue;
+        };
+        if vp.len() < fixed.len() {
+            continue;
+        }
+        if !fixed.iter().zip(&vp).all(|(a, b)| a == b) {
+            continue;
+        }
+        let better = match &best {
+            Some((bv, _)) => version_cmp(&vp, bv) == std::cmp::Ordering::Greater,
+            None => true,
+        };
+        if better {
+            best = Some((vp, v.clone()));
+        }
+    }
+    best.map(|(_, s)| s)
+}
+
+/// Resolve the version used for the dependency URI lookup (fixDependsOn,
+/// IGExporter.ts:289-315). For `latest`, pick an installed version and mutate
+/// the emitted `version` field (stock sets `dependsOn.version`); the
+/// single-version-in-scope assumption is resolved to the greatest installed
+/// version. For an x-range, return `maxSatisfying` while keeping the emitted
+/// version as the raw config value. Otherwise return the raw version.
+fn resolve_depends_on_version(
+    cache_dir: &str,
+    package_id: &str,
+    raw_version: &str,
+    entry: &mut [(String, J)],
+) -> String {
+    if raw_version == "latest" {
+        let installed = installed_versions(cache_dir, package_id);
+        let numeric: Vec<String> = installed.into_iter().filter(|v| !v.contains('-')).collect();
+        if let Some(v) = numeric
+            .iter()
+            .filter_map(|v| {
+                v.split('.')
+                    .map(|s| s.parse::<u64>())
+                    .collect::<Result<Vec<u64>, _>>()
+                    .ok()
+                    .map(|p| (p, v.clone()))
+            })
+            .max_by(|a, b| version_cmp(&a.0, &b.0))
+            .map(|(_, s)| s)
+        {
+            if let Some((_, val)) = entry.iter_mut().find(|(k, _)| k == "version") {
+                *val = J::String(v.clone());
+            }
+            return v;
+        }
+        return raw_version.to_string();
+    }
+    if raw_version.ends_with(".x") {
+        let installed = installed_versions(cache_dir, package_id);
+        if let Some(v) = max_satisfying_x(&installed, raw_version) {
+            return v;
+        }
+    }
+    raw_version.to_string()
 }
 
 /// Read a dependency package's ImplementationGuide `url`.
