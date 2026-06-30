@@ -72,6 +72,11 @@ pub struct SdContext<'a> {
     in_progress: std::collections::HashSet<String>,
     /// Early-push metadata for in-progress SDs (so circular fishes resolve url).
     in_progress_meta: std::collections::HashMap<String, Metadata>,
+    /// name/id -> url-bearing metadata for every local SD in the tank, computed
+    /// up front. Lets the fisher resolve a local SD's canonical url before it is
+    /// exported (or even if its export fails), mirroring stock's
+    /// `FSHTank.fishForMetadata` for StructureDefinitions.
+    tank_sd_meta: std::collections::HashMap<String, Metadata>,
     pub diag: Vec<String>,
     vs_url: &'a dyn Fn(&str) -> Option<String>,
     cs_url: &'a dyn Fn(&str) -> Option<String>,
@@ -84,6 +89,7 @@ pub struct FisherView<'a> {
     store: &'a package_store::PackageStore,
     exported: &'a [ExportedSd],
     in_progress_meta: &'a std::collections::HashMap<String, Metadata>,
+    tank_sd_meta: &'a std::collections::HashMap<String, Metadata>,
     predefined_vs: &'a std::collections::HashMap<String, String>,
 }
 
@@ -115,6 +121,13 @@ impl Fisher for FisherView<'_> {
             if n == base || m.id == base || m.url.as_deref() == Some(base) {
                 return Some(m.clone());
             }
+        }
+        // Tank SDs not yet exported: resolve a local SD's url before/without its
+        // export (FSHTank.fishForMetadata for StructureDefinitions). Checked after
+        // the package store would normally run in stock, but a tank SD shadows the
+        // external definition of the same name, so it must win over `store`.
+        if let Some(m) = self.tank_sd_meta.get(base) {
+            return Some(m.clone());
         }
         let m = self.store.fish_for_metadata(name, package_store::ALL_FISH_TYPES)?;
         Some(metadata_from_json(&m))
@@ -235,6 +248,27 @@ impl<'a> SdContext<'a> {
         for doc in docs {
             collect(&mut tank, &mut by_name, &mut by_id, &doc.resources, StructureKind::Resource);
         }
+        let mut tank_sd_meta: std::collections::HashMap<String, Metadata> =
+            std::collections::HashMap::new();
+        for ts in &tank {
+            let id = effective_sd_id(&ts.def);
+            let url = sd_url_from_def(&ts.def, &id, &cfg.canonical);
+            let md = Metadata {
+                id: id.clone(),
+                name: ts.def.name.clone(),
+                sd_type: None,
+                url: Some(url),
+                parent: ts.def.parent.clone(),
+                abstract_: None,
+                version: None,
+                kind: None,
+                can_bind: false,
+                can_be_target: false,
+                instance_usage: None,
+            };
+            tank_sd_meta.entry(ts.def.name.clone()).or_insert_with(|| md.clone());
+            tank_sd_meta.entry(id).or_insert(md);
+        }
         SdContext {
             store,
             cfg,
@@ -244,6 +278,7 @@ impl<'a> SdContext<'a> {
             exported: Vec::new(),
             in_progress: std::collections::HashSet::new(),
             in_progress_meta: std::collections::HashMap::new(),
+            tank_sd_meta,
             diag: Vec::new(),
             vs_url,
             cs_url,
@@ -262,6 +297,7 @@ impl<'a> SdContext<'a> {
             store: self.store,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
+            tank_sd_meta: &self.tank_sd_meta,
             predefined_vs: &self.predefined_vs,
         }
     }
@@ -379,6 +415,7 @@ impl<'a> SdContext<'a> {
             store: self.store,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
+            tank_sd_meta: &self.tank_sd_meta,
             predefined_vs: &self.predefined_vs,
         };
         for rule in &rules {
@@ -442,6 +479,7 @@ impl<'a> SdContext<'a> {
                 store: self.store,
                 exported: &self.exported,
                 in_progress_meta: &self.in_progress_meta,
+                tank_sd_meta: &self.tank_sd_meta,
                 predefined_vs: &self.predefined_vs,
             };
             let mut local_diag = Vec::new();
@@ -535,22 +573,7 @@ impl<'a> SdContext<'a> {
     }
 
     fn url_from_def(&self, def: &StructureDef, id: &str) -> String {
-        // ^url caret rule wins
-        for r in def.rules.iter().rev() {
-            if let Rule::CaretValue {
-                path,
-                caret_path,
-                value: Some(FshValue::Str(s)),
-                is_instance: false,
-                ..
-            } = r
-            {
-                if path.is_empty() && caret_path.as_deref() == Some("url") {
-                    return s.clone();
-                }
-            }
-        }
-        format!("{}/StructureDefinition/{}", self.cfg.canonical, id)
+        sd_url_from_def(def, id, &self.cfg.canonical)
     }
 
     fn set_metadata(&mut self, sd: &mut StructureDefinition, def: &StructureDef, kind: StructureKind) {
@@ -647,6 +670,26 @@ impl<'a> SdContext<'a> {
 // ---------------------------------------------------------------------------
 // Free helpers
 // ---------------------------------------------------------------------------
+
+/// `getUrlFromFshDefinition`: a `* ^url = ...` caret wins, else the default
+/// `{canonical}/StructureDefinition/{id}`.
+fn sd_url_from_def(def: &StructureDef, id: &str, canonical: &str) -> String {
+    for r in def.rules.iter().rev() {
+        if let Rule::CaretValue {
+            path,
+            caret_path,
+            value: Some(FshValue::Str(s)),
+            is_instance: false,
+            ..
+        } = r
+        {
+            if path.is_empty() && caret_path.as_deref() == Some("url") {
+                return s.clone();
+            }
+        }
+    }
+    format!("{canonical}/StructureDefinition/{id}")
+}
 
 fn effective_sd_id(def: &StructureDef) -> String {
     for r in def.rules.iter().rev() {
@@ -2160,12 +2203,23 @@ fn resolve_canonical_caret(
     cs_url: &dyn Fn(&str) -> Option<String>,
 ) -> FshValue {
     if let FshValue::Canonical(c) = value {
-        if fisher.fish_for_metadata(&c.entity_name).and_then(|m| m.url).is_none() {
-            if let Some(url) = vs_url(&c.entity_name).or_else(|| cs_url(&c.entity_name)) {
-                let mut c2 = c.clone();
-                c2.entity_name = url;
-                return FshValue::Canonical(c2);
+        // Resolve the entity to its canonical url. Stock fishes SD types (Profile,
+        // Extension, Logical, Resource, ...) then ValueSet/CodeSystem; the version
+        // (if any) is folded onto the url. Fall back to the bare name when nothing
+        // resolves.
+        let url = fisher
+            .fish_for_metadata(&c.entity_name)
+            .and_then(|m| m.url)
+            .or_else(|| vs_url(&c.entity_name))
+            .or_else(|| cs_url(&c.entity_name));
+        if let Some(mut url) = url {
+            if let Some(v) = &c.version {
+                url = format!("{url}|{v}");
             }
+            let mut c2 = c.clone();
+            c2.entity_name = url;
+            c2.version = None;
+            return FshValue::Canonical(c2);
         }
     }
     // `replaceReferences` FshCode branch: resolve a bare CodeSystem name (local or
