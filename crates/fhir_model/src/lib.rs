@@ -108,13 +108,23 @@ impl ElementDefinition {
     /// `ElementDefinition.fromJSON` — copy known PROPS (drops unknown keys),
     /// then (optionally) captureOriginal.
     pub fn from_json(json: &Value, capture: bool) -> ElementDefinition {
-        let mut map = Map::new();
+        let mut map = json
+            .as_object()
+            .map(|obj| Map::with_capacity(obj.len().min(ED_PROPS.len() * 2)))
+            .unwrap_or_else(Map::new);
+        let mut id = String::new();
+        let mut path = String::new();
         if let Some(obj) = json.as_object() {
             let mut uk = String::new();
             for prop in ED_PROPS {
                 if let Some(key) = resolve_choice_key(prop, obj) {
                     let key = key.as_ref();
                     if let Some(v) = obj.get(key) {
+                        if key == "id" {
+                            id = v.as_str().unwrap_or("").to_string();
+                        } else if key == "path" {
+                            path = v.as_str().unwrap_or("").to_string();
+                        }
                         map.insert(key.to_string(), v.clone());
                     }
                     uk.clear();
@@ -126,8 +136,6 @@ impl ElementDefinition {
                 }
             }
         }
-        let id = map.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let path = map.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let mut ed = ElementDefinition { map: Rc::new(map), original: None, id, path };
         if capture {
             ed.capture_original();
@@ -137,7 +145,7 @@ impl ElementDefinition {
 
     pub fn new(id: &str) -> ElementDefinition {
         let path = id_to_path(id);
-        let mut map = Map::new();
+        let mut map = Map::with_capacity(2);
         map.insert("id".into(), Value::String(id.to_string()));
         map.insert("path".into(), Value::String(path.clone()));
         ElementDefinition {
@@ -227,7 +235,7 @@ impl ElementDefinition {
     pub fn calculate_diff_json(&self) -> Value {
         let blank = Map::new();
         let original = self.original.as_deref().unwrap_or(&blank);
-        let mut diff = Map::new();
+        let mut diff = Map::with_capacity(self.map.len().min(ED_PROPS.len()));
         let id = self.id().to_string();
         diff.insert("id".into(), Value::String(id.clone()));
         diff.insert("path".into(), Value::String(id_to_path(&id)));
@@ -308,7 +316,7 @@ fn order_type_obj(t: &Value) -> Value {
     let Some(obj) = t.as_object() else {
         return t.clone();
     };
-    let mut out = Map::new();
+    let mut out = Map::with_capacity(obj.len().min(TYPE_PROPS.len()));
     for k in TYPE_PROPS {
         if let Some(v) = obj.get(*k) {
             out.insert((*k).to_string(), v.clone());
@@ -322,7 +330,7 @@ fn order_type_obj(t: &Value) -> Value {
 
 /// Order an element JSON map per ED PROPS (with `[x]` resolution + `_` siblings).
 fn order_element_json(map: &Map<String, Value>) -> Value {
-    let mut out = Map::new();
+    let mut out = Map::with_capacity(map.len().min(ED_PROPS.len() * 2));
     let mut uk = String::new();
     for prop in ED_PROPS {
         if let Some(key) = resolve_choice_key(prop, map) {
@@ -427,11 +435,11 @@ pub struct StructureDefinition {
 
 impl StructureDefinition {
     pub fn from_json(json: &Value, capture: bool) -> StructureDefinition {
-        let mut body = Map::new();
         // Borrow the object — we only `.get()` fields out of it; cloning the whole
         // SD (incl. the large snapshot) here was pure waste, re-dropped immediately.
         let empty = Map::new();
         let obj = json.as_object().unwrap_or(&empty);
+        let mut body = Map::with_capacity(obj.len().min(SD_PROPS.len() * 2));
         let mut uk = String::new();
         for prop in SD_PROPS {
             if let Some(v) = obj.get(*prop) {
@@ -450,6 +458,7 @@ impl StructureDefinition {
             .and_then(|s| s.get("element"))
             .and_then(|e| e.as_array())
         {
+            elements.reserve(snap.len());
             for el in snap {
                 elements.push(ElementDefinition::from_json(el, capture));
             }
