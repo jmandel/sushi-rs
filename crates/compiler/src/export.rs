@@ -20,6 +20,7 @@ use fsh_model::{
     ValueSetComponentFrom,
 };
 use package_store::{FishType, PackageStore};
+use rustc_hash::FxHashSet;
 use serde_json::{Map, Value as J};
 
 /// `fisher.fishForMetadata(name, ty)?.url` against the FHIR packages — the
@@ -1526,7 +1527,7 @@ fn set_concepts(obj: &mut Map<String, J>, cs: &FshCodeSystem) {
     }
     let mut root: Vec<J> = Vec::new();
     // Track codes already added (for duplicate detection like the TS Map).
-    let mut existing: Vec<String> = Vec::new();
+    let mut existing: FxHashSet<String> = FxHashSet::default();
 
     for r in &concept_rules {
         let Rule::Concept {
@@ -1554,7 +1555,7 @@ fn set_concepts(obj: &mut Map<String, J>, cs: &FshCodeSystem) {
 
         // Navigate the hierarchy to find the container array.
         if insert_into_hierarchy(&mut root, hierarchy, J::Object(new_concept)) {
-            existing.push(code.clone());
+            existing.insert(code.clone());
         }
     }
 
