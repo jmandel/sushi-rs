@@ -36,6 +36,7 @@ serde_yaml = "0.9"
 indexmap = { version = "2", features = ["serde"] }
 smallvec = { version = "1", features = ["serde", "union"] }
 rustc-hash = "2"
+mimalloc = { version = "0.1", default-features = false }
 anyhow = "1"
 thiserror = "2"
 flate2 = "1"

@@ -184,13 +184,15 @@ extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/per
 
 **31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
 CAS+lock→materialized cache separately from build-from-materialized-cache and now
-prints top total/build/materialization tails. Current median-of-3 score
-(`temp/perf31/runs/20260701-072957/results.csv`): **0.87s materialize + 23.86s build
-= 24.73s total** across all 31 IGs. Earlier scores were **0.83s + 25.39s = 26.22s**,
+prints top total/build/materialization tails. Current median-of-3 score after the
+`mimalloc` global allocator experiment (`perf/struct-index-explore`,
+`temp/perf31/runs/20260701-093651/results.csv`): **0.60s materialize + 17.18s build
+= 17.78s total** across all 31 IGs. Previous no-allocator score was
+**0.87s + 23.86s = 24.73s**. Earlier scores were **0.83s + 25.39s = 26.22s**,
 **0.84s + 25.69s = 26.53s**,
 **0.86s + 28.33s = 29.19s**, **1.0s + 31.8s = 32.8s**, **50.8s + 30.8s = 81.6s**,
 and pre-optimization **64.1s + 37.7s = 101.8s**. IPS in the current run is
-**0.021s materialize + 0.537s build = 0.558s total**.
+**0.015s materialize + 0.370s build = 0.385s total**.
 Materialization remains a normal
 local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
 source `.index.json` are a directory symlink to the immutable CAS package; packages
@@ -203,9 +205,12 @@ SD parent-template caching, and hot path allocation cleanup in
 `StructureDefinition::add_element` / `find_element_by_path`; plus incremental
 `StructureDefinition` id-index maintenance, borrowed non-choice ED prop keys, and
 known-capacity FHIR model maps/vectors, and a Fisher-level parsed StructureDefinition
-template cache reused by `unfold_by_id`/`unfoldChoiceElementTypes`. Current build tails
-are compiler/model work, not acquisition: `sdc` 4.91s, `tw-pas` 2.92s, `ccda-cda`
-1.87s, `ecr` 1.43s, `genomics` 1.32s.
+template cache reused by `unfold_by_id`/`unfoldChoiceElementTypes`; plus `mimalloc`
+as the CLI global allocator (A/B on slow slice: system **11.19s**, jemalloc **8.15s**,
+mimalloc **7.51s** build median-sum). Current build tails are compiler/model work, not
+acquisition: `sdc` 3.50s, `tw-pas` 1.78s, `ccda-cda` 1.30s, `ecr` 1.02s,
+`genomics` 0.92s. Correctness held: cargo tests green, 31-IG **3401/3401**,
+harvest **256/256 resources, 326/326 cases**.
 
 ## 5. Commands / methodology (the closed loop)
 

@@ -12,19 +12,19 @@
 The harness defaults to `temp/perf31` and `temp/perf31/cas`; it never defaults to
 the real `~/.fhir`.
 
-Latest one-pass baseline on the 31-IG corpus, after the initial perf work:
+Latest median-of-3 baseline on the 31-IG corpus after the allocator pass
+(`mimalloc` global allocator in the CLI, run `20260701-093651`):
 
 ```text
-materialize median-sum: 50.841s
-build median-sum:       30.775s
-total:                  81.615s
+materialize median-sum: 0.595s
+build median-sum:       17.184s
+total:                  17.779s
 ```
 
-The pre-optimization one-pass baseline was `64.052s` materialize + `37.708s`
-build = `101.760s` total. The largest remaining materialization cost is
-filesystem entry creation for each package file; the next major design option is
-a direct CAS-backed build path that avoids physical materialization for Rust
-builds.
+The previous no-allocator score was `0.866s` materialize + `23.863s` build =
+`24.729s` total. The pre-optimization one-pass baseline was `64.052s`
+materialize + `37.708s` build = `101.760s` total. Materialization is now a small
+part of the 31-IG total; the remaining build tails are compiler/model work.
 
 ## Common Runs
 

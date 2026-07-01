@@ -4,6 +4,9 @@
 use fsh_lexer_parser::{import_to_json, lex_document, Channel};
 use package_acquisition::{default_registries, Coordinate, PackageCas};
 
+#[global_allocator]
+static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {

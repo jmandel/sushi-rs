@@ -4,6 +4,18 @@ A pool of subagents propose performance improvements, each in its OWN git
 worktree. The curator (main session) evaluates and integrates selectively based on
 measured gain vs maintenance cost. **Parity is sacred** — speed never trades correctness.
 
+## 2026-07-01 Update
+
+The earlier "mimalloc reverted" decision below was revisited on the 31-IG corpus
+after package materialization and SD-template caching work. New A/B results:
+system allocator slow-slice build median-sum **11.19s**, jemalloc **8.15s**,
+mimalloc **7.51s**. Full 31-IG median-of-3 with mimalloc:
+**0.60s materialize + 17.18s build = 17.78s total** (previous no-allocator score:
+**0.87s + 23.86s = 24.73s**). Correctness held: cargo tests green, 31-IG
+**3401/3401**, harvest **256/256 resources / 326/326 cases**. Tradeoff remains:
+mimalloc adds a native `libmimalloc-sys` build dependency, but the gain is now large
+and broad enough to justify carrying it unless portability issues appear.
+
 ## Baseline (best-of-5 warm; curator re-baselines after each integration)
 | IG | initial | r1 lock (A+B) | r2 (A+B+E+D) |
 |---|--:|--:|
