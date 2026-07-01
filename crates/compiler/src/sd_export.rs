@@ -1817,13 +1817,21 @@ fn constrain_type(
     if element_types.is_empty() {
         return;
     }
+    // Stock starts constrainType with lodash uniqWith(rule.types, isEqual).
+    // This preserves first occurrence order while dropping duplicate alternatives.
+    let mut unique_types: Vec<OnlyRuleType> = Vec::new();
+    for t in types {
+        if !unique_types.iter().any(|u| u == t) {
+            unique_types.push(t.clone());
+        }
+    }
     // matches grouped by the element-type code they matched against
     let mut matches_by_code: std::collections::HashMap<String, Vec<Match>> =
         std::collections::HashMap::new();
     for et in &element_types {
         matches_by_code.entry(type_code(et).to_string()).or_default();
     }
-    for t in types {
+    for t in &unique_types {
         let lineage = get_type_lineage(&t.type_, fisher);
         if lineage.is_empty() {
             diag.push(format!("Type not found: {}", t.type_));

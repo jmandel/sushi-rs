@@ -8,10 +8,11 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
-13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge: **31-IG =
-3400/3401 byte-identical (100.0% rounded) + 4 tracked compat-breaks**; the one remaining
-byte diff is the pre-existing ccda-cda `StructureDefinition-HealthConcernAct` extra
-`ProblemObservation` targetProfile (also present on `main`). The **18-IG core (12+6top20)
+13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge +
+OnlyRule type dedupe: **31-IG = 3401/3401 byte-identical (100.0%) + 4 tracked
+compat-breaks**. The last ccda-cda diff was duplicate `ProblemObservation` in an
+`only` rule; stock `ElementDefinition.constrainType` starts with `uniqWith(rule.types,
+isEqual)`, and Rust now mirrors that first-occurrence dedupe. The **18-IG core (12+6top20)
 = 2491/2491 byte-identical** — the hard non-regression floor; NONE may drop. PLUS a **permanent
 326-case harvest of SUSHI's own unit tests** (`tests/sushi-harvest/`, gate
 `harness/harvest-gate.sh`) at **239/256 resources (93.4%) / 246/326 cases**. Session
