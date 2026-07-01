@@ -1156,9 +1156,6 @@ fn copy_tree(source: &Path, target: &Path) -> anyhow::Result<()> {
         if ent.file_type().is_dir() {
             fs::create_dir_all(&dst)?;
         } else if ent.file_type().is_file() {
-            if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
-            }
             fs::copy(ent.path(), &dst)?;
         }
     }
@@ -1173,9 +1170,6 @@ fn link_tree(source: &Path, target: &Path) -> anyhow::Result<()> {
         if ent.file_type().is_dir() {
             fs::create_dir_all(&dst)?;
         } else if ent.file_type().is_file() {
-            if let Some(parent) = dst.parent() {
-                fs::create_dir_all(parent)?;
-            }
             link_or_copy_file(ent.path(), &dst)?;
         }
     }
