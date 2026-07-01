@@ -2925,6 +2925,14 @@ impl Fisher for AliasFisher<'_> {
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
         self.inner.fish_for_fhir(&self.resolve(name))
     }
+    fn fish_for_structure_definition(
+        &self,
+        name: &str,
+        capture: bool,
+    ) -> Option<std::rc::Rc<StructureDefinition>> {
+        self.inner
+            .fish_for_structure_definition(&self.resolve(name), capture)
+    }
     fn fish_for_metadata(&self, name: &str) -> Option<fhir_model::Metadata> {
         self.inner.fish_for_metadata(&self.resolve(name))
     }

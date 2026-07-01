@@ -5,7 +5,7 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
-## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-01)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
 13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
@@ -185,11 +185,12 @@ extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/per
 **31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
 CAS+lock→materialized cache separately from build-from-materialized-cache and now
 prints top total/build/materialization tails. Current median-of-3 score
-(`temp/perf31/runs/20260701-070024/results.csv`): **0.83s materialize + 25.39s build
-= 26.22s total** across all 31 IGs. Earlier scores were **0.84s + 25.69s = 26.53s**,
+(`temp/perf31/runs/20260701-072957/results.csv`): **0.87s materialize + 23.86s build
+= 24.73s total** across all 31 IGs. Earlier scores were **0.83s + 25.39s = 26.22s**,
+**0.84s + 25.69s = 26.53s**,
 **0.86s + 28.33s = 29.19s**, **1.0s + 31.8s = 32.8s**, **50.8s + 30.8s = 81.6s**,
 and pre-optimization **64.1s + 37.7s = 101.8s**. IPS in the current run is
-**0.020s materialize + 0.593s build = 0.613s total**.
+**0.021s materialize + 0.537s build = 0.558s total**.
 Materialization remains a normal
 local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
 source `.index.json` are a directory symlink to the immutable CAS package; packages
@@ -201,9 +202,10 @@ per-file `mkdir`, CodeSystem concept duplicate detection `Vec`→`FxHashSet`
 SD parent-template caching, and hot path allocation cleanup in
 `StructureDefinition::add_element` / `find_element_by_path`; plus incremental
 `StructureDefinition` id-index maintenance, borrowed non-choice ED prop keys, and
-known-capacity FHIR model maps/vectors. Current build tails are compiler/model work,
-not acquisition: `sdc` 5.09s, `tw-pas` 2.99s, `ccda-cda` 1.93s, `genomics` 1.56s,
-`ecr` 1.48s.
+known-capacity FHIR model maps/vectors, and a Fisher-level parsed StructureDefinition
+template cache reused by `unfold_by_id`/`unfoldChoiceElementTypes`. Current build tails
+are compiler/model work, not acquisition: `sdc` 4.91s, `tw-pas` 2.92s, `ccda-cda`
+1.87s, `ecr` 1.43s, `genomics` 1.32s.
 
 ## 5. Commands / methodology (the closed loop)
 

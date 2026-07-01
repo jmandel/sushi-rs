@@ -102,6 +102,9 @@ pub struct FisherView<'a> {
     in_progress_meta: &'a std::collections::HashMap<String, Metadata>,
     tank_sd_meta: &'a std::collections::HashMap<String, Metadata>,
     predefined_vs: &'a std::collections::HashMap<String, String>,
+    sd_template_cache: &'a std::cell::RefCell<
+        std::collections::HashMap<String, Option<std::rc::Rc<StructureDefinition>>>,
+    >,
 }
 
 impl Fisher for FisherView<'_> {
@@ -123,6 +126,30 @@ impl Fisher for FisherView<'_> {
             }
         }
         self.store.fish_for_fhir(name, package_store::ALL_FISH_TYPES)
+    }
+
+    fn fish_for_structure_definition(
+        &self,
+        name: &str,
+        capture: bool,
+    ) -> Option<std::rc::Rc<StructureDefinition>> {
+        if !capture {
+            return self
+                .fish_for_fhir(name)
+                .map(|json| std::rc::Rc::new(StructureDefinition::from_json(&json, false)));
+        }
+        if let Some(cached) = self.sd_template_cache.borrow().get(name) {
+            return cached.clone();
+        }
+        let parsed = self
+            .fish_for_fhir(name)
+            .map(|json| std::rc::Rc::new(StructureDefinition::from_json(&json, true)));
+        if parsed.is_some() {
+            self.sd_template_cache
+                .borrow_mut()
+                .insert(name.to_string(), parsed.clone());
+        }
+        parsed
     }
 
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata> {
@@ -347,6 +374,7 @@ impl<'a> SdContext<'a> {
             in_progress_meta: &self.in_progress_meta,
             tank_sd_meta: &self.tank_sd_meta,
             predefined_vs: &self.predefined_vs,
+            sd_template_cache: &self.sd_template_cache,
         }
     }
 
@@ -491,6 +519,7 @@ impl<'a> SdContext<'a> {
             in_progress_meta: &self.in_progress_meta,
             tank_sd_meta: &self.tank_sd_meta,
             predefined_vs: &self.predefined_vs,
+            sd_template_cache: &self.sd_template_cache,
         };
         for rule in &rules {
             let Rule::Mapping { path, map, comment, language, .. } = rule else { continue };
@@ -566,6 +595,7 @@ impl<'a> SdContext<'a> {
                 in_progress_meta: &self.in_progress_meta,
                 tank_sd_meta: &self.tank_sd_meta,
                 predefined_vs: &self.predefined_vs,
+                sd_template_cache: &self.sd_template_cache,
             };
             let mut local_diag = Vec::new();
             set_rules(&mut sd, &mut def, kind, &fisher, self.cfg, self.vs_url, self.cs_url, &mut local_diag, &*self);

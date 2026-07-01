@@ -40,6 +40,17 @@ pub trait Fisher {
     /// parse with no deep clone, and callers here only read it (build a
     /// `StructureDefinition`, inspect fields) via deref coercion.
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<Value>>;
+    /// Parsed StructureDefinition template for callers that repeatedly fish and
+    /// inspect the same snapshot. Implementors may cache this; the default keeps
+    /// the old behavior of parsing the fished JSON on every call.
+    fn fish_for_structure_definition(
+        &self,
+        name: &str,
+        capture: bool,
+    ) -> Option<std::rc::Rc<StructureDefinition>> {
+        self.fish_for_fhir(name)
+            .map(|json| std::rc::Rc::new(StructureDefinition::from_json(&json, capture)))
+    }
     /// Metadata for a name|id|url.
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata>;
     /// Metadata restricted to ValueSet definitions (`fishForMetadata(_, Type.ValueSet)`).
@@ -996,8 +1007,7 @@ impl StructureDefinition {
                 .unwrap_or(false);
 
             if !use_constrained {
-                if let Some(base_json) = fisher.fish_for_fhir(&sd_type) {
-                    let base_def = StructureDefinition::from_json(&base_json, true);
+                if let Some(base_def) = fisher.fish_for_structure_definition(&sd_type, true) {
                     if let Some(rbi) = base_def.index_of_id(&ref_id) {
                         let ref_type = base_def.elements[rbi].get("type").cloned();
                         let new_ids =
@@ -1093,14 +1103,13 @@ impl StructureDefinition {
 
         // type-fishing fallback
         let fish_name = profile_to_use.clone().unwrap_or_else(|| codes[0].clone());
-        let json = match fisher
-            .fish_for_fhir(&fish_name)
-            .or_else(|| fisher.fish_for_fhir(&codes[0]))
+        let def = match fisher
+            .fish_for_structure_definition(&fish_name, true)
+            .or_else(|| fisher.fish_for_structure_definition(&codes[0], true))
         {
-            Some(j) => j,
+            Some(def) => def,
             None => return vec![],
         };
-        let def = StructureDefinition::from_json(&json, true);
         if def.elements.len() <= 1 {
             return vec![];
         }
@@ -1152,10 +1161,9 @@ impl StructureDefinition {
             // No common ancestor — stock logs an error and returns [].
             return vec![];
         };
-        let Some(json) = fisher.fish_for_fhir(common_url) else {
+        let Some(def) = fisher.fish_for_structure_definition(common_url, true) else {
             return vec![];
         };
-        let def = StructureDefinition::from_json(&json, true);
         let def_pt = def.path_type();
         let parent_id = self.elements[idx].id().to_string();
         let mut new_children = Vec::new();
