@@ -8,6 +8,7 @@
 
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -112,12 +113,13 @@ impl ElementDefinition {
             let mut uk = String::new();
             for prop in ED_PROPS {
                 if let Some(key) = resolve_choice_key(prop, obj) {
-                    if let Some(v) = obj.get(&key) {
-                        map.insert(key.clone(), v.clone());
+                    let key = key.as_ref();
+                    if let Some(v) = obj.get(key) {
+                        map.insert(key.to_string(), v.clone());
                     }
                     uk.clear();
                     uk.push('_');
-                    uk.push_str(&key);
+                    uk.push_str(key);
                     if let Some(v) = obj.get(uk.as_str()) {
                         map.insert(uk.clone(), v.clone());
                     }
@@ -207,12 +209,13 @@ impl ElementDefinition {
                 Some(k) => k,
                 None => continue,
             };
-            if self.map.get(&key) != original.get(&key) {
+            let key = key.as_ref();
+            if self.map.get(key) != original.get(key) {
                 return true;
             }
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
+            uk.push_str(key);
             if self.map.get(uk.as_str()) != original.get(uk.as_str()) {
                 return true;
             }
@@ -237,16 +240,17 @@ impl ElementDefinition {
                 Some(k) => k,
                 None => continue,
             };
+            let key = key.as_ref();
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
-            let changed = self.map.get(&key) != original.get(&key);
+            uk.push_str(key);
+            let changed = self.map.get(key) != original.get(key);
             let uchanged = self.map.get(uk.as_str()) != original.get(uk.as_str());
 
             if changed {
                 if key == "mapping" || key == "constraint" {
-                    let cur = self.map.get(&key).and_then(|v| v.as_array());
-                    let orig = original.get(&key).and_then(|v| v.as_array());
+                    let cur = self.map.get(key).and_then(|v| v.as_array());
+                    let orig = original.get(key).and_then(|v| v.as_array());
                     if let Some(cur) = cur {
                         let diff_arr: Vec<Value> = cur
                             .iter()
@@ -254,15 +258,15 @@ impl ElementDefinition {
                             .cloned()
                             .collect();
                         if !diff_arr.is_empty() {
-                            diff.insert(key.clone(), Value::Array(diff_arr));
+                            diff.insert(key.to_string(), Value::Array(diff_arr));
                         }
                     }
-                } else if let Some(v) = self.map.get(&key) {
-                    diff.insert(key.clone(), v.clone());
+                } else if let Some(v) = self.map.get(key) {
+                    diff.insert(key.to_string(), v.clone());
                 }
             } else if key == "type" && is_choice_slice {
-                if let Some(v) = self.map.get(&key) {
-                    diff.insert(key.clone(), v.clone());
+                if let Some(v) = self.map.get(key) {
+                    diff.insert(key.to_string(), v.clone());
                 }
             }
             if uchanged {
@@ -322,7 +326,8 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
     let mut uk = String::new();
     for prop in ED_PROPS {
         if let Some(key) = resolve_choice_key(prop, map) {
-            if let Some(v) = map.get(&key) {
+            let key = key.as_ref();
+            if let Some(v) = map.get(key) {
                 let v = if key == "type" {
                     match v.as_array() {
                         Some(arr) => Value::Array(arr.iter().map(order_type_obj).collect()),
@@ -331,11 +336,11 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
                 } else {
                     v.clone()
                 };
-                out.insert(key.clone(), v);
+                out.insert(key.to_string(), v);
             }
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
+            uk.push_str(key);
             if let Some(v) = map.get(uk.as_str()) {
                 out.insert(uk.clone(), v.clone());
             }
@@ -344,7 +349,7 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
     Value::Object(out)
 }
 
-fn resolve_choice_key(prop: &str, map: &Map<String, Value>) -> Option<String> {
+fn resolve_choice_key<'a>(prop: &'a str, map: &Map<String, Value>) -> Option<Cow<'a, str>> {
     if let Some(base) = prop.strip_suffix("[x]") {
         for k in map.keys() {
             // A choice prop like `maxValue[x]` matches both the value key
@@ -357,25 +362,25 @@ fn resolve_choice_key(prop: &str, map: &Map<String, Value>) -> Option<String> {
             let bare = k.strip_prefix('_').unwrap_or(k);
             if let Some(rest) = bare.strip_prefix(base) {
                 if rest.chars().next().map(|c| c.is_ascii_uppercase()) == Some(true) {
-                    return Some(bare.to_string());
+                    return Some(Cow::Owned(bare.to_string()));
                 }
             }
         }
         None
     } else {
-        Some(prop.to_string())
+        Some(Cow::Borrowed(prop))
     }
 }
 
-fn resolve_choice_key_either(
-    prop: &str,
+fn resolve_choice_key_either<'a>(
+    prop: &'a str,
     a: &Map<String, Value>,
     b: &Map<String, Value>,
-) -> Option<String> {
+) -> Option<Cow<'a, str>> {
     if prop.ends_with("[x]") {
         resolve_choice_key(prop, a).or_else(|| resolve_choice_key(prop, b))
     } else {
-        Some(prop.to_string())
+        Some(Cow::Borrowed(prop))
     }
 }
 
@@ -467,6 +472,39 @@ impl StructureDefinition {
     /// without changing the element count (e.g. an external `set_id` loop).
     pub fn invalidate_id_index(&self) {
         *self.id_index.borrow_mut() = None;
+    }
+
+    fn push_element(&mut self, element: ElementDefinition) {
+        let idx = self.elements.len();
+        let id = element.id().to_string();
+        self.elements.push(element);
+        self.record_inserted_element(idx, id);
+    }
+
+    fn insert_element_at(&mut self, idx: usize, element: ElementDefinition) {
+        let id = element.id().to_string();
+        self.elements.insert(idx, element);
+        self.record_inserted_element(idx, id);
+    }
+
+    fn record_inserted_element(&self, idx: usize, id: String) {
+        let mut cache = self.id_index.borrow_mut();
+        let Some((len, map)) = cache.as_mut() else {
+            return;
+        };
+        if *len + 1 != self.elements.len() {
+            *cache = None;
+            return;
+        }
+        for pos in map.values_mut() {
+            if *pos >= idx {
+                *pos += 1;
+            }
+        }
+        if map.get(&id).map(|&pos| pos > idx).unwrap_or(true) {
+            map.insert(id, idx);
+        }
+        *len += 1;
     }
 
     pub fn get_str(&self, key: &str) -> Option<&str> {
@@ -1178,6 +1216,7 @@ impl StructureDefinition {
     /// `addElements` — insert each via `add_element` (ordering). Returns new ids.
     pub fn add_elements(&mut self, els: Vec<ElementDefinition>) -> Vec<String> {
         let mut ids = Vec::new();
+        self.elements.reserve(els.len());
         for e in els {
             ids.push(e.id().to_string());
             self.add_element(e);
@@ -1191,11 +1230,11 @@ impl StructureDefinition {
         let id = element.id().to_string();
         let parent_id = id.rfind('.').map(|i| id[..i].to_string());
         let Some(parent_id) = parent_id else {
-            self.elements.push(element);
+            self.push_element(element);
             return;
         };
         if self.index_of_id(&parent_id).is_none() {
-            self.elements.push(element);
+            self.push_element(element);
             return;
         }
         if element.slice_name().is_some() {
@@ -1220,7 +1259,7 @@ impl StructureDefinition {
                 }
                 i += 1;
             }
-            self.elements.insert(i, element);
+            self.insert_element_at(i, element);
         } else {
             // plain child: insert after older sibling's deepest child, or after parent.
             let parent_dot = format!("{parent_id}.");
@@ -1235,7 +1274,7 @@ impl StructureDefinition {
                 .collect();
             if siblings.is_empty() {
                 let pidx = self.index_of_id(&parent_id).unwrap();
-                self.elements.insert(pidx + 1, element);
+                self.insert_element_at(pidx + 1, element);
             } else {
                 let older = *siblings.last().unwrap();
                 let older_id = self.elements[older].id().to_string();
@@ -1253,7 +1292,7 @@ impl StructureDefinition {
                         break;
                     }
                 }
-                self.elements.insert(insert_at + 1, element);
+                self.insert_element_at(insert_at + 1, element);
             }
         }
     }

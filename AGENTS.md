@@ -185,10 +185,11 @@ extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/per
 **31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
 CAS+lock→materialized cache separately from build-from-materialized-cache and now
 prints top total/build/materialization tails. Current median-of-3 score
-(`temp/perf31/runs/20260701-064158/results.csv`): **0.86s materialize + 28.33s build
-= 29.19s total** across all 31 IGs. Earlier scores were **1.0s + 31.8s = 32.8s**,
-**50.8s + 30.8s = 81.6s**, and pre-optimization **64.1s + 37.7s = 101.8s**.
-IPS in the current run is **0.020s materialize + 0.679s build = 0.699s total**.
+(`temp/perf31/runs/20260701-065358/results.csv`): **0.84s materialize + 25.69s build
+= 26.53s total** across all 31 IGs. Earlier scores were **0.86s + 28.33s = 29.19s**,
+**1.0s + 31.8s = 32.8s**, **50.8s + 30.8s = 81.6s**, and pre-optimization
+**64.1s + 37.7s = 101.8s**. IPS in the current run is
+**0.021s materialize + 0.608s build = 0.629s total**.
 Materialization remains a normal
 local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
 source `.index.json` are a directory symlink to the immutable CAS package; packages
@@ -198,9 +199,10 @@ with missing/empty indexes fall back to a real wrapper directory plus generated
 per-file `mkdir`, CodeSystem concept duplicate detection `Vec`→`FxHashSet`
 (tw-pas build ~10.5s→3.2s in current full run), directory-symlink materialization,
 SD parent-template caching, and hot path allocation cleanup in
-`StructureDefinition::add_element` / `find_element_by_path`. Current build tails
-are compiler/model work, not acquisition: `sdc` 5.72s, `tw-pas` 3.21s,
-`ccda-cda` 2.54s, `ecr` 1.83s, `genomics` 1.79s.
+`StructureDefinition::add_element` / `find_element_by_path`; plus incremental
+`StructureDefinition` id-index maintenance and borrowed non-choice ED prop keys.
+Current build tails are compiler/model work, not acquisition: `sdc` 5.29s,
+`tw-pas` 3.09s, `ccda-cda` 1.94s, `genomics` 1.57s, `ecr` 1.55s.
 
 ## 5. Commands / methodology (the closed loop)
 
