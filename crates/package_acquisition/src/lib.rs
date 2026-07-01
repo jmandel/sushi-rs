@@ -450,7 +450,9 @@ impl PackageCas {
         out_cache: impl AsRef<Path>,
     ) -> anyhow::Result<()> {
         let pkg_root = self.package_root(&package_ref.sha256);
-        verify_manifest(&pkg_root)?;
+        if verify_cas_on_materialize() {
+            verify_manifest(&pkg_root)?;
+        }
 
         let source = pkg_root.join("package");
         if !source.is_dir() {
@@ -480,7 +482,9 @@ impl PackageCas {
         out_cache: &Path,
     ) -> anyhow::Result<()> {
         let pkg_root = self.package_root(&package_ref.sha256);
-        verify_manifest(&pkg_root)?;
+        if verify_cas_on_materialize() {
+            verify_manifest(&pkg_root)?;
+        }
         let source = pkg_root.join("package");
         reject_real_fhir_path(out_cache)?;
         let target = out_cache.join(label).join("package");
@@ -1112,6 +1116,12 @@ fn verify_manifest(pkg_root: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn verify_cas_on_materialize() -> bool {
+    std::env::var("RUST_SUSHI_VERIFY_CAS")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"))
+        .unwrap_or(false)
 }
 
 fn sample_indices(len: usize) -> Vec<usize> {

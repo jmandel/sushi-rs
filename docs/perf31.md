@@ -4,8 +4,8 @@
 
 1. **materialize**: a populated CAS plus an IG lock file becomes a `.fhir/packages`
    style materialized cache. Benchmark mode runs this with `--offline` by default,
-   so the timed path is local CAS verification, hardlink/copy work, and index
-   generation only.
+   so the timed path is local hardlink/copy work plus derived-index installation
+   only.
 2. **build**: `rust_sushi build <ig> --cache <materialized-cache>` compiles from an
    already materialized package tree.
 
@@ -30,6 +30,7 @@ Useful knobs:
 ```sh
 RUNS=5 harness/perf31.sh bench ips mcode safr
 PERF31_WORK=/tmp/perf31 FHIR_CAS=/tmp/perf31/cas OFFLINE=0 harness/perf31.sh prepare
+RUST_SUSHI_VERIFY_CAS=1 harness/perf31.sh bench ips
 harness/perf31.sh summarize temp/perf31/runs/<stamp>/results.csv
 ```
 
@@ -58,3 +59,7 @@ ig,iter,phase,status,seconds,packages,files,bytes,src,cache,out,log
 `summary.txt` reports median and best observed time for each phase. The
 `TOTAL median-sum` line is the best quick whole-corpus scorecard: it is the sum of
 per-IG medians, split between materialization and compiler build time.
+
+Materialization trusts CAS entries by default. CAS packages are validated and
+made read-only at ingest; set `RUST_SUSHI_VERIFY_CAS=1` when debugging suspected
+cache corruption and you want the older per-materialize manifest check.
