@@ -12,6 +12,20 @@
 The harness defaults to `temp/perf31` and `temp/perf31/cas`; it never defaults to
 the real `~/.fhir`.
 
+Latest one-pass baseline on the 31-IG corpus, after the initial perf work:
+
+```text
+materialize median-sum: 50.841s
+build median-sum:       30.775s
+total:                  81.615s
+```
+
+The pre-optimization one-pass baseline was `64.052s` materialize + `37.708s`
+build = `101.760s` total. The largest remaining materialization cost is
+filesystem entry creation for each package file; the next major design option is
+a direct CAS-backed build path that avoids physical materialization for Rust
+builds.
+
 ## Common Runs
 
 ```sh

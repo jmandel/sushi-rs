@@ -182,6 +182,17 @@ package's `.index.json` every run (no SQLite/persisted index); a build writes ON
 the output dir; cold vs warm OS page cache is ~3% (CPU-bound). Needs only a normal
 extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/perf-map.md.
 
+**31-IG self-reliant two-phase perf (2026-06-30):** `harness/perf31.sh` measures
+CAS+lock→materialized cache separately from build-from-materialized-cache. Current
+one-pass score (`temp/perf31` CAS; some packages predate derived-index caching, so
+materialization is conservative): **50.8s materialize + 30.8s build = 81.6s total**
+across all 31 IGs. Before this pass: **64.1s + 37.7s = 101.8s**. Landed perf work:
+CAS `derived/materialized-index-v2.json`, opt-in `RUST_SUSHI_VERIFY_CAS=1` for old
+per-materialize manifest checks, removed redundant per-file `mkdir`, and
+CodeSystem concept duplicate detection `Vec`→`FxHashSet` (tw-pas build ~10.5s→2.4s).
+Remaining materialization cost is mostly filesystem entry creation (`linkat` for
+every file); a true next step is direct CAS-backed `PackageStore`/IG dependency
+metadata, skipping physical `.fhir/packages` materialization for Rust builds.
 
 ## 5. Commands / methodology (the closed loop)
 
@@ -254,6 +265,22 @@ cargo test  --workspace
 cargo test  -p <crate>                 # focused
 cargo run   -p rust_sushi -- <args>
 ```
+
+### 31-IG two-phase perf
+```sh
+# Setup locks + populate temp CAS (not timed):
+OFFLINE=0 harness/perf31.sh prepare
+
+# Time CAS->materialized cache, then build-from-materialized cache:
+RUNS=3 OFFLINE=1 harness/perf31.sh bench
+
+# Profile one phase/IG (use frame pointers for useful call graphs):
+CARGO_PROFILE_RELEASE_DEBUG=1 RUSTFLAGS="-C force-frame-pointers=yes" cargo build --release -q
+harness/perf31.sh profile build tw-pas
+harness/perf31.sh profile materialize crd
+```
+See `docs/perf31.md`. Keep `PERF31_WORK`/`FHIR_CAS` under `temp/` unless deliberately
+using another scratch path; never use real `~/.fhir`.
 
 ### Cache isolation policy (SAFETY — non-negotiable)
 **Never touch the user's real `~/.fhir`.** All runs use an **isolated FHIR home**
