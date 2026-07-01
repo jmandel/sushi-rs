@@ -8,7 +8,7 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
-13 next-20), all in `harness/gate1.sh`. Current on `feat/predefined`: **31-IG =
+13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge: **31-IG =
 3400/3401 byte-identical (100.0% rounded) + 4 tracked compat-breaks**; the one remaining
 byte diff is the pre-existing ccda-cda `StructureDefinition-HealthConcernAct` extra
 `ProblemObservation` targetProfile (also present on `main`). The **18-IG core (12+6top20)
@@ -20,7 +20,7 @@ started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/
 Validation reports: `docs/{holdout,top20,next20,harvest}-findings.md`. Don't single out
 the old 4-IG "665" — retired.
 
-**PREDEFINED RESOURCE PACKAGE — DONE on `feat/predefined` (2026-06-30):** stock's
+**PREDEFINED RESOURCE PACKAGE — DONE (2026-06-30):** stock's
 `DiskBasedVirtualPackage` / `predefinedResources.ts` behavior is mirrored by
 `compiler::predefined`: JSON + SD-guided FHIR XML resources under `input/resources` and
 the other stock predefined folders are loaded as a fishable virtual package. XML conversion
