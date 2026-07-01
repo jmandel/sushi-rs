@@ -72,6 +72,28 @@ fn is_path_token(k: K) -> bool {
     )
 }
 
+fn is_target_type_start(k: K) -> bool {
+    is_path_token(k) || matches!(k, K::REFERENCE | K::CANONICAL | K::CODEABLE_REFERENCE)
+}
+
+fn has_add_element_tail(cur: &Cursor, pos: usize) -> bool {
+    let kind_at = |i: usize| cur.toks.get(i).map(|t| t.kind).unwrap_or(K::EOF);
+    if kind_at(pos) == K::KW_CONTENTREFERENCE {
+        return matches!(kind_at(pos + 1), K::SEQUENCE | K::CODE)
+            && matches!(kind_at(pos + 2), K::STRING | K::MULTILINE_STRING);
+    }
+    if !is_target_type_start(kind_at(pos)) {
+        return false;
+    }
+    let first = kind_at(pos);
+    let mut p = pos + 1;
+    while kind_at(p) == K::KW_OR && is_target_type_start(kind_at(p + 1)) {
+        p += 2;
+    }
+    matches!(kind_at(p), K::STRING | K::MULTILINE_STRING)
+        || (!is_flag(first) && matches!(kind_at(p), K::STAR | K::EOF))
+}
+
 /// FIRST(value): the tokens that can begin a `value` in the FSH grammar
 /// (`value: STRING | MULTILINE_STRING | NUMBER | DATETIME | TIME | reference |
 /// canonical | code | quantity | ratio | bool | name`). `is_path_token` already
@@ -321,10 +343,14 @@ fn parse_code_lexeme(text: &str) -> (String, Option<String>) {
         }
     };
     system = system.replace("\\\\", "\\").replace("\\#", "#");
-    if code.starts_with('"') && code.ends_with('"') && code.len() >= 2 {
-        code = code[1..code.len() - 1]
-            .replace("\\\\", "\\")
-            .replace("\\\"", "\"");
+    if code.starts_with('"') && code.ends_with('"') {
+        code = if code.len() >= 2 {
+            code[1..code.len() - 1]
+                .replace("\\\\", "\\")
+                .replace("\\\"", "\"")
+        } else {
+            String::new()
+        };
     }
     let sys = if system.is_empty() { None } else { Some(system) };
     (code, sys)
@@ -1306,8 +1332,9 @@ impl Importer {
         let version = it.next();
         if let Some(resolved) = self.all_aliases.get(without) {
             match version {
-                Some(v) => format!("{}|{}", resolved, v),
+                Some(v) if !v.is_empty() => format!("{}|{}", resolved, v),
                 None => resolved.clone(),
+                _ => resolved.clone(),
             }
         } else {
             value.to_string()
@@ -1394,7 +1421,7 @@ impl Importer {
         cur.advance();
         match cur.kind() {
             K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES => {
-                Some(self.finish_vs_component(cur, start, &star))
+                self.finish_vs_component(cur, start, &star)
             }
             K::CODE => {
                 // could be vsConceptComponent, codeCaretValueRule, codeInsertRule
@@ -1409,7 +1436,7 @@ impl Importer {
                 } else if after == K::KW_INSERT {
                     self.finish_code_insert(cur, start, &star, true)
                 } else {
-                    Some(self.finish_vs_component(cur, start, &star))
+                    self.finish_vs_component(cur, start, &star)
                 }
             }
             K::CARET_SEQUENCE => {
@@ -1472,7 +1499,9 @@ impl Importer {
             K::CARET_SEQUENCE => {
                 vec![self.finish_caret(cur, start, &star, "")]
             }
-            K::KW_OBEYS => self.finish_obeys(cur, start, &star, ""),
+            K::KW_OBEYS if !(host != RuleHost::Sd && cur.la(1) == K::CARD) => {
+                self.finish_obeys(cur, start, &star, "")
+            }
             K::KW_INSERT => self
                 .finish_insert(cur, start, &star, "", false)
                 .into_iter()
@@ -1497,9 +1526,10 @@ impl Importer {
                     vec![self.finish_concept(cur, start, &star, true)]
                 }
             }
-            K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES if host == RuleHost::RuleSet => {
-                vec![self.finish_vs_component(cur, start, &star)]
-            }
+            K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES if host == RuleHost::RuleSet => self
+                .finish_vs_component(cur, start, &star)
+                .into_iter()
+                .collect(),
             _ => {
                 let (local_path, _had) = self.read_path(cur);
                 match cur.kind() {
@@ -1559,12 +1589,23 @@ impl Importer {
     ) -> Vec<Rule> {
         let card_text = cur.tok().text.clone();
         cur.advance();
-        // flags
-        let flag_toks = self.consume_flags(cur);
-        // is there an addElement tail? (targetType / STRING / contentReference)
-        let has_tail = matches!(host, RuleHost::Lr)
-            && !matches!(cur.kind(), K::STAR | K::EOF)
-            && cur.pos < cur.toks.len();
+        let flag_start = cur.pos;
+        let mut flag_toks = self.consume_flags(cur);
+        let can_add_element = matches!(host, RuleHost::Lr | RuleHost::RuleSet);
+        let mut has_tail = can_add_element && has_add_element_tail(cur, cur.pos);
+        if can_add_element
+            && !flag_toks.is_empty()
+            && !has_tail
+            && has_add_element_tail(cur, flag_start + flag_toks.len() - 1)
+        {
+            // In stock's ANTLR grammar, AddElementRule is `CARD flag*
+            // targetType+`. Since flag keywords are also valid `name`
+            // targetTypes, the parser leaves the final flag-looking token as the
+            // target type when consuming it as a flag would make the rule fail.
+            flag_toks.pop();
+            cur.pos = flag_start + flag_toks.len();
+            has_tail = true;
+        }
         if has_tail {
             return vec![self.finish_add_element(cur, start, star, local_path, &card_text, &flag_toks)];
         }
@@ -2466,7 +2507,7 @@ impl Importer {
 
     // ---------- vsComponent ----------
 
-    fn finish_vs_component(&mut self, cur: &mut Cursor, start: usize, star: &Token) -> Rule {
+    fn finish_vs_component(&mut self, cur: &mut Cursor, start: usize, star: &Token) -> Option<Rule> {
         let mut inclusion = true;
         if cur.kind() == K::KW_INCLUDE {
             cur.advance();
@@ -2498,15 +2539,21 @@ impl Importer {
             let location = loc(star, &stop);
             // reset context
             self.prepend_path_context(vec![], &location, false, false, true);
-            Rule::VsFilter {
+            Some(Rule::VsFilter {
                 source_info: SourceInfo::new(&self.current_file, location),
                 path: String::new(),
                 inclusion,
                 from,
                 filters,
-            }
+            })
         } else {
             // concept component: code vsComponentFrom?
+            if cur.kind() != K::CODE {
+                while !matches!(cur.kind(), K::STAR | K::EOF) {
+                    cur.advance();
+                }
+                return None;
+            }
             let code = match self.parse_code(cur) {
                 Value::Code(c) => c,
                 _ => FshCode {
@@ -2545,13 +2592,13 @@ impl Importer {
             } else {
                 self.prepend_path_context(vec![], &location, false, false, true);
             }
-            Rule::VsConcept {
+            Some(Rule::VsConcept {
                 source_info: SourceInfo::new(&self.current_file, location),
                 path: String::new(),
                 inclusion,
                 from,
                 concepts,
-            }
+            })
         }
     }
 

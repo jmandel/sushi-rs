@@ -416,16 +416,33 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str, resolver: &TypeResolver) -
             FshValue::Bool(b) => J::Bool(*b),
             FshValue::BigInt(s) => {
                 if let Ok(i) = s.parse::<i64>() {
+                    if !integer_value_ok(leaf_ty, i) {
+                        return None;
+                    }
                     J::Number(i.into())
                 } else if let Ok(u) = s.parse::<u64>() {
+                    if !unsigned_integer_value_ok(leaf_ty, u) {
+                        return None;
+                    }
                     J::Number(u.into())
                 } else {
                     J::String(s.clone())
                 }
             }
-            FshValue::Float(f) => serde_json::Number::from_f64(*f)
-                .map(J::Number)
-                .unwrap_or(J::Null),
+            FshValue::Float(f) => {
+                if matches!(leaf_ty, "integer" | "unsignedInt" | "positiveInt") {
+                    if f.fract() != 0.0 {
+                        return None;
+                    }
+                    let i = *f as i64;
+                    if !integer_value_ok(leaf_ty, i) {
+                        return None;
+                    }
+                }
+                serde_json::Number::from_f64(*f)
+                    .map(J::Number)
+                    .unwrap_or(J::Null)
+            }
             FshValue::Canonical(c) => J::String(c.entity_name.clone()),
             _ => return None,
         })
@@ -453,6 +470,21 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str, resolver: &TypeResolver) -
         }
     } else {
         None
+    }
+}
+
+fn integer_value_ok(leaf_ty: &str, value: i64) -> bool {
+    match leaf_ty {
+        "unsignedInt" => value >= 0,
+        "positiveInt" => value > 0,
+        _ => true,
+    }
+}
+
+fn unsigned_integer_value_ok(leaf_ty: &str, value: u64) -> bool {
+    match leaf_ty {
+        "positiveInt" => value > 0,
+        _ => true,
     }
 }
 
@@ -834,8 +866,11 @@ pub fn export_value_set(
         }
     }
 
-    // setCompose.
-    set_compose(&mut obj, vs, tank, store);
+    // setCompose. Stock catches InvalidUriError from this phase in export()
+    // and skips the whole ValueSet.
+    if set_compose(&mut obj, vs, tank, store).is_err() {
+        return None;
+    }
 
     // setConceptCaretRules (`ValueSetExporter.ts:441`): concept-level carets
     // (`* system#code ^designation...`) whose `path_array` carries the concept's
@@ -1028,7 +1063,7 @@ fn from_to_compose_element(
     tank: &TankIndex,
     vs_url: &str,
     store: Option<&PackageStore>,
-) -> Map<String, J> {
+) -> Result<Map<String, J>, ()> {
     let mut ce: Map<String, J> = Map::new();
     if let Some(system) = &from.system {
         let system_parts: Vec<&str> = system.split('|').collect();
@@ -1036,6 +1071,9 @@ fn from_to_compose_element(
             .cs_url(system)
             .or_else(|| pkg_url(store, system, FishType::CodeSystem))
             .unwrap_or_else(|| system_parts[0].to_string());
+        if !is_valid_uri(&resolved) {
+            return Err(());
+        }
         ce.insert("system".into(), J::String(resolved));
         let version = system_parts[1..].join("|");
         if !version.is_empty() {
@@ -1043,7 +1081,7 @@ fn from_to_compose_element(
         }
     }
     if let Some(value_sets) = &from.value_sets {
-        let mapped: Vec<J> = value_sets
+        let mapped: Vec<String> = value_sets
             .iter()
             .map(|vs| {
                 let resolved = tank.vs_url(vs).or_else(|| pkg_url(store, vs, FishType::ValueSet));
@@ -1060,11 +1098,45 @@ fn from_to_compose_element(
                 }
             })
             .filter(|u| u != vs_url)
+            .collect();
+        for u in &mapped {
+            let base = u.split('|').next().unwrap_or(u);
+            if !is_valid_uri(base) {
+                return Err(());
+            }
+        }
+        let mapped: Vec<J> = mapped
+            .into_iter()
             .map(J::String)
             .collect();
         ce.insert("valueSet".into(), J::Array(mapped));
     }
-    ce
+    Ok(ce)
+}
+
+pub(crate) fn is_valid_uri(s: &str) -> bool {
+    if s.is_empty()
+        || s.chars()
+            .any(|c| c.is_ascii_whitespace() || c.is_control() || c == '|' || c == '\\')
+    {
+        return false;
+    }
+    let Some((scheme, rest)) = s.split_once(':') else {
+        return false;
+    };
+    if scheme.is_empty()
+        || !scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        || !scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    {
+        return false;
+    }
+    if scheme.eq_ignore_ascii_case("urn") {
+        return !rest.is_empty();
+    }
+    let prefix = format!("{scheme}://");
+    s.starts_with(&prefix) && s[prefix.len()..].split('/').next().is_some_and(|h| !h.is_empty())
 }
 
 fn compose_concepts(concepts: &[FshCode]) -> Vec<J> {
@@ -1150,14 +1222,19 @@ fn xor_empty(a: &[String], b: &[String]) -> bool {
 }
 
 /// `setCompose` (`ValueSetExporter.ts:73`).
-fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, store: Option<&PackageStore>) {
+fn set_compose(
+    obj: &mut Map<String, J>,
+    vs: &FshValueSet,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+) -> Result<(), ()> {
     let components: Vec<&Rule> = vs
         .rules
         .iter()
         .filter(|r| matches!(r, Rule::VsConcept { .. } | Rule::VsFilter { .. }))
         .collect();
     if components.is_empty() {
-        return;
+        return Ok(());
     }
     let vs_url = obj.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let mut include: Vec<J> = Vec::new();
@@ -1171,7 +1248,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
                 concepts,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store)?;
                 if !concepts.is_empty() {
                     ce.insert("concept".into(), J::Array(compose_concepts(concepts)));
                 }
@@ -1183,7 +1260,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
                 filters,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store)?;
                 if !filters.is_empty() {
                     let f: Vec<J> = filters
                         .iter()
@@ -1213,6 +1290,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
         compose.insert("exclude".into(), J::Array(exclude));
     }
     obj.insert("compose".into(), J::Object(compose));
+    Ok(())
 }
 
 fn push_component(

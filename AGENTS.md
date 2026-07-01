@@ -8,14 +8,15 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
-13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge +
-OnlyRule type dedupe: **31-IG = 3401/3401 byte-identical (100.0%) + 4 tracked
-compat-breaks**. The last ccda-cda diff was duplicate `ProblemObservation` in an
-`only` rule; stock `ElementDefinition.constrainType` starts with `uniqWith(rule.types,
-isEqual)`, and Rust now mirrors that first-occurrence dedupe. The **18-IG core (12+6top20)
-= 2491/2491 byte-identical** — the hard non-regression floor; NONE may drop. PLUS a **permanent
-326-case harvest of SUSHI's own unit tests** (`tests/sushi-harvest/`, gate
-`harness/harvest-gate.sh`) at **239/256 resources (93.4%) / 246/326 cases**. Session
+13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
+OnlyRule type dedupe, and harvested invalid-input alignment: **31-IG = 3401/3401
+byte-identical (100.0%) + 4 tracked compat-breaks**. The last ccda-cda diff was duplicate
+`ProblemObservation` in an `only` rule; stock `ElementDefinition.constrainType` starts with
+`uniqWith(rule.types, isEqual)`, and Rust now mirrors that first-occurrence dedupe. The
+**18-IG core (12+6top20) = 2491/2491 byte-identical** — the hard non-regression floor; NONE
+may drop. PLUS a **permanent 326-case harvest of SUSHI's own unit tests**
+(`tests/sushi-harvest/`, gate `harness/harvest-gate.sh`) at **256/256 resources (100.0%) /
+326/326 cases (100.0%)**. Session
 started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/top20-cache`;
 13 next-20 → `temp/next20/fhir-home` (gate1.sh routes per-IG via IGCACHE/N20ROOT).
 Validation reports: `docs/{holdout,top20,next20,harvest}-findings.md`. Don't single out
@@ -30,9 +31,16 @@ handling, resource-contained resources, numeric/XML entity decode including `&#x
 Fisher precedence is stock-aligned: predefined full bodies are fished before local/package
 defs, but arbitrary non-conformance resources expose full bodies only (not metadata) so
 SearchParameters do not shadow local extension metadata (plannet guard). Closed the target
-files: `application-feature` **13/13** and `safr` **25/25**. The rest of the harvest tail
-(~63 cases) is **L1 leniency** (we accept invalid FSH stock rejects) — owned by the
-diagnostics worktree, NOT output parity.
+files: `application-feature` **13/13** and `safr` **25/25**.
+
+**SUSHI HARVEST PARITY — DONE (2026-06-30):** the permanent harvest of stock SUSHI unit
+cases is now **256/256 resources and 326/326 cases byte-identical**. Closed by aligning
+stock's invalid-input behavior instead of waiving it: invalid ValueSet compose URIs skip
+the whole ValueSet, invalid binding/code systems are ignored like stock, integer primitives
+reject non-integral floats and sign violations, AddElement target-type/flag ambiguity follows
+ANTLR recovery, AddElement invalid target types produce no differential element, MS on
+specialization AddElements stops after the stock partial mutation point, and empty assigned
+pattern/fixed values are cleaned at final SD serialization rather than during rule application.
 
 **SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
 `package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build

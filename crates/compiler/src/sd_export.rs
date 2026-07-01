@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::paths::resolve_soft_indexing;
 use fhir_model::{type_code, ElementDefinition, Fisher, Metadata, StructureDefinition};
 use fsh_model::{
-    ExtensionContext, FshDocument, OnlyRuleType, Rule, StructureDef, StructureKind,
+    ExtensionContext, FshCode, FshDocument, OnlyRuleType, Rule, StructureDef, StructureKind,
     Value as FshValue,
 };
 use serde_json::{json, Map, Value as J};
@@ -1170,7 +1170,10 @@ fn set_rules(
                     None => value_set.clone(),
                 };
                 let _cs = (cs_url)(value_set);
-                bind_to_vs(&mut sd.elements[ei], &vs_uri, strength);
+                let vs_base = vs_uri.split('|').next().unwrap_or(&vs_uri);
+                if vs_uri.starts_with('#') || crate::export::is_valid_uri(vs_base) {
+                    bind_to_vs(&mut sd.elements[ei], &vs_uri, strength);
+                }
             }
             Rule::Obeys { invariant, .. } => {
                 // handled by full obeys port below
@@ -1477,14 +1480,25 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
         FshValue::Code(fc) => match etype.as_str() {
             "code" | "string" | "uri" => Some((etype.clone(), J::String(fc.code.clone()))),
             "CodeableConcept" => {
+                if !fsh_code_system_uri_ok(fc) {
+                    return;
+                }
                 let mut m = Map::new();
                 m.insert("coding".into(), J::Array(vec![crate::export::coding_from(fc)]));
                 Some(("CodeableConcept".to_string(), J::Object(m)))
             }
-            "Coding" => Some(("Coding".to_string(), crate::export::coding_from(fc))),
+            "Coding" => {
+                if !fsh_code_system_uri_ok(fc) {
+                    return;
+                }
+                Some(("Coding".to_string(), crate::export::coding_from(fc)))
+            }
             // A FshCode assigned to a Quantity-typed element maps to the code +
             // system parts of the Quantity (`FshCode.toFHIRQuantity`).
             t if is_quantity_type(t) => {
+                if !fsh_code_system_uri_ok(fc) {
+                    return;
+                }
                 let mut m = Map::new();
                 m.insert("code".into(), J::String(fc.code.clone()));
                 if let Some(sys) = &fc.system {
@@ -1551,6 +1565,14 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
     }
 }
 
+fn fsh_code_system_uri_ok(fc: &FshCode) -> bool {
+    let Some(system) = fc.system.as_deref() else {
+        return true;
+    };
+    let cs_uri = system.split('|').next().unwrap_or(system);
+    crate::export::is_valid_uri(cs_uri)
+}
+
 /// Build a FHIR Quantity JSON object from an `FshQuantity`, mirroring
 /// `FshQuantity.toFHIRQuantity` exactly (key order: value, code, system, unit).
 /// Each field is only emitted when truthy (non-empty), matching the TS guards.
@@ -1599,6 +1621,41 @@ fn set_pattern(ed: &mut ElementDefinition, type_name: &str, value: J, exactly: b
         format!("pattern{}", upper_first(type_name))
     };
     ed.set(&key, value);
+}
+
+fn clean_assigned_value(v: &mut J) {
+    match v {
+        J::Object(map) => {
+            let keys: Vec<String> = map.keys().cloned().collect();
+            for k in keys {
+                if let Some(child) = map.get_mut(&k) {
+                    clean_assigned_value(child);
+                }
+                let remove = matches!(map.get(&k), Some(J::Array(a)) if a.iter().all(J::is_null));
+                if remove {
+                    map.shift_remove(&k);
+                    continue;
+                }
+                let null_child = match map.get(&k) {
+                    Some(J::Object(m)) => m.is_empty(),
+                    Some(J::Array(a)) => a.is_empty(),
+                    _ => false,
+                };
+                if null_child {
+                    map.insert(k, J::Null);
+                }
+            }
+            if map.is_empty() {
+                *v = J::Null;
+            }
+        }
+        J::Array(arr) => {
+            for child in arr {
+                clean_assigned_value(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn bind_to_vs(ed: &mut ElementDefinition, vs_uri: &str, strength: &str) {
@@ -2204,7 +2261,7 @@ fn apply_profiles(new_type: &mut J, matches: &[&Match], kind: &str) {
 
 /// `ElementDefinition.initializeElementType` — build the initial type array
 /// from the AddElementRule's declared types.
-fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Vec<J> {
+fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Option<Vec<J>> {
     let mut ref_cnt = 0;
     let mut can_cnt = 0;
     let mut codeable_ref_cnt = 0;
@@ -2217,10 +2274,8 @@ fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Vec<J
         } else if t.is_codeable_reference {
             codeable_ref_cnt += 1;
         } else {
-            let sd_type = fisher
-                .fish_for_metadata(&t.type_)
-                .and_then(|m| m.sd_type)
-                .unwrap_or_else(|| t.type_.clone());
+            let md = fisher.fish_for_metadata(&t.type_)?;
+            let sd_type = md.sd_type.unwrap_or_else(|| t.type_.clone());
             let mut o = Map::new();
             o.insert("code".into(), J::String(sd_type));
             let cand = J::Object(o);
@@ -2243,7 +2298,7 @@ fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Vec<J
     if codeable_ref_cnt > 0 {
         initial.push(mk("CodeableReference"));
     }
-    initial
+    Some(initial)
 }
 
 /// `StructureDefinition.newElement` + `ElementDefinition.applyAddElementRule`.
@@ -2276,7 +2331,11 @@ fn apply_add_element(sd: &mut StructureDefinition, rule: &Rule, fisher: &dyn Fis
     // type / contentReference, then card / flags / short / definition all appear
     // in the differential because there is no captured original for a new element.
     if !types.is_empty() {
-        ed.set("type", J::Array(initialize_element_type(types, fisher)));
+        let Some(initial_types) = initialize_element_type(types, fisher) else {
+            diag.push(format!("Type not found in AddElementRule at path {path}"));
+            return;
+        };
+        ed.set("type", J::Array(initial_types));
     } else if let Some(cr) = content_reference {
         ed.set("contentReference", J::String(cr.clone()));
     }
@@ -2288,6 +2347,15 @@ fn apply_add_element(sd: &mut StructureDefinition, rule: &Rule, fisher: &dyn Fis
         constrain_type(sd, ei, types, None, fisher, diag);
     }
     constrain_cardinality(&mut sd.elements[ei], *min, max);
+    let specialization = sd
+        .body
+        .get("derivation")
+        .and_then(|v| v.as_str())
+        == Some("specialization");
+    if flags.must_support && specialization {
+        diag.push("must support on specialization".to_string());
+        return;
+    }
     apply_flags(&mut sd.elements[ei], flags, false, diag);
     let short = short.clone().filter(|s| !s.is_empty());
     let definition = definition.clone().filter(|s| !s.is_empty());
@@ -2557,12 +2625,37 @@ pub fn exported_files(ctx: &SdContext) -> Vec<crate::export::Exported> {
     let mut out = Vec::new();
     for e in &ctx.exported {
         let id = e.sd.get_str("id").unwrap_or("").to_string();
+        let mut body = e.sd.to_json_differential();
+        clean_sd_output_patterns(&mut body);
         out.push(crate::export::Exported {
             filename: crate::instance_export::sanitize(&format!("StructureDefinition-{}.json", id)),
-            body: e.sd.to_json_differential(),
+            body,
         });
     }
     out
+}
+
+fn clean_sd_output_patterns(v: &mut J) {
+    match v {
+        J::Object(map) => {
+            let keys: Vec<String> = map.keys().cloned().collect();
+            for k in keys {
+                if let Some(child) = map.get_mut(&k) {
+                    if k.starts_with("pattern") || k.starts_with("fixed") {
+                        clean_assigned_value(child);
+                    } else {
+                        clean_sd_output_patterns(child);
+                    }
+                }
+            }
+        }
+        J::Array(arr) => {
+            for child in arr {
+                clean_sd_output_patterns(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 pub fn export_structure_definitions(
