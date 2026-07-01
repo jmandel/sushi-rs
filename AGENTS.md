@@ -184,19 +184,23 @@ extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/per
 
 **31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
 CAS+lock→materialized cache separately from build-from-materialized-cache and now
-prints top total/build/materialization tails. Current one-pass score
-(`temp/perf31/runs/20260701-061826/results.csv`): **1.0s materialize + 31.8s build
-= 32.8s total** across all 31 IGs. Earlier scores were **50.8s + 30.8s = 81.6s**
-and pre-optimization **64.1s + 37.7s = 101.8s**. Materialization remains a normal
+prints top total/build/materialization tails. Current median-of-3 score
+(`temp/perf31/runs/20260701-064158/results.csv`): **0.86s materialize + 28.33s build
+= 29.19s total** across all 31 IGs. Earlier scores were **1.0s + 31.8s = 32.8s**,
+**50.8s + 30.8s = 81.6s**, and pre-optimization **64.1s + 37.7s = 101.8s**.
+IPS in the current run is **0.020s materialize + 0.679s build = 0.699s total**.
+Materialization remains a normal
 local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
 source `.index.json` are a directory symlink to the immutable CAS package; packages
 with missing/empty indexes fall back to a real wrapper directory plus generated
 `.index.json`. Landed perf work: CAS `derived/materialized-index-v2.json`, opt-in
 `RUST_SUSHI_VERIFY_CAS=1` for old per-materialize manifest checks, removed redundant
 per-file `mkdir`, CodeSystem concept duplicate detection `Vec`→`FxHashSet`
-(tw-pas build ~10.5s→2.4s), and directory-symlink materialization. Current build
-tails are compiler/model work, not acquisition: `sdc` ~6.0s, `ccda-cda` ~3.7s,
-`tw-pas` ~3.3s, `genomics` ~2.1s, `ecr` ~2.0s.
+(tw-pas build ~10.5s→3.2s in current full run), directory-symlink materialization,
+SD parent-template caching, and hot path allocation cleanup in
+`StructureDefinition::add_element` / `find_element_by_path`. Current build tails
+are compiler/model work, not acquisition: `sdc` 5.72s, `tw-pas` 3.21s,
+`ccda-cda` 2.54s, `ecr` 1.83s, `genomics` 1.79s.
 
 ## 5. Commands / methodology (the closed loop)
 

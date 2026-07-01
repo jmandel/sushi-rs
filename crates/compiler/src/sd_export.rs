@@ -86,6 +86,12 @@ pub struct SdContext<'a> {
     cs_url: &'a dyn Fn(&str) -> Option<String>,
     /// name/id/url -> canonical url for predefined ValueSets (input/resources).
     predefined_vs: std::collections::HashMap<String, String>,
+    /// Parsed parent SD templates keyed by fish query. Many local SDs share the
+    /// same parent; clone the parsed template instead of re-reading/rebuilding
+    /// every ElementDefinition map.
+    sd_template_cache: std::cell::RefCell<
+        std::collections::HashMap<String, Option<std::rc::Rc<StructureDefinition>>>,
+    >,
 }
 
 /// A read-only fisher over package + already-exported local SDs.
@@ -323,6 +329,7 @@ impl<'a> SdContext<'a> {
             vs_url,
             cs_url,
             predefined_vs: std::collections::HashMap::new(),
+            sd_template_cache: std::cell::RefCell::new(std::collections::HashMap::new()),
         }
     }
 
@@ -357,6 +364,21 @@ impl<'a> SdContext<'a> {
     /// `fisher.fishForFHIR(instanceOf, Resource, Profile, Extension, Type, Logical)`.
     pub fn fish_sd_json(&self, name: &str) -> Option<std::rc::Rc<J>> {
         self.fisher().fish_for_fhir(name)
+    }
+
+    fn fish_sd_template(&self, name: &str) -> Option<StructureDefinition> {
+        if let Some(cached) = self.sd_template_cache.borrow().get(name) {
+            return cached.as_ref().map(|rc| (**rc).clone());
+        }
+        let parsed = self
+            .fisher()
+            .fish_for_fhir(name)
+            .map(|json| std::rc::Rc::new(StructureDefinition::from_json(&json, true)));
+        let out = parsed.as_ref().map(|rc| (**rc).clone());
+        self.sd_template_cache
+            .borrow_mut()
+            .insert(name.to_string(), parsed);
+        out
     }
 
     fn tank_index(&self, name: &str) -> Option<usize> {
@@ -622,11 +644,7 @@ impl<'a> SdContext<'a> {
         if !self.already_exported(&parent) && self.tank_index(&parent).is_some() {
             self.export_sd(&parent);
         }
-        let parent_json = {
-            let fisher = self.fisher();
-            fisher.fish_for_fhir(&parent)?
-        };
-        let mut sd = StructureDefinition::from_json(&parent_json, true);
+        let mut sd = self.fish_sd_template(&parent)?;
         let parent_url = sd.url().to_string();
         let version_parts: Vec<&str> = parent.split('|').skip(1).collect();
         let base_def = if version_parts.is_empty() {

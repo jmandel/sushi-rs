@@ -569,10 +569,13 @@ impl StructureDefinition {
     /// `findElementByPath(path, fisher)`. Port of `StructureDefinition.ts:255`.
     pub fn find_element_by_path(&mut self, path: &str, fisher: &dyn Fisher) -> Option<usize> {
         let pt = self.path_type();
-        let full = if !path.is_empty() && path != "." {
-            format!("{pt}.{path}")
+        let mut full = String::with_capacity(pt.len() + path.len() + 1);
+        if !path.is_empty() && path != "." {
+            full.push_str(&pt);
+            full.push('.');
+            full.push_str(path);
         } else {
-            pt.clone()
+            full.push_str(&pt);
         };
         if let Some(i) = self
             .elements
@@ -583,21 +586,19 @@ impl StructureDefinition {
         }
 
         let parsed = crate::parse_fsh_path(path);
-        let mut fhir_path = pt.clone();
+        let mut fhir_path = String::with_capacity(pt.len() + path.len() + 1);
+        fhir_path.push_str(&pt);
         let mut previous_part = String::new();
         // matching set as ids (stable across splices)
         let mut matching: Vec<String> = self.elements.iter().map(|e| e.id().to_string()).collect();
         for part in &parsed {
-            fhir_path = format!("{fhir_path}.{}", part.base);
-            let fhir_path_dot = format!("{fhir_path}.");
-            let fhir_path_colon = format!("{fhir_path}:");
+            fhir_path.push('.');
+            fhir_path.push_str(&part.base);
             let mut new_matching: Vec<String> = matching
                 .iter()
                 .filter(|id| {
                     let p = self.path_of_id(id).unwrap_or("");
-                    p.starts_with(&fhir_path_dot)
-                        || p.starts_with(&fhir_path_colon)
-                        || p == fhir_path
+                    path_is_exact_or_child_or_slice(p, &fhir_path)
                 })
                 .cloned()
                 .collect();
@@ -615,9 +616,7 @@ impl StructureDefinition {
                         .collect();
                     // If none matched, try unfolding the choice element's types
                     // (the single match was already sliced to this choice type).
-                    if new_matching.is_empty()
-                        && single.ends_with(&format!("[x]:{previous_part}"))
-                    {
+                    if new_matching.is_empty() && ends_with_choice_slice(&single, &previous_part) {
                         unfolded = self.unfold_choice_element_types(&single, fisher);
                         new_matching = unfolded
                             .iter()
@@ -668,14 +667,12 @@ impl StructureDefinition {
             } else {
                 // remove slices that don't match exactly
                 let pdepth = path_depth(&fhir_path);
-                let path_end = fhir_path.split('.').nth(pdepth).unwrap_or("").to_string();
-                let path_end_colon = format!("{path_end}:");
-                let path_end_base = format!("{path_end}:{}", part.base);
+                let path_end = fhir_path.split('.').nth(pdepth).unwrap_or("");
                 let differs = path_end != part.base;
                 matching.retain(|id| {
                     let id_end = id.split('.').nth(pdepth).unwrap_or("");
-                    !id_end.contains(&path_end_colon)
-                        || (id_end == path_end_base && differs)
+                    !contains_colon_slice(id_end, path_end)
+                        || (differs && equals_colon_slice(id_end, path_end, &part.base))
                 });
             }
             previous_part = part.base.clone();
@@ -709,7 +706,7 @@ impl StructureDefinition {
             if let Some(types) = self.elements[i].get("type").and_then(|v| v.as_array()) {
                 for t in types {
                     let code = type_code(t);
-                    if format!("{stem}{}", upper_first(code)) == fhir_path {
+                    if choice_path_matches(fhir_path, stem, code) {
                         matching.push((id.clone(), t.clone()));
                         break;
                     }
@@ -1226,13 +1223,14 @@ impl StructureDefinition {
             self.elements.insert(i, element);
         } else {
             // plain child: insert after older sibling's deepest child, or after parent.
+            let parent_dot = format!("{parent_id}.");
+            let parent_child_depth = path_depth(self.path_of_id(&parent_id).unwrap_or("")) + 1;
             let siblings: Vec<usize> = (0..self.elements.len())
                 .filter(|&j| {
                     let cid = self.elements[j].id();
                     cid != id
-                        && cid.starts_with(&format!("{parent_id}."))
-                        && path_depth(self.elements[j].path())
-                            == path_depth(self.path_of_id(&parent_id).unwrap_or("")) + 1
+                        && cid.starts_with(&parent_dot)
+                        && path_depth(self.elements[j].path()) == parent_child_depth
                 })
                 .collect();
             if siblings.is_empty() {
@@ -1243,10 +1241,12 @@ impl StructureDefinition {
                 let older_id = self.elements[older].id().to_string();
                 // deepest descendant of older sibling
                 let mut insert_at = older;
+                let older_dot = format!("{older_id}.");
+                let older_colon = format!("{older_id}:");
                 for j in older..self.elements.len() {
                     if self.elements[j].id() == older_id
-                        || self.elements[j].id().starts_with(&format!("{older_id}."))
-                        || self.elements[j].id().starts_with(&format!("{older_id}:"))
+                        || self.elements[j].id().starts_with(&older_dot)
+                        || self.elements[j].id().starts_with(&older_colon)
                     {
                         insert_at = j;
                     } else {
@@ -1517,16 +1517,54 @@ pub fn parse_fsh_path(path: &str) -> Vec<PathPart> {
         .collect()
 }
 
-fn upper_first(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
-}
-
 fn path_depth(path: &str) -> usize {
     path.split('.').count().saturating_sub(1)
+}
+
+fn path_is_exact_or_child_or_slice(path: &str, prefix: &str) -> bool {
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.as_bytes().first().copied())
+            .map(|b| b == b'.' || b == b':')
+            .unwrap_or(false)
+}
+
+fn ends_with_choice_slice(id: &str, slice: &str) -> bool {
+    let Some(stem) = id.strip_suffix(slice) else {
+        return false;
+    };
+    stem.ends_with("[x]:")
+}
+
+fn contains_colon_slice(id_end: &str, path_end: &str) -> bool {
+    id_end
+        .match_indices(path_end)
+        .any(|(i, _)| id_end.as_bytes().get(i + path_end.len()) == Some(&b':'))
+}
+
+fn equals_colon_slice(id_end: &str, path_end: &str, slice_base: &str) -> bool {
+    let Some(rest) = id_end.strip_prefix(path_end) else {
+        return false;
+    };
+    rest.as_bytes().first() == Some(&b':') && &rest[1..] == slice_base
+}
+
+fn choice_path_matches(fhir_path: &str, stem: &str, code: &str) -> bool {
+    let Some(suffix) = fhir_path.strip_prefix(stem) else {
+        return false;
+    };
+    let mut code_chars = code.chars();
+    let Some(first) = code_chars.next() else {
+        return suffix.is_empty();
+    };
+    let mut suffix_chars = suffix.chars();
+    for upper in first.to_uppercase() {
+        if suffix_chars.next() != Some(upper) {
+            return false;
+        }
+    }
+    suffix_chars.as_str() == code_chars.as_str()
 }
 
 /// Port of `ElementDefinition.hasProfileElementExtension`: returns true when the
@@ -1716,5 +1754,3 @@ fn remove_uninherited(ed: &mut ElementDefinition) {
         m.remove("extension");
     }
 }
-
-
