@@ -20,6 +20,8 @@ use tar::{Archive, Builder, Header};
 use walkdir::WalkDir;
 
 const RESOLUTION_CONFIG_JSON: &str = include_str!("../resolution-config.json");
+const DERIVED_DIR: &str = "derived";
+const MATERIALIZED_INDEX_V2: &str = "materialized-index-v2.json";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -467,7 +469,7 @@ impl PackageCas {
         }
         fs::create_dir_all(&target).with_context(|| format!("create {}", target.display()))?;
         link_tree(&source, &target)?;
-        write_materialized_index(&target)?;
+        install_materialized_index(&pkg_root, &target)?;
         Ok(())
     }
 
@@ -487,7 +489,7 @@ impl PackageCas {
         }
         fs::create_dir_all(&target).with_context(|| format!("create {}", target.display()))?;
         link_tree(&source, &target)?;
-        write_materialized_index(&target)?;
+        install_materialized_index(&pkg_root, &target)?;
         Ok(())
     }
 
@@ -609,6 +611,10 @@ impl PackageCas {
             let staged_root = temp.path().join("cas-entry");
             fs::create_dir_all(&staged_root)?;
             copy_tree(&extract_root.join("package"), &staged_root.join("package"))?;
+            write_derived_materialized_index(
+                &staged_root.join("package"),
+                &derived_materialized_index_path(&staged_root),
+            )?;
             fs::write(
                 staged_root.join("manifest.json"),
                 serde_json::to_vec_pretty(&manifest)?,
@@ -1160,18 +1166,41 @@ fn link_tree(source: &Path, target: &Path) -> anyhow::Result<()> {
             if let Some(parent) = dst.parent() {
                 fs::create_dir_all(parent)?;
             }
-            match fs::hard_link(ent.path(), &dst) {
-                Ok(()) => {}
-                Err(_) => {
-                    fs::copy(ent.path(), &dst)?;
-                }
-            }
+            link_or_copy_file(ent.path(), &dst)?;
         }
     }
     Ok(())
 }
 
-fn write_materialized_index(package_dir: &Path) -> anyhow::Result<()> {
+fn link_or_copy_file(source: &Path, target: &Path) -> anyhow::Result<()> {
+    match fs::hard_link(source, target) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(source, target)?;
+            Ok(())
+        }
+    }
+}
+
+fn derived_materialized_index_path(pkg_root: &Path) -> PathBuf {
+    pkg_root.join(DERIVED_DIR).join(MATERIALIZED_INDEX_V2)
+}
+
+fn install_materialized_index(pkg_root: &Path, target_package_dir: &Path) -> anyhow::Result<()> {
+    let target_index = target_package_dir.join(".index.json");
+    if target_index.exists() {
+        fs::remove_file(&target_index)?;
+    }
+    let derived_index = derived_materialized_index_path(pkg_root);
+    if derived_index.is_file() {
+        link_or_copy_file(&derived_index, &target_index)?;
+    } else {
+        write_materialized_index(target_package_dir)?;
+    }
+    Ok(())
+}
+
+fn build_materialized_index(package_dir: &Path) -> anyhow::Result<Value> {
     let mut filenames = Vec::new();
     for ent in fs::read_dir(package_dir)? {
         let ent = ent?;
@@ -1219,11 +1248,37 @@ fn write_materialized_index(package_dir: &Path) -> anyhow::Result<()> {
     let mut index = Map::new();
     index.insert("index-version".into(), Value::Number(2.into()));
     index.insert("files".into(), Value::Array(files));
-    let index_path = package_dir.join(".index.json");
-    if index_path.exists() {
-        fs::remove_file(&index_path)?;
+    Ok(Value::Object(index))
+}
+
+fn write_derived_materialized_index(package_dir: &Path, index_path: &Path) -> anyhow::Result<()> {
+    let index = build_materialized_index(package_dir)?;
+    write_json_atomically(index_path, &index)
+}
+
+fn write_materialized_index(package_dir: &Path) -> anyhow::Result<()> {
+    let index = build_materialized_index(package_dir)?;
+    write_json_atomically(&package_dir.join(".index.json"), &index)
+}
+
+fn write_json_atomically(path: &Path, value: &Value) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
     }
-    fs::write(index_path, serde_json::to_vec(&Value::Object(index))?)?;
+    let tmp = path.with_extension(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| format!("{e}.tmp"))
+            .unwrap_or_else(|| "tmp".to_string()),
+    );
+    if tmp.exists() {
+        fs::remove_file(&tmp)?;
+    }
+    fs::write(&tmp, serde_json::to_vec(value)?)?;
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    fs::rename(&tmp, path).with_context(|| format!("write {}", path.display()))?;
     Ok(())
 }
 
@@ -1516,6 +1571,40 @@ mod tests {
     }
 
     #[test]
+    fn materialize_installs_generated_index_from_cas_derived_artifact() {
+        let package = package_tgz_with_bad_index("example.fhir.pkg", "1.0.0");
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("package.tgz");
+        fs::write(&source, package).unwrap();
+        let cas = PackageCas::new(temp.path().join("cas"));
+        let coord = Coordinate::parse("example.fhir.pkg#1.0.0").unwrap();
+
+        let package_ref = cas.ingest_local_source(&coord, &source).unwrap();
+        let pkg_root = cas.package_root(&package_ref.sha256);
+        assert!(derived_materialized_index_path(&pkg_root).is_file());
+
+        let out = temp.path().join("cache");
+        cas.materialize_ref(&package_ref, &out).unwrap();
+        let index_path = out.join("example.fhir.pkg#1.0.0/package/.index.json");
+        let index: Value = serde_json::from_slice(&fs::read(index_path).unwrap()).unwrap();
+        let files = index
+            .get("files")
+            .and_then(Value::as_array)
+            .expect("index files array");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            files[0].get("filename").and_then(Value::as_str),
+            Some("ValueSet-Test.json")
+        );
+        assert_eq!(
+            files[0].get("resourceType").and_then(Value::as_str),
+            Some("ValueSet")
+        );
+        assert_eq!(files[0].get("id").and_then(Value::as_str), Some("Test"));
+    }
+
+    #[test]
     fn latest_and_wildcard_versions_resolve_from_registry_metadata() {
         let pkg_120 = package_tgz("example.fhir.pkg", "1.2.0");
         let pkg_123 = package_tgz("example.fhir.pkg", "1.2.3");
@@ -1598,6 +1687,31 @@ mod tests {
     }
 
     fn package_tgz(name: &str, version: &str) -> Vec<u8> {
+        package_tgz_with_files(
+            name,
+            version,
+            &[(
+                "package/ValueSet-Test.json",
+                br#"{"resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test","status":"draft"}"#,
+            )],
+        )
+    }
+
+    fn package_tgz_with_bad_index(name: &str, version: &str) -> Vec<u8> {
+        package_tgz_with_files(
+            name,
+            version,
+            &[
+                ("package/.index.json", br#"{"index-version":2,"files":[]}"#),
+                (
+                    "package/ValueSet-Test.json",
+                    br#"{"resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test","status":"draft"}"#,
+                ),
+            ],
+        )
+    }
+
+    fn package_tgz_with_files(name: &str, version: &str, files: &[(&str, &[u8])]) -> Vec<u8> {
         let mut gz = flate2::write::GzEncoder::new(Vec::new(), Compression::default());
         {
             let mut builder = Builder::new(&mut gz);
@@ -1607,11 +1721,9 @@ mod tests {
                 "package/package.json",
                 package_json.as_bytes(),
             );
-            append_tar_file(
-                &mut builder,
-                "package/ValueSet-Test.json",
-                br#"{"resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test","status":"draft"}"#,
-            );
+            for (path, data) in files {
+                append_tar_file(&mut builder, path, data);
+            }
             builder.finish().unwrap();
         }
         gz.finish().unwrap()
