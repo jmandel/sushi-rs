@@ -16,6 +16,12 @@ mimalloc **7.51s**. Full 31-IG median-of-3 with mimalloc:
 mimalloc adds a native `libmimalloc-sys` build dependency, but the gain is now large
 and broad enough to justify carrying it unless portability issues appear.
 
+Pure-Rust allocator follow-up in the perf worktree found no better replacement:
+`dlmalloc` slow-slice build median-sum **11.43s**, `numalloc` no-NUMA mode made
+SDC alone **39.33s** on the first iteration, `rulloc` requires nightly features,
+and `talc` is only usable here as a fixed arena (`GlobalAllocSource<System>` is
+not `Sync` for a static global allocator; a 512MiB arena OOMs on CCDA).
+
 ## Baseline (best-of-5 warm; curator re-baselines after each integration)
 | IG | initial | r1 lock (A+B) | r2 (A+B+E+D) |
 |---|--:|--:|

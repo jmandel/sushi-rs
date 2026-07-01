@@ -211,6 +211,12 @@ mimalloc **7.51s** build median-sum). Current build tails are compiler/model wor
 acquisition: `sdc` 3.50s, `tw-pas` 1.78s, `ccda-cda` 1.30s, `ecr` 1.02s,
 `genomics` 0.92s. Correctness held: cargo tests green, 31-IG **3401/3401**,
 harvest **256/256 resources, 326/326 cases**.
+Pure-Rust allocator follow-up in the perf worktree did not find a replacement:
+`dlmalloc` slow-slice **11.43s** (worse than system), `numalloc` no-NUMA mode
+made SDC **39.33s** on the first iteration, `rulloc` requires nightly features,
+and `talc`'s dynamic source is not `Sync` as a global allocator while the 512MiB
+fixed-arena mode OOMs on CCDA. Keep `mimalloc` unless a portability issue forces
+falling back to the system allocator.
 
 ## 5. Commands / methodology (the closed loop)
 
