@@ -1021,3 +1021,129 @@ fn xml_unescape(s: &str) -> String {
     out.push_str(&s[i..]);
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn test_resource_sd() -> Rc<J> {
+        Rc::new(json!({
+            "resourceType": "StructureDefinition",
+            "type": "TestResource",
+            "kind": "resource",
+            "snapshot": {
+                "element": [
+                    {"path": "TestResource", "max": "1"},
+                    {"path": "TestResource.id", "max": "1", "type": [{"code": "id"}]},
+                    {"path": "TestResource.name", "max": "1", "type": [{"code": "string"}]},
+                    {"path": "TestResource.alias", "max": "*", "type": [{"code": "string"}]},
+                    {"path": "TestResource.extension", "max": "*", "type": [{"code": "Extension"}]},
+                    {"path": "TestResource.tag", "max": "*", "type": [{"code": "BackboneElement"}]},
+                    {"path": "TestResource.tag.code", "max": "1", "type": [{"code": "code"}]}
+                ]
+            }
+        }))
+    }
+
+    fn extension_sd() -> Rc<J> {
+        Rc::new(json!({
+            "resourceType": "StructureDefinition",
+            "type": "Extension",
+            "kind": "complex-type",
+            "snapshot": {
+                "element": [
+                    {"path": "Extension", "max": "1"},
+                    {"path": "Extension.id", "max": "1", "representation": ["xmlAttr"], "type": [{"code": "string"}]},
+                    {"path": "Extension.extension", "max": "*", "type": [{"code": "Extension"}]},
+                    {"path": "Extension.url", "max": "1", "representation": ["xmlAttr"], "type": [{"code": "uri"}]},
+                    {
+                        "path": "Extension.value[x]",
+                        "max": "1",
+                        "type": [{"code": "string"}, {"code": "integer"}, {"code": "Coding"}]
+                    }
+                ]
+            }
+        }))
+    }
+
+    #[test]
+    fn xml_reader_uses_sd_cardinality_and_decodes_entities() {
+        let mut defs = HashMap::new();
+        defs.insert("TestResource", test_resource_sd());
+        defs.insert("Extension", extension_sd());
+        let fish = |name: &str| defs.get(name).cloned();
+        let reader = FhirXmlReader::new(&fish);
+
+        let actual = reader.parse(
+            r#"<TestResource xmlns="http://hl7.org/fhir">
+                 <id value="abc"/>
+                 <name value="A&#xA;B"/>
+                 <alias value="one"/>
+                 <tag><code value="x"/></tag>
+               </TestResource>"#,
+        ).unwrap();
+
+        assert_eq!(
+            actual,
+            json!({
+                "resourceType": "TestResource",
+                "id": "abc",
+                "name": "A\nB",
+                "alias": ["one"],
+                "tag": [{"code": "x"}]
+            })
+        );
+    }
+
+    #[test]
+    fn xml_reader_matches_nested_extension_url_order() {
+        let mut defs = HashMap::new();
+        defs.insert("TestResource", test_resource_sd());
+        defs.insert("Extension", extension_sd());
+        let fish = |name: &str| defs.get(name).cloned();
+        let reader = FhirXmlReader::new(&fish);
+
+        let actual = reader.parse(
+            r#"<TestResource xmlns="http://hl7.org/fhir">
+                 <extension url="outer">
+                   <extension url="inner">
+                     <valueString value="v"/>
+                   </extension>
+                 </extension>
+                 <extension url="direct">
+                   <valueString value="x"/>
+                 </extension>
+               </TestResource>"#,
+        ).unwrap();
+
+        let rendered = serde_json::to_string(&actual).unwrap();
+        assert!(rendered.contains(
+            r#""extension":[{"extension":[{"url":"inner","valueString":"v"}],"url":"outer"},{"url":"direct","valueString":"x"}]"#
+        ));
+    }
+
+    #[test]
+    fn non_conformance_predefined_resources_do_not_shadow_metadata() {
+        let mut pkg = PredefinedPackage::default();
+        pkg.push(
+            PathBuf::from("input/resources/SearchParameter-practitioner-period.json"),
+            json!({
+                "resourceType": "SearchParameter",
+                "id": "practitioner-period",
+                "name": "Plannet_sp_practitioner_period",
+                "url": "http://example.org/SearchParameter/practitioner-period"
+            }),
+        );
+
+        assert!(pkg
+            .fish_for_fhir("practitioner-period", package_store::ALL_FISH_TYPES)
+            .is_some());
+        assert!(pkg
+            .fish_for_metadata("practitioner-period", package_store::ALL_FISH_TYPES)
+            .is_none());
+        assert!(pkg
+            .fish_for_metadata("practitioner-period", &[FishType::Extension])
+            .is_none());
+    }
+}
