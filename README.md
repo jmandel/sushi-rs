@@ -96,10 +96,13 @@ This creates:
 temp/fhir-cache/hl7.fhir.uv.subscriptions-backport.r4#1.1.0/package/...
 ```
 
-Materialization verifies the CAS manifest, then hardlinks package files into the
-cache when possible and falls back to copying across filesystems. The materialized
-package gets a normalized `.index.json` generated from its actual top-level JSON
-resources; the immutable CAS copy remains verbatim.
+Materialization creates a local package-cache view. When the package's own
+`.index.json` is usable, `<cache>/<name>#<version>/package` is a directory
+symlink to the immutable CAS package, so setup is one filesystem entry. If the
+package index is missing or empty, materialization falls back to a real wrapper
+directory with hardlinked/copied package files and installs a normalized
+`.index.json` generated from the actual top-level JSON resources. The immutable
+CAS copy remains verbatim.
 
 ### Lock a Project
 

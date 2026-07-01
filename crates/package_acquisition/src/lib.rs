@@ -466,12 +466,7 @@ impl PackageCas {
         let target = out_cache
             .join(package_ref.materialized_label())
             .join("package");
-        if target.exists() {
-            fs::remove_dir_all(&target).with_context(|| format!("remove {}", target.display()))?;
-        }
-        fs::create_dir_all(&target).with_context(|| format!("create {}", target.display()))?;
-        link_tree(&source, &target)?;
-        install_materialized_index(&pkg_root, &target)?;
+        materialize_package_view(&pkg_root, &source, &target)?;
         Ok(())
     }
 
@@ -488,12 +483,7 @@ impl PackageCas {
         let source = pkg_root.join("package");
         reject_real_fhir_path(out_cache)?;
         let target = out_cache.join(label).join("package");
-        if target.exists() {
-            fs::remove_dir_all(&target).with_context(|| format!("remove {}", target.display()))?;
-        }
-        fs::create_dir_all(&target).with_context(|| format!("create {}", target.display()))?;
-        link_tree(&source, &target)?;
-        install_materialized_index(&pkg_root, &target)?;
+        materialize_package_view(&pkg_root, &source, &target)?;
         Ok(())
     }
 
@@ -1120,7 +1110,12 @@ fn verify_manifest(pkg_root: &Path) -> anyhow::Result<()> {
 
 fn verify_cas_on_materialize() -> bool {
     std::env::var("RUST_SUSHI_VERIFY_CAS")
-        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"))
+        .map(|v| {
+            matches!(
+                v.as_str(),
+                "1" | "true" | "TRUE" | "yes" | "YES" | "on" | "ON"
+            )
+        })
         .unwrap_or(false)
 }
 
@@ -1174,6 +1169,71 @@ fn link_tree(source: &Path, target: &Path) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn materialize_package_view(pkg_root: &Path, source: &Path, target: &Path) -> anyhow::Result<()> {
+    remove_materialized_target(target)?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("package target has no parent: {}", target.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+
+    if package_index_is_trustworthy(source) {
+        match symlink_dir(source, target) {
+            Ok(()) => return Ok(()),
+            Err(_) => {
+                // Symlinks can be unavailable on some filesystems/platforms. Fall
+                // back to the existing hardlink/copy materialization.
+            }
+        }
+    }
+
+    fs::create_dir_all(target).with_context(|| format!("create {}", target.display()))?;
+    link_tree(source, target)?;
+    install_materialized_index(pkg_root, target)?;
+    Ok(())
+}
+
+fn remove_materialized_target(target: &Path) -> anyhow::Result<()> {
+    match fs::symlink_metadata(target) {
+        Ok(meta) => {
+            if meta.file_type().is_dir() && !meta.file_type().is_symlink() {
+                fs::remove_dir_all(target)
+                    .with_context(|| format!("remove {}", target.display()))?;
+            } else {
+                fs::remove_file(target).with_context(|| format!("remove {}", target.display()))?;
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e).with_context(|| format!("stat {}", target.display())),
+    }
+    Ok(())
+}
+
+fn package_index_is_trustworthy(package_dir: &Path) -> bool {
+    fs::read(package_dir.join(".index.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .and_then(|index| {
+            index
+                .get("files")
+                .and_then(Value::as_array)
+                .map(|a| !a.is_empty())
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(unix)]
+fn symlink_dir(source: &Path, target: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(source, target)
+}
+
+#[cfg(not(unix))]
+fn symlink_dir(_source: &Path, _target: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "directory symlinks are not supported on this platform",
+    ))
 }
 
 fn link_or_copy_file(source: &Path, target: &Path) -> anyhow::Result<()> {
@@ -1589,6 +1649,13 @@ mod tests {
 
         let out = temp.path().join("cache");
         cas.materialize_ref(&package_ref, &out).unwrap();
+        #[cfg(unix)]
+        assert!(
+            !fs::symlink_metadata(out.join("example.fhir.pkg#1.0.0/package"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         let index_path = out.join("example.fhir.pkg#1.0.0/package/.index.json");
         let index: Value = serde_json::from_slice(&fs::read(index_path).unwrap()).unwrap();
         let files = index
@@ -1606,6 +1673,33 @@ mod tests {
             Some("ValueSet")
         );
         assert_eq!(files[0].get("id").and_then(Value::as_str), Some("Test"));
+    }
+
+    #[test]
+    fn materialize_symlinks_package_directory_when_source_index_is_good() {
+        let package = package_tgz_with_good_index("example.fhir.pkg", "1.0.0");
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("package.tgz");
+        fs::write(&source, package).unwrap();
+        let cas = PackageCas::new(temp.path().join("cas"));
+        let coord = Coordinate::parse("example.fhir.pkg#1.0.0").unwrap();
+
+        let package_ref = cas.ingest_local_source(&coord, &source).unwrap();
+        let out = temp.path().join("cache");
+        cas.materialize_ref(&package_ref, &out).unwrap();
+        cas.materialize_ref(&package_ref, &out).unwrap();
+
+        let package_dir = out.join("example.fhir.pkg#1.0.0/package");
+        assert!(package_dir.join("ValueSet-Test.json").is_file());
+        assert!(cas
+            .package_root(&package_ref.sha256)
+            .join("package/ValueSet-Test.json")
+            .is_file());
+        #[cfg(unix)]
+        assert!(fs::symlink_metadata(&package_dir)
+            .unwrap()
+            .file_type()
+            .is_symlink());
     }
 
     #[test]
@@ -1707,6 +1801,23 @@ mod tests {
             version,
             &[
                 ("package/.index.json", br#"{"index-version":2,"files":[]}"#),
+                (
+                    "package/ValueSet-Test.json",
+                    br#"{"resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test","status":"draft"}"#,
+                ),
+            ],
+        )
+    }
+
+    fn package_tgz_with_good_index(name: &str, version: &str) -> Vec<u8> {
+        package_tgz_with_files(
+            name,
+            version,
+            &[
+                (
+                    "package/.index.json",
+                    br#"{"index-version":2,"files":[{"filename":"ValueSet-Test.json","resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test"}]}"#,
+                ),
                 (
                     "package/ValueSet-Test.json",
                     br#"{"resourceType":"ValueSet","id":"Test","url":"http://example.org/ValueSet/Test","status":"draft"}"#,

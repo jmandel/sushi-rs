@@ -111,8 +111,8 @@ tree_stats() {
   local path="$1"
   if [ -d "$path" ]; then
     local files bytes
-    files="$(find "$path" -type f | wc -l | tr -d ' ')"
-    bytes="$(du -sb "$path" | awk '{print $1}')"
+    files="$(find -L "$path" -type f | wc -l | tr -d ' ')"
+    bytes="$(du -sbL "$path" | awk '{print $1}')"
     printf '%s,%s' "$files" "$bytes"
   else
     printf '0,0'
@@ -259,6 +259,7 @@ print(f"{'IG':22} {'mat-med':>9} {'mat-min':>9} {'build-med':>10} {'build-min':>
 print("-" * 76)
 total_mat = 0.0
 total_build = 0.0
+totals = []
 for ig in igs:
     mat = groups.get((ig, "materialize"), [])
     build = groups.get((ig, "build"), [])
@@ -273,9 +274,20 @@ for ig in igs:
     def fmt(v):
         return f"{v:.3f}" if v is not None else "ERR"
     total = mat_med + build_med if mat_med is not None and build_med is not None else None
+    if total is not None:
+        totals.append((ig, mat_med, build_med, total))
     print(f"{ig:22} {fmt(mat_med):>9} {fmt(mat_min):>9} {fmt(build_med):>10} {fmt(build_min):>10} {fmt(total):>10}")
 print("-" * 76)
 print(f"{'TOTAL median-sum':22} {total_mat:9.3f} {'':9} {total_build:10.3f} {'':10} {total_mat + total_build:10.3f}")
+if totals:
+    def tail(label, key):
+        print()
+        print(label)
+        for ig, mat, build, total in sorted(totals, key=key, reverse=True)[:8]:
+            print(f"  {ig:22} mat={mat:.3f}s build={build:.3f}s total={total:.3f}s")
+    tail("Top total tails:", lambda row: row[3])
+    tail("Top build tails:", lambda row: row[2])
+    tail("Top materialize tails:", lambda row: row[1])
 if failures:
     print()
     print("Failures:")

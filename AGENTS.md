@@ -182,17 +182,21 @@ package's `.index.json` every run (no SQLite/persisted index); a build writes ON
 the output dir; cold vs warm OS page cache is ~3% (CPU-bound). Needs only a normal
 extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/perf-map.md.
 
-**31-IG self-reliant two-phase perf (2026-06-30):** `harness/perf31.sh` measures
-CAS+lock→materialized cache separately from build-from-materialized-cache. Current
-one-pass score (`temp/perf31` CAS; some packages predate derived-index caching, so
-materialization is conservative): **50.8s materialize + 30.8s build = 81.6s total**
-across all 31 IGs. Before this pass: **64.1s + 37.7s = 101.8s**. Landed perf work:
-CAS `derived/materialized-index-v2.json`, opt-in `RUST_SUSHI_VERIFY_CAS=1` for old
-per-materialize manifest checks, removed redundant per-file `mkdir`, and
-CodeSystem concept duplicate detection `Vec`→`FxHashSet` (tw-pas build ~10.5s→2.4s).
-Remaining materialization cost is mostly filesystem entry creation (`linkat` for
-every file); a true next step is direct CAS-backed `PackageStore`/IG dependency
-metadata, skipping physical `.fhir/packages` materialization for Rust builds.
+**31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
+CAS+lock→materialized cache separately from build-from-materialized-cache and now
+prints top total/build/materialization tails. Current one-pass score
+(`temp/perf31/runs/20260701-061826/results.csv`): **1.0s materialize + 31.8s build
+= 32.8s total** across all 31 IGs. Earlier scores were **50.8s + 30.8s = 81.6s**
+and pre-optimization **64.1s + 37.7s = 101.8s**. Materialization remains a normal
+local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
+source `.index.json` are a directory symlink to the immutable CAS package; packages
+with missing/empty indexes fall back to a real wrapper directory plus generated
+`.index.json`. Landed perf work: CAS `derived/materialized-index-v2.json`, opt-in
+`RUST_SUSHI_VERIFY_CAS=1` for old per-materialize manifest checks, removed redundant
+per-file `mkdir`, CodeSystem concept duplicate detection `Vec`→`FxHashSet`
+(tw-pas build ~10.5s→2.4s), and directory-symlink materialization. Current build
+tails are compiler/model work, not acquisition: `sdc` ~6.0s, `ccda-cda` ~3.7s,
+`tw-pas` ~3.3s, `genomics` ~2.1s, `ecr` ~2.0s.
 
 ## 5. Commands / methodology (the closed loop)
 
