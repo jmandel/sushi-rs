@@ -8,9 +8,11 @@
 ## 0. HANDOFF — current state (read FIRST, updated 2026-06-30)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
-13 next-20), all in `harness/gate1.sh`. Current: **31-IG = 3393/3401 byte-identical
-(99.8%) + 4 tracked compat-breaks** (`main` ~HEAD). The **18-IG core (12+6top20) = 100%
-byte-identical** — the hard non-regression floor; NONE may drop. PLUS a **permanent
+13 next-20), all in `harness/gate1.sh`. Current on `feat/predefined`: **31-IG =
+3400/3401 byte-identical (100.0% rounded) + 4 tracked compat-breaks**; the one remaining
+byte diff is the pre-existing ccda-cda `StructureDefinition-HealthConcernAct` extra
+`ProblemObservation` targetProfile (also present on `main`). The **18-IG core (12+6top20)
+= 2491/2491 byte-identical** — the hard non-regression floor; NONE may drop. PLUS a **permanent
 326-case harvest of SUSHI's own unit tests** (`tests/sushi-harvest/`, gate
 `harness/harvest-gate.sh`) at **239/256 resources (93.4%) / 246/326 cases**. Session
 started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/top20-cache`;
@@ -18,15 +20,18 @@ started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/
 Validation reports: `docs/{holdout,top20,next20,harvest}-findings.md`. Don't single out
 the old 4-IG "665" — retired.
 
-**THE ONE REMAINING REAL GAP (8 files: safr 1 + application-feature 7):** load **predefined
-resources as a fishable virtual package** — stock's `DiskBasedVirtualPackage`
-(`predefinedResources.ts`) converts `input/resources/*.{xml,json}` → fishable defs. We only
-load predefined VS metadata + a lightweight XML tokenizer. Closing it needs: FHIR-aware
-XML→JSON converter + predefined-SD fishing into the core type-resolver + logical-model
-instance→`Binary-*` export + IG `resource-format` extension form + XML entity decode. It's
-ONE coherent feature (G9-safr + B6 a/b/c/d share it). Its own effort. Everything else real
-is closed. The rest of the harvest tail (~63 cases) is **L1 leniency** (we accept invalid FSH
-stock rejects) — owned by the diagnostics worktree, NOT output parity.
+**PREDEFINED RESOURCE PACKAGE — DONE on `feat/predefined` (2026-06-30):** stock's
+`DiskBasedVirtualPackage` / `predefinedResources.ts` behavior is mirrored by
+`compiler::predefined`: JSON + SD-guided FHIR XML resources under `input/resources` and
+the other stock predefined folders are loaded as a fishable virtual package. XML conversion
+is StructureDefinition-guided (arrays from `max`, primitive `_value` sidecars, xmlAttr
+handling, resource-contained resources, numeric/XML entity decode including `&#xA;`).
+Fisher precedence is stock-aligned: predefined full bodies are fished before local/package
+defs, but arbitrary non-conformance resources expose full bodies only (not metadata) so
+SearchParameters do not shadow local extension metadata (plannet guard). Closed the target
+files: `application-feature` **13/13** and `safr` **25/25**. The rest of the harvest tail
+(~63 cases) is **L1 leniency** (we accept invalid FSH stock rejects) — owned by the
+diagnostics worktree, NOT output parity.
 
 **SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
 `package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build

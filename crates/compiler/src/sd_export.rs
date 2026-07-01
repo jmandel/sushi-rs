@@ -63,6 +63,7 @@ pub struct ExportedSd {
 
 pub struct SdContext<'a> {
     pub store: &'a package_store::PackageStore,
+    predefined: &'a crate::predefined::PredefinedPackage,
     cfg: &'a Config,
     /// The parsed FSH documents — retained so the SD pass can export an inline
     /// `Instance` on demand when it is assigned to a profile element.
@@ -90,6 +91,7 @@ pub struct SdContext<'a> {
 /// A read-only fisher over package + already-exported local SDs.
 pub struct FisherView<'a> {
     store: &'a package_store::PackageStore,
+    predefined: &'a crate::predefined::PredefinedPackage,
     exported: &'a [ExportedSd],
     in_progress_meta: &'a std::collections::HashMap<String, Metadata>,
     tank_sd_meta: &'a std::collections::HashMap<String, Metadata>,
@@ -100,6 +102,12 @@ impl Fisher for FisherView<'_> {
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
         let name = &resolve_alias_tl(name);
         let base = name.split('|').next().unwrap_or(name);
+        if let Some(hit) = self
+            .predefined
+            .fish_for_fhir(name, package_store::ALL_FISH_TYPES)
+        {
+            return Some(hit);
+        }
         // local exported SDs (by name, id, or url)
         for e in self.exported {
             let url = e.sd.url();
@@ -114,6 +122,12 @@ impl Fisher for FisherView<'_> {
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata> {
         let name = &resolve_alias_tl(name);
         let base = name.split('|').next().unwrap_or(name);
+        if let Some(m) = self
+            .predefined
+            .fish_for_metadata(name, package_store::ALL_FISH_TYPES)
+        {
+            return Some(m);
+        }
         for e in self.exported {
             let url = e.sd.url();
             let id = e.sd.get_str("id").unwrap_or("");
@@ -146,6 +160,12 @@ impl Fisher for FisherView<'_> {
         // a `* path from <Name>` binding resolves to the local canonical url before
         // a wrong same-named THO/core ValueSet (or no match).
         let base = name.split('|').next().unwrap_or(name);
+        if let Some(m) = self
+            .predefined
+            .fish_for_metadata(name, &[package_store::FishType::ValueSet])
+        {
+            return Some(m);
+        }
         if let Some(url) = self.predefined_vs.get(base) {
             return Some(Metadata {
                 id: String::new(),
@@ -172,6 +192,12 @@ impl Fisher for FisherView<'_> {
         // `fishForMetadata(_, Type.CodeSystem)`. Local FSH CodeSystems are not
         // StructureDefinitions, so they are resolved by callers via the tank's
         // `cs_url`; here we only cover dependency-package CodeSystems.
+        if let Some(m) = self
+            .predefined
+            .fish_for_metadata(name, &[package_store::FishType::CodeSystem])
+        {
+            return Some(m);
+        }
         let m = self
             .store
             .fish_for_metadata(name, &[package_store::FishType::CodeSystem])?;
@@ -217,6 +243,7 @@ fn metadata_from_json(m: &J) -> Metadata {
 impl<'a> SdContext<'a> {
     pub fn new(
         store: &'a package_store::PackageStore,
+        predefined: &'a crate::predefined::PredefinedPackage,
         cfg: &'a Config,
         docs: &'a [FshDocument],
         vs_url: &'a dyn Fn(&str) -> Option<String>,
@@ -282,6 +309,7 @@ impl<'a> SdContext<'a> {
         }
         SdContext {
             store,
+            predefined,
             cfg,
             docs,
             tank,
@@ -307,6 +335,7 @@ impl<'a> SdContext<'a> {
     pub fn fisher(&self) -> FisherView<'_> {
         FisherView {
             store: self.store,
+            predefined: self.predefined,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
             tank_sd_meta: &self.tank_sd_meta,
@@ -435,6 +464,7 @@ impl<'a> SdContext<'a> {
         let mut sd = std::mem::take(&mut self.exported[si].sd);
         let fisher = FisherView {
             store: self.store,
+            predefined: self.predefined,
             exported: &self.exported,
             in_progress_meta: &self.in_progress_meta,
             tank_sd_meta: &self.tank_sd_meta,
@@ -509,6 +539,7 @@ impl<'a> SdContext<'a> {
         {
             let fisher = FisherView {
                 store: self.store,
+                predefined: self.predefined,
                 exported: &self.exported,
                 in_progress_meta: &self.in_progress_meta,
                 tank_sd_meta: &self.tank_sd_meta,
@@ -2499,13 +2530,14 @@ pub fn build_sd_context<'a>(
     docs: &'a [FshDocument],
     cfg: &'a Config,
     store: &'a package_store::PackageStore,
+    predefined: &'a crate::predefined::PredefinedPackage,
     vs_url: &'a dyn Fn(&str) -> Option<String>,
     cs_url: &'a dyn Fn(&str) -> Option<String>,
     predefined_vs: std::collections::HashMap<String, String>,
 ) -> SdContext<'a> {
     set_invariants(docs);
     set_aliases(docs);
-    let mut ctx = SdContext::new(store, cfg, docs, vs_url, cs_url);
+    let mut ctx = SdContext::new(store, predefined, cfg, docs, vs_url, cs_url);
     ctx.set_predefined_vs(predefined_vs);
     ctx.export_all();
     ctx.export_mappings(docs);
@@ -2532,6 +2564,15 @@ pub fn export_structure_definitions(
     vs_url: &dyn Fn(&str) -> Option<String>,
     cs_url: &dyn Fn(&str) -> Option<String>,
 ) -> Vec<crate::export::Exported> {
-    let ctx = build_sd_context(docs, cfg, store, vs_url, cs_url, std::collections::HashMap::new());
+    let empty_predefined = crate::predefined::PredefinedPackage::default();
+    let ctx = build_sd_context(
+        docs,
+        cfg,
+        store,
+        &empty_predefined,
+        vs_url,
+        cs_url,
+        std::collections::HashMap::new(),
+    );
     exported_files(&ctx)
 }

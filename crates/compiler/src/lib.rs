@@ -12,6 +12,7 @@ pub mod export;
 pub mod ig_export;
 pub mod instance_export;
 pub mod paths;
+pub mod predefined;
 pub mod sd_export;
 pub mod type_resolver;
 
@@ -551,6 +552,8 @@ fn build_project_inner(
     // The FHIR package cache (needed by VS external-name resolution + SD export).
     let cache_dir = resolve_cache_dir(explicit_cache_dir)?;
     let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
+    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
+    let predefined = predefined::PredefinedPackage::load(ig_dir, &cfg_yaml, &store);
 
     // Collect IG `definition.resource` metadata as we export.
     use ig_export::{ConformanceRes, IgInputs};
@@ -591,11 +594,16 @@ fn build_project_inner(
     // Predefined ValueSets (input/resources/*.{xml,json}) feed the SD binding
     // fisher so `* path from <Name>` resolves to the local canonical url before
     // a wrong same-named package ValueSet.
-    let predefined_vs = {
-        let cy: serde_yaml::Value = serde_yaml::from_str(&cfg_text).unwrap_or(serde_yaml::Value::Null);
-        ig_export::predefined_vs_map(ig_dir, &cy)
-    };
-    let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url, predefined_vs);
+    let predefined_vs = predefined.value_set_url_map();
+    let ctx = sd_export::build_sd_context(
+        &docs,
+        &cfg,
+        &store,
+        &predefined,
+        &vs_url,
+        &cs_url,
+        predefined_vs,
+    );
 
     // SD conformance (profiles, extensions, logicals — in tank order), local
     // profile/logical urls, custom-resource detection.
@@ -649,7 +657,6 @@ fn build_project_inner(
     // If FSHOnly is true in the config, do not generate IG content (matches
     // stock SUSHI app.ts: the IGExporter block is skipped entirely under FSHOnly).
     if !cfg.fsh_only {
-        let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
         let mut conformance = sd_conformance;
         conformance.append(&mut vs_conformance);
         conformance.append(&mut cs_conformance);
@@ -660,6 +667,7 @@ fn build_project_inner(
             has_custom_resources,
             cache_dir: cache_dir.clone(),
             ig_dir: ig_dir.to_string(),
+            predefined: &predefined,
         };
         if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
             let text = json_emit::to_fhir_json_string(&ig.body);

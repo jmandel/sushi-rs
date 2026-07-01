@@ -42,6 +42,8 @@ pub struct IgInputs<'a> {
     pub cache_dir: String,
     /// The IG project root (for disk page scanning).
     pub ig_dir: String,
+    /// Stock `sushi-local#LOCAL` predefined resources, in FIFO load order.
+    pub predefined: &'a crate::predefined::PredefinedPackage,
 }
 
 // ---------------------------------------------------------------------------
@@ -1478,6 +1480,7 @@ fn make_config_only_resource(c: &ConfigResource) -> ResEntry {
 
 // ---- predefined resources -------------------------------------------------
 
+#[allow(dead_code)]
 struct PredefinedRes {
     resource_type: String,
     id: String,
@@ -1494,7 +1497,7 @@ struct PredefinedRes {
 
 fn add_predefined_resources(
     entries: &mut Vec<ResEntry>,
-    cfg_yaml: &Y,
+    _cfg_yaml: &Y,
     inputs: &IgInputs,
     config_resources: &[ConfigResource],
     cfg: &Config,
@@ -1502,7 +1505,7 @@ fn add_predefined_resources(
     add_group: &mut impl FnMut(&str, Option<&str>, Option<&str>),
 ) {
     let _ = is_r4;
-    let files = collect_predefined_files(&inputs.ig_dir, cfg_yaml);
+    let files = inputs.predefined.resources();
     // configured Binary resources with a resource-format extension.
     let configured_binary: Vec<&ConfigResource> = config_resources
         .iter()
@@ -1591,7 +1594,7 @@ fn pair_str(pairs: &[(String, J)], key: &str) -> Option<String> {
 
 #[allow(clippy::too_many_arguments)]
 fn make_predefined_resource(
-    pf: &PredefinedRes,
+    pf: &crate::predefined::PredefinedResource,
     cr: Option<&ConfigResource>,
     reference_key: &str,
     existing_name: Option<String>,
@@ -1664,7 +1667,7 @@ fn make_predefined_resource(
 fn push_predefined_example_flag(
     pairs: &mut Vec<(String, J)>,
     cr: Option<&ConfigResource>,
-    pf: &PredefinedRes,
+    pf: &crate::predefined::PredefinedResource,
     examples_folder: bool,
     inputs: &IgInputs,
     cfg: &Config,
