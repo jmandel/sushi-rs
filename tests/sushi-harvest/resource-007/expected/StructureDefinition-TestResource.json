@@ -1,0 +1,25 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TestResource",
+  "url": "http://example.org/StructureDefinition/TestResource",
+  "version": "0.1.0",
+  "name": "TestResource",
+  "title": "First Test Resource",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "TestResource",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "TestResource",
+        "path": "TestResource",
+        "short": "First Test Resource",
+        "definition": "First Test Resource"
+      }
+    ]
+  }
+}

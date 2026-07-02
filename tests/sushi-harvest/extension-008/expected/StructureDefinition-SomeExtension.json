@@ -1,0 +1,35 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "SomeExtension",
+  "url": "http://example.org/StructureDefinition/SomeExtension",
+  "version": "0.1.0",
+  "name": "SomeExtension",
+  "title": "This Extension",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Element"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "This Extension"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://example.org/StructureDefinition/SomeExtension"
+      }
+    ]
+  }
+}

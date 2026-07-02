@@ -1,0 +1,12 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "Foo",
+  "item": [
+    {
+      "linkId": "foo"
+    },
+    {
+      "linkId": "bar"
+    }
+  ]
+}

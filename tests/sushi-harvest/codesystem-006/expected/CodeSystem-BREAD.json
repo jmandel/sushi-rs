@@ -1,0 +1,10 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "BREAD",
+  "id": "BREAD",
+  "title": "Known Bread",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/BREAD"
+}

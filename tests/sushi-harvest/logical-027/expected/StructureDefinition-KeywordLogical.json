@@ -1,0 +1,265 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "KeywordLogical",
+  "url": "http://example.org/StructureDefinition/KeywordLogical",
+  "version": "0.1.0",
+  "name": "KeywordLogical",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/KeywordLogical",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "KeywordLogical",
+        "path": "KeywordLogical",
+        "short": "KeywordLogical",
+        "definition": "KeywordLogical"
+      },
+      {
+        "id": "KeywordLogical.MS",
+        "path": "KeywordLogical.MS",
+        "short": "Element named MS",
+        "definition": "Element named MS",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.TU",
+        "path": "KeywordLogical.TU",
+        "short": "Element named TU",
+        "definition": "Element named TU",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.N",
+        "path": "KeywordLogical.N",
+        "short": "Element named N",
+        "definition": "Element named N",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "code"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.D",
+        "path": "KeywordLogical.D",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.from",
+        "path": "KeywordLogical.from",
+        "short": "From an address",
+        "definition": "From an address",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Address"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.contains",
+        "path": "KeywordLogical.contains",
+        "short": "Contains many strings",
+        "definition": "Contains many strings",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.named",
+        "path": "KeywordLogical.named",
+        "short": "Has a name",
+        "definition": "Has a name",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "HumanName"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.and",
+        "path": "KeywordLogical.and",
+        "short": "And what?",
+        "definition": "And what?",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.or",
+        "path": "KeywordLogical.or",
+        "short": "Or three strings",
+        "definition": "Or three strings",
+        "min": 0,
+        "max": "3",
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.obeys",
+        "path": "KeywordLogical.obeys",
+        "short": "Obey boolean",
+        "definition": "Obey boolean",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.true",
+        "path": "KeywordLogical.true",
+        "short": "Please don't make an element named true",
+        "definition": "Please don't make an element named true",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.false",
+        "path": "KeywordLogical.false",
+        "short": "Please don't make an element named false, either",
+        "definition": "Please don't make an element named false, either",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.include",
+        "path": "KeywordLogical.include",
+        "short": "Include a coding",
+        "definition": "Include a coding",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.exclude",
+        "path": "KeywordLogical.exclude",
+        "short": "Exclude a coding",
+        "definition": "Exclude a coding",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.codes",
+        "path": "KeywordLogical.codes",
+        "short": "List of codes",
+        "definition": "List of codes",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "code"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.where",
+        "path": "KeywordLogical.where",
+        "short": "Where is it?",
+        "definition": "Where is it?",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Address"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.valueset",
+        "path": "KeywordLogical.valueset",
+        "short": "Give me a value set",
+        "definition": "Give me a value set",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "uri"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.system",
+        "path": "KeywordLogical.system",
+        "short": "Give me a system",
+        "definition": "Give me a system",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "uri"
+          }
+        ]
+      },
+      {
+        "id": "KeywordLogical.contentReference",
+        "path": "KeywordLogical.contentReference",
+        "short": "A content reference with a content reference",
+        "definition": "A content reference with a content reference",
+        "min": 1,
+        "max": "1",
+        "contentReference": "http://example.org/StructureDefinition/Keywords#Keywords.content"
+      }
+    ]
+  }
+}

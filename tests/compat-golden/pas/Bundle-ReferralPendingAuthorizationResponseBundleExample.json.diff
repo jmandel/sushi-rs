@@ -1,0 +1,22 @@
+30,43d29
+<             "extension": [
+<               {
+<                 "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider",
+<                 "extension": [
+<                   {
+<                     "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType"
+<                   }
+<                 ]
+<               },
+<               {
+<                 "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber",
+<                 "valueString": "PEND0001"
+<               }
+<             ],
+72a59,64
+>               }
+>             ],
+>             "extension": [
+>               {
+>                 "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber",
+>                 "valueString": "PEND0001"

@@ -1,0 +1,9 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "ZooVS",
+  "id": "ZooVS",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/ZooVS",
+  "compose": null
+}

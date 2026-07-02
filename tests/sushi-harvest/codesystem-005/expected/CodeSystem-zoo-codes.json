@@ -1,0 +1,11 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "ZOO",
+  "id": "zoo-codes",
+  "title": "Zoo Animals",
+  "description": "Animals and cryptids that may be at a zoo.",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/zoo-codes"
+}

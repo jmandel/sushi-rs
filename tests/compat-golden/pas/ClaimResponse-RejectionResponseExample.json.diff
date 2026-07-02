@@ -1,0 +1,11 @@
+13,22d12
+<       "extension": [
+<         {
+<           "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider",
+<           "extension": [
+<             {
+<               "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType"
+<             }
+<           ]
+<         }
+<       ],

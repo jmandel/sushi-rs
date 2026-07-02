@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MyResource",
+  "url": "http://example.org/StructureDefinition/MyResource",
+  "version": "0.1.0",
+  "name": "MyResource",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "MyResource",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "MyResource",
+        "path": "MyResource",
+        "short": "MyResource",
+        "definition": "MyResource"
+      }
+    ]
+  }
+}

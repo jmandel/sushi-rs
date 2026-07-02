@@ -5,6 +5,97 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-01)
+
+**SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
+13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
+OnlyRule type dedupe, and harvested invalid-input alignment: **31-IG = 3401/3401
+byte-identical (100.0%) + 4 tracked compat-breaks**. The last ccda-cda diff was duplicate
+`ProblemObservation` in an `only` rule; stock `ElementDefinition.constrainType` starts with
+`uniqWith(rule.types, isEqual)`, and Rust now mirrors that first-occurrence dedupe. The
+**18-IG core (12+6top20) = 2491/2491 byte-identical** — the hard non-regression floor; NONE
+may drop. PLUS a **permanent 326-case harvest of SUSHI's own unit tests**
+(`tests/sushi-harvest/`, gate `harness/harvest-gate.sh`) at **256/256 resources (100.0%) /
+326/326 cases (100.0%)**. Session
+started at 1800 (12-IG). Caches: 12-IG → `temp/fhir-home`; 6 top-20 → `temp/top20-cache`;
+13 next-20 → `temp/next20/fhir-home` (gate1.sh routes per-IG via IGCACHE/N20ROOT).
+Validation reports: `docs/{holdout,top20,next20,harvest}-findings.md`. Don't single out
+the old 4-IG "665" — retired.
+
+**PREDEFINED RESOURCE PACKAGE — DONE (2026-06-30):** stock's
+`DiskBasedVirtualPackage` / `predefinedResources.ts` behavior is mirrored by
+`compiler::predefined`: JSON + SD-guided FHIR XML resources under `input/resources` and
+the other stock predefined folders are loaded as a fishable virtual package. XML conversion
+is StructureDefinition-guided (arrays from `max`, primitive `_value` sidecars, xmlAttr
+handling, resource-contained resources, numeric/XML entity decode including `&#xA;`).
+Fisher precedence is stock-aligned: predefined full bodies are fished before local/package
+defs, but arbitrary non-conformance resources expose full bodies only (not metadata) so
+SearchParameters do not shadow local extension metadata (plannet guard). Closed the target
+files: `application-feature` **13/13** and `safr` **25/25**.
+
+**SUSHI HARVEST PARITY — DONE (2026-06-30):** the permanent harvest of stock SUSHI unit
+cases is now **256/256 resources and 326/326 cases byte-identical**. Closed by aligning
+stock's invalid-input behavior instead of waiving it: invalid ValueSet compose URIs skip
+the whole ValueSet, invalid binding/code systems are ignored like stock, integer primitives
+reject non-integral floats and sign violations, AddElement target-type/flag ambiguity follows
+ANTLR recovery, AddElement invalid target types produce no differential element, MS on
+specialization AddElements stops after the stock partial mutation point, and empty assigned
+pattern/fixed values are cleaned at final SD serialization rather than during rule application.
+
+**SELF-RELIANT PACKAGE ACQUISITION — DONE & MERGED (2026-06-30).** The
+`package_acquisition` crate (registry→CAS→materialize) is integrated; `rust_sushi build
+<ig> --materialize` is the canonical self-reliant build. `harness/acquisition-dashboard.sh`
+= **2065/2065, 0 mismatches** (our-acquired cache == stock-seeded cache, all 12 IGs). We no
+longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
+`reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
+
+**COMPAT-BREAK MECHANISM (2026-06-30):** intentional divergences where STOCK emits invalid/
+buggy output are tracked in `docs/compat-breaks.json` + `tests/compat-golden/<ig>/<file>.diff`,
+and counted SEPARATELY from byte-parity (not failures). It is **DIFF-BASED**: the gate asserts
+the current `diff <stock> <ours>` EQUALS the recorded `.diff` — only the specific recorded
+difference is tolerated; any other change in that file is flagged UNEXPECTED (regression) or
+RESOLVED (stock now matches). Dashboard reports both **byte-identical** AND **EQUIVALENT
+(parity + tracked divergences)**. First entry: **4 pas files** where stock emits an empty
+required-extension scaffold (`{url}`-only, violates FHIR **ext-1**) as an order-dependent side-
+effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit valid FHIR. So
+**Root Cause C is RESOLVED via compat-break, NOT the risky shared-cache work** (which existed
+only to reproduce invalid output where stock violates ext-1).
+
+**WHERE WE ARE (this session: 1800 → 2490/2491 + 4 compat-breaks):** the 12-IG corpus is 100%
+equivalent; the 6 new top-20 IGs (bulk 13/13, pdex 179/179, plannet 110/110, formulary 86/86,
+cdshooks 8/8, subscriptions 33/34) are all complete except the 1 file above. Fixed this
+session via the **investigate-then-align loop** (deep-dive stock's algorithm → port it; NEVER
+spot-fix): N7, G4, N1, G2 (carinbb perfect, genomics +64), G14/G11, G9, G5, narrative, G13
+(instance order = InstanceOf snapshot order), VS/CS carets via replaceReferences/Canonical,
+`unfoldChoiceElementTypes` for multi-type `value[x]`, underscore-sibling diff, IG
+`normalizeResourceReference` + `.x`-version maxSatisfying + R5→R4 copyrightLabel translation,
+SD inline-instance→pattern, strict soft-indexing (`convertSoftIndicesStrict`), cross-slice
+extension scoping, DefIndex instance-CS url, xhtml attr whitespace, ecr `entry.resource`
+full-resource embedding, sdc/dtr extension fixedUri on unfold (`profileToUse` guard), and the
+**top-20 X-family** (X1 `fixCrossVersionDependencies` legacy `extensions.r5`→xver at load +
+dependsOn; X2/X3 fish+unfold the SD behind `extension contains <URL>`, skip-if-unfishable; X5
+copyrightLabel; the `findConnectedSliceElement` instance path) — PLUS the package-acquisition
+merge + acquisition leniency. Catalogs: `docs/holdout-findings.md` (G1-G14), `docs/mining-
+findings.md` (N1-N7), `docs/top20-findings.md` (X1-X6).
+
+**REMAINING:**
+- **ZERO real fails on the 18-IG set** — all 2491/2491 byte-identical (+4 compat-breaks). The
+  last file (subscriptions CapStmt: X6 url-referenced extension on a primitive + the path
+  sliceName-rewrite that orders implied metadata after `rest`) is FIXED (commits `7cd9756` then
+  `a513bd8` — ORDER MATTERS: the rewrite must precede the url-resolution or it regresses 61).
+- **NEXT-20 batch IN PROGRESS** — agent validating `docs/igs-to-test-with-next-20.json`
+  (international/IHE/CDA set) → `docs/next20-findings.md`. Integrate/triage when it lands.
+- **6 of the FIRST top-20 are NOT FSH** on their default branch (US Core/CDex/IPA/QI-Core/
+  AU Core/SMART) — need an FSH branch/tag to test. Future expansion.
+
+**USER-OWNED worktrees — DO NOT TOUCH:** `../sushi-rs-diagnostics` (`diagnostics-parity`),
+`../sushi-rs-snapshot` (`snapshot-gen`).
+
+**Longer-tail backlog:** N2/N4/N5 (decimal/empty-value/id-sanitization — mining, corpus-
+invisible), **L1** leniency (reject invalid FSH like stock — tie to diagnostics worktree),
+scaling SUSHI-test mining to the EXPORT suite. FIXED earlier: G1/G3 (T1 SD-driven
+TypeResolver), G6 (T2 dir-reconcile).
+
 ## 1. What we are doing
 
 Porting **SUSHI** (FHIR Shorthand compiler) from TypeScript to Rust, targeting
@@ -47,7 +138,15 @@ edit it.
 - `cargo`/`rustc` **1.96.0**. `node` v24, `bun`, `npm` available.
 - **Stock SUSHI binary** (the oracle): `/home/jmandel/periodicity/node_modules/fsh-sushi/dist/app.js`, **v3.20.0** — matches the submodule. Run via `node <app.js> build <ig> -o <out>`.
 - **Benchmark IG (IPS)**: `/home/jmandel/periodicity/temp/ips-ig` (123 .fsh files).
-- Shared warm FHIR cache: `~/.fhir/packages` (~145 packages already present).
+- **FHIR packages — WE ARE SELF-RELIANT (since 2026-06-30).** The `package_acquisition`
+  crate acquires packages itself from the FHIR registry → content-addressed store
+  (CAS, default `~/.cache/fhir-rs/cas`, NEVER `~/.fhir`) → `materialize` a `.fhir/packages`
+  tree → build. `rust_sushi build <ig> --materialize` is the canonical self-reliant build.
+  PROVEN byte-identical: `harness/acquisition-dashboard.sh` = **2065/2065, 0 mismatches**
+  across all 12 IGs (registry-acquired cache == stock-seeded cache). The isolated
+  stock-seeded cache `temp/fhir-home/.fhir/packages` is now ONLY a convenience/offline
+  cache + the speed path for the correctness gates; it is NOT a build dependency. The
+  real `~/.fhir/packages` (~145 pkgs) is the user's and is NEVER read/written by us.
 - **GOTCHA:** `/usr/bin/time` is NOT installed. Use bash/`date` timing.
 - **GOTCHA:** `sushi build <ig> -o <OUT>` writes resources to **`<OUT>/fsh-generated/resources`** (SUSHI appends its own `fsh-generated`). So pass `-o temp/ips-stock`, then look in `temp/ips-stock/fsh-generated/resources`.
 - This repo dir (`/home/jmandel/hobby/sushi-rs`) is its own git repo; `sushi-ts` is a submodule. The env banner "Is a git repository: false" is stale — it IS a git repo now.
@@ -83,6 +182,41 @@ package's `.index.json` every run (no SQLite/persisted index); a build writes ON
 the output dir; cold vs warm OS page cache is ~3% (CPU-bound). Needs only a normal
 extracted `.fhir/packages` cache. Perf log: docs/perf-protocol.md; map: docs/perf-map.md.
 
+**31-IG self-reliant two-phase perf (2026-07-01):** `harness/perf31.sh` measures
+CAS+lock→materialized cache separately from build-from-materialized-cache and now
+prints top total/build/materialization tails. Current median-of-3 score after the
+`mimalloc` global allocator experiment (`perf/struct-index-explore`,
+`temp/perf31/runs/20260701-093651/results.csv`): **0.60s materialize + 17.18s build
+= 17.78s total** across all 31 IGs. Previous no-allocator score was
+**0.87s + 23.86s = 24.73s**. Earlier scores were **0.83s + 25.39s = 26.22s**,
+**0.84s + 25.69s = 26.53s**,
+**0.86s + 28.33s = 29.19s**, **1.0s + 31.8s = 32.8s**, **50.8s + 30.8s = 81.6s**,
+and pre-optimization **64.1s + 37.7s = 101.8s**. IPS in the current run is
+**0.015s materialize + 0.370s build = 0.385s total**.
+Materialization remains a normal
+local package-cache view (`<cache>/<pkg>#<ver>/package`): packages with usable
+source `.index.json` are a directory symlink to the immutable CAS package; packages
+with missing/empty indexes fall back to a real wrapper directory plus generated
+`.index.json`. Landed perf work: CAS `derived/materialized-index-v2.json`, opt-in
+`RUST_SUSHI_VERIFY_CAS=1` for old per-materialize manifest checks, removed redundant
+per-file `mkdir`, CodeSystem concept duplicate detection `Vec`→`FxHashSet`
+(tw-pas build ~10.5s→3.2s in current full run), directory-symlink materialization,
+SD parent-template caching, and hot path allocation cleanup in
+`StructureDefinition::add_element` / `find_element_by_path`; plus incremental
+`StructureDefinition` id-index maintenance, borrowed non-choice ED prop keys, and
+known-capacity FHIR model maps/vectors, and a Fisher-level parsed StructureDefinition
+template cache reused by `unfold_by_id`/`unfoldChoiceElementTypes`; plus `mimalloc`
+as the CLI global allocator (A/B on slow slice: system **11.19s**, jemalloc **8.15s**,
+mimalloc **7.51s** build median-sum). Current build tails are compiler/model work, not
+acquisition: `sdc` 3.50s, `tw-pas` 1.78s, `ccda-cda` 1.30s, `ecr` 1.02s,
+`genomics` 0.92s. Correctness held: cargo tests green, 31-IG **3401/3401**,
+harvest **256/256 resources, 326/326 cases**.
+Pure-Rust allocator follow-up in the perf worktree did not find a replacement:
+`dlmalloc` slow-slice **11.43s** (worse than system), `numalloc` no-NUMA mode
+made SDC **39.33s** on the first iteration, `rulloc` requires nightly features,
+and `talc`'s dynamic source is not `Sync` as a global allocator while the 512MiB
+fixed-arena mode OOMs on CCDA. Keep `mimalloc` unless a portability issue forces
+falling back to the system allocator.
 
 ## 5. Commands / methodology (the closed loop)
 
@@ -155,6 +289,22 @@ cargo test  --workspace
 cargo test  -p <crate>                 # focused
 cargo run   -p rust_sushi -- <args>
 ```
+
+### 31-IG two-phase perf
+```sh
+# Setup locks + populate temp CAS (not timed):
+OFFLINE=0 harness/perf31.sh prepare
+
+# Time CAS->materialized cache, then build-from-materialized cache:
+RUNS=3 OFFLINE=1 harness/perf31.sh bench
+
+# Profile one phase/IG (use frame pointers for useful call graphs):
+CARGO_PROFILE_RELEASE_DEBUG=1 RUSTFLAGS="-C force-frame-pointers=yes" cargo build --release -q
+harness/perf31.sh profile build tw-pas
+harness/perf31.sh profile materialize crd
+```
+See `docs/perf31.md`. Keep `PERF31_WORK`/`FHIR_CAS` under `temp/` unless deliberately
+using another scratch path; never use real `~/.fhir`.
 
 ### Cache isolation policy (SAFETY — non-negotiable)
 **Never touch the user's real `~/.fhir`.** All runs use an **isolated FHIR home**

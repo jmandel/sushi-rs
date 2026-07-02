@@ -1,0 +1,164 @@
+{
+  "fhir_implementation_guides": [
+    {
+      "name": "US Core",
+      "description": "Foundational US Realm IG defining minimum FHIR profile constraints implementing USCDI; required for ONC (g)(10) certification.",
+      "design_pattern": "National-realm base profiles + RESTful interactions",
+      "hl7_workgroup": "Cross-Group Projects",
+      "published_url": "https://hl7.org/fhir/us/core/",
+      "github_url": "https://github.com/HL7/US-Core"
+    },
+    {
+      "name": "SMART App Launch Framework",
+      "description": "OAuth 2.0-based launch and authorization framework for third-party apps connecting to EHR/FHIR systems; defines scopes, discovery, and Backend Services.",
+      "design_pattern": "OAuth 2.0 authorization + scoped access + launch context",
+      "hl7_workgroup": "FHIR Infrastructure",
+      "published_url": "https://hl7.org/fhir/smart-app-launch/",
+      "github_url": "https://github.com/HL7/smart-app-launch"
+    },
+    {
+      "name": "Bulk Data Access (Flat FHIR)",
+      "description": "Asynchronous, population-scale FHIR export operation supporting Group, Patient, and System-level bulk export with NDJSON output.",
+      "design_pattern": "Async operation + status polling + bulk file manifest",
+      "hl7_workgroup": "FHIR Infrastructure",
+      "published_url": "https://hl7.org/fhir/uv/bulkdata/",
+      "github_url": "https://github.com/HL7/bulk-data"
+    },
+    {
+      "name": "Da Vinci Payer Data Exchange (PDex)",
+      "description": "Defines how health plans exchange clinical and claims-derived data with members and providers using FHIR and C-CDA on FHIR.",
+      "design_pattern": "Payer-to-provider/member data exchange; $everything-style operations",
+      "hl7_workgroup": "Financial Management",
+      "published_url": "https://hl7.org/fhir/us/davinci-pdex/",
+      "github_url": "https://github.com/HL7/davinci-epdx"
+    },
+    {
+      "name": "Da Vinci Prior Authorization Support (PAS)",
+      "description": "Maps FHIR resources to X12 278 transactions to enable prior authorization requests and responses directly from EHRs to payers.",
+      "design_pattern": "FHIR-to-X12 mapping; Claim/$submit operation; Subscription-based responses",
+      "hl7_workgroup": "Financial Management",
+      "published_url": "https://hl7.org/fhir/us/davinci-pas/",
+      "github_url": "https://github.com/HL7/davinci-pas"
+    },
+    {
+      "name": "Da Vinci Coverage Requirements Discovery (CRD)",
+      "description": "Uses CDS Hooks to surface payer coverage and documentation requirements at the point of order entry in the clinical workflow.",
+      "design_pattern": "CDS Hooks cards + coverage decision support",
+      "hl7_workgroup": "Financial Management",
+      "published_url": "https://hl7.org/fhir/us/davinci-crd/",
+      "github_url": "https://github.com/HL7/davinci-crd"
+    },
+    {
+      "name": "Da Vinci Documentation Templates and Rules (DTR)",
+      "description": "Allows providers to download SMART questionnaires and CQL rules to gather documentation required by payers; uses Questionnaire/QuestionnaireResponse.",
+      "design_pattern": "SMART on FHIR app + Questionnaire/QuestionnaireResponse + CQL rules",
+      "hl7_workgroup": "Clinical Decision Support",
+      "published_url": "https://hl7.org/fhir/us/davinci-dtr/",
+      "github_url": "https://github.com/HL7/davinci-dtr"
+    },
+    {
+      "name": "Da Vinci Plan Net",
+      "description": "FHIR API for publishing payer provider/pharmacy network directories using InsurancePlan, Organization, PractitionerRole, and Location profiles.",
+      "design_pattern": "Provider directory REST API + nested include search",
+      "hl7_workgroup": "Financial Management",
+      "published_url": "https://hl7.org/fhir/us/davinci-pdex-plan-net/",
+      "github_url": "https://github.com/HL7/davinci-pdex-plan-net"
+    },
+    {
+      "name": "Da Vinci US Drug Formulary",
+      "description": "FHIR API to a health plan's drug formulary using InsurancePlan and MedicationKnowledge profiles, enabling patients to compare drug costs across plans.",
+      "design_pattern": "Formulary API + InsurancePlan/MedicationKnowledge profiles + Bulk export",
+      "hl7_workgroup": "Pharmacy",
+      "published_url": "https://hl7.org/fhir/us/davinci-drug-formulary/",
+      "github_url": "https://github.com/HL7/davinci-pdex-formulary"
+    },
+    {
+      "name": "Da Vinci Clinical Data Exchange (CDex)",
+      "description": "Defines Direct Query, Task-based, and Attachments patterns for exchanging clinical data between providers and payers (or other providers).",
+      "design_pattern": "Task-based exchange + CommunicationRequest + Document attachments",
+      "hl7_workgroup": "Payer/Provider Information Exchange",
+      "published_url": "https://hl7.org/fhir/us/davinci-cdex/",
+      "github_url": "https://github.com/HL7/davinci-ecdx"
+    },
+    {
+      "name": "International Patient Summary (IPS)",
+      "description": "Minimal, specialty-agnostic patient summary document for unplanned cross-border care, using internationally reusable value sets.",
+      "design_pattern": "FHIR Document (Composition) + international value sets",
+      "hl7_workgroup": "Patient Care",
+      "published_url": "https://hl7.org/fhir/uv/ips/",
+      "github_url": "https://github.com/HL7/fhir-ips"
+    },
+    {
+      "name": "International Patient Access (IPA)",
+      "description": "Minimal base set of FHIR profiles and RESTful interactions enabling patient access to their data worldwide, paired with SMART on FHIR for authorization.",
+      "design_pattern": "RESTful access + SMART App Launch + minimal profiles",
+      "hl7_workgroup": "Patient Care",
+      "published_url": "https://hl7.org/fhir/uv/ipa/",
+      "github_url": "https://github.com/HL7/fhir-ipa"
+    },
+    {
+      "name": "mCODE (Minimal Common Oncology Data Elements)",
+      "description": "Approximately 40 FHIR profiles providing a core set of structured oncology data elements, organized into six thematic groups.",
+      "design_pattern": "Domain-specific profile set + MustSupport conformance + multiple profile groups",
+      "hl7_workgroup": "Clinical Interoperability Council",
+      "published_url": "https://hl7.org/fhir/us/mcode/",
+      "github_url": "https://github.com/HL7/fhir-mCODE-ig"
+    },
+    {
+      "name": "Structured Data Capture (SDC)",
+      "description": "Infrastructure for Questionnaire/QuestionnaireResponse with pre-population, advanced rendering, calculations, adaptive forms, and extraction capabilities.",
+      "design_pattern": "Questionnaire-based forms + expression-based behavior + StructureMap extraction",
+      "hl7_workgroup": "FHIR Infrastructure",
+      "published_url": "https://hl7.org/fhir/uv/sdc/",
+      "github_url": "https://github.com/HL7/sdc"
+    },
+    {
+      "name": "Quality Improvement Core (QI-Core)",
+      "description": "Set of FHIR profiles and extensions for clinical quality measurement (eCQM) and decision support, harmonizing QDM and vMR data requirements.",
+      "design_pattern": "Quality-measurement profiles + QDM mapping + CQL-ready",
+      "hl7_workgroup": "Clinical Quality Information",
+      "published_url": "https://hl7.org/fhir/us/qicore/",
+      "github_url": "https://github.com/HL7/fhir-qi-core"
+    },
+    {
+      "name": "Genomics Reporting Implementation Guide",
+      "description": "FHIR representations of variants, genotypes, pharmacogenomics, somatic and histocompatibility (HLA) reporting using Observation and DiagnosticReport.",
+      "design_pattern": "Domain-specific Observation/DiagnosticReport profiles + hasMember/derivedFrom graphs",
+      "hl7_workgroup": "Clinical Genomics",
+      "published_url": "https://hl7.org/fhir/uv/genomics-reporting/",
+      "github_url": "https://github.com/HL7/genomics-reporting"
+    },
+    {
+      "name": "Electronic Case Reporting (eCR)",
+      "description": "Automated public health case reporting from EHRs to health departments and reportability response reports back, using trigger codes and ClinicalDocument Composition.",
+      "design_pattern": "Public health reporting + trigger code subscriptions + Composition/Document",
+      "hl7_workgroup": "Public Health",
+      "published_url": "https://hl7.org/fhir/us/ecr/",
+      "github_url": "https://github.com/HL7/case-reporting"
+    },
+    {
+      "name": "Subscriptions R5 Backport",
+      "description": "Backports R5 topic-based Subscription framework (SubscriptionTopic, rest-hook, Bundle notifications) to R4 and R4B servers.",
+      "design_pattern": "Backporting newer FHIR features via extensions + SubscriptionTopic + topic-based subscription",
+      "hl7_workgroup": "FHIR Infrastructure",
+      "published_url": "https://hl7.org/fhir/uv/subscriptions-backport/",
+      "github_url": "https://github.com/HL7/fhir-subscription-backport-ig"
+    },
+    {
+      "name": "AU Core",
+      "description": "Australian national FHIR conformance baseline; profiles and RESTful API setting minimum expectations for patient data access in Australia.",
+      "design_pattern": "National-realm base profiles (AU analog to US Core) + AU Base dependencies",
+      "hl7_workgroup": "HL7 Australia FHIR Working Group",
+      "published_url": "https://hl7.org.au/fhir/core/",
+      "github_url": "https://github.com/hl7au/au-fhir-core"
+    },
+    {
+      "name": "CDS Hooks",
+      "description": "Hook-based pattern for invoking decision support from within a clinician's workflow via synchronous REST calls returning cards; companion to FHIR but not a pure FHIR resource IG.",
+      "design_pattern": "Hook-based REST + cards + prefetch templates + SMART launch",
+      "hl7_workgroup": "Clinical Decision Support",
+      "published_url": "https://cds-hooks.hl7.org/",
+      "github_url": "https://github.com/HL7/cds-hooks"
+    }
+  ]
+}

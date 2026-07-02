@@ -14,11 +14,13 @@
 //! self-contained (no FHIR packages needed).
 
 use crate::config::Config;
+use crate::type_resolver::TypeResolver;
 use fsh_model::{
     FilterValue, FshCode, FshCodeSystem, FshDocument, FshValueSet, Rule, Value as FshValue,
     ValueSetComponentFrom,
 };
 use package_store::{FishType, PackageStore};
+use rustc_hash::FxHashSet;
 use serde_json::{Map, Value as J};
 
 /// `fisher.fishForMetadata(name, ty)?.url` against the FHIR packages — the
@@ -29,6 +31,92 @@ fn pkg_url(store: Option<&PackageStore>, name: &str, ty: FishType) -> Option<Str
     store?
         .fish_for_metadata(base, &[ty])
         .and_then(|m| m.get("url").and_then(|u| u.as_str()).map(String::from))
+}
+
+/// `fisher.fishForMetadata(entityName, <all entity types>)?.url` for the
+/// `ElementDefinition.assignValue` Canonical case (`ElementDefinition.ts:2006`),
+/// which fishes Resource/Logical/Type/Profile/Extension/ValueSet/CodeSystem/Instance.
+/// Used as the dependency-package fallback when a `Canonical(name)` doesn't
+/// resolve to a LOCAL ValueSet/CodeSystem.
+fn pkg_canonical_url(store: Option<&PackageStore>, name: &str) -> Option<String> {
+    let base = name.split('|').next().unwrap_or(name);
+    let types = [
+        FishType::Resource,
+        FishType::Logical,
+        FishType::Type,
+        FishType::Profile,
+        FishType::Extension,
+        FishType::ValueSet,
+        FishType::CodeSystem,
+        FishType::Instance,
+    ];
+    store?
+        .fish_for_metadata(base, &types)
+        .and_then(|m| m.get("url").and_then(|u| u.as_str()).map(String::from))
+}
+
+/// Stock's `replaceReferences` (`common.ts:903`) + `ElementDefinition.assignValue`
+/// Canonical case (`ElementDefinition.ts:2003`), applied to a VS/CS caret value
+/// before coercion. Two resolutions, matching exactly when stock runs each:
+///
+/// * `FshCanonical` -> the target entity's url + optional `|version`. This runs
+///   for BOTH ValueSet and CodeSystem carets, because the resolution lives in
+///   `assignValue` (invoked via `setPropertyOnDefinitionInstance` for both
+///   exporters), not in `replaceReferences`. Local ValueSets/CodeSystems resolve
+///   via the tank; dependency-package entities via the fisher. The bare name is
+///   kept when nothing resolves.
+/// * `FshCode` system -> the system CodeSystem's canonical url. This runs ONLY for
+///   CodeSystem carets: the CS exporter calls `replaceReferences(rule, ...)`
+///   (`CodeSystemExporter.ts:203`) whereas the VS exporter does not
+///   (`ValueSetExporter.ts:360-366` passes `rule.value` straight to
+///   `validateValueAtPath`).
+///
+/// `FshReference` is intentionally NOT rewritten here: the VS exporter performs no
+/// reference replacement, and our targets (and stock for `/`-containing values)
+/// keep the reference verbatim — `coerce`'s Reference arm builds the object as-is.
+fn resolve_caret_value(
+    value: &FshValue,
+    is_code_system: bool,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+) -> FshValue {
+    match value {
+        FshValue::Canonical(c) => {
+            let base = c.entity_name.split('|').next().unwrap_or(&c.entity_name);
+            let url = tank
+                .vs_url(base)
+                .or_else(|| tank.cs_url(base))
+                .or_else(|| pkg_canonical_url(store, base));
+            match url {
+                Some(mut url) => {
+                    if let Some(v) = &c.version {
+                        url = format!("{url}|{v}");
+                    }
+                    let mut c2 = c.clone();
+                    c2.entity_name = url;
+                    c2.version = None;
+                    FshValue::Canonical(c2)
+                }
+                None => value.clone(),
+            }
+        }
+        FshValue::Code(fc) if is_code_system => {
+            let Some(sys) = &fc.system else {
+                return value.clone();
+            };
+            let resolve_cs =
+                |b: &str| tank.cs_url(b).or_else(|| pkg_url(store, b, FishType::CodeSystem));
+            match replace_code_system(sys, resolve_cs) {
+                Some(new_sys) => {
+                    let mut fc2 = fc.clone();
+                    fc2.system = Some(new_sys);
+                    FshValue::Code(fc2)
+                }
+                None => value.clone(),
+            }
+        }
+        _ => value.clone(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -50,13 +138,40 @@ impl TankIndex {
         for doc in docs {
             for (_k, cs) in &doc.code_systems {
                 let id = effective_id(&cs.rules, &cs.id);
-                let url = format!("{}/CodeSystem/{}", cfg.canonical, id);
+                // G14/G11: a `* ^url = ...` caret overrides the default canonical
+                // (stock fishes the CodeSystem's declared url, not the derived one).
+                let url = effective_url(&cs.rules)
+                    .unwrap_or_else(|| format!("{}/CodeSystem/{}", cfg.canonical, id));
                 code_systems.push((vec![cs.name.clone(), id, url.clone()], url));
             }
             for (_k, vs) in &doc.value_sets {
                 let id = effective_id(&vs.rules, &vs.id);
-                let url = format!("{}/ValueSet/{}", cfg.canonical, id);
+                let url = effective_url(&vs.rules)
+                    .unwrap_or_else(|| format!("{}/ValueSet/{}", cfg.canonical, id));
                 value_sets.push((vec![vs.name.clone(), id, url.clone()], url));
+            }
+        }
+        // Instance-defined conformance ValueSets/CodeSystems (`InstanceOf: ValueSet`
+        // / `CodeSystem` with `Usage` other than Inline) are fishable as their
+        // resource type. Stock's MasterFisher.fixMetadata synthesizes a url
+        // `{canonical}/{resourceType}/{id}` when the instance has no explicit
+        // `* url`. Added after keyword-defined VS/CS so those win on name clash,
+        // matching FSHTank.fish (entities before instances).
+        for doc in docs {
+            for (_k, inst) in &doc.instances {
+                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
+                let (target, fhir_type) = match instance_of {
+                    "ValueSet" => (&mut value_sets, "ValueSet"),
+                    "CodeSystem" => (&mut code_systems, "CodeSystem"),
+                    _ => continue,
+                };
+                if inst.usage == "Inline" {
+                    continue;
+                }
+                let id = instance_effective_id(inst);
+                let url = instance_assigned_url(inst)
+                    .unwrap_or_else(|| format!("{}/{}/{}", cfg.canonical, fhir_type, id));
+                target.push((vec![inst.name.clone(), id, url.clone()], url));
             }
         }
         TankIndex {
@@ -85,6 +200,35 @@ impl TankIndex {
     }
 }
 
+/// Effective instance id: the last `* id = "..."` AssignmentRule's value, else
+/// the declared id (which defaults to the instance name).
+pub(crate) fn instance_effective_id(inst: &fsh_model::Instance) -> String {
+    for r in inst.rules.iter().rev() {
+        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+            if path == "url" {
+                continue;
+            }
+            if path == "id" {
+                return s.clone();
+            }
+        }
+    }
+    inst.id.clone()
+}
+
+/// An explicit `* url = "..."` AssignmentRule on an instance, if present
+/// (mirrors `getNonInstanceValueFromRules(entity, 'url')`).
+pub(crate) fn instance_assigned_url(inst: &fsh_model::Instance) -> Option<String> {
+    for r in inst.rules.iter().rev() {
+        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+            if path == "url" {
+                return Some(s.clone());
+            }
+        }
+    }
+    None
+}
+
 /// Recompute the effective `id` (`FshValueSet.get id()` / `FshCodeSystem`):
 /// `findLast` non-instance `^id` CaretValueRule, else the declared id.
 pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
@@ -101,253 +245,78 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
                 && caret_path.as_deref() == Some("id")
                 && !is_instance
             {
+                // An explicit `^id` assignment is stock's `idRule`: it is used
+                // verbatim (no name→id sanitization, `mixins.ts:60-71`).
                 if let Some(FshValue::Str(s)) = value {
                     return s.clone();
                 }
             }
         }
     }
-    declared.to_string()
+    sanitize_fhir_id(declared)
 }
 
-// ---------------------------------------------------------------------------
-// Embedded element-type schema (only what VS/CS caret rules need).
-// ---------------------------------------------------------------------------
-
-fn is_primitive(ty: &str) -> bool {
-    matches!(
-        ty,
-        "code"
-            | "string"
-            | "uri"
-            | "url"
-            | "canonical"
-            | "markdown"
-            | "boolean"
-            | "integer"
-            | "unsignedInt"
-            | "positiveInt"
-            | "decimal"
-            | "dateTime"
-            | "date"
-            | "instant"
-            | "id"
-            | "base64Binary"
-            | "time"
-            | "oid"
-            | "uuid"
-    )
+/// `idRegex` from `primitiveTypes.ts:29`: `^[A-Za-z0-9\-\.]{1,64}$`.
+fn id_regex_ok(s: &str) -> bool {
+    let n = s.chars().count();
+    n >= 1 && n <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
 }
 
-fn is_complex(ty: &str) -> bool {
-    matches!(
-        ty,
-        "Meta"
-            | "Identifier"
-            | "ContactDetail"
-            | "ContactPoint"
-            | "CodeableConcept"
-            | "Coding"
-            | "Extension"
-            | "UsageContext"
-            | "Period"
-            | "Reference"
-            | "Quantity"
-    )
-}
-
-/// Element type table: `(type_name, base) -> (element_type, is_array)`.
-fn field_def(type_name: &str, base: &str) -> Option<(&'static str, bool)> {
-    // Shared conformance-resource metadata elements (ValueSet & CodeSystem).
-    let shared = |base: &str| -> Option<(&'static str, bool)> {
-        Some(match base {
-            "meta" => ("Meta", false),
-            "implicitRules" => ("uri", false),
-            "language" => ("code", false),
-            "extension" => ("Extension", true),
-            "modifierExtension" => ("Extension", true),
-            "url" => ("uri", false),
-            "identifier" => ("Identifier", true),
-            "version" => ("string", false),
-            "name" => ("string", false),
-            "title" => ("string", false),
-            "status" => ("code", false),
-            "experimental" => ("boolean", false),
-            "date" => ("dateTime", false),
-            "publisher" => ("string", false),
-            "contact" => ("ContactDetail", true),
-            "description" => ("markdown", false),
-            "useContext" => ("UsageContext", true),
-            "jurisdiction" => ("CodeableConcept", true),
-            "purpose" => ("markdown", false),
-            "copyright" => ("markdown", false),
-            "id" => ("id", false),
-            _ => return None,
-        })
-    };
-    match type_name {
-        "ValueSet" => shared(base).or(match base {
-            "immutable" => Some(("boolean", false)),
-            "compose" => Some(("ValueSetCompose", false)),
-            _ => None,
-        }),
-        "CodeSystem" => shared(base).or(match base {
-            "caseSensitive" => Some(("boolean", false)),
-            "valueSet" => Some(("canonical", false)),
-            "hierarchyMeaning" => Some(("code", false)),
-            "compositional" => Some(("boolean", false)),
-            "versionNeeded" => Some(("boolean", false)),
-            "content" => Some(("code", false)),
-            "supplements" => Some(("canonical", false)),
-            "count" => Some(("unsignedInt", false)),
-            "filter" => Some(("CodeSystemFilter", true)),
-            "property" => Some(("CodeSystemProperty", true)),
-            "concept" => Some(("CodeSystemConcept", true)),
-            _ => None,
-        }),
-        "CodeSystemFilter" => Some(match base {
-            "code" => ("code", false),
-            "description" => ("string", false),
-            "operator" => ("code", true),
-            "value" => ("string", false),
-            _ => return None,
-        }),
-        "CodeSystemProperty" => Some(match base {
-            "code" => ("code", false),
-            "uri" => ("uri", false),
-            "description" => ("string", false),
-            "type" => ("code", false),
-            _ => return None,
-        }),
-        "CodeSystemConcept" => Some(match base {
-            "code" => ("code", false),
-            "display" => ("string", false),
-            "definition" => ("string", false),
-            "designation" => ("CodeSystemConceptDesignation", true),
-            "property" => ("CodeSystemConceptProperty", true),
-            "concept" => ("CodeSystemConcept", true),
-            "extension" => ("Extension", true),
-            _ => return None,
-        }),
-        "CodeSystemConceptDesignation" => Some(match base {
-            "language" => ("code", false),
-            "use" => ("Coding", false),
-            "value" => ("string", false),
-            _ => return None,
-        }),
-        // CodeSystemConceptProperty: code + value[x] (handled via resolve_choice).
-        "CodeSystemConceptProperty" => Some(match base {
-            "code" => ("code", false),
-            _ => return None,
-        }),
-        "Meta" => Some(match base {
-            "versionId" => ("id", false),
-            "lastUpdated" => ("instant", false),
-            "source" => ("uri", false),
-            "profile" => ("canonical", true),
-            "security" => ("Coding", true),
-            "tag" => ("Coding", true),
-            _ => return None,
-        }),
-        "Identifier" => Some(match base {
-            "use" => ("code", false),
-            "type" => ("CodeableConcept", false),
-            "system" => ("uri", false),
-            "value" => ("string", false),
-            "period" => ("Period", false),
-            "assigner" => ("Reference", false),
-            _ => return None,
-        }),
-        "ContactDetail" => Some(match base {
-            "name" => ("string", false),
-            "telecom" => ("ContactPoint", true),
-            _ => return None,
-        }),
-        "ContactPoint" => Some(match base {
-            "system" => ("code", false),
-            "value" => ("string", false),
-            "use" => ("code", false),
-            "rank" => ("positiveInt", false),
-            "period" => ("Period", false),
-            _ => return None,
-        }),
-        "CodeableConcept" => Some(match base {
-            "coding" => ("Coding", true),
-            "text" => ("string", false),
-            _ => return None,
-        }),
-        "Coding" => Some(match base {
-            "system" => ("uri", false),
-            "version" => ("string", false),
-            "code" => ("code", false),
-            "display" => ("string", false),
-            "userSelected" => ("boolean", false),
-            _ => return None,
-        }),
-        "Extension" => Some(match base {
-            "url" => ("uri", false),
-            "extension" => ("Extension", true),
-            _ => return None,
-        }),
-        "UsageContext" => Some(match base {
-            "code" => ("Coding", false),
-            _ => return None,
-        }),
-        _ => None,
+/// `nameRegex` from `mixins.ts:6`: `^[A-Z]([A-Za-z0-9_]){0,254}$`.
+fn name_regex_ok(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_uppercase() => {}
+        _ => return false,
     }
+    let rest: Vec<char> = chars.collect();
+    rest.len() <= 254 && rest.iter().all(|c| c.is_ascii_alphanumeric() || *c == '_')
 }
 
-/// Resolve a `value[x]` choice key (e.g. `valueCode`) on a type that has a
-/// choice element (Extension / UsageContext) to its concrete element type.
-fn resolve_choice(type_name: &str, base: &str) -> Option<&'static str> {
-    if !matches!(
-        type_name,
-        "Extension" | "UsageContext" | "CodeSystemConceptProperty"
-    ) {
-        return None;
+/// Port of `HasId.validateId`'s name→id sanitization (`mixins.ts:59-74`): when an
+/// id (from the `Id:` keyword or the entity name, i.e. no `^id` rule) is not a
+/// valid FHIR id but IS a valid FHIR name, replace `_` with `-` and slice to 64
+/// chars (e.g. `SimpleVS_ID` → `SimpleVS-ID`). Otherwise the id is left as-is
+/// (stock logs an error but still exports the original, e.g. colon-bearing ids).
+/// The Instance branch is excluded by stock and handled via `instance_effective_id`.
+pub(crate) fn sanitize_fhir_id(id: &str) -> String {
+    if id_regex_ok(id) {
+        return id.to_string();
     }
-    let suffix = base.strip_prefix("value")?;
-    if suffix.is_empty() {
-        return None;
+    if name_regex_ok(id) {
+        let sanitized: String = id.replace('_', "-").chars().take(64).collect();
+        if id_regex_ok(&sanitized) {
+            return sanitized;
+        }
     }
-    // PascalCase suffix -> complex type name; otherwise lower-camel primitive.
-    let complex = match suffix {
-        "Coding" => Some("Coding"),
-        "CodeableConcept" => Some("CodeableConcept"),
-        "Quantity" => Some("Quantity"),
-        "Reference" => Some("Reference"),
-        "Period" => Some("Period"),
-        "Identifier" => Some("Identifier"),
-        _ => None,
-    };
-    if let Some(c) = complex {
-        return Some(c);
-    }
-    // Primitive: lowercase the first character.
-    let prim: &'static str = match suffix {
-        "Code" => "code",
-        "String" => "string",
-        "Uri" => "uri",
-        "Url" => "url",
-        "Canonical" => "canonical",
-        "Markdown" => "markdown",
-        "Boolean" => "boolean",
-        "Integer" => "integer",
-        "UnsignedInt" => "unsignedInt",
-        "PositiveInt" => "positiveInt",
-        "Decimal" => "decimal",
-        "DateTime" => "dateTime",
-        "Date" => "date",
-        "Instant" => "instant",
-        "Id" => "id",
-        "Time" => "time",
-        "Oid" => "oid",
-        "Uuid" => "uuid",
-        "Base64Binary" => "base64Binary",
-        _ => return None,
-    };
-    Some(prim)
+    id.to_string()
 }
+
+/// Effective canonical url from a `* ^url = "..."` caret override (findLast,
+/// non-instance, root path), or `None` to fall back to the derived default.
+pub(crate) fn effective_url(rules: &[Rule]) -> Option<String> {
+    for r in rules.iter().rev() {
+        if let Rule::CaretValue {
+            path,
+            caret_path,
+            value,
+            is_instance,
+            ..
+        } = r
+        {
+            if path.is_empty()
+                && caret_path.as_deref() == Some("url")
+                && !is_instance
+            {
+                if let Some(FshValue::Str(s)) = value {
+                    return Some(s.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
 
 // ---------------------------------------------------------------------------
 // Caret path parsing + application.
@@ -358,6 +327,16 @@ pub(crate) struct Seg {
     pub array: bool,
     pub slice_url: Option<String>,
     pub index: Option<usize>,
+    /// When this segment is a URL-valued extension slice, whether stock SUSHI
+    /// defers the implied `url` to *after* the assigned children for slice
+    /// instances at array index >= 1 (yielding `{…children, url}`). This is the
+    /// case when the original FSH bracket token is NOT a URI (an alias or a plain
+    /// slice name) — stock keeps that token as the `_sliceName`, so the indexed
+    /// implied-url path overlaps the rule path and sorts after its descendants in
+    /// `setImpliedPropertiesOnInstance`. When the token IS a literal URI, stock
+    /// renames the slice to the extension id (no overlap), so the implied `url`
+    /// stays first for every index. Defaults to false (URI / not an extension).
+    pub defer_url: bool,
 }
 
 /// Split a caret path on `.` that are outside `[...]` brackets.
@@ -387,62 +366,23 @@ pub(crate) fn split_caret_path(path: &str) -> Vec<String> {
     parts
 }
 
-/// Parse a path part into `(base, bracket_content)`.
-pub(crate) fn parse_part(part: &str) -> (String, Option<String>) {
-    if let Some(open) = part.find('[') {
-        let base = part[..open].to_string();
-        let inner = part[open + 1..]
-            .strip_suffix(']')
-            .unwrap_or(&part[open + 1..])
-            .to_string();
-        (base, Some(inner))
-    } else {
-        (part.to_string(), None)
-    }
-}
 
-/// Resolve a caret path on a resource type into segments + the leaf element type.
-fn resolve_path(resource_type: &str, caret_path: &str) -> Option<(Vec<Seg>, String)> {
-    let parts = split_caret_path(caret_path);
-    if parts.is_empty() {
-        return None;
-    }
-    let mut cur = resource_type.to_string();
-    let mut segs = Vec::with_capacity(parts.len());
-    let mut leaf_ty = String::new();
-    let n = parts.len();
-    for (i, part) in parts.iter().enumerate() {
-        let (base, bracket) = parse_part(part);
-        let (ty, array) = match field_def(&cur, &base) {
-            Some(v) => v,
-            None => {
-                // `value[x]` choice on Extension/UsageContext.
-                let choice = resolve_choice(&cur, &base)?;
-                (choice, false)
-            }
-        };
-        let mut index = None;
-        let slice_url = match &bracket {
-            Some(b) if b.chars().all(|c| c.is_ascii_digit()) => {
-                index = b.parse::<usize>().ok();
-                None
-            }
-            Some(b) if base == "extension" || base == "modifierExtension" => Some(b.clone()),
-            _ => None,
-        };
-        segs.push(Seg {
-            key: base,
-            array,
-            slice_url,
-            index,
-        });
-        if i == n - 1 {
-            leaf_ty = ty.to_string();
-        } else {
-            cur = ty.to_string();
-        }
-    }
-    Some((segs, leaf_ty))
+/// Port of the `FshCode` branch of `replaceReferences` (`fhirtypes/common.ts`):
+/// fish the system name (the part before any `|version`) as a CodeSystem and, if
+/// found, substitute its canonical url while preserving the version suffix
+/// (`value.system.replace(/^[^|]+/, codeSystemMeta.url)`). Unresolvable systems —
+/// including bare names with no matching CodeSystem and systems that are already
+/// urls of no known CodeSystem — are left untouched. `resolve_cs` mirrors
+/// `fishForMetadata(base, Type.CodeSystem)?.url` (local CodeSystems first, then
+/// dependency packages). Returns `Some(new_system)` only when resolution changes
+/// (or confirms) the system; `None` when nothing was found.
+pub(crate) fn replace_code_system(
+    system: &str,
+    resolve_cs: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
+    let base = system.split('|').next().unwrap_or(system);
+    let url = resolve_cs(base)?;
+    Some(system.replacen(base, &url, 1))
 }
 
 /// Build a FHIR Coding JSON object from an FshCode (key order: code, system,
@@ -468,8 +408,8 @@ pub(crate) fn coding_from(fc: &FshCode) -> J {
 
 /// Coerce an FSH caret value to JSON according to the resolved leaf element type
 /// (port of the relevant `assignValue` / `assignFshCode` branches).
-pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
-    if is_primitive(leaf_ty) {
+pub(crate) fn coerce(value: &FshValue, leaf_ty: &str, resolver: &TypeResolver) -> Option<J> {
+    if resolver.is_primitive(leaf_ty) {
         Some(match value {
             // For a code/string/uri leaf, a FshCode contributes only its code.
             FshValue::Code(fc) => J::String(fc.code.clone()),
@@ -477,20 +417,37 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
             FshValue::Bool(b) => J::Bool(*b),
             FshValue::BigInt(s) => {
                 if let Ok(i) = s.parse::<i64>() {
+                    if !integer_value_ok(leaf_ty, i) {
+                        return None;
+                    }
                     J::Number(i.into())
                 } else if let Ok(u) = s.parse::<u64>() {
+                    if !unsigned_integer_value_ok(leaf_ty, u) {
+                        return None;
+                    }
                     J::Number(u.into())
                 } else {
                     J::String(s.clone())
                 }
             }
-            FshValue::Float(f) => serde_json::Number::from_f64(*f)
-                .map(J::Number)
-                .unwrap_or(J::Null),
+            FshValue::Float(f) => {
+                if matches!(leaf_ty, "integer" | "unsignedInt" | "positiveInt") {
+                    if f.fract() != 0.0 {
+                        return None;
+                    }
+                    let i = *f as i64;
+                    if !integer_value_ok(leaf_ty, i) {
+                        return None;
+                    }
+                }
+                serde_json::Number::from_f64(*f)
+                    .map(J::Number)
+                    .unwrap_or(J::Null)
+            }
             FshValue::Canonical(c) => J::String(c.entity_name.clone()),
             _ => return None,
         })
-    } else if is_complex(leaf_ty) {
+    } else if resolver.is_complex(leaf_ty) {
         match (leaf_ty, value) {
             ("Coding", FshValue::Code(fc)) => Some(coding_from(fc)),
             ("CodeableConcept", FshValue::Code(fc)) => {
@@ -498,10 +455,37 @@ pub(crate) fn coerce(value: &FshValue, leaf_ty: &str) -> Option<J> {
                 m.insert("coding".into(), J::Array(vec![coding_from(fc)]));
                 Some(J::Object(m))
             }
+            // `FshReference.toFHIRReference` (key order: reference, then display).
+            // The reference string is emitted as-is; any local name->Type/id /
+            // canonical resolution happens upstream (stock's `replaceReferences`),
+            // and stock leaves `/`- or `urn:`-prefixed references untouched.
+            ("Reference", FshValue::Reference(r)) => {
+                let mut m = Map::new();
+                m.insert("reference".into(), J::String(r.reference.clone()));
+                if let Some(d) = &r.display {
+                    m.insert("display".into(), J::String(d.clone()));
+                }
+                Some(J::Object(m))
+            }
             _ => None,
         }
     } else {
         None
+    }
+}
+
+fn integer_value_ok(leaf_ty: &str, value: i64) -> bool {
+    match leaf_ty {
+        "unsignedInt" => value >= 0,
+        "positiveInt" => value > 0,
+        _ => true,
+    }
+}
+
+fn unsigned_integer_value_ok(leaf_ty: &str, value: u64) -> bool {
+    match leaf_ty {
+        "positiveInt" => value > 0,
+        _ => true,
     }
 }
 
@@ -518,6 +502,81 @@ pub(crate) fn set_value(target: &mut J, leaf: J) {
     }
 }
 
+/// Whether a slice bracket token is a URI (mirrors stock's `isUri(token)`): only
+/// then does stock rename an extension slice to the extension id. Non-URI tokens
+/// (aliases like `$obligation`, or plain slice names) keep their token as the
+/// `_sliceName`, which triggers the implied-url deferral for index >= 1.
+fn slice_token_is_uri(token: &str) -> bool {
+    token.contains("://") || token.starts_with("urn:")
+}
+
+/// Set `defer_url` on each URL-valued extension-slice segment using the ORIGINAL
+/// (pre-alias-resolution) caret path. Stock defers the implied `url` (to after the
+/// assigned children, for slice index >= 1) exactly when the original FSH bracket
+/// token is not a URI. `segs` are produced from the alias-resolved path, where the
+/// token is already the canonical url, so the original path is needed to recover
+/// this distinction. The k-th URL-valued slice segment corresponds to the k-th
+/// extension slice token in the original path (both walk the path in order).
+pub(crate) fn mark_defer_urls(segs: &mut [Seg], original_caret_path: &str) {
+    if !segs.iter().any(|s| s.slice_url.is_some()) {
+        return;
+    }
+    // Collect the original slice tokens (non-numeric bracket of each
+    // extension/modifierExtension part) in path order.
+    let mut tokens: Vec<String> = Vec::new();
+    for part in split_caret_path(original_caret_path) {
+        let base = part.split('[').next().unwrap_or("");
+        if base != "extension" && base != "modifierExtension" {
+            continue;
+        }
+        // last non-numeric bracket token (mirrors the resolver's slice_url pick)
+        let mut tok: Option<String> = None;
+        let mut depth = 0i32;
+        let mut cur = String::new();
+        for c in part.chars() {
+            match c {
+                '[' => {
+                    depth += 1;
+                    if depth == 1 {
+                        cur.clear();
+                    }
+                }
+                ']' => {
+                    depth -= 1;
+                    if depth == 0 && !(cur.chars().all(|c| c.is_ascii_digit()) && !cur.is_empty()) {
+                        tok = Some(std::mem::take(&mut cur));
+                    }
+                }
+                _ if depth >= 1 => cur.push(c),
+                _ => {}
+            }
+        }
+        if let Some(t) = tok {
+            tokens.push(t);
+        }
+    }
+    // The implied `url` is only deferred (to after the children) when the rule
+    // descends into a NESTED extension slice under this one: the nested
+    // sub-extension's own implied `url` is what sorts ahead of this slice's `url`
+    // in stock's `setImpliedPropertiesOnInstance`. A slice that takes a direct
+    // value (e.g. `^extension[$cwp][+].valueCanonical = …`) has no such nested
+    // implied url, so its `url` stays first for every index.
+    let slice_positions: Vec<usize> = segs
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.slice_url.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    let mut ti = 0usize;
+    for &pos in &slice_positions {
+        let has_deeper_slice = segs[pos + 1..].iter().any(|s| s.slice_url.is_some());
+        if let Some(t) = tokens.get(ti) {
+            segs[pos].defer_url = has_deeper_slice && !slice_token_is_uri(t);
+        }
+        ti += 1;
+    }
+}
+
 pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
     let seg = &segs[0];
     let last = segs.len() == 1;
@@ -529,6 +588,15 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
             *arr = J::Array(vec![]);
         }
         let arr = arr.as_array_mut().unwrap();
+        // When a new URL-valued extension slice entry is created, stock SUSHI
+        // materializes its implied (fixed) `url` via `setImpliedPropertiesOnInstance`.
+        // For the *first* instance of the slice (array index 0) the implied path is
+        // non-indexed (`extension[$slice].url`), which sorts ahead of its assigned
+        // children — so `url` is emitted first. For *subsequent* instances (index
+        // >= 1) the implied path is indexed (`extension[$slice][n].url`), which sorts
+        // AFTER the assigned children — so `url` is emitted last. We replicate that by
+        // deferring the `url` insertion until after the children are set when want>=1.
+        let mut deferred_url: Option<String> = None;
         let idx = if let Some(url) = &seg.slice_url {
             // n-th occurrence of this url (default 0); create entries as needed.
             let want = seg.index.unwrap_or(0);
@@ -542,7 +610,11 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
                 p
             } else {
                 let mut m = Map::new();
-                m.insert("url".into(), J::String(url.clone()));
+                if want == 0 || !seg.defer_url {
+                    m.insert("url".into(), J::String(url.clone()));
+                } else {
+                    deferred_url = Some(url.clone());
+                }
                 arr.push(J::Object(m));
                 arr.len() - 1
             }
@@ -560,6 +632,11 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
                 arr[idx] = J::Object(Map::new());
             }
             apply(arr[idx].as_object_mut().unwrap(), &segs[1..], leaf);
+        }
+        if let Some(url) = deferred_url {
+            if let Some(o) = arr[idx].as_object_mut() {
+                o.entry("url".to_string()).or_insert(J::String(url));
+            }
         }
     } else if last {
         match obj.get_mut(&seg.key) {
@@ -582,17 +659,31 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
 }
 
 /// Apply one top-level caret rule (`path == ''`) onto the resource object.
-fn apply_caret(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str, value: &FshValue) {
+#[allow(clippy::too_many_arguments)]
+fn apply_caret(
+    obj: &mut Map<String, J>,
+    resource_type: &str,
+    caret_path: &str,
+    value: &FshValue,
+    resolver: &TypeResolver,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+) {
     // Resolve aliases inside path brackets (e.g. `^extension[FMM]` where FMM is a
     // global Alias) — same export-time resolution the SD exporter does.
-    let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
-    let caret_path = caret_path.as_str();
-    let Some((segs, leaf_ty)) = resolve_path(resource_type, caret_path) else {
+    let resolved_path = crate::sd_export::resolve_caret_aliases(caret_path);
+    let Some((mut segs, leaf_ty)) = resolver.resolve(resource_type, resolved_path.as_str()) else {
         return;
     };
-    let Some(leaf) = coerce(value, &leaf_ty) else {
+    // `replaceReferences` / `assignValue`(Canonical) pass, mirroring stock: a
+    // `Canonical(name)` resolves to the entity url for both VS & CS; a CodeSystem
+    // caret's `FshCode` system resolves to its CodeSystem url. See
+    // `resolve_caret_value`.
+    let resolved = resolve_caret_value(value, resource_type == "CodeSystem", tank, store);
+    let Some(leaf) = coerce(&resolved, &leaf_ty, resolver) else {
         return;
     };
+    mark_defer_urls(&mut segs, caret_path);
     apply(obj, &segs, leaf);
 }
 
@@ -675,9 +766,14 @@ fn precreate_implied(obj: &mut Map<String, J>, segs: &[Seg]) {
 }
 
 /// Run the implied-properties pre-pass for one caret rule path.
-fn precreate_implied_for_path(obj: &mut Map<String, J>, resource_type: &str, caret_path: &str) {
+fn precreate_implied_for_path(
+    obj: &mut Map<String, J>,
+    resource_type: &str,
+    caret_path: &str,
+    resolver: &TypeResolver,
+) {
     let caret_path = crate::sd_export::resolve_caret_aliases(caret_path);
-    if let Some((segs, _)) = resolve_path(resource_type, caret_path.as_str()) {
+    if let Some((segs, _)) = resolver.resolve(resource_type, caret_path.as_str()) {
         precreate_implied(obj, &segs);
     }
 }
@@ -692,7 +788,13 @@ pub struct Exported {
     pub body: J,
 }
 
-pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store: Option<&PackageStore>) -> Exported {
+pub fn export_value_set(
+    vs: &FshValueSet,
+    cfg: &Config,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+    resolver: &TypeResolver,
+) -> Option<Exported> {
     let id = effective_id(&vs.rules, &vs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -722,9 +824,14 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store:
         J::String(format!("{}/ValueSet/{}", cfg.canonical, id)),
     );
 
+    // Resolve `[+]`/`[=]` soft indices on caret paths (e.g. `^useContext[+]`,
+    // `^extension[=]`), exactly as the SD/instance exporters do. Without this a
+    // `[=]` would be emitted literally as a slice url.
+    let mut resolved_rules = vs.rules.clone();
+    crate::paths::resolve_soft_indexing(&mut resolved_rules, false);
+
     // partition caret rules: concept-level (pathArray non-empty) vs other.
-    let other_carets: Vec<&Rule> = vs
-        .rules
+    let other_carets: Vec<&Rule> = resolved_rules
         .iter()
         .filter(|r| matches!(r, Rule::CaretValue { path_array, .. } if path_array.is_empty()))
         .collect();
@@ -741,7 +848,7 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store:
             ..
         } = r
         {
-            precreate_implied_for_path(&mut obj, "ValueSet", cp);
+            precreate_implied_for_path(&mut obj, "ValueSet", cp, resolver);
         }
     }
 
@@ -755,18 +862,201 @@ pub fn export_value_set(vs: &FshValueSet, cfg: &Config, tank: &TankIndex, store:
         } = r
         {
             if let Some(cp) = caret_path {
-                apply_caret(&mut obj, "ValueSet", cp, value);
+                apply_caret(&mut obj, "ValueSet", cp, value, resolver, tank, store);
             }
         }
     }
 
-    // setCompose.
-    set_compose(&mut obj, vs, tank, store);
-
-    Exported {
-        filename: format!("ValueSet-{}.json", id),
-        body: J::Object(obj),
+    // setCompose. Stock catches InvalidUriError from this phase in export()
+    // and skips the whole ValueSet.
+    if set_compose(&mut obj, vs, tank, store).is_err() {
+        return None;
     }
+
+    // setConceptCaretRules (`ValueSetExporter.ts:441`): concept-level carets
+    // (`* system#code ^designation...`) whose `path_array` carries the concept's
+    // `system#code`. These run AFTER setCompose so the targeted concept already
+    // exists in `compose.include[]`/`compose.exclude[]`.
+    let concept_carets: Vec<&Rule> = resolved_rules
+        .iter()
+        .filter(|r| matches!(r, Rule::CaretValue { path_array, .. } if !path_array.is_empty()))
+        .collect();
+    set_concept_caret_rules(&mut obj, &concept_carets, tank, store, resolver);
+
+    // Port of `ValueSetExporter.ts:603`: a compose with an empty `include` is a
+    // `ValueSetComposeError`; stock logs it and skips the whole ValueSet (no file
+    // emitted). `compose` is only present when there were component rules.
+    if let Some(J::Object(compose)) = obj.get("compose") {
+        let include_empty = compose
+            .get("include")
+            .and_then(|v| v.as_array())
+            .map_or(true, |a| a.is_empty());
+        if include_empty {
+            return None;
+        }
+    }
+
+    // Port of `cleanResource` (`common.ts:1192`): collapse empty objects/arrays
+    // (e.g. an empty compose element `{}` → `compose: null`).
+    clean_resource_map(&mut obj);
+
+    Some(Exported {
+        filename: crate::instance_export::sanitize(&format!("ValueSet-{}.json", id)),
+        body: J::Object(obj),
+    })
+}
+
+/// Returns true iff `v` is an empty object or empty array (lodash `isEmpty`
+/// restricted to the `typeof === 'object' && !== null` case in `cleanResource`).
+fn is_empty_container(v: &J) -> bool {
+    matches!(v, J::Object(m) if m.is_empty()) || matches!(v, J::Array(a) if a.is_empty())
+}
+
+/// Port of `cleanResource`'s "change any {} to null" pass (`common.ts:1204` via
+/// `replaceField`): recursively replace empty containers with `null`, delete an
+/// object key whose value became an all-`null` array, then re-check whether the
+/// emptied parent is now itself an empty container (and null it). Mirrors
+/// `replaceField`'s depth-first traversal and post-recursion re-check so nested
+/// emptiness propagates upward (`{include:[{}]}` → `compose: null`).
+fn clean_resource_empties(v: &mut J) {
+    match v {
+        J::Object(map) => clean_resource_map(map),
+        J::Array(arr) => {
+            let mut i = 0;
+            while i < arr.len() {
+                if is_empty_container(&arr[i]) {
+                    arr[i] = J::Null;
+                } else if matches!(arr[i], J::Object(_) | J::Array(_)) {
+                    clean_resource_empties(&mut arr[i]);
+                    // A nested array that became all-null, or a now-empty
+                    // container, collapses to a `null` hole (JS `delete arr[i]`).
+                    let collapse = match &arr[i] {
+                        J::Array(a) => a.iter().all(J::is_null),
+                        other => is_empty_container(other),
+                    };
+                    if collapse {
+                        arr[i] = J::Null;
+                    }
+                }
+                i += 1;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn clean_resource_map(map: &mut Map<String, J>) {
+    let keys: Vec<String> = map.keys().cloned().collect();
+    for k in keys {
+        let child = map.get(&k).expect("key from snapshot");
+        if is_empty_container(child) {
+            map.insert(k, J::Null);
+            continue;
+        }
+        if matches!(child, J::Object(_) | J::Array(_)) {
+            clean_resource_empties(map.get_mut(&k).unwrap());
+            if let Some(J::Array(a)) = map.get(&k) {
+                if a.iter().all(J::is_null) {
+                    map.shift_remove(&k); // delete key, preserving order
+                    continue;
+                }
+            }
+            if is_empty_container(map.get(&k).unwrap()) {
+                map.insert(k, J::Null);
+            }
+        }
+    }
+}
+
+/// Port of `ValueSetExporter.setConceptCaretRules` (`ValueSetExporter.ts:441`).
+/// For each concept-level caret rule, locate the `compose.include`/`compose.exclude`
+/// element (matched by system + version, with no `filter`) and the concept (matched
+/// by code), then apply the caret value at
+/// `compose.<array>[i].concept[j].<caretPath>`.
+fn set_concept_caret_rules(
+    obj: &mut Map<String, J>,
+    rules: &[&Rule],
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+    resolver: &TypeResolver,
+) {
+    for r in rules {
+        let Rule::CaretValue {
+            path_array,
+            caret_path: Some(cp),
+            value: Some(value),
+            is_instance: false,
+            ..
+        } = r
+        else {
+            continue;
+        };
+        let Some(concept_path) = path_array.first() else {
+            continue;
+        };
+        // `pathArray[0].split('#')`: system before the first `#`, code after.
+        let Some((system, code)) = concept_path.split_once('#') else {
+            continue;
+        };
+        // `system.split('|')`: base system and optional version.
+        let (base_system, version) = match system.split_once('|') {
+            Some((b, v)) => (b, Some(v)),
+            None => (system, None),
+        };
+        // `fishForMetadata(baseSystem, CodeSystem)?.url` — a local CS may be named.
+        let system_url = tank
+            .cs_url(base_system)
+            .or_else(|| pkg_url(store, base_system, FishType::CodeSystem));
+
+        // Find the compose include (then exclude) element matching system+version
+        // with no filter, then the concept index by code.
+        let Some((array_name, ci, ji)) =
+            find_concept(obj, base_system, system_url.as_deref(), version, code)
+        else {
+            continue;
+        };
+        let full_path = format!("compose.{array_name}[{ci}].concept[{ji}].{cp}");
+        apply_caret(obj, "ValueSet", &full_path, value, resolver, tank, store);
+    }
+}
+
+/// Locate the `(array, composeIndex, conceptIndex)` for a concept-caret target,
+/// mirroring the include-then-exclude search in `setConceptCaretRules`.
+fn find_concept(
+    obj: &Map<String, J>,
+    base_system: &str,
+    system_url: Option<&str>,
+    version: Option<&str>,
+    code: &str,
+) -> Option<(&'static str, usize, usize)> {
+    let compose = obj.get("compose")?.as_object()?;
+    for array_name in ["include", "exclude"] {
+        let Some(arr) = compose.get(array_name).and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for (ci, ce) in arr.iter().enumerate() {
+            let Some(ce) = ce.as_object() else { continue };
+            if ce.contains_key("filter") {
+                continue;
+            }
+            let ce_system = ce_get_str(ce, "system");
+            let ce_version = ce_get_str(ce, "version");
+            let system_ok = ce_system == Some(base_system) || (system_url.is_some() && ce_system == system_url);
+            if !system_ok || ce_version != version {
+                continue;
+            }
+            let Some(concepts) = ce.get("concept").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            if let Some(ji) = concepts
+                .iter()
+                .position(|c| c.get("code").and_then(|v| v.as_str()) == Some(code))
+            {
+                return Some((array_name, ci, ji));
+            }
+        }
+    }
+    None
 }
 
 fn from_to_compose_element(
@@ -774,7 +1064,7 @@ fn from_to_compose_element(
     tank: &TankIndex,
     vs_url: &str,
     store: Option<&PackageStore>,
-) -> Map<String, J> {
+) -> Result<Map<String, J>, ()> {
     let mut ce: Map<String, J> = Map::new();
     if let Some(system) = &from.system {
         let system_parts: Vec<&str> = system.split('|').collect();
@@ -782,6 +1072,9 @@ fn from_to_compose_element(
             .cs_url(system)
             .or_else(|| pkg_url(store, system, FishType::CodeSystem))
             .unwrap_or_else(|| system_parts[0].to_string());
+        if !is_valid_uri(&resolved) {
+            return Err(());
+        }
         ce.insert("system".into(), J::String(resolved));
         let version = system_parts[1..].join("|");
         if !version.is_empty() {
@@ -789,7 +1082,7 @@ fn from_to_compose_element(
         }
     }
     if let Some(value_sets) = &from.value_sets {
-        let mapped: Vec<J> = value_sets
+        let mapped: Vec<String> = value_sets
             .iter()
             .map(|vs| {
                 let resolved = tank.vs_url(vs).or_else(|| pkg_url(store, vs, FishType::ValueSet));
@@ -806,11 +1099,45 @@ fn from_to_compose_element(
                 }
             })
             .filter(|u| u != vs_url)
+            .collect();
+        for u in &mapped {
+            let base = u.split('|').next().unwrap_or(u);
+            if !is_valid_uri(base) {
+                return Err(());
+            }
+        }
+        let mapped: Vec<J> = mapped
+            .into_iter()
             .map(J::String)
             .collect();
         ce.insert("valueSet".into(), J::Array(mapped));
     }
-    ce
+    Ok(ce)
+}
+
+pub(crate) fn is_valid_uri(s: &str) -> bool {
+    if s.is_empty()
+        || s.chars()
+            .any(|c| c.is_ascii_whitespace() || c.is_control() || c == '|' || c == '\\')
+    {
+        return false;
+    }
+    let Some((scheme, rest)) = s.split_once(':') else {
+        return false;
+    };
+    if scheme.is_empty()
+        || !scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        || !scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    {
+        return false;
+    }
+    if scheme.eq_ignore_ascii_case("urn") {
+        return !rest.is_empty();
+    }
+    let prefix = format!("{scheme}://");
+    s.starts_with(&prefix) && s[prefix.len()..].split('/').next().is_some_and(|h| !h.is_empty())
 }
 
 fn compose_concepts(concepts: &[FshCode]) -> Vec<J> {
@@ -896,14 +1223,19 @@ fn xor_empty(a: &[String], b: &[String]) -> bool {
 }
 
 /// `setCompose` (`ValueSetExporter.ts:73`).
-fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, store: Option<&PackageStore>) {
+fn set_compose(
+    obj: &mut Map<String, J>,
+    vs: &FshValueSet,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+) -> Result<(), ()> {
     let components: Vec<&Rule> = vs
         .rules
         .iter()
         .filter(|r| matches!(r, Rule::VsConcept { .. } | Rule::VsFilter { .. }))
         .collect();
     if components.is_empty() {
-        return;
+        return Ok(());
     }
     let vs_url = obj.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let mut include: Vec<J> = Vec::new();
@@ -917,7 +1249,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
                 concepts,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store)?;
                 if !concepts.is_empty() {
                     ce.insert("concept".into(), J::Array(compose_concepts(concepts)));
                 }
@@ -929,7 +1261,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
                 filters,
                 ..
             } => {
-                let mut ce = from_to_compose_element(from, tank, &vs_url, store);
+                let mut ce = from_to_compose_element(from, tank, &vs_url, store)?;
                 if !filters.is_empty() {
                     let f: Vec<J> = filters
                         .iter()
@@ -959,6 +1291,7 @@ fn set_compose(obj: &mut Map<String, J>, vs: &FshValueSet, tank: &TankIndex, sto
         compose.insert("exclude".into(), J::Array(exclude));
     }
     obj.insert("compose".into(), J::Object(compose));
+    Ok(())
 }
 
 fn push_component(
@@ -1005,10 +1338,17 @@ fn push_component(
                 add_concept_compose_element(ce, include);
             }
         } else {
-            // push if it has any valueSet or a defined system.
-            let has_vs = ce.contains_key("valueSet");
-            let has_system = ce.contains_key("system");
-            if has_vs || has_system {
+            // Port of `ValueSetExporter.ts:254`:
+            //   if (composeElement.valueSet?.length !== 0 || composeElement.system != undefined)
+            // For an absent `valueSet`, `undefined?.length` is `undefined` and
+            // `undefined !== 0` is `true`, so even a fully empty `{}` element is
+            // pushed (it is later collapsed to `compose: null` by cleanResource).
+            // The ONLY non-push case is a present-but-empty `valueSet` with no system.
+            let value_set_len_ne_zero = match ce.get("valueSet") {
+                Some(J::Array(a)) => !a.is_empty(),
+                _ => true,
+            };
+            if value_set_len_ne_zero || ce.contains_key("system") {
                 include.push(J::Object(ce));
             }
         }
@@ -1030,7 +1370,13 @@ fn filter_value_to_string(v: &FilterValue) -> String {
 // CodeSystem export.
 // ---------------------------------------------------------------------------
 
-pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -> Exported {
+pub fn export_code_system(
+    cs: &FshCodeSystem,
+    cfg: &Config,
+    tank: &TankIndex,
+    store: Option<&PackageStore>,
+    resolver: &TypeResolver,
+) -> Exported {
     let id = effective_id(&cs.rules, &cs.id);
     let mut obj: Map<String, J> = Map::new();
 
@@ -1064,13 +1410,16 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
     // setConcepts.
     set_concepts(&mut obj, cs);
 
+    // Resolve `[+]`/`[=]` soft indices on caret paths (keyed per concept-path).
+    let mut resolved_rules = cs.rules.clone();
+    crate::paths::resolve_soft_indexing(&mut resolved_rules, false);
+
     // setCaretPathRules (`CodeSystemExporter.ts:108`): both top-level carets
     // (empty pathArray) and concept-level carets (pathArray of concept codes →
     // `concept[i]...` prefix via findConceptPath). The full caret path is the
     // concept prefix joined with the rule's caret path. Concepts must already be
     // built (set_concepts above) so the indices resolve.
-    let cs_carets: Vec<(String, &FshValue)> = cs
-        .rules
+    let cs_carets: Vec<(String, &FshValue)> = resolved_rules
         .iter()
         .filter_map(|r| {
             if let Rule::CaretValue {
@@ -1097,12 +1446,12 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
     // setImpliedPropertiesOnInstance pre-pass (see export_value_set): hoist
     // extension/modifierExtension slice urls ahead of later metadata caret keys.
     for (full, _) in &cs_carets {
-        precreate_implied_for_path(&mut obj, "CodeSystem", full);
+        precreate_implied_for_path(&mut obj, "CodeSystem", full, resolver);
     }
 
     // value loop, in source order.
     for (full, value) in &cs_carets {
-        apply_caret(&mut obj, "CodeSystem", full, value);
+        apply_caret(&mut obj, "CodeSystem", full, value, resolver, tank, store);
     }
 
     // updateCount: only when content == 'complete'.
@@ -1116,7 +1465,7 @@ pub fn export_code_system(cs: &FshCodeSystem, cfg: &Config, _tank: &TankIndex) -
     }
 
     Exported {
-        filename: format!("CodeSystem-{}.json", id),
+        filename: crate::instance_export::sanitize(&format!("CodeSystem-{}.json", id)),
         body: J::Object(obj),
     }
 }
@@ -1178,7 +1527,7 @@ fn set_concepts(obj: &mut Map<String, J>, cs: &FshCodeSystem) {
     }
     let mut root: Vec<J> = Vec::new();
     // Track codes already added (for duplicate detection like the TS Map).
-    let mut existing: Vec<String> = Vec::new();
+    let mut existing: FxHashSet<String> = FxHashSet::default();
 
     for r in &concept_rules {
         let Rule::Concept {
@@ -1206,7 +1555,7 @@ fn set_concepts(obj: &mut Map<String, J>, cs: &FshCodeSystem) {
 
         // Navigate the hierarchy to find the container array.
         if insert_into_hierarchy(&mut root, hierarchy, J::Object(new_concept)) {
-            existing.push(code.clone());
+            existing.insert(code.clone());
         }
     }
 
@@ -1244,6 +1593,12 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
     // the SD exporter). Idempotent; safe to call before/after SD export.
     crate::sd_export::set_aliases(docs);
     let tank = TankIndex::build(docs, cfg);
+    // SD-driven type resolver over the FHIR packages (fishes ValueSet/CodeSystem +
+    // every datatype/extension SD on demand). A local extension referenced by url
+    // that isn't yet exported falls back to the generic Extension SD inside the
+    // resolver, so `value[x]` still types correctly.
+    let fish = |name: &str| store.and_then(|s| s.fish_for_fhir(name, package_store::ALL_FISH_TYPES));
+    let resolver = TypeResolver::new(&fish);
     let mut out = Vec::new();
     // CodeSystems export before ValueSets (FHIRExporter order), though it does
     // not affect file output for these self-contained resources.
@@ -1254,7 +1609,7 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_cs.push(cs.name.clone());
-            out.push(export_code_system(cs, cfg, &tank));
+            out.push(export_code_system(cs, cfg, &tank, store, &resolver));
         }
     }
     let mut seen_vs: Vec<String> = Vec::new();
@@ -1264,7 +1619,9 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
                 continue;
             }
             seen_vs.push(vs.name.clone());
-            out.push(export_value_set(vs, cfg, &tank, store));
+            if let Some(exported) = export_value_set(vs, cfg, &tank, store, &resolver) {
+                out.push(exported);
+            }
         }
     }
     out

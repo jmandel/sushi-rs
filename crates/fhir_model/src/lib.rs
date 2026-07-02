@@ -8,6 +8,7 @@
 
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -39,11 +40,28 @@ pub trait Fisher {
     /// parse with no deep clone, and callers here only read it (build a
     /// `StructureDefinition`, inspect fields) via deref coercion.
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<Value>>;
+    /// Parsed StructureDefinition template for callers that repeatedly fish and
+    /// inspect the same snapshot. Implementors may cache this; the default keeps
+    /// the old behavior of parsing the fished JSON on every call.
+    fn fish_for_structure_definition(
+        &self,
+        name: &str,
+        capture: bool,
+    ) -> Option<std::rc::Rc<StructureDefinition>> {
+        self.fish_for_fhir(name)
+            .map(|json| std::rc::Rc::new(StructureDefinition::from_json(&json, capture)))
+    }
     /// Metadata for a name|id|url.
     fn fish_for_metadata(&self, name: &str) -> Option<Metadata>;
     /// Metadata restricted to ValueSet definitions (`fishForMetadata(_, Type.ValueSet)`).
     /// Default falls back to the untyped fish.
     fn fish_for_metadata_vs(&self, name: &str) -> Option<Metadata> {
+        self.fish_for_metadata(name)
+    }
+    /// Metadata restricted to CodeSystem definitions (`fishForMetadata(_, Type.CodeSystem)`).
+    /// Used by the `replaceReferences` FshCode-system resolution. Default falls back
+    /// to the untyped fish.
+    fn fish_for_metadata_cs(&self, name: &str) -> Option<Metadata> {
         self.fish_for_metadata(name)
     }
 }
@@ -101,25 +119,34 @@ impl ElementDefinition {
     /// `ElementDefinition.fromJSON` — copy known PROPS (drops unknown keys),
     /// then (optionally) captureOriginal.
     pub fn from_json(json: &Value, capture: bool) -> ElementDefinition {
-        let mut map = Map::new();
+        let mut map = json
+            .as_object()
+            .map(|obj| Map::with_capacity(obj.len().min(ED_PROPS.len() * 2)))
+            .unwrap_or_else(Map::new);
+        let mut id = String::new();
+        let mut path = String::new();
         if let Some(obj) = json.as_object() {
             let mut uk = String::new();
             for prop in ED_PROPS {
                 if let Some(key) = resolve_choice_key(prop, obj) {
-                    if let Some(v) = obj.get(&key) {
-                        map.insert(key.clone(), v.clone());
+                    let key = key.as_ref();
+                    if let Some(v) = obj.get(key) {
+                        if key == "id" {
+                            id = v.as_str().unwrap_or("").to_string();
+                        } else if key == "path" {
+                            path = v.as_str().unwrap_or("").to_string();
+                        }
+                        map.insert(key.to_string(), v.clone());
                     }
                     uk.clear();
                     uk.push('_');
-                    uk.push_str(&key);
+                    uk.push_str(key);
                     if let Some(v) = obj.get(uk.as_str()) {
                         map.insert(uk.clone(), v.clone());
                     }
                 }
             }
         }
-        let id = map.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let path = map.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let mut ed = ElementDefinition { map: Rc::new(map), original: None, id, path };
         if capture {
             ed.capture_original();
@@ -129,7 +156,7 @@ impl ElementDefinition {
 
     pub fn new(id: &str) -> ElementDefinition {
         let path = id_to_path(id);
-        let mut map = Map::new();
+        let mut map = Map::with_capacity(2);
         map.insert("id".into(), Value::String(id.to_string()));
         map.insert("path".into(), Value::String(path.clone()));
         ElementDefinition {
@@ -201,12 +228,13 @@ impl ElementDefinition {
                 Some(k) => k,
                 None => continue,
             };
-            if self.map.get(&key) != original.get(&key) {
+            let key = key.as_ref();
+            if self.map.get(key) != original.get(key) {
                 return true;
             }
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
+            uk.push_str(key);
             if self.map.get(uk.as_str()) != original.get(uk.as_str()) {
                 return true;
             }
@@ -218,7 +246,7 @@ impl ElementDefinition {
     pub fn calculate_diff_json(&self) -> Value {
         let blank = Map::new();
         let original = self.original.as_deref().unwrap_or(&blank);
-        let mut diff = Map::new();
+        let mut diff = Map::with_capacity(self.map.len().min(ED_PROPS.len()));
         let id = self.id().to_string();
         diff.insert("id".into(), Value::String(id.clone()));
         diff.insert("path".into(), Value::String(id_to_path(&id)));
@@ -231,16 +259,17 @@ impl ElementDefinition {
                 Some(k) => k,
                 None => continue,
             };
+            let key = key.as_ref();
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
-            let changed = self.map.get(&key) != original.get(&key);
+            uk.push_str(key);
+            let changed = self.map.get(key) != original.get(key);
             let uchanged = self.map.get(uk.as_str()) != original.get(uk.as_str());
 
             if changed {
                 if key == "mapping" || key == "constraint" {
-                    let cur = self.map.get(&key).and_then(|v| v.as_array());
-                    let orig = original.get(&key).and_then(|v| v.as_array());
+                    let cur = self.map.get(key).and_then(|v| v.as_array());
+                    let orig = original.get(key).and_then(|v| v.as_array());
                     if let Some(cur) = cur {
                         let diff_arr: Vec<Value> = cur
                             .iter()
@@ -248,15 +277,15 @@ impl ElementDefinition {
                             .cloned()
                             .collect();
                         if !diff_arr.is_empty() {
-                            diff.insert(key.clone(), Value::Array(diff_arr));
+                            diff.insert(key.to_string(), Value::Array(diff_arr));
                         }
                     }
-                } else if let Some(v) = self.map.get(&key) {
-                    diff.insert(key.clone(), v.clone());
+                } else if let Some(v) = self.map.get(key) {
+                    diff.insert(key.to_string(), v.clone());
                 }
             } else if key == "type" && is_choice_slice {
-                if let Some(v) = self.map.get(&key) {
-                    diff.insert(key.clone(), v.clone());
+                if let Some(v) = self.map.get(key) {
+                    diff.insert(key.to_string(), v.clone());
                 }
             }
             if uchanged {
@@ -298,7 +327,7 @@ fn order_type_obj(t: &Value) -> Value {
     let Some(obj) = t.as_object() else {
         return t.clone();
     };
-    let mut out = Map::new();
+    let mut out = Map::with_capacity(obj.len().min(TYPE_PROPS.len()));
     for k in TYPE_PROPS {
         if let Some(v) = obj.get(*k) {
             out.insert((*k).to_string(), v.clone());
@@ -312,11 +341,12 @@ fn order_type_obj(t: &Value) -> Value {
 
 /// Order an element JSON map per ED PROPS (with `[x]` resolution + `_` siblings).
 fn order_element_json(map: &Map<String, Value>) -> Value {
-    let mut out = Map::new();
+    let mut out = Map::with_capacity(map.len().min(ED_PROPS.len() * 2));
     let mut uk = String::new();
     for prop in ED_PROPS {
         if let Some(key) = resolve_choice_key(prop, map) {
-            if let Some(v) = map.get(&key) {
+            let key = key.as_ref();
+            if let Some(v) = map.get(key) {
                 let v = if key == "type" {
                     match v.as_array() {
                         Some(arr) => Value::Array(arr.iter().map(order_type_obj).collect()),
@@ -325,11 +355,11 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
                 } else {
                     v.clone()
                 };
-                out.insert(key.clone(), v);
+                out.insert(key.to_string(), v);
             }
             uk.clear();
             uk.push('_');
-            uk.push_str(&key);
+            uk.push_str(key);
             if let Some(v) = map.get(uk.as_str()) {
                 out.insert(uk.clone(), v.clone());
             }
@@ -338,30 +368,38 @@ fn order_element_json(map: &Map<String, Value>) -> Value {
     Value::Object(out)
 }
 
-fn resolve_choice_key(prop: &str, map: &Map<String, Value>) -> Option<String> {
+fn resolve_choice_key<'a>(prop: &'a str, map: &Map<String, Value>) -> Option<Cow<'a, str>> {
     if let Some(base) = prop.strip_suffix("[x]") {
         for k in map.keys() {
-            if let Some(rest) = k.strip_prefix(base) {
+            // A choice prop like `maxValue[x]` matches both the value key
+            // (`maxValueDate`) and its primitive sibling (`_maxValueDate`).
+            // Stock SUSHI carries `maxValue[x]` and `_maxValue[x]` as separate
+            // PROPS_AND_UNDERPROPS entries; we instead resolve the base key here
+            // and let the caller's `_`-sibling logic emit the underscore form.
+            // So strip an optional leading `_` before testing, and always return
+            // the non-underscore base key.
+            let bare = k.strip_prefix('_').unwrap_or(k);
+            if let Some(rest) = bare.strip_prefix(base) {
                 if rest.chars().next().map(|c| c.is_ascii_uppercase()) == Some(true) {
-                    return Some(k.clone());
+                    return Some(Cow::Owned(bare.to_string()));
                 }
             }
         }
         None
     } else {
-        Some(prop.to_string())
+        Some(Cow::Borrowed(prop))
     }
 }
 
-fn resolve_choice_key_either(
-    prop: &str,
+fn resolve_choice_key_either<'a>(
+    prop: &'a str,
     a: &Map<String, Value>,
     b: &Map<String, Value>,
-) -> Option<String> {
+) -> Option<Cow<'a, str>> {
     if prop.ends_with("[x]") {
         resolve_choice_key(prop, a).or_else(|| resolve_choice_key(prop, b))
     } else {
-        Some(prop.to_string())
+        Some(Cow::Borrowed(prop))
     }
 }
 
@@ -408,11 +446,11 @@ pub struct StructureDefinition {
 
 impl StructureDefinition {
     pub fn from_json(json: &Value, capture: bool) -> StructureDefinition {
-        let mut body = Map::new();
         // Borrow the object — we only `.get()` fields out of it; cloning the whole
         // SD (incl. the large snapshot) here was pure waste, re-dropped immediately.
         let empty = Map::new();
         let obj = json.as_object().unwrap_or(&empty);
+        let mut body = Map::with_capacity(obj.len().min(SD_PROPS.len() * 2));
         let mut uk = String::new();
         for prop in SD_PROPS {
             if let Some(v) = obj.get(*prop) {
@@ -431,6 +469,7 @@ impl StructureDefinition {
             .and_then(|s| s.get("element"))
             .and_then(|e| e.as_array())
         {
+            elements.reserve(snap.len());
             for el in snap {
                 elements.push(ElementDefinition::from_json(el, capture));
             }
@@ -453,6 +492,39 @@ impl StructureDefinition {
     /// without changing the element count (e.g. an external `set_id` loop).
     pub fn invalidate_id_index(&self) {
         *self.id_index.borrow_mut() = None;
+    }
+
+    fn push_element(&mut self, element: ElementDefinition) {
+        let idx = self.elements.len();
+        let id = element.id().to_string();
+        self.elements.push(element);
+        self.record_inserted_element(idx, id);
+    }
+
+    fn insert_element_at(&mut self, idx: usize, element: ElementDefinition) {
+        let id = element.id().to_string();
+        self.elements.insert(idx, element);
+        self.record_inserted_element(idx, id);
+    }
+
+    fn record_inserted_element(&self, idx: usize, id: String) {
+        let mut cache = self.id_index.borrow_mut();
+        let Some((len, map)) = cache.as_mut() else {
+            return;
+        };
+        if *len + 1 != self.elements.len() {
+            *cache = None;
+            return;
+        }
+        for pos in map.values_mut() {
+            if *pos >= idx {
+                *pos += 1;
+            }
+        }
+        if map.get(&id).map(|&pos| pos > idx).unwrap_or(true) {
+            map.insert(id, idx);
+        }
+        *len += 1;
     }
 
     pub fn get_str(&self, key: &str) -> Option<&str> {
@@ -555,10 +627,13 @@ impl StructureDefinition {
     /// `findElementByPath(path, fisher)`. Port of `StructureDefinition.ts:255`.
     pub fn find_element_by_path(&mut self, path: &str, fisher: &dyn Fisher) -> Option<usize> {
         let pt = self.path_type();
-        let full = if !path.is_empty() && path != "." {
-            format!("{pt}.{path}")
+        let mut full = String::with_capacity(pt.len() + path.len() + 1);
+        if !path.is_empty() && path != "." {
+            full.push_str(&pt);
+            full.push('.');
+            full.push_str(path);
         } else {
-            pt.clone()
+            full.push_str(&pt);
         };
         if let Some(i) = self
             .elements
@@ -569,21 +644,19 @@ impl StructureDefinition {
         }
 
         let parsed = crate::parse_fsh_path(path);
-        let mut fhir_path = pt.clone();
+        let mut fhir_path = String::with_capacity(pt.len() + path.len() + 1);
+        fhir_path.push_str(&pt);
         let mut previous_part = String::new();
         // matching set as ids (stable across splices)
         let mut matching: Vec<String> = self.elements.iter().map(|e| e.id().to_string()).collect();
         for part in &parsed {
-            fhir_path = format!("{fhir_path}.{}", part.base);
-            let fhir_path_dot = format!("{fhir_path}.");
-            let fhir_path_colon = format!("{fhir_path}:");
+            fhir_path.push('.');
+            fhir_path.push_str(&part.base);
             let mut new_matching: Vec<String> = matching
                 .iter()
                 .filter(|id| {
                     let p = self.path_of_id(id).unwrap_or("");
-                    p.starts_with(&fhir_path_dot)
-                        || p.starts_with(&fhir_path_colon)
-                        || p == fhir_path
+                    path_is_exact_or_child_or_slice(p, &fhir_path)
                 })
                 .cloned()
                 .collect();
@@ -592,13 +665,37 @@ impl StructureDefinition {
             if new_matching.is_empty() && matching.len() == 1 {
                 let single = matching[0].clone();
                 unfolded = self.unfold_by_id(&single, fisher);
-                new_matching = unfolded
-                    .iter()
-                    .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
-                    .cloned()
-                    .collect();
+                if !unfolded.is_empty() {
+                    // Only keep the children that match our path.
+                    new_matching = unfolded
+                        .iter()
+                        .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
+                        .cloned()
+                        .collect();
+                    // If none matched, try unfolding the choice element's types
+                    // (the single match was already sliced to this choice type).
+                    if new_matching.is_empty() && ends_with_choice_slice(&single, &previous_part) {
+                        unfolded = self.unfold_choice_element_types(&single, fisher);
+                        new_matching = unfolded
+                            .iter()
+                            .filter(|id| {
+                                self.path_of_id(id).unwrap_or("").starts_with(&fhir_path)
+                            })
+                            .cloned()
+                            .collect();
+                    }
+                } else if single.ends_with("[x]") {
+                    // `unfold` returned [] for a multi-type choice; graft the
+                    // common-ancestor children so deeper paths (e.g. `.extension`)
+                    // resolve. Port of StructureDefinition.ts:303-305.
+                    unfolded = self.unfold_choice_element_types(&single, fisher);
+                    new_matching = unfolded
+                        .iter()
+                        .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
+                        .cloned()
+                        .collect();
+                }
             }
-            let _ = &previous_part;
 
             if new_matching.is_empty() {
                 // sliceMatchingValueX: resolve e.g. valueCodeableConcept -> value[x].
@@ -628,14 +725,12 @@ impl StructureDefinition {
             } else {
                 // remove slices that don't match exactly
                 let pdepth = path_depth(&fhir_path);
-                let path_end = fhir_path.split('.').nth(pdepth).unwrap_or("").to_string();
-                let path_end_colon = format!("{path_end}:");
-                let path_end_base = format!("{path_end}:{}", part.base);
+                let path_end = fhir_path.split('.').nth(pdepth).unwrap_or("");
                 let differs = path_end != part.base;
                 matching.retain(|id| {
                     let id_end = id.split('.').nth(pdepth).unwrap_or("");
-                    !id_end.contains(&path_end_colon)
-                        || (id_end == path_end_base && differs)
+                    !contains_colon_slice(id_end, path_end)
+                        || (differs && equals_colon_slice(id_end, path_end, &part.base))
                 });
             }
             previous_part = part.base.clone();
@@ -669,7 +764,7 @@ impl StructureDefinition {
             if let Some(types) = self.elements[i].get("type").and_then(|v| v.as_array()) {
                 for t in types {
                     let code = type_code(t);
-                    if format!("{stem}{}", upper_first(code)) == fhir_path {
+                    if choice_path_matches(fhir_path, stem, code) {
                         matching.push((id.clone(), t.clone()));
                         break;
                     }
@@ -747,16 +842,16 @@ impl StructureDefinition {
         }
     }
 
-    /// `findMatchingSlice` (simplified: direct + url-encode retry).
+    /// `findMatchingSlice` (direct match + connected-slice fallback).
     fn find_matching_slice(
         &mut self,
         fhir_path: &str,
         part: &crate::PathPart,
         elements: &[String],
-        _fisher: &dyn Fisher,
+        fisher: &dyn Fisher,
     ) -> Option<String> {
         let slice_name = part.brackets.join("/");
-        elements
+        if let Some(id) = elements
             .iter()
             .find(|id| {
                 self.path_of_id(id).unwrap_or("") == fhir_path
@@ -766,6 +861,96 @@ impl StructureDefinition {
                         .unwrap_or(false)
             })
             .cloned()
+        {
+            return Some(id);
+        }
+        // Connected-slice fallback (StructureDefinition.ts:888-905): when the current
+        // element is a child of a slice, the requested slice may be defined on the
+        // *unsliced* (connected) sibling element rather than under this slice. e.g.
+        // `adjudication[amounttype].extension[reviewAction]` where the `reviewAction`
+        // extension slice lives on the generic `adjudication.extension`. Clone the
+        // matching slice from the connected element onto this slice's path so the
+        // path (and its later unfold) resolves.
+        if part.brackets.len() == 1 {
+            for e_id in elements {
+                let Some(connected) = self.find_connected_slice_element_id(e_id, "") else {
+                    continue;
+                };
+                let Some(ci) = self.index_of_id(&connected) else { continue };
+                let slice_idx = self.get_slices(ci).find(|&j| {
+                    self.elements[j].path() == fhir_path
+                        && self.elements[j].slice_name() == Some(slice_name.as_str())
+                });
+                if let Some(si) = slice_idx {
+                    let mut new_el = self.elements[si].clone();
+                    let new_id = format!("{e_id}:{slice_name}");
+                    new_el.set_id(new_id.clone());
+                    // Copy the connected element's slicing onto this element if absent.
+                    if let Some(ei) = self.index_of_id(e_id) {
+                        if self.elements[ei].get("slicing").is_none() {
+                            if let Some(sl) = self.elements[ci].get("slicing").cloned() {
+                                self.elements[ei].set("slicing", sl);
+                            }
+                        }
+                    }
+                    self.add_element(new_el);
+                    return Some(new_id);
+                }
+            }
+
+            // fishForFHIR fallback (StructureDefinition.ts:907-913): if the bracket
+            // is not a sliceName, fish it as an Extension and match the slice whose
+            // `type[0].profile[0]` equals the extension's url. This resolves an
+            // extension referenced by its canonical url (e.g.
+            // `mode.extension[http://.../capabilitystatement-expectation]`) to the
+            // slice that was registered under the extension's id.
+            if let Some(url) = fisher
+                .fish_for_metadata(&part.brackets[0])
+                .and_then(|m| m.url)
+            {
+                if let Some(id) = elements
+                    .iter()
+                    .find(|id| {
+                        self.path_of_id(id).unwrap_or("") == fhir_path
+                            && self
+                                .index_of_id(id)
+                                .map(|i| {
+                                    let ed = &self.elements[i];
+                                    ed.slice_name().is_some()
+                                        && ed
+                                            .get("type")
+                                            .and_then(|v| v.as_array())
+                                            .and_then(|a| a.first())
+                                            .and_then(|t| t.get("profile"))
+                                            .and_then(|p| p.as_array())
+                                            .and_then(|a| a.first())
+                                            .and_then(|v| v.as_str())
+                                            == Some(url.as_str())
+                                })
+                                .unwrap_or(false)
+                    })
+                    .cloned()
+                {
+                    return Some(id);
+                }
+            }
+        }
+        None
+    }
+
+    /// `findConnectedSliceElement` (ElementDefinition.ts:1019-1027): walk up until
+    /// we reach a slice, then return the corresponding element on the *unsliced*
+    /// sliced root (`slicedElement().id + postPath`).
+    fn find_connected_slice_element_id(&self, id: &str, post_path: &str) -> Option<String> {
+        // slicedElement() is non-null iff this id's last path segment is a slice.
+        if let Some(root) = self.sliced_element_id(id) {
+            let target = format!("{root}{post_path}");
+            return self.index_of_id(&target).map(|_| target);
+        }
+        let path = self.path_of_id(id)?;
+        let last_seg = path.rsplit('.').next()?.to_string();
+        let parent = id.rfind('.').map(|i| id[..i].to_string())?;
+        self.find_connected_slice_element_id(&parent, &format!(".{last_seg}{post_path}"))
     }
 
     /// `findMatchingSlice` fishForFHIR branch (StructureDefinition.ts:907-913):
@@ -822,8 +1007,7 @@ impl StructureDefinition {
                 .unwrap_or(false);
 
             if !use_constrained {
-                if let Some(base_json) = fisher.fish_for_fhir(&sd_type) {
-                    let base_def = StructureDefinition::from_json(&base_json, true);
+                if let Some(base_def) = fisher.fish_for_structure_definition(&sd_type, true) {
                     if let Some(rbi) = base_def.index_of_id(&ref_id) {
                         let ref_type = base_def.elements[rbi].get("type").cloned();
                         let new_ids =
@@ -876,26 +1060,56 @@ impl StructureDefinition {
         let parent_id = self.elements[idx].id().to_string();
         if self.elements[idx].slice_name().is_some() {
             if let Some(sliced_id) = self.sliced_element_id(&parent_id) {
-                let child_ids = self.children_ids(&sliced_id);
-                if !child_ids.is_empty() {
-                    // sliceName unfold uses cloneChildren(slicedElement, false):
-                    // slice extensions keep their inherited original so they still
-                    // appear as diffs in the slice (ElementDefinition.ts:2742).
-                    return self.clone_children_from(&sliced_id, &parent_id, idx, false);
+                // Stock only clones children from the sliced (generic) element when
+                // EITHER this slice has no profile of its own, OR its single profile
+                // equals the sliced element's single profile. Otherwise it leaves
+                // newElements empty and falls through to fishing this slice's profile,
+                // so profile-specific fixed values (notably an extension slice's `url`
+                // fixedUri) get applied. Cloning unconditionally from a sliced element
+                // that was already unfolded (e.g. a sibling generic `extension[+]`
+                // forced it) drops the slice's `url` fixedUri.
+                // (ElementDefinition.ts:2736-2748)
+                let clone_from_sliced = match &profile_to_use {
+                    None => true,
+                    Some(p) => {
+                        if let Some(si) = self.index_of_id(&sliced_id) {
+                            let types = self.elements[si].get("type").and_then(|v| v.as_array());
+                            let one_type = types.map(|a| a.len() == 1).unwrap_or(false);
+                            let sliced_profiles: Vec<String> = types
+                                .and_then(|a| a.first())
+                                .and_then(|t| t.get("profile"))
+                                .and_then(|pr| pr.as_array())
+                                .map(|a| {
+                                    a.iter().filter_map(|v| v.as_str().map(String::from)).collect()
+                                })
+                                .unwrap_or_default();
+                            one_type && sliced_profiles.len() == 1 && &sliced_profiles[0] == p
+                        } else {
+                            false
+                        }
+                    }
+                };
+                if clone_from_sliced {
+                    let child_ids = self.children_ids(&sliced_id);
+                    if !child_ids.is_empty() {
+                        // sliceName unfold uses cloneChildren(slicedElement, false):
+                        // slice extensions keep their inherited original so they still
+                        // appear as diffs in the slice (ElementDefinition.ts:2742).
+                        return self.clone_children_from(&sliced_id, &parent_id, idx, false);
+                    }
                 }
             }
         }
 
         // type-fishing fallback
         let fish_name = profile_to_use.clone().unwrap_or_else(|| codes[0].clone());
-        let json = match fisher
-            .fish_for_fhir(&fish_name)
-            .or_else(|| fisher.fish_for_fhir(&codes[0]))
+        let def = match fisher
+            .fish_for_structure_definition(&fish_name, true)
+            .or_else(|| fisher.fish_for_structure_definition(&codes[0], true))
         {
-            Some(j) => j,
+            Some(def) => def,
             None => return vec![],
         };
-        let def = StructureDefinition::from_json(&json, true);
         if def.elements.len() <= 1 {
             return vec![];
         }
@@ -906,6 +1120,59 @@ impl StructureDefinition {
             let old_id = ed.id().to_string();
             let new_id = old_id.replacen(&def_pt, &parent_id, 1);
             ed.set_id(new_id);
+            ed.capture_original();
+            new_children.push(ed);
+        }
+        self.add_elements(new_children)
+    }
+
+    /// `unfoldChoiceElementTypes(fisher)`. Port of `ElementDefinition.ts:2910`.
+    /// Unfolds a multi-type choice element (one `unfold` refuses, since it returns
+    /// `[]` for a >1-type choice) by grafting the children of the common ancestor
+    /// of all available types onto this choice element. Returns the new ids.
+    pub fn unfold_choice_element_types(&mut self, id: &str, fisher: &dyn Fisher) -> Vec<String> {
+        let Some(idx) = self.index_of_id(id) else {
+            return vec![];
+        };
+        // Gather every type: its profiles if present, else the bare code.
+        let mut all_types: Vec<String> = Vec::new();
+        if let Some(types) = self.elements[idx].get("type").and_then(|v| v.as_array()) {
+            for t in types {
+                let profiles: Vec<String> = t
+                    .get("profile")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+                if !profiles.is_empty() {
+                    all_types.extend(profiles);
+                } else {
+                    all_types.push(type_code(t).to_string());
+                }
+            }
+        }
+        // Ancestry (lineage urls) of each type; intersect to the shared ancestry,
+        // preserving the order of the first type's lineage (lodash intersectionWith
+        // with no comparator behaves like intersection). The nearest common ancestor
+        // is the first shared url.
+        let all_ancestry: Vec<Vec<String>> =
+            all_types.iter().map(|t| type_lineage_urls(t, fisher)).collect();
+        let shared = intersection_first(&all_ancestry);
+        let Some(common_url) = shared.first() else {
+            // No common ancestor — stock logs an error and returns [].
+            return vec![];
+        };
+        let Some(def) = fisher.fish_for_structure_definition(common_url, true) else {
+            return vec![];
+        };
+        let def_pt = def.path_type();
+        let parent_id = self.elements[idx].id().to_string();
+        let mut new_children = Vec::new();
+        for child in def.elements.iter().skip(1) {
+            let mut ed = child.clone();
+            let old_id = ed.id().to_string();
+            let new_id = old_id.replacen(&def_pt, &parent_id, 1);
+            ed.set_id(new_id);
+            remove_uninherited(&mut ed);
             ed.capture_original();
             new_children.push(ed);
         }
@@ -966,6 +1233,7 @@ impl StructureDefinition {
     /// `addElements` — insert each via `add_element` (ordering). Returns new ids.
     pub fn add_elements(&mut self, els: Vec<ElementDefinition>) -> Vec<String> {
         let mut ids = Vec::new();
+        self.elements.reserve(els.len());
         for e in els {
             ids.push(e.id().to_string());
             self.add_element(e);
@@ -979,11 +1247,11 @@ impl StructureDefinition {
         let id = element.id().to_string();
         let parent_id = id.rfind('.').map(|i| id[..i].to_string());
         let Some(parent_id) = parent_id else {
-            self.elements.push(element);
+            self.push_element(element);
             return;
         };
         if self.index_of_id(&parent_id).is_none() {
-            self.elements.push(element);
+            self.push_element(element);
             return;
         }
         if element.slice_name().is_some() {
@@ -1008,37 +1276,40 @@ impl StructureDefinition {
                 }
                 i += 1;
             }
-            self.elements.insert(i, element);
+            self.insert_element_at(i, element);
         } else {
             // plain child: insert after older sibling's deepest child, or after parent.
+            let parent_dot = format!("{parent_id}.");
+            let parent_child_depth = path_depth(self.path_of_id(&parent_id).unwrap_or("")) + 1;
             let siblings: Vec<usize> = (0..self.elements.len())
                 .filter(|&j| {
                     let cid = self.elements[j].id();
                     cid != id
-                        && cid.starts_with(&format!("{parent_id}."))
-                        && path_depth(self.elements[j].path())
-                            == path_depth(self.path_of_id(&parent_id).unwrap_or("")) + 1
+                        && cid.starts_with(&parent_dot)
+                        && path_depth(self.elements[j].path()) == parent_child_depth
                 })
                 .collect();
             if siblings.is_empty() {
                 let pidx = self.index_of_id(&parent_id).unwrap();
-                self.elements.insert(pidx + 1, element);
+                self.insert_element_at(pidx + 1, element);
             } else {
                 let older = *siblings.last().unwrap();
                 let older_id = self.elements[older].id().to_string();
                 // deepest descendant of older sibling
                 let mut insert_at = older;
+                let older_dot = format!("{older_id}.");
+                let older_colon = format!("{older_id}:");
                 for j in older..self.elements.len() {
                     if self.elements[j].id() == older_id
-                        || self.elements[j].id().starts_with(&format!("{older_id}."))
-                        || self.elements[j].id().starts_with(&format!("{older_id}:"))
+                        || self.elements[j].id().starts_with(&older_dot)
+                        || self.elements[j].id().starts_with(&older_colon)
                     {
                         insert_at = j;
                     } else {
                         break;
                     }
                 }
-                self.elements.insert(insert_at + 1, element);
+                self.insert_element_at(insert_at + 1, element);
             }
         }
     }
@@ -1302,16 +1573,54 @@ pub fn parse_fsh_path(path: &str) -> Vec<PathPart> {
         .collect()
 }
 
-fn upper_first(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
-}
-
 fn path_depth(path: &str) -> usize {
     path.split('.').count().saturating_sub(1)
+}
+
+fn path_is_exact_or_child_or_slice(path: &str, prefix: &str) -> bool {
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.as_bytes().first().copied())
+            .map(|b| b == b'.' || b == b':')
+            .unwrap_or(false)
+}
+
+fn ends_with_choice_slice(id: &str, slice: &str) -> bool {
+    let Some(stem) = id.strip_suffix(slice) else {
+        return false;
+    };
+    stem.ends_with("[x]:")
+}
+
+fn contains_colon_slice(id_end: &str, path_end: &str) -> bool {
+    id_end
+        .match_indices(path_end)
+        .any(|(i, _)| id_end.as_bytes().get(i + path_end.len()) == Some(&b':'))
+}
+
+fn equals_colon_slice(id_end: &str, path_end: &str, slice_base: &str) -> bool {
+    let Some(rest) = id_end.strip_prefix(path_end) else {
+        return false;
+    };
+    rest.as_bytes().first() == Some(&b':') && &rest[1..] == slice_base
+}
+
+fn choice_path_matches(fhir_path: &str, stem: &str, code: &str) -> bool {
+    let Some(suffix) = fhir_path.strip_prefix(stem) else {
+        return false;
+    };
+    let mut code_chars = code.chars();
+    let Some(first) = code_chars.next() else {
+        return suffix.is_empty();
+    };
+    let mut suffix_chars = suffix.chars();
+    for upper in first.to_uppercase() {
+        if suffix_chars.next() != Some(upper) {
+            return false;
+        }
+    }
+    suffix_chars.as_str() == code_chars.as_str()
 }
 
 /// Port of `ElementDefinition.hasProfileElementExtension`: returns true when the
@@ -1414,6 +1723,47 @@ fn reclone_capture(ed: &mut ElementDefinition, recapture_slice_extensions: bool)
     }
 }
 
+/// `getTypeLineage(type, fisher)` reduced to the chain of canonical urls.
+/// Port of `ElementDefinition.getTypeLineage` (without `includeImposeProfiles`),
+/// mirroring `sd_export::get_type_lineage`. Walks up `parent` from `type_name`.
+fn type_lineage_urls(type_name: &str, fisher: &dyn Fisher) -> Vec<String> {
+    let mut urls = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut current = Some(type_name.to_string());
+    while let Some(ct) = current {
+        if seen.contains(&ct) {
+            break;
+        }
+        let md = fisher
+            .fish_for_metadata(&ct)
+            .or_else(|| fisher.fish_for_metadata(ct.split('|').next().unwrap_or(&ct)));
+        let Some(md) = md else { break };
+        if let Some(u) = &md.url {
+            if seen.contains(u) {
+                break;
+            }
+            seen.push(u.clone());
+            urls.push(u.clone());
+        }
+        current = md.parent.clone();
+    }
+    urls
+}
+
+/// Intersection of all lists, preserving the order of (and deduped by) the first.
+/// Equivalent to lodash `intersectionWith(...arrays)` with no comparator.
+fn intersection_first(arrays: &[Vec<String>]) -> Vec<String> {
+    let Some(first) = arrays.first() else {
+        return vec![];
+    };
+    let rest = &arrays[1..];
+    first
+        .iter()
+        .filter(|x| rest.iter().all(|a| a.contains(*x)))
+        .cloned()
+        .collect()
+}
+
 fn remove_uninherited(ed: &mut ElementDefinition) {
     const UNINHERITED: &[&str] = &[
         "http://hl7.org/fhir/tools/StructureDefinition/binding-definition",
@@ -1460,5 +1810,3 @@ fn remove_uninherited(ed: &mut ElementDefinition) {
         m.remove("extension");
     }
 }
-
-

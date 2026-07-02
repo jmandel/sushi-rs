@@ -1,0 +1,44 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TrialOperationDefinition",
+  "url": "http://example.org/StructureDefinition/TrialOperationDefinition",
+  "version": "0.1.0",
+  "name": "TrialOperationDefinition",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "OperationDefinition",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OperationDefinition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "OperationDefinition.system",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+            "valueCode": "trial-use"
+          }
+        ],
+        "path": "OperationDefinition.system",
+        "mustSupport": true
+      },
+      {
+        "id": "OperationDefinition.type",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+            "valueCode": "trial-use"
+          }
+        ],
+        "path": "OperationDefinition.type"
+      },
+      {
+        "id": "OperationDefinition.instance",
+        "path": "OperationDefinition.instance",
+        "mustSupport": true
+      }
+    ]
+  }
+}

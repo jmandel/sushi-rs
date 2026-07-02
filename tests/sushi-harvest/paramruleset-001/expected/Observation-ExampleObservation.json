@@ -1,0 +1,9 @@
+{
+  "resourceType": "Observation",
+  "id": "ExampleObservation",
+  "meta": {
+    "profile": [
+      "http://example.org/StructureDefinition/MyObservation"
+    ]
+  }
+}

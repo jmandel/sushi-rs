@@ -4,6 +4,7 @@ members = [
     "crates/fsh_lexer_parser",
     "crates/fsh_model",
     "crates/fhir_model",
+    "crates/package_acquisition",
     "crates/package_store",
     "crates/compiler",
     "crates/diagnostics",
@@ -24,6 +25,7 @@ fsh_lexer_parser = { path = "crates/fsh_lexer_parser" }
 fsh_model = { path = "crates/fsh_model" }
 fhir_model = { path = "crates/fhir_model" }
 package_store = { path = "crates/package_store" }
+package_acquisition = { path = "crates/package_acquisition" }
 compiler = { path = "crates/compiler" }
 diagnostics = { path = "crates/diagnostics" }
 json_emit = { path = "crates/json_emit" }
@@ -36,8 +38,17 @@ serde_yaml = "0.9"
 indexmap = { version = "2", features = ["serde"] }
 smallvec = { version = "1", features = ["serde", "union"] }
 rustc-hash = "2"
+mimalloc = { version = "0.1", default-features = false }
 anyhow = "1"
 thiserror = "2"
+flate2 = "1"
+hex = "0.4"
+sha1 = "0.10"
+sha2 = "0.10"
+tar = "0.4"
+tempfile = "3"
+ureq = { version = "2", features = ["json"] }
+walkdir = "2"
 
 [profile.release]
 opt-level = 3

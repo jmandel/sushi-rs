@@ -1,0 +1,9 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "Foo",
+  "id": "Foo",
+  "title": "That",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/Foo"
+}

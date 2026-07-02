@@ -1,0 +1,9 @@
+{
+  "resourceType": "Patient",
+  "id": "PatientExample",
+  "identifier": [
+    {
+      "system": "http://example.org"
+    }
+  ]
+}

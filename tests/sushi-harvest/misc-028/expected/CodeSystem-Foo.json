@@ -1,0 +1,10 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "Foo",
+  "id": "Foo",
+  "title": "This",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/Foo"
+}

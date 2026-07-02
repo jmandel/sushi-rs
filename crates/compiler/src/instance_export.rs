@@ -286,25 +286,106 @@ fn reference_from(r: &FshReference) -> Map<String, J> {
 }
 
 /// Port of SUSHI's xhtml handling: `minify(value, {collapseWhitespace:true,
-/// html5:false, keepClosingSlash:true})` (ElementDefinition.assignString). Two
-/// transforms: normalize attribute value quotes to `"`, and collapse whitespace
-/// with block-element awareness.
+/// html5:false, keepClosingSlash:true})` (ElementDefinition.assignString,
+/// ElementDefinition.ts:2385-2393). This faithfully reimplements the relevant
+/// subset of html-minifier-terser 5.1.1's `collapseWhitespace:true` state
+/// machine (`src/htmlminifier.js`), including the cross-element trailing-trim
+/// (`squashTrailingWhitespace`) and the `inlineTextTags` leading-trim that keys
+/// on accumulated `currentChars`. All other minifier options are at SUSHI's
+/// defaults (no decodeEntities, removeComments, conservativeCollapse, etc.).
 fn minify_xhtml(input: &str) -> String {
-    #[derive(Clone)]
-    enum Tok {
-        Tag(String, String), // (rendered tag, lowercase element name)
-        Text(String),
+    let tokens = tokenize_xhtml(input);
+    let mut st = MinState::default();
+    // html-minifier's parser `prevTag`: None = undefined (doc start), Some("")
+    // for a preceding comment/doctype, Some(name)/Some("/name") for a tag.
+    let mut prev_tag: Option<String> = None;
+    for idx in 0..tokens.len() {
+        match tokens[idx].kind {
+            TokKind::Start => {
+                st.start(&tokens[idx]);
+                prev_tag = Some(tokens[idx].name.clone());
+            }
+            TokKind::End => {
+                st.end(&tokens[idx]);
+                prev_tag = Some(format!("/{}", tokens[idx].name));
+            }
+            TokKind::Comment => {
+                st.buffer.push(tokens[idx].rendered.clone());
+                prev_tag = Some(String::new());
+            }
+            TokKind::Text => {
+                // nextTag: peek the following token the way the parser does.
+                let next_tag: String = match tokens.get(idx + 1) {
+                    Some(t) => match t.kind {
+                        TokKind::Start => t.name.clone(),
+                        TokKind::End => format!("/{}", t.name),
+                        TokKind::Comment | TokKind::Text => String::new(),
+                    },
+                    None => String::new(),
+                };
+                st.chars(&tokens[idx].rendered, prev_tag.as_deref(), &next_tag);
+                prev_tag = Some(String::new());
+            }
+        }
     }
-    // Tokenize into tags vs text (respecting quotes inside tags).
+    st.buffer.concat()
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum TokKind {
+    Start,
+    End,
+    Text,
+    Comment,
+}
+
+struct XTok {
+    kind: TokKind,
+    rendered: String,
+    name: String,
+    unary: bool,
+}
+
+fn tokenize_xhtml(input: &str) -> Vec<XTok> {
     let chars: Vec<char> = input.chars().collect();
-    let mut toks: Vec<Tok> = Vec::new();
+    let mut toks: Vec<XTok> = Vec::new();
+    let n = chars.len();
     let mut i = 0;
-    while i < chars.len() {
+    let starts_with = |i: usize, pat: &str| -> bool {
+        let p: Vec<char> = pat.chars().collect();
+        i + p.len() <= n && chars[i..i + p.len()] == p[..]
+    };
+    while i < n {
         if chars[i] == '<' {
-            // read until matching '>' (skip over quoted attr values)
+            if starts_with(i, "<!--") {
+                // Comment: up to and including "-->".
+                let mut j = i + 4;
+                while j < n && !(chars[j] == '-' && starts_with(j, "-->")) {
+                    j += 1;
+                }
+                let end = (j + 3).min(n);
+                let raw: String = chars[i..end].iter().collect();
+                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                i = end;
+                continue;
+            }
+            if starts_with(i, "<!") {
+                // Doctype / conditional: up to next '>'.
+                let mut j = i + 2;
+                while j < n && chars[j] != '>' {
+                    j += 1;
+                }
+                let end = (j + 1).min(n);
+                let raw: String = chars[i..end].iter().collect();
+                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                i = end;
+                continue;
+            }
+            // Read until matching '>' (skipping over quoted attribute values).
+            let is_end = starts_with(i, "</");
             let mut j = i + 1;
             let mut quote: Option<char> = None;
-            while j < chars.len() {
+            while j < n {
                 let c = chars[j];
                 match quote {
                     Some(q) => {
@@ -322,66 +403,460 @@ fn minify_xhtml(input: &str) -> String {
                 }
                 j += 1;
             }
-            let raw: String = chars[i..=j.min(chars.len() - 1)].iter().collect();
+            let raw: String = chars[i..=j.min(n - 1)].iter().collect();
             let name = tag_element_name(&raw);
-            toks.push(Tok::Tag(rewrite_tag_quotes(&raw), name));
+            if is_end {
+                toks.push(XTok { kind: TokKind::End, rendered: String::new(), name, unary: false });
+            } else {
+                let body = raw.strip_suffix('>').unwrap_or(&raw);
+                let unary = body.trim_end().ends_with('/') || is_void_element(&name);
+                toks.push(XTok { kind: TokKind::Start, rendered: rewrite_tag_quotes(&raw), name, unary });
+            }
             i = j + 1;
         } else {
             let mut j = i;
-            while j < chars.len() && chars[j] != '<' {
+            while j < n && chars[j] != '<' {
                 j += 1;
             }
             let raw: String = chars[i..j].iter().collect();
-            toks.push(Tok::Text(raw));
+            toks.push(XTok { kind: TokKind::Text, rendered: raw, name: String::new(), unary: false });
             i = j;
         }
     }
-    // Collapse whitespace on text tokens with block-awareness.
+    toks
+}
+
+/// html-minifier-terser handler state for `collapseWhitespace:true`.
+#[derive(Default)]
+struct MinState {
+    buffer: Vec<String>,
+    current_chars: String,
+    chars_prev_tag: String,
+    current_tag: String,
+    has_chars: bool,
+    stack_no_trim: Vec<String>,
+    stack_no_collapse: Vec<String>,
+}
+
+impl MinState {
+    fn start(&mut self, tok: &XTok) {
+        let tag = &tok.name;
+        self.current_tag = tag.clone();
+        self.chars_prev_tag = tag.clone();
+        if !is_inline_text_tag(tag) {
+            self.current_chars.clear();
+        }
+        self.has_chars = false;
+        if self.stack_no_trim.is_empty() {
+            self.squash_trailing_whitespace(tag);
+        }
+        if !tok.unary {
+            if !can_trim_ws(tag) || !self.stack_no_trim.is_empty() {
+                self.stack_no_trim.push(tag.clone());
+            }
+            if !can_collapse_ws(tag) || !self.stack_no_collapse.is_empty() {
+                self.stack_no_collapse.push(tag.clone());
+            }
+        }
+        self.buffer.push(tok.rendered.clone());
+    }
+
+    fn end(&mut self, tok: &XTok) {
+        let tag = &tok.name;
+        if !self.stack_no_trim.is_empty() {
+            if self.stack_no_trim.last().map(String::as_str) == Some(tag.as_str()) {
+                self.stack_no_trim.pop();
+            }
+        } else {
+            self.squash_trailing_whitespace(&format!("/{tag}"));
+        }
+        if !self.stack_no_collapse.is_empty()
+            && self.stack_no_collapse.last().map(String::as_str) == Some(tag.as_str())
+        {
+            self.stack_no_collapse.pop();
+        }
+        let mut is_empty = false;
+        if self.current_tag == *tag {
+            self.current_tag.clear();
+            is_empty = !self.has_chars;
+        }
+        self.buffer.push(format!("</{tag}>"));
+        self.chars_prev_tag = format!("/{tag}");
+        if !is_inline_tag(tag) {
+            self.current_chars.clear();
+        } else if is_empty {
+            self.current_chars.push('|');
+        }
+    }
+
+    fn squash_trailing_whitespace(&mut self, next_tag: &str) {
+        let mut chars_index: isize = self.buffer.len() as isize - 1;
+        if self.buffer.len() > 1 {
+            let item = &self.buffer[self.buffer.len() - 1];
+            // last buffer item is a comment (`<!`) or empty string -> skip it.
+            if item.is_empty() || item.starts_with("<!") {
+                chars_index -= 1;
+            }
+        }
+        self.trim_trailing_whitespace(chars_index, next_tag);
+    }
+
+    // Walk backwards, bypassing closing tags, to trim the trailing whitespace of
+    // the most recent text node (html-minifier `trimTrailingWhitespace`).
+    fn trim_trailing_whitespace(&mut self, mut index: isize, next_tag: &str) {
+        let mut end_tag: Option<String> = None;
+        while index >= 0 && can_trim_ws_opt(end_tag.as_deref()) {
+            let s = &self.buffer[index as usize];
+            if let Some(name) = match_end_tag(s) {
+                end_tag = Some(name);
+            } else if s.ends_with('>') {
+                break;
+            } else {
+                let r = collapse_whitespace_smart(s, None, Some(next_tag));
+                let nonempty = !r.is_empty();
+                self.buffer[index as usize] = r;
+                if nonempty {
+                    break;
+                }
+            }
+            index -= 1;
+        }
+    }
+
+    fn chars(&mut self, text_in: &str, prev_tag_in: Option<&str>, next_tag_in: &str) {
+        // Map empty-string tags (preceding comment / next is comment-or-eof) to
+        // the 'comment' sentinel, matching html-minifier.
+        let prev_mapped: Option<String> = match prev_tag_in {
+            None => None,
+            Some("") => Some("comment".to_string()),
+            Some(t) => Some(t.to_string()),
+        };
+        let next_tag: String = if next_tag_in.is_empty() {
+            "comment".to_string()
+        } else {
+            next_tag_in.to_string()
+        };
+        let mut text = text_in.to_string();
+        // collapseWhitespace is always true here.
+        let mut prev_eff = prev_mapped;
+        if self.stack_no_trim.is_empty() {
+            if prev_eff.as_deref() == Some("comment") {
+                if let Some(prev_comment) = self.buffer.last().cloned() {
+                    let prev_comment_empty = prev_comment.is_empty();
+                    if prev_comment_empty {
+                        prev_eff = Some(self.chars_prev_tag.clone());
+                    }
+                    if self.buffer.len() > 1
+                        && (prev_comment_empty || self.current_chars.ends_with(' '))
+                    {
+                        let ci = self.buffer.len() - 2;
+                        let b = &self.buffer[ci];
+                        let kept = b.trim_end_matches(|c: char| c.is_whitespace());
+                        let trailing = &b[kept.len()..];
+                        if !trailing.is_empty() {
+                            text = format!("{trailing}{text}");
+                            let kept = kept.to_string();
+                            self.buffer[ci] = kept;
+                        }
+                    }
+                }
+            }
+            if let Some(pt) = prev_eff.clone() {
+                if !pt.is_empty() {
+                    if pt == "/nobr" || pt == "wbr" {
+                        if text.starts_with(|c: char| c.is_whitespace()) {
+                            let bare = pt.trim_start_matches('/');
+                            let needle = format!("<{bare}");
+                            let mut tag_index = self.buffer.len() as isize - 1;
+                            while tag_index > 0
+                                && self.buffer[tag_index as usize].find(&needle) != Some(0)
+                            {
+                                tag_index -= 1;
+                            }
+                            self.trim_trailing_whitespace(tag_index - 1, "br");
+                        }
+                    } else {
+                        let stripped = pt.strip_prefix('/').unwrap_or(&pt);
+                        if is_inline_text_tag(stripped) {
+                            let trim_left = self.current_chars.is_empty()
+                                || self.current_chars.ends_with(is_ws6);
+                            text = collapse_whitespace(&text, trim_left, false, false);
+                        }
+                    }
+                }
+            }
+            // prevTag || nextTag (nextTag is always truthy here).
+            text = collapse_whitespace_smart(&text, prev_eff.as_deref(), Some(&next_tag));
+            if text.is_empty()
+                && self.current_chars.ends_with(is_ws6)
+                && prev_eff.as_deref().is_some_and(|s| s.starts_with('/'))
+            {
+                self.trim_trailing_whitespace(self.buffer.len() as isize - 1, &next_tag);
+            }
+        }
+        if self.stack_no_collapse.is_empty() && next_tag != "html" && prev_eff.is_none() {
+            text = collapse_whitespace(&text, false, false, true);
+        }
+        self.chars_prev_tag = if text.chars().all(|c| c.is_whitespace()) {
+            prev_eff.clone().unwrap_or_default()
+        } else {
+            "comment".to_string()
+        };
+        self.current_chars.push_str(&text);
+        if !text.is_empty() {
+            self.has_chars = true;
+        }
+        self.buffer.push(text);
+    }
+}
+
+// ---- html-minifier whitespace primitives ----
+
+/// The six whitespace chars html-minifier's regexes treat as collapsible:
+/// space, newline, carriage-return, tab, form-feed, and non-breaking space.
+fn is_ws6(c: char) -> bool {
+    matches!(c, ' ' | '\n' | '\r' | '\t' | '\u{0C}' | '\u{A0}')
+}
+
+fn collapse_whitespace_smart(s: &str, prev: Option<&str>, next: Option<&str>) -> String {
+    let mut trim_left = prev.is_some_and(|p| !is_self_closing_inline(p));
+    if trim_left {
+        let p = prev.unwrap();
+        trim_left = match p.strip_prefix('/') {
+            Some(rest) => !is_inline_tag(rest),
+            None => !is_inline_text_tag(p),
+        };
+    }
+    let mut trim_right = next.is_some_and(|x| !is_self_closing_inline(x));
+    if trim_right {
+        let x = next.unwrap();
+        trim_right = match x.strip_prefix('/') {
+            Some(rest) => !is_inline_text_tag(rest),
+            None => !is_inline_tag(x),
+        };
+    }
+    let collapse_all = prev.is_some() && next.is_some();
+    collapse_whitespace(s, trim_left, trim_right, collapse_all)
+}
+
+fn collapse_whitespace(s: &str, trim_left: bool, trim_right: bool, collapse_all: bool) -> String {
+    let mut out = s.to_string();
+    if trim_left {
+        out = ws_trim_left(&out);
+    }
+    if trim_right {
+        out = ws_trim_right(&out);
+    }
+    if collapse_all {
+        out = ws_collapse_all(&out);
+    }
+    out
+}
+
+fn ws_trim_left(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut end = 0;
+    while end < chars.len() && is_ws6(chars[end]) {
+        end += 1;
+    }
+    if end == 0 {
+        return s.to_string();
+    }
+    let run: String = chars[..end].iter().collect();
+    let rest: String = chars[end..].iter().collect();
+    format!("{}{rest}", ws_transform_leading(&run))
+}
+
+fn ws_trim_right(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut start = chars.len();
+    while start > 0 && is_ws6(chars[start - 1]) {
+        start -= 1;
+    }
+    if start == chars.len() {
+        return s.to_string();
+    }
+    let head: String = chars[..start].iter().collect();
+    let run: String = chars[start..].iter().collect();
+    format!("{head}{}", ws_transform_trailing(&run))
+}
+
+const NBSP: char = '\u{A0}';
+
+// JS: spaces.replace(/^[^\xA0]+/, '').replace(/(\xA0+)[^\xA0]+/g, '$1 ')
+fn ws_transform_leading(run: &str) -> String {
+    let chars: Vec<char> = run.chars().collect();
+    let mut i = 0;
+    while i < chars.len() && chars[i] != NBSP {
+        i += 1; // drop leading non-nbsp whitespace
+    }
     let mut out = String::new();
-    for idx in 0..toks.len() {
-        match &toks[idx] {
-            Tok::Tag(t, _) => out.push_str(t),
-            Tok::Text(s) => {
-                let collapsed = collapse_ws(s);
-                let trim_left = match idx.checked_sub(1).and_then(|p| toks.get(p)) {
-                    None => true,
-                    Some(Tok::Tag(_, name)) => !is_inline_element(name),
-                    Some(Tok::Text(_)) => false,
-                };
-                let trim_right = match toks.get(idx + 1) {
-                    None => true,
-                    Some(Tok::Tag(_, name)) => !is_inline_element(name),
-                    Some(Tok::Text(_)) => false,
-                };
-                let mut v = collapsed.as_str();
-                if trim_left {
-                    v = v.trim_start_matches(' ');
-                }
-                if trim_right {
-                    v = v.trim_end_matches(' ');
-                }
-                out.push_str(v);
+    while i < chars.len() {
+        while i < chars.len() && chars[i] == NBSP {
+            out.push(NBSP);
+            i += 1;
+        }
+        if i < chars.len() && chars[i] != NBSP {
+            out.push(' ');
+            while i < chars.len() && chars[i] != NBSP {
+                i += 1;
             }
         }
     }
     out
 }
 
-fn collapse_ws(s: &str) -> String {
+// JS: spaces.replace(/[^\xA0]+(\xA0+)/g, ' $1').replace(/[^\xA0]+$/, '')
+fn ws_transform_trailing(run: &str) -> String {
+    let chars: Vec<char> = run.chars().collect();
     let mut out = String::new();
-    let mut in_ws = false;
-    for c in s.chars() {
-        if c.is_whitespace() {
-            if !in_ws {
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != NBSP {
+            let start = i;
+            while i < chars.len() && chars[i] != NBSP {
+                i += 1;
+            }
+            if i < chars.len() && chars[i] == NBSP {
                 out.push(' ');
-                in_ws = true;
+                while i < chars.len() && chars[i] == NBSP {
+                    out.push(NBSP);
+                    i += 1;
+                }
+            } else {
+                for &c in &chars[start..i] {
+                    out.push(c);
+                }
             }
         } else {
-            out.push(c);
-            in_ws = false;
+            out.push(NBSP);
+            i += 1;
+        }
+    }
+    // .replace(/[^\xA0]+$/, '') — drop the trailing non-nbsp run.
+    let kept: String = {
+        let oc: Vec<char> = out.chars().collect();
+        let mut e = oc.len();
+        while e > 0 && oc[e - 1] != NBSP {
+            e -= 1;
+        }
+        oc[..e].iter().collect()
+    };
+    kept
+}
+
+// JS: str.replace(/[ \n\r\t\f\xA0]+/g, fn) where each run collapses via
+// (^|\xA0+)[^\xA0]+ -> '$1 ', except a lone '\t' run is preserved.
+fn ws_collapse_all(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if is_ws6(chars[i]) {
+            let start = i;
+            while i < chars.len() && is_ws6(chars[i]) {
+                i += 1;
+            }
+            let run = &chars[start..i];
+            if run == ['\t'] {
+                out.push('\t');
+            } else {
+                out.push_str(&ws_collapse_run(run));
+            }
+        } else {
+            out.push(chars[i]);
+            i += 1;
         }
     }
     out
+}
+
+fn ws_collapse_run(run: &[char]) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+    if i < run.len() && run[i] != NBSP {
+        out.push(' ');
+        while i < run.len() && run[i] != NBSP {
+            i += 1;
+        }
+    }
+    while i < run.len() {
+        while i < run.len() && run[i] == NBSP {
+            out.push(NBSP);
+            i += 1;
+        }
+        if i < run.len() && run[i] != NBSP {
+            out.push(' ');
+            while i < run.len() && run[i] != NBSP {
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+fn match_end_tag(s: &str) -> Option<String> {
+    let inner = s.strip_prefix("</")?.strip_suffix('>')?;
+    if !inner.is_empty()
+        && inner
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '-')
+    {
+        Some(inner.to_string())
+    } else {
+        None
+    }
+}
+
+fn can_trim_ws(tag: &str) -> bool {
+    !matches!(tag, "pre" | "textarea")
+}
+
+fn can_trim_ws_opt(tag: Option<&str>) -> bool {
+    match tag {
+        None => true,
+        Some(t) => can_trim_ws(t),
+    }
+}
+
+fn can_collapse_ws(tag: &str) -> bool {
+    !matches!(tag, "script" | "style" | "pre" | "textarea")
+}
+
+fn is_void_element(name: &str) -> bool {
+    matches!(
+        name,
+        "area" | "base" | "basefont" | "br" | "col" | "embed" | "frame" | "hr" | "img"
+            | "input" | "isindex" | "keygen" | "link" | "meta" | "param" | "source" | "track"
+            | "wbr"
+    )
+}
+
+// html-minifier `inlineTags`: maintain whitespace AROUND these elements.
+fn is_inline_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr" | "acronym" | "b" | "bdi" | "bdo" | "big" | "button" | "cite" | "code"
+            | "del" | "dfn" | "em" | "font" | "i" | "ins" | "kbd" | "label" | "mark" | "math"
+            | "nobr" | "object" | "q" | "rp" | "rt" | "rtc" | "ruby" | "s" | "samp" | "select"
+            | "small" | "span" | "strike" | "strong" | "sub" | "sup" | "svg" | "textarea"
+            | "time" | "tt" | "u" | "var"
+    )
+}
+
+// html-minifier `inlineTextTags`: maintain whitespace WITHIN these elements.
+fn is_inline_text_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr" | "acronym" | "b" | "big" | "del" | "em" | "font" | "i" | "ins" | "kbd"
+            | "mark" | "nobr" | "rp" | "s" | "samp" | "small" | "span" | "strike" | "strong"
+            | "sub" | "sup" | "time" | "tt" | "u" | "var"
+    )
+}
+
+// html-minifier `selfClosingInlineTags`: maintain whitespace around these.
+fn is_self_closing_inline(name: &str) -> bool {
+    matches!(name, "comment" | "img" | "input" | "wbr")
 }
 
 fn tag_element_name(tag: &str) -> String {
@@ -392,44 +867,56 @@ fn tag_element_name(tag: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn is_inline_element(name: &str) -> bool {
-    matches!(
-        name,
-        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "br" | "button" | "cite" | "code"
-            | "dfn" | "em" | "i" | "img" | "input" | "kbd" | "label" | "map" | "object" | "q"
-            | "samp" | "select" | "small" | "span" | "strong" | "sub" | "sup" | "textarea"
-            | "time" | "tt" | "u" | "var"
-    )
-}
-
-/// Within a tag, convert single-quoted attribute values to double-quoted
-/// (matching html-minifier's default `"` quoting), when the value has no `"`.
+/// Re-render a start tag the way html-minifier rebuilds it from parsed
+/// attributes: tag name and attributes joined by single spaces, attribute
+/// values double-quoted, no whitespace before the closing `>`/`/>`. Whitespace
+/// *outside* quoted attribute values (between the tag name and attributes, and
+/// between attributes — even multi-line) collapses to a single space.
 fn rewrite_tag_quotes(tag: &str) -> String {
     let chars: Vec<char> = tag.chars().collect();
     let mut out = String::new();
     let mut i = 0;
     while i < chars.len() {
-        if chars[i] == '\'' {
-            // find closing single quote
-            if let Some(close) = (i + 1..chars.len()).find(|&k| chars[k] == '\'') {
+        let q = chars[i];
+        if q == '\'' || q == '"' {
+            // Treat any quoted span in a tag as an attribute value: find its
+            // matching close quote, trim leading/trailing whitespace inside it
+            // (html-minifier-terser `collapseWhitespace:true` trims attribute
+            // values — ElementDefinition.ts:2389), and re-emit. Prefer double
+            // quotes unless the trimmed value itself contains a `"`.
+            if let Some(close) = (i + 1..chars.len()).find(|&k| chars[k] == q) {
                 let inner: String = chars[i + 1..close].iter().collect();
-                if !inner.contains('"') {
+                let trimmed = inner.trim();
+                if !trimmed.contains('"') {
                     out.push('"');
-                    out.push_str(&inner);
+                    out.push_str(trimmed);
                     out.push('"');
-                    i = close + 1;
-                    continue;
+                } else {
+                    out.push(q);
+                    out.push_str(trimmed);
+                    out.push(q);
                 }
+                i = close + 1;
+                continue;
             }
+        }
+        // Collapse any run of ASCII whitespace (outside quoted values) to a
+        // single space — html-minifier separates rebuilt tokens with one space.
+        if matches!(chars[i], ' ' | '\n' | '\r' | '\t' | '\u{0C}') {
+            while i < chars.len() && matches!(chars[i], ' ' | '\n' | '\r' | '\t' | '\u{0C}') {
+                i += 1;
+            }
+            out.push(' ');
+            continue;
         }
         out.push(chars[i]);
         i += 1;
     }
-    // Collapse whitespace before a trailing self-closing `/>`.
-    if out.ends_with("/>") {
-        let body = &out[..out.len() - 2];
-        let trimmed = body.trim_end();
-        out = format!("{trimmed}/>");
+    // No whitespace before the closing `>` or self-closing `/>`.
+    if let Some(body) = out.strip_suffix("/>") {
+        out = format!("{}/>", body.trim_end());
+    } else if let Some(body) = out.strip_suffix('>') {
+        out = format!("{}>", body.trim_end());
     }
     out
 }
@@ -541,11 +1028,13 @@ fn validate_value_at_path(
     sd: &mut StructureDefinition,
     path: &str,
     value: Option<&FshValue>,
+    inline_resource_types: &[Option<String>],
     fisher: &dyn Fisher,
 ) -> Option<Validated> {
     let mut path_parts = parse_ipath(path);
     let mut current_path = String::new();
     let mut current_idx: Option<usize> = None;
+    let mut previous_idx: Option<usize> = None;
     let n = path_parts.len();
 
     for i in 0..n {
@@ -601,17 +1090,34 @@ fn validate_value_at_path(
                         // alias/url/id that doesn't equal the slice's sliceName
                         // (e.g. `extension[USCoreRace]` -> inherited `race` slice).
                         if let Some(existing_sn) = find_ext_slice_by_profile(sd, ext_idx, url) {
-                            // Replace the path to use the sliceName (StructureDefinition.ts:671-681).
-                            let new_brackets: Vec<String> =
+                            // Replace ONLY the matched (first) bracket with the slice
+                            // name, preserving any following brackets such as a
+                            // numeric index (`extension[Name][1]`). The original code
+                            // overwrote the whole bracket list, dropping the trailing
+                            // index — which made a soft-indexed slice rule look like a
+                            // scalar assignment and corrupted the `extension` array
+                            // (G1 crash). StructureDefinition.ts:671-681 rewrites only
+                            // the matched bracket and leaves the rest of the path.
+                            let mut new_brackets: Vec<String> =
                                 existing_sn.split('/').map(|s| s.to_string()).collect();
+                            new_brackets.extend(path_parts[i].brackets.iter().skip(1).cloned());
                             path_parts[i].brackets = new_brackets;
-                            // Rebuild currentPath with the rewritten bracket.
+                            // Rebuild currentPath, excluding the trailing numeric index
+                            // when this part is an array element (mirrors the step-2
+                            // reconstruction above that drops the last bracket when
+                            // `array_index` is present).
                             current_path = previous_path.clone();
                             if !current_path.is_empty() {
                                 current_path.push('.');
                             }
                             current_path.push_str(&path_parts[i].base);
-                            for b in &path_parts[i].brackets {
+                            let bk = &path_parts[i].brackets;
+                            let upto = if array_index.is_some() {
+                                bk.len().saturating_sub(1)
+                            } else {
+                                bk.len()
+                            };
+                            for b in &bk[..upto] {
                                 current_path.push('[');
                                 current_path.push_str(b);
                                 current_path.push(']');
@@ -635,20 +1141,52 @@ fn validate_value_at_path(
             }
         }
 
-        // resourceType pseudo-element on an inline resource.
+        // resourceType pseudo-element on an inline resource: when the previous
+        // element is a single-typed Resource placeholder, `<x>.resourceType =
+        // "Type"` assigns the resourceType string directly (StructureDefinition.ts
+        // :682-693). Mirror `isInheritedResource(value, prevType)`.
         if current_idx.is_none() && path_parts[i].base == "resourceType" {
-            if let Some(value) = value {
-                if let FshValue::Str(_) = value {
+            if let (Some(FshValue::Str(s)), Some(prev)) = (value, previous_idx) {
+                let prev_types = el_type_codes(sd, prev);
+                if prev_types.len() == 1 && is_inherited_resource(s, &prev_types[0], fisher, false) {
                     return Some(Validated {
-                        assigned_value: None,
+                        assigned_value: Some(J::String(s.clone())),
                         path_parts,
                         child_path: None,
                     });
                 }
+                return None;
             }
         }
 
         let cur = current_idx?;
+
+        // If the element is an extension and we found it via some identifier other
+        // than its sliceName (e.g. the extension's canonical url), rewrite the path
+        // to use the sliceName — the user's intent (StructureDefinition.ts:671-681).
+        // This makes the assembled rule path (and the `paths` array driving
+        // setImpliedPropertiesOnInstance) carry the sliceName, so the slice's fixed
+        // children (notably the extension's fixed `url`) are recognized and emitted.
+        if is_extension_base(&path_parts[i].base) {
+            let slices_joined = get_slice_name(&path_parts[i]);
+            if !slices_joined.is_empty() {
+                if let Some(sn) = el_slice_name(sd, cur) {
+                    if sn != slices_joined {
+                        let numeric: Vec<String> = path_parts[i]
+                            .brackets
+                            .iter()
+                            .filter(|b| !b.is_empty() && b.chars().all(|c| c.is_ascii_digit()))
+                            .cloned()
+                            .collect();
+                        let mut new_brackets: Vec<String> =
+                            sn.split('/').map(|s| s.to_string()).collect();
+                        new_brackets.extend(numeric);
+                        path_parts[i].brackets = new_brackets;
+                    }
+                }
+            }
+        }
+
         let max = el_max(sd, cur).map(|s| s.to_string());
         // Cannot resolve if max==0 or array index out of bounds.
         if max.as_deref() == Some("0") {
@@ -682,6 +1220,41 @@ fn validate_value_at_path(
             path_parts[i].primitive = true;
         }
 
+        // If we have an inline resource type at this path part, the element is a
+        // `Resource` (or `DomainResource`/specific resource) placeholder being
+        // populated as a concrete resourceType. Switch to that type's
+        // StructureDefinition and validate the remainder of the path against it,
+        // splicing the result back in (StructureDefinition.ts:732-766).
+        if let Some(Some(inline_type)) = inline_resource_types.get(i) {
+            if types.len() == 1 && is_inherited_resource(inline_type, &types[0], fisher, true) {
+                if let Some(inline_json) = fisher.fish_for_fhir(inline_type) {
+                    let mut inline_sd = StructureDefinition::from_json(&inline_json, false);
+                    if !inline_sd.elements.is_empty() {
+                        let inline_path = assemble_fsh_path(&path_parts[i + 1..]);
+                        let sub_types: Vec<Option<String>> = inline_resource_types
+                            .get(i + 1..)
+                            .map(|s| s.to_vec())
+                            .unwrap_or_default();
+                        let sub = validate_value_at_path(
+                            &mut inline_sd,
+                            &inline_path,
+                            value,
+                            &sub_types,
+                            fisher,
+                        )?;
+                        let mut combined = path_parts[..=i].to_vec();
+                        combined.extend(sub.path_parts);
+                        return Some(Validated {
+                            assigned_value: sub.assigned_value,
+                            path_parts: combined,
+                            child_path: sub.child_path,
+                        });
+                    }
+                }
+            }
+        }
+
+        previous_idx = current_idx;
     }
 
     let cur = current_idx?;
@@ -715,9 +1288,21 @@ fn find_ext_slice_by_profile(
     ext_idx: usize,
     url: &str,
 ) -> Option<String> {
+    // Scope candidates to DIRECT slices of THIS extension element, matching
+    // stock's `findMatchingSlice`, whose fishForFHIR-Extension branch
+    // (StructureDefinition.ts:908-913) searches only the scoped child candidate
+    // set. A slice element's `path` equals the unsliced path, so matching by
+    // path alone wrongly pulls in a slice that lives under a DIFFERENT generic
+    // slice (e.g. `component:repeat-motif.extension:...` shares the path of the
+    // generic `component.extension`). A real slice of `ext_idx` has an id of the
+    // form `{ext_id}:{sliceName}`, so require that id prefix instead.
     let ext_path = el_path(sd, ext_idx);
+    let ext_id = el_id_ref(sd, ext_idx);
+    let id_prefix = format!("{ext_id}:");
     for el in &sd.elements {
-        if el.path() != ext_path {
+        // Same path (a direct slice, not a deeper sub-element) AND an id that is
+        // a slice of THIS extension element (`{ext_id}:...`).
+        if el.path() != ext_path || !el.id().starts_with(&id_prefix) {
             continue;
         }
         let Some(sn) = el.slice_name() else { continue };
@@ -748,7 +1333,12 @@ fn slice_it_value_url(sd: &mut StructureDefinition, idx: usize) {
 
 /// Add an extension slice (`addSlice`) carrying `type[0].profile=[url]`.
 fn add_extension_slice(sd: &mut StructureDefinition, parent_idx: usize, name: &str, url: &str) {
-    let ty = serde_json::json!([{ "code": "Extension", "profile": [url] }]);
+    // `add_slice` takes a SINGLE ElementDefinitionType object and wraps it in the
+    // `type` array itself. Passing an array here produced a doubly-nested
+    // `type:[[{...}]]`, so the slice's type code resolved to "" and `unfold`
+    // couldn't fish the extension profile to expose its sub-extension slices
+    // (e.g. ndh `extension[qualification].extension[code]` was dropped).
+    let ty = serde_json::json!({ "code": "Extension", "profile": [url] });
     sd.add_slice(parent_idx, name, Some(ty));
 }
 
@@ -1417,7 +2007,7 @@ fn set_implied_properties_on_instance(
     };
 
     for path in sorted {
-        if let Some(validated) = validate_value_at_path(sd, &path, None, fisher) {
+        if let Some(validated) = validate_value_at_path(sd, &path, None, &[], fisher) {
             if let Some(v) = value_for(&path) {
                 set_property_on_instance(instance, &validated.path_parts, &v);
             }
@@ -1611,8 +2201,14 @@ fn determine_known_slices(
     fisher: &dyn Fisher,
 ) -> HashMap<String, i64> {
     let mut known = HashMap::new();
-    for (path, parts) in rule_map {
-        let non_numeric = strip_numeric_brackets(path);
+    for (_path, parts) in rule_map {
+        // Gate on the REWRITTEN parts (which carry the resolved sliceName), not the
+        // raw rule path. When a bracket was an extension name/url/alias that differs
+        // from the slice's sliceName (e.g. `extension[RecommendedAction]` -> the
+        // inherited `recommended-action` slice), the raw path won't resolve via
+        // find_element_by_path and the slice would be miscounted — dropping implied
+        // urls and corrupting slice order. Mirrors stock rewriting `rule.path`.
+        let non_numeric = strip_numeric_brackets(&assemble_fsh_path(parts));
         if sd.find_element_by_path(&non_numeric, fisher).is_some() {
             let mut current_path = String::new();
             for pp in parts {
@@ -1656,8 +2252,14 @@ fn create_useful_slices(
     fisher: &dyn Fisher,
 ) -> HashMap<String, i64> {
     let mut known = HashMap::new();
-    for (path, parts) in rule_map {
-        let non_numeric = strip_numeric_brackets(path);
+    for (_path, parts) in rule_map {
+        // Gate on the REWRITTEN parts (which carry the resolved sliceName), not the
+        // raw rule path — identical to `determine_known_slices`. The raw rule_map key
+        // can still hold an unresolved bracket alias (e.g.
+        // `extension[$questionnaire-versionAlgorithm]`) that `find_element_by_path`
+        // won't resolve, which would skip the slice and drop its placeholder element
+        // (corrupting key order). Mirrors stock keying its ruleMap on the resolved path.
+        let non_numeric = strip_numeric_brackets(&assemble_fsh_path(parts));
         if sd.find_element_by_path(&non_numeric, fisher).is_none() {
             continue;
         }
@@ -2002,7 +2604,7 @@ pub struct InstanceIndex {
 }
 
 impl InstanceIndex {
-    fn build(docs: &[FshDocument]) -> InstanceIndex {
+    fn build(docs: &[FshDocument], cfg: &Config, fisher: &dyn Fisher) -> InstanceIndex {
         let mut by_ref = HashMap::new();
         let mut inst_url = HashMap::new();
         for doc in docs {
@@ -2015,7 +2617,24 @@ impl InstanceIndex {
                     by_ref
                         .entry(id.clone())
                         .or_insert((io.clone(), id.clone()));
-                    if let Some(url) = effective_instance_url(inst) {
+                    // The canonical url used when this instance is referenced via
+                    // Canonical()/Reference(): an explicit `* url = "..."` wins,
+                    // else — for any non-Inline instance — it is derived as
+                    // `{canonical}/{resourceType}/{id}` exactly like
+                    // MasterFisher.fixMetadata (utils/MasterFisher.ts:134-136),
+                    // where resourceType is the InstanceOf SD's `type`.
+                    let derived = if let Some(url) = effective_instance_url(inst) {
+                        Some(url)
+                    } else if inst.usage != "Inline" {
+                        let base = io.split('|').next().unwrap_or(io);
+                        fisher
+                            .fish_for_metadata(base)
+                            .and_then(|m| m.sd_type)
+                            .map(|rt| format!("{}/{}/{}", cfg.canonical, rt, id))
+                    } else {
+                        None
+                    };
+                    if let Some(url) = derived {
                         inst_url.entry(inst.name.clone()).or_insert(url.clone());
                         inst_url.entry(id).or_insert(url);
                     }
@@ -2082,7 +2701,9 @@ impl DefIndex {
         for doc in docs {
             for (_k, cs) in &doc.code_systems {
                 let id = crate::export::effective_id(&cs.rules, &cs.id);
-                let url = format!("{}/CodeSystem/{}", cfg.canonical, id);
+                // G14: honor a `* ^url = ...` caret override (matches TankIndex).
+                let url = crate::export::effective_url(&cs.rules)
+                    .unwrap_or_else(|| format!("{}/CodeSystem/{}", cfg.canonical, id));
                 by_ref
                     .entry(cs.name.clone())
                     .or_insert(("CodeSystem".to_string(), id.clone()));
@@ -2094,7 +2715,8 @@ impl DefIndex {
             }
             for (_k, vs) in &doc.value_sets {
                 let id = crate::export::effective_id(&vs.rules, &vs.id);
-                let url = format!("{}/ValueSet/{}", cfg.canonical, id);
+                let url = crate::export::effective_url(&vs.rules)
+                    .unwrap_or_else(|| format!("{}/ValueSet/{}", cfg.canonical, id));
                 by_ref
                     .entry(vs.name.clone())
                     .or_insert(("ValueSet".to_string(), id.clone()));
@@ -2103,6 +2725,38 @@ impl DefIndex {
                     .or_insert(("ValueSet".to_string(), id.clone()));
                 vs_url.insert(vs.name.clone(), url.clone());
                 vs_url.insert(id.clone(), url);
+            }
+        }
+        // Instance-defined conformance CodeSystems/ValueSets (`InstanceOf:
+        // CodeSystem` / `ValueSet`, `Usage` other than Inline). Stock's
+        // MasterFisher.fixMetadata (MasterFisher.ts:133-136) synthesizes a url
+        // `{canonical}/{resourceType}/{id}` for tank metadata lacking a url, so a
+        // coding `system` referencing such an instance by name/id resolves to the
+        // synthesized canonical instead of staying bare. Added AFTER the
+        // keyword-defined CS/VS so those win on name clash (`or_insert`),
+        // mirroring TankIndex::build (entities before instances).
+        for doc in docs {
+            for (_k, inst) in &doc.instances {
+                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
+                let (target_url, fhir_type): (&mut HashMap<String, String>, &str) = match instance_of {
+                    "CodeSystem" => (&mut cs_url, "CodeSystem"),
+                    "ValueSet" => (&mut vs_url, "ValueSet"),
+                    _ => continue,
+                };
+                if inst.usage == "Inline" {
+                    continue;
+                }
+                let id = crate::export::instance_effective_id(inst);
+                let url = crate::export::instance_assigned_url(inst)
+                    .unwrap_or_else(|| format!("{}/{}/{}", cfg.canonical, fhir_type, id));
+                by_ref
+                    .entry(inst.name.clone())
+                    .or_insert((fhir_type.to_string(), id.clone()));
+                by_ref
+                    .entry(id.clone())
+                    .or_insert((fhir_type.to_string(), id.clone()));
+                target_url.entry(inst.name.clone()).or_insert(url.clone());
+                target_url.entry(id).or_insert(url);
             }
         }
         DefIndex { by_ref, cs_url, vs_url }
@@ -2141,9 +2795,18 @@ fn replace_references(
         }
         FshValue::Code(fc) => {
             if let Some(sys) = &fc.system {
-                let base = sys.split('|').next().unwrap_or(sys).to_string();
-                if let Some(url) = def_idx.cs_url.get(&base) {
-                    fc.system = Some(sys.replacen(&base, url, 1));
+                // `replaceReferences` FshCode branch: fish the system name as a
+                // CodeSystem (local FSH CodeSystems first, then dependency packages)
+                // and substitute its canonical url, preserving any |version.
+                let resolve_cs = |base: &str| {
+                    def_idx
+                        .cs_url
+                        .get(base)
+                        .cloned()
+                        .or_else(|| fisher.fish_for_metadata_cs(base).and_then(|m| m.url))
+                };
+                if let Some(new_sys) = crate::export::replace_code_system(sys, resolve_cs) {
+                    fc.system = Some(new_sys);
                 }
             }
         }
@@ -2178,6 +2841,10 @@ struct ExportedInst {
     filename: String,
     write: bool,
     ig: IgInstanceMeta,
+    /// FHIR type of the InstanceOf SD (`sd.type`, or `Binary` for logicals).
+    /// Used by on-demand inline-instance assignment to pick the `pattern[x]`
+    /// / `fixed[x]` key in the StructureDefinition exporter.
+    type_name: String,
 }
 
 /// Metadata an instance contributes to the generated ImplementationGuide
@@ -2216,6 +2883,11 @@ struct Exporter<'a> {
     /// FSH alias name -> value (first-wins), resolved on every fish like FSHTank.fish.
     aliases: HashMap<String, String>,
     memo: std::cell::RefCell<HashMap<String, Option<ExportedInst>>>,
+    /// Fully-exported ValueSet/CodeSystem bodies (exported in Phase 4 before
+    /// instances), keyed by name, id, and url. Stock's MasterFisher fishes the
+    /// exported `pkg` first, so an `entry.resource = <SomeValueSet>` assignment
+    /// embeds the whole exported ValueSet rather than a stub.
+    exported_conformance: HashMap<String, Rc<J>>,
     /// Cache of freshly-parsed (unmutated) InstanceOf snapshots keyed by base
     /// type name. Many instances share a profile (mcode: 209 instances → 64
     /// distinct InstanceOf), and fishing+parsing the snapshot per instance is
@@ -2223,6 +2895,13 @@ struct Exporter<'a> {
     /// clone (cheap: element maps are shared `Rc`s until a write forks them, and
     /// the template's lazy id-index stays `None` so clones don't copy it).
     sd_cache: std::cell::RefCell<HashMap<String, Option<Rc<StructureDefinition>>>>,
+    /// Names in the order their export first *completes*, mirroring stock's
+    /// `this.pkg.instances.push(...)` at the end of `exportInstance`. Because an
+    /// inline-assigned instance (`entry.resource = X`) is exported recursively
+    /// mid-rule, its push lands before the container's — so this captures the
+    /// dependency-before-dependent ordering that breaks ties in the IG resource
+    /// list (`sortResources` is a stable sort keyed on name).
+    complete_order: std::cell::RefCell<Vec<String>>,
 }
 
 /// Wraps a fisher so that the queried name is alias-resolved first, mirroring
@@ -2246,15 +2925,80 @@ impl Fisher for AliasFisher<'_> {
     fn fish_for_fhir(&self, name: &str) -> Option<std::rc::Rc<J>> {
         self.inner.fish_for_fhir(&self.resolve(name))
     }
+    fn fish_for_structure_definition(
+        &self,
+        name: &str,
+        capture: bool,
+    ) -> Option<std::rc::Rc<StructureDefinition>> {
+        self.inner
+            .fish_for_structure_definition(&self.resolve(name), capture)
+    }
     fn fish_for_metadata(&self, name: &str) -> Option<fhir_model::Metadata> {
         self.inner.fish_for_metadata(&self.resolve(name))
     }
+    fn fish_for_metadata_cs(&self, name: &str) -> Option<fhir_model::Metadata> {
+        self.inner.fish_for_metadata_cs(&self.resolve(name))
+    }
+}
+
+/// Index already-exported conformance bodies (ValueSets/CodeSystems) by name,
+/// id, and url so the inline-instance fisher can resolve `entry.resource =
+/// <Name>` to the whole exported resource. Lower-indexed (earlier-exported)
+/// entries win on key collision, matching first-found package fishing.
+fn index_conformance(conformance: &[Rc<J>]) -> HashMap<String, Rc<J>> {
+    let mut map: HashMap<String, Rc<J>> = HashMap::new();
+    for body in conformance {
+        for key in ["name", "id", "url"] {
+            if let Some(k) = body.get(key).and_then(|v| v.as_str()) {
+                map.entry(k.to_string()).or_insert_with(|| body.clone());
+            }
+        }
+    }
+    map
+}
+
+/// Reorder a fished resource body the way `InstanceDefinition.toJSON` does
+/// (`fhirtypes/InstanceDefinition.ts:34-41` + `orderedCloneDeep`): move
+/// `resourceType`, `id`, `meta` (with their `_`-prefixed siblings) to the
+/// front in that order, keep all other keys in their original order. Stock
+/// applies `value.toJSON()` to every inline-instance value at
+/// `StructureDefinition.validateValueAtPath` (StructureDefinition.ts:777),
+/// so an embedded ValueSet is reordered from its standalone key order.
+fn instance_definition_json_order(body: &J) -> J {
+    let obj = match body.as_object() {
+        Some(o) => o,
+        None => return body.clone(),
+    };
+    let mut ordered: Vec<String> = Vec::new();
+    for base in ["resourceType", "id", "meta"] {
+        if obj.get(base).map(|v| !v.is_null()).unwrap_or(false) {
+            ordered.push(base.to_string());
+        }
+        let us = format!("_{base}");
+        if obj.get(&us).map(|v| !v.is_null()).unwrap_or(false) {
+            ordered.push(us);
+        }
+    }
+    for k in obj.keys() {
+        if k == "_instanceMeta" || ordered.contains(k) {
+            continue;
+        }
+        ordered.push(k.clone());
+    }
+    let mut out = Map::new();
+    for k in ordered {
+        if let Some(v) = obj.get(&k) {
+            out.insert(k, v.clone());
+        }
+    }
+    J::Object(out)
 }
 
 pub fn export_instances(
     docs: &[FshDocument],
     cfg: &Config,
     ctx: &SdContext,
+    conformance: &[Rc<J>],
 ) -> Vec<InstanceExport> {
     let mut by_name: HashMap<String, &Instance> = HashMap::new();
     let mut id_to_name: HashMap<String, String> = HashMap::new();
@@ -2276,20 +3020,34 @@ pub fn export_instances(
             aliases.entry(k.clone()).or_insert_with(|| v.clone());
         }
     }
+    let inst_idx = {
+        let inner_fisher = ctx.fisher();
+        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        InstanceIndex::build(docs, cfg, &index_fisher)
+    };
     let exporter = Exporter {
         cfg,
         ctx,
-        inst_idx: InstanceIndex::build(docs),
+        inst_idx,
         def_idx: DefIndex::build(docs, cfg),
         by_name,
         id_to_name,
         aliases,
         memo: std::cell::RefCell::new(HashMap::new()),
+        exported_conformance: index_conformance(conformance),
         sd_cache: std::cell::RefCell::new(HashMap::new()),
+        complete_order: std::cell::RefCell::new(Vec::new()),
     };
 
-    let mut out = Vec::new();
+    // First pass: export every instance in FSH-definition order. Inline-assigned
+    // instances are exported recursively, so `complete_order` ends up holding
+    // names in stock's `pkg.instances` push order (dependency before dependent).
     for name in &order {
+        exporter.export(name);
+    }
+    let mut out = Vec::new();
+    let complete = exporter.complete_order.borrow().clone();
+    for name in &complete {
         if let Some(e) = exporter.export(name) {
             if e.write {
                 out.push(InstanceExport {
@@ -2305,6 +3063,55 @@ pub fn export_instances(
     out
 }
 
+/// Export a single inline `Instance` on demand for assignment to a profile
+/// element. Mirrors stock `StructureDefinitionExporter.setAssignedValues`
+/// (`sushi-ts/src/export/StructureDefinitionExporter.ts:795-823`), which creates
+/// a fresh `InstanceExporter` and calls `fishForFHIR(rule.value)`. Returns the
+/// ordered FHIR JSON body plus the instance's FHIR type name (for the
+/// `pattern[x]`/`fixed[x]` key). A fresh exporter (and memo) per call matches
+/// stock's per-rule `new InstanceExporter(...)`.
+pub fn export_inline_instance(ctx: &SdContext, name: &str) -> Option<(J, String)> {
+    let cfg = ctx.cfg();
+    let docs = ctx.docs();
+    let mut by_name: HashMap<String, &Instance> = HashMap::new();
+    let mut id_to_name: HashMap<String, String> = HashMap::new();
+    for doc in docs {
+        for (_k, inst) in &doc.instances {
+            if !by_name.contains_key(&inst.name) {
+                by_name.insert(inst.name.clone(), inst);
+                id_to_name
+                    .entry(effective_instance_id(inst))
+                    .or_insert_with(|| inst.name.clone());
+            }
+        }
+    }
+    let mut aliases: HashMap<String, String> = HashMap::new();
+    for doc in docs {
+        for (k, v) in &doc.aliases {
+            aliases.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
+    let inst_idx = {
+        let inner_fisher = ctx.fisher();
+        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        InstanceIndex::build(docs, cfg, &index_fisher)
+    };
+    let exporter = Exporter {
+        cfg,
+        ctx,
+        inst_idx,
+        def_idx: DefIndex::build(docs, cfg),
+        by_name,
+        id_to_name,
+        aliases,
+        memo: std::cell::RefCell::new(HashMap::new()),
+        exported_conformance: HashMap::new(),
+        sd_cache: std::cell::RefCell::new(HashMap::new()),
+        complete_order: std::cell::RefCell::new(Vec::new()),
+    };
+    exporter.fish_instance_typed(name)
+}
+
 impl<'a> Exporter<'a> {
     /// Fish an exported InstanceDefinition body by FSH name (for inline-instance
     /// assignment). Returns the ordered JSON to embed.
@@ -2316,9 +3123,43 @@ impl<'a> Exporter<'a> {
         if let Some(real) = self.id_to_name.get(base) {
             return self.export(real).map(|e| e.body);
         }
+        // Locally-exported ValueSet/CodeSystem (the "package"): embed whole.
+        if let Some(body) = self.exported_conformance.get(base) {
+            return Some((**body).clone());
+        }
         // External instance: fish raw FHIR JSON from packages. This body is owned
         // by the AssignRule and mutated downstream, so clone out of the shared Rc.
         self.ctx.fisher().fish_for_fhir(base).map(|rc| (*rc).clone())
+    }
+
+    /// Like `fish_instance`, but also returns the instance's FHIR type name so the
+    /// StructureDefinition exporter can pick the `pattern[x]`/`fixed[x]` key when
+    /// assigning an inline Instance to a profile element.
+    fn fish_instance_typed(&self, name: &str) -> Option<(J, String)> {
+        let base = name.split('|').next().unwrap_or(name);
+        if self.by_name.contains_key(base) {
+            return self.export(base).map(|e| (e.body, e.type_name));
+        }
+        if let Some(real) = self.id_to_name.get(base) {
+            return self.export(real).map(|e| (e.body, e.type_name));
+        }
+        // Locally-exported ValueSet/CodeSystem (the "package"): embed whole.
+        if let Some(body) = self.exported_conformance.get(base) {
+            let tn = body
+                .get("resourceType")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            return Some(((**body).clone(), tn));
+        }
+        // External instance: type comes from the raw FHIR JSON's resourceType.
+        let body = (*self.ctx.fisher().fish_for_fhir(base)?).clone();
+        let tn = body
+            .get("resourceType")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        Some((body, tn))
     }
 
     fn export(&self, name: &str) -> Option<ExportedInst> {
@@ -2329,6 +3170,8 @@ impl<'a> Exporter<'a> {
         self.memo.borrow_mut().insert(name.to_string(), None);
         let result = self.export_compute(name);
         self.memo.borrow_mut().insert(name.to_string(), result.clone());
+        // Record completion order (stock pushes to pkg.instances here).
+        self.complete_order.borrow_mut().push(name.to_string());
         result
     }
 
@@ -2440,6 +3283,7 @@ impl<'a> Exporter<'a> {
             filename,
             write: !is_inline,
             ig,
+            type_name,
         })
     }
 
@@ -2475,9 +3319,13 @@ impl<'a> Exporter<'a> {
         let pt = sd.path_type();
         let has = |suffix: &str| sd.elements.iter().any(|e| e.id() == format!("{pt}.{suffix}"));
         if has("url") {
+            // Stock uses `fshDefinition.id` (InstanceExporter.ts:853), whose getter
+            // resolves a `* id = ...` rule before falling back to the instance name
+            // (Instance.ts:26-32). `inst.id` is only the name default here, so use
+            // the effective id to match (app-feature: feature-query vs FeatureQuery).
             obj.insert(
                 "url".into(),
-                J::String(format!("{}/{}/{}", self.cfg.canonical, pt, inst.id)),
+                J::String(format!("{}/{}/{}", self.cfg.canonical, pt, effective_instance_id(inst))),
             );
         }
         if let Some(t) = &inst.title {
@@ -2596,7 +3444,7 @@ fn set_assigned_values(
     let manual_slice_ordering = self.cfg.manual_slice_ordering();
     // 1. resolve soft indexing on a clone of the rules.
     let mut rules: Vec<Rule> = inst.rules.clone();
-    crate::paths::resolve_soft_indexing(&mut rules);
+    crate::paths::resolve_soft_indexing(&mut rules, manual_slice_ordering);
 
     // 2. normalize [0] indices away; replaceReferences.
     let mut assign_rules: Vec<AssignRule> = Vec::new();
@@ -2657,14 +3505,59 @@ fn set_assigned_values(
         }
     }
 
+    // 2b. Collect inlineResourcePaths (InstanceExporter.ts:137-159): for each
+    // inline-instance assignment, {path, instanceOf = body.meta.profile[0] ??
+    // body.resourceType}; for each `<x>.resourceType = "Type"` rule, {x, Type}.
+    // These switch the element type during validation so sub-paths of an inline
+    // resource resolve against the right resource StructureDefinition.
+    let mut inline_resource_paths: Vec<(String, String)> = Vec::new();
+    for ar in &assign_rules {
+        if let Some(body) = &ar.inline {
+            let io = body
+                .get("meta")
+                .and_then(|m| m.get("profile"))
+                .and_then(|p| p.as_array())
+                .and_then(|a| a.first())
+                .and_then(|v| v.as_str())
+                .or_else(|| body.get("resourceType").and_then(|v| v.as_str()))
+                .map(str::to_string);
+            if let Some(io) = io {
+                inline_resource_paths.push((ar.path.clone(), io));
+            }
+        } else if let Some(stripped) = ar.path.strip_suffix(".resourceType") {
+            if let Some(FshValue::Str(s)) = &ar.value {
+                inline_resource_paths.push((stripped.to_string(), s.clone()));
+            }
+        }
+    }
+    // Helper: build the sparse inlineResourceTypes array for a given rule path.
+    let inline_types_for = |rule_path: &str| -> Vec<Option<String>> {
+        let mut out: Vec<Option<String>> = Vec::new();
+        for (ip_path, io) in &inline_resource_paths {
+            let prefix = format!("{ip_path}.");
+            if rule_path.starts_with(&prefix) && rule_path != format!("{ip_path}.resourceType") {
+                let idx = split_periods(ip_path).len() - 1;
+                if out.len() <= idx {
+                    out.resize(idx + 1, None);
+                }
+                out[idx] = Some(io.clone());
+            }
+        }
+        out
+    };
+
     // 3. Build ruleMap (validate each rule), keyed by rule path (last-wins replaced).
     let mut rule_map: Vec<(String, Vec<IPathPart>, J)> = Vec::new();
     for ar in &assign_rules {
         let path = &ar.path;
-        if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), fisher) {
+        let inline_types = inline_types_for(path);
+        if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), &inline_types, fisher) {
             // skip choice [x] unresolved
             let av = if let Some(body) = &ar.inline {
-                body.clone()
+                // Stock applies `value.toJSON()` to inline-instance values
+                // (StructureDefinition.ts:777), reordering resourceType/id/meta
+                // to the front. No-op for our already-ordered FSH-instance bodies.
+                instance_definition_json_order(body)
             } else {
                 validated.assigned_value.clone().unwrap_or(J::Null)
             };
@@ -2740,6 +3633,30 @@ fn set_assigned_values(
 }
 }
 
+/// Port of `common.ts:isInheritedResource`. Does `resource_type` (a resource
+/// type or, when `allow_profile`, a profile) satisfy an element typed `type_code`
+/// (`Resource`, `DomainResource`, or a specific resource type)?
+fn is_inherited_resource(
+    resource_type: &str,
+    type_code: &str,
+    fisher: &dyn Fisher,
+    allow_profile: bool,
+) -> bool {
+    let Some(resource) = fisher.fish_for_fhir(resource_type) else {
+        return false;
+    };
+    let mut rt = resource_type.to_string();
+    if allow_profile {
+        if let Some(actual) = resource.get("resourceType").and_then(|v| v.as_str()) {
+            rt = actual.to_string();
+        }
+    }
+    type_code == "Resource"
+        || (type_code == "DomainResource"
+            && !matches!(rt.as_str(), "Bundle" | "Parameters" | "Binary"))
+        || type_code == rt
+}
+
 /// Does the element at `path` have a single `Resource` type (so a primitive
 /// value can't be assigned there — it must be an inline instance)?
 fn leaf_is_resource(sd: &mut StructureDefinition, path: &str, fisher: &dyn Fisher) -> bool {
@@ -2800,10 +3717,16 @@ fn order_instance(instance: &J) -> J {
     json_emit::ordered_clone_deep(&J::Object(ordered))
 }
 
-fn sanitize(name: &str) -> String {
+/// Port of the npm `sanitize-filename` package (used by every `getFileName()`,
+/// e.g. `ValueSet.ts:67`) with `{ replacement: '-' }`. Replaces the package's
+/// `illegalRe` characters (`/ \ ? < > : * | "`) plus ASCII control characters
+/// with `-`. (Reserved Windows names / trailing-dot handling are not reachable
+/// for FHIR `<Type>-<id>.json` names.)
+pub(crate) fn sanitize(name: &str) -> String {
     name.chars()
         .map(|c| match c {
-            '/' | '\\' | '?' | '%' | '*' | ':' | '|' | '"' | '<' | '>' => '-',
+            '/' | '\\' | '?' | '*' | ':' | '|' | '"' | '<' | '>' => '-',
+            c if (c as u32) < 0x20 || ((c as u32) >= 0x80 && (c as u32) <= 0x9f) => '-',
             _ => c,
         })
         .collect()

@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "2000-10-31T00:01:02",
+  "url": "http://example.org/StructureDefinition/2000-10-31T00:01:02",
+  "version": "0.1.0",
+  "name": "2000-10-31T00:01:02",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "2000-10-31T00:01:02",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "2000-10-31T00:01:02",
+        "path": "2000-10-31T00:01:02",
+        "short": "2000-10-31T00:01:02",
+        "definition": "2000-10-31T00:01:02"
+      }
+    ]
+  }
+}

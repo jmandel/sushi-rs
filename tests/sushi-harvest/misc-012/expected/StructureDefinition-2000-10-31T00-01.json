@@ -1,0 +1,49 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "2000-10-31T00:01",
+  "url": "http://example.org/StructureDefinition/2000-10-31T00:01",
+  "version": "0.1.0",
+  "name": "2000-10-31T00:01",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "12",
+      "uri": "http://unknown.org/mystery"
+    }
+  ],
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/2000-10-31T00:01",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "2000-10-31T00:01",
+        "path": "2000-10-31T00:01",
+        "short": "2000-10-31T00:01",
+        "definition": "2000-10-31T00:01"
+      },
+      {
+        "id": "2000-10-31T00:01.1999-12-31",
+        "path": "2000-10-31T00:01.1999-12-31",
+        "short": "Party",
+        "definition": "Party like it's 1999",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "12",
+            "map": "Patient"
+          }
+        ]
+      }
+    ]
+  }
+}

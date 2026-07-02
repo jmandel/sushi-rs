@@ -1,0 +1,29 @@
+{
+  "description": "Intentional divergences from stock SUSHI v3.20.0, where stock produces INVALID or clearly-buggy output and we deliberately produce correct output instead. Tracked, counted separately from byte-parity (NOT as failures). The mechanism is DIFF-BASED, not file-based: each entry pins the EXACT expected `diff <stock> <ours>` in tests/compat-golden/<ig>/<file>.diff. Each gate run recomputes the stock-vs-ours diff and asserts it EQUALS the recorded diff, so the ONLY tolerated difference is the specific one recorded; ANY other change in that file (a regression, or a new divergence) makes the diff differ and is flagged UNEXPECTED. If the diff becomes empty (stock now matches ours), the entry is RESOLVED/obsolete and should be removed. Re-record after an intended change by regenerating the .diff.",
+  "divergences": [
+    {
+      "ig": "pas", "file": "ClaimResponse-RejectionResponseExample.json",
+      "category": "stock-emits-invalid-fhir",
+      "reason": "Stock emits an empty required-extension scaffold {url:.../extension-authorizedProviderType} with no value[x] and no sub-extensions, violating FHIR invariant ext-1. It is an order-dependent side-effect of stock's shared InstanceExporter.sdCache. Stock build is silent (0 errors/0 warnings). We emit valid FHIR (omit the empty scaffold).",
+      "recorded": "2026-06-30"
+    },
+    {
+      "ig": "pas", "file": "ClaimResponse-PractitionerRequestorPendingResponseExample.json",
+      "category": "stock-emits-invalid-fhir",
+      "reason": "Same ext-1 violation (empty required authorizedProviderType extension scaffold). See ClaimResponse-RejectionResponseExample.",
+      "recorded": "2026-06-30"
+    },
+    {
+      "ig": "pas", "file": "Bundle-RejectionResponseBundleExample.json",
+      "category": "stock-emits-invalid-fhir",
+      "reason": "Bundle embedding the above ClaimResponse; same ext-1 violation in the contained resource.",
+      "recorded": "2026-06-30"
+    },
+    {
+      "ig": "pas", "file": "Bundle-ReferralPendingAuthorizationResponseBundleExample.json",
+      "category": "stock-emits-invalid-fhir",
+      "reason": "Bundle embedding the PractitionerRequestor ClaimResponse; same ext-1 violation in the contained resource.",
+      "recorded": "2026-06-30"
+    }
+  ]
+}

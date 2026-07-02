@@ -1,0 +1,16 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "active",
+  "content": "complete",
+  "name": "MyCS",
+  "id": "MyCS",
+  "version": "0.1.0",
+  "url": "http://example.org/CodeSystem/MyCS",
+  "concept": [
+    {
+      "code": "cookie",
+      "display": "Cookie"
+    }
+  ],
+  "count": 1
+}

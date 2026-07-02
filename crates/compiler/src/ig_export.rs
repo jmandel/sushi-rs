@@ -23,6 +23,10 @@ pub struct ConformanceRes {
     pub reference_key: String,
     pub name: Option<String>,
     pub description: Option<String>,
+    /// The resource's actual `name` element (FSH name), used for fishing by name.
+    pub fhir_name: Option<String>,
+    /// The resource's canonical `url`, returned when normalizing a reference.
+    pub url: Option<String>,
 }
 
 /// Inputs gathered during `build_project`.
@@ -38,6 +42,8 @@ pub struct IgInputs<'a> {
     pub cache_dir: String,
     /// The IG project root (for disk page scanning).
     pub ig_dir: String,
+    /// Stock `sushi-local#LOCAL` predefined resources, in FIFO load order.
+    pub predefined: &'a crate::predefined::PredefinedPackage,
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +263,37 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     insert_passthrough(&mut ig, cfg_yaml, "extension");
     insert_passthrough(&mut ig, cfg_yaml, "modifierExtension");
 
+    // translateR5PropertiesToR4 (IGExporter.ts:1663): for an R4 IG, R5-only
+    // top-level IG properties are emitted as extensions appended to
+    // `ImplementationGuide.extension` (the bare R5 property is added instead for
+    // R5 IGs — see the copyrightLabel branch after `definition`). The extension
+    // array keeps its DomainResource key position, so append here.
+    if is_r4 {
+        if let Some(cl) = yget_str(cfg_yaml, "copyrightLabel") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.copyrightLabel",
+                "valueString",
+                J::String(cl),
+            );
+        }
+        if let Some(va) = yget_str(cfg_yaml, "versionAlgorithmString") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.versionAlgorithm",
+                "valueString",
+                J::String(va),
+            );
+        } else if let Some(vc) = yget(cfg_yaml, "versionAlgorithmCoding") {
+            append_ig_extension(
+                &mut ig,
+                "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.versionAlgorithm",
+                "valueCoding",
+                yaml_to_json(vc),
+            );
+        }
+    }
+
     // url
     let url = yget_str(cfg_yaml, "url")
         .unwrap_or_else(|| format!("{canonical}/ImplementationGuide/{id}"));
@@ -357,6 +394,22 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
         filename,
         body: J::Object(ig),
     })
+}
+
+/// Append an `{ url, <value_key>: value }` extension to `ImplementationGuide.extension`,
+/// creating the array (at its current key position) if absent. Mirrors stock's
+/// `this.ig.extension = (this.ig.extension ?? []).concat({...})`.
+fn append_ig_extension(ig: &mut Map<String, J>, url: &str, value_key: &str, value: J) {
+    let mut obj = Map::new();
+    obj.insert("url".into(), J::String(url.into()));
+    obj.insert(value_key.into(), value);
+    let ext = J::Object(obj);
+    match ig.get_mut("extension") {
+        Some(J::Array(arr)) => arr.push(ext),
+        _ => {
+            ig.insert("extension".into(), J::Array(vec![ext]));
+        }
+    }
 }
 
 fn insert_passthrough(ig: &mut Map<String, J>, cfg_yaml: &Y, key: &str) {
@@ -482,23 +535,44 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
     let mut out = Vec::new();
     for (pkg_key, val) in map {
         let Some(package_id) = ystr(pkg_key) else { continue };
-        let package_id = if package_id.chars().any(|c| c.is_ascii_uppercase()) {
+        let mut package_id = if package_id.chars().any(|c| c.is_ascii_uppercase()) {
             package_id.to_lowercase()
         } else {
             package_id
         };
 
+        // Replace a legacy cross-version extensions package with the official xver
+        // package in the emitted dependsOn (fixCrossVersionDependencies, called from
+        // IGExporter.ts:230). The substitution forces packageId, version=`latest`
+        // (later resolved to the installed version), and the canonical xver uri.
+        let raw_cfg_version = match val {
+            Y::String(_) | Y::Number(_) => ystr(val),
+            Y::Mapping(_) => yget(val, "version").and_then(ystr),
+            _ => None,
+        };
+        let xver = raw_cfg_version
+            .as_deref()
+            .and_then(|v| package_store::xver_substitution(&package_id, v));
+        let package_id = match &xver {
+            Some((xid, _, _)) => xid.clone(),
+            None => package_id,
+        };
+        let forced_uri = xver.as_ref().map(|(_, _, u)| u.clone());
+
         // Parse config entry preserving key order: id, packageId, uri, version, (reason/extension).
         let mut entry: Vec<(String, J)> = Vec::new();
         let mut reason: Option<String> = None;
         let mut version: Option<String> = None;
-        let mut uri: Option<String> = None;
+        let mut uri: Option<String> = forced_uri.clone();
         let mut id: Option<String> = None;
         let mut explicit_ext: Option<J> = None;
 
         match val {
             Y::String(_) | Y::Number(_) => {
-                version = ystr(val);
+                version = match &xver {
+                    Some((_, v, _)) => Some(v.clone()),
+                    None => ystr(val),
+                };
                 entry.push(("packageId".into(), J::String(package_id.clone())));
                 if let Some(v) = &version {
                     entry.push(("version".into(), J::String(v.clone())));
@@ -506,8 +580,11 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
             }
             Y::Mapping(_) => {
                 id = yget_str(val, "id");
-                uri = yget_str(val, "uri");
-                version = yget(val, "version").and_then(ystr);
+                uri = forced_uri.clone().or_else(|| yget_str(val, "uri"));
+                version = match &xver {
+                    Some((_, v, _)) => Some(v.clone()),
+                    None => yget(val, "version").and_then(ystr),
+                };
                 reason = yget_str(val, "reason");
                 explicit_ext = yget(val, "extension").map(yaml_to_json);
                 // removeUndefinedValues: build in order id, packageId, uri, version, [extension]
@@ -531,18 +608,36 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
             }
         }
 
+        // NB: the cross-version-extensions dependency rewrite
+        // (fixCrossVersionDependencies, Processing.ts:542 / IGExporter.ts:230) is
+        // handled UP FRONT via `package_store::xver_substitution` (lines ~551-558),
+        // which sets package_id/uri/version before the entry is built. (An earlier
+        // duplicate `fix_cross_version_dep` pass here was redundant and removed.)
+
         // fixDependsOn: version required, else drop.
-        let Some(resolved_version) = version.clone() else {
+        let Some(raw_version) = version.clone() else {
             continue;
         };
 
-        // uri: resolve if missing.
-        if uri.is_none() {
-            let resolved = find_dependency_ig_url(cache_dir, &package_id, &resolved_version)
-                .or_else(|| find_package_canonical(cache_dir, &package_id, &resolved_version))
-                .unwrap_or_else(|| {
-                    format!("http://fhir.org/packages/{package_id}/ImplementationGuide/{package_id}")
-                });
+        // Resolve the version used for the URI lookup (fixDependsOn,
+        // IGExporter.ts:289-315): `latest` -> a matching installed version (also
+        // mutating the emitted version, as stock does); `M.m.x` -> maxSatisfying
+        // over installed versions (emitted version kept as the raw config value).
+        let resolved_version =
+            resolve_depends_on_version(cache_dir, &package_id, &raw_version, &mut entry);
+
+        // uri: push when not already present in the entry. A forced (xver
+        // substitution) uri or, for a string-form dependency, a resolved one.
+        if !entry.iter().any(|(k, _)| k == "uri") {
+            let resolved = uri.clone().unwrap_or_else(|| {
+                find_dependency_ig_url(cache_dir, &package_id, &resolved_version)
+                    .or_else(|| find_package_canonical(cache_dir, &package_id, &resolved_version))
+                    .unwrap_or_else(|| {
+                        format!(
+                            "http://fhir.org/packages/{package_id}/ImplementationGuide/{package_id}"
+                        )
+                    })
+            });
             entry.push(("uri".into(), J::String(resolved)));
         }
 
@@ -601,20 +696,151 @@ fn merge_or_set_extension(entry: &mut Vec<(String, J)>, ext: J) {
     entry.push(("extension".into(), ext));
 }
 
-/// Read a dependency package's ImplementationGuide `url` from its `.index.json`.
-fn find_dependency_ig_url(cache_dir: &str, package_id: &str, version: &str) -> Option<String> {
-    let index_path = Path::new(cache_dir)
-        .join(format!("{package_id}#{version}"))
-        .join("package")
-        .join(".index.json");
-    let bytes = std::fs::read(&index_path).ok()?;
-    let index: J = serde_json::from_slice(&bytes).ok()?;
-    let files = index.get("files")?.as_array()?;
-    for f in files {
-        if f.get("resourceType").and_then(|v| v.as_str()) == Some("ImplementationGuide") {
-            if let Some(u) = f.get("url").and_then(|v| v.as_str()) {
-                return Some(u.to_string());
+/// Enumerate installed versions of `package_id` by scanning the cache for
+/// `{package_id}#<version>` directories (the FHIR cache layout). Mirrors the
+/// set of cached IGs stock filters by `packageId` in fixDependsOn.
+fn installed_versions(cache_dir: &str, package_id: &str) -> Vec<String> {
+    let prefix = format!("{package_id}#");
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(cache_dir) else { return out };
+    for entry in rd.flatten() {
+        if let Some(name) = entry.file_name().to_str() {
+            if let Some(ver) = name.strip_prefix(&prefix) {
+                if !ver.is_empty() {
+                    out.push(ver.to_string());
+                }
             }
+        }
+    }
+    out
+}
+
+/// Compare two dotted numeric versions (zero-padded to equal length).
+fn version_cmp(a: &[u64], b: &[u64]) -> std::cmp::Ordering {
+    let n = a.len().max(b.len());
+    for i in 0..n {
+        let av = a.get(i).copied().unwrap_or(0);
+        let bv = b.get(i).copied().unwrap_or(0);
+        match av.cmp(&bv) {
+            std::cmp::Ordering::Equal => {}
+            other => return other,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+/// `maxSatisfying(versions, range)` for an x-range like `4.0.x` or `4.x`.
+/// The numeric components before the first `x`/`*` are fixed; the matching
+/// version with the greatest remaining components is returned. Prerelease
+/// versions (containing `-`) are excluded, matching node-semver defaults.
+fn max_satisfying_x(installed: &[String], range: &str) -> Option<String> {
+    let mut fixed: Vec<u64> = Vec::new();
+    for p in range.split('.') {
+        if p == "x" || p == "X" || p == "*" {
+            break;
+        }
+        fixed.push(p.parse::<u64>().ok()?);
+    }
+    let mut best: Option<(Vec<u64>, String)> = None;
+    for v in installed {
+        if v.contains('-') {
+            continue;
+        }
+        let Ok(vp) = v
+            .split('.')
+            .map(|s| s.parse::<u64>())
+            .collect::<Result<Vec<u64>, _>>()
+        else {
+            continue;
+        };
+        if vp.len() < fixed.len() {
+            continue;
+        }
+        if !fixed.iter().zip(&vp).all(|(a, b)| a == b) {
+            continue;
+        }
+        let better = match &best {
+            Some((bv, _)) => version_cmp(&vp, bv) == std::cmp::Ordering::Greater,
+            None => true,
+        };
+        if better {
+            best = Some((vp, v.clone()));
+        }
+    }
+    best.map(|(_, s)| s)
+}
+
+
+/// Resolve the version used for the dependency URI lookup (fixDependsOn,
+/// IGExporter.ts:289-315). For `latest`, pick an installed version and mutate
+/// the emitted `version` field (stock sets `dependsOn.version`); the
+/// single-version-in-scope assumption is resolved to the greatest installed
+/// version. For an x-range, return `maxSatisfying` while keeping the emitted
+/// version as the raw config value. Otherwise return the raw version.
+fn resolve_depends_on_version(
+    cache_dir: &str,
+    package_id: &str,
+    raw_version: &str,
+    entry: &mut [(String, J)],
+) -> String {
+    if raw_version == "latest" {
+        let installed = installed_versions(cache_dir, package_id);
+        let numeric: Vec<String> = installed.into_iter().filter(|v| !v.contains('-')).collect();
+        if let Some(v) = numeric
+            .iter()
+            .filter_map(|v| {
+                v.split('.')
+                    .map(|s| s.parse::<u64>())
+                    .collect::<Result<Vec<u64>, _>>()
+                    .ok()
+                    .map(|p| (p, v.clone()))
+            })
+            .max_by(|a, b| version_cmp(&a.0, &b.0))
+            .map(|(_, s)| s)
+        {
+            if let Some((_, val)) = entry.iter_mut().find(|(k, _)| k == "version") {
+                *val = J::String(v.clone());
+            }
+            return v;
+        }
+        return raw_version.to_string();
+    }
+    if raw_version.ends_with(".x") {
+        let installed = installed_versions(cache_dir, package_id);
+        if let Some(v) = max_satisfying_x(&installed, raw_version) {
+            return v;
+        }
+    }
+    raw_version.to_string()
+}
+
+/// Read a dependency package's ImplementationGuide `url`.
+///
+/// FPL loads IG resources by scanning package JSON files, so packages with an
+/// empty `.index.json` can still contribute an IG URL. Use package_store's shared
+/// package-resource listing helper so this path follows the same index-vs-scan
+/// rules as package fishing.
+fn find_dependency_ig_url(cache_dir: &str, package_id: &str, version: &str) -> Option<String> {
+    let package_dir = Path::new(cache_dir)
+        .join(format!("{package_id}#{version}"))
+        .join("package");
+    for record in package_store::package_resource_entries(&package_dir) {
+        let entry = record.entry;
+        if entry.resource_type.as_deref() != Some("ImplementationGuide") {
+            continue;
+        }
+        let package_matches = entry
+            .package_id
+            .as_deref()
+            .map(|id| id == package_id)
+            .unwrap_or(true);
+        let version_matches = entry
+            .version
+            .as_deref()
+            .map(|v| v == version || version == "current" || version == "dev")
+            .unwrap_or(true);
+        if package_matches && version_matches {
+            return entry.url;
         }
     }
     None
@@ -631,6 +857,40 @@ fn find_package_canonical(cache_dir: &str, package_id: &str, version: &str) -> O
     json.get("canonical")
         .and_then(|v| v.as_str())
         .map(str::to_string)
+}
+
+// ---------------------------------------------------------------------------
+// normalizeResourceReference (IGExporter.ts:1375-1399).
+// ---------------------------------------------------------------------------
+
+/// Port of `normalizeResourceReference`. If `name` is already a relative URL or
+/// canonical (contains `/` or `:`) it is returned unchanged. Otherwise we fish
+/// the local conformance resources by name/id/url and replace with the relative
+/// reference (`Type/id`) when `use_relative`, else the canonical `url`. Falls
+/// back to the original string if nothing is found.
+fn normalize_resource_reference(
+    name: &str,
+    use_relative: bool,
+    conformance: &[ConformanceRes],
+) -> String {
+    if name.contains('/') || name.contains(':') {
+        return name.to_string();
+    }
+    for c in conformance {
+        let id = c.reference_key.split_once('/').map(|(_, id)| id);
+        let matches = c.fhir_name.as_deref() == Some(name)
+            || id == Some(name)
+            || c.url.as_deref() == Some(name);
+        if matches {
+            if use_relative {
+                // reference_key is always `ResourceType/id`.
+                return c.reference_key.clone();
+            } else if let Some(url) = &c.url {
+                return url.clone();
+            }
+        }
+    }
+    name.to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -654,7 +914,15 @@ fn build_definition(
     }
 
     // Build resources + grouping.
-    let config_resources = parse_config_resources(cfg_yaml);
+    let mut config_resources = parse_config_resources(cfg_yaml);
+    // normalizeResourceReferences: config.resources[].exampleCanonical (a bare
+    // profile name) is replaced with its canonical url (useRelative=false).
+    for cr in &mut config_resources {
+        if let Some(ec) = &cr.example_canonical {
+            cr.example_canonical =
+                Some(normalize_resource_reference(ec, false, &inputs.conformance));
+        }
+    }
     let groups = parse_groups(cfg_yaml);
     let (resources, grouping) =
         build_resources(cfg_yaml, inputs, &config_resources, &groups, is_r4, cfg);
@@ -900,30 +1168,54 @@ fn build_resources(
     }
 
     // normalizeResourceReferences: group resources that are bare names resolve to
-    // `Type/id` (fished against the package). Resolve against the built entries.
+    // `Type/id` (fished against the package by name/id/url, matching stock's
+    // `normalizeResourceReference` → `fishForFHIR`). Resolve against the FSH inputs.
+    let mut name_to_ref: HashMap<String, String> = HashMap::new();
     let mut id_to_ref: HashMap<String, String> = HashMap::new();
+    let mut url_to_ref: HashMap<String, String> = HashMap::new();
+    for c in &inputs.conformance {
+        if let Some((_, id)) = c.reference_key.split_once('/') {
+            id_to_ref.entry(id.to_string()).or_insert_with(|| c.reference_key.clone());
+        }
+        if let Some(n) = &c.fhir_name {
+            name_to_ref.entry(n.clone()).or_insert_with(|| c.reference_key.clone());
+        }
+        if let Some(u) = &c.url {
+            url_to_ref.entry(u.clone()).or_insert_with(|| c.reference_key.clone());
+        }
+    }
+    for inst in &inputs.instances {
+        if let Some((_, id)) = inst.reference_key.split_once('/') {
+            id_to_ref.entry(id.to_string()).or_insert_with(|| inst.reference_key.clone());
+        }
+        if let Some(n) = &inst.name {
+            name_to_ref.entry(n.clone()).or_insert_with(|| inst.reference_key.clone());
+        }
+    }
+    // Also let any built entry resolve by its id (covers predefined resources).
     for e in &entries {
         if let Some((_, id)) = e.reference_key.split_once('/') {
             id_to_ref.entry(id.to_string()).or_insert_with(|| e.reference_key.clone());
         }
     }
+    let resolve_ref = |r: &str| -> String {
+        if r.contains('/') || r.contains(':') {
+            return r.to_string();
+        }
+        name_to_ref
+            .get(r)
+            .or_else(|| id_to_ref.get(r))
+            .or_else(|| url_to_ref.get(r))
+            .cloned()
+            .unwrap_or_else(|| r.to_string())
+    };
     let groups: Vec<Group> = groups
         .iter()
         .map(|g| Group {
             id: g.id.clone(),
             name: g.name.clone(),
             description: g.description.clone(),
-            resources: g
-                .resources
-                .iter()
-                .map(|r| {
-                    if r.contains('/') || r.contains(':') {
-                        r.clone()
-                    } else {
-                        id_to_ref.get(r).cloned().unwrap_or_else(|| r.clone())
-                    }
-                })
-                .collect(),
+            resources: g.resources.iter().map(|r| resolve_ref(r)).collect(),
         })
         .collect();
     let groups = &groups[..];
@@ -1188,6 +1480,7 @@ fn make_config_only_resource(c: &ConfigResource) -> ResEntry {
 
 // ---- predefined resources -------------------------------------------------
 
+#[allow(dead_code)]
 struct PredefinedRes {
     resource_type: String,
     id: String,
@@ -1204,7 +1497,7 @@ struct PredefinedRes {
 
 fn add_predefined_resources(
     entries: &mut Vec<ResEntry>,
-    cfg_yaml: &Y,
+    _cfg_yaml: &Y,
     inputs: &IgInputs,
     config_resources: &[ConfigResource],
     cfg: &Config,
@@ -1212,7 +1505,7 @@ fn add_predefined_resources(
     add_group: &mut impl FnMut(&str, Option<&str>, Option<&str>),
 ) {
     let _ = is_r4;
-    let files = collect_predefined_files(&inputs.ig_dir, cfg_yaml);
+    let files = inputs.predefined.resources();
     // configured Binary resources with a resource-format extension.
     let configured_binary: Vec<&ConfigResource> = config_resources
         .iter()
@@ -1301,7 +1594,7 @@ fn pair_str(pairs: &[(String, J)], key: &str) -> Option<String> {
 
 #[allow(clippy::too_many_arguments)]
 fn make_predefined_resource(
-    pf: &PredefinedRes,
+    pf: &crate::predefined::PredefinedResource,
     cr: Option<&ConfigResource>,
     reference_key: &str,
     existing_name: Option<String>,
@@ -1374,7 +1667,7 @@ fn make_predefined_resource(
 fn push_predefined_example_flag(
     pairs: &mut Vec<(String, J)>,
     cr: Option<&ConfigResource>,
-    pf: &PredefinedRes,
+    pf: &crate::predefined::PredefinedResource,
     examples_folder: bool,
     inputs: &IgInputs,
     cfg: &Config,
@@ -2399,4 +2692,37 @@ fn build_parameters(
             J::Object(o)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dependency_ig_url_scans_package_when_index_is_empty() {
+        let temp = tempfile::tempdir().unwrap();
+        let package_dir = temp.path().join("example.fhir.pkg#1.0.0").join("package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        std::fs::write(
+            package_dir.join(".index.json"),
+            r#"{"index-version":2,"files":[]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package_dir.join("package.json"),
+            r#"{"name":"example.fhir.pkg","version":"1.0.0","canonical":"http://example.org/pkg"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package_dir.join("ImplementationGuide-example.fhir.pkg.json"),
+            r#"{"resourceType":"ImplementationGuide","id":"example.fhir.pkg","packageId":"example.fhir.pkg","version":"1.0.0","url":"http://example.org/pkg/ImplementationGuide/example.fhir.pkg"}"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_dependency_ig_url(temp.path().to_str().unwrap(), "example.fhir.pkg", "1.0.0")
+                .as_deref(),
+            Some("http://example.org/pkg/ImplementationGuide/example.fhir.pkg")
+        );
+    }
 }

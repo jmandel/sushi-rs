@@ -1,0 +1,40 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "LogicalModel",
+  "url": "http://example.org/StructureDefinition/LogicalModel",
+  "version": "0.1.0",
+  "name": "LogicalModel",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/LogicalModel",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "LogicalModel",
+        "path": "LogicalModel",
+        "short": "LogicalModel",
+        "definition": "LogicalModel"
+      },
+      {
+        "id": "LogicalModel.oranges",
+        "path": "LogicalModel.oranges",
+        "min": 1,
+        "max": "*",
+        "contentReference": "http://example.org/StructureDefinition/Citrus#Citrus.orange"
+      },
+      {
+        "id": "LogicalModel.apples",
+        "path": "LogicalModel.apples",
+        "short": "apples",
+        "definition": "apples",
+        "min": 0,
+        "max": "3",
+        "contentReference": "http://example.org/StructureDefinition/Fruit#Fruit.apple"
+      }
+    ]
+  }
+}

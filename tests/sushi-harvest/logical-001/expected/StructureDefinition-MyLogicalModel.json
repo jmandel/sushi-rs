@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MyLogicalModel",
+  "url": "http://example.org/StructureDefinition/MyLogicalModel",
+  "version": "0.1.0",
+  "name": "MyLogicalModel",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "logical",
+  "abstract": false,
+  "type": "http://example.org/StructureDefinition/MyLogicalModel",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "MyLogicalModel",
+        "path": "MyLogicalModel",
+        "short": "MyLogicalModel",
+        "definition": "MyLogicalModel"
+      }
+    ]
+  }
+}

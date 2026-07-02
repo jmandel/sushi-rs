@@ -1,0 +1,22 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "2001",
+  "url": "http://example.org/StructureDefinition/2001",
+  "version": "0.1.0",
+  "name": "2001",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://example.org/StructureDefinition/2000-01",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation"
+      }
+    ]
+  }
+}

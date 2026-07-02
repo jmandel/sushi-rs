@@ -1,0 +1,12 @@
+{
+  "resourceType": "Observation",
+  "id": "OneInstance",
+  "status": "final",
+  "code": {
+    "coding": [
+      {
+        "code": "123"
+      }
+    ]
+  }
+}

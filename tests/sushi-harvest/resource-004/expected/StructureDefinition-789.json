@@ -1,0 +1,24 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "789",
+  "url": "http://example.org/StructureDefinition/789",
+  "version": "0.1.0",
+  "name": "123",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "789",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DomainResource",
+  "derivation": "specialization",
+  "differential": {
+    "element": [
+      {
+        "id": "789",
+        "path": "789",
+        "short": "123",
+        "definition": "123"
+      }
+    ]
+  }
+}

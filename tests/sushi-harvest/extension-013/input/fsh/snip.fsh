@@ -1,0 +1,4 @@
+
+        Extension: SomeExtension
+        * extension MS
+        

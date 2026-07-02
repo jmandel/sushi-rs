@@ -72,6 +72,40 @@ fn is_path_token(k: K) -> bool {
     )
 }
 
+fn is_target_type_start(k: K) -> bool {
+    is_path_token(k) || matches!(k, K::REFERENCE | K::CANONICAL | K::CODEABLE_REFERENCE)
+}
+
+fn has_add_element_tail(cur: &Cursor, pos: usize) -> bool {
+    let kind_at = |i: usize| cur.toks.get(i).map(|t| t.kind).unwrap_or(K::EOF);
+    if kind_at(pos) == K::KW_CONTENTREFERENCE {
+        return matches!(kind_at(pos + 1), K::SEQUENCE | K::CODE)
+            && matches!(kind_at(pos + 2), K::STRING | K::MULTILINE_STRING);
+    }
+    if !is_target_type_start(kind_at(pos)) {
+        return false;
+    }
+    let first = kind_at(pos);
+    let mut p = pos + 1;
+    while kind_at(p) == K::KW_OR && is_target_type_start(kind_at(p + 1)) {
+        p += 2;
+    }
+    matches!(kind_at(p), K::STRING | K::MULTILINE_STRING)
+        || (!is_flag(first) && matches!(kind_at(p), K::STAR | K::EOF))
+}
+
+/// FIRST(value): the tokens that can begin a `value` in the FSH grammar
+/// (`value: STRING | MULTILINE_STRING | NUMBER | DATETIME | TIME | reference |
+/// canonical | code | quantity | ratio | bool | name`). `is_path_token` already
+/// covers SEQUENCE/NUMBER/DATETIME/TIME and the alpha keywords (incl. true/false).
+fn is_value_start(k: K) -> bool {
+    is_path_token(k)
+        || matches!(
+            k,
+            K::STRING | K::MULTILINE_STRING | K::REFERENCE | K::CANONICAL | K::CODE | K::UNIT
+        )
+}
+
 fn utf16_len(s: &str) -> i64 {
     s.encode_utf16().count() as i64
 }
@@ -155,21 +189,44 @@ fn split_path(path: &str) -> Vec<String> {
 // ----- string unescaping -----
 
 fn unescape_unicode(seg: &str) -> String {
-    // replace \uXXXX
-    let mut out = String::new();
+    // Replace \uXXXX (matching stock SUSHI's /\\(u[A-Fa-f0-9]{4})/g + JSON.parse).
+    // Stock relies on JS UTF-16 strings: each \uXXXX becomes a code unit, and two
+    // adjacent surrogate code units naturally combine into the astral character.
+    // Rust `char` cannot hold a lone surrogate, so we detect a high surrogate
+    // followed by a low surrogate and combine them into the real code point.
     let chars: Vec<char> = seg.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] == '\\' && i + 1 < chars.len() && chars[i + 1] == 'u' && i + 5 < chars.len() {
+    // Returns Some(code_unit) if chars[i..] begins with a \uXXXX escape.
+    let read_escape = |i: usize| -> Option<u32> {
+        if i + 5 < chars.len() && chars[i] == '\\' && chars[i + 1] == 'u' {
             let hex: String = chars[i + 2..i + 6].iter().collect();
             if hex.chars().all(|c| c.is_ascii_hexdigit()) {
-                if let Ok(cp) = u32::from_str_radix(&hex, 16) {
-                    if let Some(ch) = char::from_u32(cp) {
-                        out.push(ch);
-                        i += 6;
-                        continue;
+                return u32::from_str_radix(&hex, 16).ok();
+            }
+        }
+        None
+    };
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if let Some(cp) = read_escape(i) {
+            // High surrogate possibly followed by a low surrogate -> astral char.
+            if (0xD800..=0xDBFF).contains(&cp) {
+                if let Some(low) = read_escape(i + 6) {
+                    if (0xDC00..=0xDFFF).contains(&low) {
+                        let combined =
+                            0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                        if let Some(ch) = char::from_u32(combined) {
+                            out.push(ch);
+                            i += 12;
+                            continue;
+                        }
                     }
                 }
+            }
+            if let Some(ch) = char::from_u32(cp) {
+                out.push(ch);
+                i += 6;
+                continue;
             }
         }
         out.push(chars[i]);
@@ -286,10 +343,14 @@ fn parse_code_lexeme(text: &str) -> (String, Option<String>) {
         }
     };
     system = system.replace("\\\\", "\\").replace("\\#", "#");
-    if code.starts_with('"') && code.ends_with('"') && code.len() >= 2 {
-        code = code[1..code.len() - 1]
-            .replace("\\\\", "\\")
-            .replace("\\\"", "\"");
+    if code.starts_with('"') && code.ends_with('"') {
+        code = if code.len() >= 2 {
+            code[1..code.len() - 1]
+                .replace("\\\\", "\\")
+                .replace("\\\"", "\"")
+        } else {
+            String::new()
+        };
     }
     let sys = if system.is_empty() { None } else { Some(system) };
     (code, sys)
@@ -1271,8 +1332,9 @@ impl Importer {
         let version = it.next();
         if let Some(resolved) = self.all_aliases.get(without) {
             match version {
-                Some(v) => format!("{}|{}", resolved, v),
+                Some(v) if !v.is_empty() => format!("{}|{}", resolved, v),
                 None => resolved.clone(),
+                _ => resolved.clone(),
             }
         } else {
             value.to_string()
@@ -1359,7 +1421,7 @@ impl Importer {
         cur.advance();
         match cur.kind() {
             K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES => {
-                Some(self.finish_vs_component(cur, start, &star))
+                self.finish_vs_component(cur, start, &star)
             }
             K::CODE => {
                 // could be vsConceptComponent, codeCaretValueRule, codeInsertRule
@@ -1374,7 +1436,7 @@ impl Importer {
                 } else if after == K::KW_INSERT {
                     self.finish_code_insert(cur, start, &star, true)
                 } else {
-                    Some(self.finish_vs_component(cur, start, &star))
+                    self.finish_vs_component(cur, start, &star)
                 }
             }
             K::CARET_SEQUENCE => {
@@ -1437,7 +1499,9 @@ impl Importer {
             K::CARET_SEQUENCE => {
                 vec![self.finish_caret(cur, start, &star, "")]
             }
-            K::KW_OBEYS => self.finish_obeys(cur, start, &star, ""),
+            K::KW_OBEYS if !(host != RuleHost::Sd && cur.la(1) == K::CARD) => {
+                self.finish_obeys(cur, start, &star, "")
+            }
             K::KW_INSERT => self
                 .finish_insert(cur, start, &star, "", false)
                 .into_iter()
@@ -1462,9 +1526,10 @@ impl Importer {
                     vec![self.finish_concept(cur, start, &star, true)]
                 }
             }
-            K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES if host == RuleHost::RuleSet => {
-                vec![self.finish_vs_component(cur, start, &star)]
-            }
+            K::KW_INCLUDE | K::KW_EXCLUDE | K::KW_CODES if host == RuleHost::RuleSet => self
+                .finish_vs_component(cur, start, &star)
+                .into_iter()
+                .collect(),
             _ => {
                 let (local_path, _had) = self.read_path(cur);
                 match cur.kind() {
@@ -1524,12 +1589,23 @@ impl Importer {
     ) -> Vec<Rule> {
         let card_text = cur.tok().text.clone();
         cur.advance();
-        // flags
-        let flag_toks = self.consume_flags(cur);
-        // is there an addElement tail? (targetType / STRING / contentReference)
-        let has_tail = matches!(host, RuleHost::Lr)
-            && !matches!(cur.kind(), K::STAR | K::EOF)
-            && cur.pos < cur.toks.len();
+        let flag_start = cur.pos;
+        let mut flag_toks = self.consume_flags(cur);
+        let can_add_element = matches!(host, RuleHost::Lr | RuleHost::RuleSet);
+        let mut has_tail = can_add_element && has_add_element_tail(cur, cur.pos);
+        if can_add_element
+            && !flag_toks.is_empty()
+            && !has_tail
+            && has_add_element_tail(cur, flag_start + flag_toks.len() - 1)
+        {
+            // In stock's ANTLR grammar, AddElementRule is `CARD flag*
+            // targetType+`. Since flag keywords are also valid `name`
+            // targetTypes, the parser leaves the final flag-looking token as the
+            // target type when consuming it as a flag would make the rule fail.
+            flag_toks.pop();
+            cur.pos = flag_start + flag_toks.len();
+            has_tail = true;
+        }
         if has_tail {
             return vec![self.finish_add_element(cur, start, star, local_path, &card_text, &flag_toks)];
         }
@@ -1868,16 +1944,10 @@ impl Importer {
         let caret_path = cur.tok().text.clone();
         cur.advance(); // CARET_SEQUENCE
         let caret_path = caret_path.strip_prefix('^').unwrap_or(&caret_path).to_string();
-        let mut value = None;
-        let mut raw_value = None;
-        let mut is_instance = false;
-        if cur.kind() == K::EQUAL {
-            cur.advance();
-            let vr = self.parse_value(cur);
-            value = vr.value;
-            raw_value = vr.raw_value;
-            is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
-        }
+        let vr = self.parse_equal_value(cur);
+        let value = vr.value;
+        let raw_value = vr.raw_value;
+        let is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
         let stop = self.stop_tok(cur, start);
         let location = loc(star, &stop);
         let split = split_path(local_path);
@@ -1901,7 +1971,12 @@ impl Importer {
             let (code, sys) = parse_code_lexeme(&cur.tok().text);
             cur.advance();
             if keep_system {
-                local_code_path.push(format!("{}#{}", sys.unwrap_or_default(), code));
+                // Resolve the system alias (e.g. `$sct`) the same way the FSH importer
+                // does, so a VS concept-level caret's `path_array` carries the resolved
+                // system url — letting `setConceptCaretRules` match it against the
+                // already-resolved `compose.include[].system`.
+                let sys = self.alias_aware(&sys.unwrap_or_default());
+                local_code_path.push(format!("{}#{}", sys, code));
             } else {
                 local_code_path.push(format!("#{}", code));
             }
@@ -1912,16 +1987,10 @@ impl Importer {
             cur.advance();
             caret_path = Some(cp.strip_prefix('^').unwrap_or(&cp).to_string());
         }
-        let mut value = None;
-        let mut raw_value = None;
-        let mut is_instance = false;
-        if cur.kind() == K::EQUAL {
-            cur.advance();
-            let vr = self.parse_value(cur);
-            value = vr.value;
-            raw_value = vr.raw_value;
-            is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
-        }
+        let vr = self.parse_equal_value(cur);
+        let value = vr.value;
+        let raw_value = vr.raw_value;
+        let is_instance = vr.is_name && !self.is_alias(vr.name_text.as_deref());
         let stop = self.stop_tok(cur, start);
         let location = loc(star, &stop);
         let path_array = self.prepend_path_context(local_code_path, &location, false, false, false);
@@ -2106,7 +2175,12 @@ impl Importer {
             let (code, sys) = parse_code_lexeme(&cur.tok().text);
             cur.advance();
             if keep_system {
-                local_code_path.push(format!("{}#{}", sys.unwrap_or_default(), code));
+                // Resolve the system alias (e.g. `$sct`) the same way the FSH importer
+                // does, so a VS concept-level caret's `path_array` carries the resolved
+                // system url — letting `setConceptCaretRules` match it against the
+                // already-resolved `compose.include[].system`.
+                let sys = self.alias_aware(&sys.unwrap_or_default());
+                local_code_path.push(format!("{}#{}", sys, code));
             } else {
                 local_code_path.push(format!("#{}", code));
             }
@@ -2177,6 +2251,23 @@ impl Importer {
 
     // ---------- value parsing ----------
 
+    /// Parse `EQUAL value`. Emulates ANTLR's single-token insertion of a missing
+    /// `=`: when the operator is absent but a value-start token follows, ANTLR's
+    /// error recovery inserts the missing EQUAL and parses the value anyway. This
+    /// happens for inputs like `^short ="x"`, where the lexer greedily makes
+    /// `="x"` a single SEQUENCE token (longest match) rather than EQUAL + STRING,
+    /// so the parser sees `caretPath SEQUENCE` and recovers by inserting EQUAL.
+    fn parse_equal_value(&mut self, cur: &mut Cursor) -> ValueResult {
+        if cur.kind() == K::EQUAL {
+            cur.advance();
+            self.parse_value(cur)
+        } else if is_value_start(cur.kind()) {
+            self.parse_value(cur)
+        } else {
+            ValueResult::default()
+        }
+    }
+
     fn parse_value(&mut self, cur: &mut Cursor) -> ValueResult {
         let mut vr = ValueResult::default();
         match cur.kind() {
@@ -2202,7 +2293,8 @@ impl Importer {
                 vr.value = Some(self.parse_code(cur));
             }
             K::UNIT => {
-                vr.value = Some(self.parse_quantity(cur));
+                let q = self.parse_quantity(cur);
+                vr.value = Some(self.maybe_ratio(cur, q));
             }
             K::NUMBER => {
                 vr.value = Some(self.parse_number_value(cur, &mut vr.raw_value));
@@ -2415,7 +2507,7 @@ impl Importer {
 
     // ---------- vsComponent ----------
 
-    fn finish_vs_component(&mut self, cur: &mut Cursor, start: usize, star: &Token) -> Rule {
+    fn finish_vs_component(&mut self, cur: &mut Cursor, start: usize, star: &Token) -> Option<Rule> {
         let mut inclusion = true;
         if cur.kind() == K::KW_INCLUDE {
             cur.advance();
@@ -2447,15 +2539,21 @@ impl Importer {
             let location = loc(star, &stop);
             // reset context
             self.prepend_path_context(vec![], &location, false, false, true);
-            Rule::VsFilter {
+            Some(Rule::VsFilter {
                 source_info: SourceInfo::new(&self.current_file, location),
                 path: String::new(),
                 inclusion,
                 from,
                 filters,
-            }
+            })
         } else {
             // concept component: code vsComponentFrom?
+            if cur.kind() != K::CODE {
+                while !matches!(cur.kind(), K::STAR | K::EOF) {
+                    cur.advance();
+                }
+                return None;
+            }
             let code = match self.parse_code(cur) {
                 Value::Code(c) => c,
                 _ => FshCode {
@@ -2494,13 +2592,13 @@ impl Importer {
             } else {
                 self.prepend_path_context(vec![], &location, false, false, true);
             }
-            Rule::VsConcept {
+            Some(Rule::VsConcept {
                 source_info: SourceInfo::new(&self.current_file, location),
                 path: String::new(),
                 inclusion,
                 from,
                 concepts,
-            }
+            })
         }
     }
 

@@ -1,0 +1,23 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MyOperation",
+  "url": "http://example.org/StructureDefinition/MyOperation",
+  "version": "0.1.0",
+  "name": "MyOperation",
+  "status": "active",
+  "fhirVersion": "4.0.1",
+  "kind": "resource",
+  "abstract": false,
+  "type": "OperationDefinition",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OperationDefinition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "OperationDefinition.system",
+        "path": "OperationDefinition.system",
+        "patternBoolean": true
+      }
+    ]
+  }
+}

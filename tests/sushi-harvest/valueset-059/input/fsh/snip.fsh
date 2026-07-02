@@ -1,0 +1,3 @@
+
+ValueSet: ZooVS
+* ^publisher = "foo"

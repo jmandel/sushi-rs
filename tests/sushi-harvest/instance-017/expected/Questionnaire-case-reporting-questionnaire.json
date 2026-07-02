@@ -1,0 +1,12 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "case-reporting-questionnaire",
+  "item": [
+    {
+      "linkId": "title",
+      "text": "HIV Case Report",
+      "type": "display",
+      "repeats": false
+    }
+  ]
+}

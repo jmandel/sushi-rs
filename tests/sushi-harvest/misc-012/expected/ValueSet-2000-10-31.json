@@ -1,0 +1,28 @@
+{
+  "resourceType": "ValueSet",
+  "status": "active",
+  "name": "2000-10-31",
+  "id": "2000-10-31",
+  "version": "0.1.0",
+  "url": "http://example.org/ValueSet/2000-10-31",
+  "compose": {
+    "include": [
+      {
+        "system": "http://example.org/CodeSystem/2000-10-31T00",
+        "concept": [
+          {
+            "code": "2001-01"
+          }
+        ]
+      },
+      {
+        "system": "http://aprilfools.com",
+        "concept": [
+          {
+            "code": "2001-01-01"
+          }
+        ]
+      }
+    ]
+  }
+}

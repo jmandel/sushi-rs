@@ -78,3 +78,36 @@ parity_tests! {
     caret_regex      => "08_caret_regex",
     nested_param_insert => "09_nested_param_insert",
 }
+
+#[test]
+fn add_element_flag_keyword_recovery() {
+    let src = r#"
+RuleSet: IdentifierDisplayName
+* identifier 0..* MS
+* identifier[displayName].value 1..1 MS
+
+Logical: LogicalModel
+* stuff 0..* N "just stuff" "a list of some stuff"
+* address 1..* Address
+"#;
+    let actual = import_to_json(&[("ambiguous-add-element.fsh", src)]);
+    let doc = &actual.as_array().unwrap()[0];
+
+    let ruleset_rules = doc["ruleSets"]["__map"]["IdentifierDisplayName"]["rules"]
+        .as_array()
+        .unwrap();
+    assert_eq!(ruleset_rules[0]["__type"], "CardRule");
+    assert_eq!(ruleset_rules[1]["__type"], "FlagRule");
+    assert_eq!(ruleset_rules[1]["mustSupport"], true);
+    assert_eq!(ruleset_rules[2]["__type"], "CardRule");
+    assert_eq!(ruleset_rules[3]["__type"], "FlagRule");
+    assert_eq!(ruleset_rules[3]["mustSupport"], true);
+
+    let logical_rules = doc["logicals"]["__map"]["LogicalModel"]["rules"]
+        .as_array()
+        .unwrap();
+    assert_eq!(logical_rules[0]["__type"], "AddElementRule");
+    assert_eq!(logical_rules[0]["types"][0]["type"], "N");
+    assert_eq!(logical_rules[1]["__type"], "AddElementRule");
+    assert_eq!(logical_rules[1]["types"][0]["type"], "Address");
+}

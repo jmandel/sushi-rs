@@ -7,13 +7,14 @@
 use fsh_lexer_parser::{dump, parser};
 use fsh_model::{FshCode, FshDocument, Rule, SourceInfo, ValueSetComponentFrom};
 
-pub mod caret_schema;
 pub mod config;
 pub mod export;
 pub mod ig_export;
 pub mod instance_export;
 pub mod paths;
+pub mod predefined;
 pub mod sd_export;
+pub mod type_resolver;
 
 /// Entity-type discriminant (mirrors TS `constructorName`) used for the
 /// `isAllowedRule` table and diagnostic messages.
@@ -483,6 +484,25 @@ pub fn expand_to_json(files: &[(&str, &str)]) -> serde_json::Value {
 /// first). Gate: `harness/diff-resources-glob.sh`.
 ///
 pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
+    build_project_inner(ig_dir, out_dir, None)
+}
+
+/// Build a SUSHI project against an explicit materialized FHIR package cache
+/// (e.g. one produced by `package_acquisition` materialize). The explicit cache
+/// is validated to exist; we still NEVER fall back to `~/.fhir`.
+pub fn build_project_with_cache(
+    ig_dir: &str,
+    out_dir: &str,
+    cache_dir: &str,
+) -> anyhow::Result<()> {
+    build_project_inner(ig_dir, out_dir, Some(cache_dir))
+}
+
+fn build_project_inner(
+    ig_dir: &str,
+    out_dir: &str,
+    explicit_cache_dir: Option<&str>,
+) -> anyhow::Result<()> {
     use std::path::{Path, PathBuf};
 
     // 1. Config.
@@ -530,8 +550,10 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(&resources_dir)?;
 
     // The FHIR package cache (needed by VS external-name resolution + SD export).
-    let cache_dir = resolve_cache_dir()?;
+    let cache_dir = resolve_cache_dir(explicit_cache_dir)?;
     let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
+    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
+    let predefined = predefined::PredefinedPackage::load(ig_dir, &cfg_yaml, &store);
 
     // Collect IG `definition.resource` metadata as we export.
     use ig_export::{ConformanceRes, IgInputs};
@@ -539,6 +561,11 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     let mut cs_conformance: Vec<ConformanceRes> = Vec::new();
 
     // ValueSets + CodeSystems (Phase 4).
+    // Retain the fully-exported VS/CS bodies so the instance exporter can embed
+    // them whole when a Bundle/instance assigns one by name (stock: MasterFisher
+    // fishes the exported `pkg` first — InstanceExporter.fishForFHIR). These are
+    // exported before instances, matching stock's FHIRExporter order.
+    let mut exported_conformance: Vec<std::rc::Rc<serde_json::Value>> = Vec::new();
     for exported in export::export_all(&docs, &cfg, Some(&store)) {
         let rt = exported
             .body
@@ -557,6 +584,7 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
         }
         let text = json_emit::to_fhir_json_string(&exported.body);
         std::fs::write(resources_dir.join(&exported.filename), text)?;
+        exported_conformance.push(std::rc::Rc::new(exported.body));
     }
 
     // StructureDefinitions (Phase 5/6).
@@ -566,11 +594,16 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     // Predefined ValueSets (input/resources/*.{xml,json}) feed the SD binding
     // fisher so `* path from <Name>` resolves to the local canonical url before
     // a wrong same-named package ValueSet.
-    let predefined_vs = {
-        let cy: serde_yaml::Value = serde_yaml::from_str(&cfg_text).unwrap_or(serde_yaml::Value::Null);
-        ig_export::predefined_vs_map(ig_dir, &cy)
-    };
-    let ctx = sd_export::build_sd_context(&docs, &cfg, &store, &vs_url, &cs_url, predefined_vs);
+    let predefined_vs = predefined.value_set_url_map();
+    let ctx = sd_export::build_sd_context(
+        &docs,
+        &cfg,
+        &store,
+        &predefined,
+        &vs_url,
+        &cs_url,
+        predefined_vs,
+    );
 
     // SD conformance (profiles, extensions, logicals — in tank order), local
     // profile/logical urls, custom-resource detection.
@@ -604,6 +637,8 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
             reference_key: format!("StructureDefinition/{id}"),
             name,
             description,
+            fhir_name: e.sd.get_str("name").map(str::to_string),
+            url: url.clone(),
         });
     }
     for exported in sd_export::exported_files(&ctx) {
@@ -612,28 +647,32 @@ pub fn build_project(ig_dir: &str, out_dir: &str) -> anyhow::Result<()> {
     }
 
     // Instances (Phase 7).
-    let instances = instance_export::export_instances(&docs, &cfg, &ctx);
+    let instances = instance_export::export_instances(&docs, &cfg, &ctx, &exported_conformance);
     for inst in &instances {
         let text = json_emit::to_fhir_json_string(&inst.exported.body);
         std::fs::write(resources_dir.join(&inst.exported.filename), text)?;
     }
 
     // ImplementationGuide resource (last — references all of the above).
-    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
-    let mut conformance = sd_conformance;
-    conformance.append(&mut vs_conformance);
-    conformance.append(&mut cs_conformance);
-    let inputs = IgInputs {
-        conformance,
-        instances: instances.iter().map(|i| &i.ig).collect(),
-        local_profile_logical,
-        has_custom_resources,
-        cache_dir: cache_dir.clone(),
-        ig_dir: ig_dir.to_string(),
-    };
-    if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
-        let text = json_emit::to_fhir_json_string(&ig.body);
-        std::fs::write(resources_dir.join(&ig.filename), text)?;
+    // If FSHOnly is true in the config, do not generate IG content (matches
+    // stock SUSHI app.ts: the IGExporter block is skipped entirely under FSHOnly).
+    if !cfg.fsh_only {
+        let mut conformance = sd_conformance;
+        conformance.append(&mut vs_conformance);
+        conformance.append(&mut cs_conformance);
+        let inputs = IgInputs {
+            conformance,
+            instances: instances.iter().map(|i| &i.ig).collect(),
+            local_profile_logical,
+            has_custom_resources,
+            cache_dir: cache_dir.clone(),
+            ig_dir: ig_dir.to_string(),
+            predefined: &predefined,
+        };
+        if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
+            let text = json_emit::to_fhir_json_string(&ig.body);
+            std::fs::write(resources_dir.join(&ig.filename), text)?;
+        }
     }
     Ok(())
 }
@@ -656,6 +695,8 @@ fn conformance_from_body(body: &serde_json::Value) -> Option<ig_export::Conforma
         reference_key: format!("{rt}/{id}"),
         name,
         description,
+        fhir_name: body.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        url: body.get("url").and_then(|v| v.as_str()).map(str::to_string),
     })
 }
 
@@ -670,8 +711,14 @@ fn sd_ig_name(sd: &fhir_model::StructureDefinition) -> Option<String> {
 /// Locate the explicit FHIR package cache. Honors `FHIR_CACHE`, else the repo's
 /// isolated cache under `temp/fhir-home/.fhir/packages` relative to cwd. NEVER
 /// falls back to `~/.fhir` (hard rule). Fails loud if missing.
-fn resolve_cache_dir() -> anyhow::Result<String> {
+fn resolve_cache_dir(explicit: Option<&str>) -> anyhow::Result<String> {
     use std::path::Path;
+    if let Some(c) = explicit {
+        if Path::new(c).is_dir() {
+            return Ok(c.to_string());
+        }
+        anyhow::bail!("FHIR package cache {c} is not a directory");
+    }
     if let Ok(c) = std::env::var("FHIR_CACHE") {
         if Path::new(&c).is_dir() {
             return Ok(c);

@@ -1,0 +1,4 @@
+
+        Instance: MyObservation
+        InstanceOf: Observation
+        

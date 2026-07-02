@@ -1,0 +1,12 @@
+{
+  "resourceType": "Observation",
+  "id": "2000-10-31T00:01:02.000",
+  "status": "final",
+  "code": {
+    "coding": [
+      {
+        "code": "123"
+      }
+    ]
+  }
+}
