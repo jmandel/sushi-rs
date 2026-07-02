@@ -197,6 +197,20 @@ conversion; only the blank *value* is removed.
 in source order**. **No top-level SD field is renamed, moved, dropped, or turned
 into an extension; no extension becomes a field at SD level.**
 
+> **"Same-name copy" ≠ verbatim JSON passthrough for complex-typed metadata.**
+> `identifier[]` (Identifier), `contact[]` (ContactDetail), `useContext[]`
+> (UsageContext), `jurisdiction[]` (CodeableConcept), and `keyword[]` (Coding) are
+> routed through their own datatype converters, which **reconstruct the object in
+> canonical R5 field order** and recurse (blank-string drops, nested Coding
+> `system→version→code→display→userSelected`, etc.). A Rust port must NOT copy
+> these arrays byte-for-byte — verified against the IPS goldens, where R4
+> `jurisdiction[0].coding[0]` is authored `{code, system}` but the golden emits
+> `{system, code}` (Coding40_50 field order). Only genuine primitives
+> (`url`/`version`/`name`/… ) and value-less scalars are literal copies.
+> UsageContext.value[x] is a `convertType` choice (same datatype dispatch as
+> `fixed[x]`/`pattern[x]`), so an exotic `useContext.value` datatype hits the same
+> fail-loud converter as ED value[x].
+
 | # | R4 field | R5 field | Converter (line) | Notes |
 |---|----------|----------|-----|-------|
 | — | id/meta/implicitRules/language/text/contained/extension/modifierExtension | same | copyDomainResource (56) | §2 |
@@ -584,6 +598,30 @@ behaviors. Corrections/clarifications discovered here:
    have not each been line-audited here. For StructureDefinition fixtures the
    common cases are CodeableConcept/Coding/Quantity/string/uri/boolean/code —
    audit any exotic datatype a fixture actually uses before trusting the port.
+
+   **RESOLVED (W2a, Rust port).** The Rust `convert.rs` implements a fail-loud
+   `convert_datatype`: every primitive (verbatim value copy + blank-drop) plus the
+   complex datatypes that surface across the 39 goldens AND the full
+   `{ips,us-core,qicore,sdc,pas,ecr}` fixture sweep (338 fixtures). Audited field
+   orders (all begin with copyElement = id+extension, then):
+   - **Coding** (`general40_50/Coding40_50.java:14-19`): system, version, code,
+     display, userSelected.
+   - **CodeableConcept** (`CodeableConcept40_50.java:12-14`): coding[], text.
+   - **Identifier** (`Identifier40_50.java:14-20`): use, type (CodeableConcept),
+     system, value, period, assigner (Reference).
+   - **Reference** (`Reference40_50.java`): reference, type, identifier, display.
+   - **Period** (`Period40_50.java:11-13`): start, end.
+   - **Quantity** (+Duration/Age/Count/Distance/MoneyQuantity/SimpleQuantity, which
+     delegate to `Quantity40_50.copyQuantity`; `Quantity40_50.java:16-21`): value,
+     comparator, unit, system, code.
+   - **ContactPoint** (`ContactPoint40_50.java:14-18`): system, value, use, rank,
+     period.
+   - **ContactDetail** (`ContactDetail40_50.java:13-15`): name, telecom[].
+   - **UsageContext** (`UsageContext40_50.java:12-14`): code (Coding), value[x]
+     (convertType — same fail-loud dispatch).
+   Any datatype NOT in this set returns `Err("unimplemented value[x] datatype
+   converter: <Name>")` — no silent passthrough. None of the 338 smoke fixtures
+   needed anything beyond the above.
 
 5. **Nested/contained resources.** `copyDomainResource` recurses `contained[]`
    through `convertResource` with `failFast=true` (throws on unknown types). SD

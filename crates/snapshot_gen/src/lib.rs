@@ -4,6 +4,7 @@ use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 
 mod cli;
+pub(crate) mod convert;
 mod legacy;
 mod merge;
 mod package;
@@ -21,6 +22,13 @@ pub(crate) use merge::*;
 pub(crate) use projection::*;
 pub(crate) use quirks::*;
 pub(crate) use text::*;
+
+/// Stage-2 pure R4->R5 StructureDefinition conversion (VersionConvertor_40_50
+/// semantics). Context-free; R5 inputs pass through unchanged. Exposed for the
+/// `--dump-converted` CLI mode and the `convert_parity` gate.
+pub fn convert_r4_sd_to_r5(sd: &Value) -> anyhow::Result<Value> {
+    convert::r4_sd_to_r5(sd)
+}
 
 pub fn generate_snapshot(
     mut derived: Value,

@@ -84,9 +84,13 @@ pub fn main_cli() -> anyhow::Result<()> {
     let mut batch_list: Option<String> = None;
     let mut input: Option<String> = None;
     let mut engine: Option<String> = None;
+    let mut dump_converted: Option<String> = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--dump-converted" => {
+                dump_converted = Some(args.next().context("--dump-converted needs <input.json>")?);
+            }
             "--cache" => cache = args.next(),
             "--package" | "-p" => {
                 packages.push(args.next().context("--package needs pkg#ver")?);
@@ -106,6 +110,18 @@ pub fn main_cli() -> anyhow::Result<()> {
             _ if arg.starts_with('-') => bail!("unknown option: {arg}"),
             _ => input = Some(arg),
         }
+    }
+
+    // Stage-2-only mode: pure R4->R5 StructureDefinition conversion, no package
+    // context / base / snapshot generation (context-free). Emits the converted
+    // JSON so oracle diffs are scriptable.
+    if let Some(dump_input) = dump_converted {
+        let source = std::fs::read_to_string(&dump_input)
+            .with_context(|| format!("failed to read {dump_input}"))?;
+        let sd: Value = serde_json::from_str(&source)?;
+        let converted = crate::convert_r4_sd_to_r5(&sd)?;
+        print!("{}", json_emit::to_fhir_json_string(&converted));
+        return Ok(());
     }
 
     // Engine resolution: explicit --engine flag, else the ENGINE env var, else the
@@ -147,7 +163,7 @@ pub fn main_cli() -> anyhow::Result<()> {
 
 pub(crate) fn print_usage() {
     eprintln!(
-        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--engine <legacy|walk>] [--sort|--no-sort] [--native-r5] [--batch-list <tsv>] <StructureDefinition.json>"
+        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--engine <legacy|walk>] [--sort|--no-sort] [--native-r5] [--dump-converted <input.json>] [--batch-list <tsv>] <StructureDefinition.json>"
     );
 }
 
