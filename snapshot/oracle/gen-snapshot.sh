@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: snapshot/oracle/gen-snapshot.sh [--r4|--r5] [--sort|--direct] [--native-r5|--output-r5|--output-r4] [--local-dir <dir>] [--batch-list <tsv>] <input.json> <out.json> [pkg#ver ...]" >&2
+  echo "usage: snapshot/oracle/gen-snapshot.sh [--r4|--r5] [--sort|--direct] [--dump-converted|--dump-converted-sorted] [--native-r5|--output-r5|--output-r4] [--local-dir <dir>] [--batch-list <tsv>] <input.json> <out.json> [pkg#ver ...]" >&2
   exit 2
 }
 
@@ -11,12 +11,15 @@ FHIR_VERSION="r5"
 OUTPUT_MODE=""
 LOCAL_DIR=""
 BATCH_LIST=""
+DUMP_CONVERTED=""   # "", "unsorted", or "sorted"
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --r4) FHIR_VERSION="r4"; shift ;;
     --r5) FHIR_VERSION="r5"; shift ;;
     --sort) MODE="sort"; shift ;;
     --direct) MODE="direct"; shift ;;
+    --dump-converted) DUMP_CONVERTED="unsorted"; shift ;;
+    --dump-converted-sorted) DUMP_CONVERTED="sorted"; shift ;;
     --native-r5|--output-r5) OUTPUT_MODE="r5"; shift ;;
     --output-r4) OUTPUT_MODE="r4"; shift ;;
     --local-dir) LOCAL_DIR="${2:-}"; [[ -n "$LOCAL_DIR" ]] || usage; shift 2 ;;
@@ -24,6 +27,11 @@ while [[ "${1:-}" == --* ]]; do
     *) usage ;;
   esac
 done
+
+if [[ -n "$DUMP_CONVERTED" && "$FHIR_VERSION" != "r4" ]]; then
+  echo "FATAL: --dump-converted[-sorted] is only valid with --r4" >&2
+  exit 2
+fi
 
 if [[ -n "$BATCH_LIST" ]]; then
   [[ "$FHIR_VERSION" == "r4" ]] || { echo "FATAL: --batch-list is currently supported only with --r4" >&2; exit 2; }
@@ -98,7 +106,38 @@ fi
 
 javac -cp "$CP" -d "$REPO/temp/snapshot-oracle/classes" "$JAVA_SOURCE"
 
+# TRACE=1 enables the snap-trace decision tracer (fhir-core branch snap-trace).
+# It writes a JSONL decision trace alongside the snapshot output and does not
+# change generation output. Default (TRACE unset) leaves behavior untouched.
+JVM_ARGS=()
+if [[ "${TRACE:-0}" == "1" ]]; then
+  if [[ -n "$OUT" ]]; then
+    TRACE_OUT="${TRACE_OUT:-${OUT%.json}.trace.jsonl}"
+  else
+    TRACE_OUT="${TRACE_OUT:-$REPO/temp/snapshot-oracle/trace.jsonl}"
+  fi
+  mkdir -p "$(dirname "$TRACE_OUT")"
+  JVM_ARGS+=("-Dsnapshot.trace=$TRACE_OUT")
+fi
+
 JAVA_ARGS=()
+if [[ -n "$DUMP_CONVERTED" ]]; then
+  if [[ "$DUMP_CONVERTED" == "sorted" ]]; then
+    JAVA_ARGS+=(--dump-converted-sorted)
+  else
+    JAVA_ARGS+=(--dump-converted)
+  fi
+  if [[ -n "$BATCH_LIST" ]]; then
+    JAVA_ARGS+=(--batch-list "$BATCH_LIST" "$FHIR_CACHE")
+    JAVA_ARGS+=("${PACKAGES[@]}")
+  else
+    JAVA_ARGS+=("$FHIR_CACHE")
+    JAVA_ARGS+=("${PACKAGES[@]}" "$IN" "$OUT")
+  fi
+  HOME="$FHIR_HOME" java "${JVM_ARGS[@]}" -cp "$CP" "$JAVA_CLASS" "${JAVA_ARGS[@]}"
+  assert_real_fhir_untouched "$REAL_HOME" "$before"
+  exit 0
+fi
 if [[ "$MODE" == "sort" ]]; then
   JAVA_ARGS+=(--sort)
 fi
@@ -122,5 +161,5 @@ else
   JAVA_ARGS+=("${PACKAGES[@]}" "$IN" "$OUT")
 fi
 
-HOME="$FHIR_HOME" java -cp "$CP" "$JAVA_CLASS" "${JAVA_ARGS[@]}"
+HOME="$FHIR_HOME" java "${JVM_ARGS[@]}" -cp "$CP" "$JAVA_CLASS" "${JAVA_ARGS[@]}"
 assert_real_fhir_untouched "$REAL_HOME" "$before"

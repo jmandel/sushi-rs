@@ -1,0 +1,115 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "Coding-uv-ips",
+  "url" : "http://hl7.org/fhir/uv/ips/StructureDefinition/Coding-uv-ips",
+  "version" : "1.1.0",
+  "name" : "CodingIPS",
+  "title" : "Coding with translations",
+  "status" : "active",
+  "date" : "2024-06-19T10:50:07-05:00",
+  "publisher" : "HL7 International / Patient Care",
+  "contact" : [{
+    "telecom" : [{
+      "system" : "url",
+      "value" : "http://www.hl7.org/Special/committees/patientcare"
+    }]
+  }],
+  "description" : "This profile extends the capabilities of the coding data type to support multi-language designations (display).\nIt relies on the Translation extension.",
+  "jurisdiction" : [{
+    "coding" : [{
+      "system" : "http://unstats.un.org/unsd/methods/m49/m49.htm",
+      "code" : "001"
+    }]
+  }],
+  "fhirVersion" : "4.0.1",
+  "kind" : "complex-type",
+  "abstract" : false,
+  "type" : "Coding",
+  "baseDefinition" : "http://hl7.org/fhir/StructureDefinition/Coding",
+  "derivation" : "constraint",
+  "differential" : {
+    "element" : [{
+      "id" : "Coding.system",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "Coding.system",
+      "mustSupport" : true
+    },
+    {
+      "id" : "Coding.code",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "Coding.code",
+      "mustSupport" : true
+    },
+    {
+      "id" : "Coding.display",
+      "path" : "Coding.display",
+      "short" : "Text representation defined by the system"
+    },
+    {
+      "id" : "Coding.display.extension",
+      "path" : "Coding.display.extension",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "value",
+          "path" : "url"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      }
+    },
+    {
+      "id" : "Coding.display.extension:translation",
+      "path" : "Coding.display.extension",
+      "sliceName" : "translation",
+      "short" : "Language Translation (Localization)",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/StructureDefinition/translation"]
+      }]
+    }]
+  }
+}

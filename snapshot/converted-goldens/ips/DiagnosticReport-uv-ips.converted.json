@@ -1,0 +1,364 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "DiagnosticReport-uv-ips",
+  "url" : "http://hl7.org/fhir/uv/ips/StructureDefinition/DiagnosticReport-uv-ips",
+  "version" : "1.1.0",
+  "name" : "DiagnosticReportUvIps",
+  "title" : "DiagnosticReport (IPS)",
+  "status" : "active",
+  "experimental" : false,
+  "date" : "2024-06-19T10:50:07-05:00",
+  "publisher" : "HL7 International / Patient Care",
+  "contact" : [{
+    "telecom" : [{
+      "system" : "url",
+      "value" : "http://www.hl7.org/Special/committees/patientcare"
+    }]
+  }],
+  "description" : "This profile constrains the DiagnosticReport resource to represent diagnostic test and procedure reports in a patient summary.",
+  "jurisdiction" : [{
+    "coding" : [{
+      "system" : "http://unstats.un.org/unsd/methods/m49/m49.htm",
+      "code" : "001"
+    }]
+  }],
+  "purpose" : "This profile constrains the DiagnosticReport resource to use the specific IPS profiles for observations and coded data types.",
+  "fhirVersion" : "4.0.1",
+  "kind" : "resource",
+  "abstract" : false,
+  "type" : "DiagnosticReport",
+  "baseDefinition" : "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+  "derivation" : "constraint",
+  "differential" : {
+    "element" : [{
+      "id" : "DiagnosticReport.status",
+      "path" : "DiagnosticReport.status",
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "ObservationStatus"
+        }],
+        "strength" : "required",
+        "valueSet" : "http://hl7.org/fhir/uv/ips/ValueSet/diagnostics-report-status-uv-ips"
+      }
+    },
+    {
+      "id" : "DiagnosticReport.code",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.code",
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips"]
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.subject",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.subject",
+      "min" : 1,
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips",
+        "http://hl7.org/fhir/StructureDefinition/Group"]
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.subject.reference",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.subject.reference",
+      "min" : 1,
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.effective[x]",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.effective[x]",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "type",
+          "path" : "$this"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      },
+      "min" : 1,
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.effective[x]:effectiveDateTime",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:able-to-populate"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.effective[x]",
+      "sliceName" : "effectiveDateTime",
+      "min" : 0,
+      "max" : "1",
+      "type" : [{
+        "code" : "dateTime"
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.performer",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.performer",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Practitioner-uv-ips",
+        "http://hl7.org/fhir/uv/ips/StructureDefinition/PractitionerRole-uv-ips",
+        "http://hl7.org/fhir/uv/ips/StructureDefinition/Organization-uv-ips",
+        "http://hl7.org/fhir/StructureDefinition/CareTeam"]
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "DiagnosticReport.specimen",
+      "path" : "DiagnosticReport.specimen",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Specimen-uv-ips"]
+      }],
+      "mustSupport" : false
+    },
+    {
+      "id" : "DiagnosticReport.result",
+      "path" : "DiagnosticReport.result",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "profile",
+          "path" : "resolve()"
+        }],
+        "rules" : "open"
+      },
+      "short" : "Observation results included in the diagnostic report.",
+      "definition" : "Observation results included in the diagnostic report."
+    },
+    {
+      "id" : "DiagnosticReport.result:observation-results",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "DiagnosticReport.result",
+      "sliceName" : "observation-results",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-results-laboratory-pathology-uv-ips",
+        "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-results-radiology-uv-ips"]
+      }],
+      "mustSupport" : true
+    }]
+  }
+}

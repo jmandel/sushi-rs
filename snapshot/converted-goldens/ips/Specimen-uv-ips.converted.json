@@ -1,0 +1,170 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "Specimen-uv-ips",
+  "url" : "http://hl7.org/fhir/uv/ips/StructureDefinition/Specimen-uv-ips",
+  "version" : "1.1.0",
+  "name" : "SpecimenUvIps",
+  "title" : "Specimen (IPS)",
+  "status" : "active",
+  "date" : "2024-06-19T10:50:07-05:00",
+  "publisher" : "HL7 International / Patient Care",
+  "contact" : [{
+    "telecom" : [{
+      "system" : "url",
+      "value" : "http://www.hl7.org/Special/committees/patientcare"
+    }]
+  }],
+  "description" : "This profile constrains the Specimen resource to represent the characteristics of a biological specimens in the context of laboratory results integrated to a patient summary.",
+  "jurisdiction" : [{
+    "coding" : [{
+      "system" : "http://unstats.un.org/unsd/methods/m49/m49.htm",
+      "code" : "001"
+    }]
+  }],
+  "purpose" : "Minimal specimen attributes, usable for the laboratory results section and entry of a patient summary.",
+  "fhirVersion" : "4.0.1",
+  "kind" : "resource",
+  "abstract" : false,
+  "type" : "Specimen",
+  "baseDefinition" : "http://hl7.org/fhir/StructureDefinition/Specimen",
+  "derivation" : "constraint",
+  "differential" : {
+    "element" : [{
+      "id" : "Specimen.type",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "Specimen.type",
+      "min" : 1,
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips"]
+      }],
+      "mustSupport" : true,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenType"
+        }],
+        "strength" : "preferred",
+        "valueSet" : "http://hl7.org/fhir/uv/ips/ValueSet/results-specimen-type-uv-ips"
+      }
+    },
+    {
+      "id" : "Specimen.subject",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "Specimen.subject",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips"]
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "Specimen.subject.reference",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "Specimen.subject.reference",
+      "min" : 1,
+      "mustSupport" : true
+    },
+    {
+      "id" : "Specimen.collection.method",
+      "path" : "Specimen.collection.method",
+      "binding" : {
+        "strength" : "preferred",
+        "valueSet" : "http://hl7.org/fhir/uv/ips/ValueSet/results-specimen-collection-method-uv-ips"
+      }
+    },
+    {
+      "id" : "Specimen.collection.bodySite",
+      "path" : "Specimen.collection.bodySite",
+      "binding" : {
+        "strength" : "preferred",
+        "valueSet" : "http://hl7.org/fhir/uv/ips/ValueSet/body-site-uv-ips"
+      }
+    }]
+  }
+}

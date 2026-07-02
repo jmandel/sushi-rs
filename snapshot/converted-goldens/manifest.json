@@ -1,0 +1,64 @@
+{
+  "description": "Stage-2 (R4 SD JSON -> R5 internal-model JSON) conversion goldens. Each *.converted.json is the R5-internal model emitted by SnapOracleR4 --dump-converted (raw converted form: no sortDifferential, no setIds, no generateSnapshot). Oracle pinned at fhir-core commit 5c4d5a0ff, jar org.hl7.fhir.r5-6.9.10-SNAPSHOT.",
+  "oracle": {
+    "driver": "snapshot/oracle/SnapOracleR4.java",
+    "mode": "--dump-converted",
+    "wrapper": "bash snapshot/oracle/gen-snapshot.sh --r4 --dump-converted --batch-list <tsv> <pkg#ver ...>",
+    "note": "Conversion is context-free: --dump-converted needs no package context and no base. All 39 goldens were generated in two batched invocations with only hl7.fhir.r4.core#4.0.1 loaded (never consulted). A --dump-converted-sorted variant exists that additionally runs sortDifferential+setIds; it DOES require a resolvable base in the package context and was not used for these unsorted goldens."
+  },
+  "spec": "snapshot/specs/r4-to-r5-conversion.md",
+  "groups": [
+    {
+      "ig": "ips",
+      "count": 29,
+      "source": "snapshot/harvested/r4/ips/fixtures/*.json (all)",
+      "packageContext": "none required (context-free). Harvest package context for reference: hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.ipa#1.1.0 hl7.fhir.uv.extensions.r4#5.3.0",
+      "conversionTraits": "choice-path elements (Observation value[x]/effective[x]), markdown fields, contact/mapping/context backbones, nested BackboneElement (Bundle/Composition sections)."
+    },
+    {
+      "ig": "us-core",
+      "count": 4,
+      "fixtures": [
+        {"name": "us-core-observation-lab", "traits": "constraint.xpath -> extension (us-core-4 constraint carries elementdefinition-bestpractice FIRST then xpath extension appended LAST); choice paths (valueCodeableConcept)."},
+        {"name": "us-core-genderIdentity", "traits": "elementdefinition-bindingName binding extension copied VERBATIM (NOT projected into binding.additional[]); Extension.value[x] choice."},
+        {"name": "us-core-medicationrequest", "traits": "elementdefinition-maxValueSet binding extension copied VERBATIM; binding.description string->markdown; largest us-core differential."},
+        {"name": "us-core-head-circumference", "traits": "choice-path differential rows (valueQuantity); vital-signs component slicing."}
+      ],
+      "packageContext": "none required. Harvest context: hl7.fhir.us.core#9.0.0 closure (package-deps.cjs)."
+    },
+    {
+      "ig": "qicore",
+      "count": 2,
+      "fixtures": [
+        {"name": "qicore-claim", "traits": "binding extension fodder; large profile."},
+        {"name": "qicore-observation-clinical-result", "traits": "elementdefinition-bindingName / additional binding fodder, choice paths."}
+      ],
+      "packageContext": "none required. Harvest context: hl7.fhir.us.qicore#6.0.0 closure."
+    },
+    {
+      "ig": "sdc",
+      "count": 2,
+      "fixtures": [
+        {"name": "sdc-library", "traits": "2 constraint.xpath -> extension conversions on root Library constraints; mapping[] backbones (string->markdown comment)."},
+        {"name": "sdc-valueset", "traits": "choice paths; 67 differential elements; extension/modifierExtension slice anchors."}
+      ],
+      "packageContext": "none required. Harvest context: hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 hl7.fhir.r4.examples#4.0.1 hl7.fhir.uv.extensions.r4#5.3.0."
+    },
+    {
+      "ig": "mcode",
+      "count": 1,
+      "fixtures": [
+        {"name": "mcode-cancer-stage", "traits": "empty-string primitive drop: differential Observation.value[x] carries comment:\"\" in R4; converted output DROPS the comment key entirely (PrimitiveType.hasValue() is false for blank)."}
+      ],
+      "packageContext": "none required."
+    },
+    {
+      "ig": "ndh",
+      "count": 1,
+      "fixtures": [
+        {"name": "ndh-HealthcareService", "traits": "empty-string primitive drop: a slicing.description:\"\" in R4; converted output drops it. 49 differential elements, heavy slicing."}
+      ],
+      "packageContext": "none required."
+    }
+  ]
+}

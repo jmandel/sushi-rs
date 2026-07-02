@@ -1,0 +1,655 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "ndh-HealthcareService",
+  "url" : "http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-HealthcareService",
+  "name" : "NdhHealthcareService",
+  "title" : "NDH HealthcareService Profile",
+  "status" : "active",
+  "description" : "This profile enables NDH to represent healthcare and community services in a consistent, searchable way so consumers can identify what is offered, where and how it is delivered, and who can access it; it adds extensions for ratings, new-patient intake, delivery method, funding, required documents, network linkage, and verification, and strengthens interoperability with ValueSet-constrained categories, types, specialties, provision conditions, eligibility codes, and programs.",
+  "fhirVersion" : "4.0.1",
+  "mapping" : [{
+    "identity" : "ndh-to-plannet-healthcareservice",
+    "uri" : "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+    "name" : "NDH to Plan-Net HealthcareService Mapping",
+    "comment" : "Maps NDH HealthcareService profile to the Plan-Net HealthcareService profile, noting elements not present in Plan-Net."
+  }],
+  "kind" : "resource",
+  "abstract" : false,
+  "type" : "HealthcareService",
+  "baseDefinition" : "http://hl7.org/fhir/StructureDefinition/HealthcareService",
+  "derivation" : "constraint",
+  "differential" : {
+    "element" : [{
+      "id" : "HealthcareService",
+      "path" : "HealthcareService",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService",
+        "comment" : "Top-level mapping from NDH to Plan-Net"
+      }]
+    },
+    {
+      "id" : "HealthcareService.meta.lastUpdated",
+      "path" : "HealthcareService.meta.lastUpdated",
+      "min" : 1,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.meta.lastUpdated",
+        "comment" : ", is required in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension",
+      "path" : "HealthcareService.extension",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "value",
+          "path" : "url"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      }
+    },
+    {
+      "id" : "HealthcareService.extension:rating",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "rating",
+      "short" : "Evaluations or reviews for the service.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-rating"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:newpatients",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "newpatients",
+      "short" : "Is the service currently accepting new patients?",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-newpatients"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.extension[newpatients]",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:deliverymethod",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "deliverymethod",
+      "short" : "Method of providing the service.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-delivery-method"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.extension[deliverymethod]",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:paymentaccepted",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "paymentaccepted",
+      "short" : "Forms of payment accepted.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-paymentAccepted"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:requiredDocument",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "requiredDocument",
+      "short" : "Documents required for the service.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-requiredDocument"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:fundingSource",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "fundingSource",
+      "short" : "Funding source for the service.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-fundingSource"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:verification-status",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "verification-status",
+      "short" : "Verification Status",
+      "min" : 0,
+      "max" : "1",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-verification-status"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:network",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "network",
+      "short" : "Network associated with social service.",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-network-reference"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:social-service-requirement",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "social-service-requirement",
+      "short" : "Social Service Requirement",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      },
+      {
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extension:logo",
+      "path" : "HealthcareService.extension",
+      "sliceName" : "logo",
+      "short" : "Service Logo",
+      "min" : 0,
+      "max" : "1",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-logo"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.identifier",
+      "path" : "HealthcareService.identifier",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.identifier"
+      }]
+    },
+    {
+      "id" : "HealthcareService.identifier.extension:identifier-status",
+      "path" : "HealthcareService.identifier.extension",
+      "sliceName" : "identifier-status",
+      "short" : "Identifier Status",
+      "min" : 0,
+      "max" : "1",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-identifier-status"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.identifier.assigner",
+      "path" : "HealthcareService.identifier.assigner",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"]
+      }]
+    },
+    {
+      "id" : "HealthcareService.active",
+      "path" : "HealthcareService.active",
+      "min" : 1,
+      "patternBoolean" : true,
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.active",
+        "comment" : ", required in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.providedBy",
+      "path" : "HealthcareService.providedBy",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Organization"]
+      }],
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.providedBy",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.category",
+      "path" : "HealthcareService.category",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "value",
+          "path" : "$this"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      },
+      "min" : 1,
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.category",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.category:HSC",
+      "path" : "HealthcareService.category",
+      "sliceName" : "HSC",
+      "short" : "NDH HealthcareService Category",
+      "min" : 0,
+      "max" : "1",
+      "mustSupport" : true,
+      "binding" : {
+        "strength" : "required",
+        "valueSet" : "http://hl7.org/fhir/us/ndh/ValueSet/NdhHealthcareServiceCategoryVS"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.category[plan-net-category]",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.type",
+      "path" : "HealthcareService.type",
+      "mustSupport" : true,
+      "binding" : {
+        "strength" : "extensible",
+        "valueSet" : "http://hl7.org/fhir/us/ndh/ValueSet/HealthcareServiceTypeVS"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.type",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.specialty",
+      "path" : "HealthcareService.specialty",
+      "mustSupport" : true,
+      "binding" : {
+        "strength" : "extensible",
+        "valueSet" : "http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.114222.4.11.1066"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.specialty",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.location",
+      "path" : "HealthcareService.location",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"]
+      }],
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.location",
+        "comment" : ", using NDH Location Profile"
+      }]
+    },
+    {
+      "id" : "HealthcareService.name",
+      "path" : "HealthcareService.name",
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.name",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.comment",
+      "path" : "HealthcareService.comment",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.comment",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.extraDetails",
+      "path" : "HealthcareService.extraDetails",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.extraDetails",
+        "comment" : ", optional in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.photo",
+      "path" : "HealthcareService.photo",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.photo",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.telecom",
+      "path" : "HealthcareService.telecom",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.telecom"
+      }]
+    },
+    {
+      "id" : "HealthcareService.telecom.extension:language-speak",
+      "path" : "HealthcareService.telecom.extension",
+      "sliceName" : "language-speak",
+      "short" : "Language Speak",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-language-speak"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.coverageArea",
+      "path" : "HealthcareService.coverageArea",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Location"]
+      }],
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.coverageArea",
+        "comment" : ", recommended in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.serviceProvisionCode",
+      "path" : "HealthcareService.serviceProvisionCode",
+      "binding" : {
+        "strength" : "extensible",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/service-provision-conditions"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.serviceProvisionCode",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.eligibility",
+      "path" : "HealthcareService.eligibility",
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.eligibility",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.eligibility.code",
+      "path" : "HealthcareService.eligibility.code",
+      "mustSupport" : true,
+      "binding" : {
+        "strength" : "extensible",
+        "valueSet" : "http://hl7.org/fhir/us/ndh/ValueSet/HealthcareServiceEligibilityCodeVS"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.eligibility.code",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.program",
+      "path" : "HealthcareService.program",
+      "binding" : {
+        "strength" : "extensible",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/program"
+      },
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.program"
+      },
+      {
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.program",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.program.extension:program-requirement",
+      "path" : "HealthcareService.program.extension",
+      "sliceName" : "program-requirement",
+      "short" : "Program Requirement",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-service-or-program-requirement"]
+      }],
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      },
+      {
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "Not in Plan-Net",
+        "comment" : ", NDH-specific"
+      }]
+    },
+    {
+      "id" : "HealthcareService.characteristic",
+      "path" : "HealthcareService.characteristic",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.characteristic",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.communication",
+      "path" : "HealthcareService.communication",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.communication",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.referralMethod",
+      "path" : "HealthcareService.referralMethod",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.referralMethod",
+        "comment" : ", optional in Plan-Net and NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.appointmentRequired",
+      "path" : "HealthcareService.appointmentRequired",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.appointmentRequired",
+        "comment" : ", recommended in Plan-Net and optional inNDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availableTime",
+      "path" : "HealthcareService.availableTime",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availableTime",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availableTime.daysOfWeek",
+      "path" : "HealthcareService.availableTime.daysOfWeek",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availableTime.daysOfWeek",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availableTime.allDay",
+      "path" : "HealthcareService.availableTime.allDay",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availableTime.allDay",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availableTime.availableStartTime",
+      "path" : "HealthcareService.availableTime.availableStartTime",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availableTime.availableStart\nTime",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availableTime.availableEndTime",
+      "path" : "HealthcareService.availableTime.availableEndTime",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availableTime.availableEndTime",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.notAvailable",
+      "path" : "HealthcareService.notAvailable",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.notAvailable",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.notAvailable.description",
+      "path" : "HealthcareService.notAvailable.description",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.notAvailable.description",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.notAvailable.during",
+      "path" : "HealthcareService.notAvailable.during",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.notAvailable.during",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.availabilityExceptions",
+      "path" : "HealthcareService.availabilityExceptions",
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.availabilityExceptions",
+        "comment" : ", recommended in Plan-Net and optional in NDH"
+      }]
+    },
+    {
+      "id" : "HealthcareService.endpoint",
+      "path" : "HealthcareService.endpoint",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/us/ndh/StructureDefinition/ndh-Endpoint"]
+      }],
+      "mustSupport" : true,
+      "mapping" : [{
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.endpoint",
+        "comment" : ", using NDH Endpoint Profile"
+      },
+      {
+        "identity" : "ndh-to-plannet-healthcareservice",
+        "map" : "HealthcareService.endpoint",
+        "comment" : ", using NDH Endpoint Profile"
+      }]
+    }]
+  }
+}

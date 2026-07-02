@@ -5,6 +5,14 @@
 // args:
 //   [--sort] [--output-r5|--output-r4] [--local-dir <dir>] [--messages <messages.json>] <cacheFolder> <pkgId#ver>... <inputProfile.json> <outputSnapshot.json>
 //   [--sort] [--output-r5|--output-r4] [--local-dir <dir>] --batch-list <tsv> <cacheFolder> <pkgId#ver>...
+//
+// --dump-converted / --dump-converted-sorted (stage-2 oracle):
+//   parse the R4 input SD, convert to the R5 internal model exactly as the
+//   generation path does, and emit R5-internal JSON WITHOUT running
+//   generateSnapshot. --dump-converted is the raw converted form (no
+//   sortDifferential, no setIds). --dump-converted-sorted additionally runs
+//   sortDifferential + setIds (the same prep generateSnapshot sees). Neither
+//   fetches the base or runs the walk, so packages are optional in this mode.
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_40_50;
 import org.hl7.fhir.r5.context.SimpleWorkerContext;
 import org.hl7.fhir.r5.conformance.profile.ProfileUtilities;
@@ -26,10 +34,19 @@ public class SnapOracleR4 {
     String messagesFile = null;
     String localDir = null;
     String batchList = null;
+    // 0 = normal generateSnapshot; 1 = dump raw converted R5 model (no sort, no
+    // generateSnapshot); 2 = dump converted R5 model after sortDifferential+setIds.
+    int dumpConverted = 0;
     int pos = 0;
     while (pos < a.length && a[pos].startsWith("--")) {
       if ("--sort".equals(a[pos])) {
         sort = true;
+        pos++;
+      } else if ("--dump-converted".equals(a[pos])) {
+        dumpConverted = 1;
+        pos++;
+      } else if ("--dump-converted-sorted".equals(a[pos])) {
+        dumpConverted = 2;
         pos++;
       } else if ("--output-r5".equals(a[pos]) || "--native-r5".equals(a[pos])) {
         outputR5 = true;
@@ -73,9 +90,24 @@ public class SnapOracleR4 {
       }
       loadPackageFallbackR4CanonicalResources(ctx, cache, a[i]);
     }
-    ctx.setExpansionParameters(new org.hl7.fhir.r5.model.Parameters());
-    if (localDir != null) {
-      loadLocalR4CanonicalResources(ctx, localDir);
+    // Conversion is context-free; --dump-converted needs no package context and no base.
+    if (ctx != null) {
+      ctx.setExpansionParameters(new org.hl7.fhir.r5.model.Parameters());
+      if (localDir != null) {
+        loadLocalR4CanonicalResources(ctx, localDir);
+      }
+    } else if (dumpConverted == 0) {
+      throw new IllegalArgumentException("no packages loaded; a package context is required unless --dump-converted[-sorted]");
+    }
+
+    if (dumpConverted != 0) {
+      if (batchList != null) {
+        runDumpBatch(batchList, ctx, dumpConverted == 2);
+      } else {
+        int elements = runDumpConverted(ctx, dumpConverted == 2, inFile, outFile);
+        System.out.println("OK r4 dump-converted sorted=" + (dumpConverted == 2) + " differential.element=" + elements);
+      }
+      return;
     }
 
     if (batchList != null) {
@@ -163,6 +195,71 @@ public class SnapOracleR4 {
       writeMessages(messagesFile, messages, sortErrors);
     }
     return new RunResult(derived.getSnapshot().getElement().size(), messages.size(), sortErrors.size());
+  }
+
+  // Stage-2 oracle: parse R4 SD -> convert to R5 model exactly as the generation
+  // path does -> emit R5-internal JSON. NO generateSnapshot. When sorted is false
+  // this is the raw converted form (no sortDifferential, no setIds); when true we
+  // additionally run sortDifferential + setIds (the prep generateSnapshot sees).
+  private static int runDumpConverted(SimpleWorkerContext ctx, boolean sorted, String inFile, String outFile) throws Exception {
+    org.hl7.fhir.r4.model.StructureDefinition derivedR4 =
+      (org.hl7.fhir.r4.model.StructureDefinition) new org.hl7.fhir.r4.formats.JsonParser(true, true).parse(new FileInputStream(inFile));
+    StructureDefinition derived = (StructureDefinition) VersionConvertorFactory_40_50.convertResource(derivedR4);
+    if (sorted) {
+      if (ctx == null) { throw new IllegalArgumentException("--dump-converted-sorted requires a package context to resolve the base"); }
+      StructureDefinition base = ctx.fetchResource(StructureDefinition.class, derived.getBaseDefinition());
+      if (base == null) { throw new IOException("base not found: " + derived.getBaseDefinition()); }
+      List<ValidationMessage> messages = new ArrayList<>();
+      ProfileUtilities pu = new ProfileUtilities(ctx, messages, null);
+      pu.setForPublication(true);
+      pu.setNewSlicingProcessing(true);
+      ArrayList<String> sortErrors = new ArrayList<>();
+      pu.sortDifferential(base, derived, "profile " + derived.getUrl(), sortErrors, true);
+      pu.setIds(derived, true);
+    }
+    org.hl7.fhir.r5.formats.JsonParser jp = new org.hl7.fhir.r5.formats.JsonParser();
+    jp.setOutputStyle(IParser.OutputStyle.PRETTY);
+    new File(outFile).getParentFile().mkdirs();
+    jp.compose(new FileOutputStream(outFile), derived);
+    return derived.hasDifferential() ? derived.getDifferential().getElement().size() : 0;
+  }
+
+  private static void runDumpBatch(String batchList, SimpleWorkerContext ctx, boolean sorted) throws Exception {
+    int total = 0;
+    int ok = 0;
+    int failed = 0;
+    try (BufferedReader reader = new BufferedReader(new FileReader(batchList))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        if (line.trim().isEmpty() || line.startsWith("#")) {
+          continue;
+        }
+        total++;
+        String[] parts = line.split("\t", -1);
+        if (parts.length < 2) {
+          failed++;
+          System.err.println("FAIL dump malformed batch line " + total + ": " + line);
+          continue;
+        }
+        String inFile = parts[0];
+        String outFile = parts[1];
+        String name = new File(inFile).getName().replaceFirst("\\.json$", "");
+        try {
+          int elements = runDumpConverted(ctx, sorted, inFile, outFile);
+          ok++;
+          System.out.println("OK dump " + name + " differential.element=" + elements);
+        } catch (Exception e) {
+          failed++;
+          new File(outFile).delete();
+          System.err.println("FAIL dump " + name + ": " + e.getMessage());
+          e.printStackTrace(System.err);
+        }
+      }
+    }
+    System.out.println("R4 DUMP-CONVERTED BATCH (sorted=" + sorted + "): ok=" + ok + " failed=" + failed + " total=" + total);
+    if (failed != 0) {
+      System.exit(1);
+    }
   }
 
   private static class RunResult {

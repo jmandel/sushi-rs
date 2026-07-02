@@ -1,0 +1,129 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "CodeableConcept-uv-ips",
+  "url" : "http://hl7.org/fhir/uv/ips/StructureDefinition/CodeableConcept-uv-ips",
+  "version" : "1.1.0",
+  "name" : "CodeableConceptIPS",
+  "title" : "Codeable Concept (IPS)",
+  "status" : "active",
+  "date" : "2024-06-19T10:50:07-05:00",
+  "publisher" : "HL7 International / Patient Care",
+  "contact" : [{
+    "telecom" : [{
+      "system" : "url",
+      "value" : "http://www.hl7.org/Special/committees/patientcare"
+    }]
+  }],
+  "description" : "This profile represents the constraint applied to the CodeableConcept data type by the International Patient Summary (IPS) FHIR Implementation Guide to use the Coding-uv-ips data type profile.",
+  "jurisdiction" : [{
+    "coding" : [{
+      "system" : "http://unstats.un.org/unsd/methods/m49/m49.htm",
+      "code" : "001"
+    }]
+  }],
+  "fhirVersion" : "4.0.1",
+  "kind" : "complex-type",
+  "abstract" : false,
+  "type" : "CodeableConcept",
+  "baseDefinition" : "http://hl7.org/fhir/StructureDefinition/CodeableConcept",
+  "derivation" : "constraint",
+  "differential" : {
+    "element" : [{
+      "id" : "CodeableConcept.coding",
+      "extension" : [{
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "CodeableConcept.coding",
+      "type" : [{
+        "code" : "Coding",
+        "profile" : ["http://hl7.org/fhir/uv/ips/StructureDefinition/Coding-uv-ips"]
+      }],
+      "mustSupport" : true
+    },
+    {
+      "id" : "CodeableConcept.text",
+      "extension" : [{
+        "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable",
+        "valueBoolean" : true
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:populate-if-known"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHALL:handle"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      },
+      {
+        "extension" : [{
+          "url" : "code",
+          "valueCode" : "SHOULD:display"
+        },
+        {
+          "url" : "actor",
+          "valueCanonical" : "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+        }],
+        "url" : "http://hl7.org/fhir/StructureDefinition/obligation"
+      }],
+      "path" : "CodeableConcept.text",
+      "mustSupport" : true
+    },
+    {
+      "id" : "CodeableConcept.text.extension",
+      "path" : "CodeableConcept.text.extension",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "value",
+          "path" : "url"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      }
+    },
+    {
+      "id" : "CodeableConcept.text.extension:translation",
+      "path" : "CodeableConcept.text.extension",
+      "sliceName" : "translation",
+      "short" : "Language Translation (Localization)",
+      "min" : 0,
+      "max" : "*",
+      "type" : [{
+        "code" : "Extension",
+        "profile" : ["http://hl7.org/fhir/StructureDefinition/translation"]
+      }]
+    }]
+  }
+}
