@@ -1,6 +1,7 @@
 OK rust head-occipital-frontal-circumference-percentile
 OK rust pediatric-bmi-for-age
 OK rust pediatric-weight-for-height
+OK rust uscdi-requirement
 OK rust us-core-adi-documentreference
 OK rust us-core-allergyintolerance
 OK rust us-core-authentication-time
@@ -37,9 +38,9 @@ OK rust us-core-interpreter-needed
 OK rust us-core-jurisdiction
 OK rust us-core-location
 OK rust us-core-medication-adherence
-OK rust us-core-medication
 OK rust us-core-medicationdispense
 OK rust us-core-medicationrequest
+OK rust us-core-medication
 OK rust us-core-observation-adi-documentation
 OK rust us-core-observation-clinical-result
 OK rust us-core-observation-lab
@@ -50,8 +51,8 @@ OK rust us-core-observation-screening-assessment
 OK rust us-core-observation-sexual-orientation
 OK rust us-core-organization
 OK rust us-core-patient
-OK rust us-core-practitioner
 OK rust us-core-practitionerrole
+OK rust us-core-practitioner
 OK rust us-core-procedure
 OK rust us-core-provenance
 OK rust us-core-pulse-oximetry
@@ -67,5 +68,4 @@ OK rust us-core-specimen
 OK rust us-core-treatment-intervention-preference
 OK rust us-core-tribal-affiliation
 OK rust us-core-vital-signs
-OK rust uscdi-requirement
 RUST BATCH: ok=70 failed=0 total=70

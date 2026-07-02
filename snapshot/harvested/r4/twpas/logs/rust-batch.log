@@ -4,9 +4,9 @@ OK rust Bundle-response-twpas
 OK rust Bundle-twpas
 OK rust CarePlan-twpas
 OK rust Claim-immunologic-agent-twpas
-OK rust Claim-twpas
 OK rust ClaimResponse-self-assessment-twpas
 OK rust ClaimResponse-twpas
+OK rust Claim-twpas
 OK rust ClinicalImpression-twpas
 OK rust Composition-opd-twpas
 OK rust Condition-twpas
@@ -16,6 +16,9 @@ OK rust DiagnosticReport-twpas
 OK rust DocumentReference-twpas
 OK rust Encounter-opd-twpas
 OK rust Encounter-twpas
+OK rust extension-claim-encounter
+OK rust extension-claimResponse-requestor
+OK rust extension-requestedService
 OK rust ImagingStudy-twpas
 OK rust Media-twpas
 OK rust MedicationRequest-apply-twpas
@@ -38,7 +41,4 @@ OK rust Procedure-twpas
 OK rust Specimen-twpas
 OK rust Substance-phototherapy-twpas
 OK rust Substance-twpas
-OK rust extension-claim-encounter
-OK rust extension-claimResponse-requestor
-OK rust extension-requestedService
 RUST BATCH: ok=43 failed=0 total=43

@@ -5,15 +5,15 @@ OK rust Coding-uv-ips
 OK rust Composition-uv-ips
 OK rust Condition-uv-ips
 OK rust Device-observer-uv-ips
-OK rust Device-uv-ips
 OK rust DeviceUseStatement-uv-ips
+OK rust Device-uv-ips
 OK rust DiagnosticReport-uv-ips
 OK rust Flag-alert-uv-ips
 OK rust ImagingStudy-uv-ips
 OK rust Immunization-uv-ips
-OK rust Medication-uv-ips
 OK rust MedicationRequest-uv-ips
 OK rust MedicationStatement-uv-ips
+OK rust Medication-uv-ips
 OK rust Observation-alcoholuse-uv-ips
 OK rust Observation-pregnancy-edd-uv-ips
 OK rust Observation-pregnancy-outcome-uv-ips
@@ -23,8 +23,8 @@ OK rust Observation-results-radiology-uv-ips
 OK rust Observation-tobaccouse-uv-ips
 OK rust Organization-uv-ips
 OK rust Patient-uv-ips
-OK rust Practitioner-uv-ips
 OK rust PractitionerRole-uv-ips
+OK rust Practitioner-uv-ips
 OK rust Procedure-uv-ips
 OK rust Specimen-uv-ips
 RUST BATCH: ok=29 failed=0 total=29

@@ -5,15 +5,15 @@ snapshot/harvested/r4/ips/fixtures/Coding-uv-ips.json	snapshot/harvested/r4/ips/
 snapshot/harvested/r4/ips/fixtures/Composition-uv-ips.json	snapshot/harvested/r4/ips/rust/Composition-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Condition-uv-ips.json	snapshot/harvested/r4/ips/rust/Condition-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Device-observer-uv-ips.json	snapshot/harvested/r4/ips/rust/Device-observer-uv-ips.snapshot.json
-snapshot/harvested/r4/ips/fixtures/Device-uv-ips.json	snapshot/harvested/r4/ips/rust/Device-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/DeviceUseStatement-uv-ips.json	snapshot/harvested/r4/ips/rust/DeviceUseStatement-uv-ips.snapshot.json
+snapshot/harvested/r4/ips/fixtures/Device-uv-ips.json	snapshot/harvested/r4/ips/rust/Device-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/DiagnosticReport-uv-ips.json	snapshot/harvested/r4/ips/rust/DiagnosticReport-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Flag-alert-uv-ips.json	snapshot/harvested/r4/ips/rust/Flag-alert-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/ImagingStudy-uv-ips.json	snapshot/harvested/r4/ips/rust/ImagingStudy-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Immunization-uv-ips.json	snapshot/harvested/r4/ips/rust/Immunization-uv-ips.snapshot.json
-snapshot/harvested/r4/ips/fixtures/Medication-uv-ips.json	snapshot/harvested/r4/ips/rust/Medication-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/MedicationRequest-uv-ips.json	snapshot/harvested/r4/ips/rust/MedicationRequest-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/MedicationStatement-uv-ips.json	snapshot/harvested/r4/ips/rust/MedicationStatement-uv-ips.snapshot.json
+snapshot/harvested/r4/ips/fixtures/Medication-uv-ips.json	snapshot/harvested/r4/ips/rust/Medication-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Observation-alcoholuse-uv-ips.json	snapshot/harvested/r4/ips/rust/Observation-alcoholuse-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Observation-pregnancy-edd-uv-ips.json	snapshot/harvested/r4/ips/rust/Observation-pregnancy-edd-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Observation-pregnancy-outcome-uv-ips.json	snapshot/harvested/r4/ips/rust/Observation-pregnancy-outcome-uv-ips.snapshot.json
@@ -23,7 +23,7 @@ snapshot/harvested/r4/ips/fixtures/Observation-results-radiology-uv-ips.json	sna
 snapshot/harvested/r4/ips/fixtures/Observation-tobaccouse-uv-ips.json	snapshot/harvested/r4/ips/rust/Observation-tobaccouse-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Organization-uv-ips.json	snapshot/harvested/r4/ips/rust/Organization-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Patient-uv-ips.json	snapshot/harvested/r4/ips/rust/Patient-uv-ips.snapshot.json
-snapshot/harvested/r4/ips/fixtures/Practitioner-uv-ips.json	snapshot/harvested/r4/ips/rust/Practitioner-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/PractitionerRole-uv-ips.json	snapshot/harvested/r4/ips/rust/PractitionerRole-uv-ips.snapshot.json
+snapshot/harvested/r4/ips/fixtures/Practitioner-uv-ips.json	snapshot/harvested/r4/ips/rust/Practitioner-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Procedure-uv-ips.json	snapshot/harvested/r4/ips/rust/Procedure-uv-ips.snapshot.json
 snapshot/harvested/r4/ips/fixtures/Specimen-uv-ips.json	snapshot/harvested/r4/ips/rust/Specimen-uv-ips.snapshot.json

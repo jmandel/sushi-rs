@@ -4,9 +4,9 @@ snapshot/harvested/r4/twpas/fixtures/Bundle-response-twpas.json	snapshot/harvest
 snapshot/harvested/r4/twpas/fixtures/Bundle-twpas.json	snapshot/harvested/r4/twpas/rust/Bundle-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/CarePlan-twpas.json	snapshot/harvested/r4/twpas/rust/CarePlan-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Claim-immunologic-agent-twpas.json	snapshot/harvested/r4/twpas/rust/Claim-immunologic-agent-twpas.snapshot.json
-snapshot/harvested/r4/twpas/fixtures/Claim-twpas.json	snapshot/harvested/r4/twpas/rust/Claim-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/ClaimResponse-self-assessment-twpas.json	snapshot/harvested/r4/twpas/rust/ClaimResponse-self-assessment-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/ClaimResponse-twpas.json	snapshot/harvested/r4/twpas/rust/ClaimResponse-twpas.snapshot.json
+snapshot/harvested/r4/twpas/fixtures/Claim-twpas.json	snapshot/harvested/r4/twpas/rust/Claim-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/ClinicalImpression-twpas.json	snapshot/harvested/r4/twpas/rust/ClinicalImpression-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Composition-opd-twpas.json	snapshot/harvested/r4/twpas/rust/Composition-opd-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Condition-twpas.json	snapshot/harvested/r4/twpas/rust/Condition-twpas.snapshot.json
@@ -16,6 +16,9 @@ snapshot/harvested/r4/twpas/fixtures/DiagnosticReport-twpas.json	snapshot/harves
 snapshot/harvested/r4/twpas/fixtures/DocumentReference-twpas.json	snapshot/harvested/r4/twpas/rust/DocumentReference-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Encounter-opd-twpas.json	snapshot/harvested/r4/twpas/rust/Encounter-opd-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Encounter-twpas.json	snapshot/harvested/r4/twpas/rust/Encounter-twpas.snapshot.json
+snapshot/harvested/r4/twpas/fixtures/extension-claim-encounter.json	snapshot/harvested/r4/twpas/rust/extension-claim-encounter.snapshot.json
+snapshot/harvested/r4/twpas/fixtures/extension-claimResponse-requestor.json	snapshot/harvested/r4/twpas/rust/extension-claimResponse-requestor.snapshot.json
+snapshot/harvested/r4/twpas/fixtures/extension-requestedService.json	snapshot/harvested/r4/twpas/rust/extension-requestedService.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/ImagingStudy-twpas.json	snapshot/harvested/r4/twpas/rust/ImagingStudy-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Media-twpas.json	snapshot/harvested/r4/twpas/rust/Media-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/MedicationRequest-apply-twpas.json	snapshot/harvested/r4/twpas/rust/MedicationRequest-apply-twpas.snapshot.json
@@ -38,6 +41,3 @@ snapshot/harvested/r4/twpas/fixtures/Procedure-twpas.json	snapshot/harvested/r4/
 snapshot/harvested/r4/twpas/fixtures/Specimen-twpas.json	snapshot/harvested/r4/twpas/rust/Specimen-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Substance-phototherapy-twpas.json	snapshot/harvested/r4/twpas/rust/Substance-phototherapy-twpas.snapshot.json
 snapshot/harvested/r4/twpas/fixtures/Substance-twpas.json	snapshot/harvested/r4/twpas/rust/Substance-twpas.snapshot.json
-snapshot/harvested/r4/twpas/fixtures/extension-claim-encounter.json	snapshot/harvested/r4/twpas/rust/extension-claim-encounter.snapshot.json
-snapshot/harvested/r4/twpas/fixtures/extension-claimResponse-requestor.json	snapshot/harvested/r4/twpas/rust/extension-claimResponse-requestor.snapshot.json
-snapshot/harvested/r4/twpas/fixtures/extension-requestedService.json	snapshot/harvested/r4/twpas/rust/extension-requestedService.snapshot.json

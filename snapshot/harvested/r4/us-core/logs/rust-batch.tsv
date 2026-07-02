@@ -1,6 +1,7 @@
 snapshot/harvested/r4/us-core/fixtures/head-occipital-frontal-circumference-percentile.json	snapshot/harvested/r4/us-core/rust/head-occipital-frontal-circumference-percentile.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/pediatric-bmi-for-age.json	snapshot/harvested/r4/us-core/rust/pediatric-bmi-for-age.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/pediatric-weight-for-height.json	snapshot/harvested/r4/us-core/rust/pediatric-weight-for-height.snapshot.json
+snapshot/harvested/r4/us-core/fixtures/uscdi-requirement.json	snapshot/harvested/r4/us-core/rust/uscdi-requirement.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-adi-documentreference.json	snapshot/harvested/r4/us-core/rust/us-core-adi-documentreference.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-allergyintolerance.json	snapshot/harvested/r4/us-core/rust/us-core-allergyintolerance.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-authentication-time.json	snapshot/harvested/r4/us-core/rust/us-core-authentication-time.snapshot.json
@@ -37,9 +38,9 @@ snapshot/harvested/r4/us-core/fixtures/us-core-interpreter-needed.json	snapshot/
 snapshot/harvested/r4/us-core/fixtures/us-core-jurisdiction.json	snapshot/harvested/r4/us-core/rust/us-core-jurisdiction.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-location.json	snapshot/harvested/r4/us-core/rust/us-core-location.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-medication-adherence.json	snapshot/harvested/r4/us-core/rust/us-core-medication-adherence.snapshot.json
-snapshot/harvested/r4/us-core/fixtures/us-core-medication.json	snapshot/harvested/r4/us-core/rust/us-core-medication.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-medicationdispense.json	snapshot/harvested/r4/us-core/rust/us-core-medicationdispense.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-medicationrequest.json	snapshot/harvested/r4/us-core/rust/us-core-medicationrequest.snapshot.json
+snapshot/harvested/r4/us-core/fixtures/us-core-medication.json	snapshot/harvested/r4/us-core/rust/us-core-medication.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-observation-adi-documentation.json	snapshot/harvested/r4/us-core/rust/us-core-observation-adi-documentation.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-observation-clinical-result.json	snapshot/harvested/r4/us-core/rust/us-core-observation-clinical-result.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-observation-lab.json	snapshot/harvested/r4/us-core/rust/us-core-observation-lab.snapshot.json
@@ -50,8 +51,8 @@ snapshot/harvested/r4/us-core/fixtures/us-core-observation-screening-assessment.
 snapshot/harvested/r4/us-core/fixtures/us-core-observation-sexual-orientation.json	snapshot/harvested/r4/us-core/rust/us-core-observation-sexual-orientation.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-organization.json	snapshot/harvested/r4/us-core/rust/us-core-organization.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-patient.json	snapshot/harvested/r4/us-core/rust/us-core-patient.snapshot.json
-snapshot/harvested/r4/us-core/fixtures/us-core-practitioner.json	snapshot/harvested/r4/us-core/rust/us-core-practitioner.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-practitionerrole.json	snapshot/harvested/r4/us-core/rust/us-core-practitionerrole.snapshot.json
+snapshot/harvested/r4/us-core/fixtures/us-core-practitioner.json	snapshot/harvested/r4/us-core/rust/us-core-practitioner.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-procedure.json	snapshot/harvested/r4/us-core/rust/us-core-procedure.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-provenance.json	snapshot/harvested/r4/us-core/rust/us-core-provenance.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-pulse-oximetry.json	snapshot/harvested/r4/us-core/rust/us-core-pulse-oximetry.snapshot.json
@@ -67,4 +68,3 @@ snapshot/harvested/r4/us-core/fixtures/us-core-specimen.json	snapshot/harvested/
 snapshot/harvested/r4/us-core/fixtures/us-core-treatment-intervention-preference.json	snapshot/harvested/r4/us-core/rust/us-core-treatment-intervention-preference.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-tribal-affiliation.json	snapshot/harvested/r4/us-core/rust/us-core-tribal-affiliation.snapshot.json
 snapshot/harvested/r4/us-core/fixtures/us-core-vital-signs.json	snapshot/harvested/r4/us-core/rust/us-core-vital-signs.snapshot.json
-snapshot/harvested/r4/us-core/fixtures/uscdi-requirement.json	snapshot/harvested/r4/us-core/rust/uscdi-requirement.snapshot.json
