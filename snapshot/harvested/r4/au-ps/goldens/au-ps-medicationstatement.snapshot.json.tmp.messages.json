@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "error", "type": "business-rule", "source": "InstanceValidator", "location": "MedicationStatement.reasonReference", "line": -1, "col": -1, "message": "Error at http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-medicationstatement#MedicationStatement.reasonReference: The target profile http://hl7.org/fhir/uv/ips/StructureDefinition/DiagnosticReport-uv-ips is not a valid constraint on the base ([CanonicalType[http://hl7.org.au/fhir/core/StructureDefinition/au-core-condition], CanonicalType[http://hl7.org/fhir/StructureDefinition/Observation], CanonicalType[http://hl7.org.au/fhir/StructureDefinition/au-diagnosticreport]])"}
+  ]
+}

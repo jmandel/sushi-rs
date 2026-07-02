@@ -1,0 +1,4 @@
+snapshot/harvested/r4/radiation-dose-summary/fixtures/indication-observation.json	snapshot/harvested/r4/radiation-dose-summary/rust/indication-observation.snapshot.json
+snapshot/harvested/r4/radiation-dose-summary/fixtures/modality-device.json	snapshot/harvested/r4/radiation-dose-summary/rust/modality-device.snapshot.json
+snapshot/harvested/r4/radiation-dose-summary/fixtures/radiation-dose-summary.json	snapshot/harvested/r4/radiation-dose-summary/rust/radiation-dose-summary.snapshot.json
+snapshot/harvested/r4/radiation-dose-summary/fixtures/radiation-summary-report.json	snapshot/harvested/r4/radiation-dose-summary/rust/radiation-summary-report.snapshot.json

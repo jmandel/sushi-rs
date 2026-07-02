@@ -1,0 +1,125 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Organization-genetic-testing-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas",
+  "version": "1.2.3",
+  "name": "OrganizationGeneticTestingTWPAS",
+  "title": "基因檢測機構-Organization Genetic Testing TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此基因檢測機構-Organization Genetic Testing TWPAS Profile說明本IG如何進一步定義臺灣核心-機構(TW Core Organization) Profile以呈現事前審查之基因檢測機構基本資料",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "servd",
+      "uri": "http://www.omg.org/spec/ServD/1.0/",
+      "name": "ServD"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Organization",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/emr/StructureDefinition/TWCoreOrganization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Organization.meta",
+        "path": "Organization.meta",
+        "min": 1
+      },
+      {
+        "id": "Organization.meta.profile",
+        "path": "Organization.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas"
+      },
+      {
+        "id": "Organization.identifier",
+        "path": "Organization.identifier",
+        "short": "基因檢測機構，衛福部公告名冊或LDTs核定函上之「案件編號」。",
+        "min": 1,
+        "max": "1",
+        "constraint": [
+          {
+            "key": "ngs-org",
+            "severity": "error",
+            "human": "基因檢測機構(identifier.value)可填包含LDT之文字，或4個文字擇一(CAP、TAF、TFDA、TSP)",
+            "expression": "value.toString().matches('^(CAP|TAF|TFDA|TSP)$|^.*LDT.*$')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier.system",
+        "path": "Organization.identifier.system",
+        "patternUri": "https://dep.mohw.gov.tw",
+        "example": [
+          {
+            "label": "General",
+            "valueUri": "https://dep.mohw.gov.tw/DOMA/ngs-org"
+          }
+        ]
+      },
+      {
+        "id": "Organization.identifier.value",
+        "path": "Organization.identifier.value",
+        "min": 1,
+        "example": [
+          {
+            "label": "12碼",
+            "valueString": "2023LDTB0002"
+          },
+          {
+            "label": "11碼",
+            "valueString": "2024LDT2717"
+          },
+          {
+            "label": "1",
+            "valueString": "CAP"
+          },
+          {
+            "label": "2",
+            "valueString": "TAF"
+          },
+          {
+            "label": "3",
+            "valueString": "TFDA"
+          },
+          {
+            "label": "4",
+            "valueString": "TSP"
+          }
+        ]
+      }
+    ]
+  }
+}

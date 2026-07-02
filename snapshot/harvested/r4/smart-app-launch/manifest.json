@@ -1,0 +1,77 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.smart-app-launch#2.2.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.smart-app-launch#2.2.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.smart-app-launch#2.2.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.smart-app-launch",
+    "version": "2.2.0",
+    "canonical": "http://hl7.org/fhir/smart-app-launch",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.fhir.uv.extensions": "5.1.0-snapshot1",
+      "hl7.terminology": "5.5.0"
+    }
+  },
+  "counts": {
+    "scanned": 6,
+    "harvested": 6,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "smart-app-state-basic",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/smart-app-state-basic",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Basic",
+      "source": "StructureDefinition-smart-app-state-basic.json",
+      "fixture": "fixtures/smart-app-state-basic.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "task-ehr-launch",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/task-ehr-launch",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-task-ehr-launch.json",
+      "fixture": "fixtures/task-ehr-launch.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "task-standalone-launch",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/task-standalone-launch",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-task-standalone-launch.json",
+      "fixture": "fixtures/task-standalone-launch.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "user-access-brand",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/user-access-brand",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Organization",
+      "source": "StructureDefinition-user-access-brand.json",
+      "fixture": "fixtures/user-access-brand.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "user-access-brands-bundle",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/user-access-brands-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-user-access-brands-bundle.json",
+      "fixture": "fixtures/user-access-brands-bundle.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "user-access-endpoint",
+      "url": "http://hl7.org/fhir/smart-app-launch/StructureDefinition/user-access-endpoint",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Endpoint",
+      "source": "StructureDefinition-user-access-endpoint.json",
+      "fixture": "fixtures/user-access-endpoint.json",
+      "differentialElements": 12
+    }
+  ],
+  "skipped": []
+}

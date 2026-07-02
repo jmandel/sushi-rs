@@ -1,0 +1,367 @@
+{
+  "source": "package",
+  "package": "ihe.iti.mhd#4.2.5-comment",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.mhd#4.2.5-comment/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.mhd#4.2.5-comment/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "ihe.iti.mhd",
+    "version": "4.2.5-comment",
+    "canonical": "https://profiles.ihe.net/ITI/MHD",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "ihe.iti.balp": "1.1.4",
+      "ihe.formatcode.fhir": "1.5.x"
+    }
+  },
+  "counts": {
+    "scanned": 42,
+    "harvested": 42,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "IHE.MHD.Comprehensive.DocumentReference",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Comprehensive.DocumentReference",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.DocumentReference",
+      "source": "StructureDefinition-IHE.MHD.Comprehensive.DocumentReference.json",
+      "fixture": "fixtures/IHE.MHD.Comprehensive.DocumentReference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "IHE.MHD.Comprehensive.Folder",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Comprehensive.Folder",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.Folder",
+      "source": "StructureDefinition-IHE.MHD.Comprehensive.Folder.json",
+      "fixture": "fixtures/IHE.MHD.Comprehensive.Folder.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "IHE.MHD.Comprehensive.ProvideBundle",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Comprehensive.ProvideBundle",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.ProvideBundle",
+      "source": "StructureDefinition-IHE.MHD.Comprehensive.ProvideBundle.json",
+      "fixture": "fixtures/IHE.MHD.Comprehensive.ProvideBundle.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "IHE.MHD.Comprehensive.SubmissionSet",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Comprehensive.SubmissionSet",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.SubmissionSet",
+      "source": "StructureDefinition-IHE.MHD.Comprehensive.SubmissionSet.json",
+      "fixture": "fixtures/IHE.MHD.Comprehensive.SubmissionSet.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "IHE.MHD.EntryUUID.Identifier",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.EntryUUID.Identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-IHE.MHD.EntryUUID.Identifier.json",
+      "fixture": "fixtures/IHE.MHD.EntryUUID.Identifier.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "IHE.MHD.FindDocumentLists.Audit.Consumer",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentLists.Audit.Consumer",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentLists.Audit.Consumer.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentLists.Audit.Consumer.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "IHE.MHD.FindDocumentLists.Audit.Responder",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentLists.Audit.Responder",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentLists.Audit.Responder.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentLists.Audit.Responder.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "IHE.MHD.FindDocumentListsResponseMessage",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentListsResponseMessage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentListsResponseMessage.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentListsResponseMessage.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "IHE.MHD.FindDocumentReferences.Audit.Consumer",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentReferences.Audit.Consumer",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentReferences.Audit.Consumer.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentReferences.Audit.Consumer.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "IHE.MHD.FindDocumentReferences.Audit.Responder",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentReferences.Audit.Responder",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientQuery",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentReferences.Audit.Responder.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentReferences.Audit.Responder.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "IHE.MHD.FindDocumentReferencesResponseMessage",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentReferencesResponseMessage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentReferencesResponseMessage.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentReferencesResponseMessage.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch.json",
+      "fixture": "fixtures/IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "IHE.MHD.GenerateMetadata.Audit.Recipient",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.GenerateMetadata.Audit.Recipient",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientCreate",
+      "source": "StructureDefinition-IHE.MHD.GenerateMetadata.Audit.Recipient.json",
+      "fixture": "fixtures/IHE.MHD.GenerateMetadata.Audit.Recipient.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "IHE.MHD.GenerateMetadata.Audit.Source",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.GenerateMetadata.Audit.Source",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.Create",
+      "source": "StructureDefinition-IHE.MHD.GenerateMetadata.Audit.Source.json",
+      "fixture": "fixtures/IHE.MHD.GenerateMetadata.Audit.Source.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "IHE.MHD.GenerateMetadata.Parameters.In",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.GenerateMetadata.Parameters.In",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-IHE.MHD.GenerateMetadata.Parameters.In.json",
+      "fixture": "fixtures/IHE.MHD.GenerateMetadata.Parameters.In.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "IHE.MHD.List",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.List",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/List",
+      "source": "StructureDefinition-IHE.MHD.List.json",
+      "fixture": "fixtures/IHE.MHD.List.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "IHE.MHD.Minimal.DocumentReference",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.DocumentReference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-IHE.MHD.Minimal.DocumentReference.json",
+      "fixture": "fixtures/IHE.MHD.Minimal.DocumentReference.json",
+      "differentialElements": 44
+    },
+    {
+      "id": "IHE.MHD.Minimal.Folder",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.Folder",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.List",
+      "source": "StructureDefinition-IHE.MHD.Minimal.Folder.json",
+      "fixture": "fixtures/IHE.MHD.Minimal.Folder.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "IHE.MHD.Minimal.ProvideBundle",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.ProvideBundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.Minimal.ProvideBundle.json",
+      "fixture": "fixtures/IHE.MHD.Minimal.ProvideBundle.json",
+      "differentialElements": 30
+    },
+    {
+      "id": "IHE.MHD.Minimal.SubmissionSet",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.SubmissionSet",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.List",
+      "source": "StructureDefinition-IHE.MHD.Minimal.SubmissionSet.json",
+      "fixture": "fixtures/IHE.MHD.Minimal.SubmissionSet.json",
+      "differentialElements": 26
+    },
+    {
+      "id": "IHE.MHD.Patch.Parameters",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Patch.Parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-IHE.MHD.Patch.Parameters.json",
+      "fixture": "fixtures/IHE.MHD.Patch.Parameters.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "IHE.MHD.ProvideBundle.Audit.Recipient",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.ProvideBundle.Audit.Recipient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AuditEvent",
+      "source": "StructureDefinition-IHE.MHD.ProvideBundle.Audit.Recipient.json",
+      "fixture": "fixtures/IHE.MHD.ProvideBundle.Audit.Recipient.json",
+      "differentialElements": 26
+    },
+    {
+      "id": "IHE.MHD.ProvideBundle.Audit.Source",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.ProvideBundle.Audit.Source",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AuditEvent",
+      "source": "StructureDefinition-IHE.MHD.ProvideBundle.Audit.Source.json",
+      "fixture": "fixtures/IHE.MHD.ProvideBundle.Audit.Source.json",
+      "differentialElements": 26
+    },
+    {
+      "id": "IHE.MHD.ProvideDocumentBundleResponse",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.ProvideDocumentBundleResponse",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-IHE.MHD.ProvideDocumentBundleResponse.json",
+      "fixture": "fixtures/IHE.MHD.ProvideDocumentBundleResponse.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "IHE.MHD.RetrieveDocument.Audit.Consumer",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.RetrieveDocument.Audit.Consumer",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientRead",
+      "source": "StructureDefinition-IHE.MHD.RetrieveDocument.Audit.Consumer.json",
+      "fixture": "fixtures/IHE.MHD.RetrieveDocument.Audit.Consumer.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "IHE.MHD.RetrieveDocument.Audit.Responder",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.RetrieveDocument.Audit.Responder",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientRead",
+      "source": "StructureDefinition-IHE.MHD.RetrieveDocument.Audit.Responder.json",
+      "fixture": "fixtures/IHE.MHD.RetrieveDocument.Audit.Responder.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "IHE.MHD.SimplifiedPublish.Audit.Recipient",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.SimplifiedPublish.Audit.Recipient",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientCreate",
+      "source": "StructureDefinition-IHE.MHD.SimplifiedPublish.Audit.Recipient.json",
+      "fixture": "fixtures/IHE.MHD.SimplifiedPublish.Audit.Recipient.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "IHE.MHD.SimplifiedPublish.Audit.Source",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.SimplifiedPublish.Audit.Source",
+      "baseDefinition": "https://profiles.ihe.net/ITI/BALP/StructureDefinition/IHE.BasicAudit.PatientCreate",
+      "source": "StructureDefinition-IHE.MHD.SimplifiedPublish.Audit.Source.json",
+      "fixture": "fixtures/IHE.MHD.SimplifiedPublish.Audit.Source.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "IHE.MHD.SimplifiedPublish.DocumentReference",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.SimplifiedPublish.DocumentReference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-IHE.MHD.SimplifiedPublish.DocumentReference.json",
+      "fixture": "fixtures/IHE.MHD.SimplifiedPublish.DocumentReference.json",
+      "differentialElements": 26
+    },
+    {
+      "id": "IHE.MHD.SubmissionSetUniqueIdIdentifier",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.SubmissionSetUniqueIdIdentifier",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UniqueIdIdentifier",
+      "source": "StructureDefinition-IHE.MHD.SubmissionSetUniqueIdIdentifier.json",
+      "fixture": "fixtures/IHE.MHD.SubmissionSetUniqueIdIdentifier.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "IHE.MHD.UnContained.Comprehensive.DocumentReference",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.DocumentReference",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.DocumentReference",
+      "source": "StructureDefinition-IHE.MHD.UnContained.Comprehensive.DocumentReference.json",
+      "fixture": "fixtures/IHE.MHD.UnContained.Comprehensive.DocumentReference.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "IHE.MHD.UnContained.Comprehensive.ProvideBundle",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.ProvideBundle",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.ProvideBundle",
+      "source": "StructureDefinition-IHE.MHD.UnContained.Comprehensive.ProvideBundle.json",
+      "fixture": "fixtures/IHE.MHD.UnContained.Comprehensive.ProvideBundle.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "IHE.MHD.UnContained.Comprehensive.SubmissionSet",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UnContained.Comprehensive.SubmissionSet",
+      "baseDefinition": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.Minimal.SubmissionSet",
+      "source": "StructureDefinition-IHE.MHD.UnContained.Comprehensive.SubmissionSet.json",
+      "fixture": "fixtures/IHE.MHD.UnContained.Comprehensive.SubmissionSet.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "IHE.MHD.UniqueIdIdentifier",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/IHE.MHD.UniqueIdIdentifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-IHE.MHD.UniqueIdIdentifier.json",
+      "fixture": "fixtures/IHE.MHD.UniqueIdIdentifier.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "ihe-HomeCommunityId",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-HomeCommunityId",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-HomeCommunityId.json",
+      "fixture": "fixtures/ihe-HomeCommunityId.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ihe-authorOrg",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-authorOrg",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-authorOrg.json",
+      "fixture": "fixtures/ihe-authorOrg.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ihe-designationType",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-designationType",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-designationType.json",
+      "fixture": "fixtures/ihe-designationType.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ihe-full-text-search-match-snippet",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-full-text-search-match-snippet",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-full-text-search-match-snippet.json",
+      "fixture": "fixtures/ihe-full-text-search-match-snippet.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "ihe-full-text-search-match-total-hits",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-full-text-search-match-total-hits",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-full-text-search-match-total-hits.json",
+      "fixture": "fixtures/ihe-full-text-search-match-total-hits.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ihe-intendedRecipient",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-intendedRecipient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-intendedRecipient.json",
+      "fixture": "fixtures/ihe-intendedRecipient.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ihe-sourceId",
+      "url": "https://profiles.ihe.net/ITI/MHD/StructureDefinition/ihe-sourceId",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ihe-sourceId.json",
+      "fixture": "fixtures/ihe-sourceId.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": []
+}

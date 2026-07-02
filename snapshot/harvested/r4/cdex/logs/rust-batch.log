@@ -1,0 +1,9 @@
+OK rust cdex-parameters-submit-attachment
+OK rust cdex-patient-demographics
+OK rust cdex-practitionerrole
+OK rust cdex-sdc-questionnaireresponse
+OK rust cdex-signature-bundle
+OK rust cdex-signature
+OK rust cdex-task-attachment-request
+OK rust cdex-task-data-request
+RUST BATCH: ok=8 failed=0 total=8

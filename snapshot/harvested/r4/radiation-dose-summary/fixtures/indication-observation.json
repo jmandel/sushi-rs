@@ -1,0 +1,221 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "indication-observation",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "ii"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/uv/radiation-dose-summary/ImplementationGuide/hl7.fhir.uv.radiation-dose-summary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/indication-observation",
+  "version": "1.0.0",
+  "name": "IndicationObservation",
+  "title": "Indication Observation",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-05-07T00:50:09+10:00",
+  "publisher": "HL7 International / Imaging Integration",
+  "contact": [
+    {
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "HL7 Imaging Integration Workgroup",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "Abderrazek Boufahja",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "abderrazek.boufahja@gehealthcare.com"
+        }
+      ]
+    }
+  ],
+  "description": "Indication observation related to the radiation administration",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "procedure-indication-mapping",
+      "uri": "http://dicom.nema.org/medical/dicom/current/output/chtml/part03/sect_C.4.11.html",
+      "name": "DICOM Procedure Indication",
+      "comment": "The mapping for indication is following the CDA defined mapping within PS 3.20: http://dicom.nema.org/medical/dicom/current/output/chtml/part20/sect_C.4.4.html"
+    },
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "mapping": [
+          {
+            "identity": "procedure-indication-mapping",
+            "map": "Requested Procedure Module"
+          }
+        ]
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "patternCoding": {
+          "system": "http://dicom.nema.org/resources/ontology/DCM",
+          "version": "2025.2.20250411",
+          "code": "121109",
+          "display": "Indications for Procedure"
+        }
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "short": "Related Patient",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "short": "Indications description",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          },
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]:valueCodeableConcept",
+        "path": "Observation.value[x]",
+        "sliceName": "valueCodeableConcept",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "procedure-indication-mapping",
+            "map": "Referenced Request Sequence (0040,A370) > Reason for the Requested Procedure (0040,1002)"
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]:valueString",
+        "path": "Observation.value[x]",
+        "sliceName": "valueString",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mapping": [
+          {
+            "identity": "procedure-indication-mapping",
+            "map": "Referenced Request Sequence (0040,A370) > Reason for the Requested Procedure Code Sequence (0040,100A)"
+          }
+        ]
+      }
+    ]
+  }
+}

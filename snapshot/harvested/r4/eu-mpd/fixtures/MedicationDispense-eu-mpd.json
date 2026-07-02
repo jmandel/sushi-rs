@@ -1,0 +1,334 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MedicationDispense-eu-mpd",
+  "url": "http://hl7.eu/fhir/mpd/StructureDefinition/MedicationDispense-eu-mpd",
+  "version": "1.0.0",
+  "name": "MedicationDispenseEuMpd",
+  "title": "MedicationDispense: MPD",
+  "status": "active",
+  "date": "2026-05-11T17:24:08+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "MedicationDispense profile for capturing dispensation information based on a medication prescription.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rx-dispense-rmim",
+      "uri": "http://www.hl7.org/v3/PORX_RM020070UV",
+      "name": "V3 Pharmacy Dispense RMIM"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationDispense",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationDispense",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationDispense",
+        "path": "MedicationDispense"
+      },
+      {
+        "id": "MedicationDispense.extension",
+        "path": "MedicationDispense.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "MedicationDispense.extension:renderedDosageInstruction",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.extension",
+        "sliceName": "renderedDosageInstruction",
+        "short": "Full representation of the dosage instructions",
+        "requirements": "EHDSDosage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.renderedDosageInstruction"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationDispense.extension:recorded",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.extension",
+        "sliceName": "recorded",
+        "short": "Date and time when the dispense was recorded/issued. This is not necessarily the same as when the medication was handed over to the patient.",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationDispense.recorded"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationDispense.status",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.status"
+      },
+      {
+        "id": "MedicationDispense.medication[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.medication[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "MedicationDispense.medication[x]:medicationReference",
+        "path": "MedicationDispense.medication[x]",
+        "sliceName": "medicationReference",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.eu/fhir/mpd/StructureDefinition/Medication-eu-mpd"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationDispense.subject",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.subject"
+      },
+      {
+        "id": "MedicationDispense.performer.actor",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.performer.actor"
+      },
+      {
+        "id": "MedicationDispense.authorizingPrescription",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.authorizingPrescription",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.eu/fhir/mpd/StructureDefinition/MedicationRequest-eu-mpd"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationDispense.quantity",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.quantity",
+        "min": 1
+      },
+      {
+        "id": "MedicationDispense.whenHandedOver",
+        "path": "MedicationDispense.whenHandedOver",
+        "short": "Date and time when the medication was handed over. When not present, the time of dispensation is assumed to be the time of issuing the dispense record."
+      },
+      {
+        "id": "MedicationDispense.dosageInstruction",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "MedicationDispense.dosageInstruction",
+        "type": [
+          {
+            "code": "Dosage",
+            "profile": [
+              "http://hl7.eu/fhir/mpd/StructureDefinition/Dosage-eu-mpd"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

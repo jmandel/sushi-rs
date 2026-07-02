@@ -1,0 +1,297 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "usdf-QuantityLimitDetail-extension",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "phx"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/ImplementationGuide/hl7.fhir.us.davinci-drug-formulary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-QuantityLimitDetail-extension",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.25.74595174031514506193398850787025340071.42.18"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "QuantityLimitDetail",
+  "title": "Quantity Limit Detail",
+  "status": "active",
+  "date": "2025-02-26T17:11:51+00:00",
+  "publisher": "HL7 International / Pharmacy",
+  "contact": [
+    {
+      "name": "HL7 International / Pharmacy",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/medication"
+        },
+        {
+          "system": "email",
+          "value": "pharmacy@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "A detailed definition of the quantity limits the coverage plan imposes on this drug. These limit details may include (potentially including a rolling dispense limit, maximum daily, or therapy days for a period of time. (Only include if QuantityLimit = true)",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Basic"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Quantity Limit Detail",
+        "definition": "A detailed definition of the quantity limits the coverage plan imposes on this drug. These limit details may include (potentially including a rolling dispense limit, maximum daily, or therapy days for a period of time. (Only include if QuantityLimit = true)"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:Description",
+        "path": "Extension.extension",
+        "sliceName": "Description",
+        "short": "A human readable description of quantity limits.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:Description.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:Description.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "Description"
+      },
+      {
+        "id": "Extension.extension:Description.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:Rolling",
+        "path": "Extension.extension",
+        "sliceName": "Rolling",
+        "short": "Indicator of dispense amount limit per time period.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:Rolling.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:Rolling.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "Rolling"
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Timing"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x].event",
+        "path": "Extension.extension.value[x].event",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x].repeat",
+        "path": "Extension.extension.value[x].repeat",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x].repeat.count",
+        "path": "Extension.extension.value[x].repeat.count",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x].repeat.period",
+        "path": "Extension.extension.value[x].repeat.period",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:Rolling.value[x].repeat.periodUnit",
+        "path": "Extension.extension.value[x].repeat.periodUnit",
+        "patternCode": "d"
+      },
+      {
+        "id": "Extension.extension:MaximumDaily",
+        "path": "Extension.extension",
+        "sliceName": "MaximumDaily",
+        "short": "Indicator of maximum daily amount.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:MaximumDaily.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:MaximumDaily.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "MaximumDaily"
+      },
+      {
+        "id": "Extension.extension:MaximumDaily.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:MaximumDaily.value[x].value",
+        "path": "Extension.extension.value[x].value",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:DaysSupply",
+        "path": "Extension.extension",
+        "sliceName": "DaysSupply",
+        "short": "Indicator of number of therapy days over time period.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.extension",
+        "path": "Extension.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.url",
+        "path": "Extension.extension.url",
+        "fixedUri": "DaysSupply"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x]",
+        "path": "Extension.extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Timing"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].event",
+        "path": "Extension.extension.value[x].event",
+        "max": "0"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat",
+        "path": "Extension.extension.value[x].repeat",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.bounds[x]",
+        "path": "Extension.extension.value[x].repeat.bounds[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.bounds[x].value",
+        "path": "Extension.extension.value[x].repeat.bounds[x].value",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.bounds[x].system",
+        "path": "Extension.extension.value[x].repeat.bounds[x].system",
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.bounds[x].code",
+        "path": "Extension.extension.value[x].repeat.bounds[x].code",
+        "patternCode": "d"
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.count",
+        "path": "Extension.extension.value[x].repeat.count",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.period",
+        "path": "Extension.extension.value[x].repeat.period",
+        "min": 1
+      },
+      {
+        "id": "Extension.extension:DaysSupply.value[x].repeat.periodUnit",
+        "path": "Extension.extension.value[x].repeat.periodUnit",
+        "patternCode": "d"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-QuantityLimitDetail-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "max": "0"
+      }
+    ]
+  }
+}

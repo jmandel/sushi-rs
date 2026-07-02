@@ -1,0 +1,331 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Observation-diagnostic-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas",
+  "version": "1.2.3",
+  "name": "ObservationDiagnosticTWPAS",
+  "title": "基因資訊-Observation Diagnostic TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此基因資訊-Observation Diagnostic TWPAS Profile說明本IG如何進一步定義FHIR的Observation Resource以呈現事前審查之基因資訊",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.meta",
+        "path": "Observation.meta",
+        "min": 1
+      },
+      {
+        "id": "Observation.meta.profile",
+        "path": "Observation.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas"
+      },
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "short": "因FHIR設計而需必填",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category.coding",
+        "path": "Observation.category.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category.coding.system",
+        "path": "Observation.category.coding.system",
+        "patternUri": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type"
+      },
+      {
+        "id": "Observation.category.coding.code",
+        "path": "Observation.category.coding.code",
+        "patternCode": "geneInfo"
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.code.coding.system",
+        "path": "Observation.code.coding.system",
+        "patternUri": "http://loinc.org"
+      },
+      {
+        "id": "Observation.code.coding.code",
+        "path": "Observation.code.coding.code",
+        "min": 1,
+        "patternCode": "69548-6",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "short": "基因檢測日期",
+        "min": 1,
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer",
+        "path": "Observation.performer",
+        "short": "基因檢測機構，衛福部公告名冊或LDTs核定函上之「案件編號」。",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "基因檢測分析結果。請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "min": 1,
+        "type": [
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                "valueBoolean": true
+              }
+            ],
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.interpretation",
+        "path": "Observation.interpretation",
+        "short": "基因臨床判讀結果，醫師判讀結果。請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.method",
+        "path": "Observation.method",
+        "short": "基因檢測方法",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://loinc.org/vs/LL4048-6"
+        }
+      },
+      {
+        "id": "Observation.method.coding.code",
+        "path": "Observation.method.coding.code",
+        "short": "基因檢測方法。若值集中的代碼不夠用，可用其他LOINC代碼或是於text呈現。"
+      },
+      {
+        "id": "Observation.method.text",
+        "path": "Observation.method.text",
+        "short": "基因檢測方法。若值集中的代碼不夠用，可用其他LOINC代碼或是於text呈現。"
+      },
+      {
+        "id": "Observation.specimen",
+        "path": "Observation.specimen",
+        "short": "基因檢測檢體類型",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.derivedFrom",
+        "path": "Observation.derivedFrom",
+        "short": "基因報告",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "code.coding.system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1
+      },
+      {
+        "id": "Observation.component:gene-test-code",
+        "path": "Observation.component",
+        "sliceName": "gene-test-code",
+        "short": "基因檢測代碼",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:gene-test-code.code",
+        "path": "Observation.component.code",
+        "short": "基因檢測代碼",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/gene-test-code"
+        }
+      },
+      {
+        "id": "Observation.component:gene-test-code.code.coding",
+        "path": "Observation.component.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.component:gene-test-code.code.coding.system",
+        "path": "Observation.component.code.coding.system",
+        "min": 1,
+        "patternUri": "http://loinc.org"
+      },
+      {
+        "id": "Observation.component:gene-test-code.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "基因檢測實際結果",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:gene-test-code.interpretation",
+        "path": "Observation.component.interpretation",
+        "short": "基因突變類型",
+        "definition": "Type of DNA change observed. Convenience property for variants with exact breakpoints, required otherwise.",
+        "max": "1",
+        "constraint": [
+          {
+            "key": "pas-1",
+            "severity": "error",
+            "human": "text、coding至少需存在一個。",
+            "expression": "text.exists() or coding.exists()",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/dna-change-type"
+        }
+      },
+      {
+        "id": "Observation.component:gene-test-code.interpretation.coding",
+        "path": "Observation.component.interpretation.coding",
+        "condition": [
+          "pas-1"
+        ]
+      },
+      {
+        "id": "Observation.component:gene-test-code.interpretation.coding.code",
+        "path": "Observation.component.interpretation.coding.code",
+        "short": "LA6692-3: Deletion | LA6686-5: Duplication | LA6687-3: Insertion | LA6688-1: Insertion/Deletion | LA6689-9: Inversion | LA6690-7: Substitution | 101397-8: Copy number variation analysis Sequencing Doc (Bld/Tiss) | 81695-9: MSI Ca spec-Imp | 94077-5: TMB Tumor-Imp | O55-2: Delins",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:gene-test-code.interpretation.text",
+        "path": "Observation.component.interpretation.text",
+        "short": "基因突變類型。若無合適代碼，可使用此欄位以文字呈現。請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "condition": [
+          "pas-1"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,292 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "practitioner-obl-eu-eps",
+  "url": "http://hl7.eu/fhir/eps/StructureDefinition/practitioner-obl-eu-eps",
+  "version": "1.0.0-ballot",
+  "name": "PractitionerOblEuEps",
+  "title": "Practitioner - Obligations (EPS)",
+  "status": "draft",
+  "date": "2026-06-06T08:56:20+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profiles set the IPS obligations on the EU Core Practitioner profile.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "servd",
+      "uri": "http://www.omg.org/spec/ServD/1.0/",
+      "name": "ServD"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Practitioner",
+  "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/practitioner-eu-core",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Practitioner.name",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Practitioner.name"
+      },
+      {
+        "id": "Practitioner.name.family",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Practitioner.name.family"
+      },
+      {
+        "id": "Practitioner.name.given",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Practitioner.name.given"
+      },
+      {
+        "id": "Practitioner.telecom",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Practitioner.telecom"
+      },
+      {
+        "id": "Practitioner.address",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Practitioner.address"
+      }
+    ]
+  }
+}

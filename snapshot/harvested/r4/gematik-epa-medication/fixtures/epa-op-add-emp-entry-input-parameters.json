@@ -1,0 +1,337 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "epa-op-add-emp-entry-input-parameters",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-add-emp-entry-input-parameters",
+  "version": "1.3.2",
+  "name": "EPAOpAddEMPEntryInputParameters",
+  "title": "EPA Operation addEMPEntry Input-Parameters",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "EPA Operation addEMPEntry Input-Parameters",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 2,
+        "max": "3",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId",
+        "path": "Parameters.parameter",
+        "sliceName": "acknowledgedChronologyId",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "acknowledgedChronologyId",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "id"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.resource",
+        "path": "Parameters.parameter.resource",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:empEntry",
+        "path": "Parameters.parameter",
+        "sliceName": "empEntry",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "empEntry",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:empEntry.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication",
+        "path": "Parameters.parameter",
+        "sliceName": "medication",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "medication",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.resource",
+        "path": "Parameters.parameter.resource",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.part",
+        "path": "Parameters.parameter.part",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:resource",
+        "path": "Parameters.parameter.part",
+        "sliceName": "resource",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:resource.name",
+        "path": "Parameters.parameter.part.name",
+        "patternString": "resource",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:resource.value[x]",
+        "path": "Parameters.parameter.part.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.part:resource.resource",
+        "path": "Parameters.parameter.part.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Medication",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:resource.part",
+        "path": "Parameters.parameter.part.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference",
+        "path": "Parameters.parameter.part",
+        "sliceName": "reference",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "epa-no-history-reference",
+            "severity": "error",
+            "human": "Die Referenz darf keine History-Referenz enthalten ('/_history/' ist nicht erlaubt).",
+            "expression": "value.where($this is Reference).reference.exists() implies value.where($this is Reference).reference.contains('/_history/').not()",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-add-emp-entry-input-parameters"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.name",
+        "path": "Parameters.parameter.part.name",
+        "patternString": "reference",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x]",
+        "path": "Parameters.parameter.part.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].reference",
+        "path": "Parameters.parameter.part.value[x].reference",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier",
+        "path": "Parameters.parameter.part.value[x].identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type",
+        "path": "Parameters.parameter.part.value[x].identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type.coding",
+        "path": "Parameters.parameter.part.value[x].identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type.coding.system",
+        "path": "Parameters.parameter.part.value[x].identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type.coding.version",
+        "path": "Parameters.parameter.part.value[x].identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type.coding.code",
+        "path": "Parameters.parameter.part.value[x].identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.type.coding.display",
+        "path": "Parameters.parameter.part.value[x].identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.system",
+        "path": "Parameters.parameter.part.value[x].identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].identifier.value",
+        "path": "Parameters.parameter.part.value[x].identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.value[x].display",
+        "path": "Parameters.parameter.part.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.resource",
+        "path": "Parameters.parameter.part.resource",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.part:reference.part",
+        "path": "Parameters.parameter.part.part",
+        "max": "0"
+      }
+    ]
+  }
+}

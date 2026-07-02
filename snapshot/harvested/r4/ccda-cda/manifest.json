@@ -1,0 +1,1176 @@
+{
+  "source": "package",
+  "package": "hl7.cda.us.ccda#5.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.cda.us.ccda#5.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.cda.us.ccda#5.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.cda.us.ccda",
+    "version": "5.0.0",
+    "canonical": "http://hl7.org/cda/us/ccda",
+    "fhirVersions": [
+      "5.0.0"
+    ],
+    "dependencies": {
+      "hl7.terminology.r5": "7.1.0",
+      "hl7.fhir.uv.extensions.r5": "5.3.0",
+      "hl7.cda.uv.core": "2.0.3-sd",
+      "us.cdc.phinvads": "0.12.0",
+      "hl7.fhir.us.core": "9.0.0"
+    }
+  },
+  "counts": {
+    "scanned": 229,
+    "harvested": 0,
+    "skipped": 229
+  },
+  "entries": [],
+  "skipped": [
+    {
+      "id": "ActivitiesSection",
+      "source": "StructureDefinition-ActivitiesSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdmissionDiagnosisSection",
+      "source": "StructureDefinition-AdmissionDiagnosisSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdmissionMedication",
+      "source": "StructureDefinition-AdmissionMedication.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdmissionMedicationsSectionEntriesOptional",
+      "source": "StructureDefinition-AdmissionMedicationsSectionEntriesOptional.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdvanceDirectiveExistenceObservation",
+      "source": "StructureDefinition-AdvanceDirectiveExistenceObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdvanceDirectiveObservation",
+      "source": "StructureDefinition-AdvanceDirectiveObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdvanceDirectiveOrganizer",
+      "source": "StructureDefinition-AdvanceDirectiveOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AdvanceDirectivesSection",
+      "source": "StructureDefinition-AdvanceDirectivesSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AgeObservation",
+      "source": "StructureDefinition-AgeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AgeRangeObservation",
+      "source": "StructureDefinition-AgeRangeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AllergiesAndIntolerancesSection",
+      "source": "StructureDefinition-AllergiesAndIntolerancesSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AllergyConcernAct",
+      "source": "StructureDefinition-AllergyConcernAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AllergyIntoleranceObservation",
+      "source": "StructureDefinition-AllergyIntoleranceObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AllergyStatusObservation",
+      "source": "StructureDefinition-AllergyStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AnesthesiaSection",
+      "source": "StructureDefinition-AnesthesiaSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AssessmentScaleObservation",
+      "source": "StructureDefinition-AssessmentScaleObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AssessmentScaleSupportingObservation",
+      "source": "StructureDefinition-AssessmentScaleSupportingObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AssessmentSection",
+      "source": "StructureDefinition-AssessmentSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AssessmentandPlanSection",
+      "source": "StructureDefinition-AssessmentandPlanSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AuthorParticipation",
+      "source": "StructureDefinition-AuthorParticipation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AuthorizationActivity",
+      "source": "StructureDefinition-AuthorizationActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "AverageBloodPressureOrganizer",
+      "source": "StructureDefinition-AverageBloodPressureOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "BasicIndustryObservation",
+      "source": "StructureDefinition-BasicIndustryObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "BasicOccupationObservation",
+      "source": "StructureDefinition-BasicOccupationObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "BirthSexObservation",
+      "source": "StructureDefinition-BirthSexObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "BrandNameObservation",
+      "source": "StructureDefinition-BrandNameObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareExperiencePreference",
+      "source": "StructureDefinition-CareExperiencePreference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CarePlan",
+      "source": "StructureDefinition-CarePlan.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CarePlanAct",
+      "source": "StructureDefinition-CarePlanAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareTeamMemberAct",
+      "source": "StructureDefinition-CareTeamMemberAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareTeamMemberScheduleObservation",
+      "source": "StructureDefinition-CareTeamMemberScheduleObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareTeamOrganizer",
+      "source": "StructureDefinition-CareTeamOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareTeamTypeObservation",
+      "source": "StructureDefinition-CareTeamTypeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CareTeamsSection",
+      "source": "StructureDefinition-CareTeamsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CaregiverCharacteristics",
+      "source": "StructureDefinition-CaregiverCharacteristics.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CatalogNumberObservation",
+      "source": "StructureDefinition-CatalogNumberObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CharacteristicsofHomeEnvironment",
+      "source": "StructureDefinition-CharacteristicsofHomeEnvironment.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ChiefComplaintSection",
+      "source": "StructureDefinition-ChiefComplaintSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ChiefComplaintandReasonforVisitSection",
+      "source": "StructureDefinition-ChiefComplaintandReasonforVisitSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CommentActivity",
+      "source": "StructureDefinition-CommentActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CompanyNameObservation",
+      "source": "StructureDefinition-CompanyNameObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ComplicationsSection",
+      "source": "StructureDefinition-ComplicationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ConsultationNote",
+      "source": "StructureDefinition-ConsultationNote.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ContinuityofCareDocumentCCD",
+      "source": "StructureDefinition-ContinuityofCareDocumentCCD.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CourseofCareSection",
+      "source": "StructureDefinition-CourseofCareSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CoverageActivity",
+      "source": "StructureDefinition-CoverageActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CriticalityObservation",
+      "source": "StructureDefinition-CriticalityObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CulturalandReligiousObservation",
+      "source": "StructureDefinition-CulturalandReligiousObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DateOfDiagnosisAct",
+      "source": "StructureDefinition-DateOfDiagnosisAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DeceasedObservation",
+      "source": "StructureDefinition-DeceasedObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DeviceIdentifierObservation",
+      "source": "StructureDefinition-DeviceIdentifierObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DisabilityStatusObservation",
+      "source": "StructureDefinition-DisabilityStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DischargeDiagnosisSection",
+      "source": "StructureDefinition-DischargeDiagnosisSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DischargeMedication",
+      "source": "StructureDefinition-DischargeMedication.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DischargeMedicationsSection",
+      "source": "StructureDefinition-DischargeMedicationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DischargeSummary",
+      "source": "StructureDefinition-DischargeSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DistinctIdentificationCodeObservation",
+      "source": "StructureDefinition-DistinctIdentificationCodeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DrugMonitoringAct",
+      "source": "StructureDefinition-DrugMonitoringAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DrugVehicle",
+      "source": "StructureDefinition-DrugVehicle.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "EncounterActivity",
+      "source": "StructureDefinition-EncounterActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "EncounterDiagnosis",
+      "source": "StructureDefinition-EncounterDiagnosis.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "EncountersSection",
+      "source": "StructureDefinition-EncountersSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "EntryReference",
+      "source": "StructureDefinition-EntryReference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "EstimatedDateofDelivery",
+      "source": "StructureDefinition-EstimatedDateofDelivery.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ExpirationDateObservation",
+      "source": "StructureDefinition-ExpirationDateObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ExternalDocumentReference",
+      "source": "StructureDefinition-ExternalDocumentReference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FamilyHistoryDeathObservation",
+      "source": "StructureDefinition-FamilyHistoryDeathObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FamilyHistoryObservation",
+      "source": "StructureDefinition-FamilyHistoryObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FamilyHistoryOrganizer",
+      "source": "StructureDefinition-FamilyHistoryOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FamilyHistorySection",
+      "source": "StructureDefinition-FamilyHistorySection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FunctionalStatusObservation",
+      "source": "StructureDefinition-FunctionalStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FunctionalStatusOrganizer",
+      "source": "StructureDefinition-FunctionalStatusOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "FunctionalStatusSection",
+      "source": "StructureDefinition-FunctionalStatusSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "GenderIdentityObservation",
+      "source": "StructureDefinition-GenderIdentityObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "GeneralStatusSection",
+      "source": "StructureDefinition-GeneralStatusSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "GoalObservation",
+      "source": "StructureDefinition-GoalObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "GoalsSection",
+      "source": "StructureDefinition-GoalsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HandoffCommunicationParticipants",
+      "source": "StructureDefinition-HandoffCommunicationParticipants.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HealthConcernAct",
+      "source": "StructureDefinition-HealthConcernAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HealthConcernsSection",
+      "source": "StructureDefinition-HealthConcernsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HealthStatusObservation",
+      "source": "StructureDefinition-HealthStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HighestPressureUlcerStage",
+      "source": "StructureDefinition-HighestPressureUlcerStage.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HistoryandPhysical",
+      "source": "StructureDefinition-HistoryandPhysical.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HistoryofPresentIllnessSection",
+      "source": "StructureDefinition-HistoryofPresentIllnessSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalAdmissionDiagnosis",
+      "source": "StructureDefinition-HospitalAdmissionDiagnosis.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalConsultationsSection",
+      "source": "StructureDefinition-HospitalConsultationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalCourseSection",
+      "source": "StructureDefinition-HospitalCourseSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalDischargeDiagnosis",
+      "source": "StructureDefinition-HospitalDischargeDiagnosis.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalDischargeInstructionsSection",
+      "source": "StructureDefinition-HospitalDischargeInstructionsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalDischargePhysicalSection",
+      "source": "StructureDefinition-HospitalDischargePhysicalSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "HospitalDischargeStudiesSummarySection",
+      "source": "StructureDefinition-HospitalDischargeStudiesSummarySection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ImmunizationActivity",
+      "source": "StructureDefinition-ImmunizationActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ImmunizationMedicationInformation",
+      "source": "StructureDefinition-ImmunizationMedicationInformation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ImmunizationNotGivenReason",
+      "source": "StructureDefinition-ImmunizationNotGivenReason.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ImmunizationsSection",
+      "source": "StructureDefinition-ImmunizationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ImplantableDeviceStatusObservation",
+      "source": "StructureDefinition-ImplantableDeviceStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "Indication",
+      "source": "StructureDefinition-Indication.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "IndividualPronounObservation",
+      "source": "StructureDefinition-IndividualPronounObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InstructionActivity",
+      "source": "StructureDefinition-InstructionActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InstructionObservation",
+      "source": "StructureDefinition-InstructionObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InstructionsSection",
+      "source": "StructureDefinition-InstructionsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InterpreterNeededObservation",
+      "source": "StructureDefinition-InterpreterNeededObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InterventionAct",
+      "source": "StructureDefinition-InterventionAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LatexSafetyObservation",
+      "source": "StructureDefinition-LatexSafetyObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LongitudinalCareWoundObservation",
+      "source": "StructureDefinition-LongitudinalCareWoundObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LotOrBatchNumberObservation",
+      "source": "StructureDefinition-LotOrBatchNumberObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MRISafetyObservation",
+      "source": "StructureDefinition-MRISafetyObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ManufacturingDateObservation",
+      "source": "StructureDefinition-ManufacturingDateObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicalEquipmentOrganizer",
+      "source": "StructureDefinition-MedicalEquipmentOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicalEquipmentSection",
+      "source": "StructureDefinition-MedicalEquipmentSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicalGeneralHistorySection",
+      "source": "StructureDefinition-MedicalGeneralHistorySection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationActivity",
+      "source": "StructureDefinition-MedicationActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationAdherence",
+      "source": "StructureDefinition-MedicationAdherence.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationDispense",
+      "source": "StructureDefinition-MedicationDispense.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationFreeTextSig",
+      "source": "StructureDefinition-MedicationFreeTextSig.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationInformation",
+      "source": "StructureDefinition-MedicationInformation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationSupplyOrder",
+      "source": "StructureDefinition-MedicationSupplyOrder.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationsAdministeredSection",
+      "source": "StructureDefinition-MedicationsAdministeredSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MedicationsSection",
+      "source": "StructureDefinition-MedicationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MentalStatusObservation",
+      "source": "StructureDefinition-MentalStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MentalStatusOrganizer",
+      "source": "StructureDefinition-MentalStatusOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "MentalStatusSection",
+      "source": "StructureDefinition-MentalStatusSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ModelNumberObservation",
+      "source": "StructureDefinition-ModelNumberObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NonMedicinalSupplyActivity",
+      "source": "StructureDefinition-NonMedicinalSupplyActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NoteActivity",
+      "source": "StructureDefinition-NoteActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NotesSection",
+      "source": "StructureDefinition-NotesSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NumberofPressureUlcersObservation",
+      "source": "StructureDefinition-NumberofPressureUlcersObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NutritionAssessment",
+      "source": "StructureDefinition-NutritionAssessment.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NutritionRecommendation",
+      "source": "StructureDefinition-NutritionRecommendation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NutritionSection",
+      "source": "StructureDefinition-NutritionSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "NutritionalStatusObservation",
+      "source": "StructureDefinition-NutritionalStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ObjectiveSection",
+      "source": "StructureDefinition-ObjectiveSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "OperativeNote",
+      "source": "StructureDefinition-OperativeNote.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "OperativeNoteFluidsSection",
+      "source": "StructureDefinition-OperativeNoteFluidsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "OperativeNoteSurgicalProcedureSection",
+      "source": "StructureDefinition-OperativeNoteSurgicalProcedureSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "OutcomeObservation",
+      "source": "StructureDefinition-OutcomeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "OutcomesSection",
+      "source": "StructureDefinition-OutcomesSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PastMedicalHistory",
+      "source": "StructureDefinition-PastMedicalHistory.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PayersSection",
+      "source": "StructureDefinition-PayersSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PhysicalExamSection",
+      "source": "StructureDefinition-PhysicalExamSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedCoverage",
+      "source": "StructureDefinition-PlannedCoverage.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedEncounter",
+      "source": "StructureDefinition-PlannedEncounter.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedImmunizationActivity",
+      "source": "StructureDefinition-PlannedImmunizationActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedInterventionAct",
+      "source": "StructureDefinition-PlannedInterventionAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedMedicationActivity",
+      "source": "StructureDefinition-PlannedMedicationActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedProcedure",
+      "source": "StructureDefinition-PlannedProcedure.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedProcedureSection",
+      "source": "StructureDefinition-PlannedProcedureSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlannedSupply",
+      "source": "StructureDefinition-PlannedSupply.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PlanofTreatmentSection",
+      "source": "StructureDefinition-PlanofTreatmentSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PolicyActivity",
+      "source": "StructureDefinition-PolicyActivity.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PostoperativeDiagnosisSection",
+      "source": "StructureDefinition-PostoperativeDiagnosisSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PostprocedureDiagnosis",
+      "source": "StructureDefinition-PostprocedureDiagnosis.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PostprocedureDiagnosisSection",
+      "source": "StructureDefinition-PostprocedureDiagnosisSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PreconditionforSubstanceAdministration",
+      "source": "StructureDefinition-PreconditionforSubstanceAdministration.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PregnancyIntentionInNextYear",
+      "source": "StructureDefinition-PregnancyIntentionInNextYear.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PregnancySection",
+      "source": "StructureDefinition-PregnancySection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PregnancyStatusObservation",
+      "source": "StructureDefinition-PregnancyStatusObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PreoperativeDiagnosis",
+      "source": "StructureDefinition-PreoperativeDiagnosis.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PreoperativeDiagnosisSection",
+      "source": "StructureDefinition-PreoperativeDiagnosisSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PriorityPreference",
+      "source": "StructureDefinition-PriorityPreference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProblemConcernAct",
+      "source": "StructureDefinition-ProblemConcernAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProblemObservation",
+      "source": "StructureDefinition-ProblemObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProblemSection",
+      "source": "StructureDefinition-ProblemSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProblemStatus",
+      "source": "StructureDefinition-ProblemStatus.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureActivityProcedure",
+      "source": "StructureDefinition-ProcedureActivityProcedure.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureDescriptionSection",
+      "source": "StructureDefinition-ProcedureDescriptionSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureDispositionSection",
+      "source": "StructureDefinition-ProcedureDispositionSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureEstimatedBloodLossSection",
+      "source": "StructureDefinition-ProcedureEstimatedBloodLossSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureFindingsSection",
+      "source": "StructureDefinition-ProcedureFindingsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureImplantsSection",
+      "source": "StructureDefinition-ProcedureImplantsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureIndicationsSection",
+      "source": "StructureDefinition-ProcedureIndicationsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureNote",
+      "source": "StructureDefinition-ProcedureNote.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProcedureSpecimensTakenSection",
+      "source": "StructureDefinition-ProcedureSpecimensTakenSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProceduresSection",
+      "source": "StructureDefinition-ProceduresSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProductInstance",
+      "source": "StructureDefinition-ProductInstance.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "PrognosisObservation",
+      "source": "StructureDefinition-PrognosisObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProgressNote",
+      "source": "StructureDefinition-ProgressNote.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProgressTowardGoalObservation",
+      "source": "StructureDefinition-ProgressTowardGoalObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProvenanceAssemblerParticipation",
+      "source": "StructureDefinition-ProvenanceAssemblerParticipation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ProvenanceAuthorParticipation",
+      "source": "StructureDefinition-ProvenanceAuthorParticipation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReactionObservation",
+      "source": "StructureDefinition-ReactionObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "Reason",
+      "source": "StructureDefinition-Reason.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReasonforReferralSection",
+      "source": "StructureDefinition-ReasonforReferralSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReasonforVisitSection",
+      "source": "StructureDefinition-ReasonforVisitSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReferralAct",
+      "source": "StructureDefinition-ReferralAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReferralNote",
+      "source": "StructureDefinition-ReferralNote.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "RelatedPersonRelationshipAndNameParticipant",
+      "source": "StructureDefinition-RelatedPersonRelationshipAndNameParticipant.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ResultObservation",
+      "source": "StructureDefinition-ResultObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ResultOrganizer",
+      "source": "StructureDefinition-ResultOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ResultsSection",
+      "source": "StructureDefinition-ResultsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ReviewofSystemsSection",
+      "source": "StructureDefinition-ReviewofSystemsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "RiskConcernAct",
+      "source": "StructureDefinition-RiskConcernAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SectionTimeRangeObservation",
+      "source": "StructureDefinition-SectionTimeRangeObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SelfCareActivitiesADLandIADL",
+      "source": "StructureDefinition-SelfCareActivitiesADLandIADL.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SensoryStatus",
+      "source": "StructureDefinition-SensoryStatus.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SerialNumberObservation",
+      "source": "StructureDefinition-SerialNumberObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ServiceDeliveryLocation",
+      "source": "StructureDefinition-ServiceDeliveryLocation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SeverityObservation",
+      "source": "StructureDefinition-SeverityObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SexObservation",
+      "source": "StructureDefinition-SexObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SexParameterForClinicalUseObservation",
+      "source": "StructureDefinition-SexParameterForClinicalUseObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SexualOrientationObservation",
+      "source": "StructureDefinition-SexualOrientationObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SmokingStatus",
+      "source": "StructureDefinition-SmokingStatus.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SmokingStatusMeaningfulUse",
+      "source": "StructureDefinition-SmokingStatusMeaningfulUse.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SocialHistoryObservation",
+      "source": "StructureDefinition-SocialHistoryObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SocialHistorySection",
+      "source": "StructureDefinition-SocialHistorySection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SpecimenCollectionProcedure",
+      "source": "StructureDefinition-SpecimenCollectionProcedure.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SpecimenConditionObservation",
+      "source": "StructureDefinition-SpecimenConditionObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SubjectiveSection",
+      "source": "StructureDefinition-SubjectiveSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SubstanceAdministeredAct",
+      "source": "StructureDefinition-SubstanceAdministeredAct.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SubstanceOrDeviceAllergyIntoleranceObservation",
+      "source": "StructureDefinition-SubstanceOrDeviceAllergyIntoleranceObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SurgicalDrainsSection",
+      "source": "StructureDefinition-SurgicalDrainsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "TobaccoUse",
+      "source": "StructureDefinition-TobaccoUse.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "TransferSummary",
+      "source": "StructureDefinition-TransferSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "TreatmentInterventionPreference",
+      "source": "StructureDefinition-TreatmentInterventionPreference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "TribalAffiliationObservation",
+      "source": "StructureDefinition-TribalAffiliationObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "UDIOrganizer",
+      "source": "StructureDefinition-UDIOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmAddress",
+      "source": "StructureDefinition-USRealmAddress.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmDateTime",
+      "source": "StructureDefinition-USRealmDateTime.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmDateTimeInterval",
+      "source": "StructureDefinition-USRealmDateTimeInterval.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmHeader",
+      "source": "StructureDefinition-USRealmHeader.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmHeaderforPatientGeneratedDocument",
+      "source": "StructureDefinition-USRealmHeaderforPatientGeneratedDocument.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmPatientNamePTNUSFIELDED",
+      "source": "StructureDefinition-USRealmPatientNamePTNUSFIELDED.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "USRealmPersonNamePNUSFIELDED",
+      "source": "StructureDefinition-USRealmPersonNamePNUSFIELDED.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "UnstructuredDocument",
+      "source": "StructureDefinition-UnstructuredDocument.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "VitalSignObservation",
+      "source": "StructureDefinition-VitalSignObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "VitalSignsOrganizer",
+      "source": "StructureDefinition-VitalSignsOrganizer.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "VitalSignsSection",
+      "source": "StructureDefinition-VitalSignsSection.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "WoundCharacteristic",
+      "source": "StructureDefinition-WoundCharacteristic.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "WoundMeasurementObservation",
+      "source": "StructureDefinition-WoundMeasurementObservation.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    }
+  ]
+}

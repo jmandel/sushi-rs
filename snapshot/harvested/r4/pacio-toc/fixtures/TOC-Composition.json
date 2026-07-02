@@ -1,0 +1,937 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "TOC-Composition",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "pc"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/pacio-toc/ImplementationGuide/hl7.fhir.us.pacio-toc"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/pacio-toc/ImplementationGuide/hl7.fhir.us.pacio-toc"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/pacio-toc/StructureDefinition/TOC-Composition",
+  "version": "1.0.0",
+  "name": "TOCComposition",
+  "title": "Transition of Care Composition",
+  "status": "active",
+  "date": "2026-05-13T05:33:53+10:00",
+  "publisher": "HL7 International / Patient Care",
+  "contact": [
+    {
+      "name": "HL7 International / Patient Care",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/patientcare"
+        },
+        {
+          "system": "email",
+          "value": "patientcare@lists.HL7.org"
+        }
+      ]
+    },
+    {
+      "name": "PACIO project",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/patientcare"
+        },
+        {
+          "system": "email",
+          "value": "info@pacioproject.org"
+        }
+      ]
+    }
+  ],
+  "description": "This profile defines constraints that represent common administrative and demographic concepts for transitions of care information used in US Realm clinical documents.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    },
+    {
+      "identity": "fhirdocumentreference",
+      "uri": "http://hl7.org/fhir/documentreference",
+      "name": "FHIR DocumentReference"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Composition",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/clinicaldocument",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Composition.language",
+        "path": "Composition.language",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.identifier",
+        "path": "Composition.identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.type",
+        "path": "Composition.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/ValueSet/doc-typecodes"
+        }
+      },
+      {
+        "id": "Composition.category",
+        "path": "Composition.category",
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "18761-7",
+              "display": "Transfer Summary Note"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.subject",
+        "path": "Composition.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|8.0.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.encounter",
+        "path": "Composition.encounter",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.date",
+        "path": "Composition.date",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.author",
+        "path": "Composition.author",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole|8.0.1",
+              "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|8.0.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.title",
+        "path": "Composition.title",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.confidentiality",
+        "path": "Composition.confidentiality",
+        "max": "0"
+      },
+      {
+        "id": "Composition.custodian",
+        "path": "Composition.custodian",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|8.0.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section",
+        "path": "Composition.section",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "code"
+            }
+          ],
+          "description": "Slice based on $this value",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 15
+      },
+      {
+        "id": "Composition.section.text",
+        "path": "Composition.section.text",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:advance_directives",
+        "path": "Composition.section",
+        "sliceName": "advance_directives",
+        "short": "Advance Directives",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:advance_directives.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:advance_directives.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "42348-3"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:advance_directives.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/pacio-adi/StructureDefinition/ADI-DocumentReference"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:advance_directives.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:allergies",
+        "path": "Composition.section",
+        "sliceName": "allergies",
+        "short": "Allergies and Adverse Reactions",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:allergies.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:allergies.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "48765-2"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:allergies.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:allergies.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:behavioral_health",
+        "path": "Composition.section",
+        "sliceName": "behavioral_health",
+        "short": "Behavioral Health",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:behavioral_health.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:behavioral_health.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/pacio-toc/CodeSystem/toc-temp-cs",
+              "code": "behavioral_health_summary"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:behavioral_health.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:behavioral_health.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:functional_status",
+        "path": "Composition.section",
+        "sliceName": "functional_status",
+        "short": "Functional Status",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:functional_status.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:functional_status.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "47420-5"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:functional_status.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Observation",
+              "http://hl7.org/fhir/us/pacio-pfe/StructureDefinition/pfe-use-of-device",
+              "http://hl7.org/fhir/us/pacio-pfe/StructureDefinition/pfe-narrative-history-of-status",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:functional_status.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:immunizations",
+        "path": "Composition.section",
+        "sliceName": "immunizations",
+        "short": "Immunizations",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:immunizations.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:immunizations.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11369-6"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:immunizations.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:immunizations.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:discharge_instructions",
+        "path": "Composition.section",
+        "sliceName": "discharge_instructions",
+        "short": "Discharge Instructions",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:discharge_instructions.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:discharge_instructions.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "69730-0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:discharge_instructions.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-note|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:discharge_instructions.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medical_devices",
+        "path": "Composition.section",
+        "sliceName": "medical_devices",
+        "short": "Medical Devices",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medical_devices.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medical_devices.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "46264-8"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:medical_devices.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Device"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:medical_devices.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medications",
+        "path": "Composition.section",
+        "sliceName": "medications",
+        "short": "Medications",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medications.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:medications.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "10160-0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:medications.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/smp/StructureDefinition/smp-medication-list",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:medications.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:plan_of_care",
+        "path": "Composition.section",
+        "sliceName": "plan_of_care",
+        "short": "Discharge Care Plan",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:plan_of_care.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:plan_of_care.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "18776-5"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:plan_of_care.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careplan|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:plan_of_care.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:problems",
+        "path": "Composition.section",
+        "sliceName": "problems",
+        "short": "Problems",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:problems.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:problems.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "11450-4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:problems.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:problems.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:procedures",
+        "path": "Composition.section",
+        "sliceName": "procedures",
+        "short": "Procedures",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:procedures.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:procedures.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "47519-4"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:procedures.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:reason_for_referral",
+        "path": "Composition.section",
+        "sliceName": "reason_for_referral",
+        "short": "Reason for Transfer",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:reason_for_referral.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:reason_for_referral.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "42349-1"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:reason_for_referral.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure|8.0.1",
+              "http://hl7.org/fhir/StructureDefinition/Observation",
+              "http://hl7.org/fhir/StructureDefinition/ImmunizationRecommendation",
+              "http://hl7.org/fhir/us/ccda/StructureDefinition/Discharge-Summary|1.2.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:reason_for_referral.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:clinical_results",
+        "path": "Composition.section",
+        "sliceName": "clinical_results",
+        "short": "Clinical Results",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:clinical_results.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:clinical_results.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "30954-2"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:clinical_results.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-note|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:clinical_results.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:social_history",
+        "path": "Composition.section",
+        "sliceName": "social_history",
+        "short": "Social History",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:social_history.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:social_history.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "29762-2"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:social_history.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-smokingstatus|8.0.1",
+              "http://hl7.org/fhir/us/pacio-pfe/StructureDefinition/pfe-narrative-history-of-status",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careplan|8.0.1",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:social_history.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:vital_signs",
+        "path": "Composition.section",
+        "sliceName": "vital_signs",
+        "short": "Vital Signs",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:vital_signs.title",
+        "path": "Composition.section.title",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Composition.section:vital_signs.code",
+        "path": "Composition.section.code",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8716-3"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Composition.section:vital_signs.entry",
+        "path": "Composition.section.entry",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs|8.0.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Composition.section:vital_signs.emptyReason",
+        "path": "Composition.section.emptyReason",
+        "mustSupport": true
+      }
+    ]
+  }
+}

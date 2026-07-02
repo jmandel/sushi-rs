@@ -1,0 +1,116 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.subscriptions-backport.r4#1.1.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.subscriptions-backport.r4#1.1.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.subscriptions-backport.r4#1.1.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.subscriptions-backport.r4",
+    "version": "1.1.0",
+    "canonical": "http://hl7.org/fhir/uv/subscriptions-backport",
+    "fhirVersions": [
+      "4.0.0"
+    ],
+    "dependencies": {
+      "hl7.terminology.r4": "5.0.0",
+      "hl7.fhir.r4.core": "4.0.0"
+    }
+  },
+  "counts": {
+    "scanned": 11,
+    "harvested": 11,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "backport-channel-type",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-channel-type",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-channel-type.json",
+      "fixture": "fixtures/backport-channel-type.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "backport-filter-criteria",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-filter-criteria",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-filter-criteria.json",
+      "fixture": "fixtures/backport-filter-criteria.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "backport-heartbeat-period",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-heartbeat-period",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-heartbeat-period.json",
+      "fixture": "fixtures/backport-heartbeat-period.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "backport-max-count",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-max-count",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-max-count.json",
+      "fixture": "fixtures/backport-max-count.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "backport-payload-content",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-payload-content",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-payload-content.json",
+      "fixture": "fixtures/backport-payload-content.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "backport-subscription-notification-r4",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-backport-subscription-notification-r4.json",
+      "fixture": "fixtures/backport-subscription-notification-r4.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "backport-subscription-notification",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-backport-subscription-notification.json",
+      "fixture": "fixtures/backport-subscription-notification.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "backport-subscription-status-r4",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-status-r4",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-backport-subscription-status-r4.json",
+      "fixture": "fixtures/backport-subscription-status-r4.json",
+      "differentialElements": 35
+    },
+    {
+      "id": "backport-subscription",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Subscription",
+      "source": "StructureDefinition-backport-subscription.json",
+      "fixture": "fixtures/backport-subscription.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "backport-timeout",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-timeout",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-backport-timeout.json",
+      "fixture": "fixtures/backport-timeout.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "capabilitystatement-subscriptiontopic-canonical",
+      "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/capabilitystatement-subscriptiontopic-canonical",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-capabilitystatement-subscriptiontopic-canonical.json",
+      "fixture": "fixtures/capabilitystatement-subscriptiontopic-canonical.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": []
+}

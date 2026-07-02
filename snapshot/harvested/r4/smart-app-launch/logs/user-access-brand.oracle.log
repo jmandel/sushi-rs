@@ -1,0 +1,7 @@
+warning: Supported source version 'RELEASE_6' from annotation processor 'org.eclipse.sisu.scanners.index.SisuIndexAPT6' less than -source '17'
+Note: /home/jmandel/hobby/sushi-rs-snapshot/snapshot/oracle/SnapOracleR4.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+Can't find Extension definition for http://hl7.org/fhir/StructureDefinition/organization-brand but trying to go on
+Can't find Extension definition for http://hl7.org/fhir/StructureDefinition/organization-portal but trying to go on
+OK r4 publisher-path output=r5 sort=true snapshot.element=35 messages=2 sortErrors=0

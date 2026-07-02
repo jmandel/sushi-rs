@@ -1,0 +1,150 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-subscription",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscription",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.74"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASSubscription",
+  "title": "PAS Subscription",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "The profile for PAS subscription.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Subscription",
+  "baseDefinition": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Subscription",
+        "path": "Subscription"
+      },
+      {
+        "id": "Subscription.criteria",
+        "path": "Subscription.criteria",
+        "patternString": "http://hl7.org/fhir/us/davinci-pas/SubscriptionTopic/PASSubscriptionTopic"
+      },
+      {
+        "id": "Subscription.channel.type",
+        "path": "Subscription.channel.type",
+        "patternCode": "rest-hook"
+      },
+      {
+        "id": "Subscription.channel.endpoint",
+        "path": "Subscription.channel.endpoint",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Subscription.channel.payload.extension:content",
+        "path": "Subscription.channel.payload.extension",
+        "sliceName": "content"
+      },
+      {
+        "id": "Subscription.channel.payload.extension:content.value[x]:valueCode",
+        "path": "Subscription.channel.payload.extension.value[x]",
+        "sliceName": "valueCode",
+        "type": [
+          {
+            "code": "code"
+          }
+        ],
+        "patternCode": "full-resource"
+      }
+    ]
+  }
+}

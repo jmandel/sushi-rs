@@ -1,0 +1,295 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "plannet-Location",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ImplementationGuide/hl7.fhir.us.davinci-pdex-plan-net"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location",
+  "version": "1.2.0",
+  "name": "PlannetLocation",
+  "title": "Plan-Net Location",
+  "status": "active",
+  "date": "2025-02-25T19:12:27+00:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fm@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "A Location is the physical place where healthcare services are provided, practitioners are employed, \n                 organizations are based, etc. Locations can range in scope from a room in a building to a geographic region/area.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Location",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Location.extension",
+        "path": "Location.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Location.extension:newpatients",
+        "path": "Location.extension",
+        "sliceName": "newpatients",
+        "short": "New Patients",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/newpatients"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.extension:accessibility",
+        "path": "Location.extension",
+        "sliceName": "accessibility",
+        "short": "Accessibility",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/accessibility"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.extension:region",
+        "path": "Location.extension",
+        "sliceName": "region",
+        "short": "Associated Region (GeoJSON)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/location-boundary-geojson"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.identifier.type",
+        "path": "Location.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.identifier.value",
+        "path": "Location.identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.status",
+        "path": "Location.status",
+        "min": 1,
+        "fixedCode": "active"
+      },
+      {
+        "id": "Location.alias",
+        "path": "Location.alias",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.description",
+        "path": "Location.description",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.mode",
+        "path": "Location.mode",
+        "max": "0"
+      },
+      {
+        "id": "Location.telecom.extension:contactpoint-availabletime",
+        "path": "Location.telecom.extension",
+        "sliceName": "contactpoint-availabletime",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/contactpoint-availabletime"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.telecom.extension:via-intermediary",
+        "path": "Location.telecom.extension",
+        "sliceName": "via-intermediary",
+        "short": "Via Intermediary",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/via-intermediary"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.telecom.system",
+        "path": "Location.telecom.system",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.telecom.value",
+        "path": "Location.telecom.value",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.position",
+        "path": "Location.position",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.managingOrganization",
+        "path": "Location.managingOrganization",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Location.partOf",
+        "path": "Location.partOf",
+        "type": [
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy",
+                "valueBoolean": true
+              }
+            ],
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Location.hoursOfOperation",
+        "path": "Location.hoursOfOperation",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.hoursOfOperation.daysOfWeek",
+        "path": "Location.hoursOfOperation.daysOfWeek",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.hoursOfOperation.allDay",
+        "path": "Location.hoursOfOperation.allDay",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.hoursOfOperation.openingTime",
+        "path": "Location.hoursOfOperation.openingTime",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.hoursOfOperation.closingTime",
+        "path": "Location.hoursOfOperation.closingTime",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.availabilityExceptions",
+        "path": "Location.availabilityExceptions",
+        "mustSupport": true
+      },
+      {
+        "id": "Location.endpoint",
+        "path": "Location.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

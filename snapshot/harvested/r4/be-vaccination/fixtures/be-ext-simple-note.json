@@ -1,0 +1,102 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "be-ext-simple-note",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-simple-note",
+  "version": "1.1.3",
+  "name": "BeExtSimpleNote",
+  "title": "BeExtSimpleNote",
+  "status": "active",
+  "date": "2026-06-05T14:44:04+02:00",
+  "publisher": "eHealth Platform",
+  "contact": [
+    {
+      "name": "eHealth Platform",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.ehealth.fgov.be/"
+        },
+        {
+          "system": "email",
+          "value": "support@be-ehealth-standards.atlassian.net"
+        }
+      ]
+    },
+    {
+      "name": "Message Structure",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "support@be-ehealth-standards.atlassian.net",
+          "use": "work"
+        }
+      ]
+    }
+  ],
+  "description": "Simple note extension if the element doesn't have a note. To be replaced by https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-ext-simple-note ",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "BE",
+          "display": "Belgium"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Immunization"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "BeExtSimpleNote",
+        "definition": "Simple note extension if the element doesn't have a note. To be replaced by https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-ext-simple-note "
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-simple-note"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "type": [
+          {
+            "code": "Annotation"
+          }
+        ]
+      }
+    ]
+  }
+}

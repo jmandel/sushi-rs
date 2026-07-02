@@ -60,7 +60,38 @@ When the spec and our output disagree, the **oracle** decides; the spec tells us
   cache, goldens are generated, and `crates/snapshot_gen` gates strict semantic `snapshot.element[]`
   parity for the fixture ladder plus harvested real R4 profiles: IPS 29/29, mCODE 46/46,
   CRD 22/22, SDC 73/73, plus holdout IGs CARIN BB 6/6, Genomics 33/33, DTR 21/21,
-  eCR 28/28, NDH 47/50, and PAS 64/73.
+  eCR 28/28, NDH 50/50, and PAS 73/73. Published-package harvesting also gates
+  PDDI 1/1, MHD 42/42, DeID 1/1, EU EPS 23/23, EU MPD 4/4,
+  AU Core 2.0.0 26/26, AU PS 17/17, gematik ePA medication 49/49 usable profiles,
+  Belgium Vaccination 7/7, and PACIO TOC 4/4, DARTS 1/1, DAPL 26/26,
+  Radiation Dose Summary 4/4,
+  Taiwan PAS 43/43, US Core 9.0.0 70/70, IPA 1.1.0 12/12,
+  QI-Core 6.0.0 63/63 usable profiles, SMART App Launch 2.2.0 6/6,
+  Da Vinci CDex 2.1.0 8/8, Da Vinci PDex 2.1.0 37/37,
+  Da Vinci Plan Net 1.2.0 22/22, Da Vinci Drug Formulary 2.1.0
+  19/19 usable profiles, Da Vinci PAS 2.2.1 80/80 usable profiles, plus
+  Subscriptions Backport R4 1.1.0 9/9 usable profiles. SAFR, Bulk Data 2.0.0,
+  CDS Hooks 3.0.0-ballot, Application Feature,
+  IHE VHL, C-CDA R5.0, C-CDA on FHIR, PH Query, and Order Catalog harvested 0
+  usable R4 constraint StructureDefinitions through the published-package path.
+  The 2026-07-02 TWPAS fix pass reached Taiwan PAS 43/43; after the later
+  Coding-anchor refinement, the affected TWPAS coding profiles were rerun
+  20/20 plus focused Patient/Practitioner checks. The same pass was regression
+  checked against AU Core 26/26, AU PS 17/17, MHD 42/42, and EU EPS 23/23.
+  The official Da Vinci PAS pass added batch Java/Rust harness paths, an
+  empty-`.index.json` package scan fallback needed by subscriptions-backport.r4,
+  and tightened direct-slice child unfolding; regression checks stayed green for
+  PDDI 1/1, TWPAS 43/43, AU Core 26/26, AU PS 17/17, MHD 42/42, EU EPS 23/23,
+  and PAS 80/80.
+  Genomics, eCR, NDH, and the published-package goldens were checked against the
+  current Publisher-path oracle after extension-root condition/doco drift and R4/R5
+  dependency-closure ambiguity were found. The later 2026-07-02 native-extension
+  and direct-slice/MS pass rechecked IPS 29/29, mCODE 46/46, CARIN BB 6/6,
+  Genomics 33/33, eCR 28/28, NDH 50/50, PAS 73/73, Taiwan PAS 43/43, US Core
+  70/70, QI-Core 63/63, CRD 22/22, SDC 73/73, DTR 21/21, AU Core 26/26, and
+  the package-harvested sweep after tightening fhirQueryPattern,
+  variable-extension, direct Coding/Identifier slice materialization, and
+  direct-slice MS propagation behavior.
 - Next: keep broadening real profile coverage and close remaining Java pass structure gaps
   (richer slicing/reslicing, type-slice groups, mapping/userData side-channel behavior, and structural
   self-validation). Transitional output flags should be cleaned up once the migration no longer needs

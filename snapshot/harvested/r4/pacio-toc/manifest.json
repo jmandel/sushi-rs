@@ -1,0 +1,69 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.pacio-toc#1.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.pacio-toc#1.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.pacio-toc#1.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.pacio-toc",
+    "version": "1.0.0",
+    "canonical": "http://hl7.org/fhir/us/pacio-toc",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.pacio-adi": "1.0.0",
+      "hl7.fhir.us.pacio-pfe": "2.0.0",
+      "hl7.fhir.us.smp": "1.0.0",
+      "hl7.fhir.us.core": "8.0.1",
+      "us.nlm.vsac": "0.24.0",
+      "hl7.fhir.uv.ips": "2.0.0",
+      "hl7.fhir.us.dental-data-exchange": "1.0.0",
+      "hl7.fhir.us.ccda": "1.2.0"
+    }
+  },
+  "counts": {
+    "scanned": 4,
+    "harvested": 4,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "TOC-Bundle",
+      "url": "http://hl7.org/fhir/us/pacio-toc/StructureDefinition/TOC-Bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-TOC-Bundle.json",
+      "fixture": "fixtures/TOC-Bundle.json",
+      "differentialElements": 40
+    },
+    {
+      "id": "TOC-Composition",
+      "url": "http://hl7.org/fhir/us/pacio-toc/StructureDefinition/TOC-Composition",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/clinicaldocument",
+      "source": "StructureDefinition-TOC-Composition.json",
+      "fixture": "fixtures/TOC-Composition.json",
+      "differentialElements": 87
+    },
+    {
+      "id": "TOC-DocumentReference",
+      "url": "http://hl7.org/fhir/us/pacio-toc/StructureDefinition/TOC-DocumentReference",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference|8.0.1",
+      "source": "StructureDefinition-TOC-DocumentReference.json",
+      "fixture": "fixtures/TOC-DocumentReference.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "point-of-contact-extension",
+      "url": "http://hl7.org/fhir/us/pacio-toc/StructureDefinition/point-of-contact-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-point-of-contact-extension.json",
+      "fixture": "fixtures/point-of-contact-extension.json",
+      "differentialElements": 5
+    }
+  ],
+  "skipped": []
+}

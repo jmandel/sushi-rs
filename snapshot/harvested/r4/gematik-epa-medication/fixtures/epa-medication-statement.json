@@ -1,0 +1,727 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "epa-medication-statement",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement",
+  "version": "1.3.2",
+  "name": "EPAMedicationStatement",
+  "title": "EPA MedicationStatement",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "Hält die Medikationsinformationen eines Eintrags in der elektronischen Medikationsliste (eML) vor und stellt das zentrale Element dar. Es wird zu Verschreibungs- und Dispensierinformationen als auch Nachträgen in der eML genutzt.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationStatement",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationStatement",
+        "path": "MedicationStatement",
+        "constraint": [
+          {
+            "key": "epa-med-statement-status",
+            "severity": "error",
+            "human": "Ein MedicationStatement im Kontext 'Nachtrag' darf nicht den Status 'intended' haben",
+            "expression": "extension('https://gematik.de/fhir/epa-medication/StructureDefinition/context-extension').exists(value != 'MANUAL') or status != 'intended'",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement"
+          }
+        ]
+      },
+      {
+        "id": "MedicationStatement.meta",
+        "path": "MedicationStatement.meta",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.meta.versionId",
+        "path": "MedicationStatement.meta.versionId",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.meta.lastUpdated",
+        "path": "MedicationStatement.meta.lastUpdated",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension",
+        "path": "MedicationStatement.extension",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:context",
+        "path": "MedicationStatement.extension",
+        "sliceName": "context",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/context-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:context.url",
+        "path": "MedicationStatement.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:context.value[x]",
+        "path": "MedicationStatement.extension.value[x]",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://gematik.de/fhir/epa-medication/ValueSet/epa-medicationstatement-context-code"
+        }
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier",
+        "path": "MedicationStatement.extension",
+        "sliceName": "rxPrescriptionProcessIdentifier",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/rx-prescription-process-identifier-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.url",
+        "path": "MedicationStatement.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x]",
+        "path": "MedicationStatement.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type",
+        "path": "MedicationStatement.extension.value[x].type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type.coding",
+        "path": "MedicationStatement.extension.value[x].type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type.coding.system",
+        "path": "MedicationStatement.extension.value[x].type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type.coding.version",
+        "path": "MedicationStatement.extension.value[x].type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type.coding.code",
+        "path": "MedicationStatement.extension.value[x].type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:rxPrescriptionProcessIdentifier.value[x].type.coding.display",
+        "path": "MedicationStatement.extension.value[x].type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent",
+        "path": "MedicationStatement.extension",
+        "sliceName": "processingEvent",
+        "short": "Ein Ereignis, welches während eines Prozessschritts auftritt.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medicationstatement-processing-event-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.extension",
+        "path": "MedicationStatement.extension.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.extension:event",
+        "path": "MedicationStatement.extension.extension",
+        "sliceName": "event"
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.extension:event.url",
+        "path": "MedicationStatement.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.extension:dateTime",
+        "path": "MedicationStatement.extension.extension",
+        "sliceName": "dateTime"
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.extension:dateTime.url",
+        "path": "MedicationStatement.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:processingEvent.url",
+        "path": "MedicationStatement.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:renderedDosageInstruction",
+        "path": "MedicationStatement.extension",
+        "sliceName": "renderedDosageInstruction",
+        "short": "Vollständige Darstellung der Dosierungsanweisungen (generiert aus den Dosage-Elementen).",
+        "definition": "Ein menschenlesbarer, vollständiger Text der Dosierungsanweisungen. Der Text wird aus den strukturierten Dosage-Elementen generiert und dient der patientensicheren Darstellung der Dosierung. Er soll die maschinenlesbaren Angaben konsistent wiedergeben und in einer für Patient:innen verständlichen Form bereitstellen.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationStatement.renderedDosageInstruction"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:renderedDosageInstruction.url",
+        "path": "MedicationStatement.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:renderedDosageInstruction.value[x]",
+        "path": "MedicationStatement.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta",
+        "path": "MedicationStatement.extension",
+        "sliceName": "generatedDosageInstructionsMeta",
+        "short": "Metadaten zu den generierten Dosierungsanweisungen",
+        "definition": "Diese Extension enthält zusätzliche Metadaten zu den automatisch generierten Dosierungsanweisungen, wie z.B. Informationen zur Generierung oder zum Ursprung der Daten.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://ig.fhir.de/igs/medication/StructureDefinition/GeneratedDosageInstructionsMeta"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:language",
+        "path": "MedicationStatement.extension.extension",
+        "sliceName": "language"
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:language.url",
+        "path": "MedicationStatement.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:language.value[x]",
+        "path": "MedicationStatement.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:algorithmVersion",
+        "path": "MedicationStatement.extension.extension",
+        "sliceName": "algorithmVersion"
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:algorithmVersion.url",
+        "path": "MedicationStatement.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.extension:algorithmVersion.value[x]",
+        "path": "MedicationStatement.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.extension:generatedDosageInstructionsMeta.url",
+        "path": "MedicationStatement.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn",
+        "path": "MedicationStatement.basedOn",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-request",
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.extension",
+        "path": "MedicationStatement.basedOn.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.extension:isEMP",
+        "path": "MedicationStatement.basedOn.extension",
+        "sliceName": "isEMP",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/is-emp-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.extension:isEMP.url",
+        "path": "MedicationStatement.basedOn.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.extension:isEMP.value[x]",
+        "path": "MedicationStatement.basedOn.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.reference",
+        "path": "MedicationStatement.basedOn.reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier",
+        "path": "MedicationStatement.basedOn.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type",
+        "path": "MedicationStatement.basedOn.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type.coding",
+        "path": "MedicationStatement.basedOn.identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type.coding.system",
+        "path": "MedicationStatement.basedOn.identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type.coding.version",
+        "path": "MedicationStatement.basedOn.identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type.coding.code",
+        "path": "MedicationStatement.basedOn.identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.type.coding.display",
+        "path": "MedicationStatement.basedOn.identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.system",
+        "path": "MedicationStatement.basedOn.identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.identifier.value",
+        "path": "MedicationStatement.basedOn.identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.basedOn.display",
+        "path": "MedicationStatement.basedOn.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.status",
+        "path": "MedicationStatement.status",
+        "short": "unknown | entered-in-error | intended",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://gematik.de/fhir/epa-medication/ValueSet/epa-medication-statement-status-vs"
+        }
+      },
+      {
+        "id": "MedicationStatement.medication[x]",
+        "path": "MedicationStatement.medication[x]",
+        "short": "Arzneimittel, welches diese Medikationsinformation bzw. dieses MedicationStatement näher beschreibt",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].reference",
+        "path": "MedicationStatement.medication[x].reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier",
+        "path": "MedicationStatement.medication[x].identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type",
+        "path": "MedicationStatement.medication[x].identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type.coding",
+        "path": "MedicationStatement.medication[x].identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type.coding.system",
+        "path": "MedicationStatement.medication[x].identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type.coding.version",
+        "path": "MedicationStatement.medication[x].identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type.coding.code",
+        "path": "MedicationStatement.medication[x].identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.type.coding.display",
+        "path": "MedicationStatement.medication[x].identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.system",
+        "path": "MedicationStatement.medication[x].identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].identifier.value",
+        "path": "MedicationStatement.medication[x].identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.medication[x].display",
+        "path": "MedicationStatement.medication[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.subject",
+        "path": "MedicationStatement.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.subject.identifier",
+        "path": "MedicationStatement.subject.identifier",
+        "min": 1,
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://fhir.de/StructureDefinition/identifier-kvid-10"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.effective[x]",
+        "path": "MedicationStatement.effective[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "short": "effective[x] gibt den Zeitpunkt oder Zeitraum der Gültigkeit der Medikation an",
+        "definition": "Das Element effective[x] gibt den Zeitraum an, in dem die Angaben zur Medikation gültig sind. Je nach Situation kann hierfür ein einzelner Zeitpunkt (effectiveDateTime) oder ein Zeitraum (effectivePeriod mit Start und ggf. Enddatum) angegeben werden",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.effective[x]:effectiveDateTime",
+        "path": "MedicationStatement.effective[x]",
+        "sliceName": "effectiveDateTime",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.effective[x]:effectivePeriod",
+        "path": "MedicationStatement.effective[x]",
+        "sliceName": "effectivePeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.effective[x]:effectivePeriod.start",
+        "path": "MedicationStatement.effective[x].start",
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.effective[x]:effectivePeriod.end",
+        "path": "MedicationStatement.effective[x].end",
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.dateAsserted",
+        "path": "MedicationStatement.dateAsserted",
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom",
+        "path": "MedicationStatement.derivedFrom",
+        "short": "Information des Verschreibungs- und Dispensierprozesses",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-request",
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-dispense"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.reference",
+        "path": "MedicationStatement.derivedFrom.reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier",
+        "path": "MedicationStatement.derivedFrom.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type",
+        "path": "MedicationStatement.derivedFrom.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type.coding",
+        "path": "MedicationStatement.derivedFrom.identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type.coding.system",
+        "path": "MedicationStatement.derivedFrom.identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type.coding.version",
+        "path": "MedicationStatement.derivedFrom.identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type.coding.code",
+        "path": "MedicationStatement.derivedFrom.identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.type.coding.display",
+        "path": "MedicationStatement.derivedFrom.identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.system",
+        "path": "MedicationStatement.derivedFrom.identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.identifier.value",
+        "path": "MedicationStatement.derivedFrom.identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.derivedFrom.display",
+        "path": "MedicationStatement.derivedFrom.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.dosage",
+        "path": "MedicationStatement.dosage",
+        "short": "Strukturierte Dosierung/Gebrauchsanweisung",
+        "definition": "Hier werden strukturierte Informationen zur Dosierung/Gebrauchsanweisung zur Arzneimitteleinnahme gemäß Vorgabe von HL7 Deutschland e.V. angegeben.",
+        "type": [
+          {
+            "code": "Dosage",
+            "profile": [
+              "http://ig.fhir.de/igs/medication/StructureDefinition/DosageDgMP"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.dosage.doseAndRate.dose[x]",
+        "path": "MedicationStatement.dosage.doseAndRate.dose[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationStatement.dosage.doseAndRate.dose[x]:doseQuantity",
+        "path": "MedicationStatement.dosage.doseAndRate.dose[x]",
+        "sliceName": "doseQuantity",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationStatement.dosage.doseAndRate.dose[x]:doseQuantity.value",
+        "path": "MedicationStatement.dosage.doseAndRate.dose[x].value",
+        "mustSupport": true
+      }
+    ]
+  }
+}

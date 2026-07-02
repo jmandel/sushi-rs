@@ -1,0 +1,143 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "cdex-sdc-questionnaireresponse",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "claims"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-cdex/ImplementationGuide/hl7.fhir.us.davinci-cdex"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-cdex/ImplementationGuide/hl7.fhir.us.davinci-cdex"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-sdc-questionnaireresponse",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.21.42.4"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "CDEXSDCQuestionnaireResponse",
+  "title": "CDex SDC QuestionnaireResponse Profile",
+  "status": "active",
+  "date": "2023-01-15",
+  "publisher": "HL7 International / Payer/Provider Information Exchange Work Group",
+  "contact": [
+    {
+      "name": "HL7 International / Payer/Provider Information Exchange Work Group",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/claims"
+        },
+        {
+          "system": "email",
+          "value": "pie@lists.hl7.org"
+        }
+      ]
+    }
+  ],
+  "description": "This profile is derived from the [US Core QuestionnaireResponse Profile](https://hl7.org/fhir/us/core/STU6.1/StructureDefinition-us-core-questionnaireresponse.html) profile and enforces the various elements of [signature](https://hl7.org/fhir/us/davinci-cdex/signatures.html) documented in the CDex guide to represent an enveloped signature. It adds the following constraints:\n- The signature extensions use the CDex Signature Profile",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "copyright": "Used by permission of HL7 International all rights reserved Creative Commons License",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "QuestionnaireResponse",
+  "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-questionnaireresponse|7.0.0",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "QuestionnaireResponse",
+        "path": "QuestionnaireResponse"
+      },
+      {
+        "id": "QuestionnaireResponse.extension:signature",
+        "path": "QuestionnaireResponse.extension",
+        "sliceName": "signature"
+      },
+      {
+        "id": "QuestionnaireResponse.extension:signature.value[x]",
+        "path": "QuestionnaireResponse.extension.value[x]",
+        "type": [
+          {
+            "code": "Signature",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-signature"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "QuestionnaireResponse.item",
+        "path": "QuestionnaireResponse.item"
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension:ItemSignature",
+        "path": "QuestionnaireResponse.item.extension",
+        "sliceName": "ItemSignature"
+      },
+      {
+        "id": "QuestionnaireResponse.item.extension:ItemSignature.value[x]",
+        "path": "QuestionnaireResponse.item.extension.value[x]",
+        "type": [
+          {
+            "code": "Signature",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-signature"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

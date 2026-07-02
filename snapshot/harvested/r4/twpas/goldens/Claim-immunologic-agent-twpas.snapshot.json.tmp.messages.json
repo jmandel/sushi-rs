@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "information", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[343]", "line": -1, "col": -1, "message": "The slice definition for Claim.procedure.procedure[x].coding has a maximum of 1 but the slices add up to a maximum of 3. Check that this is what is intended"}
+  ]
+}

@@ -1,0 +1,157 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Observation-blood-group-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-blood-group-twpas",
+  "version": "1.2.3",
+  "name": "ObservationBloodGroupTWPAS",
+  "title": "血型-Observation Blood Group TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此血型-Observation Blood Group TWPAS Profile說明本IG如何進一步定義臺灣核心-臨床檢驗檢查（TW Core Observation Clinical Result） Profile以呈現免疫製劑事前審查之血型資訊",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation.meta",
+        "path": "Observation.meta",
+        "min": 1
+      },
+      {
+        "id": "Observation.meta.profile",
+        "path": "Observation.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-blood-group-twpas"
+      },
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "short": "因FHIR設計而需必填",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category.coding",
+        "path": "Observation.category.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.category.coding.system",
+        "path": "Observation.category.coding.system",
+        "patternUri": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type"
+      },
+      {
+        "id": "Observation.category.coding.code",
+        "path": "Observation.category.coding.code",
+        "patternCode": "bloodgroup"
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.code.coding.system",
+        "path": "Observation.code.coding.system",
+        "patternUri": "http://loinc.org"
+      },
+      {
+        "id": "Observation.code.coding.code",
+        "path": "Observation.code.coding.code",
+        "min": 1,
+        "patternCode": "882-1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ]
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "血型",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/uv/ips/ValueSet/results-blood-group-uv-ips"
+        }
+      }
+    ]
+  }
+}

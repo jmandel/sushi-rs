@@ -1,0 +1,177 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "usdf-Formulary",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "phx"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/ImplementationGuide/hl7.fhir.us.davinci-drug-formulary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-Formulary",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.25.74595174031514506193398850787025340071.42.6"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "Formulary",
+  "title": "Formulary",
+  "status": "active",
+  "date": "2025-02-26T17:11:51+00:00",
+  "publisher": "HL7 International / Pharmacy",
+  "contact": [
+    {
+      "name": "HL7 International / Pharmacy",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/medication"
+        },
+        {
+          "system": "email",
+          "value": "pharmacy@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "The Formulary provides general information about a formulary and acts as an organizing construct that associated FormularyItem resources point to. The Formulary combined with its associated FormularyItem and FormularyDrug resources represent a formulary list that includes the set of drugs covered and the requirements and limitations of the coverage.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "InsurancePlan",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "InsurancePlan",
+        "path": "InsurancePlan"
+      },
+      {
+        "id": "InsurancePlan.meta.lastUpdated",
+        "path": "InsurancePlan.meta.lastUpdated",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.identifier",
+        "path": "InsurancePlan.identifier",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.status",
+        "path": "InsurancePlan.status",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.type",
+        "path": "InsurancePlan.type",
+        "short": "Plan type",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "DRUGPOL"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.name",
+        "path": "InsurancePlan.name",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.period",
+        "path": "InsurancePlan.period",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan",
+        "path": "InsurancePlan.plan",
+        "short": "Optional non-cost related plan information indicating pharmacy benefit types and drug tiers available in the formulary",
+        "max": "1"
+      },
+      {
+        "id": "InsurancePlan.plan.type",
+        "path": "InsurancePlan.plan.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/insurance-plan-type",
+              "code": "drug",
+              "display": "Drug"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.plan.specificCost",
+        "path": "InsurancePlan.plan.specificCost",
+        "short": "Pharmacy benefit type specific cost"
+      },
+      {
+        "id": "InsurancePlan.plan.specificCost.category",
+        "path": "InsurancePlan.plan.specificCost.category",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/PharmacyBenefitTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan.specificCost.benefit",
+        "path": "InsurancePlan.plan.specificCost.benefit",
+        "short": "Drug tier benefit"
+      },
+      {
+        "id": "InsurancePlan.plan.specificCost.benefit.type",
+        "path": "InsurancePlan.plan.specificCost.benefit.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/DrugTierVS"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,478 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "au-core-immunization",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org.au/fhir/core/ImplementationGuide/hl7.fhir.au.core"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-immunization",
+  "version": "2.0.0",
+  "name": "AUCoreImmunization",
+  "title": "AU Core Immunization",
+  "status": "active",
+  "date": "2026-01-28T05:31:23+00:00",
+  "publisher": "HL7 Australia",
+  "contact": [
+    {
+      "name": "HL7 Australia FHIR Work Group",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://confluence.hl7.org/display/HAFWG",
+          "use": "work"
+        }
+      ]
+    }
+  ],
+  "description": "This profile sets minimum expectations for an Immunization resource to record, search, and fetch immunisation history associated with a patient. It is based on the [AU Base Immunization](https://hl7.org.au/fhir/6.0.0/StructureDefinition-au-immunization.html) profile and identifies the *additional* mandatory core elements, extensions, vocabularies and value sets that **SHALL** be present in the Immunization resource when conforming to this profile. It provides the floor for standards development for specific uses cases in an Australian context.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "AU"
+        }
+      ]
+    }
+  ],
+  "copyright": "Used by permission of HL7 International, all rights reserved Creative Commons License. HL7 Australia© 2022+; Licensed Under Creative Commons No Rights Reserved.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Immunization",
+  "baseDefinition": "http://hl7.org.au/fhir/StructureDefinition/au-immunization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Immunization",
+        "path": "Immunization"
+      },
+      {
+        "id": "Immunization.status",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.vaccineCode",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.vaccineCode",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.vaccineCode.coding",
+        "path": "Immunization.vaccineCode.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Immunization.vaccineCode.coding:amtVaccineCode",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.vaccineCode.coding",
+        "sliceName": "amtVaccineCode",
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://healthterminologies.gov.au/fhir/ValueSet/amt-vaccine-1"
+        }
+      },
+      {
+        "id": "Immunization.vaccineCode.coding:airVaccineCode",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.vaccineCode.coding",
+        "sliceName": "airVaccineCode",
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://healthterminologies.gov.au/fhir/ValueSet/australian-immunisation-register-vaccine-1"
+        }
+      },
+      {
+        "id": "Immunization.patient",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.occurrence[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.occurrence[x]",
+        "type": [
+          {
+            "extension": [
+              {
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCode": "SHALL:populate-if-known"
+                  },
+                  {
+                    "url": "actor",
+                    "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+                  }
+                ],
+                "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+              },
+              {
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCode": "SHOULD:populate"
+                  },
+                  {
+                    "url": "actor",
+                    "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+                  }
+                ],
+                "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+              },
+              {
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCode": "SHALL:no-error"
+                  },
+                  {
+                    "url": "actor",
+                    "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+                  }
+                ],
+                "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+              },
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/elementdefinition-type-must-support",
+                "valueBoolean": true
+              }
+            ],
+            "code": "dateTime"
+          },
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.primarySource",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.primarySource",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.lotNumber",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.lotNumber",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.note",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-responder"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:no-error"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org.au/fhir/core/ActorDefinition/au-core-actor-requester"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Immunization.note",
+        "mustSupport": true
+      }
+    ]
+  }
+}

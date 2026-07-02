@@ -1,6 +1,9 @@
 {
   "sortErrors": [],
   "messages": [
-
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[8]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/cqf-knowledgeCapability|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[9]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/cqf-artifactComment|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[10]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-versionAlgorithm|5.2.0 cannot be checked as the profile is not known"},
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[11]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/artifact-versionPolicy|5.2.0 cannot be checked as the profile is not known"}
   ]
 }

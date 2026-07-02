@@ -1,0 +1,419 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "radiation-dose-summary",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "ii"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/uv/radiation-dose-summary/ImplementationGuide/hl7.fhir.uv.radiation-dose-summary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/radiation-dose-summary",
+  "version": "1.0.0",
+  "name": "RadiationDoseSummary",
+  "title": "Radiation Dose Summary",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-05-07T00:50:09+10:00",
+  "publisher": "HL7 International / Imaging Integration",
+  "contact": [
+    {
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "HL7 Imaging Integration Workgroup",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "Abderrazek Boufahja",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "abderrazek.boufahja@gehealthcare.com"
+        }
+      ]
+    }
+  ],
+  "description": "General Structure describing a summary of an irradiation act",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation"
+      },
+      {
+        "id": "Observation.identifier",
+        "path": "Observation.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Identifiers for the radiation dose",
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Observation.identifier:radiationSRUID",
+        "path": "Observation.identifier",
+        "sliceName": "radiationSRUID",
+        "short": "Identifier related to SOP Instance UID if the resource is generated based on an RDSR",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.identifier:radiationSRUID.type",
+        "path": "Observation.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/uv/radiation-dose-summary/CodeSystem/dicom-identifier-type",
+              "code": "sop-instance-uid",
+              "display": "SOP Instance UID"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.identifier:radiationSRUID.system",
+        "path": "Observation.identifier.system",
+        "patternUri": "urn:dicom:uid"
+      },
+      {
+        "id": "Observation.identifier:radiationSRUID.value",
+        "path": "Observation.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Observation.basedOn",
+        "path": "Observation.basedOn",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "reference"
+            }
+          ],
+          "description": "Description of the related ServiceRequest",
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Observation.basedOn:serviceRequestRef",
+        "path": "Observation.basedOn",
+        "sliceName": "serviceRequestRef",
+        "short": "Description of the related ServiceRequest",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ServiceRequest"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.basedOn:serviceRequestRef.identifier",
+        "path": "Observation.basedOn.identifier",
+        "short": "The accession number related to the performed study"
+      },
+      {
+        "id": "Observation.basedOn:serviceRequestRef.identifier.type",
+        "path": "Observation.basedOn.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+              "code": "ACSN",
+              "display": "Accession ID"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.basedOn:serviceRequestRef.identifier.value",
+        "path": "Observation.basedOn.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Observation.partOf",
+        "path": "Observation.partOf",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "reference"
+            }
+          ],
+          "description": "Description of the related ImagingStudy",
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Observation.partOf:imagingStudyRef",
+        "path": "Observation.partOf",
+        "sliceName": "imagingStudyRef",
+        "short": "Related ImagingStudy",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ImagingStudy"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.partOf:imagingStudyRef.identifier",
+        "path": "Observation.partOf.identifier",
+        "short": "Identifier related to Study Instance UID"
+      },
+      {
+        "id": "Observation.partOf:imagingStudyRef.identifier.type",
+        "path": "Observation.partOf.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/uv/radiation-dose-summary/CodeSystem/dicom-identifier-type",
+              "code": "study-instance-uid",
+              "display": "Study Instance UID"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.partOf:imagingStudyRef.identifier.system",
+        "path": "Observation.partOf.identifier.system",
+        "patternUri": "urn:dicom:uid"
+      },
+      {
+        "id": "Observation.partOf:imagingStudyRef.identifier.value",
+        "path": "Observation.partOf.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "73569-6",
+              "display": "Radiation exposure and protection information [Description] Document Diagnostic imaging"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "short": "Irradiated patient",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.focus",
+        "path": "Observation.focus",
+        "short": "The observation has a focus on the performed exam.",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/ImagingStudy"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "short": "Irradiation Start Date Time",
+        "min": 1,
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer",
+        "path": "Observation.performer",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "reference"
+            }
+          ],
+          "description": "Description of the related performer",
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer:irradiationAuthorizingPerson",
+        "path": "Observation.performer",
+        "sliceName": "irradiationAuthorizingPerson",
+        "short": "Related irradiation authorizing person",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Practitioner"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "Dose Summary text.",
+        "comment": "Textual representation of the dose summary based computed by the Dose Management system. Based on a locally defined template, definition of which is out of scope of this IG.",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.dataAbsentReason",
+        "path": "Observation.dataAbsentReason",
+        "max": "0"
+      },
+      {
+        "id": "Observation.specimen",
+        "path": "Observation.specimen",
+        "max": "0"
+      },
+      {
+        "id": "Observation.device",
+        "path": "Observation.device",
+        "short": "Irradiating modality",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/modality-device"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component.code",
+        "path": "Observation.component.code",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/uv/radiation-dose-summary/ValueSet/component-radiation-dose-summary-vs"
+        }
+      }
+    ]
+  }
+}

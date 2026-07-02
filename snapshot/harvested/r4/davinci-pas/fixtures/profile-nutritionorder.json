@@ -1,0 +1,205 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-nutritionorder",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-nutritionorder",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.62"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASNutritionOrder",
+  "title": "PAS Nutrition Order",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "PAS constraint on Nutrition Order resource for elements relevant to the ordering of nutrition on a prior authorization request",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "NutritionOrder",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "NutritionOrder",
+        "path": "NutritionOrder"
+      },
+      {
+        "id": "NutritionOrder.extension",
+        "path": "NutritionOrder.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "NutritionOrder.extension:coverage",
+        "path": "NutritionOrder.extension",
+        "sliceName": "coverage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-crd/StructureDefinition/ext-coverage-information|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.intent",
+        "path": "NutritionOrder.intent",
+        "fixedCode": "order",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.patient",
+        "path": "NutritionOrder.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet",
+        "path": "NutritionOrder.oralDiet",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.oralDiet.type",
+        "path": "NutritionOrder.oralDiet.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278NutritionOralDietType|2.2.1"
+        }
+      },
+      {
+        "id": "NutritionOrder.enteralFormula",
+        "path": "NutritionOrder.enteralFormula",
+        "mustSupport": true
+      },
+      {
+        "id": "NutritionOrder.enteralFormula.baseFormulaType",
+        "path": "NutritionOrder.enteralFormula.baseFormulaType",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278NutritionEnteralFormulaType|2.2.1"
+        }
+      }
+    ]
+  }
+}

@@ -32,6 +32,7 @@ pub fn main_cli() -> anyhow::Result<()> {
     let mut local_dirs: Vec<String> = Vec::new();
     let mut sort_differential = true;
     let mut native_r5 = false;
+    let mut batch_list: Option<String> = None;
     let mut input: Option<String> = None;
 
     while let Some(arg) = args.next() {
@@ -46,6 +47,7 @@ pub fn main_cli() -> anyhow::Result<()> {
             "--sort" => sort_differential = true,
             "--no-sort" | "--direct" => sort_differential = false,
             "--native-r5" | "--output-r5" => native_r5 = true,
+            "--batch-list" => batch_list = args.next(),
             "-h" | "--help" => {
                 print_usage();
                 return Ok(());
@@ -55,36 +57,99 @@ pub fn main_cli() -> anyhow::Result<()> {
         }
     }
 
-    let input = input.context("missing input StructureDefinition JSON")?;
+    if batch_list.is_none() && input.is_none() {
+        bail!("missing input StructureDefinition JSON");
+    }
     if packages.is_empty() {
         packages.push("hl7.fhir.r5.core#5.0.0".to_string());
     }
     let cache = cache
         .or_else(|| std::env::var("FHIR_CACHE").ok())
         .unwrap_or_else(|| "temp/fhir-home/.fhir/packages".to_string());
-    let source = std::fs::read_to_string(&input)?;
-    let derived: Value = serde_json::from_str(&source)?;
     let mut ctx = PackageContext::new(&cache, &packages)?;
     for local_dir in local_dirs {
         ctx.load_local_dir(local_dir)?;
     }
-    let out = generate_snapshot(
-        derived,
-        &ctx,
-        SnapshotOptions {
-            sort_differential,
-            native_r5,
-            apply_extension_root_doco: true,
-        },
-    )?;
+    let options = SnapshotOptions {
+        sort_differential,
+        native_r5,
+        apply_extension_root_doco: true,
+    };
+    if let Some(batch_list) = batch_list {
+        return run_batch_list(&batch_list, &ctx, options);
+    }
+    let input = input.expect("checked above");
+    let source = std::fs::read_to_string(&input)?;
+    let derived: Value = serde_json::from_str(&source)?;
+    let out = generate_snapshot(derived, &ctx, options)?;
     print!("{}", json_emit::to_fhir_json_string(&out));
     Ok(())
 }
 
 fn print_usage() {
     eprintln!(
-        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--sort|--no-sort] [--native-r5] <StructureDefinition.json>"
+        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--sort|--no-sort] [--native-r5] [--batch-list <tsv>] <StructureDefinition.json>"
     );
+}
+
+fn run_batch_list(
+    batch_list: &str,
+    ctx: &PackageContext,
+    options: SnapshotOptions,
+) -> anyhow::Result<()> {
+    let source = std::fs::read_to_string(batch_list)
+        .with_context(|| format!("failed to read batch list {batch_list}"))?;
+    let mut total = 0usize;
+    let mut ok = 0usize;
+    let mut failed = 0usize;
+    for (line_index, line) in source.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        total += 1;
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 2 {
+            failed += 1;
+            eprintln!(
+                "FAIL rust malformed batch line {}: {}",
+                line_index + 1,
+                line
+            );
+            continue;
+        }
+        let input = parts[0];
+        let output = parts[1];
+        let name = Path::new(input)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(input);
+        let result = (|| -> anyhow::Result<()> {
+            let source = std::fs::read_to_string(input)?;
+            let derived: Value = serde_json::from_str(&source)?;
+            let out = generate_snapshot(derived, ctx, options.clone())?;
+            if let Some(parent) = Path::new(output).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(output, json_emit::to_fhir_json_string(&out))?;
+            Ok(())
+        })();
+        match result {
+            Ok(()) => {
+                ok += 1;
+                println!("OK rust {name}");
+            }
+            Err(err) => {
+                failed += 1;
+                let _ = std::fs::remove_file(output);
+                eprintln!("FAIL rust {name}: {err:#}");
+            }
+        }
+    }
+    println!("RUST BATCH: ok={ok} failed={failed} total={total}");
+    if failed != 0 {
+        bail!("Rust batch had {failed} failures");
+    }
+    Ok(())
 }
 
 pub fn generate_snapshot(
@@ -101,6 +166,7 @@ pub fn generate_snapshot(
         .with_context(|| format!("base not found: {base_url}"))?;
     let base_spec_url = spec_url_for_structure(&base, options.native_r5);
     let base_strip_non_inherited = options.native_r5 || strips_non_inherited_extensions(&base);
+    let base_preserve_common_binding = options.native_r5 && is_r4_spec_url(&base_spec_url);
 
     if options.sort_differential {
         sort_differential_by_base(&mut derived, &base);
@@ -111,12 +177,13 @@ pub fn generate_snapshot(
         .and_then(|s| s.get("element"))
         .and_then(Value::as_array)
         .context("base StructureDefinition has no snapshot.element")?;
-    let diff_elements = derived
+    let mut diff_elements = derived
         .get("differential")
         .and_then(|d| d.get("element"))
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    canonicalize_choice_differentials(&mut diff_elements, base_elements);
     let explicit_slicing_paths: HashSet<String> = diff_elements
         .iter()
         .filter(|element| element.get("slicing").is_some())
@@ -129,6 +196,7 @@ pub fn generate_snapshot(
         .collect();
 
     let base_constraint_source = structure_source(&base, &base_url);
+    let base_is_local = ctx.is_local(&base_url);
     let mut snapshot_elements: Vec<Value> = base_elements
         .iter()
         .cloned()
@@ -141,7 +209,7 @@ pub fn generate_snapshot(
                 options.native_r5,
                 &base_constraint_source,
                 None,
-                false,
+                base_is_local,
             )
         })
         .collect();
@@ -154,10 +222,62 @@ pub fn generate_snapshot(
                 .map(|id| (id.to_string(), element.clone()))
         })
         .collect();
+    let original_ids: HashSet<String> = original_elements_by_id.keys().cloned().collect();
+    let original_must_support_ids: HashSet<String> = snapshot_elements
+        .iter()
+        .filter(|element| element.get("mustSupport").and_then(Value::as_bool) == Some(true))
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
+    let original_snapshot_elements = snapshot_elements.clone();
     let diff_ids: HashSet<String> = diff_elements
         .iter()
         .filter_map(|d| d.get("id").and_then(Value::as_str).map(str::to_string))
         .collect();
+    let diff_must_support_ids: HashSet<String> = diff_elements
+        .iter()
+        .filter(|d| d.get("mustSupport").is_some())
+        .filter_map(|d| d.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let diff_preserve_must_support_ids: HashSet<String> = diff_elements
+        .iter()
+        .filter(|d| {
+            d.get("mustSupport").is_some()
+                || d.get("extension")
+                    .and_then(Value::as_array)
+                    .is_some_and(|exts| exts.iter().any(is_obligation_extension))
+        })
+        .filter_map(|d| d.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let diff_condition_ids: HashSet<String> = diff_elements
+        .iter()
+        .filter(|d| d.get("condition").is_some())
+        .filter_map(|d| d.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect();
+    let diff_slice_anchor_ids: HashSet<String> = diff_elements
+        .iter()
+        .filter(|d| d.get("sliceName").is_some())
+        .filter_map(|d| {
+            d.get("id")
+                .and_then(Value::as_str)
+                .and_then(slice_anchor_id_from_diff_id)
+        })
+        .collect();
+    let diff_slice_orders: HashMap<String, usize> = diff_elements
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.get("sliceName").is_some())
+        .filter_map(|(index, d)| {
+            d.get("id")
+                .and_then(Value::as_str)
+                .map(|id| (id.to_string(), index))
+        })
+        .collect();
+    let all_diff_elements = diff_elements.clone();
     // Java applies checkExtensionDoco to an extension profile's root element even
     // when the differential doesn't touch it (ecr eicr-initiation-type-extension);
     // when the root IS in the differential, the same normalization happens during
@@ -170,7 +290,7 @@ pub fn generate_snapshot(
         && !diff_elements
             .iter()
             .any(|d| d.get("path").and_then(Value::as_str) == Some("Extension"));
-    for diff in diff_elements {
+    for (diff_index, diff) in diff_elements.iter().enumerate() {
         let Some(path) = diff.get("path").and_then(Value::as_str) else {
             continue;
         };
@@ -183,6 +303,7 @@ pub fn generate_snapshot(
                 &base_url,
                 &base_spec_url,
                 options.native_r5,
+                &original_snapshot_elements,
             )?;
         }
         if find_matching_snapshot_index(&snapshot_elements, path, &diff).is_none()
@@ -195,11 +316,15 @@ pub fn generate_snapshot(
                 ctx,
                 &original_elements_by_id,
                 base_strip_non_inherited,
+                base_preserve_common_binding,
                 options.native_r5,
                 &base_url,
                 &base_spec_url,
                 &explicit_slicing_paths,
                 &diff_ids,
+                &diff_must_support_ids,
+                &diff_preserve_must_support_ids,
+                &diff_condition_ids,
             )?;
             inserted_slice = true;
         }
@@ -211,10 +336,36 @@ pub fn generate_snapshot(
                     ctx,
                     options.native_r5,
                 )?;
+                propagate_slice_min_to_anchor(&mut snapshot_elements, path, &diff, &diff_ids);
+                ensure_type_slicing_anchor(&mut snapshot_elements, path, &diff);
+                ensure_extension_slicing_anchor(&mut snapshot_elements, path, &diff);
                 continue;
             }
             if diff.get("sliceName").is_some() && !explicit_slicing_paths.contains(path) {
                 close_inferred_type_slice_anchor(&mut snapshot_elements, path, &diff);
+            }
+            if diff.get("type").is_some() {
+                let target_id = snapshot_elements[index]
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(path)
+                    .to_string();
+                let target_path = snapshot_elements[index]
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(path)
+                    .to_string();
+                unfold_content_reference_parent(
+                    &mut snapshot_elements,
+                    index,
+                    &target_id,
+                    &target_path,
+                    &base_url,
+                    &base_spec_url,
+                    ctx,
+                    options.native_r5,
+                    &original_snapshot_elements,
+                )?;
             }
             copy_plan_definition_offset_duration_definition(&mut snapshot_elements, index, &diff);
             apply_extension_profile_root(
@@ -223,22 +374,131 @@ pub fn generate_snapshot(
                 ctx,
                 options.native_r5,
                 Some(&base_url),
+                false,
                 true,
                 true,
             )?;
             apply_type_profile_root(&mut snapshot_elements[index], &diff, ctx, options.native_r5)?;
+            apply_generalized_slice_differentials(
+                &mut snapshot_elements[index],
+                &diff,
+                &all_diff_elements[..diff_index],
+                base_strip_non_inherited,
+                base_preserve_common_binding,
+                Some(&diff_must_support_ids),
+                Some(&original_must_support_ids),
+                Some(&original_ids),
+                &base_constraint_source,
+            )?;
             merge_diff_into_element(
                 &mut snapshot_elements[index],
                 &diff,
                 base_strip_non_inherited,
+                base_preserve_common_binding,
+                Some(&diff_must_support_ids),
+                Some(&original_must_support_ids),
+                Some(&original_ids),
                 &base_constraint_source,
             )?;
+            if diff.get("sliceName").is_some() {
+                let slice_id = snapshot_elements[index]
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(path)
+                    .to_string();
+                let slice_path = snapshot_elements[index]
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .unwrap_or(path)
+                    .to_string();
+                if should_materialize_extension_profile_children_on_insert(
+                    &snapshot_elements[index],
+                ) {
+                    if let Some(profile_url) =
+                        first_extension_profile_url(&snapshot_elements[index]).map(str::to_string)
+                    {
+                        materialize_extension_profile_children_for_slice(
+                            &mut snapshot_elements,
+                            index,
+                            &slice_id,
+                            &slice_path,
+                            &profile_url,
+                            ctx,
+                            options.native_r5,
+                        )?;
+                    }
+                } else if should_materialize_existing_direct_slice_children(
+                    &snapshot_elements[index],
+                    &diff,
+                    &original_elements_by_id,
+                    &diff_ids,
+                ) {
+                    unfold_sliced_parent_from_anchor(
+                        &mut snapshot_elements,
+                        index,
+                        &slice_id,
+                        &slice_path,
+                        Some(&original_elements_by_id),
+                        Some(&diff_ids),
+                        Some(&diff_preserve_must_support_ids),
+                        Some(&diff_must_support_ids),
+                    );
+                }
+            }
+            let prune_profiled_unsliced_children = should_prune_profiled_unsliced_descendants(
+                &snapshot_elements[index],
+                &diff,
+                &diff_ids,
+                &original_elements_by_id,
+            );
+            if prune_profiled_unsliced_children {
+                let id = snapshot_elements[index]
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or(path)
+                    .to_string();
+                prune_unsliced_descendants(&mut snapshot_elements, &id);
+            }
+            if diff.get("sliceName").is_some() {
+                prune_unsliced_descendants_for_slice_diff(
+                    &mut snapshot_elements,
+                    &diff,
+                    &diff_ids,
+                    &original_elements_by_id,
+                );
+            }
+            propagate_slice_min_to_anchor(&mut snapshot_elements, path, &diff, &diff_ids);
+            ensure_type_slicing_anchor(&mut snapshot_elements, path, &diff);
+            ensure_extension_slicing_anchor(&mut snapshot_elements, path, &diff);
         }
     }
 
     close_first_level_plan_definition_offset_slicing(&mut snapshot_elements);
     stamp_plan_definition_nested_action_must_support(&mut snapshot_elements);
+    materialize_generalized_child_slices_for_direct_slices(
+        &mut snapshot_elements,
+        &original_elements_by_id,
+        &diff_ids,
+        ctx,
+        options.native_r5,
+    )?;
+    materialize_missing_extension_profile_children_for_slices(
+        &mut snapshot_elements,
+        ctx,
+        options.native_r5,
+    )?;
     fix_plan_definition_nested_data_requirement_sources(&mut snapshot_elements);
+    reconcile_type_slicing_anchor_types(&mut snapshot_elements);
+    sort_type_slice_groups_by_differential_order(
+        &mut snapshot_elements,
+        &diff_slice_anchor_ids,
+        &diff_slice_orders,
+    );
+    materialize_missing_extension_profile_children_for_slices(
+        &mut snapshot_elements,
+        ctx,
+        options.native_r5,
+    )?;
 
     if extension_root_untouched {
         if let Some(root) = snapshot_elements.first_mut() {
@@ -322,7 +582,181 @@ fn profile_with_snapshot(
     .map(Some)
 }
 
+#[derive(Clone)]
+struct ChoiceSegment {
+    prefix: String,
+    choice_segment: String,
+    actual_segment: String,
+    type_code: String,
+}
+
+fn canonicalize_choice_differentials(diff_elements: &mut [Value], base_elements: &[Value]) {
+    let choices = collect_choice_segments(base_elements);
+    if choices.is_empty() {
+        return;
+    }
+    let direct_choice_slices: HashSet<String> = diff_elements
+        .iter()
+        .flat_map(|diff| {
+            ["id", "path"]
+                .into_iter()
+                .filter_map(|key| direct_choice_slice_key(diff.get(key)?.as_str()?, &choices))
+        })
+        .collect();
+    for diff in diff_elements {
+        canonicalize_choice_field(diff, "path", &choices, &direct_choice_slices, false);
+        canonicalize_choice_field(diff, "id", &choices, &direct_choice_slices, true);
+    }
+}
+
+fn collect_choice_segments(base_elements: &[Value]) -> Vec<ChoiceSegment> {
+    let mut out = Vec::new();
+    for element in base_elements {
+        let Some(id) = element.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some((prefix, choice_segment)) = id.rsplit_once('.') else {
+            continue;
+        };
+        let Some(choice_base) = choice_segment.strip_suffix("[x]") else {
+            continue;
+        };
+        let Some(types) = element.get("type").and_then(Value::as_array) else {
+            continue;
+        };
+        for ty in types {
+            let Some(code) = ty.get("code").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(suffix) = choice_type_suffix(code) else {
+                continue;
+            };
+            out.push(ChoiceSegment {
+                prefix: prefix.to_string(),
+                choice_segment: choice_segment.to_string(),
+                actual_segment: format!("{choice_base}{suffix}"),
+                type_code: code.to_string(),
+            });
+        }
+    }
+    out
+}
+
+fn choice_type_suffix(code: &str) -> Option<String> {
+    let mut tail = code
+        .rsplit('/')
+        .next()
+        .unwrap_or(code)
+        .rsplit('.')
+        .next()
+        .unwrap_or(code)
+        .to_string();
+    if tail.is_empty() {
+        return None;
+    }
+    if let Some(first) = tail.chars().next() {
+        if first.is_ascii_lowercase() {
+            tail.replace_range(0..first.len_utf8(), &first.to_ascii_uppercase().to_string());
+        }
+    }
+    Some(tail)
+}
+
+fn direct_choice_slice_key(value: &str, choices: &[ChoiceSegment]) -> Option<String> {
+    let segments: Vec<&str> = value.split('.').collect();
+    for index in 0..segments.len() {
+        let prefix = segments[..index].join(".");
+        let Some(choice) = matching_choice(&prefix, segments[index], choices) else {
+            continue;
+        };
+        if index + 1 == segments.len() && !has_slice_marker(&prefix) {
+            return Some(choice_slice_key(&prefix, choice));
+        }
+    }
+    None
+}
+
+fn matching_choice<'a>(
+    prefix: &str,
+    segment: &str,
+    choices: &'a [ChoiceSegment],
+) -> Option<&'a ChoiceSegment> {
+    choices.iter().find(|choice| {
+        choice.actual_segment == segment
+            && (choice.prefix == prefix
+                || unsliced_element_id(prefix)
+                    .as_deref()
+                    .is_some_and(|unsliced| unsliced == choice.prefix))
+    })
+}
+
+fn choice_slice_key(prefix: &str, choice: &ChoiceSegment) -> String {
+    format!(
+        "{}.{}:{}",
+        prefix, choice.choice_segment, choice.actual_segment
+    )
+}
+
+fn choice_type_value(code: &str) -> Value {
+    let mut ty = Map::new();
+    ty.insert("code".to_string(), Value::String(code.to_string()));
+    Value::Array(vec![Value::Object(ty)])
+}
+
+fn canonicalize_choice_field(
+    diff: &mut Value,
+    key: &str,
+    choices: &[ChoiceSegment],
+    direct_choice_slices: &HashSet<String>,
+    add_direct_slice: bool,
+) {
+    let Some(original) = diff.get(key).and_then(Value::as_str).map(str::to_string) else {
+        return;
+    };
+    let mut segments: Vec<String> = original.split('.').map(str::to_string).collect();
+    let mut direct_choice: Option<(String, String, String, bool)> = None;
+    for index in 0..segments.len() {
+        let prefix = segments[..index].join(".");
+        let Some(choice) = matching_choice(&prefix, &segments[index], choices) else {
+            continue;
+        };
+        let actual = segments[index].clone();
+        let slice_key = choice_slice_key(&prefix, choice);
+        if add_direct_slice
+            && index + 1 < segments.len()
+            && direct_choice_slices.contains(&slice_key)
+        {
+            segments[index] = format!("{}:{}", choice.choice_segment, actual);
+        } else {
+            segments[index] = choice.choice_segment.clone();
+        }
+        if add_direct_slice && index + 1 == segments.len() {
+            direct_choice = Some((
+                choice.choice_segment.clone(),
+                actual,
+                choice.type_code.clone(),
+                !has_slice_marker(&prefix),
+            ));
+        }
+    }
+    let mut canonical = segments.join(".");
+    if let Some((choice_segment, actual, type_code, add_slice_marker)) = direct_choice {
+        if add_slice_marker && diff.get("sliceName").is_none() {
+            canonical =
+                canonical.replacen(&choice_segment, &format!("{choice_segment}:{actual}"), 1);
+            set_field(diff, "sliceName", Value::String(actual));
+        }
+        if diff.get("type").is_none() {
+            set_field(diff, "type", choice_type_value(&type_code));
+        }
+    }
+    if canonical != original {
+        set_field(diff, key, Value::String(canonical));
+    }
+}
+
 fn find_matching_snapshot_index(elements: &[Value], path: &str, diff: &Value) -> Option<usize> {
+    let diff_id = diff.get("id").and_then(Value::as_str);
     if let Some(diff_id) = diff.get("id").and_then(Value::as_str) {
         if let Some(index) = elements
             .iter()
@@ -336,9 +770,133 @@ fn find_matching_snapshot_index(elements: &[Value], path: &str, diff: &Value) ->
     }
     let diff_slice = diff.get("sliceName").and_then(Value::as_str);
     elements.iter().position(|candidate| {
-        candidate.get("path").and_then(Value::as_str) == Some(path)
-            && candidate.get("sliceName").and_then(Value::as_str) == diff_slice
+        if candidate.get("path").and_then(Value::as_str) != Some(path)
+            || candidate.get("sliceName").and_then(Value::as_str) != diff_slice
+        {
+            return false;
+        }
+        if diff_id.is_some_and(|id| !has_slice_marker(id))
+            && candidate
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(has_slice_marker)
+        {
+            return false;
+        }
+        true
     })
+}
+
+fn apply_generalized_slice_differentials(
+    target: &mut Value,
+    diff: &Value,
+    prior_diff_elements: &[Value],
+    strip_non_inherited: bool,
+    preserve_common_binding: bool,
+    diff_must_support_ids: Option<&HashSet<String>>,
+    inherited_must_support_ids: Option<&HashSet<String>>,
+    original_ids: Option<&HashSet<String>>,
+    constraint_source: &str,
+) -> anyhow::Result<()> {
+    let Some(diff_id) = diff.get("id").and_then(Value::as_str) else {
+        return Ok(());
+    };
+    if !has_slice_marker(diff_id) {
+        return Ok(());
+    }
+    if is_direct_slice_id(diff_id) {
+        return Ok(());
+    }
+    let diff_path = diff.get("path").and_then(Value::as_str);
+    for generalized in prior_diff_elements {
+        if generalized.get("slicing").is_some() {
+            continue;
+        }
+        if generalized.get("path").and_then(Value::as_str) != diff_path {
+            continue;
+        }
+        let Some(generalized_id) = generalized.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if generalized_id == diff_id
+            || !differential_id_generalizes_sliced_id(generalized_id, diff_id)
+        {
+            continue;
+        }
+        merge_diff_into_element(
+            target,
+            &generalized_diff_for_sliced_target(generalized, generalized_id, diff_id),
+            strip_non_inherited,
+            preserve_common_binding,
+            diff_must_support_ids,
+            inherited_must_support_ids,
+            original_ids,
+            constraint_source,
+        )?;
+    }
+    Ok(())
+}
+
+fn generalized_diff_for_sliced_target(
+    generalized: &Value,
+    generalized_id: &str,
+    sliced_id: &str,
+) -> Value {
+    if has_slice_marker(generalized_id) || !has_slice_marker(sliced_id) {
+        return generalized.clone();
+    }
+    let mut cloned = generalized.clone();
+    remove_field(&mut cloned, "short");
+    if generalized_id.ends_with("[x]") && sliced_id.ends_with("[x]") {
+        remove_type_extensions(&mut cloned);
+    }
+    cloned
+}
+
+fn remove_type_extensions(element: &mut Value) {
+    let Some(types) = element.get_mut("type").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for ty in types {
+        remove_field(ty, "extension");
+    }
+}
+
+fn differential_id_generalizes_sliced_id(generalized_id: &str, sliced_id: &str) -> bool {
+    let generalized_segments: Vec<&str> = generalized_id.split('.').collect();
+    let sliced_segments: Vec<&str> = sliced_id.split('.').collect();
+    if generalized_segments.len() != sliced_segments.len() {
+        return false;
+    }
+
+    let mut specialized = false;
+    for (generalized, sliced) in generalized_segments.iter().zip(sliced_segments.iter()) {
+        let (generalized_base, generalized_has_slice) = segment_base_and_slice_marker(generalized);
+        let (sliced_base, sliced_has_slice) = segment_base_and_slice_marker(sliced);
+        if generalized_base != sliced_base {
+            return false;
+        }
+        if generalized_has_slice {
+            if generalized != sliced {
+                return false;
+            }
+        } else if sliced_has_slice {
+            specialized = true;
+        } else if generalized != sliced {
+            return false;
+        }
+    }
+    specialized
+}
+
+fn segment_base_and_slice_marker(segment: &str) -> (&str, bool) {
+    if let Some((base, _)) = segment.split_once(':') {
+        return (base, true);
+    }
+    if let Some((base, _)) = segment.split_once('/') {
+        return (base, true);
+    }
+    (segment, false)
 }
 
 fn close_inferred_type_slice_anchor(elements: &mut [Value], path: &str, diff: &Value) {
@@ -468,6 +1026,254 @@ fn fix_plan_definition_nested_data_requirement_sources(elements: &mut [Value]) {
     }
 }
 
+fn reconcile_type_slicing_anchor_types(elements: &mut [Value]) {
+    for index in 0..elements.len() {
+        if !is_type_slicing(&elements[index]) {
+            continue;
+        }
+        let Some(anchor_id) = elements[index]
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let Some(anchor_path) = elements[index]
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let mut live_type_codes = HashSet::new();
+        let mut saw_zero_slice = false;
+        let mut saw_direct_slice = false;
+        let mut required_sum = 0u64;
+        for slice in elements.iter() {
+            if slice.get("path").and_then(Value::as_str) != Some(anchor_path.as_str()) {
+                continue;
+            }
+            let Some(id) = slice.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            if !is_direct_slice_of(id, &anchor_id) {
+                continue;
+            }
+            saw_direct_slice = true;
+            required_sum += slice.get("min").and_then(Value::as_u64).unwrap_or(0);
+            if slice.get("max").and_then(Value::as_str) == Some("0") {
+                saw_zero_slice = true;
+                continue;
+            }
+            if let Some(types) = slice.get("type").and_then(Value::as_array) {
+                for ty in types {
+                    if let Some(code) = ty.get("code").and_then(Value::as_str) {
+                        live_type_codes.insert(code.to_string());
+                    }
+                }
+            }
+        }
+        if live_type_codes.is_empty() {
+            continue;
+        }
+        let Some(types) = elements[index].get("type").and_then(Value::as_array) else {
+            continue;
+        };
+        let mut active_types: Vec<Value> = types.clone();
+        if is_extension_value_anchor(&anchor_id, &anchor_path) && saw_direct_slice {
+            let pruned: Vec<Value> = active_types
+                .iter()
+                .filter(|ty| {
+                    ty.get("code")
+                        .and_then(Value::as_str)
+                        .is_some_and(|code| live_type_codes.contains(code))
+                })
+                .cloned()
+                .collect();
+            if !pruned.is_empty() && pruned.len() < active_types.len() {
+                set_field(&mut elements[index], "type", Value::Array(pruned.clone()));
+                close_type_slicing_for_descendant_unfold(&mut elements[index]);
+                continue;
+            }
+        }
+        let anchor_min = elements[index]
+            .get("min")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let required_slices_cover_anchor =
+            saw_direct_slice && required_sum > 0 && required_sum >= anchor_min;
+        if saw_zero_slice {
+            let pruned: Vec<Value> = active_types
+                .iter()
+                .filter(|ty| {
+                    ty.get("code")
+                        .and_then(Value::as_str)
+                        .is_some_and(|code| live_type_codes.contains(code))
+                })
+                .cloned()
+                .collect();
+            if !pruned.is_empty() && pruned.len() < active_types.len() {
+                set_field(&mut elements[index], "type", Value::Array(pruned.clone()));
+                active_types = pruned;
+            }
+        }
+        if required_slices_cover_anchor {
+            if required_sum > anchor_min {
+                set_field(
+                    &mut elements[index],
+                    "min",
+                    Value::Number(required_sum.into()),
+                );
+            }
+            let pruned: Vec<Value> = active_types
+                .iter()
+                .filter(|ty| {
+                    ty.get("code")
+                        .and_then(Value::as_str)
+                        .is_some_and(|code| live_type_codes.contains(code))
+                })
+                .cloned()
+                .collect();
+            if !pruned.is_empty() && pruned.len() < active_types.len() {
+                set_field(&mut elements[index], "type", Value::Array(pruned.clone()));
+                active_types = pruned;
+            }
+        }
+        let direct_slices_cover_types = saw_direct_slice
+            && active_types.iter().all(|ty| {
+                ty.get("code")
+                    .and_then(Value::as_str)
+                    .is_some_and(|code| live_type_codes.contains(code))
+            });
+        if direct_slices_cover_types {
+            close_type_slicing_for_descendant_unfold(&mut elements[index]);
+        }
+    }
+}
+
+fn is_extension_value_anchor(id: &str, path: &str) -> bool {
+    id == "Extension.value[x]" || path == "Extension.value[x]"
+}
+
+fn sort_type_slice_groups_by_differential_order(
+    elements: &mut Vec<Value>,
+    diff_slice_anchor_ids: &HashSet<String>,
+    diff_slice_orders: &HashMap<String, usize>,
+) {
+    let mut anchor_index = 0;
+    while anchor_index < elements.len() {
+        if !is_type_slicing(&elements[anchor_index]) {
+            anchor_index += 1;
+            continue;
+        }
+        let Some(anchor_id) = elements[anchor_index]
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            anchor_index += 1;
+            continue;
+        };
+        if !diff_slice_anchor_ids.contains(&anchor_id) {
+            anchor_index += 1;
+            continue;
+        }
+        let Some(anchor_path) = elements[anchor_index]
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            anchor_index += 1;
+            continue;
+        };
+
+        let mut groups = Vec::new();
+        let mut pos = anchor_index + 1;
+        while pos < elements.len() {
+            let Some(id) = elements[pos].get("id").and_then(Value::as_str) else {
+                break;
+            };
+            if !is_slice_or_descendant_of(id, &anchor_id) {
+                break;
+            }
+            if elements[pos].get("path").and_then(Value::as_str) == Some(anchor_path.as_str())
+                && is_direct_slice_of(id, &anchor_id)
+            {
+                let start = pos;
+                let slice_id = id.to_string();
+                pos += 1;
+                while pos < elements.len() {
+                    let Some(next_id) = elements[pos].get("id").and_then(Value::as_str) else {
+                        break;
+                    };
+                    if is_direct_slice_of(next_id, &anchor_id) {
+                        break;
+                    }
+                    if !is_slice_or_descendant_of(next_id, &slice_id) {
+                        break;
+                    }
+                    pos += 1;
+                }
+                groups.push(TypeSliceGroup {
+                    start,
+                    end: pos,
+                    order: diff_slice_orders
+                        .get(&slice_id)
+                        .copied()
+                        .unwrap_or(usize::MAX),
+                });
+            } else {
+                pos += 1;
+            }
+        }
+
+        let mut segment_start = 0;
+        while segment_start < groups.len() {
+            let mut segment_end = segment_start + 1;
+            while segment_end < groups.len()
+                && groups[segment_end - 1].end == groups[segment_end].start
+            {
+                segment_end += 1;
+            }
+            if segment_end - segment_start > 1 {
+                sort_adjacent_type_slice_segment(elements, &groups[segment_start..segment_end]);
+            }
+            segment_start = segment_end;
+        }
+
+        anchor_index += 1;
+    }
+}
+
+#[derive(Clone, Copy)]
+struct TypeSliceGroup {
+    start: usize,
+    end: usize,
+    order: usize,
+}
+
+fn sort_adjacent_type_slice_segment(elements: &mut Vec<Value>, groups: &[TypeSliceGroup]) {
+    let start = groups[0].start;
+    let end = groups[groups.len() - 1].end;
+    let mut reordered: Vec<(usize, usize, Vec<Value>)> = groups
+        .iter()
+        .enumerate()
+        .map(|(original, group)| {
+            (
+                group.order,
+                original,
+                elements[group.start..group.end].to_vec(),
+            )
+        })
+        .collect();
+    reordered.sort_by_key(|(order, original, _)| (*order, *original));
+    let replacement: Vec<Value> = reordered
+        .into_iter()
+        .flat_map(|(_, _, values)| values)
+        .collect();
+    elements.splice(start..end, replacement);
+}
+
 fn copy_plan_definition_offset_duration_definition(
     elements: &mut [Value],
     target_index: usize,
@@ -506,11 +1312,15 @@ fn insert_slice_element(
     ctx: &PackageContext,
     original_elements_by_id: &HashMap<String, Value>,
     strip_non_inherited: bool,
+    preserve_common_binding: bool,
     native_r5: bool,
     host_extension_source: &str,
     base_spec_url: &str,
     explicit_slicing_paths: &HashSet<String>,
     diff_ids: &HashSet<String>,
+    diff_must_support_ids: &HashSet<String>,
+    diff_preserve_must_support_ids: &HashSet<String>,
+    diff_condition_ids: &HashSet<String>,
 ) -> anyhow::Result<()> {
     let expected_anchor_id = diff
         .get("id")
@@ -536,11 +1346,7 @@ fn insert_slice_element(
         .and_then(Value::as_str)
         .unwrap_or(path)
         .to_string();
-    let unsliced_anchor_id = if anchor_id.contains(':') || anchor_id.contains('/') {
-        unsliced_element_id(&anchor_id).unwrap_or_else(|| anchor_id.clone())
-    } else {
-        anchor_id.clone()
-    };
+    let unsliced_anchor_id = anchor_id.clone();
     // Java only drops the inherited unsliced datatype children when the base
     // element was already sliced (ProfilePathProcessor.processPathWithSlicedBase,
     // e.g. CRD Practitioner.identifier). When this profile newly introduces the
@@ -550,16 +1356,21 @@ fn insert_slice_element(
         .get(&unsliced_anchor_id)
         .map(|element| element.get("slicing").is_some())
         .unwrap_or(false);
-    let mut slice = if anchor_id.contains(':') || anchor_id.contains('/') {
-        unsliced_element_id(&anchor_id)
-            .and_then(|id| original_elements_by_id.get(&id).cloned())
-            .unwrap_or_else(|| elements[anchor].clone())
-    } else {
-        original_elements_by_id
-            .get(&anchor_id)
-            .cloned()
-            .unwrap_or_else(|| elements[anchor].clone())
-    };
+    let diff_id = diff.get("id").and_then(Value::as_str);
+    let mut slice = diff_id
+        .and_then(|id| original_elements_by_id.get(id).cloned())
+        .unwrap_or_else(|| {
+            if anchor_id.contains(':') || anchor_id.contains('/') {
+                unsliced_element_id(&anchor_id)
+                    .and_then(|id| original_elements_by_id.get(&id).cloned())
+                    .unwrap_or_else(|| elements[anchor].clone())
+            } else {
+                original_elements_by_id
+                    .get(&anchor_id)
+                    .cloned()
+                    .unwrap_or_else(|| elements[anchor].clone())
+            }
+        });
     fill_missing_constraint_sources_on_constrained_element(&mut slice, host_extension_source);
     remove_field(&mut slice, "slicing");
     if let Some(id) = diff.get("id") {
@@ -568,12 +1379,35 @@ fn insert_slice_element(
     if let Some(path) = diff.get("path") {
         set_field(&mut slice, "path", path.clone());
     }
+    if diff.get("min").is_none() {
+        set_field(&mut slice, "min", Value::Number(0.into()));
+    }
+    reset_slice_condition_to_original(
+        &mut slice,
+        diff_id,
+        &unsliced_anchor_id,
+        &elements[anchor],
+        original_elements_by_id,
+        diff_condition_ids,
+    );
+    inherit_resolved_content_reference_state(&mut slice, &elements[anchor]);
+    apply_content_reference_slice_root_type(
+        &mut slice,
+        &elements[anchor],
+        diff,
+        elements,
+        host_extension_source,
+        ctx,
+    );
     if first_extension_profile_url(diff).is_some() {
         if let Some(t) = diff.get("type") {
             set_field(&mut slice, "type", t.clone());
         }
-        let inherited_slicing =
-            elements[anchor].get("slicing").is_some() && !explicit_slicing_paths.contains(path);
+        let inherited_slicing = original_elements_by_id
+            .get(&unsliced_anchor_id)
+            .map(|element| element.get("slicing").is_some())
+            .unwrap_or_else(|| elements[anchor].get("slicing").is_some())
+            && !explicit_slicing_paths.contains(path);
         let allow_condition = extension_condition_context_allows(elements, path, inherited_slicing);
         apply_extension_profile_root(
             &mut slice,
@@ -581,11 +1415,21 @@ fn insert_slice_element(
             ctx,
             native_r5,
             Some(host_extension_source),
+            true,
             !inherited_slicing,
             allow_condition,
         )?;
     }
-    merge_diff_into_element(&mut slice, diff, strip_non_inherited, host_extension_source)?;
+    merge_diff_into_element(
+        &mut slice,
+        diff,
+        strip_non_inherited,
+        preserve_common_binding,
+        Some(diff_must_support_ids),
+        None,
+        None,
+        host_extension_source,
+    )?;
 
     let anchor_path = elements[anchor]
         .get("path")
@@ -602,7 +1446,11 @@ fn insert_slice_element(
         ctx,
         native_r5,
     )?;
-    if !explicit_slicing_paths.contains(path) {
+    let anchor_had_inherited_slicing = original_elements_by_id
+        .get(&anchor_id)
+        .map(|element| element.get("slicing").is_some())
+        .unwrap_or(false);
+    if !anchor_had_inherited_slicing && !explicit_slicing_paths.contains(path) {
         close_type_slicing_for_descendant_unfold(&mut elements[anchor]);
     }
     if is_plan_definition_recursive_action_anchor(&elements[anchor]) {
@@ -612,14 +1460,19 @@ fn insert_slice_element(
 
     // Java only drops the inherited unsliced datatype children when the
     // differential adds a slice without constraining any of those unsliced
-    // children (CRD Practitioner.identifier). When the differential also
-    // constrains an unsliced descendant (ndh Organization.identifier.assigner /
-    // .extension:identifier-status), the unsliced children are processed and kept.
+    // children (CRD Practitioner.identifier, TWPAS identifier slices). An
+    // anchor-only slicing/cardinality row is not enough to keep them, except
+    // for newly introduced Coding slicing where Java keeps the unsliced coding
+    // children alongside the new slices (AU Core Medication.code.coding). An
+    // unsliced descendant constraint also keeps them (ndh
+    // Organization.identifier.assigner / .extension:identifier-status).
     let unsliced_child_prefix = format!("{unsliced_anchor_id}.");
     let differential_constrains_unsliced_child = diff_ids
         .iter()
-        .any(|id| id.starts_with(&unsliced_child_prefix));
-    if base_anchor_was_sliced
+        .any(|id| id.starts_with(&unsliced_child_prefix))
+        || (diff_ids.contains(&unsliced_anchor_id)
+            && should_prune_newly_sliced_coding_descendants(&elements[anchor]));
+    if (base_anchor_was_sliced || should_prune_newly_sliced_coding_descendants(&elements[anchor]))
         && !differential_constrains_unsliced_child
         && should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor])
     {
@@ -650,6 +1503,27 @@ fn insert_slice_element(
         .to_string();
     let extension_profile = first_extension_profile_url(&slice).map(str::to_string);
     elements.insert(insert_at, slice);
+    if !materialize_extension_children
+        && should_eagerly_unfold_direct_slice_children(&elements[insert_at])
+        && (diff_ids
+            .iter()
+            .any(|diff_id| diff_id.starts_with(&format!("{slice_id}.")))
+            || should_materialize_direct_slice_from_unsliced_children(
+                &elements[insert_at],
+                diff_ids,
+            ))
+    {
+        unfold_sliced_parent_from_anchor(
+            elements,
+            insert_at,
+            &slice_id,
+            &slice_path,
+            Some(original_elements_by_id),
+            Some(diff_ids),
+            Some(diff_preserve_must_support_ids),
+            Some(diff_must_support_ids),
+        );
+    }
     if materialize_extension_children {
         if let Some(profile_url) = extension_profile {
             materialize_extension_profile_children_for_slice(
@@ -664,6 +1538,205 @@ fn insert_slice_element(
         }
     }
     Ok(())
+}
+
+fn should_eagerly_unfold_direct_slice_children(slice: &Value) -> bool {
+    if slice.get("contentReference").is_some() {
+        return false;
+    }
+    let Some(types) = slice.get("type").and_then(Value::as_array) else {
+        return false;
+    };
+    !types.iter().any(|ty| {
+        matches!(
+            ty.get("code").and_then(Value::as_str),
+            Some("BackboneElement" | "Element")
+        )
+    })
+}
+
+fn inherit_resolved_content_reference_state(slice: &mut Value, anchor: &Value) {
+    if slice.get("contentReference").is_none() || anchor.get("contentReference").is_some() {
+        return;
+    }
+    remove_field(slice, "contentReference");
+    if slice.get("type").is_none() {
+        if let Some(t) = anchor.get("type") {
+            set_field(slice, "type", t.clone());
+        }
+    }
+}
+
+fn apply_content_reference_slice_root_type(
+    slice: &mut Value,
+    anchor: &Value,
+    diff: &Value,
+    elements: &[Value],
+    base_url: &str,
+    ctx: &PackageContext,
+) {
+    if diff.get("contentReference").is_some()
+        || slice.get("contentReference").is_none()
+        || anchor.get("contentReference").is_none()
+    {
+        return;
+    }
+    let Some(content_reference) = anchor.get("contentReference").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(target) = content_reference_target(content_reference, base_url, elements, ctx) else {
+        return;
+    };
+    remove_field(slice, "contentReference");
+    if slice.get("type").is_none() {
+        if let Some(t) = target.get("type") {
+            set_field(slice, "type", t.clone());
+        }
+    }
+}
+
+fn content_reference_target(
+    content_reference: &str,
+    base_url: &str,
+    elements: &[Value],
+    ctx: &PackageContext,
+) -> Option<Value> {
+    let (source_url, target_id) = split_content_reference(content_reference, base_url)?;
+    if source_url == base_url {
+        return elements
+            .iter()
+            .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(&target_id))
+            .cloned();
+    }
+    let source = ctx.fetch(&source_url)?;
+    source
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+        .and_then(|source_elements| {
+            source_elements
+                .iter()
+                .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(&target_id))
+                .cloned()
+        })
+}
+
+fn should_materialize_existing_direct_slice_children(
+    slice: &Value,
+    diff: &Value,
+    original_elements_by_id: &HashMap<String, Value>,
+    diff_ids: &HashSet<String>,
+) -> bool {
+    let Some(id) = slice.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    if !has_slice_marker(id) {
+        return false;
+    }
+    if original_elements_by_id.contains_key(id) && is_must_support_only_slice_diff(diff) {
+        return false;
+    }
+    let child_prefix = format!("{id}.");
+    if original_elements_by_id
+        .keys()
+        .any(|original_id| original_id.starts_with(&child_prefix))
+    {
+        return false;
+    }
+    if !diff_ids
+        .iter()
+        .any(|diff_id| diff_id.starts_with(&child_prefix))
+        && !should_materialize_direct_slice_from_unsliced_children(slice, diff_ids)
+    {
+        return false;
+    }
+    if slice
+        .get("type")
+        .and_then(Value::as_array)
+        .and_then(|types| types.first())
+        .and_then(|ty| ty.get("code"))
+        .and_then(Value::as_str)
+        == Some("Coding")
+        && !should_materialize_coding_slice_from_unsliced_children(slice, diff_ids)
+    {
+        return false;
+    }
+    should_eagerly_unfold_direct_slice_children(slice)
+}
+
+fn is_must_support_only_slice_diff(diff: &Value) -> bool {
+    let Some(obj) = diff.as_object() else {
+        return false;
+    };
+    diff.get("mustSupport").is_some()
+        && obj
+            .keys()
+            .all(|key| matches!(key.as_str(), "id" | "path" | "sliceName" | "mustSupport"))
+}
+
+fn should_materialize_identifier_slice_from_unsliced_children(
+    slice: &Value,
+    diff_ids: &HashSet<String>,
+) -> bool {
+    let is_identifier_path = slice
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| path.ends_with(".identifier"));
+    if slice.get("max").and_then(Value::as_str) == Some("0")
+        || !has_fixed_or_pattern_value(slice)
+        || !is_identifier_path
+    {
+        return false;
+    }
+    let Some(id) = slice.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(anchor_id) = immediate_slice_anchor_id(id) else {
+        return false;
+    };
+    diff_ids.contains(&format!("{anchor_id}.system"))
+        || diff_ids.contains(&format!("{anchor_id}.value"))
+}
+
+fn should_materialize_direct_slice_from_unsliced_children(
+    slice: &Value,
+    diff_ids: &HashSet<String>,
+) -> bool {
+    should_materialize_identifier_slice_from_unsliced_children(slice, diff_ids)
+        || should_materialize_coding_slice_from_unsliced_children(slice, diff_ids)
+}
+
+fn should_materialize_coding_slice_from_unsliced_children(
+    slice: &Value,
+    diff_ids: &HashSet<String>,
+) -> bool {
+    if slice.get("max").and_then(Value::as_str) == Some("0") {
+        return false;
+    }
+    if slice.get("binding").is_none() && !has_fixed_or_pattern_value(slice) {
+        return false;
+    }
+    if slice
+        .get("type")
+        .and_then(Value::as_array)
+        .and_then(|types| types.first())
+        .and_then(|ty| ty.get("code"))
+        .and_then(Value::as_str)
+        != Some("Coding")
+    {
+        return false;
+    }
+    let Some(id) = slice.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(anchor_id) = immediate_slice_anchor_id(id) else {
+        return false;
+    };
+    diff_ids.contains(&format!("{anchor_id}.system"))
+        || diff_ids.contains(&format!("{anchor_id}.code"))
+        || (slice.get("max").and_then(Value::as_str) == Some("*")
+            && slice.get("binding").is_some()
+            && has_semantic_element_extensions(slice))
 }
 
 fn should_materialize_extension_profile_children_on_insert(slice: &Value) -> bool {
@@ -771,6 +1844,16 @@ fn materialize_extension_profile_children_for_slice(
 fn is_plan_definition_recursive_action_anchor(element: &Value) -> bool {
     element.get("contentReference").and_then(Value::as_str)
         == Some("http://hl7.org/fhir/StructureDefinition/PlanDefinition#PlanDefinition.action")
+}
+
+fn should_skip_plan_definition_nested_action_trigger_child(
+    parent_id: &str,
+    child_suffix: &str,
+) -> bool {
+    parent_id
+        .strip_prefix("PlanDefinition.action:")
+        .is_some_and(|tail| tail.contains(".action:"))
+        && matches!(child_suffix, ".trigger.id" | ".trigger.extension")
 }
 
 fn prune_recursive_action_unsliced_tail(elements: &mut Vec<Value>, anchor_id: &str) {
@@ -908,55 +1991,35 @@ fn apply_cqf_fhir_query_pattern_id_child_quirks(element: &mut Value, profile_url
         .get("base")
         .and_then(|base| base.get("path"))
         .and_then(Value::as_str);
-    match base_path {
-        Some("Element.id") => {
-            set_field(
+    if let Some("Extension.url") = base_path {
+        let mut ty = Map::new();
+        ty.insert("code".to_string(), Value::String("uri".to_string()));
+        set_field(element, "type", Value::Array(vec![Value::Object(ty)]));
+        set_field(
+            element,
+            "fixedUri",
+            Value::String(
+                "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern".to_string(),
+            ),
+        );
+        set_field(element, "mustSupport", Value::Bool(true));
+    }
+}
+
+fn normalize_cqf_fhir_query_pattern_url_children(elements: &mut [Value]) {
+    for element in elements {
+        let id = element.get("id").and_then(Value::as_str).unwrap_or("");
+        if id.contains("extension:fhirquerypattern.url") {
+            apply_cqf_fhir_query_pattern_id_child_quirks(
                 element,
-                "condition",
-                Value::Array(vec![Value::String("ele-1".to_string())]),
+                "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern",
             );
-            let Some(types) = element.get_mut("type").and_then(Value::as_array_mut) else {
-                return;
-            };
-            for ty in types {
-                let Some(exts) = ty.get_mut("extension").and_then(Value::as_array_mut) else {
-                    continue;
-                };
-                for ext in exts {
-                    if ext.get("url").and_then(Value::as_str)
-                        == Some(
-                            "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
-                        )
-                        && ext.get("valueUrl").and_then(Value::as_str) == Some("string")
-                    {
-                        set_field(ext, "valueUrl", Value::String("id".to_string()));
-                    }
-                }
-            }
+        } else if id.contains("extension:fhirquerypattern.value[x]") {
+            set_field(element, "min", Value::Number(1.into()));
+            let mut ty = Map::new();
+            ty.insert("code".to_string(), Value::String("string".to_string()));
+            set_field(element, "type", Value::Array(vec![Value::Object(ty)]));
         }
-        Some("Element.extension") => {
-            set_field(
-                element,
-                "definition",
-                Value::String("May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and managable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.".to_string()),
-            );
-        }
-        Some("Extension.url") => {
-            set_field(element, "mustSupport", Value::Bool(true));
-        }
-        Some("Extension.value[x]") => {
-            set_field(
-                element,
-                "definition",
-                Value::String("Value of extension - must be one of a constrained set of the data types (see [Extensibility](http://hl7.org/fhir/R5/extensibility.html) for a list).".to_string()),
-            );
-            set_field(
-                element,
-                "condition",
-                Value::Array(vec![Value::String("ext-1".to_string())]),
-            );
-        }
-        _ => {}
     }
 }
 
@@ -1098,12 +2161,127 @@ fn should_prune_unsliced_descendants_for_slice_anchor(anchor: &Value) -> bool {
     !matches!(type_code, "BackboneElement" | "Element" | "Extension")
 }
 
+fn should_prune_newly_sliced_coding_descendants(anchor: &Value) -> bool {
+    let path = anchor.get("path").and_then(Value::as_str).unwrap_or("");
+    let type_code = anchor
+        .get("type")
+        .and_then(Value::as_array)
+        .and_then(|types| types.first())
+        .and_then(|ty| ty.get("code"))
+        .and_then(Value::as_str);
+    path.ends_with(".coding") && type_code == Some("Coding")
+}
+
 fn prune_unsliced_descendants(elements: &mut Vec<Value>, anchor_id: &str) {
     let prefix = format!("{anchor_id}.");
     elements.retain(|candidate| {
         let id = candidate.get("id").and_then(Value::as_str).unwrap_or("");
-        !id.starts_with(&prefix) || has_slice_marker(id)
+        !id.starts_with(&prefix)
     });
+}
+
+fn prune_unsliced_descendants_for_slice_diff(
+    elements: &mut Vec<Value>,
+    diff: &Value,
+    diff_ids: &HashSet<String>,
+    original_elements_by_id: &HashMap<String, Value>,
+) {
+    let Some(anchor_id) = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(slice_anchor_id_from_diff_id)
+    else {
+        return;
+    };
+    let Some(anchor_index) = elements
+        .iter()
+        .position(|element| element.get("id").and_then(Value::as_str) == Some(anchor_id.as_str()))
+    else {
+        return;
+    };
+    let unsliced_child_prefix = format!("{anchor_id}.");
+    if diff_ids
+        .iter()
+        .any(|id| id.starts_with(&unsliced_child_prefix))
+        || (diff_ids.contains(&anchor_id)
+            && should_prune_newly_sliced_coding_descendants(&elements[anchor_index]))
+    {
+        return;
+    }
+    let base_anchor_was_sliced = original_elements_by_id
+        .get(&anchor_id)
+        .map(|element| element.get("slicing").is_some())
+        .unwrap_or(false);
+    if (base_anchor_was_sliced
+        || should_prune_newly_sliced_coding_descendants(&elements[anchor_index]))
+        && should_prune_unsliced_descendants_for_slice_anchor(&elements[anchor_index])
+    {
+        prune_unsliced_descendants(elements, &anchor_id);
+    }
+}
+
+fn should_prune_profiled_unsliced_descendants(
+    element: &Value,
+    diff: &Value,
+    diff_ids: &HashSet<String>,
+    original_elements_by_id: &HashMap<String, Value>,
+) -> bool {
+    if diff.get("sliceName").is_some() || first_non_extension_profile_url(diff).is_none() {
+        return false;
+    }
+    let Some(id) = element.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    if has_slice_marker(id) {
+        return false;
+    }
+    let inherited_slicing = original_elements_by_id
+        .get(id)
+        .map(|original| original.get("slicing").is_some())
+        .unwrap_or(false);
+    if !inherited_slicing || !should_prune_unsliced_descendants_for_slice_anchor(element) {
+        return false;
+    }
+    let child_prefix = format!("{id}.");
+    !diff_ids
+        .iter()
+        .any(|candidate| candidate.starts_with(&child_prefix))
+}
+
+fn reset_slice_condition_to_original(
+    slice: &mut Value,
+    diff_id: Option<&str>,
+    unsliced_anchor_id: &str,
+    current_anchor: &Value,
+    original_elements_by_id: &HashMap<String, Value>,
+    diff_condition_ids: &HashSet<String>,
+) {
+    let original_condition = diff_id
+        .and_then(|id| original_elements_by_id.get(id))
+        .and_then(|element| element.get("condition"))
+        .or_else(|| {
+            original_elements_by_id
+                .get(unsliced_anchor_id)
+                .and_then(|element| element.get("condition"))
+        })
+        .or_else(|| {
+            (!diff_condition_ids.contains(unsliced_anchor_id))
+                .then(|| current_anchor.get("condition"))
+                .flatten()
+        })
+        .or_else(|| {
+            unsliced_element_id(unsliced_anchor_id).and_then(|id| {
+                original_elements_by_id
+                    .get(&id)
+                    .and_then(|element| element.get("condition"))
+            })
+        })
+        .cloned();
+    if let Some(condition) = original_condition {
+        set_field(slice, "condition", condition);
+    } else {
+        remove_field(slice, "condition");
+    }
 }
 
 fn extension_condition_context_allows(
@@ -1145,6 +2323,7 @@ fn unfold_parent_for_diff(
     base_url: &str,
     base_spec_url: &str,
     native_r5: bool,
+    original_elements: &[Value],
 ) -> anyhow::Result<()> {
     let Some(diff_id) = diff.get("id").and_then(Value::as_str) else {
         return Ok(());
@@ -1153,7 +2332,15 @@ fn unfold_parent_for_diff(
         return Ok(());
     };
     let parent_id = &diff_id[..dot];
-    unfold_parent_id(elements, parent_id, ctx, base_url, base_spec_url, native_r5)
+    unfold_parent_id(
+        elements,
+        parent_id,
+        ctx,
+        base_url,
+        base_spec_url,
+        native_r5,
+        original_elements,
+    )
 }
 
 fn unfold_parent_id(
@@ -1163,6 +2350,7 @@ fn unfold_parent_id(
     base_url: &str,
     base_spec_url: &str,
     native_r5: bool,
+    original_elements: &[Value],
 ) -> anyhow::Result<()> {
     let mut parent_index = elements
         .iter()
@@ -1176,6 +2364,7 @@ fn unfold_parent_id(
                 base_url,
                 base_spec_url,
                 native_r5,
+                original_elements,
             )?;
             parent_index = elements.iter().position(|candidate| {
                 candidate.get("id").and_then(Value::as_str) == Some(parent_id)
@@ -1188,13 +2377,51 @@ fn unfold_parent_id(
     close_type_slicing_for_descendant_unfold(&mut elements[parent_index]);
 
     let child_prefix = format!("{parent_id}.");
-    if elements.iter().any(|candidate| {
+    let has_children = elements.iter().any(|candidate| {
         candidate
             .get("id")
             .and_then(Value::as_str)
             .unwrap_or("")
             .starts_with(&child_prefix)
-    }) {
+    });
+    if has_children {
+        let existing_parent_path = elements[parent_index]
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or(parent_id)
+            .to_string();
+        if unfold_content_reference_parent(
+            elements,
+            parent_index,
+            parent_id,
+            &existing_parent_path,
+            base_url,
+            base_spec_url,
+            ctx,
+            native_r5,
+            original_elements,
+        )? {
+            return Ok(());
+        }
+        let original_elements_by_id: HashMap<String, Value> = original_elements
+            .iter()
+            .filter_map(|element| {
+                element
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .map(|id| (id.to_string(), element.clone()))
+            })
+            .collect();
+        unfold_sliced_parent_from_anchor(
+            elements,
+            parent_index,
+            parent_id,
+            &existing_parent_path,
+            Some(&original_elements_by_id),
+            None,
+            None,
+            None,
+        );
         return Ok(());
     }
 
@@ -1206,7 +2433,25 @@ fn unfold_parent_id(
         return Ok(());
     };
 
-    if unfold_sliced_parent_from_anchor(elements, parent_index, parent_id, &parent_path) {
+    let original_elements_by_id: HashMap<String, Value> = original_elements
+        .iter()
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| (id.to_string(), element.clone()))
+        })
+        .collect();
+    if unfold_sliced_parent_from_anchor(
+        elements,
+        parent_index,
+        parent_id,
+        &parent_path,
+        Some(&original_elements_by_id),
+        None,
+        None,
+        None,
+    ) {
         return Ok(());
     }
 
@@ -1219,6 +2464,7 @@ fn unfold_parent_id(
         base_spec_url,
         ctx,
         native_r5,
+        original_elements,
     )? {
         return Ok(());
     }
@@ -1226,7 +2472,7 @@ fn unfold_parent_id(
     let Some(type_entries) = elements[parent_index].get("type").and_then(Value::as_array) else {
         return Ok(());
     };
-    let parent_profile_url = first_non_extension_profile_url(&elements[parent_index])
+    let parent_profile_url = single_non_extension_profile_url(&elements[parent_index])
         .or_else(|| first_extension_profile_url(&elements[parent_index]))
         .map(str::to_string);
     let type_code = if parent_profile_url.is_none() && type_entries.len() > 1 {
@@ -1328,7 +2574,16 @@ fn unfold_parent_id(
 }
 
 fn close_type_slicing_for_descendant_unfold(element: &mut Value) {
-    let is_type_slicing = element
+    if !is_type_slicing(element) {
+        return;
+    }
+    if let Some(slicing) = element.get_mut("slicing") {
+        set_field(slicing, "rules", Value::String("closed".to_string()));
+    }
+}
+
+fn is_type_slicing(element: &Value) -> bool {
+    element
         .get("slicing")
         .and_then(|s| s.get("discriminator"))
         .and_then(Value::as_array)
@@ -1338,13 +2593,7 @@ fn close_type_slicing_for_descendant_unfold(element: &mut Value) {
                     && d.get("path").and_then(Value::as_str) == Some("$this")
             })
         })
-        .unwrap_or(false);
-    if !is_type_slicing {
-        return;
-    }
-    if let Some(slicing) = element.get_mut("slicing") {
-        set_field(slicing, "rules", Value::String("closed".to_string()));
-    }
+        .unwrap_or(false)
 }
 
 fn unfold_sliced_parent_from_anchor(
@@ -1352,8 +2601,12 @@ fn unfold_sliced_parent_from_anchor(
     parent_index: usize,
     parent_id: &str,
     parent_path: &str,
+    original_elements_by_id: Option<&HashMap<String, Value>>,
+    diff_ids: Option<&HashSet<String>>,
+    diff_preserve_must_support_ids: Option<&HashSet<String>>,
+    diff_must_support_ids: Option<&HashSet<String>>,
 ) -> bool {
-    let Some(unsliced_id) = unsliced_element_id(parent_id) else {
+    let Some(unsliced_id) = immediate_slice_anchor_id(parent_id) else {
         return false;
     };
     if unsliced_id == parent_id {
@@ -1374,18 +2627,74 @@ fn unfold_sliced_parent_from_anchor(
 
     let child_prefix = format!("{unsliced_id}.");
     let path_prefix = format!("{unsliced_path}.");
+    let anchor_has_recursive_content_reference =
+        has_descendant_content_reference_to_anchor(elements, &unsliced_id);
+    let mut existing_ids: HashSet<String> = elements
+        .iter()
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
     let mut children = Vec::new();
     for child in elements.iter() {
         let child_id = child.get("id").and_then(Value::as_str).unwrap_or("");
         if !child_id.starts_with(&child_prefix) {
             continue;
         }
-        let mut clone = child.clone();
-        set_field(
+        let child_suffix = &child_id[unsliced_id.len()..];
+        let rehomed_id = format!("{parent_id}{child_suffix}");
+        if existing_ids.contains(&rehomed_id) {
+            continue;
+        }
+        if should_skip_plan_definition_nested_action_trigger_child(parent_id, child_suffix) {
+            continue;
+        }
+        let same_differential_child_slice = !anchor_has_recursive_content_reference
+            && has_slice_marker(child_suffix)
+            && original_elements_by_id.is_some_and(|original| !original.contains_key(child_id));
+        if same_differential_child_slice
+            && should_skip_same_differential_child_slice_for_target(
+                child_id,
+                parent_id,
+                &unsliced_id,
+                diff_ids,
+            )
+        {
+            continue;
+        }
+        let mut clone = if !anchor_has_recursive_content_reference
+            && should_clone_original_extension_anchor(child_id)
+        {
+            original_elements_by_id
+                .and_then(|original| original.get(child_id))
+                .cloned()
+                .unwrap_or_else(|| child.clone())
+        } else {
+            child.clone()
+        };
+        strip_diff_owned_type_extensions_on_sliced_choice_child(
             &mut clone,
-            "id",
-            Value::String(format!("{parent_id}{}", &child_id[unsliced_id.len()..])),
+            parent_id,
+            child_id,
+            original_elements_by_id,
         );
+        let preserve_must_support = diff_must_support_ids
+            .is_some_and(|ids| ids.contains(child_id) || ids.contains(&rehomed_id))
+            || diff_preserve_must_support_ids
+                .is_some_and(|ids| ids.contains(child_id) || ids.contains(&rehomed_id))
+            || should_preserve_identifier_slice_child_must_support(
+                parent_id,
+                parent_path,
+                child_suffix,
+                diff_must_support_ids,
+            );
+        if diff_must_support_ids.is_some() && !preserve_must_support {
+            remove_field(&mut clone, "mustSupport");
+        }
+        set_field(&mut clone, "id", Value::String(rehomed_id.clone()));
         if let Some(child_path) = clone
             .get("path")
             .and_then(Value::as_str)
@@ -1413,6 +2722,7 @@ fn unfold_sliced_parent_from_anchor(
             );
         }
         children.push(clone);
+        existing_ids.insert(rehomed_id);
     }
     if children.is_empty() {
         return false;
@@ -1423,6 +2733,374 @@ fn unfold_sliced_parent_from_anchor(
         elements.insert(insert_at + offset, child);
     }
     true
+}
+
+fn should_preserve_identifier_slice_child_must_support(
+    parent_id: &str,
+    parent_path: &str,
+    child_suffix: &str,
+    diff_must_support_ids: Option<&HashSet<String>>,
+) -> bool {
+    parent_path.ends_with(".identifier")
+        && matches!(child_suffix, ".system" | ".value")
+        && diff_must_support_ids.is_some_and(|ids| ids.contains(parent_id))
+}
+
+fn should_skip_same_differential_child_slice_for_target(
+    child_id: &str,
+    parent_id: &str,
+    unsliced_id: &str,
+    diff_ids: Option<&HashSet<String>>,
+) -> bool {
+    let Some(diff_ids) = diff_ids else {
+        return true;
+    };
+    let child_suffix = child_id.strip_prefix(unsliced_id).unwrap_or("");
+    let rehomed_id = format!("{parent_id}{child_suffix}");
+    let Some(target_anchor_id) = immediate_slice_anchor_id(&rehomed_id) else {
+        return true;
+    };
+    diff_ids.iter().any(|diff_id| {
+        diff_id == &target_anchor_id
+            || is_direct_slice_of(diff_id, &target_anchor_id)
+            || diff_id.starts_with(&format!("{target_anchor_id}."))
+    })
+}
+
+fn materialize_generalized_child_slices_for_direct_slices(
+    elements: &mut Vec<Value>,
+    original_elements_by_id: &HashMap<String, Value>,
+    diff_ids: &HashSet<String>,
+    ctx: &PackageContext,
+    native_r5: bool,
+) -> anyhow::Result<()> {
+    let source_elements = elements.clone();
+    let mut existing_ids: HashSet<String> = elements
+        .iter()
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
+    for child in source_elements {
+        let Some(child_id) = child.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if original_elements_by_id.contains_key(child_id) {
+            continue;
+        }
+        let Some(child_anchor_id) = immediate_slice_anchor_id(child_id) else {
+            continue;
+        };
+        if !is_direct_slice_of(child_id, &child_anchor_id) {
+            continue;
+        }
+        let Some((container_id, _)) = child_anchor_id.rsplit_once('.') else {
+            continue;
+        };
+        if original_elements_by_id
+            .get(container_id)
+            .is_some_and(|element| element.get("slicing").is_some())
+        {
+            continue;
+        }
+        let child_suffix = child_id.strip_prefix(container_id).unwrap_or("");
+        let target_slice_ids: Vec<String> = elements
+            .iter()
+            .filter_map(|element| element.get("id").and_then(Value::as_str))
+            .filter(|id| is_direct_slice_of(id, container_id))
+            .map(str::to_string)
+            .collect();
+        for target_slice_id in target_slice_ids {
+            let rehomed_id = format!("{target_slice_id}{child_suffix}");
+            if existing_ids.contains(&rehomed_id) {
+                if should_materialize_extension_profile_children_on_insert(&child) {
+                    if let Some(existing_index) = elements.iter().position(|element| {
+                        element.get("id").and_then(Value::as_str) == Some(rehomed_id.as_str())
+                    }) {
+                        let slice_path = elements[existing_index]
+                            .get("path")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string();
+                        if let Some(profile_url) =
+                            first_extension_profile_url(&child).map(str::to_string)
+                        {
+                            materialize_extension_profile_children_for_slice(
+                                elements,
+                                existing_index,
+                                &rehomed_id,
+                                &slice_path,
+                                &profile_url,
+                                ctx,
+                                native_r5,
+                            )?;
+                        }
+                    }
+                }
+                continue;
+            }
+            if should_skip_same_differential_child_slice_for_target(
+                child_id,
+                &target_slice_id,
+                container_id,
+                Some(diff_ids),
+            ) {
+                continue;
+            }
+            let Some(target_anchor_id) = immediate_slice_anchor_id(&rehomed_id) else {
+                continue;
+            };
+            let Some(target_anchor_index) = elements.iter().position(|element| {
+                element.get("id").and_then(Value::as_str) == Some(target_anchor_id.as_str())
+            }) else {
+                continue;
+            };
+            if target_anchor_id.ends_with(".extension")
+                || target_anchor_id.ends_with(".modifierExtension")
+            {
+                let ordered_false =
+                    extension_anchor_uses_ordered_false_slicing(elements, target_anchor_index);
+                let target_anchor = &mut elements[target_anchor_index];
+                check_extension_doco(target_anchor);
+                if target_anchor.get("slicing").is_none() {
+                    set_field(
+                        target_anchor,
+                        "slicing",
+                        extension_url_slicing(ordered_false),
+                    );
+                }
+            }
+            let mut clone = child.clone();
+            set_field(&mut clone, "id", Value::String(rehomed_id.clone()));
+            let slice_path = clone
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let extension_profile =
+                if should_materialize_extension_profile_children_on_insert(&clone) {
+                    first_extension_profile_url(&clone).map(str::to_string)
+                } else {
+                    None
+                };
+            let mut insert_at = target_anchor_index + 1;
+            while insert_at < elements.len()
+                && elements[insert_at]
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| is_slice_or_descendant_of(id, &target_anchor_id))
+            {
+                insert_at += 1;
+            }
+            elements.insert(insert_at, clone);
+            if let Some(profile_url) = extension_profile {
+                materialize_extension_profile_children_for_slice(
+                    elements,
+                    insert_at,
+                    &rehomed_id,
+                    &slice_path,
+                    &profile_url,
+                    ctx,
+                    native_r5,
+                )?;
+            }
+            existing_ids.insert(rehomed_id);
+        }
+    }
+    Ok(())
+}
+
+fn materialize_missing_extension_profile_children_for_slices(
+    elements: &mut Vec<Value>,
+    ctx: &PackageContext,
+    native_r5: bool,
+) -> anyhow::Result<()> {
+    let mut index = 0;
+    while index < elements.len() {
+        if let Some(profile_url) = cqf_fhir_query_pattern_profile_url(&elements[index]) {
+            let slice_id = elements[index]
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let slice_path = elements[index]
+                .get("path")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            materialize_extension_profile_children_for_slice(
+                elements,
+                index,
+                &slice_id,
+                &slice_path,
+                &profile_url,
+                ctx,
+                native_r5,
+            )?;
+            materialize_children_from_generalized_leaf_slice(elements, index, &slice_id);
+        }
+        index += 1;
+    }
+    normalize_cqf_fhir_query_pattern_url_children(elements);
+    Ok(())
+}
+
+fn cqf_fhir_query_pattern_profile_url(slice: &Value) -> Option<String> {
+    let profile_url = first_extension_profile_url(slice)?;
+    let bare_url = profile_url
+        .split_once('|')
+        .map(|(url, _)| url)
+        .unwrap_or(profile_url);
+    if bare_url == "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern" {
+        Some(profile_url.to_string())
+    } else {
+        None
+    }
+}
+
+fn materialize_children_from_generalized_leaf_slice(
+    elements: &mut Vec<Value>,
+    slice_index: usize,
+    slice_id: &str,
+) -> bool {
+    let Some(source_id) = generalized_id_preserving_leaf_slice(slice_id) else {
+        return false;
+    };
+    if source_id == slice_id {
+        return false;
+    }
+    let target_prefix = format!("{slice_id}.");
+    if elements.iter().any(|candidate| {
+        candidate
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .starts_with(&target_prefix)
+    }) {
+        return false;
+    }
+    let source_prefix = format!("{source_id}.");
+    let children: Vec<Value> = elements
+        .iter()
+        .filter_map(|child| {
+            let id = child.get("id").and_then(Value::as_str)?;
+            if !id.starts_with(&source_prefix) {
+                return None;
+            }
+            let mut clone = child.clone();
+            set_field(
+                &mut clone,
+                "id",
+                Value::String(id.replacen(&source_id, slice_id, 1)),
+            );
+            Some(clone)
+        })
+        .collect();
+    if children.is_empty() {
+        return false;
+    }
+    for (offset, child) in children.into_iter().enumerate() {
+        elements.insert(slice_index + 1 + offset, child);
+    }
+    true
+}
+
+fn generalized_id_preserving_leaf_slice(id: &str) -> Option<String> {
+    if !has_slice_marker(id) {
+        return None;
+    }
+    let mut segments: Vec<String> = id.split('.').map(str::to_string).collect();
+    if segments.len() < 2 {
+        return None;
+    }
+    let last = segments.len() - 1;
+    for segment in &mut segments[..last] {
+        *segment = unsliced_segment(segment).to_string();
+    }
+    Some(segments.join("."))
+}
+
+fn unsliced_segment(segment: &str) -> &str {
+    segment
+        .split_once(':')
+        .map(|(base, _)| base)
+        .or_else(|| segment.split_once('/').map(|(base, _)| base))
+        .unwrap_or(segment)
+}
+
+fn should_clone_original_extension_anchor(id: &str) -> bool {
+    let last_segment = id.rsplit('.').next().unwrap_or(id);
+    matches!(last_segment, "extension" | "modifierExtension")
+}
+
+fn has_descendant_content_reference_to_anchor(elements: &[Value], anchor_id: &str) -> bool {
+    let child_prefix = format!("{anchor_id}.");
+    let relative = format!("#{anchor_id}");
+    elements.iter().any(|element| {
+        let id = element.get("id").and_then(Value::as_str).unwrap_or("");
+        if !id.starts_with(&child_prefix) {
+            return false;
+        }
+        element
+            .get("contentReference")
+            .and_then(Value::as_str)
+            .is_some_and(|content_reference| {
+                content_reference == relative || content_reference.ends_with(&relative)
+            })
+    })
+}
+
+fn strip_diff_owned_type_extensions_on_sliced_choice_child(
+    clone: &mut Value,
+    parent_id: &str,
+    child_id: &str,
+    original_elements_by_id: Option<&HashMap<String, Value>>,
+) {
+    if !has_slice_marker(parent_id) || !child_id.ends_with("[x]") {
+        return;
+    }
+    let Some(original) = original_elements_by_id.and_then(|elements| elements.get(child_id)) else {
+        return;
+    };
+    let original_types = original
+        .get("type")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let Some(types) = clone.get_mut("type").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for ty in types {
+        let Some(code) = ty.get("code").and_then(Value::as_str) else {
+            continue;
+        };
+        let original_has_extension = original_types.iter().any(|original_ty| {
+            original_ty.get("code").and_then(Value::as_str) == Some(code)
+                && original_ty.get("extension").is_some()
+        });
+        if !original_has_extension {
+            remove_field(ty, "extension");
+        }
+    }
+}
+
+fn immediate_slice_anchor_id(id: &str) -> Option<String> {
+    let dot = id.rfind('.');
+    let (prefix, last) = match dot {
+        Some(dot) => (&id[..=dot], &id[dot + 1..]),
+        None => ("", id),
+    };
+    let base = last
+        .split_once(':')
+        .map(|(base, _)| base)
+        .or_else(|| last.split_once('/').map(|(base, _)| base));
+    if let Some(base) = base {
+        return Some(format!("{prefix}{base}"));
+    }
+    unsliced_element_id(id)
 }
 
 fn unsliced_element_id(id: &str) -> Option<String> {
@@ -1470,6 +3148,304 @@ fn is_slice_or_descendant_of(id: &str, anchor_id: &str) -> bool {
         || id.starts_with(&format!("{anchor_id}/"))
 }
 
+fn propagate_slice_min_to_anchor(
+    elements: &mut [Value],
+    path: &str,
+    diff: &Value,
+    diff_ids: &HashSet<String>,
+) {
+    if diff.get("sliceName").is_none() {
+        return;
+    }
+    let expected_anchor_id = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(slice_anchor_id_from_diff_id);
+    let Some(anchor_index) = elements
+        .iter()
+        .position(|candidate| {
+            expected_anchor_id
+                .as_deref()
+                .is_some_and(|id| candidate.get("id").and_then(Value::as_str) == Some(id))
+        })
+        .or_else(|| {
+            elements.iter().position(|candidate| {
+                candidate.get("path").and_then(Value::as_str) == Some(path)
+                    && candidate.get("sliceName").is_none()
+            })
+        })
+    else {
+        return;
+    };
+    let anchor_id = elements[anchor_index]
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or(path)
+        .to_string();
+    if diff_ids.contains(&anchor_id) {
+        return;
+    }
+    let anchor_path = elements[anchor_index]
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or(path)
+        .to_string();
+    let mut slice_count = 0usize;
+    let mut required_sum = 0u64;
+    for element in elements.iter() {
+        if element.get("path").and_then(Value::as_str) != Some(anchor_path.as_str()) {
+            continue;
+        }
+        let Some(id) = element.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if !is_direct_slice_of(id, &anchor_id) {
+            continue;
+        }
+        slice_count += 1;
+        required_sum += element.get("min").and_then(Value::as_u64).unwrap_or(0);
+    }
+    if slice_count == 0 {
+        return;
+    }
+    let current = elements[anchor_index]
+        .get("min")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    if required_sum > current {
+        set_field(
+            &mut elements[anchor_index],
+            "min",
+            Value::Number(required_sum.into()),
+        );
+    }
+}
+
+fn ensure_type_slicing_anchor(elements: &mut [Value], path: &str, diff: &Value) {
+    if diff.get("sliceName").is_none() || !path.ends_with("[x]") {
+        return;
+    }
+    let expected_anchor_id = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(slice_anchor_id_from_diff_id);
+    let Some(anchor_index) = elements
+        .iter()
+        .position(|candidate| {
+            expected_anchor_id
+                .as_deref()
+                .is_some_and(|id| candidate.get("id").and_then(Value::as_str) == Some(id))
+        })
+        .or_else(|| {
+            elements.iter().position(|candidate| {
+                candidate.get("path").and_then(Value::as_str) == Some(path)
+                    && candidate.get("sliceName").is_none()
+            })
+        })
+    else {
+        return;
+    };
+    if elements[anchor_index].get("slicing").is_some() {
+        return;
+    }
+    set_field(&mut elements[anchor_index], "slicing", type_slicing());
+}
+
+fn type_slicing() -> Value {
+    let mut slicing = Map::new();
+    let mut discriminator = Map::new();
+    discriminator.insert("type".to_string(), Value::String("type".to_string()));
+    discriminator.insert("path".to_string(), Value::String("$this".to_string()));
+    slicing.insert(
+        "discriminator".to_string(),
+        Value::Array(vec![Value::Object(discriminator)]),
+    );
+    slicing.insert("ordered".to_string(), Value::Bool(false));
+    slicing.insert("rules".to_string(), Value::String("open".to_string()));
+    Value::Object(slicing)
+}
+
+fn ensure_extension_slicing_anchor(elements: &mut [Value], path: &str, diff: &Value) {
+    if diff.get("sliceName").is_none() {
+        return;
+    }
+    let expected_anchor_id = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(slice_anchor_id_from_diff_id);
+    let Some(anchor_index) = elements
+        .iter()
+        .position(|candidate| {
+            expected_anchor_id
+                .as_deref()
+                .is_some_and(|id| candidate.get("id").and_then(Value::as_str) == Some(id))
+        })
+        .or_else(|| {
+            elements.iter().position(|candidate| {
+                candidate.get("path").and_then(Value::as_str) == Some(path)
+                    && candidate.get("sliceName").is_none()
+            })
+        })
+    else {
+        return;
+    };
+    if elements[anchor_index].get("slicing").is_some() {
+        return;
+    }
+    let anchor_path = elements[anchor_index]
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or(path);
+    if !anchor_path.ends_with(".extension") && !anchor_path.ends_with(".modifierExtension") {
+        return;
+    }
+    check_extension_doco(&mut elements[anchor_index]);
+    let ordered_false = extension_anchor_uses_ordered_false_slicing(elements, anchor_index);
+    set_field(
+        &mut elements[anchor_index],
+        "slicing",
+        extension_url_slicing(ordered_false),
+    );
+}
+
+fn extension_anchor_uses_ordered_false_slicing(elements: &[Value], anchor_index: usize) -> bool {
+    let Some(anchor_path) = elements[anchor_index].get("path").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(parent_path) = anchor_path
+        .strip_suffix(".extension")
+        .or_else(|| anchor_path.strip_suffix(".modifierExtension"))
+    else {
+        return false;
+    };
+    if !parent_path.contains('.') {
+        return true;
+    }
+    elements
+        .iter()
+        .find(|element| element.get("path").and_then(Value::as_str) == Some(parent_path))
+        .and_then(|element| element.get("type").and_then(Value::as_array))
+        .map(|types| {
+            types.iter().any(|ty| {
+                ty.get("code")
+                    .and_then(Value::as_str)
+                    .is_some_and(extension_anchor_parent_type_uses_ordered_false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn extension_anchor_parent_type_uses_ordered_false(code: &str) -> bool {
+    matches!(
+        code,
+        "BackboneElement"
+            | "base64Binary"
+            | "boolean"
+            | "canonical"
+            | "code"
+            | "date"
+            | "dateTime"
+            | "decimal"
+            | "id"
+            | "instant"
+            | "integer"
+            | "markdown"
+            | "oid"
+            | "positiveInt"
+            | "string"
+            | "time"
+            | "unsignedInt"
+            | "uri"
+            | "url"
+            | "uuid"
+            | "xhtml"
+    )
+}
+
+fn extension_url_slicing(ordered_false: bool) -> Value {
+    let mut slicing = Map::new();
+    let mut discriminator = Map::new();
+    discriminator.insert("type".to_string(), Value::String("value".to_string()));
+    discriminator.insert("path".to_string(), Value::String("url".to_string()));
+    slicing.insert(
+        "discriminator".to_string(),
+        Value::Array(vec![Value::Object(discriminator)]),
+    );
+    if ordered_false {
+        slicing.insert("ordered".to_string(), Value::Bool(false));
+    } else {
+        slicing.insert(
+            "description".to_string(),
+            Value::String("Extensions are always sliced by (at least) url".to_string()),
+        );
+    }
+    slicing.insert("rules".to_string(), Value::String("open".to_string()));
+    Value::Object(slicing)
+}
+
+fn normalize_copied_slicing(element: &mut Value) {
+    let type_slicing = is_type_slicing(element);
+    let extension_anchor = element
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| path.ends_with(".extension") || path.ends_with(".modifierExtension"));
+    let top_level_extension_anchor =
+        element.get("path").and_then(Value::as_str) == Some("Extension.extension");
+    let extension_url_slicing = element
+        .get("slicing")
+        .is_some_and(has_extension_url_slicing);
+    let choice_type_slicing = type_slicing
+        && element
+            .get("id")
+            .or_else(|| element.get("path"))
+            .and_then(Value::as_str)
+            .is_some_and(|id| id.contains("[x]"));
+    let Some(slicing) = element.get_mut("slicing") else {
+        return;
+    };
+    if choice_type_slicing && slicing.get("ordered").is_none() {
+        set_field(slicing, "ordered", Value::Bool(false));
+    }
+    if extension_anchor
+        && extension_url_slicing
+        && top_level_extension_anchor
+        && slicing.get("ordered").is_none()
+        && slicing.get("description").is_none()
+    {
+        set_field(
+            slicing,
+            "description",
+            Value::String("Extensions are always sliced by (at least) url".to_string()),
+        );
+    }
+}
+
+fn has_extension_url_slicing(slicing: &Value) -> bool {
+    slicing
+        .get("discriminator")
+        .and_then(Value::as_array)
+        .map(|discriminators| {
+            discriminators.iter().any(|d| {
+                d.get("type").and_then(Value::as_str) == Some("value")
+                    && d.get("path").and_then(Value::as_str) == Some("url")
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn is_direct_slice_of(id: &str, anchor_id: &str) -> bool {
+    let Some(rest) = id.strip_prefix(anchor_id) else {
+        return false;
+    };
+    let Some(first) = rest.as_bytes().first() else {
+        return false;
+    };
+    if *first != b':' && *first != b'/' {
+        return false;
+    }
+    !rest[1..].contains('.') && !rest[1..].contains(':') && !rest[1..].contains('/')
+}
+
 fn unfold_content_reference_parent(
     elements: &mut Vec<Value>,
     parent_index: usize,
@@ -1479,11 +3455,28 @@ fn unfold_content_reference_parent(
     base_spec_url: &str,
     ctx: &PackageContext,
     native_r5: bool,
+    original_elements: &[Value],
 ) -> anyhow::Result<bool> {
+    let original_content_reference = || {
+        original_elements
+            .iter()
+            .find(|element| element.get("id").and_then(Value::as_str) == Some(parent_id))
+            .or_else(|| {
+                unsliced_element_id(parent_id).and_then(|unsliced_id| {
+                    original_elements.iter().find(|element| {
+                        element.get("id").and_then(Value::as_str) == Some(unsliced_id.as_str())
+                    })
+                })
+            })
+            .and_then(|element| element.get("contentReference"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
     let Some(content_reference) = elements[parent_index]
         .get("contentReference")
         .and_then(Value::as_str)
         .map(str::to_string)
+        .or_else(original_content_reference)
     else {
         return Ok(false);
     };
@@ -1492,35 +3485,36 @@ fn unfold_content_reference_parent(
         return Ok(false);
     };
 
-    let (target, source_children, source_spec_url, source_strip_non_inherited) =
-        if source_url == base_url {
-            let (target, children) = collect_content_reference_source(elements, &target_id);
-            (
-                target,
-                children,
-                base_spec_url.to_string(),
-                native_r5 || base_spec_url.contains("/R5/"),
-            )
-        } else {
-            let Some(source) = ctx.fetch(&source_url) else {
-                return Ok(false);
-            };
-            let source_spec_url = spec_url_for_structure(&source, native_r5);
-            let source_strip_non_inherited = native_r5 || strips_non_inherited_extensions(&source);
-            let source_owned = source
-                .get("snapshot")
-                .and_then(|s| s.get("element"))
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            let (target, children) = collect_content_reference_source(&source_owned, &target_id);
-            (
-                target,
-                children,
-                source_spec_url,
-                source_strip_non_inherited,
-            )
+    let (target, source_children, source_spec_url, source_strip_non_inherited) = if source_url
+        == base_url
+    {
+        let (target, children) = collect_content_reference_source(original_elements, &target_id);
+        (
+            target,
+            children,
+            base_spec_url.to_string(),
+            native_r5 || base_spec_url.contains("/R5/"),
+        )
+    } else {
+        let Some(source) = ctx.fetch(&source_url) else {
+            return Ok(false);
         };
+        let source_spec_url = spec_url_for_structure(&source, native_r5);
+        let source_strip_non_inherited = native_r5 || strips_non_inherited_extensions(&source);
+        let source_owned = source
+            .get("snapshot")
+            .and_then(|s| s.get("element"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let (target, children) = collect_content_reference_source(&source_owned, &target_id);
+        (
+            target,
+            children,
+            source_spec_url,
+            source_strip_non_inherited,
+        )
+    };
     let Some(target) = target else {
         return Ok(false);
     };
@@ -1544,6 +3538,15 @@ fn unfold_content_reference_parent(
             .and_then(|source| snapshot_source_value(&source))
     };
     let target_prefix = format!("{target_id}.");
+    let existing_ids: HashSet<String> = elements
+        .iter()
+        .filter_map(|element| {
+            element
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect();
     let mut children = Vec::new();
     for child in source_children {
         let child_id = child.get("id").and_then(Value::as_str).unwrap_or("");
@@ -1578,15 +3581,36 @@ fn unfold_content_reference_parent(
                 Value::String(path.replacen(&target_path, parent_path, 1)),
             );
         }
+        if clone
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| existing_ids.contains(id))
+        {
+            continue;
+        }
         absolutize_content_reference(&mut clone, &source_url);
         children.push(clone);
     }
 
-    let insert_at = parent_index + 1;
+    let insert_at = unfolded_child_insert_index(elements, parent_index, parent_id);
     for (offset, child) in children.into_iter().enumerate() {
         elements.insert(insert_at + offset, child);
     }
     Ok(true)
+}
+
+fn unfolded_child_insert_index(elements: &[Value], parent_index: usize, parent_id: &str) -> usize {
+    let child_prefix = format!("{parent_id}.");
+    let mut insert_at = parent_index + 1;
+    while insert_at < elements.len()
+        && elements[insert_at]
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id.starts_with(&child_prefix))
+    {
+        insert_at += 1;
+    }
+    insert_at
 }
 
 fn collect_content_reference_source(
@@ -1613,9 +3637,6 @@ fn collect_content_reference_source(
 }
 
 fn rehome_unfolded_type_constraint_sources(element: &mut Value, type_url: &str, base_url: &str) {
-    if is_core_structure_url(base_url) {
-        return;
-    }
     let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
         return;
     };
@@ -1628,10 +3649,6 @@ fn rehome_unfolded_type_constraint_sources(element: &mut Value, type_url: &str, 
             set_field(constraint, "source", Value::String(base_url.to_string()));
         }
     }
-}
-
-fn is_core_structure_url(url: &str) -> bool {
-    url.starts_with("http://hl7.org/fhir/StructureDefinition/")
 }
 
 fn split_content_reference(content_reference: &str, default_url: &str) -> Option<(String, String)> {
@@ -1653,23 +3670,103 @@ fn absolutize_content_reference(element: &mut Value, source_url: &str) {
     else {
         return;
     };
-    if content_reference.starts_with('#') {
+    if let Some(fragment) = content_reference.strip_prefix('#') {
+        let base_url = content_reference_base_url(source_url, fragment);
         set_field(
             element,
             "contentReference",
-            Value::String(format!("{source_url}{content_reference}")),
+            Value::String(format!("{base_url}#{fragment}")),
         );
     }
+}
+
+fn content_reference_base_url(source_url: &str, fragment: &str) -> String {
+    if source_url.starts_with("http://hl7.org/fhir/StructureDefinition/") {
+        let target_root = fragment.split('.').next().unwrap_or("");
+        let source_tail = source_url.rsplit('/').next().unwrap_or("");
+        if target_root != source_tail
+            && target_root
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_uppercase())
+        {
+            return format!("http://hl7.org/fhir/StructureDefinition/{target_root}");
+        }
+    }
+    source_url.to_string()
 }
 
 fn merge_diff_into_element(
     target: &mut Value,
     diff: &Value,
     strip_non_inherited: bool,
+    preserve_common_binding: bool,
+    diff_must_support_ids: Option<&HashSet<String>>,
+    inherited_must_support_ids: Option<&HashSet<String>>,
+    original_ids: Option<&HashSet<String>>,
     constraint_source: &str,
 ) -> anyhow::Result<()> {
     let is_extension_doco = check_extension_doco(target);
-    merge_extensions_from_definition(target, diff, strip_non_inherited);
+    let is_slice_descendant = diff
+        .get("id")
+        .and_then(Value::as_str)
+        .is_some_and(is_child_below_slice_id);
+    if diff
+        .get("id")
+        .and_then(Value::as_str)
+        .is_some_and(is_direct_slice_id)
+        && diff_has_obligation_extension(diff)
+    {
+        remove_unprovenanced_obligation_extensions(target);
+    }
+    merge_extensions_from_definition(target, diff, strip_non_inherited, preserve_common_binding);
+    let source_child_has_differential_ms = is_slice_descendant
+        && diff.get("id").and_then(Value::as_str).is_some_and(|id| {
+            diff_must_support_ids.is_some_and(|ids| {
+                unsliced_element_id(id).is_some_and(|unsliced| ids.contains(&unsliced))
+                    || ids
+                        .iter()
+                        .any(|ms_id| differential_id_generalizes_sliced_id(ms_id, id))
+                    || (is_direct_extension_slice_value_id(id)
+                        && ids.iter().any(|ms_id| ms_id.starts_with(&format!("{id}."))))
+            })
+        });
+    if is_slice_descendant {
+        dedupe_extension_values(target, "extension");
+        let has_must_support_slice_ancestor =
+            diff.get("id").and_then(Value::as_str).is_some_and(|id| {
+                diff_constrains_must_support_shape(diff)
+                    && (unsliced_id_or_non_slice_root_ancestor_has_must_support(
+                        id,
+                        inherited_must_support_ids,
+                    ) || extension_slice_root_has_differential_must_support(
+                        id,
+                        diff_must_support_ids,
+                    ))
+                    && diff_must_support_ids.is_some_and(|ids| {
+                        ids.iter().any(|ms_id| {
+                            is_direct_slice_id(ms_id) && id.starts_with(&format!("{ms_id}."))
+                        })
+                    })
+            });
+        let diff_has_obligation = diff_has_obligation_extension(diff);
+        let diff_is_existing_slice_descendant = diff_constrains_must_support_shape(diff)
+            && diff
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| original_ids.is_some_and(|ids| ids.contains(id)));
+        if diff.get("mustSupport").is_none()
+            && (diff_constrains_must_support_shape(diff) || diff_has_text_fields(diff))
+            && !source_child_has_differential_ms
+            && !has_must_support_slice_ancestor
+            && !diff_has_obligation
+            && !diff_is_existing_slice_descendant
+            && !is_comment_only_slice_descendant_diff(diff)
+            && target.get("mustSupport").and_then(Value::as_bool) != Some(false)
+        {
+            remove_field(target, "mustSupport");
+        }
+    }
     if is_explicit_slice_descendant_without_extensions(diff) {
         remove_obligation_extensions(target);
     }
@@ -1693,6 +3790,56 @@ fn merge_diff_into_element(
     merge_max_cardinality(target, diff);
     copy_if_present(target, diff, "maxLength");
     copy_if_present(target, diff, "mustSupport");
+    if is_slice_descendant
+        && diff.get("mustSupport").is_none()
+        && target.get("mustSupport").and_then(Value::as_bool) != Some(false)
+        && diff.get("id").and_then(Value::as_str).is_some_and(|id| {
+            source_child_has_differential_ms
+                || (diff_constrains_must_support_shape(diff)
+                    && (unsliced_id_or_non_slice_root_ancestor_has_must_support(
+                        id,
+                        inherited_must_support_ids,
+                    ) || extension_slice_root_has_differential_must_support(
+                        id,
+                        diff_must_support_ids,
+                    ))
+                    && diff_must_support_ids.is_some_and(|ids| {
+                        ids.iter().any(|ms_id| {
+                            is_direct_slice_id(ms_id) && id.starts_with(&format!("{ms_id}."))
+                        })
+                    }))
+                || (!diff_constrains_must_support_shape(diff)
+                    && has_fixed_or_pattern_value(target)
+                    && element_min_is_positive(target)
+                    && unsliced_or_slice_anchor_ancestor_has_must_support(
+                        id,
+                        inherited_must_support_ids,
+                    ))
+        })
+    {
+        set_field(target, "mustSupport", Value::Bool(true));
+    }
+    if is_slice_descendant
+        && diff.get("mustSupport").is_none()
+        && !diff_constrains_must_support_shape(diff)
+        && diff_has_text_fields(diff)
+        && !diff_has_obligation_extension(diff)
+        && !is_comment_only_slice_descendant_diff(diff)
+    {
+        remove_field(target, "mustSupport");
+    }
+    if is_slice_descendant
+        && diff.get("mustSupport").is_none()
+        && has_fixed_or_pattern_value(diff)
+        && diff.get("min").is_none()
+        && diff.get("max").is_none()
+        && !source_child_has_differential_ms
+        && diff.get("id").and_then(Value::as_str).is_some_and(|id| {
+            !unsliced_exact_element_has_must_support(id, inherited_must_support_ids)
+        })
+    {
+        remove_field(target, "mustSupport");
+    }
     copy_if_present(target, diff, "mustHaveValue");
     copy_if_present(target, diff, "contentReference");
     copy_if_present(target, diff, "slicing");
@@ -1704,11 +3851,30 @@ fn merge_diff_into_element(
             remove_field(slicing, "description");
         }
     }
+    normalize_copied_slicing(target);
 
     copy_choice_prefix(target, diff, "fixed");
     copy_choice_prefix(target, diff, "pattern");
     copy_choice_prefix(target, diff, "minValue");
     copy_choice_prefix(target, diff, "maxValue");
+    if is_slice_descendant
+        && diff.get("mustSupport").is_none()
+        && target.get("mustSupport").and_then(Value::as_bool) != Some(false)
+        && has_pattern_value(target)
+        && element_min_is_positive(target)
+        && fixed_pattern_min_child_can_inherit_ms(target)
+        && diff.get("id").and_then(Value::as_str).is_some_and(|id| {
+            unsliced_or_slice_anchor_ancestor_has_must_support(id, inherited_must_support_ids)
+        })
+    {
+        set_field(target, "mustSupport", Value::Bool(true));
+    }
+    if is_slice_descendant
+        && diff.get("mustSupport").is_none()
+        && is_identifier_type_pattern_diff(diff)
+    {
+        remove_field(target, "mustSupport");
+    }
 
     if diff.get("isSummary").is_some() && target.get("isSummary") != diff.get("isSummary") {
         bail!(
@@ -1729,12 +3895,15 @@ fn merge_diff_into_element(
     }
 
     if let Some(t) = diff.get("type") {
-        set_field(target, "type", t.clone());
-        if target.get("binding").is_some() && !has_bindable_type(target) {
-            remove_field(target, "binding");
+        merge_type_entries(target, t);
+        if target.get("contentReference").is_some() {
+            remove_field(target, "contentReference");
         }
     }
     normalize_type_slicing(target, diff);
+    if target.get("binding").is_some() && !has_bindable_type(target) {
+        remove_field(target, "binding");
+    }
 
     if is_root_element(target) {
         remove_field(target, "requirements");
@@ -1748,7 +3917,170 @@ fn is_explicit_slice_descendant_without_extensions(diff: &Value) -> bool {
         && diff
             .get("id")
             .and_then(Value::as_str)
-            .is_some_and(has_slice_marker)
+            .is_some_and(is_slice_descendant_id)
+}
+
+fn diff_constrains_must_support_shape(diff: &Value) -> bool {
+    let Some(obj) = diff.as_object() else {
+        return false;
+    };
+    obj.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "id" | "path"
+                | "sliceName"
+                | "short"
+                | "definition"
+                | "comment"
+                | "label"
+                | "requirements"
+                | "alias"
+                | "mapping"
+        )
+    })
+}
+
+fn diff_has_text_fields(diff: &Value) -> bool {
+    diff.as_object().is_some_and(|obj| {
+        obj.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "short" | "definition" | "comment" | "label" | "requirements" | "alias" | "mapping"
+            )
+        })
+    })
+}
+
+fn is_comment_only_slice_descendant_diff(diff: &Value) -> bool {
+    let Some(obj) = diff.as_object() else {
+        return false;
+    };
+    diff.get("id")
+        .and_then(Value::as_str)
+        .is_some_and(is_slice_descendant_id)
+        && obj.contains_key("comment")
+        && obj
+            .keys()
+            .all(|key| matches!(key.as_str(), "id" | "path" | "comment"))
+}
+
+fn is_identifier_type_pattern_diff(diff: &Value) -> bool {
+    diff.get("id")
+        .and_then(Value::as_str)
+        .is_some_and(|id| id.contains(".identifier:") && id.ends_with(".type"))
+        && diff.get("patternCodeableConcept").is_some()
+}
+
+fn unsliced_id_or_non_slice_root_ancestor_has_must_support(
+    id: &str,
+    inherited_must_support_ids: Option<&HashSet<String>>,
+) -> bool {
+    let Some(inherited_must_support_ids) = inherited_must_support_ids else {
+        return false;
+    };
+    let direct_slice_anchor = first_slice_anchor_id(id);
+    let mut current = unsliced_element_id(id).unwrap_or_else(|| id.to_string());
+    loop {
+        if inherited_must_support_ids.contains(&current)
+            && direct_slice_anchor.as_deref() != Some(current.as_str())
+        {
+            return true;
+        }
+        let Some(dot) = current.rfind('.') else {
+            return false;
+        };
+        current.truncate(dot);
+    }
+}
+
+fn unsliced_exact_element_has_must_support(
+    id: &str,
+    inherited_must_support_ids: Option<&HashSet<String>>,
+) -> bool {
+    let Some(inherited_must_support_ids) = inherited_must_support_ids else {
+        return false;
+    };
+    let unsliced = unsliced_element_id(id).unwrap_or_else(|| id.to_string());
+    inherited_must_support_ids.contains(&unsliced)
+}
+
+fn unsliced_or_slice_anchor_ancestor_has_must_support(
+    id: &str,
+    inherited_must_support_ids: Option<&HashSet<String>>,
+) -> bool {
+    let Some(inherited_must_support_ids) = inherited_must_support_ids else {
+        return false;
+    };
+    let mut current = unsliced_element_id(id).unwrap_or_else(|| id.to_string());
+    loop {
+        if inherited_must_support_ids.contains(&current) {
+            return true;
+        }
+        let Some(dot) = current.rfind('.') else {
+            return false;
+        };
+        current.truncate(dot);
+    }
+}
+
+fn first_slice_anchor_id(id: &str) -> Option<String> {
+    let mut out = String::new();
+    for (index, segment) in id.split('.').enumerate() {
+        if index > 0 {
+            out.push('.');
+        }
+        let (base, has_slice) = segment_base_and_slice_marker(segment);
+        out.push_str(base);
+        if has_slice {
+            return Some(out);
+        }
+    }
+    None
+}
+
+fn extension_slice_root_has_differential_must_support(
+    _id: &str,
+    _diff_must_support_ids: Option<&HashSet<String>>,
+) -> bool {
+    false
+}
+
+fn is_direct_extension_slice_value_id(id: &str) -> bool {
+    let mut segments = id.rsplit('.');
+    if segments.next() != Some("value[x]") {
+        return false;
+    }
+    segments.next().is_some_and(|segment| {
+        let (base, has_slice) = segment_base_and_slice_marker(segment);
+        has_slice && matches!(base, "extension" | "modifierExtension")
+    })
+}
+
+fn is_slice_descendant_id(id: &str) -> bool {
+    id.find([':', '/'])
+        .is_some_and(|index| id[index + 1..].contains('.'))
+}
+
+fn is_child_below_slice_id(id: &str) -> bool {
+    if !has_slice_marker(id) {
+        return false;
+    }
+    let last_segment = id.rsplit('.').next().unwrap_or(id);
+    !has_slice_marker(last_segment)
+}
+
+fn is_direct_slice_id(id: &str) -> bool {
+    if !has_slice_marker(id) {
+        return false;
+    }
+    let last_segment = id.rsplit('.').next().unwrap_or(id);
+    has_slice_marker(last_segment)
+}
+
+fn diff_has_obligation_extension(diff: &Value) -> bool {
+    diff.get("extension")
+        .and_then(Value::as_array)
+        .is_some_and(|exts| exts.iter().any(is_obligation_extension))
 }
 
 fn remove_obligation_extensions(target: &mut Value) {
@@ -1758,16 +4090,53 @@ fn remove_obligation_extensions(target: &mut Value) {
     let Some(Value::Array(exts)) = obj.get_mut("extension") else {
         return;
     };
-    exts.retain(|ext| {
-        ext.get("url").and_then(Value::as_str)
-            != Some("http://hl7.org/fhir/StructureDefinition/obligation")
-    });
+    exts.retain(|ext| !is_obligation_extension(ext));
     if exts.is_empty() {
         obj.remove("extension");
     }
 }
 
+fn remove_unprovenanced_obligation_extensions(target: &mut Value) {
+    let Some(obj) = target.as_object_mut() else {
+        return;
+    };
+    let Some(Value::Array(exts)) = obj.get_mut("extension") else {
+        return;
+    };
+    exts.retain(|ext| !is_obligation_extension(ext) || obligation_has_snapshot_source(ext));
+    if exts.is_empty() {
+        obj.remove("extension");
+    }
+}
+
+fn obligation_has_snapshot_source(ext: &Value) -> bool {
+    ext.get("extension")
+        .and_then(Value::as_array)
+        .is_some_and(|children| {
+            children.iter().any(|child| {
+                child.get("url").and_then(Value::as_str)
+                    == Some("http://hl7.org/fhir/tools/StructureDefinition/snapshot-source")
+            })
+        })
+}
+
+fn is_obligation_extension(ext: &Value) -> bool {
+    ext.get("url").and_then(Value::as_str)
+        == Some("http://hl7.org/fhir/StructureDefinition/obligation")
+}
+
+fn is_structuredefinition_hierarchy_extension(ext: &Value) -> bool {
+    ext.get("url").and_then(Value::as_str) == Some(STRUCTUREDEFINITION_HIERARCHY_URL)
+}
+
 fn normalize_type_slicing(element: &mut Value, diff: &Value) {
+    if diff
+        .get("id")
+        .and_then(Value::as_str)
+        .is_some_and(is_child_below_slice_id)
+    {
+        return;
+    }
     let Some(types) = diff.get("type").and_then(Value::as_array) else {
         return;
     };
@@ -1845,49 +4214,34 @@ fn has_profiled_extension_type(element: &Value) -> bool {
     first_extension_profile_url(element).is_some()
 }
 
-fn normalize_plan_definition_variable_comment(slice: &Value, root: &mut Value, profile_url: &str) {
-    let bare_url = profile_url
-        .split_once('|')
-        .map(|(url, _)| url)
-        .unwrap_or(profile_url);
-    if bare_url != "http://hl7.org/fhir/StructureDefinition/variable"
-        || slice.get("path").and_then(Value::as_str) != Some("PlanDefinition.extension")
-    {
-        return;
-    }
-    let Some(comment) = root
-        .get("comment")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-    else {
-        return;
-    };
-    let normalized = comment.replace(
-        "http://hl7.org/fhir/uv/sdc/2025Jan/behavior.html#variable",
-        "http://hl7.org/fhir/uv/sdc/STU4-ballot/behavior.html#variable",
-    );
-    set_field(root, "comment", Value::String(normalized));
-}
-
 fn apply_extension_profile_root(
     slice: &mut Value,
     diff: &Value,
     ctx: &PackageContext,
     native_r5: bool,
     host_extension_source: Option<&str>,
+    copy_profile_root_condition: bool,
     allow_local_root_constraints: bool,
     allow_local_root_condition: bool,
 ) -> anyhow::Result<()> {
-    let Some(profile_url) =
-        first_extension_profile_url(diff).or_else(|| first_extension_profile_url(slice))
+    let diff_supplies_extension_profile = first_extension_profile_url(diff).is_some();
+    let Some(profile_url_owned) = first_extension_profile_url(diff)
+        .or_else(|| first_extension_profile_url(slice))
+        .map(str::to_string)
     else {
         return Ok(());
     };
+    let profile_url = profile_url_owned.as_str();
     if uses_generic_extension_doco_profile(profile_url) {
         apply_generic_extension_doco(slice);
         return Ok(());
     }
+    let is_local_profile = ctx.is_local(profile_url);
     let Some(profile) = profile_with_snapshot(profile_url, ctx, native_r5)? else {
+        if apply_native_r5_known_extension_root(slice, profile_url, native_r5) {
+            return Ok(());
+        }
+        apply_missing_profile_extension_slice_doco(slice);
         return Ok(());
     };
     let Some(root) = profile
@@ -1899,6 +4253,7 @@ fn apply_extension_profile_root(
         return Ok(());
     };
     let mut root = root.clone();
+    let root_explicit_is_summary = root.get("isSummary").is_some();
     // Extension-root doco keeps Publisher's known-relative links (e.g.
     // workflow-extensions.html#instantiation) as-is; only freshly applied
     // extension slices reach here. Inherited copies of the same slice go through
@@ -1908,31 +4263,56 @@ fn apply_extension_profile_root(
         &spec_url_for_structure(&profile, native_r5),
         true,
     );
-    normalize_plan_definition_variable_comment(slice, &mut root, profile_url);
-    let is_local_profile = ctx.is_local(profile_url);
     let project_local_root_constraints =
         allow_local_root_constraints && projects_local_extension_root_constraints(profile_url);
+    let local_profile_had_loaded_snapshot =
+        is_local_profile && ctx.resource_has_loaded_snapshot(profile_url);
     if native_r5 && is_local_profile {
         if project_local_root_constraints {
-            convert_own_constraint_xpaths_to_extensions(&mut root);
+            if local_profile_had_loaded_snapshot {
+                if let Some(r4_root) =
+                    profile_with_snapshot(profile_url, ctx, false)?.and_then(|profile| {
+                        profile
+                            .get("snapshot")
+                            .and_then(|s| s.get("element"))
+                            .and_then(Value::as_array)
+                            .and_then(|a| a.first())
+                            .cloned()
+                    })
+                {
+                    add_constraint_xpath_extensions_from_source(&mut root, &r4_root);
+                } else {
+                    convert_own_constraint_xpaths_to_extensions(&mut root);
+                }
+            } else {
+                strip_constraint_extensions(&mut root);
+            }
             strip_constraint_xpaths(&mut root);
         }
         if root.get("isSummary").is_none() {
             set_field(&mut root, "isSummary", Value::Bool(false));
         }
     }
-    if is_core_extension_profile(profile_url) && root.get("isSummary").is_none() {
+    if diff_supplies_extension_profile
+        && is_core_extension_profile(profile_url)
+        && root.get("isSummary").is_none()
+    {
         set_field(&mut root, "isSummary", Value::Bool(false));
     }
     adjust_extension_root_constraint_sources(
         &mut root,
         slice,
         is_local_profile && project_local_root_constraints,
+        profile_url,
         host_extension_source,
     );
+    if !copy_profile_root_condition {
+        remove_field(&mut root, "condition");
+    }
     if (!is_local_profile && !allow_local_root_constraints)
-        || (is_local_profile && !allow_local_root_condition)
-        || diff.get("max").and_then(Value::as_str) == Some("0")
+        || (is_local_profile
+            && !allow_local_root_condition
+            && !keeps_extension_root_condition(profile_url))
         || omits_extension_root_condition(profile_url)
     {
         remove_field(&mut root, "condition");
@@ -1942,35 +4322,55 @@ fn apply_extension_profile_root(
     } else if is_local_profile && !project_local_root_constraints {
         retain_base_extension_constraints(&mut root);
     }
+    let is_modifier_extension_slice = slice
+        .get("path")
+        .or_else(|| diff.get("path"))
+        .and_then(Value::as_str)
+        .is_some_and(|path| path.ends_with(".modifierExtension"));
+    if is_local_profile
+        && root.get("comment").is_some()
+        && !has_semantic_element_extensions(slice)
+        && !has_semantic_element_extensions(diff)
+        && !is_modifier_extension_slice
+    {
+        strip_constraint_extensions(&mut root);
+    }
     fill_missing_constraint_sources_on_constrained_element(
         &mut root,
         host_extension_source.unwrap_or(profile_url),
     );
+    apply_native_r5_variable_extension_comment(&mut root, profile_url, native_r5);
 
-    for key in [
+    let mut overlay_keys = vec![
         "short",
         "definition",
         "comment",
         "requirements",
         "alias",
-        "condition",
-        "min",
-        "max",
         "isModifier",
         "isModifierReason",
         "mapping",
-    ] {
+    ];
+    if copy_profile_root_condition {
+        overlay_keys.push("condition");
+    }
+    for key in overlay_keys {
         if let Some(value) = root.get(key) {
-            set_field(slice, key, value.clone());
+            set_field(slice, key, extension_root_overlay_value(key, value));
         } else {
             remove_field(slice, key);
         }
     }
+    merge_min_cardinality(slice, &root);
+    merge_max_cardinality(slice, &root);
     // isSummary is never stripped by Java's root overlay: the slice keeps whatever
     // it inherits (a stored slice like us-core birthsex carries none; a fresh slice
-    // cloned from the unsliced extension element carries false). Only overwrite it
-    // when the (core/local) root explicitly carries an isSummary value.
-    if let Some(value) = root.get("isSummary") {
+    // cloned from the unsliced extension element carries false). Synthetic native
+    // R5 defaults added above do not count as explicit root values.
+    if root_explicit_is_summary {
+        let Some(value) = root.get("isSummary") else {
+            return Ok(());
+        };
         set_field(slice, "isSummary", value.clone());
     }
 
@@ -2000,6 +4400,65 @@ fn apply_extension_profile_root(
     Ok(())
 }
 
+fn extension_root_overlay_value(key: &str, value: &Value) -> Value {
+    if matches!(key, "short" | "definition" | "comment" | "requirements") {
+        if let Some(text) = value.as_str() {
+            return Value::String(text.trim_end().to_string());
+        }
+    }
+    value.clone()
+}
+
+fn apply_native_r5_variable_extension_comment(
+    root: &mut Value,
+    profile_url: &str,
+    native_r5: bool,
+) {
+    if !native_r5 || profile_url != "http://hl7.org/fhir/StructureDefinition/variable" {
+        return;
+    }
+    const R4_CORE_VARIABLE_COMMENT: &str = "Ordering of variable extension declarations is significant as variables declared in one repetition of this extension might be used in subsequent extension repetitions.";
+    const NATIVE_R5_VARIABLE_COMMENT: &str = "Ordering of variable extension declarations is significant as variables declared in one repetition of this extension might be used in subsequent extension repetitions\n\nFor questionnaires, see additional guidance and examples in the [SDC implementation guide](http://hl7.org/fhir/uv/sdc/2025Jan/behavior.html#variable).";
+    if root.get("comment").and_then(Value::as_str) == Some(R4_CORE_VARIABLE_COMMENT) {
+        set_field(
+            root,
+            "comment",
+            Value::String(NATIVE_R5_VARIABLE_COMMENT.to_string()),
+        );
+    }
+}
+
+fn apply_native_r5_known_extension_root(
+    slice: &mut Value,
+    profile_url: &str,
+    native_r5: bool,
+) -> bool {
+    if !native_r5 || profile_url != "http://hl7.org/fhir/StructureDefinition/cqf-fhirQueryPattern" {
+        return false;
+    }
+    const CQF_FHIR_QUERY_PATTERN_DEFINITION: &str = "A FHIR Query URL pattern that corresponds to the data specified by the data requirement. If multiple FHIR Query URLs are present, they each contribute to the data specified by the data requirement (i.e. the union of the results of the FHIR Queries represents the complete data for the data requirement). This is not a resolveable URL, in that it will contain 1) No base canonical (i.e. it's a relative query), and 2) Parameters using tokens that are delimited using double-braces and the context parameters are dependent solely on the subjectType, according to the following: Patient: context.patientId, Practitioner: context.practitionerId, Organization: context.organizationId, Location: context.locationId, Device: context.deviceId. For example, for a Library with a subjectType of Patient, the context parameter `{{context.patientId}}` will be used as a token to be replaced with the `id` of the Patient in context. This extension is used primarily to address the use case for satisfying a data requirement for a single subject. However, the query pattern could also be used to satisfy population level requests by removing the subject-level filter from the query.";
+    const CQF_FHIR_QUERY_PATTERN_COMMENT: &str = "Supports communicating a FHIR query (or set of queries) for the given data requirement. The query is server-specific, and will need to be created as informed by a CapabilityStatement. The $data-requirements operation should be expected to be able to provide an Endpoint or CapabilityStatement to provide this information.; If no endpoint or capability statement is provided, the capability statement of the server performing the operation is used.";
+    set_field(
+        slice,
+        "short",
+        Value::String("What FHIR query?".to_string()),
+    );
+    set_field(
+        slice,
+        "definition",
+        Value::String(CQF_FHIR_QUERY_PATTERN_DEFINITION.to_string()),
+    );
+    set_field(
+        slice,
+        "comment",
+        Value::String(CQF_FHIR_QUERY_PATTERN_COMMENT.to_string()),
+    );
+    remove_field(slice, "requirements");
+    remove_field(slice, "alias");
+    remove_field(slice, "mapping");
+    true
+}
+
 fn retain_base_extension_constraints(element: &mut Value) {
     let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
         return;
@@ -2010,6 +4469,15 @@ fn retain_base_extension_constraints(element: &mut Value) {
             Some("ele-1" | "ext-1")
         )
     });
+}
+
+fn strip_constraint_extensions(element: &mut Value) {
+    let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for constraint in constraints {
+        remove_field(constraint, "extension");
+    }
 }
 
 fn apply_generic_extension_doco(element: &mut Value) {
@@ -2023,6 +4491,30 @@ fn apply_generic_extension_doco(element: &mut Value) {
     remove_field(element, "requirements");
     remove_field(element, "alias");
     remove_field(element, "condition");
+    remove_field(element, "mapping");
+}
+
+fn apply_missing_profile_extension_slice_doco(element: &mut Value) {
+    let is_slice = element.get("sliceName").is_some()
+        || element
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(has_slice_marker);
+    if !is_slice {
+        return;
+    }
+    let path = element.get("path").and_then(Value::as_str).unwrap_or("");
+    if !path.ends_with(".extension") && !path.ends_with(".modifierExtension") {
+        return;
+    }
+    set_field(
+        element,
+        "definition",
+        Value::String("An Extension".to_string()),
+    );
+    remove_field(element, "comment");
+    remove_field(element, "requirements");
+    remove_field(element, "alias");
     remove_field(element, "mapping");
 }
 
@@ -2045,15 +4537,51 @@ fn convert_own_constraint_xpaths_to_extensions(element: &mut Value) {
     }
 }
 
+fn add_constraint_xpath_extensions_from_source(target: &mut Value, source: &Value) {
+    let mut xpaths = HashMap::new();
+    if let Some(source_constraints) = source.get("constraint").and_then(Value::as_array) {
+        for constraint in source_constraints {
+            let Some(key) = constraint.get("key").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(xpath) = constraint.get("xpath").and_then(Value::as_str) else {
+                continue;
+            };
+            xpaths.insert(key.to_string(), xpath.to_string());
+        }
+    }
+
+    let Some(target_constraints) = target.get_mut("constraint").and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for constraint in target_constraints {
+        let Some(key) = constraint.get("key").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(xpath) = xpaths.get(key) else {
+            continue;
+        };
+        if has_constraint_xpath_extension(constraint) {
+            continue;
+        }
+        add_constraint_extension_first(constraint, constraint_xpath_extension(xpath));
+    }
+}
+
 fn adjust_extension_root_constraint_sources(
     root: &mut Value,
     slice: &Value,
     local_profile: bool,
+    profile_url: &str,
     host_extension_source: Option<&str>,
 ) {
-    let Some(source) =
-        extension_slice_ext_constraint_source(slice, local_profile, host_extension_source)
-    else {
+    let Some(source) = extension_slice_ext_constraint_source(
+        slice,
+        local_profile,
+        profile_url,
+        host_extension_source,
+    ) else {
         return;
     };
     let Some(constraints) = root.get_mut("constraint").and_then(Value::as_array_mut) else {
@@ -2071,13 +4599,14 @@ fn adjust_extension_root_constraint_sources(
 fn extension_slice_ext_constraint_source(
     slice: &Value,
     local_profile: bool,
+    profile_url: &str,
     host_extension_source: Option<&str>,
 ) -> Option<String> {
     let path = slice.get("path").and_then(Value::as_str)?;
     if !path.ends_with(".extension") && !path.ends_with(".modifierExtension") {
         return None;
     }
-    if local_profile {
+    if local_profile || !is_core_extension_profile(profile_url) {
         Some(
             host_extension_source
                 .unwrap_or_else(|| {
@@ -2100,9 +4629,13 @@ fn omits_extension_root_condition(profile_url: &str) -> bool {
     profile_url.ends_with("/mcode-histology-morphology-behavior")
         || profile_url == "http://hl7.org/fhir/StructureDefinition/condition-related"
         || profile_url == "http://hl7.org/fhir/StructureDefinition/alternate-reference"
-        || profile_url == "http://hl7.org/fhir/StructureDefinition/workflow-supportingInfo"
         || profile_url
             == "http://hl7.org/fhir/us/ph-library/StructureDefinition/us-ph-named-eventtype-extension"
+}
+
+fn keeps_extension_root_condition(profile_url: &str) -> bool {
+    profile_url == "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-type"
+        || profile_url == "http://hl7.org/fhir/us/ndh/StructureDefinition/base-ext-org-alias-period"
 }
 
 fn is_core_extension_profile(profile_url: &str) -> bool {
@@ -2131,22 +4664,46 @@ fn apply_type_profile_root(
     let Some(profile) = ctx.fetch(profile_url) else {
         return Ok(());
     };
-    if !uses_profile_root_overlay(&profile) {
-        return Ok(());
-    }
-    let Some(mut root) = profile_root_element(&profile, ctx)? else {
+    let root_candidate = if let Some((root, source, snapshot_source)) =
+        local_differential_slice_resource_type_root(target, diff, &profile, profile_url, ctx)?
+    {
+        Some((root, source, snapshot_source))
+    } else {
+        if !uses_profile_root_overlay(&profile) {
+            return Ok(());
+        }
+        profile_root_element(&profile, ctx)?.map(|root| {
+            (
+                root,
+                profile_url.to_string(),
+                snapshot_source_value(&profile),
+            )
+        })
+    };
+    let Some((mut root, root_source, root_snapshot_source)) = root_candidate else {
         return Ok(());
     };
+    let root_must_support = root
+        .get("mustSupport")
+        .cloned()
+        .or_else(|| profile_root_must_support(&profile));
     if native_r5 {
         let constraint_xpaths = HashMap::new();
+        let preserve_common_binding =
+            native_r5 && is_r4_spec_url(&spec_url_for_structure(&profile, native_r5));
         project_element_to_native_r5(
             &mut root,
-            &structure_source(&profile, profile_url),
-            snapshot_source_value(&profile).as_deref(),
+            &root_source,
+            root_snapshot_source.as_deref(),
             &constraint_xpaths,
+            None,
+            false,
+            true,
+            None,
+            preserve_common_binding,
         );
     }
-    fill_missing_constraint_sources_on_constrained_element(&mut root, profile_url);
+    fill_missing_constraint_sources_on_constrained_element(&mut root, &root_source);
 
     // The short/definition/comment/requirements/alias/mapping overlay always
     // applies (ProfileUtilities.updateFromDefinition PU:2657-2671). The
@@ -2171,13 +4728,128 @@ fn apply_type_profile_root(
         keys.extend(["condition", "isModifier", "isModifierReason", "isSummary"]);
     }
     for key in keys {
+        if diff.get(key).is_some() {
+            continue;
+        }
         if let Some(value) = root.get(key) {
             set_field(target, key, value.clone());
         } else if key != "comment" {
             remove_field(target, key);
         }
     }
+    if single_type
+        && target
+            .get("path")
+            .and_then(Value::as_str)
+            .is_some_and(|path| path.ends_with(".resource"))
+    {
+        if let Some(value) = root.get("mustSupport").or(root_must_support.as_ref()) {
+            set_field(target, "mustSupport", value.clone());
+        }
+    }
     Ok(())
+}
+
+fn profile_root_must_support(profile: &Value) -> Option<Value> {
+    profile
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+        .and_then(|root| root.get("mustSupport"))
+        .cloned()
+        .or_else(|| {
+            profile
+                .get("differential")
+                .and_then(|s| s.get("element"))
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|root| root.get("mustSupport"))
+                .cloned()
+        })
+}
+
+fn local_differential_slice_resource_type_root(
+    target: &Value,
+    diff: &Value,
+    profile: &Value,
+    profile_url: &str,
+    ctx: &PackageContext,
+) -> anyhow::Result<Option<(Value, String, Option<String>)>> {
+    let root_diff = profile
+        .get("differential")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+        .and_then(|elements| elements.first());
+    if !(ctx.is_local(profile_url)
+        && profile.get("snapshot").is_none()
+        && root_diff.is_some_and(|root| is_profile_root_diff(profile, root))
+        && root_diff.is_none_or(|root| !root_diff_has_profile_text_overlay(root))
+        && target
+            .get("path")
+            .and_then(Value::as_str)
+            .is_some_and(|path| path.ends_with(".resource"))
+        && diff
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(is_slice_descendant_id))
+    {
+        return Ok(None);
+    }
+    let Some(type_code) = first_non_extension_type_code(diff) else {
+        return Ok(None);
+    };
+    let Some(type_def) = ctx.fetch(type_code) else {
+        return Ok(None);
+    };
+    let source = structure_source(&type_def, type_code);
+    let snapshot_source = snapshot_source_value(&type_def);
+    let mut root = profile_root_element(&type_def, ctx)?;
+    if let Some(root) = root.as_mut() {
+        if let Some(profile_root) = profile_root_element(profile, ctx)? {
+            prepend_profile_only_mappings(root, &profile_root);
+        }
+    }
+    Ok(root.map(|root| (root, source, snapshot_source)))
+}
+
+fn root_diff_has_profile_text_overlay(root: &Value) -> bool {
+    ["short", "definition", "comment", "requirements", "alias"]
+        .into_iter()
+        .any(|key| root.get(key).is_some())
+}
+
+fn prepend_profile_only_mappings(root: &mut Value, profile_root: &Value) {
+    let Some(profile_mappings) = profile_root.get("mapping").and_then(Value::as_array) else {
+        return;
+    };
+    let existing = root
+        .get("mapping")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut additions = Vec::new();
+    for mapping in profile_mappings {
+        if !existing.iter().any(|candidate| candidate == mapping)
+            && !additions.iter().any(|candidate| candidate == mapping)
+        {
+            additions.push(mapping.clone());
+        }
+    }
+    if additions.is_empty() {
+        return;
+    }
+    additions.extend(existing);
+    set_field(root, "mapping", Value::Array(additions));
+}
+
+fn first_non_extension_type_code(element: &Value) -> Option<&str> {
+    element
+        .get("type")
+        .and_then(Value::as_array)?
+        .iter()
+        .filter_map(|t| t.get("code").and_then(Value::as_str))
+        .find(|code| *code != "Extension")
 }
 
 fn uses_profile_root_overlay(profile: &Value) -> bool {
@@ -2197,11 +4869,52 @@ fn profile_root_element(profile: &Value, ctx: &PackageContext) -> anyhow::Result
         return Ok(Some(root.clone()));
     }
 
+    let profile_url = structure_url_or(profile, "");
     let diff_root = profile
         .get("differential")
         .and_then(|s| s.get("element"))
         .and_then(Value::as_array)
         .and_then(|a| a.first());
+    let has_root_diff = diff_root.is_some_and(|diff| is_profile_root_diff(profile, diff));
+    if ctx.is_local(&profile_url) && !has_root_diff {
+        let generated = generate_snapshot(
+            profile.clone(),
+            ctx,
+            SnapshotOptions {
+                sort_differential: true,
+                native_r5: false,
+                apply_extension_root_doco: false,
+            },
+        )?;
+        return Ok(generated
+            .get("snapshot")
+            .and_then(|s| s.get("element"))
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .cloned());
+    }
+    let base_is_differential_only = profile
+        .get("baseDefinition")
+        .and_then(Value::as_str)
+        .and_then(|base_url| ctx.fetch(base_url))
+        .is_some_and(|base| base.get("snapshot").is_none());
+    if ctx.is_local(&profile_url) && base_is_differential_only {
+        let generated = generate_snapshot(
+            profile.clone(),
+            ctx,
+            SnapshotOptions {
+                sort_differential: true,
+                native_r5: false,
+                apply_extension_root_doco: false,
+            },
+        )?;
+        return Ok(generated
+            .get("snapshot")
+            .and_then(|s| s.get("element"))
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .cloned());
+    }
 
     let base_root = profile
         .get("baseDefinition")
@@ -2225,6 +4938,10 @@ fn profile_root_element(profile: &Value, ctx: &PackageContext) -> anyhow::Result
                 &mut root,
                 diff_root,
                 strip_non_inherited,
+                false,
+                None,
+                None,
+                None,
                 &profile_constraint_source,
             )?;
             Ok(Some(root))
@@ -2287,6 +5004,22 @@ fn first_non_extension_profile_url(element: &Value) -> Option<&str> {
         .and_then(Value::as_array)?
         .first()?
         .as_str()
+}
+
+fn single_non_extension_profile_url(element: &Value) -> Option<&str> {
+    let types = element.get("type").and_then(Value::as_array)?;
+    if types.len() != 1 {
+        return None;
+    }
+    let ty = types.first()?;
+    if ty.get("code").and_then(Value::as_str) == Some("Extension") {
+        return None;
+    }
+    let profiles = ty.get("profile").and_then(Value::as_array)?;
+    if profiles.len() != 1 {
+        return None;
+    }
+    profiles.first()?.as_str()
 }
 
 #[derive(Clone, Copy)]
@@ -2379,16 +5112,30 @@ fn merge_unique_values_prepend(target: &mut Value, diff: &Value, key: &str) {
         .unwrap_or_default();
     let mut merged = Vec::new();
     for item in derived {
-        if !merged.contains(item) {
+        if !merged_contains_by_semantic_key(&merged, item, key) {
             merged.push(item.clone());
         }
     }
     for item in existing {
-        if !merged.contains(&item) {
+        if !merged_contains_by_semantic_key(&merged, &item, key) {
             merged.push(item);
         }
     }
     set_field(target, key, Value::Array(merged));
+}
+
+fn merged_contains_by_semantic_key(merged: &[Value], item: &Value, key: &str) -> bool {
+    if key == "mapping" {
+        let item_identity = item.get("identity").and_then(Value::as_str);
+        let item_map = item.get("map").and_then(Value::as_str);
+        if item_identity.is_some() && item_map.is_some() {
+            return merged.iter().any(|existing| {
+                existing.get("identity").and_then(Value::as_str) == item_identity
+                    && existing.get("map").and_then(Value::as_str) == item_map
+            });
+        }
+    }
+    merged.contains(item)
 }
 
 fn merge_unique_by_key(target: &mut Value, diff: &Value, key: &str, id_key: &str) {
@@ -2488,9 +5235,17 @@ fn merge_additional_binding(target: &mut Vec<Value>, source: &Value) {
     target.push(source.clone());
 }
 
-fn merge_extensions_from_definition(target: &mut Value, diff: &Value, strip_non_inherited: bool) {
+fn merge_extensions_from_definition(
+    target: &mut Value,
+    diff: &Value,
+    strip_non_inherited: bool,
+    preserve_common_binding: bool,
+) {
     if strip_non_inherited {
-        remove_non_inherited_extensions(target);
+        remove_non_inherited_extensions_with_binding_policy(
+            target,
+            preserve_common_binding && has_semantic_element_extensions(target),
+        );
     }
     dedupe_extension_values(target, "extension");
     let Some(source_exts) = diff.get("extension").and_then(Value::as_array) else {
@@ -2498,13 +5253,20 @@ fn merge_extensions_from_definition(target: &mut Value, diff: &Value, strip_non_
     };
     let target_exts = ensure_array_field(target, "extension");
     for ext in source_exts {
-        if !target_exts.contains(ext) {
-            target_exts.push(ext.clone());
-        }
+        target_exts.push(ext.clone());
     }
+    dedupe_extension_values_except(target, "extension", allows_duplicate_extension_url);
 }
 
 fn dedupe_extension_values(parent: &mut Value, key: &str) {
+    dedupe_extension_values_except(parent, key, |_| false);
+}
+
+fn dedupe_extension_values_except(
+    parent: &mut Value,
+    key: &str,
+    allow_duplicate_url: impl Fn(&str) -> bool,
+) {
     let Some(obj) = parent.as_object_mut() else {
         return;
     };
@@ -2513,6 +5275,13 @@ fn dedupe_extension_values(parent: &mut Value, key: &str) {
     };
     let mut seen: Vec<Value> = Vec::new();
     exts.retain(|ext| {
+        if ext
+            .get("url")
+            .and_then(Value::as_str)
+            .is_some_and(&allow_duplicate_url)
+        {
+            return true;
+        }
         if seen.contains(ext) {
             false
         } else {
@@ -2523,6 +5292,10 @@ fn dedupe_extension_values(parent: &mut Value, key: &str) {
     if exts.is_empty() {
         obj.remove(key);
     }
+}
+
+fn allows_duplicate_extension_url(url: &str) -> bool {
+    url == USCDI_REQUIREMENT_EXTENSION_URL
 }
 
 fn has_bindable_type(element: &Value) -> bool {
@@ -2545,6 +5318,63 @@ fn has_bindable_type(element: &Value) -> bool {
     })
 }
 
+fn merge_type_entries(target: &mut Value, derived: &Value) {
+    let Some(derived_types) = derived.as_array() else {
+        set_field(target, "type", derived.clone());
+        return;
+    };
+    let inherited_types = target
+        .get("type")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut merged = Vec::new();
+    for derived_type in derived_types {
+        let mut next = derived_type.clone();
+        if let Some(code) = derived_type.get("code").and_then(Value::as_str) {
+            if let Some(inherited_type) = inherited_types
+                .iter()
+                .find(|candidate| candidate.get("code").and_then(Value::as_str) == Some(code))
+            {
+                merge_type_extensions(&mut next, inherited_type);
+            }
+        }
+        merged.push(next);
+    }
+    set_field(target, "type", Value::Array(merged));
+}
+
+fn merge_type_extensions(derived_type: &mut Value, inherited_type: &Value) {
+    let Some(inherited_exts) = inherited_type.get("extension").and_then(Value::as_array) else {
+        return;
+    };
+    let Some(derived_obj) = derived_type.as_object_mut() else {
+        return;
+    };
+    let mut merged = derived_obj
+        .get("extension")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for ext in inherited_exts.iter().filter(|ext| {
+        !is_obligation_extension(ext) && !is_structuredefinition_hierarchy_extension(ext)
+    }) {
+        if !merged.contains(ext) {
+            merged.push(ext.clone());
+        }
+    }
+    for ext in inherited_exts.iter().filter(|ext| {
+        is_obligation_extension(ext) && !is_structuredefinition_hierarchy_extension(ext)
+    }) {
+        if !merged.contains(ext) {
+            merged.push(ext.clone());
+        }
+    }
+    if !merged.is_empty() {
+        derived_obj.insert("extension".to_string(), Value::Array(merged));
+    }
+}
+
 fn is_root_element(element: &Value) -> bool {
     !element
         .get("path")
@@ -2557,6 +5387,18 @@ fn copy_if_present(target: &mut Value, diff: &Value, key: &str) {
     if let Some(value) = diff.get(key) {
         set_field(target, key, value.clone());
     }
+}
+
+fn merge_min_cardinality(target: &mut Value, diff: &Value) {
+    let Some(diff_min) = diff.get("min").and_then(Value::as_u64) else {
+        return;
+    };
+    let merged = target
+        .get("min")
+        .and_then(Value::as_u64)
+        .map(|current| current.max(diff_min))
+        .unwrap_or(diff_min);
+    set_field(target, "min", Value::Number(merged.into()));
 }
 
 fn merge_max_cardinality(target: &mut Value, diff: &Value) {
@@ -2643,7 +5485,14 @@ fn normalize_inherited_element(
     convert_own_xpaths: bool,
 ) -> Value {
     if strip_non_inherited {
-        remove_non_inherited_extensions(&mut element);
+        remove_non_inherited_extensions_with_binding_policy(
+            &mut element,
+            native_r5 && is_r4_spec_url(spec_url),
+        );
+    }
+    trim_inherited_text_fields(&mut element);
+    if element.get("comment").and_then(Value::as_str) == Some("-") {
+        remove_field(&mut element, "comment");
     }
     rewrite_markdown_links(&mut element, spec_url, false);
     if native_r5 || spec_url.contains("/R5/") {
@@ -2659,9 +5508,26 @@ fn normalize_inherited_element(
             constraint_source,
             snapshot_source,
             &constraint_xpaths,
+            None,
+            false,
+            true,
+            None,
+            native_r5 && is_r4_spec_url(spec_url),
         );
     }
     element
+}
+
+fn trim_inherited_text_fields(element: &mut Value) {
+    for key in ["short", "definition", "comment", "requirements", "label"] {
+        let Some(text) = element.get(key).and_then(Value::as_str) else {
+            continue;
+        };
+        let trimmed = text.trim_end();
+        if trimmed.len() != text.len() {
+            set_field(element, key, Value::String(trimmed.to_string()));
+        }
+    }
 }
 
 // Mirrors org.hl7.fhir.r5.conformance.profile.ProfileUtilities updateFromDefinition
@@ -2717,7 +5583,15 @@ fn spec_url_from_version(version: Option<&str>, native_r5: bool) -> String {
     }
 }
 
+fn is_r4_spec_url(spec_url: &str) -> bool {
+    spec_url.contains("/R4/")
+}
+
 fn project_r4_snapshot_to_native_r5(structure: &mut Value) {
+    let r4_native_projection = structure
+        .get("fhirVersion")
+        .and_then(Value::as_str)
+        .is_some_and(|version| version.starts_with('4'));
     let source = structure_source(
         structure,
         structure
@@ -2727,6 +5601,9 @@ fn project_r4_snapshot_to_native_r5(structure: &mut Value) {
     );
     let snapshot_source = snapshot_source_value(structure);
     let constraint_xpaths = differential_constraint_xpaths(structure);
+    let sourceless_differential_constraints = differential_sourceless_constraints(structure);
+    let additional_binding_elements = differential_additional_binding_elements(structure);
+    let differential_extension_urls = differential_extension_urls(structure);
     if let Some(elements) = structure
         .get_mut("snapshot")
         .and_then(|s| s.get_mut("element"))
@@ -2738,6 +5615,12 @@ fn project_r4_snapshot_to_native_r5(structure: &mut Value) {
                 &source,
                 snapshot_source.as_deref(),
                 &constraint_xpaths,
+                element_id_or_path(element).and_then(|key| differential_extension_urls.get(key)),
+                element_id_or_path(element)
+                    .is_some_and(|key| additional_binding_elements.contains(key)),
+                true,
+                Some(&sourceless_differential_constraints),
+                r4_native_projection,
             );
         }
     }
@@ -2752,6 +5635,12 @@ fn project_r4_snapshot_to_native_r5(structure: &mut Value) {
                 &source,
                 snapshot_source.as_deref(),
                 &constraint_xpaths,
+                element_id_or_path(element).and_then(|key| differential_extension_urls.get(key)),
+                element_id_or_path(element)
+                    .is_some_and(|key| additional_binding_elements.contains(key)),
+                false,
+                None,
+                r4_native_projection,
             );
         }
     }
@@ -2762,19 +5651,42 @@ fn project_element_to_native_r5(
     constraint_source: &str,
     snapshot_source: Option<&str>,
     constraint_xpaths: &HashMap<(String, String), String>,
+    differential_extension_urls: Option<&HashSet<String>>,
+    convert_additional_bindings: bool,
+    fill_missing_sources: bool,
+    sourceless_constraints: Option<&HashSet<(String, String)>>,
+    preserve_common_binding: bool,
 ) {
-    remove_non_inherited_extensions(element);
+    let r4_native_projection = preserve_common_binding;
+    let preserve_common_binding = r4_native_projection && has_semantic_element_extensions(element);
+    remove_non_inherited_extensions_except(
+        element,
+        differential_extension_urls,
+        preserve_common_binding,
+    );
     convert_constraint_xpaths_to_extensions(element, constraint_xpaths);
     strip_constraint_xpaths(element);
-    fill_missing_constraint_sources(element, constraint_source);
-    convert_additional_binding_extensions(element);
+    if fill_missing_sources {
+        fill_missing_constraint_sources(element, constraint_source, sourceless_constraints);
+    }
+    if convert_additional_bindings {
+        convert_additional_binding_extensions(element);
+    }
+    if r4_native_projection {
+        normalize_r4_native_binding(element);
+    }
     normalize_fhir_type_extension(element);
+    if r4_native_projection {
+        prune_r4_extension_value_choice_types(element);
+    }
     add_snapshot_source_to_obligations(element, snapshot_source);
     trim_mapping_maps(element);
 }
 
 const CONSTRAINT_XPATH_EXTENSION_URL: &str =
     "http://hl7.org/fhir/4.0/StructureDefinition/extension-ElementDefinition.constraint.xpath";
+const ADDITIONAL_BINDING_EXTENSION_URL: &str =
+    "http://hl7.org/fhir/tools/StructureDefinition/additional-binding";
 
 fn differential_constraint_xpaths(structure: &Value) -> HashMap<(String, String), String> {
     let mut out = HashMap::new();
@@ -2806,6 +5718,130 @@ fn differential_constraint_xpaths(structure: &Value) -> HashMap<(String, String)
         }
     }
     out
+}
+
+fn differential_sourceless_constraints(structure: &Value) -> HashSet<(String, String)> {
+    let mut out = HashSet::new();
+    let Some(elements) = structure
+        .get("differential")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+    else {
+        return out;
+    };
+    for element in elements {
+        let Some(element_key) = element_id_or_path(element) else {
+            continue;
+        };
+        let Some(constraints) = element.get("constraint").and_then(Value::as_array) else {
+            continue;
+        };
+        for constraint in constraints {
+            if constraint.get("source").is_some() {
+                continue;
+            }
+            let Some(key) = constraint.get("key").and_then(Value::as_str) else {
+                continue;
+            };
+            out.insert((element_key.to_string(), key.to_string()));
+        }
+    }
+    out
+}
+
+fn differential_additional_binding_elements(structure: &Value) -> HashSet<String> {
+    let mut out = HashSet::new();
+    let Some(elements) = structure
+        .get("differential")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+    else {
+        return out;
+    };
+    for element in elements {
+        let has_additional_binding = element
+            .get("binding")
+            .and_then(|binding| binding.get("extension"))
+            .and_then(Value::as_array)
+            .map(|extensions| {
+                extensions.iter().any(|ext| {
+                    ext.get("url").and_then(Value::as_str) == Some(ADDITIONAL_BINDING_EXTENSION_URL)
+                })
+            })
+            .unwrap_or(false);
+        if has_additional_binding {
+            if let Some(key) = element_id_or_path(element) {
+                out.insert(key.to_string());
+                if let Some(alias) = r4_concrete_choice_alias(key) {
+                    out.insert(alias);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn r4_concrete_choice_alias(id: &str) -> Option<String> {
+    let mut changed = false;
+    let segments: Vec<String> = id
+        .split('.')
+        .map(|segment| {
+            if segment.contains("[x]") || has_slice_marker(segment) {
+                return segment.to_string();
+            }
+            let Some(index) = segment
+                .char_indices()
+                .find_map(|(index, ch)| ch.is_ascii_uppercase().then_some(index))
+            else {
+                return segment.to_string();
+            };
+            if index == 0 {
+                return segment.to_string();
+            }
+            changed = true;
+            format!("{}[x]:{}", &segment[..index], segment)
+        })
+        .collect();
+    changed.then(|| segments.join("."))
+}
+
+fn differential_extension_urls(structure: &Value) -> HashMap<String, HashSet<String>> {
+    let mut out = HashMap::new();
+    let Some(elements) = structure
+        .get("differential")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+    else {
+        return out;
+    };
+    for element in elements {
+        let Some(element_key) = element_id_or_path(element) else {
+            continue;
+        };
+        let mut urls = HashSet::new();
+        collect_non_inherited_extension_urls(element, "extension", &mut urls);
+        if let Some(binding) = element.get("binding") {
+            collect_non_inherited_extension_urls(binding, "extension", &mut urls);
+        }
+        if !urls.is_empty() {
+            out.insert(element_key.to_string(), urls);
+        }
+    }
+    out
+}
+
+fn collect_non_inherited_extension_urls(parent: &Value, key: &str, urls: &mut HashSet<String>) {
+    let Some(exts) = parent.get(key).and_then(Value::as_array) else {
+        return;
+    };
+    for ext in exts {
+        let Some(url) = ext.get("url").and_then(Value::as_str) else {
+            continue;
+        };
+        if NON_INHERITED_ED_URLS.contains(&url) {
+            urls.insert(url.to_string());
+        }
+    }
 }
 
 fn convert_constraint_xpaths_to_extensions(
@@ -2891,9 +5927,7 @@ fn convert_additional_binding_extensions(element: &mut Value) {
     let mut additional = Vec::new();
     let mut kept = Vec::new();
     for ext in std::mem::take(exts) {
-        if ext.get("url").and_then(Value::as_str)
-            == Some("http://hl7.org/fhir/tools/StructureDefinition/additional-binding")
-        {
+        if ext.get("url").and_then(Value::as_str) == Some(ADDITIONAL_BINDING_EXTENSION_URL) {
             additional.push(convert_additional_binding_extension(&ext));
         } else {
             kept.push(ext);
@@ -2942,6 +5976,20 @@ fn convert_additional_binding_extension(ext: &Value) -> Value {
                         out.insert("shortDoco".to_string(), value.clone());
                     }
                 }
+                Some("usage") => {
+                    if let Some(value) = child.get("valueUsageContext") {
+                        out.entry("usage".to_string())
+                            .or_insert_with(|| Value::Array(vec![]))
+                            .as_array_mut()
+                            .expect("usage just inserted as array")
+                            .push(value.clone());
+                    }
+                }
+                Some("any") => {
+                    if let Some(value) = child.get("valueBoolean") {
+                        out.insert("any".to_string(), value.clone());
+                    }
+                }
                 _ => residual_exts.push(child.clone()),
             }
         }
@@ -2950,6 +5998,19 @@ fn convert_additional_binding_extension(ext: &Value) -> Value {
         out.insert("extension".to_string(), Value::Array(residual_exts));
     }
     Value::Object(out)
+}
+
+fn normalize_r4_native_binding(element: &mut Value) {
+    let Some(binding) = element.get_mut("binding") else {
+        return;
+    };
+    let value_set = binding.get("valueSet").and_then(Value::as_str);
+    let strength = binding.get("strength").and_then(Value::as_str);
+    if value_set == Some("http://hl7.org/fhir/ValueSet/ucum-vitals-common|4.0.1")
+        && strength == Some("required")
+    {
+        set_field(binding, "strength", Value::String("extensible".to_string()));
+    }
 }
 
 fn strip_constraint_xpaths(element: &mut Value) {
@@ -2961,7 +6022,12 @@ fn strip_constraint_xpaths(element: &mut Value) {
     }
 }
 
-fn fill_missing_constraint_sources(element: &mut Value, source: &str) {
+fn fill_missing_constraint_sources(
+    element: &mut Value,
+    source: &str,
+    sourceless_constraints: Option<&HashSet<(String, String)>>,
+) {
+    let element_key = element_id_or_path(element).map(str::to_string);
     let Some(constraints) = element.get_mut("constraint").and_then(Value::as_array_mut) else {
         return;
     };
@@ -2970,7 +6036,18 @@ fn fill_missing_constraint_sources(element: &mut Value, source: &str) {
             continue;
         };
         let key = obj.get("key").and_then(Value::as_str);
-        if !obj.contains_key("source") && !preserves_missing_constraint_source(key) {
+        let preserve_from_differential =
+            if let (Some(element_key), Some(key), Some(sourceless_constraints)) =
+                (element_key.as_deref(), key, sourceless_constraints)
+            {
+                sourceless_constraints.contains(&(element_key.to_string(), key.to_string()))
+            } else {
+                false
+            };
+        if !obj.contains_key("source")
+            && !preserve_from_differential
+            && !preserves_missing_constraint_source(key)
+        {
             obj.insert("source".to_string(), Value::String(source.to_string()));
         }
     }
@@ -2980,7 +6057,7 @@ fn preserves_missing_constraint_source(key: Option<&str>) -> bool {
     matches!(
         key,
         Some("us-core-16" | "us-core-17" | "us-core-18" | "us-core-19")
-    )
+    ) || key.is_some_and(|key| key.starts_with("ips-") || key.contains("-ips-"))
 }
 
 fn normalize_fhir_type_extension(element: &mut Value) {
@@ -3009,6 +6086,75 @@ fn normalize_fhir_type_extension(element: &mut Value) {
         }
     }
 }
+
+fn prune_r4_extension_value_choice_types(element: &mut Value) {
+    let id = element.get("id").and_then(Value::as_str).unwrap_or("");
+    let path = element.get("path").and_then(Value::as_str).unwrap_or("");
+    if !id.starts_with("Extension.") || !path.ends_with("value[x]") {
+        return;
+    }
+    let Some(types) = element.get_mut("type").and_then(Value::as_array_mut) else {
+        return;
+    };
+    types.retain(|ty| {
+        ty.get("code")
+            .and_then(Value::as_str)
+            .is_some_and(|code| R4_EXTENSION_VALUE_TYPE_CODES.contains(&code))
+    });
+}
+
+const R4_EXTENSION_VALUE_TYPE_CODES: &[&str] = &[
+    "base64Binary",
+    "boolean",
+    "canonical",
+    "code",
+    "date",
+    "dateTime",
+    "decimal",
+    "id",
+    "instant",
+    "integer",
+    "markdown",
+    "oid",
+    "positiveInt",
+    "string",
+    "time",
+    "unsignedInt",
+    "uri",
+    "url",
+    "uuid",
+    "Address",
+    "Age",
+    "Annotation",
+    "Attachment",
+    "CodeableConcept",
+    "Coding",
+    "ContactPoint",
+    "Count",
+    "Distance",
+    "Duration",
+    "HumanName",
+    "Identifier",
+    "Money",
+    "Period",
+    "Quantity",
+    "Range",
+    "Ratio",
+    "Reference",
+    "SampledData",
+    "Signature",
+    "Timing",
+    "ContactDetail",
+    "Contributor",
+    "DataRequirement",
+    "Expression",
+    "ParameterDefinition",
+    "RelatedArtifact",
+    "TriggerDefinition",
+    "UsageContext",
+    "Dosage",
+    "Meta",
+];
 
 fn is_root_resource_id(id_or_path: &str) -> bool {
     let Some((root, tail)) = id_or_path.split_once('.') else {
@@ -3170,34 +6316,45 @@ fn add_snapshot_source_to_obligations(element: &mut Value, snapshot_source: Opti
     let Some(snapshot_source) = snapshot_source else {
         return;
     };
-    let Some(exts) = element.get_mut("extension").and_then(Value::as_array_mut) else {
-        return;
-    };
-    for ext in exts {
-        if ext.get("url").and_then(Value::as_str)
-            != Some("http://hl7.org/fhir/StructureDefinition/obligation")
-        {
-            continue;
-        }
-        let children = ensure_array_field(ext, "extension");
-        if children.iter().any(|child| {
+    add_snapshot_source_to_obligations_in_value(element, snapshot_source);
+}
+
+fn add_snapshot_source_to_obligations_in_value(value: &mut Value, snapshot_source: &str) {
+    if value.get("url").and_then(Value::as_str)
+        == Some("http://hl7.org/fhir/StructureDefinition/obligation")
+    {
+        let children = ensure_array_field(value, "extension");
+        if !children.iter().any(|child| {
             child.get("url").and_then(Value::as_str)
                 == Some("http://hl7.org/fhir/tools/StructureDefinition/snapshot-source")
         }) {
-            continue;
+            let mut child = Map::new();
+            child.insert(
+                "url".to_string(),
+                Value::String(
+                    "http://hl7.org/fhir/tools/StructureDefinition/snapshot-source".to_string(),
+                ),
+            );
+            child.insert(
+                "valueCanonical".to_string(),
+                Value::String(snapshot_source.to_string()),
+            );
+            children.push(Value::Object(child));
         }
-        let mut child = Map::new();
-        child.insert(
-            "url".to_string(),
-            Value::String(
-                "http://hl7.org/fhir/tools/StructureDefinition/snapshot-source".to_string(),
-            ),
-        );
-        child.insert(
-            "valueCanonical".to_string(),
-            Value::String(snapshot_source.to_string()),
-        );
-        children.push(Value::Object(child));
+    }
+
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                add_snapshot_source_to_obligations_in_value(value, snapshot_source);
+            }
+        }
+        Value::Object(map) => {
+            for value in map.values_mut() {
+                add_snapshot_source_to_obligations_in_value(value, snapshot_source);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -3239,15 +6396,26 @@ fn snapshot_source_value(structure: &Value) -> Option<String> {
 // Mirrors org.hl7.fhir.r5.conformance.profile.ProfileUtilities.NON_INHERITED_ED_URLS.
 // These package metadata extensions are deliberately stripped from inherited
 // ElementDefinitions and bindings during Java snapshot generation.
+const ELEMENTDEFINITION_IS_COMMON_BINDING_URL: &str =
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-isCommonBinding";
+const STRUCTUREDEFINITION_EXPLICIT_TYPE_NAME_URL: &str =
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-explicit-type-name";
+const STRUCTUREDEFINITION_DISPLAY_HINT_URL: &str =
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-display-hint";
+const STRUCTUREDEFINITION_HIERARCHY_URL: &str =
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-hierarchy";
+const USCDI_REQUIREMENT_EXTENSION_URL: &str =
+    "http://hl7.org/fhir/us/core/StructureDefinition/uscdi-requirement";
+
 const NON_INHERITED_ED_URLS: &[&str] = &[
     "http://hl7.org/fhir/tools/StructureDefinition/binding-definition",
     "http://hl7.org/fhir/tools/StructureDefinition/no-binding",
-    "http://hl7.org/fhir/StructureDefinition/elementdefinition-isCommonBinding",
+    ELEMENTDEFINITION_IS_COMMON_BINDING_URL,
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-category",
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-implements",
-    "http://hl7.org/fhir/StructureDefinition/structuredefinition-explicit-type-name",
+    STRUCTUREDEFINITION_EXPLICIT_TYPE_NAME_URL,
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-security-category",
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-normative-version",
@@ -3257,14 +6425,105 @@ const NON_INHERITED_ED_URLS: &[&str] = &[
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-summary",
 ];
 
-fn remove_non_inherited_extensions(element: &mut Value) {
-    remove_extension_urls(element, "extension");
+fn remove_non_inherited_extensions_with_binding_policy(
+    element: &mut Value,
+    preserve_common_binding: bool,
+) {
+    let preserve_binding_common = preserve_common_binding && has_fixed_or_pattern_value(element);
+    remove_extension_urls_except_with_binding_policy(
+        element,
+        "extension",
+        None,
+        false,
+        preserve_common_binding,
+    );
     if let Some(binding) = element.get_mut("binding") {
-        remove_extension_urls(binding, "extension");
+        remove_extension_urls_except_with_binding_policy(
+            binding,
+            "extension",
+            None,
+            preserve_binding_common,
+            false,
+        );
     }
 }
 
-fn remove_extension_urls(parent: &mut Value, key: &str) {
+fn has_semantic_element_extensions(element: &Value) -> bool {
+    element
+        .get("extension")
+        .and_then(Value::as_array)
+        .map(|exts| {
+            exts.iter().any(|ext| {
+                ext.get("url")
+                    .and_then(Value::as_str)
+                    .is_some_and(is_semantic_element_extension_url)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn is_semantic_element_extension_url(url: &str) -> bool {
+    !NON_INHERITED_ED_URLS.contains(&url) && url != STRUCTUREDEFINITION_DISPLAY_HINT_URL
+}
+
+fn remove_non_inherited_extensions_except(
+    element: &mut Value,
+    keep_urls: Option<&HashSet<String>>,
+    preserve_common_binding: bool,
+) {
+    let preserve_binding_common = preserve_common_binding && has_fixed_or_pattern_value(element);
+    remove_extension_urls_except_with_binding_policy(
+        element,
+        "extension",
+        keep_urls,
+        false,
+        preserve_common_binding,
+    );
+    if let Some(binding) = element.get_mut("binding") {
+        remove_extension_urls_except_with_binding_policy(
+            binding,
+            "extension",
+            keep_urls,
+            preserve_binding_common,
+            false,
+        );
+    }
+}
+
+fn has_fixed_or_pattern_value(element: &Value) -> bool {
+    element.as_object().is_some_and(|obj| {
+        obj.keys()
+            .any(|key| key.starts_with("fixed") || key.starts_with("pattern"))
+    })
+}
+
+fn has_pattern_value(element: &Value) -> bool {
+    element
+        .as_object()
+        .is_some_and(|obj| obj.keys().any(|key| key.starts_with("pattern")))
+}
+
+fn element_min_is_positive(element: &Value) -> bool {
+    element
+        .get("min")
+        .and_then(Value::as_u64)
+        .is_some_and(|min| min > 0)
+}
+
+fn fixed_pattern_min_child_can_inherit_ms(element: &Value) -> bool {
+    element
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| path.contains(".identifier.") || path.contains(".coding."))
+}
+
+fn remove_extension_urls_except_with_binding_policy(
+    parent: &mut Value,
+    key: &str,
+    keep_urls: Option<&HashSet<String>>,
+    preserve_common_binding: bool,
+    preserve_explicit_type_name: bool,
+) {
     let Some(obj) = parent.as_object_mut() else {
         return;
     };
@@ -3274,6 +6533,9 @@ fn remove_extension_urls(parent: &mut Value, key: &str) {
     exts.retain(|ext| {
         let url = ext.get("url").and_then(Value::as_str).unwrap_or("");
         !NON_INHERITED_ED_URLS.contains(&url)
+            || keep_urls.is_some_and(|keep_urls| keep_urls.contains(url))
+            || (preserve_common_binding && url == ELEMENTDEFINITION_IS_COMMON_BINDING_URL)
+            || (preserve_explicit_type_name && url == STRUCTUREDEFINITION_EXPLICIT_TYPE_NAME_URL)
     });
     if exts.is_empty() {
         obj.remove(key);
@@ -3500,6 +6762,7 @@ impl PackageContext {
         let Some(files) = index.get("files").and_then(Value::as_array) else {
             return Ok(());
         };
+        let mut loaded = 0usize;
         for entry in files {
             if entry.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
                 continue;
@@ -3532,6 +6795,37 @@ impl PackageContext {
             }
             if let Some(name) = probe_name(&path) {
                 self.by_name.entry(name).or_insert_with(|| path.clone());
+            }
+            loaded += 1;
+        }
+        if loaded == 0 {
+            self.scan_package_structure_definitions(&package_dir)?;
+        }
+        Ok(())
+    }
+
+    fn scan_package_structure_definitions(&mut self, package_dir: &Path) -> anyhow::Result<()> {
+        let mut files = Vec::new();
+        for entry in std::fs::read_dir(package_dir)
+            .with_context(|| format!("cannot scan package directory {}", package_dir.display()))?
+        {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                files.push(path);
+            }
+        }
+        files.sort();
+        for path in files {
+            let Ok(json) = std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                .ok_or(())
+            else {
+                continue;
+            };
+            if json.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
+                self.index_structure_definition(path, &json);
             }
         }
         Ok(())
@@ -3624,14 +6918,33 @@ impl PackageContext {
             .unwrap_or(false)
     }
 
+    fn resource_has_loaded_snapshot(&self, query: &str) -> bool {
+        let Some(path) = self.resource_path(query) else {
+            return false;
+        };
+        let Ok(bytes) = std::fs::read(path) else {
+            return false;
+        };
+        let Ok(json) = serde_json::from_slice::<Value>(&bytes) else {
+            return false;
+        };
+        json.get("snapshot")
+            .and_then(|snapshot| snapshot.get("element"))
+            .and_then(Value::as_array)
+            .is_some()
+    }
+
     pub fn fetch(&self, query: &str) -> Option<Value> {
-        let path = self
-            .by_url
+        let path = self.resource_path(query)?;
+        serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+    }
+
+    fn resource_path(&self, query: &str) -> Option<&PathBuf> {
+        self.by_url
             .get(query)
             .map(|e| &e.path)
             .or_else(|| self.by_id.get(query))
-            .or_else(|| self.by_name.get(query))?;
-        serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+            .or_else(|| self.by_name.get(query))
     }
 }
 

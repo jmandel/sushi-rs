@@ -1,0 +1,41 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.darts#1.0.0-ballot",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.darts#1.0.0-ballot/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.darts#1.0.0-ballot/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.darts",
+    "version": "1.0.0-ballot",
+    "canonical": "http://hl7.org/fhir/us/darts",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.core": "8.0.1",
+      "us.nlm.vsac": "0.24.0",
+      "hl7.fhir.us.dapl": "1.0.0-ballot",
+      "hl7.fhir.uv.smart-app-launch": "2.2.0"
+    }
+  },
+  "counts": {
+    "scanned": 1,
+    "harvested": 1,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "darts-operation-data-urls-parameter",
+      "url": "http://hl7.org/fhir/us/darts/StructureDefinition/darts-operation-data-urls-parameter",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-darts-operation-data-urls-parameter.json",
+      "fixture": "fixtures/darts-operation-data-urls-parameter.json",
+      "differentialElements": 14
+    }
+  ],
+  "skipped": []
+}

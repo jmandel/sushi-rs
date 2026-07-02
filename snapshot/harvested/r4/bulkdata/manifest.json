@@ -1,0 +1,26 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.bulkdata#2.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.bulkdata#2.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.bulkdata#2.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.bulkdata",
+    "version": "2.0.0",
+    "canonical": "http://hl7.org/fhir/uv/bulkdata",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1"
+    }
+  },
+  "counts": {
+    "scanned": 0,
+    "harvested": 0,
+    "skipped": 0
+  },
+  "entries": [],
+  "skipped": []
+}

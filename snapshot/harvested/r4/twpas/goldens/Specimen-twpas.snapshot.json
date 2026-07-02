@@ -1,0 +1,2197 @@
+{
+  "resourceType" : "StructureDefinition",
+  "id" : "Specimen-twpas",
+  "url" : "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas",
+  "version" : "1.2.3",
+  "name" : "SpecimenTWPAS",
+  "title" : "基因檢測檢體-Specimen TWPAS",
+  "status" : "active",
+  "date" : "2026-05-27T12:01:55+08:00",
+  "publisher" : "衛生福利部中央健康保險署",
+  "contact" : [{
+    "name" : "衛生福利部中央健康保險署",
+    "telecom" : [{
+      "system" : "url",
+      "value" : "https://www.nhi.gov.tw"
+    }]
+  }],
+  "description" : "此基因檢測檢體-Specimen TWPAS Profile說明本IG如何進一步定義臺灣核心-檢體(TW Core Specimen) Profile以呈現事前審查中基因資訊之檢測檢體相關內容",
+  "fhirVersion" : "4.0.1",
+  "mapping" : [{
+    "identity" : "rim",
+    "uri" : "http://hl7.org/v3",
+    "name" : "RIM Mapping"
+  },
+  {
+    "identity" : "w5",
+    "uri" : "http://hl7.org/fhir/fivews",
+    "name" : "FiveWs Pattern Mapping"
+  },
+  {
+    "identity" : "v2",
+    "uri" : "http://hl7.org/v2",
+    "name" : "HL7 v2 Mapping"
+  }],
+  "kind" : "resource",
+  "abstract" : false,
+  "type" : "Specimen",
+  "baseDefinition" : "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Specimen-twcore",
+  "derivation" : "constraint",
+  "snapshot" : {
+    "extension" : [{
+      "url" : "http://hl7.org/fhir/tools/StructureDefinition/snapshot-base-version",
+      "valueString" : "0.3.2"
+    }],
+    "element" : [{
+      "id" : "Specimen",
+      "path" : "Specimen",
+      "short" : "用於分析的檢體",
+      "definition" : "用於分析的檢體",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen",
+        "min" : 0,
+        "max" : "*"
+      },
+      "constraint" : [{
+        "key" : "dom-2",
+        "severity" : "error",
+        "human" : "If the resource is contained in another resource, it SHALL NOT contain nested Resources",
+        "expression" : "contained.contained.empty()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/DomainResource"
+      },
+      {
+        "key" : "dom-3",
+        "severity" : "error",
+        "human" : "If the resource is contained in another resource, it SHALL be referred to from elsewhere in the resource or SHALL refer to the containing resource",
+        "expression" : "contained.where((('#'+id in (%resource.descendants().reference | %resource.descendants().as(canonical) | %resource.descendants().as(uri) | %resource.descendants().as(url))) or descendants().where(reference = '#').exists() or descendants().where(as(canonical) = '#').exists() or descendants().where(as(canonical) = '#').exists()).not()).trace('unmatched', id).empty()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/DomainResource"
+      },
+      {
+        "key" : "dom-4",
+        "severity" : "error",
+        "human" : "If a resource is contained in another resource, it SHALL NOT have a meta.versionId or a meta.lastUpdated",
+        "expression" : "contained.meta.versionId.empty() and contained.meta.lastUpdated.empty()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/DomainResource"
+      },
+      {
+        "key" : "dom-5",
+        "severity" : "error",
+        "human" : "If a resource is contained in another resource, it SHALL NOT have a security label",
+        "expression" : "contained.meta.security.empty()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/DomainResource"
+      },
+      {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestpractice",
+          "valueBoolean" : true
+        },
+        {
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestpractice-explanation",
+          "valueMarkdown" : "When a resource has no narrative, only systems that fully understand the data can display the resource to a human safely. Including a human readable representation in the resource makes for a much more robust eco-system and cheaper handling of resources by intermediary systems. Some ecosystems restrict distribution of resources to only those systems that do fully understand the resources, and as a consequence implementers may believe that the narrative is superfluous. However experience shows that such eco-systems often open up to new participants over time."
+        }],
+        "key" : "dom-6",
+        "severity" : "warning",
+        "human" : "A resource should have narrative for robust management",
+        "expression" : "text.`div`.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/DomainResource"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "Entity. Role, or Act"
+      },
+      {
+        "identity" : "rim",
+        "map" : "Role[classCode=SPEC]"
+      }]
+    },
+    {
+      "id" : "Specimen.id",
+      "path" : "Specimen.id",
+      "short" : "不重複的ID用以識別儲存在特定FHIR Server中的Specimen紀錄，通常又稱為邏輯性ID。",
+      "definition" : "resource的邏輯ID，在resource的URL中使用。一旦指定，這個值永遠不會改變。",
+      "comment" : "一個resource使用新增操作（create operation）提交給伺服器時，此resource沒有id，它的id在resource被創建後由伺器分配/指定。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Resource.id",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+          "valueUrl" : "id"
+        }],
+        "code" : "http://hl7.org/fhirpath/System.String"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta",
+      "path" : "Specimen.meta",
+      "short" : "此Specimen Resource的metadata",
+      "definition" : "關於resource的metadata。這是由基礎建設維護的內容。內容的更改可能並不總是與resource的版本更改相關聯。",
+      "min" : 1,
+      "max" : "1",
+      "base" : {
+        "path" : "Resource.meta",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Meta"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta.id",
+      "path" : "Specimen.meta.id",
+      "representation" : ["xmlAttr"],
+      "short" : "Unique id for inter-element referencing",
+      "definition" : "Unique id for the element within a resource (for internal references). This may be any string value that does not contain spaces.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Element.id",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+          "valueUrl" : "string"
+        }],
+        "code" : "http://hl7.org/fhirpath/System.String"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.meta.extension",
+      "path" : "Specimen.meta.extension",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "value",
+          "path" : "url"
+        }],
+        "description" : "Extensions are always sliced by (at least) url",
+        "rules" : "open"
+      },
+      "short" : "Additional content defined by implementations",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and manageable, there is a strict set of governance  applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Element.extension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.meta.versionId",
+      "path" : "Specimen.meta.versionId",
+      "short" : "Version specific identifier",
+      "definition" : "The version specific identifier, as it appears in the version portion of the URL. This value changes when the resource is created, updated, or deleted.",
+      "comment" : "The server assigns this value, and ignores what the client specifies, except in the case that the server is imposing version integrity on updates/deletes.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Meta.versionId",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "id"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta.lastUpdated",
+      "path" : "Specimen.meta.lastUpdated",
+      "short" : "When the resource version last changed",
+      "definition" : "When the resource last changed - e.g. when the version changed.",
+      "comment" : "This value is always populated except when the resource is first being created. The server / resource manager sets this value; what a client provides is irrelevant. This is equivalent to the HTTP Last-Modified and SHOULD have the same value on a [read](http://hl7.org/fhir/R4/http.html#read) interaction.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Meta.lastUpdated",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "instant"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta.source",
+      "path" : "Specimen.meta.source",
+      "short" : "Identifies where the resource comes from",
+      "definition" : "A uri that identifies the source system of the resource. This provides a minimal amount of [Provenance](http://hl7.org/fhir/R4/provenance.html#) information that can be used to track or differentiate the source of information in the resource. The source may identify another FHIR server, document, message, database, etc.",
+      "comment" : "In the provenance resource, this corresponds to Provenance.entity.what[x]. The exact use of the source (and the implied Provenance.entity.role) is left to implementer discretion. Only one nominated source is allowed; for additional provenance details, a full Provenance resource should be used. \n\nThis element can be used to indicate where the current master source of a resource that has a canonical URL if the resource is no longer hosted at the canonical URL.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Meta.source",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "uri"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta.profile",
+      "path" : "Specimen.meta.profile",
+      "short" : "Profiles this resource claims to conform to",
+      "definition" : "A list of profiles (references to [StructureDefinition](http://hl7.org/fhir/R4/structuredefinition.html#) resources) that this resource claims to conform to. The URL is a reference to [StructureDefinition.url](http://hl7.org/fhir/R4/structuredefinition-definitions.html#StructureDefinition.url).",
+      "comment" : "It is up to the server and/or other infrastructure of policy to determine whether/how these claims are verified and/or updated over time.  The list of profile URLs is a set.",
+      "min" : 1,
+      "max" : "1",
+      "base" : {
+        "path" : "Meta.profile",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "canonical",
+        "targetProfile" : ["http://hl7.org/fhir/StructureDefinition/StructureDefinition"]
+      }],
+      "patternCanonical" : "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas",
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.meta.security",
+      "path" : "Specimen.meta.security",
+      "short" : "Security Labels applied to this resource",
+      "definition" : "Security labels applied to this resource. These tags connect specific resources to the overall security policy and infrastructure.",
+      "comment" : "The security labels can be updated without changing the stated version of the resource. The list of security labels is a set. Uniqueness is based the system/code, and version and display are ignored.",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Meta.security",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Coding"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SecurityLabels"
+        }],
+        "strength" : "extensible",
+        "description" : "Security Labels from the Healthcare Privacy and Security Classification System.",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/security-labels"
+      }
+    },
+    {
+      "id" : "Specimen.meta.tag",
+      "path" : "Specimen.meta.tag",
+      "short" : "Tags applied to this resource",
+      "definition" : "Tags applied to this resource. Tags are intended to be used to identify and relate resources to process and workflow, and applications are not required to consider the tags when interpreting the meaning of a resource.",
+      "comment" : "The tags can be updated without changing the stated version of the resource. The list of tags is a set. Uniqueness is based the system/code, and version and display are ignored.",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Meta.tag",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Coding"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "Tags"
+        }],
+        "strength" : "example",
+        "description" : "Codes that represent various types of tags, commonly workflow-related; e.g. \"Needs review by Dr. Jones\".",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/common-tags"
+      }
+    },
+    {
+      "id" : "Specimen.implicitRules",
+      "path" : "Specimen.implicitRules",
+      "short" : "創建此內容所依據的一組規則",
+      "definition" : "構建resource時遵循的一系列規則的參照，在處理內容時必須理解這些規則。通常這是對IG所定義之特殊規則及其他profiles的參照。",
+      "comment" : "宣告這套規則限制了內容只能被有限的交易夥伴所理解。這從本質上限制了資料的長期有用性。然而，現有的健康生態體系高度分裂，還沒有準備好以普遍可計算的方式定義、收集和交換資料。只要有可能，實作者和/或規範編寫者應該避免使用這個資料項目。通常在使用時，此URL是對IG的參照，此IG將這些特殊規則與其他profiles、value sets等一起定義為其敘述的一部分。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Resource.implicitRules",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "uri"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "This element is labeled as a modifier because the implicit rules may provide additional knowledge about the resource that modifies it's meaning or interpretation",
+      "isSummary" : true
+    },
+    {
+      "id" : "Specimen.language",
+      "path" : "Specimen.language",
+      "short" : "用以表述Specimen Resource內容的語言。",
+      "definition" : "編寫此resource的語言",
+      "comment" : "提供語言是為了支援索引和可存取性（通常，文字表述轉語音等服務使用此語言標籤）。html lanuage tag適用於此敘述。resource上的語言標籤可用於指定從resource中的資料所產成的其他表述之語言。不是所有的內容都必須使用此語言。不應該假定Resource.language自動適用於敘述。如果指定語言，它也應該被指定在html中的div資料項目（關於xml:lang和html lang屬性之間的關係，見HTML5中的規則）。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Resource.language",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "code"
+      }],
+      "example" : [{
+        "label" : "Value",
+        "valueString" : "zh-TW"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+          "valueCanonical" : "http://hl7.org/fhir/ValueSet/all-languages"
+        },
+        {
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "Language"
+        }],
+        "strength" : "preferred",
+        "description" : "人類語言；鼓勵使用CommonLanguages代碼表中的代碼，但不強制一定要使用此代碼表，你也可使用其他代碼表的代碼或單純以文字表示。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/languages"
+      }
+    },
+    {
+      "id" : "Specimen.text",
+      "path" : "Specimen.text",
+      "short" : "Specimen Resource之內容摘要以供人閱讀",
+      "definition" : "人可讀的敘述，包含resource的摘要，可用於向人表述resource的內容。敘述不需要對所有的結構化資料進行編碼，但需要包含足夠的細節使人在閱讀敘述時理解「臨床安全性」。resource定義有哪些內容應該在敘述中表示，以確保臨床安全。",
+      "comment" : "內嵌（contained）的resource沒有敘述，非內嵌（contained）的resource則 **建議應該（SHOULD）** 有敘述。有時resource可能只有文字表述，很少或沒有額外的結構化資料（只要滿足所有minOccurs=1的資料項目）。這可能出現在舊系統的資料，當資訊以 「文字表述區塊（text blob） 」的形式被取得，或者文字表述是原始輸入或說明，而編碼資訊稍後再添加。",
+      "alias" : ["narrative",
+      "html",
+      "xhtml",
+      "display"],
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "DomainResource.text",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Narrative"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "Act.text?"
+      }]
+    },
+    {
+      "id" : "Specimen.contained",
+      "path" : "Specimen.contained",
+      "short" : "Contained, inline Resources",
+      "definition" : "These resources do not have an independent existence apart from the resource that contains them - they cannot be identified independently, and nor can they have their own independent transaction scope.",
+      "comment" : "This should never be done when the content can be identified properly, as once identification is lost, it is extremely difficult (and context dependent) to restore it again. Contained resources may have profiles and tags In their meta elements, but SHALL NOT have security labels.",
+      "alias" : ["inline resources",
+      "anonymous resources",
+      "contained resources"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "DomainResource.contained",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Resource"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.extension",
+      "path" : "Specimen.extension",
+      "short" : "Additional content defined by implementations",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the resource. To make the use of extensions safe and manageable, there is a strict set of governance  applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "DomainResource.extension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.modifierExtension",
+      "path" : "Specimen.modifierExtension",
+      "short" : "Extensions that cannot be ignored",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the resource and that modifies the understanding of the element that contains it and/or the understanding of the containing element's descendants. Usually modifier elements provide negation or qualification. To make the use of extensions safe and manageable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer is allowed to define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension. Applications processing a resource are required to check for modifier extensions.\n\nModifier extensions SHALL NOT change the meaning of any elements on Resource or DomainResource (including cannot change the meaning of modifierExtension itself).",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "requirements" : "Modifier extensions allow for extensions that *cannot* be safely ignored to be clearly distinguished from the vast majority of extensions which can be safely ignored.  This promotes interoperability by eliminating the need for implementers to prohibit the presence of extensions. For further information, see the [definition of modifier extensions](http://hl7.org/fhir/R4/extensibility.html#modifierExtension).",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "DomainResource.modifierExtension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "Modifier extensions are expected to modify the meaning or interpretation of the resource that contains them",
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.identifier",
+      "path" : "Specimen.identifier",
+      "short" : "檢體的外部識別碼",
+      "definition" : "檢體的ID",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.identifier",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Identifier"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "mustSupport" : true,
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.identifier"
+      },
+      {
+        "identity" : "v2",
+        "map" : "SPM-2"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".id"
+      }]
+    },
+    {
+      "id" : "Specimen.accessionIdentifier",
+      "path" : "Specimen.accessionIdentifier",
+      "short" : "實驗室指定的識別碼",
+      "definition" : "當實驗室接收檢體時，會給檢體一個特定的編號。這個編號和檢體本身的識別碼可能不一樣，這取決於每個實驗室的操作方式。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.accessionIdentifier",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Identifier"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.identifier"
+      },
+      {
+        "identity" : "v2",
+        "map" : "SPM-30 (v2.7+)"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=SBJ].act[classCode=ACSN, moodCode=EVN].id"
+      }]
+    },
+    {
+      "id" : "Specimen.status",
+      "path" : "Specimen.status",
+      "short" : "available | unavailable | unsatisfactory | entered-in-error",
+      "definition" : "檢體的可取得性",
+      "comment" : "此資料項目被標記為修飾用(modifier)，因為狀態包含標記 resource 為當前無效的代碼。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.status",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "code"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "This element is labelled as a modifier because it is a status element that contains status entered-in-error which means that the resource should not be treated as valid",
+      "isSummary" : true,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenStatus"
+        }],
+        "strength" : "required",
+        "description" : "檢體的可取得性；應填入所綁定值集中的其中一個代碼。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/specimen-status|4.0.1"
+      },
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.status"
+      },
+      {
+        "identity" : "v2",
+        "map" : "SPM-20"
+      },
+      {
+        "identity" : "rim",
+        "map" : "status"
+      }]
+    },
+    {
+      "id" : "Specimen.type",
+      "path" : "Specimen.type",
+      "short" : "基因檢測檢體類型",
+      "definition" : "檢體是由什麼類型的物質組成的",
+      "comment" : "檢體的類型會影響其處理方式，並決定了可以對檢體進行哪些適當的分析。這在診斷工作流程的決策系統中經常被使用。",
+      "min" : 1,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.type",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "mustSupport" : true,
+      "isModifier" : false,
+      "binding" : {
+        "strength" : "required",
+        "valueSet" : "https://nhicore.nhi.gov.tw/pas/ValueSet/specime-type"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.subject",
+      "path" : "Specimen.subject",
+      "short" : "檢體取自哪邊？檢體的來源可能有幾種，它可能來自病人，來自某個地方（例如：從環境中取得的樣本），或者是對某種物質或設備的抽樣。",
+      "definition" : "檢體取自哪邊？檢體的來源可能有幾種，它可能來自病人，來自某個地方（例如：從環境中取得的樣本），或者是對某種物質或設備的抽樣。",
+      "requirements" : "必須了解檢體取得對象的情境背景",
+      "min" : 1,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.subject",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "mustSupport" : true,
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.subject[x]"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".scoper  or  .scoper.playsRole"
+      },
+      {
+        "identity" : "w5",
+        "map" : "FiveWs.subject"
+      }]
+    },
+    {
+      "id" : "Specimen.receivedTime",
+      "path" : "Specimen.receivedTime",
+      "short" : "基因檢測日期",
+      "definition" : "收到檢體進行處理或檢驗的時間",
+      "min" : 1,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.receivedTime",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "dateTime"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "mustSupport" : true,
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.done[x]"
+      },
+      {
+        "identity" : "v2",
+        "map" : "SPM-18"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=SBJ].act[code=SPCREC, moodCode=EVN].effectiveTime"
+      }]
+    },
+    {
+      "id" : "Specimen.parent",
+      "path" : "Specimen.parent",
+      "short" : "此檢體的來源檢體",
+      "definition" : "母體（來源）檢體的參考，當檢體來自另一檢體或為另一檢體的組成部分時使用。",
+      "comment" : "母樣本可以是當前檢體通過某些處理步驟（如等分、分離或從臨床樣本中提取核酸）獲得的來源，也可以是合併成集合樣本的許多樣本之一。",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.parent",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Specimen-twcore"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".scoper (if parent) .player.scopesRole[classCode=SPEC].player (if child)"
+      }]
+    },
+    {
+      "id" : "Specimen.request",
+      "path" : "Specimen.request",
+      "short" : "採集檢體的原因",
+      "definition" : "需要採集檢體的服務請求的相關細節",
+      "comment" : "請求可以是明確的，也可以是隱含的，例如需要抽血採樣的服務請求(ServiceRequest)。",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.request",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/ServiceRequest-twcore"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.why[x]"
+      },
+      {
+        "identity" : "v2",
+        "map" : "ORC? OBR-2/3?"
+      },
+      {
+        "identity" : "rim",
+        "map" : "outboundRelationship[typeCode=FLFS].target"
+      }]
+    },
+    {
+      "id" : "Specimen.collection",
+      "path" : "Specimen.collection",
+      "short" : "採集細節",
+      "definition" : "有關檢體採集的詳細資訊",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "BackboneElement"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SPM-14"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=SBJ].act[classCode=SPECCOLLECT, moodCode=EVN]"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.id",
+      "path" : "Specimen.collection.id",
+      "representation" : ["xmlAttr"],
+      "short" : "Unique id for inter-element referencing",
+      "definition" : "Unique id for the element within a resource (for internal references). This may be any string value that does not contain spaces.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Element.id",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+          "valueUrl" : "string"
+        }],
+        "code" : "http://hl7.org/fhirpath/System.String"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.extension",
+      "path" : "Specimen.collection.extension",
+      "short" : "Additional content defined by implementations",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and manageable, there is a strict set of governance  applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Element.extension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.modifierExtension",
+      "path" : "Specimen.collection.modifierExtension",
+      "short" : "Extensions that cannot be ignored even if unrecognized",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element and that modifies the understanding of the element in which it is contained and/or the understanding of the containing element's descendants. Usually modifier elements provide negation or qualification. To make the use of extensions safe and manageable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension. Applications processing a resource are required to check for modifier extensions.\n\nModifier extensions SHALL NOT change the meaning of any elements on Resource or DomainResource (including cannot change the meaning of modifierExtension itself).",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "requirements" : "Modifier extensions allow for extensions that *cannot* be safely ignored to be clearly distinguished from the vast majority of extensions which can be safely ignored.  This promotes interoperability by eliminating the need for implementers to prohibit the presence of extensions. For further information, see the [definition of modifier extensions](http://hl7.org/fhir/R4/extensibility.html#modifierExtension).",
+      "alias" : ["extensions",
+      "user content",
+      "modifiers"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "BackboneElement.modifierExtension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "Modifier extensions are expected to modify the meaning or interpretation of the element that contains them",
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.collector",
+      "path" : "Specimen.collection.collector",
+      "short" : "誰採集了檢體",
+      "definition" : "採集檢體的人員",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.collector",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Practitioner-twcore",
+        "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/PractitionerRole-twcore"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.actor"
+      },
+      {
+        "identity" : "v2",
+        "map" : "PRT"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=PFM].role"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.collected[x]",
+      "path" : "Specimen.collection.collected[x]",
+      "short" : "採集檢體的時間",
+      "definition" : "從檢體對象採集檢體的時間--生理相關時間。生理相關時間是指生理狀態或生物活動達到特定條件或狀態時所收集的時間點。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.collected[x]",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "dateTime"
+      },
+      {
+        "code" : "Period"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.init"
+      },
+      {
+        "identity" : "v2",
+        "map" : "SPM-17"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".effectiveTime"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.duration",
+      "path" : "Specimen.collection.duration",
+      "short" : "採集檢體需要多長時間",
+      "definition" : "採集檢體的時間長度",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.duration",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Duration"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "w5",
+        "map" : "FiveWs.init"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.quantity",
+      "path" : "Specimen.collection.quantity",
+      "short" : "採集檢體的數量",
+      "definition" : "檢體採集的數量，例如：血樣的體積，或測量解剖病理樣本的實際尺寸或特性。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.quantity",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Quantity",
+        "profile" : ["http://hl7.org/fhir/StructureDefinition/SimpleQuantity"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SPM-12"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=SBJ].role[classCode=SPEC].player.quantity"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.method",
+      "path" : "Specimen.collection.method",
+      "short" : "用於執行檢體採集的技術",
+      "definition" : "一個編碼值，具體說明用於執行此程序的技術。",
+      "comment" : "Not all terminology uses fit this general pattern. In some cases, models should not use CodeableConcept and use Coding directly and provide their own structure for managing text, codings, translations and the relationship between elements and pre- and post-coordination.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.method",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "strength" : "extensible",
+        "description" : "應填入所綁定值集中適合的代碼，確定無適合的代碼才可以使用其他值集的代碼來表示。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/specimen-collection-method"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.bodySite",
+      "path" : "Specimen.collection.bodySite",
+      "short" : "解剖採集部位",
+      "definition" : "檢體採集的解剖位置（如果檢體對象是病人），這是指目標部位，此資料項目不適用於環境檢體。",
+      "comment" : "如果特定的使用情境需要將 BodySite 視為一個獨立的 resource，而不是內置的資料項目（例如：需要單獨辨識和追蹤），那麼可以使用名為 bodySite 的擴充資料項目來處理它。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.bodySite",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "strength" : "extensible",
+        "description" : "應填入所綁定值集中適合的代碼，確定無適合的代碼才可以使用其他值集的代碼來表示。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/body-site"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.collection.fastingStatus[x]",
+      "path" : "Specimen.collection.fastingStatus[x]",
+      "short" : "病人是否禁食/禁飲料，或禁食/禁飲料多長時間",
+      "definition" : "在採集檢體前的一段時間內，禁食或減少部分或全部食物、飲料或兩者。",
+      "comment" : "比起使用Observation.code=LOINC 2005-7（2小時尿液中的鈣[Moles/​time] - 禁食12小時）或者使用Observation.component code = LOINC 49541-6（禁食狀態 - 報告）這樣的「先組合配對/前組合式(pre-coordinated)」代碼，更推薦使用此資料項目來表示禁食狀態。",
+      "requirements" : "許多診斷測試需要禁食，以便準確判讀。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.collection.fastingStatus[x]",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      },
+      {
+        "code" : "Duration"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "FastingStatus"
+        }],
+        "strength" : "extensible",
+        "description" : "應填入所綁定值集中適合的代碼，確定無適合的代碼才可以使用其他值集的代碼來表示。",
+        "valueSet" : "http://terminology.hl7.org/ValueSet/v2-0916"
+      },
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "OBR-"
+      }]
+    },
+    {
+      "id" : "Specimen.processing",
+      "path" : "Specimen.processing",
+      "short" : "處理和處理步驟細節",
+      "definition" : "有關檢體處理和處理步驟的細節資訊",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.processing",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "BackboneElement"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".participation[typeCode=SBJ].act[code=SPCTRT, moodCode=EVN]"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.id",
+      "path" : "Specimen.processing.id",
+      "representation" : ["xmlAttr"],
+      "short" : "Unique id for inter-element referencing",
+      "definition" : "Unique id for the element within a resource (for internal references). This may be any string value that does not contain spaces.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Element.id",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+          "valueUrl" : "string"
+        }],
+        "code" : "http://hl7.org/fhirpath/System.String"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.extension",
+      "path" : "Specimen.processing.extension",
+      "short" : "Additional content defined by implementations",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and manageable, there is a strict set of governance  applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Element.extension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.modifierExtension",
+      "path" : "Specimen.processing.modifierExtension",
+      "short" : "Extensions that cannot be ignored even if unrecognized",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element and that modifies the understanding of the element in which it is contained and/or the understanding of the containing element's descendants. Usually modifier elements provide negation or qualification. To make the use of extensions safe and manageable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension. Applications processing a resource are required to check for modifier extensions.\n\nModifier extensions SHALL NOT change the meaning of any elements on Resource or DomainResource (including cannot change the meaning of modifierExtension itself).",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "requirements" : "Modifier extensions allow for extensions that *cannot* be safely ignored to be clearly distinguished from the vast majority of extensions which can be safely ignored.  This promotes interoperability by eliminating the need for implementers to prohibit the presence of extensions. For further information, see the [definition of modifier extensions](http://hl7.org/fhir/R4/extensibility.html#modifierExtension).",
+      "alias" : ["extensions",
+      "user content",
+      "modifiers"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "BackboneElement.modifierExtension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "Modifier extensions are expected to modify the meaning or interpretation of the element that contains them",
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.description",
+      "path" : "Specimen.processing.description",
+      "short" : "程序的文字描述",
+      "definition" : "程序的文字描述",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.processing.description",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "string"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".text"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.procedure",
+      "path" : "Specimen.processing.procedure",
+      "short" : "表明應用於檢體的處理步驟",
+      "definition" : "一個編碼值，具體說明用於處理檢體的程序。",
+      "comment" : "Not all terminology uses fit this general pattern. In some cases, models should not use CodeableConcept and use Coding directly and provide their own structure for managing text, codings, translations and the relationship between elements and pre- and post-coordination.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.processing.procedure",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenProcessingProcedure"
+        }],
+        "strength" : "example",
+        "description" : "可參考所綁定值集，但此值集只是針對這個欄位的一個可能值的範例，不預期也不鼓勵使用者一定要使用此值集的代碼。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/specimen-processing-procedure"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.additive",
+      "path" : "Specimen.processing.additive",
+      "short" : "處理步驟中使用的物質",
+      "definition" : "處理步驟中使用的物質",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.processing.additive",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/StructureDefinition/Substance"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SPM-6"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".participation[typeCode=CSM].role[classCode=ADTV].code"
+      }]
+    },
+    {
+      "id" : "Specimen.processing.time[x]",
+      "path" : "Specimen.processing.time[x]",
+      "short" : "檢體處理的日期和時間",
+      "definition" : "記錄了進行檢體處理的具體時間或持續期間。例如，可以是檢體進行固定處理的時間，或者檢體浸泡在福馬林(formalin)中的時長。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.processing.time[x]",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "dateTime"
+      },
+      {
+        "code" : "Period"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".effectiveTime"
+      }]
+    },
+    {
+      "id" : "Specimen.container",
+      "path" : "Specimen.container",
+      "short" : "檢體的直接容器（試管/玻片等）",
+      "definition" : "此處指的是存放檢體的容器。沒有涉及到容器的層層嵌套特性；也就是說，不討論像血液放在試管裡，試管放在托盤裡，托盤放在架子上這樣的情況。",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.container",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "BackboneElement"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".player.scopingRole[classCode=CONT].scoper"
+      }]
+    },
+    {
+      "id" : "Specimen.container.id",
+      "path" : "Specimen.container.id",
+      "representation" : ["xmlAttr"],
+      "short" : "Unique id for inter-element referencing",
+      "definition" : "Unique id for the element within a resource (for internal references). This may be any string value that does not contain spaces.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Element.id",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+          "valueUrl" : "string"
+        }],
+        "code" : "http://hl7.org/fhirpath/System.String"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.container.extension",
+      "path" : "Specimen.container.extension",
+      "short" : "Additional content defined by implementations",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element. To make the use of extensions safe and manageable, there is a strict set of governance  applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension.",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "alias" : ["extensions",
+      "user content"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Element.extension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      }]
+    },
+    {
+      "id" : "Specimen.container.modifierExtension",
+      "path" : "Specimen.container.modifierExtension",
+      "short" : "Extensions that cannot be ignored even if unrecognized",
+      "definition" : "May be used to represent additional information that is not part of the basic definition of the element and that modifies the understanding of the element in which it is contained and/or the understanding of the containing element's descendants. Usually modifier elements provide negation or qualification. To make the use of extensions safe and manageable, there is a strict set of governance applied to the definition and use of extensions. Though any implementer can define an extension, there is a set of requirements that SHALL be met as part of the definition of the extension. Applications processing a resource are required to check for modifier extensions.\n\nModifier extensions SHALL NOT change the meaning of any elements on Resource or DomainResource (including cannot change the meaning of modifierExtension itself).",
+      "comment" : "There can be no stigma associated with the use of extensions by any application, project, or standard - regardless of the institution or jurisdiction that uses or defines the extensions.  The use of extensions is what allows the FHIR specification to retain a core level of simplicity for everyone.",
+      "requirements" : "Modifier extensions allow for extensions that *cannot* be safely ignored to be clearly distinguished from the vast majority of extensions which can be safely ignored.  This promotes interoperability by eliminating the need for implementers to prohibit the presence of extensions. For further information, see the [definition of modifier extensions](http://hl7.org/fhir/R4/extensibility.html#modifierExtension).",
+      "alias" : ["extensions",
+      "user content",
+      "modifiers"],
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "BackboneElement.modifierExtension",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Extension"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      },
+      {
+        "key" : "ext-1",
+        "severity" : "error",
+        "human" : "Must have either extensions or value[x], not both",
+        "expression" : "extension.exists() != value.exists()",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Extension"
+      }],
+      "isModifier" : true,
+      "isModifierReason" : "Modifier extensions are expected to modify the meaning or interpretation of the element that contains them",
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "N/A"
+      }]
+    },
+    {
+      "id" : "Specimen.container.identifier",
+      "path" : "Specimen.container.identifier",
+      "short" : "容器的ID",
+      "definition" : "容器的識別碼。可能會有多種類型的識別碼，如製造商的條碼、實驗室分配的識別碼等。在某些情況下，容器的識別碼可能與檢體的識別碼不同。",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.container.identifier",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Identifier"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : true,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SAC-3"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".id"
+      }]
+    },
+    {
+      "id" : "Specimen.container.description",
+      "path" : "Specimen.container.description",
+      "short" : "容器的文字說明",
+      "definition" : "容器的文字說明",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.description",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "string"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : ".desc"
+      }]
+    },
+    {
+      "id" : "Specimen.container.type",
+      "path" : "Specimen.container.type",
+      "short" : "與檢體直接相關的容器類型",
+      "definition" : "與檢體相關的容器類型（例如：玻片、分液管等）。",
+      "comment" : "Not all terminology uses fit this general pattern. In some cases, models should not use CodeableConcept and use Coding directly and provide their own structure for managing text, codings, translations and the relationship between elements and pre- and post-coordination.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.type",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "strength" : "extensible",
+        "description" : "應填入所綁定值集中適合的代碼，確定無適合的代碼才可以使用其他值集的代碼來表示。",
+        "valueSet" : "http://hl7.org/fhir/ValueSet/specimen-container-type"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.container.capacity",
+      "path" : "Specimen.container.capacity",
+      "short" : "容器的體積或大小",
+      "definition" : "容器可容納的容量（體積或其他度量）",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.capacity",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Quantity",
+        "profile" : ["http://hl7.org/fhir/StructureDefinition/SimpleQuantity"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "one of: SAC 16, SAC17 and SAC 20, or SAC 21 and SAC 20"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".quantity"
+      }]
+    },
+    {
+      "id" : "Specimen.container.specimenQuantity",
+      "path" : "Specimen.container.specimenQuantity",
+      "short" : "容器內的檢體量",
+      "definition" : "容器裡檢體的量；可能是以體積、尺寸或根據檢體類型的其他適當計量方式來表示",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.specimenQuantity",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "Quantity",
+        "profile" : ["http://hl7.org/fhir/StructureDefinition/SimpleQuantity"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SAC-23 (value) SAC-24 (units"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".playedRole[classCode=CONT].quantity"
+      }]
+    },
+    {
+      "id" : "Specimen.container.additive[x]",
+      "path" : "Specimen.container.additive[x]",
+      "slicing" : {
+        "discriminator" : [{
+          "type" : "type",
+          "path" : "$this"
+        }],
+        "ordered" : false,
+        "rules" : "open"
+      },
+      "short" : "與容器相關的添加劑",
+      "definition" : "為保存、維護或增強檢體而引入的物質。例如：福馬林(Formalin)、檸檬酸鹽(Citrate)、EDTA。",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.additive[x]",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept"
+      },
+      {
+        "code" : "Reference",
+        "targetProfile" : ["http://hl7.org/fhir/StructureDefinition/Substance"]
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenContainerAdditive"
+        }],
+        "strength" : "example",
+        "description" : "可參考所綁定值集，但此值集只是針對這個欄位的一個可能值的範例，不預期也不鼓勵使用者一定要使用此值集的代碼。",
+        "valueSet" : "http://terminology.hl7.org/ValueSet/v2-0371"
+      },
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "SAC-27"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".scopesRole[classCode=ADTV].player"
+      }]
+    },
+    {
+      "id" : "Specimen.container.additive[x]:additiveCodeableConcept",
+      "path" : "Specimen.container.additive[x]",
+      "sliceName" : "additiveCodeableConcept",
+      "short" : "概念（Concept）— 參照一個專門術語或只是文字表述",
+      "definition" : "A concept that may be defined by a formal reference to a terminology or ontology or may be provided by text.",
+      "comment" : "Not all terminology uses fit this general pattern. In some cases, models should not use CodeableConcept and use Coding directly and provide their own structure for managing text, codings, translations and the relationship between elements and pre- and post-coordination.",
+      "min" : 0,
+      "max" : "1",
+      "base" : {
+        "path" : "Specimen.container.additive[x]",
+        "min" : 0,
+        "max" : "1"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenContainerAdditive"
+        }],
+        "strength" : "example",
+        "description" : "可參考所綁定值集，但此值集只是針對這個欄位的一個可能值的範例，不預期也不鼓勵使用者一定要使用此值集的代碼。",
+        "valueSet" : "http://terminology.hl7.org/ValueSet/v2-0371"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.condition",
+      "path" : "Specimen.condition",
+      "short" : "檢體狀態",
+      "definition" : "描述檢體性質的模式或狀態",
+      "comment" : "檢體狀態是對檢體所做的觀察，它是一個特定時間點的評估。它可以用來評估檢體的品質或其對於特定檢測的適用性。",
+      "requirements" : "檢體狀態可用來評估其對特定檢測的品質或適用性",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.condition",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "CodeableConcept",
+        "profile" : ["https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"]
+      }],
+      "condition" : ["ele-1"],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "binding" : {
+        "extension" : [{
+          "url" : "http://hl7.org/fhir/StructureDefinition/elementdefinition-bindingName",
+          "valueString" : "SpecimenCondition"
+        }],
+        "strength" : "extensible",
+        "description" : "應填入所綁定值集中適合的代碼，確定無適合的代碼才可以使用其他值集的代碼來表示。",
+        "valueSet" : "http://terminology.hl7.org/ValueSet/v2-0493"
+      },
+      "mapping" : [{
+        "identity" : "rim",
+        "map" : "n/a"
+      },
+      {
+        "identity" : "v2",
+        "map" : "CE/CNE/CWE"
+      },
+      {
+        "identity" : "rim",
+        "map" : "CD"
+      },
+      {
+        "identity" : "orim",
+        "map" : "fhir:CodeableConcept rdfs:subClassOf dt:CD"
+      }]
+    },
+    {
+      "id" : "Specimen.note",
+      "path" : "Specimen.note",
+      "short" : "評論或意見",
+      "definition" : "用以傳達有關檢體或在檢體採集過程中的任何細節或問題。（例如：破損的小瓶、與病人一起寄送、冷凍）",
+      "min" : 0,
+      "max" : "*",
+      "base" : {
+        "path" : "Specimen.note",
+        "min" : 0,
+        "max" : "*"
+      },
+      "type" : [{
+        "code" : "Annotation"
+      }],
+      "constraint" : [{
+        "key" : "ele-1",
+        "severity" : "error",
+        "human" : "All FHIR elements must have a @value or children",
+        "expression" : "hasValue() or (children().count() > id.count())",
+        "source" : "http://hl7.org/fhir/StructureDefinition/Element"
+      }],
+      "isModifier" : false,
+      "isSummary" : false,
+      "mapping" : [{
+        "identity" : "v2",
+        "map" : "OBX"
+      },
+      {
+        "identity" : "rim",
+        "map" : ".inboundRelationship[typeCode=SUBJ].source[classCode=OBS, moodCode=EVN, code=\"annotation\"].value"
+      }]
+    }]
+  },
+  "differential" : {
+    "element" : [{
+      "id" : "Specimen",
+      "path" : "Specimen"
+    },
+    {
+      "id" : "Specimen.meta",
+      "path" : "Specimen.meta",
+      "min" : 1
+    },
+    {
+      "id" : "Specimen.meta.profile",
+      "path" : "Specimen.meta.profile",
+      "min" : 1,
+      "max" : "1",
+      "patternCanonical" : "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas"
+    },
+    {
+      "id" : "Specimen.type",
+      "path" : "Specimen.type",
+      "short" : "基因檢測檢體類型",
+      "min" : 1,
+      "binding" : {
+        "strength" : "required",
+        "valueSet" : "https://nhicore.nhi.gov.tw/pas/ValueSet/specime-type"
+      }
+    },
+    {
+      "id" : "Specimen.subject",
+      "path" : "Specimen.subject",
+      "type" : [{
+        "code" : "Reference",
+        "targetProfile" : ["https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"]
+      }]
+    },
+    {
+      "id" : "Specimen.receivedTime",
+      "path" : "Specimen.receivedTime",
+      "short" : "基因檢測日期",
+      "min" : 1,
+      "mustSupport" : true
+    }]
+  }
+}

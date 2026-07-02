@@ -1,0 +1,268 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "backport-subscription",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-category",
+      "valueString": "Foundation.Other"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-security-category",
+      "valueCode": "business"
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription",
+  "version": "1.1.0",
+  "name": "BackportSubscription",
+  "title": "R4/B Topic-Based Subscription",
+  "status": "active",
+  "date": "2023-01-11T15:34:32+11:00",
+  "publisher": "HL7 FHIR Infrastructure WG",
+  "contact": [
+    {
+      "name": "HL7 FHIR Infrastructure WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://hl7.org/Special/committees/fiwg"
+        }
+      ]
+    },
+    {
+      "name": "Gino Canessa",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:gino.canessa@microsoft.com"
+        }
+      ]
+    },
+    {
+      "name": "Eric Haas",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:ehaas@healthedatainc.com"
+        }
+      ]
+    }
+  ],
+  "description": "Profile on the Subscription resource to enable R5-style topic-based subscriptions in FHIR R4 or R4B.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001",
+          "display": "World"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.0",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Subscription",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Subscription",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Subscription",
+        "path": "Subscription"
+      },
+      {
+        "id": "Subscription.criteria",
+        "path": "Subscription.criteria",
+        "short": "Canonical URL for the topic used to generate events",
+        "definition": "When using topic-based subscriptions, the primary criteria is always the topic, indicated by its canonical URL.",
+        "mustSupport": true
+      },
+      {
+        "id": "Subscription.criteria.extension",
+        "path": "Subscription.criteria.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Subscription.criteria.extension:filterCriteria",
+        "path": "Subscription.criteria.extension",
+        "sliceName": "filterCriteria",
+        "short": "Filtering critiera applied to events",
+        "definition": "Search-style filters to be applied to narrow the subscription topic stream. Keys can be either search parameters appropriate to the filtering resource or keys defined within the subscription topic.",
+        "comment": "When multiple filters are applied, evaluates to true if all the conditions are met; otherwise it returns false. (i.e., logical AND).",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-filter-criteria"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "isSummary": true
+      },
+      {
+        "id": "Subscription.channel.extension",
+        "path": "Subscription.channel.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Subscription.channel.extension:heartbeatPeriod",
+        "path": "Subscription.channel.extension",
+        "sliceName": "heartbeatPeriod",
+        "short": "Interval in seconds to send 'heartbeat' notification",
+        "definition": "If present, a 'hearbeat' notification (keepalive) is sent via this channel with an the interval period equal to this elements integer value in seconds. If not present, a heartbeat notification is not sent.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-heartbeat-period"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Subscription.channel.extension:timeout",
+        "path": "Subscription.channel.extension",
+        "sliceName": "timeout",
+        "short": "Timeout in seconds to attempt notification delivery",
+        "definition": "If present, the maximum amount of time a server will allow before failing a notification attempt.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-timeout"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Subscription.channel.extension:maxCount",
+        "path": "Subscription.channel.extension",
+        "sliceName": "maxCount",
+        "short": "Maximum number of triggering resources included in notification bundles",
+        "definition": "If present, the maximum number of triggering resources that will be included in a notification bundle (e.g., a server will not include more than this number of trigger resources in a single notification). Note that this is not a strict limit on the number of entries in a bundle, as dependent resources can be included.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-max-count"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Subscription.channel.type.extension",
+        "path": "Subscription.channel.type.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Subscription.channel.type.extension:customChannelType",
+        "path": "Subscription.channel.type.extension",
+        "sliceName": "customChannelType",
+        "short": "Extended channel type for notifications",
+        "definition": "The type of channel to send notifications on.",
+        "comment": "This extension allows for the use of additional channel types that were not defined in the FHIR R4 subscription definition.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-channel-type"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "isSummary": true
+      },
+      {
+        "id": "Subscription.channel.payload",
+        "path": "Subscription.channel.payload",
+        "min": 1
+      },
+      {
+        "id": "Subscription.channel.payload.extension",
+        "path": "Subscription.channel.payload.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Subscription.channel.payload.extension:content",
+        "path": "Subscription.channel.payload.extension",
+        "sliceName": "content",
+        "short": "Notification content level",
+        "definition": "How much of the resource content to deliver in the notification payload. The choices are an empty payload, only the resource id, or the full resource content.",
+        "comment": "Sending the payload has obvious security implications. The server is responsible for ensuring that the content is appropriately secured.",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-payload-content"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "isSummary": true
+      }
+    ]
+  }
+}

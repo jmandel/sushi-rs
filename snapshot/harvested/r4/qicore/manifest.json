@@ -1,0 +1,551 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.qicore#6.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.qicore#6.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.qicore#6.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.qicore",
+    "version": "6.0.0",
+    "canonical": "http://hl7.org/fhir/us/qicore",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.fhir.uv.extensions.r4": "1.0.0",
+      "hl7.fhir.us.core": "6.1.0",
+      "fhir.dicom": "2024.1.20240120",
+      "hl7.terminology": "5.4.0"
+    }
+  },
+  "counts": {
+    "scanned": 65,
+    "harvested": 65,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "qicore-adverseevent",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-adverseevent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AdverseEvent",
+      "source": "StructureDefinition-qicore-adverseevent.json",
+      "fixture": "fixtures/qicore-adverseevent.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "qicore-allergyintolerance",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-allergyintolerance",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance",
+      "source": "StructureDefinition-qicore-allergyintolerance.json",
+      "fixture": "fixtures/qicore-allergyintolerance.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-bodystructure",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-bodystructure",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/BodyStructure",
+      "source": "StructureDefinition-qicore-bodystructure.json",
+      "fixture": "fixtures/qicore-bodystructure.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "qicore-careplan",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-careplan",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careplan",
+      "source": "StructureDefinition-qicore-careplan.json",
+      "fixture": "fixtures/qicore-careplan.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-careteam",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-careteam",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careteam",
+      "source": "StructureDefinition-qicore-careteam.json",
+      "fixture": "fixtures/qicore-careteam.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "qicore-claim",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-claim",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+      "source": "StructureDefinition-qicore-claim.json",
+      "fixture": "fixtures/qicore-claim.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "qicore-claimresponse",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-claimresponse",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+      "source": "StructureDefinition-qicore-claimresponse.json",
+      "fixture": "fixtures/qicore-claimresponse.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "qicore-communication",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-communication",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Communication",
+      "source": "StructureDefinition-qicore-communication.json",
+      "fixture": "fixtures/qicore-communication.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-communicationnotdone",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-communicationnotdone",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Communication",
+      "source": "StructureDefinition-qicore-communicationnotdone.json",
+      "fixture": "fixtures/qicore-communicationnotdone.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "qicore-communicationrequest",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-communicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CommunicationRequest",
+      "source": "StructureDefinition-qicore-communicationrequest.json",
+      "fixture": "fixtures/qicore-communicationrequest.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-condition-encounter-diagnosis",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-condition-encounter-diagnosis",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis",
+      "source": "StructureDefinition-qicore-condition-encounter-diagnosis.json",
+      "fixture": "fixtures/qicore-condition-encounter-diagnosis.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qicore-condition-problems-health-concerns",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-condition-problems-health-concerns",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+      "source": "StructureDefinition-qicore-condition-problems-health-concerns.json",
+      "fixture": "fixtures/qicore-condition-problems-health-concerns.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qicore-coverage",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-coverage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage",
+      "source": "StructureDefinition-qicore-coverage.json",
+      "fixture": "fixtures/qicore-coverage.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "qicore-device",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-qicore-device.json",
+      "fixture": "fixtures/qicore-device.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "qicore-devicenotrequested",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-devicenotrequested",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+      "source": "StructureDefinition-qicore-devicenotrequested.json",
+      "fixture": "fixtures/qicore-devicenotrequested.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-devicerequest",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-devicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+      "source": "StructureDefinition-qicore-devicerequest.json",
+      "fixture": "fixtures/qicore-devicerequest.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-deviceusestatement",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-deviceusestatement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceUseStatement",
+      "source": "StructureDefinition-qicore-deviceusestatement.json",
+      "fixture": "fixtures/qicore-deviceusestatement.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "qicore-diagnosticreport-lab",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-diagnosticreport-lab",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-lab",
+      "source": "StructureDefinition-qicore-diagnosticreport-lab.json",
+      "fixture": "fixtures/qicore-diagnosticreport-lab.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-diagnosticreport-note",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-diagnosticreport-note",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-note",
+      "source": "StructureDefinition-qicore-diagnosticreport-note.json",
+      "fixture": "fixtures/qicore-diagnosticreport-note.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-doNotPerformReason",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-doNotPerformReason",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-doNotPerformReason.json",
+      "fixture": "fixtures/qicore-doNotPerformReason.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-encounter-diagnosisPresentOnAdmission",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-encounter-diagnosisPresentOnAdmission",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-encounter-diagnosisPresentOnAdmission.json",
+      "fixture": "fixtures/qicore-encounter-diagnosisPresentOnAdmission.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-encounter",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-encounter",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter",
+      "source": "StructureDefinition-qicore-encounter.json",
+      "fixture": "fixtures/qicore-encounter.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qicore-familymemberhistory",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-familymemberhistory",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/FamilyMemberHistory",
+      "source": "StructureDefinition-qicore-familymemberhistory.json",
+      "fixture": "fixtures/qicore-familymemberhistory.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-flag",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-flag",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Flag",
+      "source": "StructureDefinition-qicore-flag.json",
+      "fixture": "fixtures/qicore-flag.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "qicore-goal",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-goal",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-goal",
+      "source": "StructureDefinition-qicore-goal.json",
+      "fixture": "fixtures/qicore-goal.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qicore-imagingstudy",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-imagingstudy",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ImagingStudy",
+      "source": "StructureDefinition-qicore-imagingstudy.json",
+      "fixture": "fixtures/qicore-imagingstudy.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-immunization",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-immunization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization",
+      "source": "StructureDefinition-qicore-immunization.json",
+      "fixture": "fixtures/qicore-immunization.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "qicore-immunizationevaluation",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-immunizationevaluation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ImmunizationEvaluation",
+      "source": "StructureDefinition-qicore-immunizationevaluation.json",
+      "fixture": "fixtures/qicore-immunizationevaluation.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "qicore-immunizationnotdone",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-immunizationnotdone",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization",
+      "source": "StructureDefinition-qicore-immunizationnotdone.json",
+      "fixture": "fixtures/qicore-immunizationnotdone.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "qicore-immunizationrecommendation",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-immunizationrecommendation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ImmunizationRecommendation",
+      "source": "StructureDefinition-qicore-immunizationrecommendation.json",
+      "fixture": "fixtures/qicore-immunizationrecommendation.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-isElective",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-isElective",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-isElective.json",
+      "fixture": "fixtures/qicore-isElective.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-keyelement",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-keyelement.json",
+      "fixture": "fixtures/qicore-keyelement.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-location",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-location",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location",
+      "source": "StructureDefinition-qicore-location.json",
+      "fixture": "fixtures/qicore-location.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-medication",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medication",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication",
+      "source": "StructureDefinition-qicore-medication.json",
+      "fixture": "fixtures/qicore-medication.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-medicationadministration",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationadministration",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationAdministration",
+      "source": "StructureDefinition-qicore-medicationadministration.json",
+      "fixture": "fixtures/qicore-medicationadministration.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "qicore-medicationadministrationnotdone",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationadministrationnotdone",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationAdministration",
+      "source": "StructureDefinition-qicore-medicationadministrationnotdone.json",
+      "fixture": "fixtures/qicore-medicationadministrationnotdone.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "qicore-medicationdispense",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationdispense",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationdispense",
+      "source": "StructureDefinition-qicore-medicationdispense.json",
+      "fixture": "fixtures/qicore-medicationdispense.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "qicore-medicationdispensedeclined",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationdispensedeclined",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationdispense",
+      "source": "StructureDefinition-qicore-medicationdispensedeclined.json",
+      "fixture": "fixtures/qicore-medicationdispensedeclined.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "qicore-medicationnotrequested",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationnotrequested",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "source": "StructureDefinition-qicore-medicationnotrequested.json",
+      "fixture": "fixtures/qicore-medicationnotrequested.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qicore-medicationrequest",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "source": "StructureDefinition-qicore-medicationrequest.json",
+      "fixture": "fixtures/qicore-medicationrequest.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "qicore-medicationstatement",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-medicationstatement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "source": "StructureDefinition-qicore-medicationstatement.json",
+      "fixture": "fixtures/qicore-medicationstatement.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "qicore-nonpatient-observation",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-nonpatient-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-qicore-nonpatient-observation.json",
+      "fixture": "fixtures/qicore-nonpatient-observation.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qicore-notDoneReason",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-notDoneReason",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-notDoneReason.json",
+      "fixture": "fixtures/qicore-notDoneReason.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-notDoneValueSet",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-notDoneValueSet",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-notDoneValueSet.json",
+      "fixture": "fixtures/qicore-notDoneValueSet.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qicore-nutritionorder",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-nutritionorder",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+      "source": "StructureDefinition-qicore-nutritionorder.json",
+      "fixture": "fixtures/qicore-nutritionorder.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "qicore-observation-clinical-result",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-observation-clinical-result",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-qicore-observation-clinical-result.json",
+      "fixture": "fixtures/qicore-observation-clinical-result.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-observation-lab",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-observation-lab",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "source": "StructureDefinition-qicore-observation-lab.json",
+      "fixture": "fixtures/qicore-observation-lab.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "qicore-observation-screening-assessment",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-observation-screening-assessment",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-screening-assessment",
+      "source": "StructureDefinition-qicore-observation-screening-assessment.json",
+      "fixture": "fixtures/qicore-observation-screening-assessment.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "qicore-observationcancelled",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-observationcancelled",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-qicore-observationcancelled.json",
+      "fixture": "fixtures/qicore-observationcancelled.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qicore-organization",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+      "source": "StructureDefinition-qicore-organization.json",
+      "fixture": "fixtures/qicore-organization.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "qicore-patient",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-patient",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient",
+      "source": "StructureDefinition-qicore-patient.json",
+      "fixture": "fixtures/qicore-patient.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "qicore-practitioner",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+      "source": "StructureDefinition-qicore-practitioner.json",
+      "fixture": "fixtures/qicore-practitioner.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "qicore-practitionerrole",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-practitionerrole",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole",
+      "source": "StructureDefinition-qicore-practitionerrole.json",
+      "fixture": "fixtures/qicore-practitionerrole.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "qicore-procedure",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-procedure",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "source": "StructureDefinition-qicore-procedure.json",
+      "fixture": "fixtures/qicore-procedure.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-procedurenotdone",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-procedurenotdone",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "source": "StructureDefinition-qicore-procedurenotdone.json",
+      "fixture": "fixtures/qicore-procedurenotdone.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "qicore-questionnaireresponse",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-questionnaireresponse",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-questionnaireresponse",
+      "source": "StructureDefinition-qicore-questionnaireresponse.json",
+      "fixture": "fixtures/qicore-questionnaireresponse.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "qicore-recorded",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-recorded",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-recorded.json",
+      "fixture": "fixtures/qicore-recorded.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "qicore-relatedperson",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-relatedperson",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson",
+      "source": "StructureDefinition-qicore-relatedperson.json",
+      "fixture": "fixtures/qicore-relatedperson.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "qicore-servicenotrequested",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-servicenotrequested",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest",
+      "source": "StructureDefinition-qicore-servicenotrequested.json",
+      "fixture": "fixtures/qicore-servicenotrequested.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "qicore-servicerequest-appropriatenessScore",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-servicerequest-appropriatenessScore",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qicore-servicerequest-appropriatenessScore.json",
+      "fixture": "fixtures/qicore-servicerequest-appropriatenessScore.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "qicore-servicerequest",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest",
+      "source": "StructureDefinition-qicore-servicerequest.json",
+      "fixture": "fixtures/qicore-servicerequest.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "qicore-simple-observation",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-simple-observation",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "source": "StructureDefinition-qicore-simple-observation.json",
+      "fixture": "fixtures/qicore-simple-observation.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qicore-substance",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-substance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Substance",
+      "source": "StructureDefinition-qicore-substance.json",
+      "fixture": "fixtures/qicore-substance.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "qicore-task",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-task",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-qicore-task.json",
+      "fixture": "fixtures/qicore-task.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "qicore-taskrejected",
+      "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-taskrejected",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-qicore-taskrejected.json",
+      "fixture": "fixtures/qicore-taskrejected.json",
+      "differentialElements": 9
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,392 @@
+{
+  "source": "package",
+  "package": "tw.gov.mohw.nhi.pas#1.2.3",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/tw.gov.mohw.nhi.pas#1.2.3/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/tw.gov.mohw.nhi.pas#1.2.3/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "tw.gov.mohw.nhi.pas",
+    "version": "1.2.3",
+    "canonical": "https://nhicore.nhi.gov.tw/pas",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "tw.gov.mohw.twcore": "0.3.2",
+      "tw.gov.mohw.emr": "0.2.0",
+      "hl7.fhir.us.davinci-pas": "2.2.1"
+    }
+  },
+  "counts": {
+    "scanned": 46,
+    "harvested": 43,
+    "skipped": 3
+  },
+  "entries": [
+    {
+      "id": "AllergyIntolerance-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/AllergyIntolerance-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/AllergyIntolerance-twcore",
+      "source": "StructureDefinition-AllergyIntolerance-twpas.json",
+      "fixture": "fixtures/AllergyIntolerance-twpas.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "Bundle-immunologic-agent-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Bundle-immunologic-agent-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Bundle-twcore",
+      "source": "StructureDefinition-Bundle-immunologic-agent-twpas.json",
+      "fixture": "fixtures/Bundle-immunologic-agent-twpas.json",
+      "differentialElements": 77
+    },
+    {
+      "id": "Bundle-response-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Bundle-response-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Bundle-twcore",
+      "source": "StructureDefinition-Bundle-response-twpas.json",
+      "fixture": "fixtures/Bundle-response-twpas.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "Bundle-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Bundle-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Bundle-twcore",
+      "source": "StructureDefinition-Bundle-twpas.json",
+      "fixture": "fixtures/Bundle-twpas.json",
+      "differentialElements": 73
+    },
+    {
+      "id": "CarePlan-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/CarePlan-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CarePlan-twcore",
+      "source": "StructureDefinition-CarePlan-twpas.json",
+      "fixture": "fixtures/CarePlan-twpas.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "Claim-immunologic-agent-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-immunologic-agent-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+      "source": "StructureDefinition-Claim-immunologic-agent-twpas.json",
+      "fixture": "fixtures/Claim-immunologic-agent-twpas.json",
+      "differentialElements": 156
+    },
+    {
+      "id": "Claim-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+      "source": "StructureDefinition-Claim-twpas.json",
+      "fixture": "fixtures/Claim-twpas.json",
+      "differentialElements": 152
+    },
+    {
+      "id": "ClaimResponse-self-assessment-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClaimResponse-self-assessment-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+      "source": "StructureDefinition-ClaimResponse-self-assessment-twpas.json",
+      "fixture": "fixtures/ClaimResponse-self-assessment-twpas.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "ClaimResponse-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClaimResponse-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+      "source": "StructureDefinition-ClaimResponse-twpas.json",
+      "fixture": "fixtures/ClaimResponse-twpas.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "ClinicalImpression-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClinicalImpression-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClinicalImpression",
+      "source": "StructureDefinition-ClinicalImpression-twpas.json",
+      "fixture": "fixtures/ClinicalImpression-twpas.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "Composition-opd-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Composition-opd-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Composition-twcore",
+      "source": "StructureDefinition-Composition-opd-twpas.json",
+      "fixture": "fixtures/Composition-opd-twpas.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "Condition-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Condition-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Condition-twcore",
+      "source": "StructureDefinition-Condition-twpas.json",
+      "fixture": "fixtures/Condition-twpas.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "Coverage-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Coverage-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Coverage",
+      "source": "StructureDefinition-Coverage-twpas.json",
+      "fixture": "fixtures/Coverage-twpas.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "DiagnosticReport-image-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-DiagnosticReport-image-twpas.json",
+      "fixture": "fixtures/DiagnosticReport-image-twpas.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "DiagnosticReport-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-DiagnosticReport-twpas.json",
+      "fixture": "fixtures/DiagnosticReport-twpas.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "DocumentReference-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/DocumentReference-twcore",
+      "source": "StructureDefinition-DocumentReference-twpas.json",
+      "fixture": "fixtures/DocumentReference-twpas.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "Encounter-opd-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-opd-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Encounter-twcore",
+      "source": "StructureDefinition-Encounter-opd-twpas.json",
+      "fixture": "fixtures/Encounter-opd-twpas.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "Encounter-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Encounter-twcore",
+      "source": "StructureDefinition-Encounter-twpas.json",
+      "fixture": "fixtures/Encounter-twpas.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "ImagingStudy-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/ImagingStudy-twcore",
+      "source": "StructureDefinition-ImagingStudy-twpas.json",
+      "fixture": "fixtures/ImagingStudy-twpas.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "Media-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Media-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Media-twcore",
+      "source": "StructureDefinition-Media-twpas.json",
+      "fixture": "fixtures/Media-twpas.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "MedicationRequest-apply-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-apply-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore",
+      "source": "StructureDefinition-MedicationRequest-apply-twpas.json",
+      "fixture": "fixtures/MedicationRequest-apply-twpas.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "MedicationRequest-treat-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-treat-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore",
+      "source": "StructureDefinition-MedicationRequest-treat-twpas.json",
+      "fixture": "fixtures/MedicationRequest-treat-twpas.json",
+      "differentialElements": 34
+    },
+    {
+      "id": "Observation-blood-group-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-blood-group-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-blood-group-twpas.json",
+      "fixture": "fixtures/Observation-blood-group-twpas.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "Observation-cancer-stage-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-cancer-stage-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-cancer-stage-twpas.json",
+      "fixture": "fixtures/Observation-cancer-stage-twpas.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "Observation-diagnostic-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-diagnostic-twpas.json",
+      "fixture": "fixtures/Observation-diagnostic-twpas.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "Observation-laboratory-result-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-laboratory-result-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-laboratory-result-twpas.json",
+      "fixture": "fixtures/Observation-laboratory-result-twpas.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "Observation-objective-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-objective-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Observation-screening-assessment-twcore",
+      "source": "StructureDefinition-Observation-objective-twpas.json",
+      "fixture": "fixtures/Observation-objective-twpas.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "Observation-pat-assessment-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-pat-assessment-twpas.json",
+      "fixture": "fixtures/Observation-pat-assessment-twpas.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "Observation-subjective-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-subjective-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Observation-screening-assessment-twcore",
+      "source": "StructureDefinition-Observation-subjective-twpas.json",
+      "fixture": "fixtures/Observation-subjective-twpas.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "Observation-tx-assessment-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-Observation-tx-assessment-twpas.json",
+      "fixture": "fixtures/Observation-tx-assessment-twpas.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "Operationoutcome-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Operationoutcome-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OperationOutcome",
+      "source": "StructureDefinition-Operationoutcome-twpas.json",
+      "fixture": "fixtures/Operationoutcome-twpas.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "Organization-genetic-testing-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/emr/StructureDefinition/TWCoreOrganization",
+      "source": "StructureDefinition-Organization-genetic-testing-twpas.json",
+      "fixture": "fixtures/Organization-genetic-testing-twpas.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "Organization-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/emr/StructureDefinition/TWCoreOrganization",
+      "source": "StructureDefinition-Organization-twpas.json",
+      "fixture": "fixtures/Organization-twpas.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "Patient-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Patient-twcore",
+      "source": "StructureDefinition-Patient-twpas.json",
+      "fixture": "fixtures/Patient-twpas.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "Practitioner-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/emr/StructureDefinition/TWCorePractitioner",
+      "source": "StructureDefinition-Practitioner-twpas.json",
+      "fixture": "fixtures/Practitioner-twpas.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "Procedure-phototherapy-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-phototherapy-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-Procedure-phototherapy-twpas.json",
+      "fixture": "fixtures/Procedure-phototherapy-twpas.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "Procedure-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-Procedure-twpas.json",
+      "fixture": "fixtures/Procedure-twpas.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "Specimen-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas",
+      "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Specimen-twcore",
+      "source": "StructureDefinition-Specimen-twpas.json",
+      "fixture": "fixtures/Specimen-twpas.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "Substance-phototherapy-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-phototherapy-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Substance",
+      "source": "StructureDefinition-Substance-phototherapy-twpas.json",
+      "fixture": "fixtures/Substance-phototherapy-twpas.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "Substance-twpas",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-twpas",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Substance",
+      "source": "StructureDefinition-Substance-twpas.json",
+      "fixture": "fixtures/Substance-twpas.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "extension-claim-encounter",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claim-encounter",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-claim-encounter.json",
+      "fixture": "fixtures/extension-claim-encounter.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-claimResponse-requestor",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claimResponse-requestor",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-claimResponse-requestor.json",
+      "fixture": "fixtures/extension-claimResponse-requestor.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "extension-requestedService",
+      "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-requestedService",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-requestedService.json",
+      "fixture": "fixtures/extension-requestedService.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": [
+    {
+      "id": "ApplyImmModel",
+      "source": "StructureDefinition-ApplyImmModel.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "ApplyModel",
+      "source": "StructureDefinition-ApplyModel.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "ResponseModel",
+      "source": "StructureDefinition-ResponseModel.json",
+      "reason": "not derivation=constraint: specialization"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "backport-channel-type",
+  "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-channel-type",
+  "version": "1.1.0",
+  "name": "BackportChannelType",
+  "title": "Backported R5 Additional Channel Types",
+  "status": "active",
+  "date": "2023-01-11T15:34:32+11:00",
+  "publisher": "HL7 FHIR Infrastructure WG",
+  "contact": [
+    {
+      "name": "HL7 FHIR Infrastructure WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://hl7.org/Special/committees/fiwg"
+        }
+      ]
+    },
+    {
+      "name": "Gino Canessa",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:gino.canessa@microsoft.com"
+        }
+      ]
+    },
+    {
+      "name": "Eric Haas",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:ehaas@healthedatainc.com"
+        }
+      ]
+    }
+  ],
+  "description": "Additional channel types not defined before FHIR R5.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001",
+          "display": "World"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.0",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Subscription.channel.type"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Backported R5 Additional Channel Types",
+        "definition": "Additional channel types not defined before FHIR R5."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-channel-type"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Extended channel type for notifications",
+        "definition": "The type of channel to send notifications on.",
+        "comment": "This extension allows for the use of additional channel types that were not defined in the FHIR R4 subscription definition.",
+        "type": [
+          {
+            "code": "Coding"
+          }
+        ]
+      }
+    ]
+  }
+}

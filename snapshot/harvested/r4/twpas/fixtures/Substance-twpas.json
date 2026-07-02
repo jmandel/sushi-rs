@@ -1,0 +1,273 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Substance-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-twpas",
+  "version": "1.2.3",
+  "name": "SubstanceTWPAS",
+  "title": "放射治療總劑量-Substance TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此放射治療總劑量-Substance TWPAS Profile說明本IG如何進一步定義FHIR的Substance Resource以呈現事前審查中治療資訊之「放射治療」總劑量",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "orim",
+      "uri": "http://hl7.org/orim",
+      "name": "Ontological RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Substance",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Substance",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Substance.meta",
+        "path": "Substance.meta",
+        "min": 1
+      },
+      {
+        "id": "Substance.meta.profile",
+        "path": "Substance.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-twpas"
+      },
+      {
+        "id": "Substance.code",
+        "path": "Substance.code",
+        "short": "放射治療項目。ICD-10-PCS。",
+        "binding": {
+          "strength": "preferred",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.code.coding",
+        "path": "Substance.code.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2023Radiotherapy",
+        "path": "Substance.code.coding",
+        "sliceName": "ICD10PCS2023Radiotherapy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2023Radiotherapy.system",
+        "path": "Substance.code.coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2023Radiotherapy.code",
+        "path": "Substance.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2014Radiotherapy",
+        "path": "Substance.code.coding",
+        "sliceName": "ICD10PCS2014Radiotherapy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2014-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2014Radiotherapy.system",
+        "path": "Substance.code.coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.code.coding:ICD10PCS2014Radiotherapy.code",
+        "path": "Substance.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient",
+        "path": "Substance.ingredient",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator",
+        "path": "Substance.ingredient.quantity.numerator",
+        "min": 1
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator.value",
+        "path": "Substance.ingredient.quantity.numerator.value",
+        "short": "放射治療總劑量",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator.system",
+        "path": "Substance.ingredient.quantity.numerator.system",
+        "short": "放射治療總劑量單位之代碼系統，固定為「http://unitsofmeasure.org」。",
+        "min": 1,
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator.code",
+        "path": "Substance.ingredient.quantity.numerator.code",
+        "short": "放射治療總劑量單位",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "放射治療總劑量單位的代碼範圍請參考[Common UCUM units](https://hl7.org/fhir/R4/valueset-ucum-common.html)。",
+          "valueSet": "http://hl7.org/fhir/ValueSet/ucum-units"
+        }
+      },
+      {
+        "id": "Substance.ingredient.substance[x]",
+        "path": "Substance.ingredient.substance[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "short": "【因FHIR設計而需必填】",
+        "binding": {
+          "strength": "preferred",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept",
+        "path": "Substance.ingredient.substance[x]",
+        "sliceName": "substanceCodeableConcept",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ]
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding",
+        "path": "Substance.ingredient.substance[x].coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        }
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2023Radiotherapy",
+        "path": "Substance.ingredient.substance[x].coding",
+        "sliceName": "ICD10PCS2023Radiotherapy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2023Radiotherapy.system",
+        "path": "Substance.ingredient.substance[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2023Radiotherapy.code",
+        "path": "Substance.ingredient.substance[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2014Radiotherapy",
+        "path": "Substance.ingredient.substance[x].coding",
+        "sliceName": "ICD10PCS2014Radiotherapy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2014-radiotherapy"
+        }
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2014Radiotherapy.system",
+        "path": "Substance.ingredient.substance[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.substance[x]:substanceCodeableConcept.coding:ICD10PCS2014Radiotherapy.code",
+        "path": "Substance.ingredient.substance[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

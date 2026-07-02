@@ -1,0 +1,98 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.be.vaccination#1.1.3",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.be.vaccination#1.1.3/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.be.vaccination#1.1.3/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.be.vaccination",
+    "version": "1.1.3",
+    "canonical": "https://www.ehealth.fgov.be/standards/fhir/vaccination",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "hl7.fhir.be.core": "2.1.2",
+      "hl7.fhir.be.core-clinical": "1.1.0"
+    }
+  },
+  "counts": {
+    "scanned": 9,
+    "harvested": 7,
+    "skipped": 2
+  },
+  "entries": [
+    {
+      "id": "be-ext-administeredProduct",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-administeredProduct.json",
+      "fixture": "fixtures/be-ext-administeredProduct.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "be-ext-simple-note",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-simple-note",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-simple-note.json",
+      "fixture": "fixtures/be-ext-simple-note.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "be-ext-vaccination-confirmationStatus",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-confirmationStatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-vaccination-confirmationStatus.json",
+      "fixture": "fixtures/be-ext-vaccination-confirmationStatus.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "be-ext-vaccination-originalorder",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-originalorder",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-vaccination-originalorder.json",
+      "fixture": "fixtures/be-ext-vaccination-originalorder.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "be-ext-vaccination-stock-funding-organization",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-stock-funding-organization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-vaccination-stock-funding-organization.json",
+      "fixture": "fixtures/be-ext-vaccination-stock-funding-organization.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "be-ext-vaccination-stock-location",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-stock-location",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-be-ext-vaccination-stock-location.json",
+      "fixture": "fixtures/be-ext-vaccination-stock-location.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "be-vaccination",
+      "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-vaccination",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "source": "StructureDefinition-be-vaccination.json",
+      "fixture": "fixtures/be-vaccination.json",
+      "differentialElements": 35
+    }
+  ],
+  "skipped": [
+    {
+      "id": "be-model-vaccination-reduced",
+      "source": "StructureDefinition-be-model-vaccination-reduced.json",
+      "reason": "not derivation=constraint: specialization"
+    },
+    {
+      "id": "be-model-vaccination",
+      "source": "StructureDefinition-be-model-vaccination.json",
+      "reason": "not derivation=constraint: specialization"
+    }
+  ]
+}

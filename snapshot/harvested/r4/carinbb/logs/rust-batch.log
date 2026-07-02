@@ -1,0 +1,7 @@
+OK rust C4BB-Coverage
+OK rust C4BB-ExplanationOfBenefit
+OK rust C4BB-Organization
+OK rust C4BB-Patient
+OK rust C4BB-Practitioner
+OK rust C4BB-RelatedPerson
+RUST BATCH: ok=6 failed=0 total=6

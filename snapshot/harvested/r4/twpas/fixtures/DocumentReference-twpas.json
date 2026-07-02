@@ -1,0 +1,174 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "DocumentReference-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas",
+  "version": "1.2.3",
+  "name": "DocumentReferenceTWPAS",
+  "title": "文件參照-DocumentReference TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此文件參照-DocumentReference TWPAS Profile說明本IG如何進一步定義臺灣核心-文件參照(TW Core DocumentReference) Profile以呈現事前審查之治療計畫文件及基因報告",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "fhircomposition",
+      "uri": "http://hl7.org/fhir/composition",
+      "name": "FHIR Composition"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "xds",
+      "uri": "http://ihe.net/xds",
+      "name": "XDS metadata equivalent"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "DocumentReference",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/DocumentReference-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DocumentReference",
+        "path": "DocumentReference",
+        "constraint": [
+          {
+            "key": "report-title",
+            "severity": "error",
+            "human": "若category為「治療計畫文件(#careplan)」，請擇一填寫：「免疫檢查點抑制劑治療計畫／CAR-T多團隊會議紀錄／造血幹細胞移植計畫書」",
+            "expression": "((category.coding.exists(code='careplan')) implies (content.attachment.title = '免疫檢查點抑制劑治療計畫' or content.attachment.title = 'CAR-T多團隊會議紀錄' or content.attachment.title = '造血幹細胞移植計畫書'))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+          }
+        ]
+      },
+      {
+        "id": "DocumentReference.meta",
+        "path": "DocumentReference.meta",
+        "min": 1
+      },
+      {
+        "id": "DocumentReference.meta.profile",
+        "path": "DocumentReference.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+      },
+      {
+        "id": "DocumentReference.status",
+        "path": "DocumentReference.status",
+        "patternCode": "current"
+      },
+      {
+        "id": "DocumentReference.category",
+        "path": "DocumentReference.category",
+        "min": 1,
+        "max": "1",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-pdf-type"
+        }
+      },
+      {
+        "id": "DocumentReference.category.coding",
+        "path": "DocumentReference.category.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "DocumentReference.category.coding.code",
+        "path": "DocumentReference.category.coding.code",
+        "min": 1
+      },
+      {
+        "id": "DocumentReference.subject",
+        "path": "DocumentReference.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DocumentReference.content.attachment",
+        "path": "DocumentReference.content.attachment",
+        "constraint": [
+          {
+            "key": "UploadContent",
+            "severity": "error",
+            "human": "填寫格式：file://檔名.副檔名，例如：file://US01.jpg、file://PathologyReport01.pdf、file://GenReport01.pdf、file://王大明病歷.pdf",
+            "expression": "url.matches('^file://[a-zA-Z0-9_一-龥()-]+.[a-zA-Z]{2,5}$') and url.contains('.')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DocumentReference.content.attachment.contentType",
+        "path": "DocumentReference.content.attachment.contentType",
+        "short": "報告結果-MIMEType",
+        "min": 1,
+        "patternCode": "application/pdf",
+        "mustSupport": true
+      },
+      {
+        "id": "DocumentReference.content.attachment.url",
+        "path": "DocumentReference.content.attachment.url",
+        "short": "基因報告／治療計畫文件／檢驗(查)附件／病歷資料／病人狀態評估報告／照光治療紀錄。（請填寫完整檔案路徑）",
+        "min": 1,
+        "example": [
+          {
+            "label": "General",
+            "valueUrl": "file://PathologyReport01.pdf"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DocumentReference.content.attachment.title",
+        "path": "DocumentReference.content.attachment.title",
+        "short": "基因報告名稱／治療計畫文件名稱／檢驗(查)附件名稱／病歷資料名稱／病人狀態評估報告名稱／照光治療紀錄名稱。若category為「治療計畫文件(#careplan)」，請擇一填寫：「免疫檢查點抑制劑治療計畫／CAR-T多團隊會議紀錄／造血幹細胞移植計畫書」。",
+        "mustSupport": true
+      }
+    ]
+  }
+}

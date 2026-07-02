@@ -1,0 +1,533 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "usdf-PayerInsurancePlan",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "phx"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/ImplementationGuide/hl7.fhir.us.davinci-drug-formulary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PayerInsurancePlan",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.25.74595174031514506193398850787025340071.42.12"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "PayerInsurancePlan",
+  "title": "Payer Insurance Plan",
+  "status": "active",
+  "date": "2025-02-26T17:11:51+00:00",
+  "publisher": "HL7 International / Pharmacy",
+  "contact": [
+    {
+      "name": "HL7 International / Pharmacy",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/medication"
+        },
+        {
+          "system": "email",
+          "value": "pharmacy@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "The Payer InsurancePlan that defines the health insurance product, which include coverage benefits that are offered, and additional information about the offering, such as a coverage area, contact information, brochure locations, etc. The health insurance product offers one or more types of coverage, each of which may define a plan of covered benefits with the particular cost sharing structure offered to a consumer. Health insurance plans that include drug coverage reference a formulary that provides details about drugs that are covered under the plan including requirements and limitations of the coverage specific to each drug.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "InsurancePlan",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "InsurancePlan",
+        "path": "InsurancePlan"
+      },
+      {
+        "id": "InsurancePlan.meta.lastUpdated",
+        "path": "InsurancePlan.meta.lastUpdated",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.identifier",
+        "path": "InsurancePlan.identifier",
+        "short": "The business identifier for the plan. The same InsurancePlan may be present in multiple directories and if they have the same identifier they are assumed to be the same plan.",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.status",
+        "path": "InsurancePlan.status",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.type",
+        "path": "InsurancePlan.type",
+        "short": "Product type",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/InsuranceProductTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.name",
+        "path": "InsurancePlan.name",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.period",
+        "path": "InsurancePlan.period",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverageArea",
+        "path": "InsurancePlan.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-InsurancePlanLocation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact",
+        "path": "InsurancePlan.contact",
+        "short": "Contact information for the Insurance Plan including URLs for brochure and formulary information"
+      },
+      {
+        "id": "InsurancePlan.contact.purpose",
+        "path": "InsurancePlan.contact.purpose",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/PlanContactTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.contact.name",
+        "path": "InsurancePlan.contact.name",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.name.text",
+        "path": "InsurancePlan.contact.name.text",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom",
+        "path": "InsurancePlan.contact.telecom",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom.system",
+        "path": "InsurancePlan.contact.telecom.system",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom.value",
+        "path": "InsurancePlan.contact.telecom.value",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage",
+        "path": "InsurancePlan.coverage",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Slice based on $this pattern",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage.type",
+        "path": "InsurancePlan.coverage.type",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage",
+        "path": "InsurancePlan.coverage",
+        "sliceName": "drug-coverage",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.extension",
+        "path": "InsurancePlan.coverage.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.extension:usdf-FormularyReference-extension",
+        "path": "InsurancePlan.coverage.extension",
+        "sliceName": "usdf-FormularyReference-extension",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyReference-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.type",
+        "path": "InsurancePlan.coverage.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+              "code": "DRUGPOL"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.benefit",
+        "path": "InsurancePlan.coverage.benefit",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Slice based on $this pattern",
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.benefit.type",
+        "path": "InsurancePlan.coverage.benefit.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/insuranceplan-type"
+        }
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.benefit:drug-plan",
+        "path": "InsurancePlan.coverage.benefit",
+        "sliceName": "drug-plan",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverage:drug-coverage.benefit:drug-plan.type",
+        "path": "InsurancePlan.coverage.benefit.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/insurance-plan-type",
+              "code": "drug",
+              "display": "Drug"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.plan",
+        "path": "InsurancePlan.plan",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Slice based on $this pattern",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan.type",
+        "path": "InsurancePlan.plan.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://terminology.hl7.org/ValueSet/insuranceplan-type"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan",
+        "path": "InsurancePlan.plan",
+        "sliceName": "drug-plan",
+        "short": "Drug plan",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.identifier",
+        "path": "InsurancePlan.plan.identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.type",
+        "path": "InsurancePlan.plan.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/insurance-plan-type",
+              "code": "drug",
+              "display": "Drug"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.network",
+        "path": "InsurancePlan.plan.network",
+        "short": "Pharmacy benefit types that are part of the drug plan"
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost",
+        "path": "InsurancePlan.plan.specificCost",
+        "short": "Pharmacy benefit type specific cost",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.category",
+        "path": "InsurancePlan.plan.specificCost.category",
+        "short": "Pharmacy Benefit Type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/PharmacyBenefitTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit",
+        "path": "InsurancePlan.plan.specificCost.benefit",
+        "short": "Drug tier benefit",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.type",
+        "path": "InsurancePlan.plan.specificCost.benefit.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/DrugTierVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Slice based on $this pattern",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost.type",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.type",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/BenefitCostTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost.qualifiers",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.qualifiers",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost.value",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost",
+        "sliceName": "copay",
+        "short": "Copay costs",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.type",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-drug-formulary/CodeSystem/usdf-BenefitCostTypeCS-TEMPORARY-TRIAL-USE",
+              "code": "copay"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.qualifiers",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.qualifiers",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/CopayOptionVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.value",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/MoneyQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.value.value",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.value",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.value.system",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.system",
+        "patternUri": "urn:iso:std:iso:4217"
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:copay.value.code",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.code",
+        "patternCode": "USD"
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost",
+        "sliceName": "coinsurance",
+        "short": "Coinsurance costs",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.type",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-drug-formulary/CodeSystem/usdf-BenefitCostTypeCS-TEMPORARY-TRIAL-USE",
+              "code": "coinsurance"
+            }
+          ]
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.qualifiers",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.qualifiers",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/CoinsuranceOptionVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.value",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value",
+        "min": 1
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.value.value",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.value",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.value.system",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.system",
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "InsurancePlan.plan:drug-plan.specificCost.benefit.cost:coinsurance.value.code",
+        "path": "InsurancePlan.plan.specificCost.benefit.cost.value.code",
+        "patternCode": "%"
+      }
+    ]
+  }
+}

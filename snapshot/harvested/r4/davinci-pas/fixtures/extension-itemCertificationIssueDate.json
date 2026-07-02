@@ -1,0 +1,216 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-itemCertificationIssueDate",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.23"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "CertificationIssueDate",
+  "title": "Certification Issue Date",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "The specific date or period within which this item's preauthorization was issued.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Claim"
+    },
+    {
+      "type": "element",
+      "expression": "Claim.item"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Certification Issue Date",
+        "definition": "The specific date or period within which this item's preauthorization was issued."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "type": [
+          {
+            "code": "date"
+          },
+          {
+            "code": "Period"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valueDate",
+        "path": "Extension.value[x]",
+        "sliceName": "valueDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate|2.2.1"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod",
+        "path": "Extension.value[x]",
+        "sliceName": "valuePeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod.start",
+        "path": "Extension.value[x].start",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate|2.2.1"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x]:valuePeriod.end",
+        "path": "Extension.value[x].end",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate|2.2.1"
+          }
+        ]
+      }
+    ]
+  }
+}

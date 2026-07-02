@@ -1,0 +1,23 @@
+OK rust accessibility
+OK rust communication-proficiency
+OK rust contactpoint-availabletime
+OK rust delivery-method
+OK rust endpoint-usecase
+OK rust location-reference
+OK rust network-reference
+OK rust newpatients
+OK rust org-description
+OK rust plannet-Endpoint
+OK rust plannet-HealthcareService
+OK rust plannet-InsurancePlan
+OK rust plannet-Location
+OK rust plannet-Network
+OK rust plannet-Organization
+OK rust plannet-OrganizationAffiliation
+OK rust plannet-Practitioner
+OK rust plannet-PractitionerRole
+OK rust practitioner-period
+OK rust practitioner-qualification
+OK rust qualification
+OK rust via-intermediary
+RUST BATCH: ok=22 failed=0 total=22

@@ -1,0 +1,945 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "emp-medication-request",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request",
+  "version": "1.3.2",
+  "name": "EMPMedicationRequest",
+  "title": "eMP MedicationRequest",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "eMP-Eintrag: Hält die Medikationsinformationen eines Eintrags für den elektronischen MedikationsPlan (eMP) vor und stellt das zentrale Element dar. Es stellt die Verbindung zwischen der Planung und einem oder mehrerer Verschreibungsprozesse oder Nachträge.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "script10.6",
+      "uri": "http://ncpdp.org/SCRIPT10_6",
+      "name": "Mapping to NCPDP SCRIPT 10.6"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationRequest",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationRequest",
+        "path": "MedicationRequest"
+      },
+      {
+        "id": "MedicationRequest.meta",
+        "path": "MedicationRequest.meta",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.meta.versionId",
+        "path": "MedicationRequest.meta.versionId",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.meta.lastUpdated",
+        "path": "MedicationRequest.meta.lastUpdated",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension",
+        "path": "MedicationRequest.extension",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:context",
+        "path": "MedicationRequest.extension",
+        "sliceName": "context",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/context-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:context.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:context.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "patternCode": "EMP",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity",
+        "path": "MedicationRequest.extension",
+        "sliceName": "activity",
+        "short": "Aktivität die zu diesem Planelement gehört",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medicationrequest-activity-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference",
+        "path": "MedicationRequest.extension.extension",
+        "sliceName": "reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.url",
+        "path": "MedicationRequest.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x]",
+        "path": "MedicationRequest.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].reference",
+        "path": "MedicationRequest.extension.extension.value[x].reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier",
+        "path": "MedicationRequest.extension.extension.value[x].identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type.coding",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type.coding.system",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type.coding.version",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type.coding.code",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.type.coding.display",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.system",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].identifier.value",
+        "path": "MedicationRequest.extension.extension.value[x].identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:reference.value[x].display",
+        "path": "MedicationRequest.extension.extension.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:addedOn",
+        "path": "MedicationRequest.extension.extension",
+        "sliceName": "addedOn",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:addedOn.url",
+        "path": "MedicationRequest.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.extension:addedOn.value[x]",
+        "path": "MedicationRequest.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:activity.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:reasonPatientInstruction",
+        "path": "MedicationRequest.extension",
+        "sliceName": "reasonPatientInstruction",
+        "short": "Patientenlesbarer Grund für den Planungseintrag",
+        "definition": "Benennt den Behandlungsanlass für das Arzneimittel in versichertenverständlicher Form und unterstützt so Verständnis und Wiedererkennung auf dem eMP. Ergänzend angegebene ICD-10-Codes enthalten oft vergleichbare Informationen in medizinischer Fachsprache.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/reason-patient-instruction-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:reasonPatientInstruction.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:reasonPatientInstruction.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:patientNote",
+        "path": "MedicationRequest.extension",
+        "sliceName": "patientNote",
+        "short": "Hinweis für den Patienten",
+        "definition": "Übergeordnete Hinweise zur Therapie mit dem zugeordneten Arzneimittel; sie richten sich an den Versicherten, sind aber nicht der Dosierung zuzuordnen. Hierzu gehören bspw. mögliche unerwünschte Arzneimittelwirkungen, Empfehlungen zu regelmäßigen Kontrolluntersuchungen oder zur korrekten Lagerung des Arzneimittels.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/patient-note-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:patientNote.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:patientNote.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:patientNote.value[x].time",
+        "path": "MedicationRequest.extension.value[x].time",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:patientNote.value[x].text",
+        "path": "MedicationRequest.extension.value[x].text",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:effectiveDosePeriod",
+        "path": "MedicationRequest.extension",
+        "sliceName": "effectiveDosePeriod",
+        "short": "Zeitraum, in dem die Medikation eingenommen werden soll.",
+        "definition": "Zeitraum, über den die Medikation eingenommen werden soll. Wenn mehrere dosageInstruction-Zeilen vorhanden sind (z. B. bei einer ausschleichenden Dosierung), entspricht dieser Zeitraum dem frühesten Startdatum und dem spätesten Enddatum der dosageInstructions.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationRequest.effectiveDosePeriod"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:effectiveDosePeriod.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:effectiveDosePeriod.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:effectiveDosePeriod.value[x].start",
+        "path": "MedicationRequest.extension.value[x].start",
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:effectiveDosePeriod.value[x].end",
+        "path": "MedicationRequest.extension.value[x].end",
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:renderedDosageInstruction",
+        "path": "MedicationRequest.extension",
+        "sliceName": "renderedDosageInstruction",
+        "short": "Vollständige Darstellung der Dosierungsanweisungen (generiert aus den Dosage-Elementen).",
+        "definition": "Ein menschenlesbarer, vollständiger Text der Dosierungsanweisungen. Der Text wird aus den strukturierten Dosage-Elementen generiert und dient der patientensicheren Darstellung der Dosierung. Er soll die maschinenlesbaren Angaben konsistent wiedergeben und in einer für Patient:innen verständlichen Form bereitstellen.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationRequest.renderedDosageInstruction"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:renderedDosageInstruction.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:renderedDosageInstruction.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta",
+        "path": "MedicationRequest.extension",
+        "sliceName": "generatedDosageInstructionsMeta",
+        "short": "Metadaten zu den generierten Dosierungsanweisungen",
+        "definition": "Diese Extension enthält zusätzliche Metadaten zu den automatisch generierten Dosierungsanweisungen, wie z.B. Informationen zur Generierung oder zum Ursprung der Daten.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://ig.fhir.de/igs/medication/StructureDefinition/GeneratedDosageInstructionsMeta"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:language",
+        "path": "MedicationRequest.extension.extension",
+        "sliceName": "language"
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:language.url",
+        "path": "MedicationRequest.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:language.value[x]",
+        "path": "MedicationRequest.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:algorithmVersion",
+        "path": "MedicationRequest.extension.extension",
+        "sliceName": "algorithmVersion"
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:algorithmVersion.url",
+        "path": "MedicationRequest.extension.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.extension:algorithmVersion.value[x]",
+        "path": "MedicationRequest.extension.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:generatedDosageInstructionsMeta.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication",
+        "path": "MedicationRequest.extension",
+        "sliceName": "originMedication",
+        "short": "Referenz auf die Ursprungs-Medication (Basis des eMP-Eintrags)",
+        "definition": "Zeigt auf die Medication-Instanz, die als Grundlage für diesen MedicationRequest diente und stellt so den Ursprung (Origin) des eMP-Eintrags dar.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-origin-medication-extension"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.url",
+        "path": "MedicationRequest.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x]",
+        "path": "MedicationRequest.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].reference",
+        "path": "MedicationRequest.extension.value[x].reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier",
+        "path": "MedicationRequest.extension.value[x].identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type",
+        "path": "MedicationRequest.extension.value[x].identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type.coding",
+        "path": "MedicationRequest.extension.value[x].identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type.coding.system",
+        "path": "MedicationRequest.extension.value[x].identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type.coding.version",
+        "path": "MedicationRequest.extension.value[x].identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type.coding.code",
+        "path": "MedicationRequest.extension.value[x].identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.type.coding.display",
+        "path": "MedicationRequest.extension.value[x].identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.system",
+        "path": "MedicationRequest.extension.value[x].identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].identifier.value",
+        "path": "MedicationRequest.extension.value[x].identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.extension:originMedication.value[x].display",
+        "path": "MedicationRequest.extension.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier",
+        "path": "MedicationRequest.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "$this"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier",
+        "path": "MedicationRequest.identifier",
+        "sliceName": "MedicationPlanIdentifier",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "https://gematik.de/fhir/ti/StructureDefinition/medication-plan-identifier"
+            ]
+          }
+        ],
+        "patternIdentifier": {
+          "system": "https://gematik.de/fhir/sid/emp-identifier"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type",
+        "path": "MedicationRequest.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type.coding",
+        "path": "MedicationRequest.identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type.coding.system",
+        "path": "MedicationRequest.identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type.coding.version",
+        "path": "MedicationRequest.identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type.coding.code",
+        "path": "MedicationRequest.identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.identifier:MedicationPlanIdentifier.type.coding.display",
+        "path": "MedicationRequest.identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.status",
+        "path": "MedicationRequest.status",
+        "short": "active | on-hold | completed | entered-in-error | stopped",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://gematik.de/fhir/epa-medication/ValueSet/emp-medicationrequest-status-vs"
+        }
+      },
+      {
+        "id": "MedicationRequest.intent",
+        "path": "MedicationRequest.intent",
+        "short": "plan",
+        "patternCode": "plan"
+      },
+      {
+        "id": "MedicationRequest.medication[x]",
+        "path": "MedicationRequest.medication[x]",
+        "short": "Arzneimittel, welches geplant wird",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication",
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].reference",
+        "path": "MedicationRequest.medication[x].reference",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier",
+        "path": "MedicationRequest.medication[x].identifier",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type",
+        "path": "MedicationRequest.medication[x].identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type.coding",
+        "path": "MedicationRequest.medication[x].identifier.type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type.coding.system",
+        "path": "MedicationRequest.medication[x].identifier.type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type.coding.version",
+        "path": "MedicationRequest.medication[x].identifier.type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type.coding.code",
+        "path": "MedicationRequest.medication[x].identifier.type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.type.coding.display",
+        "path": "MedicationRequest.medication[x].identifier.type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.system",
+        "path": "MedicationRequest.medication[x].identifier.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].identifier.value",
+        "path": "MedicationRequest.medication[x].identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.medication[x].display",
+        "path": "MedicationRequest.medication[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.subject",
+        "path": "MedicationRequest.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.subject.identifier",
+        "path": "MedicationRequest.subject.identifier",
+        "min": 1,
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://fhir.de/StructureDefinition/identifier-kvid-10"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.authoredOn",
+        "path": "MedicationRequest.authoredOn",
+        "min": 1,
+        "constraint": [
+          {
+            "key": "epa-datetime",
+            "severity": "error",
+            "human": "dateTime muss mindestens aus Tag, Monat und Jahr bestehen",
+            "expression": "toString().matches('^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\\\.[0-9]+)?(Z|(\\\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?$')",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode",
+        "path": "MedicationRequest.reasonCode",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding",
+        "path": "MedicationRequest.reasonCode.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "$this"
+            }
+          ],
+          "rules": "closed"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm",
+        "path": "MedicationRequest.reasonCode.coding",
+        "sliceName": "icd-10-gm",
+        "definition": "Der ICD-Code ist in Deutschland das abrechnungsrelevante Code System im ambulanten und stationären Bereich.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Coding",
+            "profile": [
+              "http://fhir.de/StructureDefinition/CodingICD10GM"
+            ]
+          }
+        ],
+        "patternCoding": {
+          "system": "http://fhir.de/CodeSystem/bfarm/icd-10-gm"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension",
+        "path": "MedicationRequest.reasonCode.coding.extension",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen",
+        "path": "MedicationRequest.reasonCode.coding.extension",
+        "sliceName": "Mehrfachcodierungs-Kennzeichen",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.url",
+        "path": "MedicationRequest.reasonCode.coding.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.value[x]",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.value[x].system",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.value[x].version",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.value[x].code",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Mehrfachcodierungs-Kennzeichen.value[x].display",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation",
+        "path": "MedicationRequest.reasonCode.coding.extension",
+        "sliceName": "Seitenlokalisation",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.url",
+        "path": "MedicationRequest.reasonCode.coding.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.value[x]",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.value[x].system",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.value[x].version",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.value[x].code",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Seitenlokalisation.value[x].display",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit",
+        "path": "MedicationRequest.reasonCode.coding.extension",
+        "sliceName": "Diagnosesicherheit",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.url",
+        "path": "MedicationRequest.reasonCode.coding.extension.url",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.value[x]",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.value[x].system",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.value[x].version",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.value[x].code",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.extension:Diagnosesicherheit.value[x].display",
+        "path": "MedicationRequest.reasonCode.coding.extension.value[x].display",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.system",
+        "path": "MedicationRequest.reasonCode.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.version",
+        "path": "MedicationRequest.reasonCode.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.code",
+        "path": "MedicationRequest.reasonCode.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.reasonCode.coding:icd-10-gm.display",
+        "path": "MedicationRequest.reasonCode.coding.display",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.note",
+        "path": "MedicationRequest.note",
+        "short": "Zusätzliche Informationen durch einen Leistungserbringenden",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.note.time",
+        "path": "MedicationRequest.note.time",
+        "comment": "This information should be generated automatically",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.note.text",
+        "path": "MedicationRequest.note.text",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction",
+        "path": "MedicationRequest.dosageInstruction",
+        "short": "Hier werden Informationen zur Dosierung angegeben.",
+        "definition": "Hier werden Informationen zur Dosierung angegeben.",
+        "min": 1,
+        "type": [
+          {
+            "code": "Dosage",
+            "profile": [
+              "http://ig.fhir.de/igs/medication/StructureDefinition/DosageDgMP"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]:doseQuantity",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]",
+        "sliceName": "doseQuantity",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]:doseQuantity.value",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].value",
+        "mustSupport": true
+      }
+    ]
+  }
+}

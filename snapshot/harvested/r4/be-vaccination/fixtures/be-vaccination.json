@@ -1,0 +1,453 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "be-vaccination",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    }
+  ],
+  "url": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-vaccination",
+  "version": "1.1.3",
+  "name": "BeVaccination",
+  "title": "BeVaccination",
+  "status": "active",
+  "date": "2026-06-05T14:44:04+02:00",
+  "publisher": "eHealth Platform",
+  "contact": [
+    {
+      "name": "eHealth Platform",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.ehealth.fgov.be/"
+        },
+        {
+          "system": "email",
+          "value": "support@be-ehealth-standards.atlassian.net"
+        }
+      ]
+    },
+    {
+      "name": "Message Structure",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "support@be-ehealth-standards.atlassian.net",
+          "use": "work"
+        }
+      ]
+    }
+  ],
+  "description": "Defines constraints and extensions on the immunization resource to represent an immunization event i.e. the administration of a vaccine.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "BE",
+          "display": "Belgium"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Immunization",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Immunization",
+        "path": "Immunization",
+        "constraint": [
+          {
+            "key": "be-rule-vaccination-1",
+            "severity": "error",
+            "human": "If vaccineCode.code is other, then vaccinecode text must exist",
+            "expression": "(vaccineCode.coding.where(code = 'other').exists() or vaccineCode.coding.where(code = '787859002' and system = 'http://snomed.info/sct').exists() ) implies vaccineCode.text.exists()",
+            "source": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-vaccination"
+          },
+          {
+            "key": "be-rule-vaccination-2",
+            "severity": "error",
+            "human": "The product code SHALL be cnk, cti extended or atc",
+            "expression": "(extension('https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct').extension('coded').select($this.value as CodeableConcept)).exists().not() or (extension('https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct').extension('coded').select($this.value as CodeableConcept)).coding.where(system = 'https://www.ehealth.fgov.be/standards/fhir/medication/NamingSystem/be-ns-cnk-codes').exists()  or (extension('https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct').extension('coded').select($this.value as CodeableConcept)).coding.where(system = 'https://www.ehealth.fgov.be/standards/fhir/medication/NamingSystem/be-ns-cti-extended-code').exists() or (extension('https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct').extension('coded').select($this.value as CodeableConcept)).coding.where(system = 'http://whocc.no/atc').exists()",
+            "source": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-vaccination"
+          },
+          {
+            "key": "be-rule-vaccination-3",
+            "severity": "error",
+            "human": "The reaction detail code SHALL come from be-vs-reaction-manifestation",
+            "expression": "reaction.detail.empty() or reaction.detail.resolve().code.memberOf('https://www.ehealth.fgov.be/standards/fhir/core-clinical/ValueSet/be-vs-reaction-manifestation-code').anyTrue()",
+            "source": "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-vaccination"
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension",
+        "path": "Immunization.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Immunization.extension:vaccination-originalorder",
+        "path": "Immunization.extension",
+        "sliceName": "vaccination-originalorder",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-originalorder"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:administeredProduct",
+        "path": "Immunization.extension",
+        "sliceName": "administeredProduct",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-administeredProduct"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:vaccination-confirmationStatus",
+        "path": "Immunization.extension",
+        "sliceName": "vaccination-confirmationStatus",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-confirmationStatus"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:recorder",
+        "path": "Immunization.extension",
+        "sliceName": "recorder",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-ext-recorder"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:note",
+        "path": "Immunization.extension",
+        "sliceName": "note",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-simple-note"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:vaccination-stock-location",
+        "path": "Immunization.extension",
+        "sliceName": "vaccination-stock-location",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-stock-location"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.extension:vaccination-stock-funding-organization",
+        "path": "Immunization.extension",
+        "sliceName": "vaccination-stock-funding-organization",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/vaccination/StructureDefinition/be-ext-vaccination-stock-funding-organization"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.identifier",
+        "path": "Immunization.identifier",
+        "short": "A unique business identifier for a vaccination entry",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.identifier.system",
+        "path": "Immunization.identifier.system",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.identifier.value",
+        "path": "Immunization.identifier.value",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.status",
+        "path": "Immunization.status",
+        "short": "The status of this vaccination record entry",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.statusReason",
+        "path": "Immunization.statusReason",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://www.ehealth.fgov.be/standards/fhir/vaccination/ValueSet/be-vs-vaccination-status-reason"
+        }
+      },
+      {
+        "id": "Immunization.vaccineCode",
+        "path": "Immunization.vaccineCode",
+        "short": "The vaccine code - a type of vaccine, typically identified by the diseas(s) it covers. For example MMR, HPV, Tetanus, DTPa",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://www.ehealth.fgov.be/standards/fhir/vaccination/ValueSet/be-vs-vaccine-code"
+        }
+      },
+      {
+        "id": "Immunization.patient",
+        "path": "Immunization.patient",
+        "short": "The patient that this received vaccination entry refers to",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-patient"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.encounter",
+        "path": "Immunization.encounter",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.occurrence[x]",
+        "path": "Immunization.occurrence[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Immunization.occurrence[x]:occurrenceDateTime",
+        "path": "Immunization.occurrence[x]",
+        "sliceName": "occurrenceDateTime",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.occurrence[x]:occurrenceString",
+        "path": "Immunization.occurrence[x]",
+        "sliceName": "occurrenceString",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.recorded",
+        "path": "Immunization.recorded",
+        "short": "The date/time when the vaccination event has been recorded",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.location",
+        "path": "Immunization.location",
+        "max": "0"
+      },
+      {
+        "id": "Immunization.lotNumber",
+        "path": "Immunization.lotNumber",
+        "max": "0"
+      },
+      {
+        "id": "Immunization.expirationDate",
+        "path": "Immunization.expirationDate",
+        "max": "0"
+      },
+      {
+        "id": "Immunization.site",
+        "path": "Immunization.site",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://www.ehealth.fgov.be/standards/fhir/vaccination/ValueSet/be-vs-vaccination-bodysite"
+        }
+      },
+      {
+        "id": "Immunization.site.extension:bodyLaterality",
+        "path": "Immunization.site.extension",
+        "sliceName": "bodyLaterality",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://www.ehealth.fgov.be/standards/fhir/core-clinical/StructureDefinition/be-ext-laterality"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.route",
+        "path": "Immunization.route",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://www.ehealth.fgov.be/standards/fhir/vaccination/ValueSet/be-vs-vaccination-administration-route"
+        }
+      },
+      {
+        "id": "Immunization.doseQuantity",
+        "path": "Immunization.doseQuantity",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.performer",
+        "path": "Immunization.performer",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.performer.actor",
+        "path": "Immunization.performer.actor",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-practitioner",
+              "https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-organization",
+              "https://www.ehealth.fgov.be/standards/fhir/core/StructureDefinition/be-practitionerrole"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Immunization.reasonCode",
+        "path": "Immunization.reasonCode",
+        "short": "Can be used to indicate whether vaccination/prophylaxis took place pre- or post-exposition",
+        "mustSupport": true,
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "https://www.ehealth.fgov.be/standards/fhir/vaccination/ValueSet/be-vs-vaccination-reason-code"
+        }
+      },
+      {
+        "id": "Immunization.reasonReference",
+        "path": "Immunization.reasonReference",
+        "short": "Why vaccination has occurred or not (reference to a finding)",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.reaction",
+        "path": "Immunization.reaction",
+        "short": "Reaction immediately after vaccination (15-30 minutes)",
+        "mustSupport": true
+      },
+      {
+        "id": "Immunization.reaction.date",
+        "path": "Immunization.reaction.date",
+        "min": 1
+      },
+      {
+        "id": "Immunization.protocolApplied",
+        "path": "Immunization.protocolApplied",
+        "max": "0",
+        "mustSupport": true
+      }
+    ]
+  }
+}

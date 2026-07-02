@@ -1,0 +1,194 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.davinci-drug-formulary#2.1.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-drug-formulary#2.1.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-drug-formulary#2.1.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.davinci-drug-formulary",
+    "version": "2.1.0",
+    "canonical": "http://hl7.org/fhir/us/davinci-drug-formulary",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "6.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.core.v311": "3.1.1",
+      "hl7.fhir.us.core.v610": "6.1.0",
+      "hl7.fhir.us.core": "7.0.0",
+      "hl7.fhir.us.davinci-hrex": "1.1.0",
+      "hl7.fhir.us.davinci-pdex-plan-net": "1.2.0"
+    }
+  },
+  "counts": {
+    "scanned": 20,
+    "harvested": 20,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "insurance-plan-coverage",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/insurance-plan-coverage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage",
+      "source": "StructureDefinition-insurance-plan-coverage.json",
+      "fixture": "fixtures/insurance-plan-coverage.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "usdf-AdditionalCoverageInformation-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-AdditionalCoverageInformation-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-AdditionalCoverageInformation-extension.json",
+      "fixture": "fixtures/usdf-AdditionalCoverageInformation-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-AvailabilityPeriod-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-AvailabilityPeriod-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-AvailabilityPeriod-extension.json",
+      "fixture": "fixtures/usdf-AvailabilityPeriod-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-AvailabilityStatus-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-AvailabilityStatus-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-AvailabilityStatus-extension.json",
+      "fixture": "fixtures/usdf-AvailabilityStatus-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-DrugTierID-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-DrugTierID-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-DrugTierID-extension.json",
+      "fixture": "fixtures/usdf-DrugTierID-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-Formulary",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-Formulary",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+      "source": "StructureDefinition-usdf-Formulary.json",
+      "fixture": "fixtures/usdf-Formulary.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "usdf-FormularyBulkDataGraphDefinition",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyBulkDataGraphDefinition",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/GraphDefinition",
+      "source": "StructureDefinition-usdf-FormularyBulkDataGraphDefinition.json",
+      "fixture": "fixtures/usdf-FormularyBulkDataGraphDefinition.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "usdf-FormularyDrug",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyDrug",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationKnowledge",
+      "source": "StructureDefinition-usdf-FormularyDrug.json",
+      "fixture": "fixtures/usdf-FormularyDrug.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "usdf-FormularyItem",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyItem",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Basic",
+      "source": "StructureDefinition-usdf-FormularyItem.json",
+      "fixture": "fixtures/usdf-FormularyItem.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "usdf-FormularyReference-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyReference-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-FormularyReference-extension.json",
+      "fixture": "fixtures/usdf-FormularyReference-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-InsurancePlanLocation",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-InsurancePlanLocation",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location",
+      "source": "StructureDefinition-usdf-InsurancePlanLocation.json",
+      "fixture": "fixtures/usdf-InsurancePlanLocation.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-PayerInsurancePlan",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PayerInsurancePlan",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+      "source": "StructureDefinition-usdf-PayerInsurancePlan.json",
+      "fixture": "fixtures/usdf-PayerInsurancePlan.json",
+      "differentialElements": 53
+    },
+    {
+      "id": "usdf-PayerInsurancePlanBulkDataGraphDefinition",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PayerInsurancePlanBulkDataGraphDefinition",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/GraphDefinition",
+      "source": "StructureDefinition-usdf-PayerInsurancePlanBulkDataGraphDefinition.json",
+      "fixture": "fixtures/usdf-PayerInsurancePlanBulkDataGraphDefinition.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "usdf-PharmacyBenefitType-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PharmacyBenefitType-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-PharmacyBenefitType-extension.json",
+      "fixture": "fixtures/usdf-PharmacyBenefitType-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-PriorAuthorization-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PriorAuthorization-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-PriorAuthorization-extension.json",
+      "fixture": "fixtures/usdf-PriorAuthorization-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-PriorAuthorizationNewStartsOnly-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-PriorAuthorizationNewStartsOnly-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-PriorAuthorizationNewStartsOnly-extension.json",
+      "fixture": "fixtures/usdf-PriorAuthorizationNewStartsOnly-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-QuantityLimit-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-QuantityLimit-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-QuantityLimit-extension.json",
+      "fixture": "fixtures/usdf-QuantityLimit-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-QuantityLimitDetail-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-QuantityLimitDetail-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-QuantityLimitDetail-extension.json",
+      "fixture": "fixtures/usdf-QuantityLimitDetail-extension.json",
+      "differentialElements": 35
+    },
+    {
+      "id": "usdf-StepTherapyLimit-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-StepTherapyLimit-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-StepTherapyLimit-extension.json",
+      "fixture": "fixtures/usdf-StepTherapyLimit-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "usdf-StepTherapyLimitNewStartsOnly-extension",
+      "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-StepTherapyLimitNewStartsOnly-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-usdf-StepTherapyLimitNewStartsOnly-extension.json",
+      "fixture": "fixtures/usdf-StepTherapyLimitNewStartsOnly-extension.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,233 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "epa-op-emp-entry-output-parameters",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-emp-entry-output-parameters",
+  "version": "1.3.2",
+  "name": "EPAOpEMPEntryOutputParameters",
+  "title": "EPA Operation EMPEntry Output-Parameters",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "EPA Operation EMPEntry Output-Parameters",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters",
+        "path": "Parameters"
+      },
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "4",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry",
+        "path": "Parameters.parameter",
+        "sliceName": "empEntry",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "empEntry",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:empEntry.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication",
+        "path": "Parameters.parameter",
+        "sliceName": "medication",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "medication",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medication.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Medication",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication",
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medication.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:relatedActivity",
+        "path": "Parameters.parameter",
+        "sliceName": "relatedActivity",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:relatedActivity.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "relatedActivity",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:relatedActivity.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:relatedActivity.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Provenance",
+            "profile": [
+              "https://gematik.de/fhir/epa/StructureDefinition/epa-activity-provenance"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:relatedActivity.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:relatedChronology",
+        "path": "Parameters.parameter",
+        "sliceName": "relatedChronology",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Parameters.parameter:relatedChronology.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "relatedChronology",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:relatedChronology.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:relatedChronology.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Provenance",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-chronology-provenance"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:relatedChronology.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

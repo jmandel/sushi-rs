@@ -1,0 +1,102 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "backport-timeout",
+  "url": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-timeout",
+  "version": "1.1.0",
+  "name": "BackportTimeout",
+  "title": "Backport R5 Subscription Timeout",
+  "status": "active",
+  "date": "2023-01-11T15:34:32+11:00",
+  "publisher": "HL7 FHIR Infrastructure WG",
+  "contact": [
+    {
+      "name": "HL7 FHIR Infrastructure WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://hl7.org/Special/committees/fiwg"
+        }
+      ]
+    },
+    {
+      "name": "Gino Canessa",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:gino.canessa@microsoft.com"
+        }
+      ]
+    },
+    {
+      "name": "Eric Haas",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:ehaas@healthedatainc.com"
+        }
+      ]
+    }
+  ],
+  "description": "Timeout in seconds to attempt notification delivery.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001",
+          "display": "World"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.0",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "Subscription.channel"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Backport R5 Subscription Timeout",
+        "definition": "Timeout in seconds to attempt notification delivery."
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-timeout"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Timeout in seconds to attempt notification delivery",
+        "definition": "If present, the maximum amount of time a server will allow before failing a notification attempt.",
+        "type": [
+          {
+            "code": "unsignedInt"
+          }
+        ]
+      }
+    ]
+  }
+}

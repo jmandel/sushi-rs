@@ -1,0 +1,685 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.davinci-pas#2.2.1",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pas#2.2.1/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pas#2.2.1/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.davinci-pas",
+    "version": "2.2.1",
+    "canonical": "http://hl7.org/fhir/us/davinci-pas",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.core.v311": "3.1.1",
+      "hl7.fhir.us.core.v610": "6.1.0",
+      "hl7.fhir.us.core": "7.0.0",
+      "hl7.fhir.uv.sdc": "4.0.0",
+      "hl7.fhir.uv.xver-r5.r4": "0.1.0",
+      "hl7.fhir.us.davinci-crd": "2.2.1",
+      "hl7.fhir.us.davinci-hrex": "1.2.0",
+      "hl7.fhir.us.davinci-cdex": "2.1.0",
+      "hl7.fhir.uv.subscriptions-backport.r4": "1.1.0",
+      "hl7.fhir.uv.tools.r4": "1.1.2"
+    }
+  },
+  "counts": {
+    "scanned": 81,
+    "harvested": 80,
+    "skipped": 1
+  },
+  "entries": [
+    {
+      "id": "extension-TransmissionIdentifiers",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-TransmissionIdentifiers",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-TransmissionIdentifiers.json",
+      "fixture": "fixtures/extension-TransmissionIdentifiers.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "extension-administrationReferenceNumber",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-administrationReferenceNumber.json",
+      "fixture": "fixtures/extension-administrationReferenceNumber.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-admissionDates",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-admissionDates",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-admissionDates.json",
+      "fixture": "fixtures/extension-admissionDates.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "extension-authorizationNumber",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizationNumber",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-authorizationNumber.json",
+      "fixture": "fixtures/extension-authorizationNumber.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-authorizedProviderType",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-authorizedProviderType.json",
+      "fixture": "fixtures/extension-authorizedProviderType.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-careTeamClaimScope",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-careTeamClaimScope",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-careTeamClaimScope.json",
+      "fixture": "fixtures/extension-careTeamClaimScope.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-certificationType",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-certificationType.json",
+      "fixture": "fixtures/extension-certificationType.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-claimResponseReviewer",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-claimResponseReviewer",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-claimResponseReviewer.json",
+      "fixture": "fixtures/extension-claimResponseReviewer.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "extension-communicatedDiagnosis",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-communicatedDiagnosis",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-communicatedDiagnosis.json",
+      "fixture": "fixtures/extension-communicatedDiagnosis.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-conditionCode",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-conditionCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-conditionCode.json",
+      "fixture": "fixtures/extension-conditionCode.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "extension-contentModifier",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-contentModifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-contentModifier.json",
+      "fixture": "fixtures/extension-contentModifier.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-diagnosisRecordedDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-diagnosisRecordedDate.json",
+      "fixture": "fixtures/extension-diagnosisRecordedDate.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-dischargeDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-dischargeDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-dischargeDate.json",
+      "fixture": "fixtures/extension-dischargeDate.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-documentInformation",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-documentInformation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-documentInformation.json",
+      "fixture": "fixtures/extension-documentInformation.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "extension-epsdtIndicator",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-epsdtIndicator.json",
+      "fixture": "fixtures/extension-epsdtIndicator.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-errorElement",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorElement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-errorElement.json",
+      "fixture": "fixtures/extension-errorElement.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "extension-errorFollowupAction",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorFollowupAction",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-errorFollowupAction.json",
+      "fixture": "fixtures/extension-errorFollowupAction.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-errorPath",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorPath",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-errorPath.json",
+      "fixture": "fixtures/extension-errorPath.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-homeHealthCareInformation",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-homeHealthCareInformation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-homeHealthCareInformation.json",
+      "fixture": "fixtures/extension-homeHealthCareInformation.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "extension-identifierJurisdiction",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierJurisdiction",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-identifierJurisdiction.json",
+      "fixture": "fixtures/extension-identifierJurisdiction.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-identifierSubDepartment",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-identifierSubDepartment",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-identifierSubDepartment.json",
+      "fixture": "fixtures/extension-identifierSubDepartment.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-infoChanged",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-infoChanged",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-infoChanged.json",
+      "fixture": "fixtures/extension-infoChanged.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-itemAuthorizedDetail",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedDetail",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemAuthorizedDetail.json",
+      "fixture": "fixtures/extension-itemAuthorizedDetail.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "extension-itemAuthorizedProvider",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemAuthorizedProvider.json",
+      "fixture": "fixtures/extension-itemAuthorizedProvider.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "extension-itemCategory",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCategory",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemCategory.json",
+      "fixture": "fixtures/extension-itemCategory.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-itemCertificationEffectiveDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationEffectiveDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemCertificationEffectiveDate.json",
+      "fixture": "fixtures/extension-itemCertificationEffectiveDate.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "extension-itemCertificationExpirationDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationExpirationDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemCertificationExpirationDate.json",
+      "fixture": "fixtures/extension-itemCertificationExpirationDate.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "extension-itemCertificationIssueDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCertificationIssueDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemCertificationIssueDate.json",
+      "fixture": "fixtures/extension-itemCertificationIssueDate.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "extension-itemPreAuthIssueDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthIssueDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemPreAuthIssueDate.json",
+      "fixture": "fixtures/extension-itemPreAuthIssueDate.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-itemPreAuthPeriod",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthPeriod",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemPreAuthPeriod.json",
+      "fixture": "fixtures/extension-itemPreAuthPeriod.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-itemRequestedServiceDate",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemRequestedServiceDate",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemRequestedServiceDate.json",
+      "fixture": "fixtures/extension-itemRequestedServiceDate.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-itemTraceNumber",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemTraceNumber",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-itemTraceNumber.json",
+      "fixture": "fixtures/extension-itemTraceNumber.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-levelOfServiceCode",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-levelOfServiceCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-levelOfServiceCode.json",
+      "fixture": "fixtures/extension-levelOfServiceCode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-militaryStatus",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-militaryStatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-militaryStatus.json",
+      "fixture": "fixtures/extension-militaryStatus.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-nursingHomeLevelOfCare",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeLevelOfCare",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-nursingHomeLevelOfCare.json",
+      "fixture": "fixtures/extension-nursingHomeLevelOfCare.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-nursingHomeResidentialStatus",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeResidentialStatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-nursingHomeResidentialStatus.json",
+      "fixture": "fixtures/extension-nursingHomeResidentialStatus.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-patientStatus",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-patientStatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-patientStatus.json",
+      "fixture": "fixtures/extension-patientStatus.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-productOrServiceCodeEnd",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-productOrServiceCodeEnd.json",
+      "fixture": "fixtures/extension-productOrServiceCodeEnd.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-requestedService",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-requestedService",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-requestedService.json",
+      "fixture": "fixtures/extension-requestedService.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-revenueCode",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-revenueCode.json",
+      "fixture": "fixtures/extension-revenueCode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-revenueUnitRateLimit",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueUnitRateLimit",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-revenueUnitRateLimit.json",
+      "fixture": "fixtures/extension-revenueUnitRateLimit.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-reviewAction",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-reviewAction",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-reviewAction.json",
+      "fixture": "fixtures/extension-reviewAction.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "extension-reviewActionCode",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-reviewActionCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-reviewActionCode.json",
+      "fixture": "fixtures/extension-reviewActionCode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-serviceItemRequestType",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceItemRequestType",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-serviceItemRequestType.json",
+      "fixture": "fixtures/extension-serviceItemRequestType.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-serviceLineNumber",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceLineNumber",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-serviceLineNumber.json",
+      "fixture": "fixtures/extension-serviceLineNumber.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-timingcalendarpattern",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingcalendarpattern",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-timingcalendarpattern.json",
+      "fixture": "fixtures/extension-timingcalendarpattern.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-timingdeliverypattern",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingdeliverypattern",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-timingdeliverypattern.json",
+      "fixture": "fixtures/extension-timingdeliverypattern.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "modifierextension-infoCancelled",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/modifierextension-infoCancelled",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-modifierextension-infoCancelled.json",
+      "fixture": "fixtures/modifierextension-infoCancelled.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "profile-beneficiary",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+      "source": "StructureDefinition-profile-beneficiary.json",
+      "fixture": "fixtures/profile-beneficiary.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "profile-claim-base",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+      "source": "StructureDefinition-profile-claim-base.json",
+      "fixture": "fixtures/profile-claim-base.json",
+      "differentialElements": 93
+    },
+    {
+      "id": "profile-claim-inquiry",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-inquiry",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1",
+      "source": "StructureDefinition-profile-claim-inquiry.json",
+      "fixture": "fixtures/profile-claim-inquiry.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "profile-claim-update",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-update",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1",
+      "source": "StructureDefinition-profile-claim-update.json",
+      "fixture": "fixtures/profile-claim-update.json",
+      "differentialElements": 43
+    },
+    {
+      "id": "profile-claim",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1",
+      "source": "StructureDefinition-profile-claim.json",
+      "fixture": "fixtures/profile-claim.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "profile-claiminquiryresponse",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claiminquiryresponse",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claimresponse-base|2.2.1",
+      "source": "StructureDefinition-profile-claiminquiryresponse.json",
+      "fixture": "fixtures/profile-claiminquiryresponse.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "profile-claimresponse-base",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claimresponse-base",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+      "source": "StructureDefinition-profile-claimresponse-base.json",
+      "fixture": "fixtures/profile-claimresponse-base.json",
+      "differentialElements": 80
+    },
+    {
+      "id": "profile-claimresponse",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claimresponse",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claimresponse-base|2.2.1",
+      "source": "StructureDefinition-profile-claimresponse.json",
+      "fixture": "fixtures/profile-claimresponse.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-communicationrequest",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-communicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CommunicationRequest",
+      "source": "StructureDefinition-profile-communicationrequest.json",
+      "fixture": "fixtures/profile-communicationrequest.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "profile-coverage",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-coverage",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|7.0.0",
+      "source": "StructureDefinition-profile-coverage.json",
+      "fixture": "fixtures/profile-coverage.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "profile-datatype-timing",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-datatype-timing",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Timing",
+      "source": "StructureDefinition-profile-datatype-timing.json",
+      "fixture": "fixtures/profile-datatype-timing.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "profile-devicerequest",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-devicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+      "source": "StructureDefinition-profile-devicerequest.json",
+      "fixture": "fixtures/profile-devicerequest.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "profile-documentreference",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-documentreference",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference|7.0.0",
+      "source": "StructureDefinition-profile-documentreference.json",
+      "fixture": "fixtures/profile-documentreference.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-encounter",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-encounter",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|7.0.0",
+      "source": "StructureDefinition-profile-encounter.json",
+      "fixture": "fixtures/profile-encounter.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "profile-identifier",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-profile-identifier.json",
+      "fixture": "fixtures/profile-identifier.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "profile-insurer",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-insurer",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization|2.2.1",
+      "source": "StructureDefinition-profile-insurer.json",
+      "fixture": "fixtures/profile-insurer.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-location",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-location",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|7.0.0",
+      "source": "StructureDefinition-profile-location.json",
+      "fixture": "fixtures/profile-location.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-medicationrequest",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|7.0.0",
+      "source": "StructureDefinition-profile-medicationrequest.json",
+      "fixture": "fixtures/profile-medicationrequest.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "profile-nutritionorder",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-nutritionorder",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+      "source": "StructureDefinition-profile-nutritionorder.json",
+      "fixture": "fixtures/profile-nutritionorder.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "profile-organization",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|7.0.0",
+      "source": "StructureDefinition-profile-organization.json",
+      "fixture": "fixtures/profile-organization.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "profile-pas-inquiry-request-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-pas-inquiry-request-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-profile-pas-inquiry-request-bundle.json",
+      "fixture": "fixtures/profile-pas-inquiry-request-bundle.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "profile-pas-inquiry-response-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-pas-inquiry-response-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-profile-pas-inquiry-response-bundle.json",
+      "fixture": "fixtures/profile-pas-inquiry-response-bundle.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "profile-pas-request-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-pas-request-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-profile-pas-request-bundle.json",
+      "fixture": "fixtures/profile-pas-request-bundle.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "profile-pas-response-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-pas-response-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-profile-pas-response-bundle.json",
+      "fixture": "fixtures/profile-pas-response-bundle.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "profile-practitioner",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|7.0.0",
+      "source": "StructureDefinition-profile-practitioner.json",
+      "fixture": "fixtures/profile-practitioner.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-practitionerrole",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitionerrole",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole|7.0.0",
+      "source": "StructureDefinition-profile-practitionerrole.json",
+      "fixture": "fixtures/profile-practitionerrole.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "profile-quantity",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-quantity",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/SimpleQuantity",
+      "source": "StructureDefinition-profile-quantity.json",
+      "fixture": "fixtures/profile-quantity.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "profile-requestor",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-requestor",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization|2.2.1",
+      "source": "StructureDefinition-profile-requestor.json",
+      "fixture": "fixtures/profile-requestor.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "profile-servicerequest",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ServiceRequest",
+      "source": "StructureDefinition-profile-servicerequest.json",
+      "fixture": "fixtures/profile-servicerequest.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "profile-subscriber",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscriber",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|7.0.0",
+      "source": "StructureDefinition-profile-subscriber.json",
+      "fixture": "fixtures/profile-subscriber.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "profile-subscription",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-subscription",
+      "baseDefinition": "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription",
+      "source": "StructureDefinition-profile-subscription.json",
+      "fixture": "fixtures/profile-subscription.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "profile-task",
+      "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-task",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-profile-task.json",
+      "fixture": "fixtures/profile-task.json",
+      "differentialElements": 29
+    }
+  ],
+  "skipped": [
+    {
+      "id": "PASMetricData",
+      "source": "StructureDefinition-PASMetricData.json",
+      "reason": "not derivation=constraint: specialization"
+    }
+  ]
+}

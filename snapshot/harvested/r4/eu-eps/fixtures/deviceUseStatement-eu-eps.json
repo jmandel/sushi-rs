@@ -1,0 +1,448 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "deviceUseStatement-eu-eps",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-imposeProfile",
+      "valueCanonical": "http://hl7.org/fhir/uv/ips/StructureDefinition/DeviceUseStatement-uv-ips"
+    }
+  ],
+  "url": "http://hl7.eu/fhir/eps/StructureDefinition/deviceUseStatement-eu-eps",
+  "version": "1.0.0-ballot",
+  "name": "DeviceUseStatementEuEps",
+  "title": "DeviceUseStatement (EPS)",
+  "status": "draft",
+  "date": "2026-06-06T08:56:20+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profile constrains the DeviceUseStatement resource in the scope of the European Patient Summary.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "quick",
+      "uri": "http://siframework.org/cqf",
+      "name": "Quality Improvement and Clinical Knowledge (QUICK)"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "DeviceUseStatement",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceUseStatement",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DeviceUseStatement.text",
+        "path": "DeviceUseStatement.text",
+        "short": "Device usage description"
+      },
+      {
+        "id": "DeviceUseStatement.identifier",
+        "path": "DeviceUseStatement.identifier",
+        "short": "Device usage identifier"
+      },
+      {
+        "id": "DeviceUseStatement.status",
+        "path": "DeviceUseStatement.status",
+        "short": "Current status of the Device Usage"
+      },
+      {
+        "id": "DeviceUseStatement.subject",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.subject",
+        "definition": "The patient using the device.",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/patient-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DeviceUseStatement.subject.reference",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.subject.reference",
+        "min": 1
+      },
+      {
+        "id": "DeviceUseStatement.timing[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.timing[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "DeviceUseStatement.timing[x]:timingPeriod",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.timing[x]",
+        "sliceName": "timingPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ]
+      },
+      {
+        "id": "DeviceUseStatement.timing[x]:timingPeriod.start",
+        "path": "DeviceUseStatement.timing[x].start",
+        "short": "Start of usage (dateTime)"
+      },
+      {
+        "id": "DeviceUseStatement.timing[x]:timingPeriod.end",
+        "path": "DeviceUseStatement.timing[x].end",
+        "short": "End of usage (dateTime)"
+      },
+      {
+        "id": "DeviceUseStatement.timing[x]:timingDateTime",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.timing[x]",
+        "sliceName": "timingDateTime",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ]
+      },
+      {
+        "id": "DeviceUseStatement.recordedOn",
+        "path": "DeviceUseStatement.recordedOn",
+        "short": "When recorded (dateTime)"
+      },
+      {
+        "id": "DeviceUseStatement.source",
+        "path": "DeviceUseStatement.source",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/patient-eu-eps",
+              "http://hl7.eu/fhir/base/StructureDefinition/practitioner-eu-core",
+              "http://hl7.eu/fhir/base/StructureDefinition/practitionerRole-eu-core",
+              "http://hl7.org/fhir/StructureDefinition/RelatedPerson"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DeviceUseStatement.device",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "DeviceUseStatement.device",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/device-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DeviceUseStatement.reasonCode",
+        "path": "DeviceUseStatement.reasonCode",
+        "short": "Why is used (code)"
+      },
+      {
+        "id": "DeviceUseStatement.reasonReference",
+        "path": "DeviceUseStatement.reasonReference",
+        "short": "Why is used (details)"
+      },
+      {
+        "id": "DeviceUseStatement.bodySite",
+        "path": "DeviceUseStatement.bodySite",
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/ValueSet/body-site"
+        }
+      },
+      {
+        "id": "DeviceUseStatement.note",
+        "path": "DeviceUseStatement.note",
+        "short": "Additional information about the device usage"
+      }
+    ]
+  }
+}

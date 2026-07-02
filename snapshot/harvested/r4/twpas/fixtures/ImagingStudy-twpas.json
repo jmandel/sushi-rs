@@ -1,0 +1,175 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ImagingStudy-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas",
+  "version": "1.2.3",
+  "name": "ImagingStudyTWPAS",
+  "title": "DICOM影像-ImagingStudy TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此DICOM影像-ImagingStudy TWPAS Profile說明本IG如何進一步定義臺灣核心-影像檢查(TW Core ImagingStudy) Profile以呈現事前審查中疾病資訊之影像報告的影像檢查的身體部位及DICOM影像",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "dicom",
+      "uri": "http://nema.org/dicom",
+      "name": "DICOM Tag Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "ImagingStudy",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/ImagingStudy-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ImagingStudy.meta",
+        "path": "ImagingStudy.meta",
+        "min": 1
+      },
+      {
+        "id": "ImagingStudy.meta.profile",
+        "path": "ImagingStudy.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas"
+      },
+      {
+        "id": "ImagingStudy.identifier",
+        "path": "ImagingStudy.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1
+      },
+      {
+        "id": "ImagingStudy.identifier:study-uid",
+        "path": "ImagingStudy.identifier",
+        "sliceName": "study-uid",
+        "short": "整項影像檢查的識別碼。上傳至健保署時，必要填寫 DICOM 檢查實例 UID (Study Instance UID)",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.identifier:study-uid.system",
+        "path": "ImagingStudy.identifier.system",
+        "min": 1,
+        "patternUri": "urn:dicom:uid",
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.identifier:study-uid.value",
+        "path": "ImagingStudy.identifier.value",
+        "min": 1,
+        "example": [
+          {
+            "label": "General",
+            "valueString": "urn:oid:2.16.886.2102.54.4546465747.465465465"
+          },
+          {
+            "label": "General",
+            "valueString": "urn:oid:2.16.886.2102.54.4546465747.0.46546546"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "StudyUID",
+            "severity": "error",
+            "human": "以`urn:oid:`開頭，後接一串由數字`0`-`9`及`.`組成的字串。第一個數字須為個位數，每個數字不得為`0`開頭（除非為單一的`0`），整體(不含`urn:oid:`)長度不得超過64 bytes。",
+            "expression": "value.matches('^urn:oid:(0|[1-9])(.(0|[1-9][0-9]*)){0,63}$')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ImagingStudy.modality",
+        "path": "ImagingStudy.modality",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/dicom-cid-29-AcquisitionModality"
+        }
+      },
+      {
+        "id": "ImagingStudy.subject",
+        "path": "ImagingStudy.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ImagingStudy.series",
+        "path": "ImagingStudy.series",
+        "min": 1
+      },
+      {
+        "id": "ImagingStudy.series.modality",
+        "path": "ImagingStudy.series.modality",
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/dicom-cid-29-AcquisitionModality"
+        }
+      },
+      {
+        "id": "ImagingStudy.series.bodySite",
+        "path": "ImagingStudy.series.bodySite",
+        "short": "影像檢查的身體部位",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/sct-body-site"
+        }
+      },
+      {
+        "id": "ImagingStudy.series.instance.uid",
+        "path": "ImagingStudy.series.instance.uid",
+        "short": "DICOM影像。1.填寫DICOM欄位至ImagingStudy: Study Instance UID, Series Instance UID, SOP Instance, Modality, SOP Class UID。2.其餘資訊需額外填寫，包含: Status，影像檢查的身體部位 (SNOMED CT)、Procedure Code等。3.上傳影像需打包成DICOMDIR且壓縮成DCF。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.davinci-pdex-plan-net#1.2.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pdex-plan-net#1.2.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pdex-plan-net#1.2.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.davinci-pdex-plan-net",
+    "version": "1.2.0",
+    "canonical": "http://hl7.org/fhir/us/davinci-pdex-plan-net",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "6.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.core.v311": "3.1.1",
+      "hl7.fhir.us.core.v610": "6.1.0",
+      "hl7.fhir.us.core": "7.0.0",
+      "hl7.fhir.us.davinci-hrex": "1.1.0"
+    }
+  },
+  "counts": {
+    "scanned": 22,
+    "harvested": 22,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "accessibility",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/accessibility",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-accessibility.json",
+      "fixture": "fixtures/accessibility.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "communication-proficiency",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/communication-proficiency",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-communication-proficiency.json",
+      "fixture": "fixtures/communication-proficiency.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "contactpoint-availabletime",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/contactpoint-availabletime",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-contactpoint-availabletime.json",
+      "fixture": "fixtures/contactpoint-availabletime.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "delivery-method",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/delivery-method",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-delivery-method.json",
+      "fixture": "fixtures/delivery-method.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "endpoint-usecase",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/endpoint-usecase",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-endpoint-usecase.json",
+      "fixture": "fixtures/endpoint-usecase.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "location-reference",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/location-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-location-reference.json",
+      "fixture": "fixtures/location-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "network-reference",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/network-reference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-network-reference.json",
+      "fixture": "fixtures/network-reference.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "newpatients",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/newpatients",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-newpatients.json",
+      "fixture": "fixtures/newpatients.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "org-description",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/org-description",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-org-description.json",
+      "fixture": "fixtures/org-description.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "plannet-Endpoint",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Endpoint",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Endpoint",
+      "source": "StructureDefinition-plannet-Endpoint.json",
+      "fixture": "fixtures/plannet-Endpoint.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "plannet-HealthcareService",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-HealthcareService",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/HealthcareService",
+      "source": "StructureDefinition-plannet-HealthcareService.json",
+      "fixture": "fixtures/plannet-HealthcareService.json",
+      "differentialElements": 32
+    },
+    {
+      "id": "plannet-InsurancePlan",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-InsurancePlan",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+      "source": "StructureDefinition-plannet-InsurancePlan.json",
+      "fixture": "fixtures/plannet-InsurancePlan.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "plannet-Location",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location",
+      "source": "StructureDefinition-plannet-Location.json",
+      "fixture": "fixtures/plannet-Location.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "plannet-Network",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Network",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+      "source": "StructureDefinition-plannet-Network.json",
+      "fixture": "fixtures/plannet-Network.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "plannet-Organization",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+      "source": "StructureDefinition-plannet-Organization.json",
+      "fixture": "fixtures/plannet-Organization.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "plannet-OrganizationAffiliation",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-OrganizationAffiliation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/OrganizationAffiliation",
+      "source": "StructureDefinition-plannet-OrganizationAffiliation.json",
+      "fixture": "fixtures/plannet-OrganizationAffiliation.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "plannet-Practitioner",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Practitioner",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+      "source": "StructureDefinition-plannet-Practitioner.json",
+      "fixture": "fixtures/plannet-Practitioner.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "plannet-PractitionerRole",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-PractitionerRole",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole",
+      "source": "StructureDefinition-plannet-PractitionerRole.json",
+      "fixture": "fixtures/plannet-PractitionerRole.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "practitioner-period",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/practitioner-period",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-practitioner-period.json",
+      "fixture": "fixtures/practitioner-period.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "practitioner-qualification",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/practitioner-qualification",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-practitioner-qualification.json",
+      "fixture": "fixtures/practitioner-qualification.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "qualification",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/qualification",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-qualification.json",
+      "fixture": "fixtures/qualification.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "via-intermediary",
+      "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/via-intermediary",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-via-intermediary.json",
+      "fixture": "fixtures/via-intermediary.json",
+      "differentialElements": 4
+    }
+  ],
+  "skipped": []
+}

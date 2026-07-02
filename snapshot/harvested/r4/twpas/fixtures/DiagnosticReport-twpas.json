@@ -1,0 +1,216 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "DiagnosticReport-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas",
+  "version": "1.2.3",
+  "name": "DiagnosticReportTWPAS",
+  "title": "檢查報告-DiagnosticReport TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此檢查報告-DiagnosticReport TWPAS Profile說明本IG如何進一步定義臺灣核心-診斷報告(TW Core DiagnosticReport) Profile以呈現事前審查中疾病資訊之檢查報告",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "DiagnosticReport",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DiagnosticReport.meta",
+        "path": "DiagnosticReport.meta",
+        "min": 1
+      },
+      {
+        "id": "DiagnosticReport.meta.profile",
+        "path": "DiagnosticReport.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas"
+      },
+      {
+        "id": "DiagnosticReport.category",
+        "path": "DiagnosticReport.category",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "examinationReport"
+            }
+          ]
+        }
+      },
+      {
+        "id": "DiagnosticReport.category.coding",
+        "path": "DiagnosticReport.category.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "DiagnosticReport.code",
+        "path": "DiagnosticReport.code",
+        "short": "報告類型，當LOINC無法具體描述檢體種類（例如：`47526-9`及`66121-5`時），請填寫及補充說明檢體種類(code.text)。",
+        "constraint": [
+          {
+            "key": "speType",
+            "severity": "error",
+            "human": "當報告類型(code.coding.code)為`47526-9`時，檢體種類(code.text)必填",
+            "expression": "(coding.exists(code='47526-9')) implies (text.exists())",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas"
+          }
+        ],
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/report-type"
+        }
+      },
+      {
+        "id": "DiagnosticReport.code.coding",
+        "path": "DiagnosticReport.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "DiagnosticReport.code.coding.system",
+        "path": "DiagnosticReport.code.coding.system",
+        "min": 1,
+        "patternUri": "http://loinc.org"
+      },
+      {
+        "id": "DiagnosticReport.code.coding.code",
+        "path": "DiagnosticReport.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "DiagnosticReport.code.text",
+        "path": "DiagnosticReport.code.text",
+        "short": "檢體種類"
+      },
+      {
+        "id": "DiagnosticReport.subject",
+        "path": "DiagnosticReport.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DiagnosticReport.effective[x]",
+        "path": "DiagnosticReport.effective[x]",
+        "short": "報告日期，YYYY-MM-DD",
+        "min": 1,
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.performer",
+        "path": "DiagnosticReport.performer",
+        "short": "檢查報告醫師",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.conclusion",
+        "path": "DiagnosticReport.conclusion",
+        "short": "報告結果-文數字，請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm",
+        "path": "DiagnosticReport.presentedForm",
+        "short": "報告結果-MIMEType",
+        "constraint": [
+          {
+            "key": "UploadContent",
+            "severity": "error",
+            "human": "填寫格式：file://檔名.副檔名，例如：file://US01.jpg、file://PathologyReport01.pdf、file://GenReport01.pdf、file://王大明病歷.pdf",
+            "expression": "url.matches('^file://[a-zA-Z0-9_一-龥()-]+.[a-zA-Z]{2,5}$') and url.contains('.')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.contentType",
+        "path": "DiagnosticReport.presentedForm.contentType",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.url",
+        "path": "DiagnosticReport.presentedForm.url",
+        "short": "檢查報告（請填寫完整檔案路徑）",
+        "min": 1,
+        "example": [
+          {
+            "label": "General",
+            "valueUrl": "file://PathologyReport01.pdf"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.title",
+        "path": "DiagnosticReport.presentedForm.title",
+        "short": "檢查報告名稱",
+        "mustSupport": true
+      }
+    ]
+  }
+}

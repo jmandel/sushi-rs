@@ -1,0 +1,9 @@
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-channel-type.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-channel-type.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-filter-criteria.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-filter-criteria.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-heartbeat-period.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-heartbeat-period.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-max-count.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-max-count.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-payload-content.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-payload-content.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-subscription-notification-r4.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-subscription-notification-r4.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-subscription-status-r4.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-subscription-status-r4.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/backport-timeout.json	snapshot/harvested/r4/subscriptions-backport/rust/backport-timeout.snapshot.json
+snapshot/harvested/r4/subscriptions-backport/fixtures/capabilitystatement-subscriptiontopic-canonical.json	snapshot/harvested/r4/subscriptions-backport/rust/capabilitystatement-subscriptiontopic-canonical.snapshot.json

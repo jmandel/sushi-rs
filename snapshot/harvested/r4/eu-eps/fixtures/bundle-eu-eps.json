@@ -1,0 +1,752 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "bundle-eu-eps",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 1
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "draft"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-imposeProfile",
+      "valueCanonical": "http://hl7.org/fhir/uv/ips/StructureDefinition/Bundle-uv-ips"
+    }
+  ],
+  "url": "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps",
+  "version": "1.0.0-ballot",
+  "name": "BundleEuEps",
+  "title": "Bundle (EPS)",
+  "status": "draft",
+  "date": "2026-06-06T08:56:20+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profile defines how the Bundle resource is used to represent a European Patient Summary.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Bundle",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Bundle",
+        "path": "Bundle",
+        "short": "Patient Summary bundle",
+        "definition": "Patient Summary bundle.",
+        "constraint": [
+          {
+            "key": "eps-bundle-patient-ref",
+            "severity": "error",
+            "human": "If the Bundle contains patient-based resources (AllergyIntolerance, Immunization, ImmunizationRecommendation), each SHALL have patient.reference populated.",
+            "expression": "entry.where(\r\n  resource.is(AllergyIntolerance) or\r\n  resource.is(Immunization) or\r\n  resource.is(Consent) or\r\n  resource.is(ImmunizationRecommendation)\r\n).empty() or\r\nentry.where(\r\n  resource.is(AllergyIntolerance) or\r\n  resource.is(Immunization) or\r\n  resource.is(Consent) or\r\n  resource.is(ImmunizationRecommendation)\r\n).all(resource.patient.reference.exists())",
+            "source": "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps"
+          },
+          {
+            "key": "eps-bundle-subject-ref",
+            "severity": "error",
+            "human": "If the Bundle contains subject-based clinical resources, each SHALL have subject.reference populated.",
+            "expression": "entry.where(\r\n  resource.is(Composition) or\r\n  resource.is(CarePlan) or\r\n  resource.is(ClinicalImpression) or\r\n  resource.is(Condition) or\r\n  resource.is(DeviceUseStatement) or\r\n  resource.is(DiagnosticReport) or\r\n  resource.is(DocumentReference) or\r\n  resource.is(Flag) or\r\n  resource.is(ImagingStudy) or\r\n  resource.is(MedicationRequest) or\r\n  resource.is(MedicationStatement) or\r\n  resource.is(Procedure) or\r\n  resource.is(Observation)\r\n).empty() or\r\nentry.where(\r\n  resource.is(Composition) or\r\n  resource.is(CarePlan) or\r\n  resource.is(ClinicalImpression) or\r\n  resource.is(Condition) or\r\n  resource.is(DeviceUseStatement) or\r\n  resource.is(DiagnosticReport) or\r\n  resource.is(DocumentReference) or\r\n  resource.is(Flag) or\r\n  resource.is(ImagingStudy) or\r\n  resource.is(MedicationRequest) or\r\n  resource.is(MedicationStatement) or\r\n  resource.is(Procedure) or\r\n  resource.is(Observation)\r\n).all(resource.subject.reference.exists())",
+            "source": "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps"
+          },
+          {
+            "key": "eps-bundle-resource-code",
+            "severity": "error",
+            "human": "For the IPS some resources require a code element. If the Bundle contains such resources (e.g. Medication), they SHALL have code populated.",
+            "expression": "entry.where(\r\n  resource.is(Medication)\r\n).empty() or\r\nentry.where(\r\n  resource.is(Medication) \r\n).all(resource.code.exists())",
+            "source": "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps"
+          }
+        ]
+      },
+      {
+        "id": "Bundle.identifier",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Bundle.identifier"
+      },
+      {
+        "id": "Bundle.timestamp",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Bundle.timestamp"
+      },
+      {
+        "id": "Bundle.entry",
+        "path": "Bundle.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "resource"
+            },
+            {
+              "type": "profile",
+              "path": "resource"
+            }
+          ],
+          "rules": "open"
+        },
+        "short": "Entry resource in the patient summary bundle",
+        "definition": "An entry resource included in the patient summary document bundle resource.",
+        "comment": "Must contain the IPS Composition as the first entry (only a single Composition resource instance may be included) and a Patient resource.  Additional constraints are specified in the IPS Composition profile.",
+        "min": 2
+      },
+      {
+        "id": "Bundle.entry.fullUrl",
+        "path": "Bundle.entry.fullUrl",
+        "min": 1
+      },
+      {
+        "id": "Bundle.entry.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1
+      },
+      {
+        "id": "Bundle.entry.search",
+        "path": "Bundle.entry.search",
+        "max": "0"
+      },
+      {
+        "id": "Bundle.entry.request",
+        "path": "Bundle.entry.request",
+        "max": "0"
+      },
+      {
+        "id": "Bundle.entry.response",
+        "path": "Bundle.entry.response",
+        "max": "0"
+      },
+      {
+        "id": "Bundle.entry:composition",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Bundle.entry",
+        "sliceName": "composition",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Bundle.entry:composition.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Composition",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:patient",
+        "path": "Bundle.entry",
+        "sliceName": "patient",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Bundle.entry:patient.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Patient",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/patient-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:allergyintolerance",
+        "path": "Bundle.entry",
+        "sliceName": "allergyintolerance",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:allergyintolerance.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "AllergyIntolerance",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/allergyintolerance-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:careplan",
+        "path": "Bundle.entry",
+        "sliceName": "careplan",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:careplan.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "CarePlan"
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:condition",
+        "path": "Bundle.entry",
+        "sliceName": "condition",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:condition.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Condition",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/condition-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:device",
+        "path": "Bundle.entry",
+        "sliceName": "device",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:device.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Device",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/device-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:deviceusestatement",
+        "path": "Bundle.entry",
+        "sliceName": "deviceusestatement",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:deviceusestatement.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "DeviceUseStatement",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/deviceUseStatement-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:diagnosticreport",
+        "path": "Bundle.entry",
+        "sliceName": "diagnosticreport",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:diagnosticreport.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "DiagnosticReport",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/diagnosticReport-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:flag",
+        "path": "Bundle.entry",
+        "sliceName": "flag",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:flag.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Flag",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/flag-alert-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:imagingstudy",
+        "path": "Bundle.entry",
+        "sliceName": "imagingstudy",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:imagingstudy.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "ImagingStudy",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/ImagingStudy-uv-ips"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:immunization",
+        "path": "Bundle.entry",
+        "sliceName": "immunization",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:immunization.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Immunization",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/immunization-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:medication",
+        "path": "Bundle.entry",
+        "sliceName": "medication",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:medication.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Medication",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/medication-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:medicationrequest",
+        "path": "Bundle.entry",
+        "sliceName": "medicationrequest",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:medicationrequest.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/medicationrequest-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:medicationstatement",
+        "path": "Bundle.entry",
+        "sliceName": "medicationstatement",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:medicationstatement.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "MedicationStatement",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/MedicationStatement-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:practitioner",
+        "path": "Bundle.entry",
+        "sliceName": "practitioner",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:practitioner.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Practitioner",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/practitioner-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:practitionerrole",
+        "path": "Bundle.entry",
+        "sliceName": "practitionerrole",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:practitionerrole.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "PractitionerRole",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/practitionerrole-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:procedure",
+        "path": "Bundle.entry",
+        "sliceName": "procedure",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:procedure.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Procedure",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/procedure-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-edd",
+        "path": "Bundle.entry",
+        "sliceName": "observation-pregnancy-edd",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-edd.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-edd-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-outcome",
+        "path": "Bundle.entry",
+        "sliceName": "observation-pregnancy-outcome",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-outcome.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-outcome-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-status",
+        "path": "Bundle.entry",
+        "sliceName": "observation-pregnancy-status",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-status.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-status-eu-ips"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-alcohol-use",
+        "path": "Bundle.entry",
+        "sliceName": "observation-alcohol-use",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-alcohol-use.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-alcoholuse-uv-ips"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-tobacco-use",
+        "path": "Bundle.entry",
+        "sliceName": "observation-tobacco-use",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-tobacco-use.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/Observation-tobaccouse-uv-ips"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-vital-signs",
+        "path": "Bundle.entry",
+        "sliceName": "observation-vital-signs",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-vital-signs.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/vitalsigns"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:organization",
+        "path": "Bundle.entry",
+        "sliceName": "organization",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:organization.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Organization",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/organization-obl-eu-eps"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:specimen",
+        "path": "Bundle.entry",
+        "sliceName": "specimen",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:specimen.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Specimen",
+            "profile": [
+              "http://hl7.org/fhir/uv/ips/StructureDefinition/Specimen-uv-ips"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-age",
+        "path": "Bundle.entry",
+        "sliceName": "observation-pregnancy-age",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Bundle.entry:observation-pregnancy-age.resource",
+        "path": "Bundle.entry.resource",
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-gestationalAge-eu-eps"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

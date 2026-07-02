@@ -1,0 +1,142 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "qicore-bodystructure",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "cqi"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-bodystructure",
+  "version": "6.0.0",
+  "name": "QICoreBodyStructure",
+  "title": "QICore BodyStructure",
+  "status": "active",
+  "experimental": false,
+  "date": "2018-08-22",
+  "publisher": "HL7 International / Clinical Quality Information",
+  "contact": [
+    {
+      "name": "Clinical Quality Information WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/cqi"
+        }
+      ]
+    }
+  ],
+  "description": "Profile of BodyStructure for decision support/quality metrics. Defines the core set of elements and extensions for quality rule and measure authors.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "openehr",
+      "uri": "http://openehr.org",
+      "name": "Open EHR Archetype Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "BodyStructure",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/BodyStructure",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "BodyStructure",
+        "path": "BodyStructure",
+        "mustSupport": false
+      },
+      {
+        "id": "BodyStructure.active",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+            "valueBoolean": true
+          }
+        ],
+        "path": "BodyStructure.active",
+        "short": "(QI-Core) Whether this record is in active use",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "BodyStructure.location",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+            "valueBoolean": true
+          }
+        ],
+        "path": "BodyStructure.location",
+        "short": "(QI-Core) Body site",
+        "min": 1,
+        "max": "1",
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/ValueSet/body-site"
+        }
+      },
+      {
+        "id": "BodyStructure.locationQualifier",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+            "valueBoolean": true
+          }
+        ],
+        "path": "BodyStructure.locationQualifier",
+        "short": "(QI-Core) Body site modifier",
+        "binding": {
+          "strength": "preferred",
+          "description": "Concepts modifying the anatomic location",
+          "valueSet": "http://hl7.org/fhir/ValueSet/bodystructure-relative-location"
+        }
+      },
+      {
+        "id": "BodyStructure.patient",
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+            "valueBoolean": true
+          }
+        ],
+        "path": "BodyStructure.patient",
+        "short": "(QI-Core) Who this is about",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-patient"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+OK rust ext-billing-options
+OK rust ext-coverage-information
+OK rust ext-request-category
+OK rust profile-appointment-base
+OK rust profile-bundle-base
+OK rust profile-communicationrequest
+OK rust profile-coverage
+OK rust profile-device
+OK rust profile-devicerequest
+OK rust profile-encounter
+OK rust profile-location
+OK rust profile-medication
+OK rust profile-medicationrequest
+OK rust profile-nutritionorder
+OK rust profile-organization
+OK rust profile-patient
+OK rust profile-practitioner
+OK rust profile-servicerequest
+OK rust profile-task-dispatch
+OK rust profile-taskquestionnaire
+OK rust profile-timing
+OK rust profile-visionprescription
+RUST BATCH: ok=22 failed=0 total=22

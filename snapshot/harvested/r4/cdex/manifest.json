@@ -1,0 +1,102 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.davinci-cdex#2.1.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-cdex#2.1.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-cdex#2.1.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.davinci-cdex",
+    "version": "2.1.0",
+    "canonical": "http://hl7.org/fhir/us/davinci-cdex",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "6.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.1.0",
+      "hl7.fhir.us.core": "7.0.0",
+      "hl7.fhir.us.core.v610": "6.1.0",
+      "hl7.fhir.us.core.v311": "3.1.1",
+      "hl7.fhir.us.davinci-hrex": "1.1.0",
+      "hl7.fhir.us.davinci-pas": "2.1.0",
+      "hl7.fhir.us.carin-bb": "2.0.0",
+      "hl7.fhir.us.davinci-dtr": "2.1.0",
+      "hl7.fhir.uv.sdc": "3.0.0",
+      "hl7.fhir.uv.subscriptions-backport.r4": "1.1.0"
+    }
+  },
+  "counts": {
+    "scanned": 8,
+    "harvested": 8,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "cdex-parameters-submit-attachment",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-parameters-submit-attachment",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-cdex-parameters-submit-attachment.json",
+      "fixture": "fixtures/cdex-parameters-submit-attachment.json",
+      "differentialElements": 38
+    },
+    {
+      "id": "cdex-patient-demographics",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-patient-demographics",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+      "source": "StructureDefinition-cdex-patient-demographics.json",
+      "fixture": "fixtures/cdex-patient-demographics.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "cdex-practitionerrole",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-practitionerrole",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+      "source": "StructureDefinition-cdex-practitionerrole.json",
+      "fixture": "fixtures/cdex-practitionerrole.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "cdex-sdc-questionnaireresponse",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-sdc-questionnaireresponse",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-questionnaireresponse|7.0.0",
+      "source": "StructureDefinition-cdex-sdc-questionnaireresponse.json",
+      "fixture": "fixtures/cdex-sdc-questionnaireresponse.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "cdex-signature-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-signature-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-cdex-signature-bundle.json",
+      "fixture": "fixtures/cdex-signature-bundle.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "cdex-signature",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-signature",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Signature",
+      "source": "StructureDefinition-cdex-signature.json",
+      "fixture": "fixtures/cdex-signature.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "cdex-task-attachment-request",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-task-attachment-request",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-cdex-task-attachment-request.json",
+      "fixture": "fixtures/cdex-task-attachment-request.json",
+      "differentialElements": 68
+    },
+    {
+      "id": "cdex-task-data-request",
+      "url": "http://hl7.org/fhir/us/davinci-cdex/StructureDefinition/cdex-task-data-request",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Task",
+      "source": "StructureDefinition-cdex-task-data-request.json",
+      "fixture": "fixtures/cdex-task-data-request.json",
+      "differentialElements": 54
+    }
+  ],
+  "skipped": []
+}

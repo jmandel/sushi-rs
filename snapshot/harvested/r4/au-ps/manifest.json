@@ -1,0 +1,167 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.au.ps#1.0.0-preview",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.au.ps#1.0.0-preview/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.au.ps#1.0.0-preview/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.au.ps",
+    "version": "1.0.0-preview",
+    "canonical": "http://hl7.org.au/fhir/ps",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.uv.ips": "2.0.0",
+      "hl7.fhir.au.core": "2.0.0"
+    }
+  },
+  "counts": {
+    "scanned": 17,
+    "harvested": 17,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "au-ps-allergyintolerance",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-allergyintolerance",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-allergyintolerance",
+      "source": "StructureDefinition-au-ps-allergyintolerance.json",
+      "fixture": "fixtures/au-ps-allergyintolerance.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "au-ps-bundle",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-au-ps-bundle.json",
+      "fixture": "fixtures/au-ps-bundle.json",
+      "differentialElements": 63
+    },
+    {
+      "id": "au-ps-composition",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-composition",
+      "baseDefinition": "http://hl7.org.au/fhir/StructureDefinition/au-composition",
+      "source": "StructureDefinition-au-ps-composition.json",
+      "fixture": "fixtures/au-ps-composition.json",
+      "differentialElements": 133
+    },
+    {
+      "id": "au-ps-condition",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-condition",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-condition",
+      "source": "StructureDefinition-au-ps-condition.json",
+      "fixture": "fixtures/au-ps-condition.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "au-ps-diagnosticresult-path",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-diagnosticresult-path",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-diagnosticresult-path",
+      "source": "StructureDefinition-au-ps-diagnosticresult-path.json",
+      "fixture": "fixtures/au-ps-diagnosticresult-path.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "au-ps-encounter",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-encounter",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-encounter",
+      "source": "StructureDefinition-au-ps-encounter.json",
+      "fixture": "fixtures/au-ps-encounter.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "au-ps-immunization",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-immunization",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-immunization",
+      "source": "StructureDefinition-au-ps-immunization.json",
+      "fixture": "fixtures/au-ps-immunization.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "au-ps-medication",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-medication",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medication",
+      "source": "StructureDefinition-au-ps-medication.json",
+      "fixture": "fixtures/au-ps-medication.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "au-ps-medicationrequest",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-medicationrequest",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medicationrequest",
+      "source": "StructureDefinition-au-ps-medicationrequest.json",
+      "fixture": "fixtures/au-ps-medicationrequest.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "au-ps-medicationstatement",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-medicationstatement",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-medicationstatement",
+      "source": "StructureDefinition-au-ps-medicationstatement.json",
+      "fixture": "fixtures/au-ps-medicationstatement.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "au-ps-organization",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-organization",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-organization",
+      "source": "StructureDefinition-au-ps-organization.json",
+      "fixture": "fixtures/au-ps-organization.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "au-ps-patient",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-patient",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-patient",
+      "source": "StructureDefinition-au-ps-patient.json",
+      "fixture": "fixtures/au-ps-patient.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "au-ps-practitioner",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-practitioner",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitioner",
+      "source": "StructureDefinition-au-ps-practitioner.json",
+      "fixture": "fixtures/au-ps-practitioner.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "au-ps-practitionerrole",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-practitionerrole",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-practitionerrole",
+      "source": "StructureDefinition-au-ps-practitionerrole.json",
+      "fixture": "fixtures/au-ps-practitionerrole.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "au-ps-procedure",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-procedure",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-procedure",
+      "source": "StructureDefinition-au-ps-procedure.json",
+      "fixture": "fixtures/au-ps-procedure.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "au-ps-relatedperson",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-relatedperson",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-relatedperson",
+      "source": "StructureDefinition-au-ps-relatedperson.json",
+      "fixture": "fixtures/au-ps-relatedperson.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "au-ps-smokingstatus",
+      "url": "http://hl7.org.au/fhir/ps/StructureDefinition/au-ps-smokingstatus",
+      "baseDefinition": "http://hl7.org.au/fhir/core/StructureDefinition/au-core-smokingstatus",
+      "source": "StructureDefinition-au-ps-smokingstatus.json",
+      "fixture": "fixtures/au-ps-smokingstatus.json",
+      "differentialElements": 13
+    }
+  ],
+  "skipped": []
+}

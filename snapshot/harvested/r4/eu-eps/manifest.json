@@ -1,0 +1,218 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.eu.eps#1.0.0-ballot",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.eu.eps#1.0.0-ballot/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.eu.eps#1.0.0-ballot/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.eu.eps",
+    "version": "1.0.0-ballot",
+    "canonical": "http://hl7.eu/fhir/eps",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "hl7.fhir.uv.ips": "2.0.0",
+      "hl7.fhir.eu.base": "2.0.0",
+      "hl7.fhir.uv.xver-r5.r4": "0.1.0",
+      "hl7.fhir.eu.extensions.r4": "1.3.0",
+      "ihe.pharm.mpd.r4": "1.0.0-comment-2"
+    }
+  },
+  "counts": {
+    "scanned": 23,
+    "harvested": 23,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "MedicationStatement-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/MedicationStatement-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/medicationStatement-eu-core",
+      "source": "StructureDefinition-MedicationStatement-eu-eps.json",
+      "fixture": "fixtures/MedicationStatement-eu-eps.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "allergyintolerance-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/allergyintolerance-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/allergyIntolerance-eu-core",
+      "source": "StructureDefinition-allergyintolerance-obl-eu-eps.json",
+      "fixture": "fixtures/allergyintolerance-obl-eu-eps.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "bundle-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/bundle-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-bundle-eu-eps.json",
+      "fixture": "fixtures/bundle-eu-eps.json",
+      "differentialElements": 61
+    },
+    {
+      "id": "composition-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/composition-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/composition-eu-core",
+      "source": "StructureDefinition-composition-eu-eps.json",
+      "fixture": "fixtures/composition-eu-eps.json",
+      "differentialElements": 99
+    },
+    {
+      "id": "condition-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/condition-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/condition-eu-core",
+      "source": "StructureDefinition-condition-obl-eu-eps.json",
+      "fixture": "fixtures/condition-obl-eu-eps.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "consent-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/consent-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Consent",
+      "source": "StructureDefinition-consent-eu-eps.json",
+      "fixture": "fixtures/consent-eu-eps.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "device-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/device-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-device-eu-eps.json",
+      "fixture": "fixtures/device-eu-eps.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "deviceUseStatement-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/deviceUseStatement-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DeviceUseStatement",
+      "source": "StructureDefinition-deviceUseStatement-eu-eps.json",
+      "fixture": "fixtures/deviceUseStatement-eu-eps.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "diagnosticReport-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/diagnosticReport-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/diagnosticReport-eu-core",
+      "source": "StructureDefinition-diagnosticReport-eu-eps.json",
+      "fixture": "fixtures/diagnosticReport-eu-eps.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "flag-alert-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/flag-alert-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/flag-patient-eu-core",
+      "source": "StructureDefinition-flag-alert-obl-eu-eps.json",
+      "fixture": "fixtures/flag-alert-obl-eu-eps.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "immunization-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/immunization-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/immunization-eu-core",
+      "source": "StructureDefinition-immunization-obl-eu-eps.json",
+      "fixture": "fixtures/immunization-obl-eu-eps.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "medication-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/medication-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/medication-eu-core",
+      "source": "StructureDefinition-medication-obl-eu-eps.json",
+      "fixture": "fixtures/medication-obl-eu-eps.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "medicationrequest-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/medicationrequest-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/medicationRequest-eu-core",
+      "source": "StructureDefinition-medicationrequest-obl-eu-eps.json",
+      "fixture": "fixtures/medicationrequest-obl-eu-eps.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "observation-pregnancy-edd-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-edd-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-observation-pregnancy-edd-eu-eps.json",
+      "fixture": "fixtures/observation-pregnancy-edd-eu-eps.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "observation-pregnancy-gestationalAge-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-gestationalAge-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-observation-pregnancy-gestationalAge-eu-eps.json",
+      "fixture": "fixtures/observation-pregnancy-gestationalAge-eu-eps.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "observation-pregnancy-outcome-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-outcome-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-observation-pregnancy-outcome-eu-eps.json",
+      "fixture": "fixtures/observation-pregnancy-outcome-eu-eps.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "observation-pregnancy-status-eu-ips",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/observation-pregnancy-status-eu-ips",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-observation-pregnancy-status-eu-ips.json",
+      "fixture": "fixtures/observation-pregnancy-status-eu-ips.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "observation-travel-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/observation-travel-eu-eps",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-observation-travel-eu-eps.json",
+      "fixture": "fixtures/observation-travel-eu-eps.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "organization-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/organization-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/organization-eu-core",
+      "source": "StructureDefinition-organization-obl-eu-eps.json",
+      "fixture": "fixtures/organization-obl-eu-eps.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "patient-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/patient-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/patient-eu-core",
+      "source": "StructureDefinition-patient-eu-eps.json",
+      "fixture": "fixtures/patient-eu-eps.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "practitioner-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/practitioner-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/practitioner-eu-core",
+      "source": "StructureDefinition-practitioner-obl-eu-eps.json",
+      "fixture": "fixtures/practitioner-obl-eu-eps.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "practitionerrole-obl-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/practitionerrole-obl-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/practitionerRole-eu-core",
+      "source": "StructureDefinition-practitionerrole-obl-eu-eps.json",
+      "fixture": "fixtures/practitionerrole-obl-eu-eps.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "procedure-eu-eps",
+      "url": "http://hl7.eu/fhir/eps/StructureDefinition/procedure-eu-eps",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/procedure-eu-core",
+      "source": "StructureDefinition-procedure-eu-eps.json",
+      "fixture": "fixtures/procedure-eu-eps.json",
+      "differentialElements": 8
+    }
+  ],
+  "skipped": []
+}

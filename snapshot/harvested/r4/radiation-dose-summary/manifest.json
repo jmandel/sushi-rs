@@ -1,0 +1,63 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.radiation-dose-summary#1.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.radiation-dose-summary#1.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.radiation-dose-summary#1.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.radiation-dose-summary",
+    "version": "1.0.0",
+    "canonical": "http://hl7.org/fhir/uv/radiation-dose-summary",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.uv.ips": "2.0.0",
+      "fhir.dicom": "2025.2.20250411"
+    }
+  },
+  "counts": {
+    "scanned": 4,
+    "harvested": 4,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "indication-observation",
+      "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/indication-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-indication-observation.json",
+      "fixture": "fixtures/indication-observation.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "modality-device",
+      "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/modality-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-modality-device.json",
+      "fixture": "fixtures/modality-device.json",
+      "differentialElements": 24
+    },
+    {
+      "id": "radiation-dose-summary",
+      "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/radiation-dose-summary",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-radiation-dose-summary.json",
+      "fixture": "fixtures/radiation-dose-summary.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "radiation-summary-report",
+      "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/radiation-summary-report",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Composition",
+      "source": "StructureDefinition-radiation-summary-report.json",
+      "fixture": "fixtures/radiation-summary-report.json",
+      "differentialElements": 14
+    }
+  ],
+  "skipped": []
+}

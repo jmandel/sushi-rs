@@ -1,0 +1,149 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Observation-tx-assessment-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas",
+  "version": "1.2.3",
+  "name": "ObservationTreatmentAssessmentTWPAS",
+  "title": "治療後疾病狀態評估-Observation Treatment Assessment TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此治療後疾病狀態評估-Observation Treatment Assessment TWPAS Profile說明本IG如何進一步定義FHIR的Observation Resource以呈現事前審查中結果資訊之治療後疾病狀態評估",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "constraint": [
+          {
+            "key": "nhi-tx-ast-value",
+            "severity": "error",
+            "human": "若治療後疾病狀態評估項目(code)為ICLL，結果值(valueString)須填寫CR/PR/PD/SD其中一項；若治療後疾病狀態評估項目(code)為IREC，結果值(valueString)須填寫iCR/iPR/iSD/iUPD/iCPD/inevaluable其中一項；若治療後疾病狀態評估項目(code)為MREC或REC1，結果值(valueString)須填寫CR/PR/SD/PD/inevaluable其中一項；若治療後疾病狀態評估項目(code)為IWGC，結果值(valueString)須填寫Complete remission (CR)/CR equivalent/mCR/Partial remission (PR)/Stable disease (SD)/CRL (CRuni and CRbi)/CRh/hematologic improvement (HI)/Disease Relapse/Progressive disease (PD)/Cytogenetic response/No response/Not evaluable其中一項。",
+            "expression": "((code.coding.exists(code='ICLL')) implies (value.ofType(string) = 'CR' or value.ofType(string) = 'PR' or value.ofType(string) = 'PD' or value.ofType(string) = 'SD')) and ((code.coding.exists(code='IREC')) implies (value.ofType(string) =  'iCR' or value.ofType(string) = 'iPR' or value.ofType(string) = 'iSD' or value.ofType(string) = 'iUPD' or value.ofType(string) = 'iCPD' or value.ofType(string) = 'inevaluable')) and ((code.coding.exists(code='MREC') or code.coding.exists(code='REC1')) implies (value.ofType(string) = 'CR' or value.ofType(string) = 'PR' or value.ofType(string) = 'SD' or value.ofType(string) = 'PD' or value.ofType(string) = 'inevaluable')) and ((code.coding.exists(code='IWGC')) implies (value.ofType(string) = 'Complete remission (CR)' or value.ofType(string) = 'CR equivalent' or value.ofType(string) = 'mCR' or value.ofType(string) = 'Partial remission (PR)' or value.ofType(string) = 'Stable disease (SD)' or value.ofType(string) = 'CRL (CRuni and CRbi)' or value.ofType(string) = 'CRh' or value.ofType(string) = 'hematologic improvement (HI)' or value.ofType(string) = 'Disease Relapse' or value.ofType(string) = 'Progressive disease (PD)' or value.ofType(string) = 'Cytogenetic response' or value.ofType(string) = 'No response' or value.ofType(string) = 'Not evaluable'))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Observation.meta",
+        "path": "Observation.meta",
+        "min": 1
+      },
+      {
+        "id": "Observation.meta.profile",
+        "path": "Observation.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas"
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "治療後疾病狀態評估項目",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-tx-ast"
+        }
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.code.coding.code",
+        "path": "Observation.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "short": "治療後疾病狀態評估日期，YYYY-MM-DD，西元年月日。",
+        "min": 1,
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "治療後疾病狀態評估結果。請依評估項目填寫特定代碼。",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

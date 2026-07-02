@@ -1,0 +1,7 @@
+OK rust smart-app-state-basic
+OK rust task-ehr-launch
+OK rust task-standalone-launch
+OK rust user-access-brand
+OK rust user-access-brands-bundle
+OK rust user-access-endpoint
+RUST BATCH: ok=6 failed=0 total=6

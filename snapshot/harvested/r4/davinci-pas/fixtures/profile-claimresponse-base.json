@@ -1,0 +1,1132 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-claimresponse-base",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claimresponse-base",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.51"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASClaimResponseBase",
+  "title": "PAS Claim Response Base",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "PAS constraints on ClaimResponse resource that are common to both the request and the inquiry.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": true,
+  "type": "ClaimResponse",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ClaimResponse",
+        "path": "ClaimResponse",
+        "short": "Response to a preauthorization"
+      },
+      {
+        "id": "ClaimResponse.extension",
+        "path": "ClaimResponse.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.extension:transmissionIdentifiers",
+        "path": "ClaimResponse.extension",
+        "sliceName": "transmissionIdentifiers",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-TransmissionIdentifiers"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.extension:claimResponseReviewer",
+        "path": "ClaimResponse.extension",
+        "sliceName": "claimResponseReviewer",
+        "short": "The responsible practitioner who reviewed to the request",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-claimResponseReviewer"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.extension:authorizedProvider",
+        "path": "ClaimResponse.extension",
+        "sliceName": "authorizedProvider",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.identifier",
+        "path": "ClaimResponse.identifier",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.identifier.system",
+        "path": "ClaimResponse.identifier.system",
+        "short": "Should use a scheme of 'urn:trnorg:<TRN03>'"
+      },
+      {
+        "id": "ClaimResponse.status",
+        "path": "ClaimResponse.status",
+        "patternCode": "active",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.use",
+        "path": "ClaimResponse.use",
+        "patternCode": "preauthorization"
+      },
+      {
+        "id": "ClaimResponse.patient",
+        "path": "ClaimResponse.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.created",
+        "path": "ClaimResponse.created",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.insurer",
+        "path": "ClaimResponse.insurer",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-insurer|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.requestor",
+        "path": "ClaimResponse.requestor",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-requestor|2.2.1",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitionerrole|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.request",
+        "path": "ClaimResponse.request",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.request.extension:DataAbsentReason",
+        "path": "ClaimResponse.request.extension",
+        "sliceName": "DataAbsentReason",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/data-absent-reason|5.3.0-ballot-tc1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.outcome",
+        "path": "ClaimResponse.outcome",
+        "short": "complete | error | partial",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/ClaimResponseOutcome"
+        }
+      },
+      {
+        "id": "ClaimResponse.preAuthPeriod",
+        "path": "ClaimResponse.preAuthPeriod",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item",
+        "path": "ClaimResponse.item",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension",
+        "path": "ClaimResponse.item.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.item.extension:itemTraceNumber",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "itemTraceNumber",
+        "short": "Uniquely identifies this claim item. (2000F-TRN)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemTraceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:preAuthIssueDate",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "preAuthIssueDate",
+        "short": "The date when this item's preauthorization was issued.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthIssueDate|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:preAuthPeriod",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "preAuthPeriod",
+        "short": "The date/period when this item's preauthorization is valid.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthPeriod|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:previousAuthorizationNumber",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "previousAuthorizationNumber",
+        "short": "A string assigned by the UMO to an authorized review outcome associated with this service item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizationNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:administrationReferenceNumber",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "administrationReferenceNumber",
+        "short": "A string assigned by the UMO to the original disallowed review outcome associated with this service item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:requestedServiceDate",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "requestedServiceDate",
+        "short": "The original date/period that was requested by the submitter for this item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemRequestedServiceDate|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:authorizedProvider",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "authorizedProvider",
+        "short": "The specific provider who has been authorized to provide this item.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedProvider|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:authorizedItemDetail",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "authorizedItemDetail",
+        "short": "The details of what has been authorized for this item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemAuthorizedDetail|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:admissionDates",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "admissionDates",
+        "short": "The authorized admission dates for this item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-admissionDates"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.extension:dischargeDate",
+        "path": "ClaimResponse.item.extension",
+        "sliceName": "dischargeDate",
+        "short": "The authorized discharge date for this item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-dischargeDate"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.itemSequence",
+        "path": "ClaimResponse.item.itemSequence",
+        "short": "Sequence numbers SHALL stay the same across all instances of the Prior Authorization, eg the Claim, ClaimResponse, ClaimUpdate, ClaimUpdateResponse",
+        "comment": "Each item returned on the PAS ClaimResponse SHALL echo the same item sequence number as that same item had on the Claim. The item.sequence element SHALL serve as the main tracing identifier of items throughout requests and responses.",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.noteNumber",
+        "path": "ClaimResponse.item.noteNumber",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.adjudication",
+        "path": "ClaimResponse.item.adjudication",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.extension",
+        "path": "ClaimResponse.item.adjudication.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.extension:reviewAction",
+        "path": "ClaimResponse.item.adjudication.extension",
+        "sliceName": "reviewAction",
+        "short": "The details of the review action that is necessary for the authorization.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-reviewAction|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.category",
+        "path": "ClaimResponse.item.adjudication.category",
+        "short": "This code is fixed to 'submitted' to indicate that the adjudication result is on what was submitted.",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/adjudication",
+              "code": "submitted"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ClaimResponse.addItem",
+        "path": "ClaimResponse.addItem",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension",
+        "path": "ClaimResponse.addItem.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:itemTraceNumber",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "itemTraceNumber",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemTraceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:preAuthIssueDate",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "preAuthIssueDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthIssueDate|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:preAuthPeriod",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "preAuthPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemPreAuthPeriod|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:previousAuthorizationNumber",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "previousAuthorizationNumber",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizationNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:administrationReferenceNumber",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "administrationReferenceNumber",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:epsdtIndicator",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "epsdtIndicator",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:nursingHomeResidentialStatus",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "nursingHomeResidentialStatus",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeResidentialStatus|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:nursingHomeLevelOfCare",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "nursingHomeLevelOfCare",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeLevelOfCare|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:productOrServiceCodeEnd",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "productOrServiceCodeEnd",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:revenue",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "revenue",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueCode|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:revenueUnitRateLimit",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "revenueUnitRateLimit",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueUnitRateLimit|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:requestedService",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "requestedService",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-requestedService|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:requestType",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "requestType",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceItemRequestType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:certificationType",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "certificationType",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:category",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "category",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemCategory"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:admissionDates",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "admissionDates",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-admissionDates"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.extension:dischargeDate",
+        "path": "ClaimResponse.addItem.extension",
+        "sliceName": "dischargeDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-dischargeDate"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.itemSequence",
+        "path": "ClaimResponse.addItem.itemSequence",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.provider",
+        "path": "ClaimResponse.addItem.provider",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitioner|2.2.1",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.provider.extension:providerType",
+        "path": "ClaimResponse.addItem.provider.extension",
+        "sliceName": "providerType",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizedProviderType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.productOrService",
+        "path": "ClaimResponse.addItem.productOrService",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceType|2.2.1"
+        }
+      },
+      {
+        "id": "ClaimResponse.addItem.modifier",
+        "path": "ClaimResponse.addItem.modifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceModifierType|2.2.1"
+        }
+      },
+      {
+        "id": "ClaimResponse.addItem.serviced[x]",
+        "path": "ClaimResponse.addItem.serviced[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.location[x]",
+        "path": "ClaimResponse.addItem.location[x]",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.quantity",
+        "path": "ClaimResponse.addItem.quantity",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-quantity|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.unitPrice",
+        "path": "ClaimResponse.addItem.unitPrice",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.adjudication",
+        "path": "ClaimResponse.addItem.adjudication",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.adjudication.extension",
+        "path": "ClaimResponse.addItem.adjudication.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.addItem.adjudication.extension:reviewAction",
+        "path": "ClaimResponse.addItem.adjudication.extension",
+        "sliceName": "reviewAction",
+        "short": "The details of the review action that is necessary for the authorization.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-reviewAction|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.addItem.adjudication.category",
+        "path": "ClaimResponse.addItem.adjudication.category",
+        "short": "This code is fixed to 'submitted' to indicate that the adjudication result is on what was submitted.",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/adjudication",
+              "code": "submitted"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ClaimResponse.adjudication",
+        "path": "ClaimResponse.adjudication",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.adjudication.extension",
+        "path": "ClaimResponse.adjudication.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.adjudication.extension:reviewAction",
+        "path": "ClaimResponse.adjudication.extension",
+        "sliceName": "reviewAction",
+        "short": "The details of the review action that is necessary for the authorization.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-reviewAction|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.adjudication.category",
+        "path": "ClaimResponse.adjudication.category",
+        "short": "This code is fixed to 'submitted' to indicate that the adjudication result is on what was submitted.",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/adjudication",
+              "code": "submitted"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ClaimResponse.processNote",
+        "path": "ClaimResponse.processNote",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.processNote.number",
+        "path": "ClaimResponse.processNote.number",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.processNote.text",
+        "path": "ClaimResponse.processNote.text",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.error",
+        "path": "ClaimResponse.error",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.error.extension",
+        "path": "ClaimResponse.error.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "ClaimResponse.error.extension:followupAction",
+        "path": "ClaimResponse.error.extension",
+        "sliceName": "followupAction",
+        "short": "A code representing what action must occur to resolve this error.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorFollowupAction|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.error.extension:errorElement",
+        "path": "ClaimResponse.error.extension",
+        "sliceName": "errorElement",
+        "short": "The specific X12 loop, segment, or element that this error information is about.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorElement|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.error.extension:errorPath",
+        "path": "ClaimResponse.error.extension",
+        "sliceName": "errorPath",
+        "short": "The FHIRPath expression that indicates which FHIR element that this error information is about.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-errorPath|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.error.code",
+        "path": "ClaimResponse.error.code",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RejectReasonCodes|2.2.1"
+        }
+      }
+    ]
+  }
+}

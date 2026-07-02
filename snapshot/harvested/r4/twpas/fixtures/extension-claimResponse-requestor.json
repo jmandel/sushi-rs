@@ -1,0 +1,117 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "extension-claimResponse-requestor",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claimResponse-requestor",
+  "version": "1.2.3",
+  "name": "ClaimResponseRequestor",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "審查委員身分證號",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ClaimResponse"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "審查委員身分證號",
+        "definition": "審查委員身分證號"
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claimResponse-requestor"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "審查委員身分證號",
+        "min": 1,
+        "type": [
+          {
+            "code": "Identifier"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "id-card-number",
+            "severity": "error",
+            "human": "身分證號共十碼，首碼以英文字母代表直轄市、縣（市）別，第二碼至第十碼為數字碼。",
+            "expression": "value.matches('^[A-Za-z][0-9]{9}$')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claimResponse-requestor"
+          }
+        ]
+      },
+      {
+        "id": "Extension.value[x].use",
+        "path": "Extension.value[x].use",
+        "patternCode": "official"
+      },
+      {
+        "id": "Extension.value[x].type",
+        "path": "Extension.value[x].type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+              "code": "NNxxx"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Extension.value[x].type.coding",
+        "path": "Extension.value[x].type.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Extension.value[x].system",
+        "path": "Extension.value[x].system",
+        "short": "身分證號的命名空間（namespace），請固定填「http://www.moi.gov.tw」。",
+        "min": 1,
+        "patternUri": "http://www.moi.gov.tw"
+      },
+      {
+        "id": "Extension.value[x].value",
+        "path": "Extension.value[x].value",
+        "short": "審查委員身分證號",
+        "min": 1
+      }
+    ]
+  }
+}

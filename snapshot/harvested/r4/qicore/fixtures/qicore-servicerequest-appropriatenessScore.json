@@ -1,0 +1,105 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "qicore-servicerequest-appropriatenessScore",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "cqi"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-servicerequest-appropriatenessScore",
+  "version": "6.0.0",
+  "name": "QICoreServiceRequestAppropriatenessScore",
+  "title": "QICore Appropriateness Score",
+  "status": "draft",
+  "experimental": false,
+  "date": "2018-08-22",
+  "publisher": "HL7 International / Clinical Quality Information",
+  "contact": [
+    {
+      "name": "Clinical Quality Information WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/cqi"
+        }
+      ]
+    }
+  ],
+  "description": "The appropriateness score for the requested action.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ServiceRequest"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Appropriateness Score",
+        "definition": "The RAND appropriateness score for the requested procedure.",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Extension.extension:extension",
+        "path": "Extension.extension",
+        "sliceName": "extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "type": [
+          {
+            "code": "uri"
+          }
+        ],
+        "fixedUri": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-servicerequest-appropriatenessScore"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "code"
+          },
+          {
+            "code": "decimal"
+          }
+        ],
+        "binding": {
+          "strength": "required",
+          "description": "The RAND scoring for appropriateness of the procedure.",
+          "valueSet": "http://terminology.hl7.org/ValueSet/appropriateness-score"
+        }
+      }
+    ]
+  }
+}

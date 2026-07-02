@@ -1,0 +1,22 @@
+OK rust DTR-QPackageBundle
+OK rust DTR-QRBundle
+OK rust activeRole
+OK rust alternativeExpression
+OK rust containedReference
+OK rust dtr-base-questionnaire
+OK rust dtr-log-errors-input-parameters
+OK rust dtr-next-question-input-parameters
+OK rust dtr-next-question-output-parameters
+OK rust dtr-qpackage-input-parameters
+OK rust dtr-qpackage-output-parameters
+OK rust dtr-questionnaire-adapt-search
+OK rust dtr-questionnaireresponse
+OK rust dtr-supported-Payers
+OK rust estimated-completion-time
+OK rust information-origin
+OK rust intendedUse
+OK rust qr-context
+OK rust qr-coverage
+OK rust questionnaireAudience
+OK rust request-specific
+RUST BATCH: ok=21 failed=0 total=21

@@ -1,0 +1,98 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "AllergyIntolerance-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/AllergyIntolerance-twpas",
+  "version": "1.2.3",
+  "name": "AllergyIntoleranceTWPAS",
+  "title": "過敏史-AllergyIntolerance TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此過敏史-AllergyIntolerance TWPAS Profile說明本IG如何進一步定義臺灣核心-過敏或不耐症（TW Core AllergyIntolerance）Profile以呈現免疫製劑事前審查之過敏史",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "AllergyIntolerance",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/AllergyIntolerance-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "AllergyIntolerance",
+        "path": "AllergyIntolerance"
+      },
+      {
+        "id": "AllergyIntolerance.meta",
+        "path": "AllergyIntolerance.meta",
+        "min": 1
+      },
+      {
+        "id": "AllergyIntolerance.meta.profile",
+        "path": "AllergyIntolerance.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/AllergyIntolerance-twpas"
+      },
+      {
+        "id": "AllergyIntolerance.code",
+        "path": "AllergyIntolerance.code",
+        "short": "過敏史，由醫院自行填寫。"
+      },
+      {
+        "id": "AllergyIntolerance.patient",
+        "path": "AllergyIntolerance.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "AllergyIntolerance.recorder",
+        "path": "AllergyIntolerance.recorder",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas",
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas",
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/PractitionerRole-twcore",
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/RelatedPerson-twcore"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

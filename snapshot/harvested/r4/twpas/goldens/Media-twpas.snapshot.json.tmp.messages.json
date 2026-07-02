@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "warning", "type": "business-rule", "source": "ProfileValidator", "location": "非DICOM影像-Media TWPAS.content.Media.content.contentType", "line": -1, "col": -1, "message": "Binding http://hl7.org/fhir/ValueSet/mimetypes|4.0.1 could not be expanded"}
+  ]
+}

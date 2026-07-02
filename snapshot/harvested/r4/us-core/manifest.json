@@ -1,0 +1,593 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.core#9.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.core#9.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.core#9.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.core",
+    "version": "9.0.0",
+    "canonical": "http://hl7.org/fhir/us/core",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.smart-app-launch": "2.2.0",
+      "hl7.fhir.uv.sdc": "4.0.0",
+      "us.cdc.phinvads": "0.12.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "hl7.fhir.uv.xver-r5.r4": "0.1.0"
+    }
+  },
+  "counts": {
+    "scanned": 70,
+    "harvested": 70,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "head-occipital-frontal-circumference-percentile",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/head-occipital-frontal-circumference-percentile",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-head-occipital-frontal-circumference-percentile.json",
+      "fixture": "fixtures/head-occipital-frontal-circumference-percentile.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "pediatric-bmi-for-age",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-bmi-for-age",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-pediatric-bmi-for-age.json",
+      "fixture": "fixtures/pediatric-bmi-for-age.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "pediatric-weight-for-height",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-weight-for-height",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-pediatric-weight-for-height.json",
+      "fixture": "fixtures/pediatric-weight-for-height.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-adi-documentreference",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-adi-documentreference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-us-core-adi-documentreference.json",
+      "fixture": "fixtures/us-core-adi-documentreference.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "us-core-allergyintolerance",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AllergyIntolerance",
+      "source": "StructureDefinition-us-core-allergyintolerance.json",
+      "fixture": "fixtures/us-core-allergyintolerance.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "us-core-authentication-time",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-authentication-time",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-authentication-time.json",
+      "fixture": "fixtures/us-core-authentication-time.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "us-core-average-blood-pressure",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-average-blood-pressure",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-average-blood-pressure.json",
+      "fixture": "fixtures/us-core-average-blood-pressure.json",
+      "differentialElements": 29
+    },
+    {
+      "id": "us-core-birthsex",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-birthsex",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-birthsex.json",
+      "fixture": "fixtures/us-core-birthsex.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-blood-pressure",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-blood-pressure",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-blood-pressure.json",
+      "fixture": "fixtures/us-core-blood-pressure.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "us-core-bmi",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-bmi",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-bmi.json",
+      "fixture": "fixtures/us-core-bmi.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-body-height",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-height",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-body-height.json",
+      "fixture": "fixtures/us-core-body-height.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-body-temperature",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-temperature",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-body-temperature.json",
+      "fixture": "fixtures/us-core-body-temperature.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-body-weight",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-weight",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-body-weight.json",
+      "fixture": "fixtures/us-core-body-weight.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-care-experience-preference",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-care-experience-preference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-care-experience-preference.json",
+      "fixture": "fixtures/us-core-care-experience-preference.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "us-core-careplan",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careplan",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CarePlan",
+      "source": "StructureDefinition-us-core-careplan.json",
+      "fixture": "fixtures/us-core-careplan.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "us-core-careteam",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careteam",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/CareTeam",
+      "source": "StructureDefinition-us-core-careteam.json",
+      "fixture": "fixtures/us-core-careteam.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "us-core-condition-encounter-diagnosis",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-us-core-condition-encounter-diagnosis.json",
+      "fixture": "fixtures/us-core-condition-encounter-diagnosis.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "us-core-condition-problems-health-concerns",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-us-core-condition-problems-health-concerns.json",
+      "fixture": "fixtures/us-core-condition-problems-health-concerns.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "us-core-coverage",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Coverage",
+      "source": "StructureDefinition-us-core-coverage.json",
+      "fixture": "fixtures/us-core-coverage.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "us-core-device",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-us-core-device.json",
+      "fixture": "fixtures/us-core-device.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-diagnosticreport-lab",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-lab",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-us-core-diagnosticreport-lab.json",
+      "fixture": "fixtures/us-core-diagnosticreport-lab.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "us-core-diagnosticreport-note",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-note",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+      "source": "StructureDefinition-us-core-diagnosticreport-note.json",
+      "fixture": "fixtures/us-core-diagnosticreport-note.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-direct",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-direct",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-direct.json",
+      "fixture": "fixtures/us-core-direct.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-documentreference",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-us-core-documentreference.json",
+      "fixture": "fixtures/us-core-documentreference.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "us-core-encounter",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Encounter",
+      "source": "StructureDefinition-us-core-encounter.json",
+      "fixture": "fixtures/us-core-encounter.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "us-core-ethnicity",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-ethnicity.json",
+      "fixture": "fixtures/us-core-ethnicity.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-extension-questionnaire-uri",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-extension-questionnaire-uri",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-extension-questionnaire-uri.json",
+      "fixture": "fixtures/us-core-extension-questionnaire-uri.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-familymemberhistory-recorder",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-familymemberhistory-recorder",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-familymemberhistory-recorder.json",
+      "fixture": "fixtures/us-core-familymemberhistory-recorder.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "us-core-familymemberhistory",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-familymemberhistory",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/FamilyMemberHistory",
+      "source": "StructureDefinition-us-core-familymemberhistory.json",
+      "fixture": "fixtures/us-core-familymemberhistory.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "us-core-genderIdentity",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-genderIdentity",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-genderIdentity.json",
+      "fixture": "fixtures/us-core-genderIdentity.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-goal",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-goal",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Goal",
+      "source": "StructureDefinition-us-core-goal.json",
+      "fixture": "fixtures/us-core-goal.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "us-core-head-circumference",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-head-circumference",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-head-circumference.json",
+      "fixture": "fixtures/us-core-head-circumference.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-heart-rate",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-heart-rate",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-heart-rate.json",
+      "fixture": "fixtures/us-core-heart-rate.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-immunization",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "source": "StructureDefinition-us-core-immunization.json",
+      "fixture": "fixtures/us-core-immunization.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "us-core-individual-sex",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-individual-sex",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-individual-sex.json",
+      "fixture": "fixtures/us-core-individual-sex.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-interpreter-needed",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-interpreter-needed",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-interpreter-needed.json",
+      "fixture": "fixtures/us-core-interpreter-needed.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "us-core-jurisdiction",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-jurisdiction",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-jurisdiction.json",
+      "fixture": "fixtures/us-core-jurisdiction.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "us-core-location",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Location",
+      "source": "StructureDefinition-us-core-location.json",
+      "fixture": "fixtures/us-core-location.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "us-core-medication-adherence",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication-adherence",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-medication-adherence.json",
+      "fixture": "fixtures/us-core-medication-adherence.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-medication",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-us-core-medication.json",
+      "fixture": "fixtures/us-core-medication.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "us-core-medicationdispense",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationdispense",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationDispense",
+      "source": "StructureDefinition-us-core-medicationdispense.json",
+      "fixture": "fixtures/us-core-medicationdispense.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "us-core-medicationrequest",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-us-core-medicationrequest.json",
+      "fixture": "fixtures/us-core-medicationrequest.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "us-core-observation-adi-documentation",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-adi-documentation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-adi-documentation.json",
+      "fixture": "fixtures/us-core-observation-adi-documentation.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-observation-clinical-result",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-clinical-result.json",
+      "fixture": "fixtures/us-core-observation-clinical-result.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-observation-lab",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result",
+      "source": "StructureDefinition-us-core-observation-lab.json",
+      "fixture": "fixtures/us-core-observation-lab.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "us-core-observation-occupation",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-occupation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-occupation.json",
+      "fixture": "fixtures/us-core-observation-occupation.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-observation-pregnancyintent",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-pregnancyintent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-pregnancyintent.json",
+      "fixture": "fixtures/us-core-observation-pregnancyintent.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "us-core-observation-pregnancystatus",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-pregnancystatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-pregnancystatus.json",
+      "fixture": "fixtures/us-core-observation-pregnancystatus.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "us-core-observation-screening-assessment",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-screening-assessment",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-screening-assessment.json",
+      "fixture": "fixtures/us-core-observation-screening-assessment.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-observation-sexual-orientation",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-sexual-orientation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-observation-sexual-orientation.json",
+      "fixture": "fixtures/us-core-observation-sexual-orientation.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "us-core-organization",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Organization",
+      "source": "StructureDefinition-us-core-organization.json",
+      "fixture": "fixtures/us-core-organization.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "us-core-patient",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+      "source": "StructureDefinition-us-core-patient.json",
+      "fixture": "fixtures/us-core-patient.json",
+      "differentialElements": 30
+    },
+    {
+      "id": "us-core-practitioner",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Practitioner",
+      "source": "StructureDefinition-us-core-practitioner.json",
+      "fixture": "fixtures/us-core-practitioner.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "us-core-practitionerrole",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitionerrole",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+      "source": "StructureDefinition-us-core-practitionerrole.json",
+      "fixture": "fixtures/us-core-practitionerrole.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-procedure",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-us-core-procedure.json",
+      "fixture": "fixtures/us-core-procedure.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-provenance",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-provenance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Provenance",
+      "source": "StructureDefinition-us-core-provenance.json",
+      "fixture": "fixtures/us-core-provenance.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "us-core-pulse-oximetry",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-pulse-oximetry",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-pulse-oximetry.json",
+      "fixture": "fixtures/us-core-pulse-oximetry.json",
+      "differentialElements": 25
+    },
+    {
+      "id": "us-core-questionnaireresponse",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-questionnaireresponse",
+      "baseDefinition": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaireresponse",
+      "source": "StructureDefinition-us-core-questionnaireresponse.json",
+      "fixture": "fixtures/us-core-questionnaireresponse.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "us-core-race",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-race.json",
+      "fixture": "fixtures/us-core-race.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "us-core-relatedperson",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/RelatedPerson",
+      "source": "StructureDefinition-us-core-relatedperson.json",
+      "fixture": "fixtures/us-core-relatedperson.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-respiratory-rate",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-respiratory-rate",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "source": "StructureDefinition-us-core-respiratory-rate.json",
+      "fixture": "fixtures/us-core-respiratory-rate.json",
+      "differentialElements": 7
+    },
+    {
+      "id": "us-core-servicerequest",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ServiceRequest",
+      "source": "StructureDefinition-us-core-servicerequest.json",
+      "fixture": "fixtures/us-core-servicerequest.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "us-core-sex",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-sex",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-sex.json",
+      "fixture": "fixtures/us-core-sex.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "us-core-simple-observation",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-simple-observation.json",
+      "fixture": "fixtures/us-core-simple-observation.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "us-core-smokingstatus",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-smokingstatus",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-smokingstatus.json",
+      "fixture": "fixtures/us-core-smokingstatus.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "us-core-specimen",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-specimen",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Specimen",
+      "source": "StructureDefinition-us-core-specimen.json",
+      "fixture": "fixtures/us-core-specimen.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "us-core-treatment-intervention-preference",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-treatment-intervention-preference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-us-core-treatment-intervention-preference.json",
+      "fixture": "fixtures/us-core-treatment-intervention-preference.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "us-core-tribal-affiliation",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-tribal-affiliation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-us-core-tribal-affiliation.json",
+      "fixture": "fixtures/us-core-tribal-affiliation.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "us-core-vital-signs",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/vitalsigns",
+      "source": "StructureDefinition-us-core-vital-signs.json",
+      "fixture": "fixtures/us-core-vital-signs.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "uscdi-requirement",
+      "url": "http://hl7.org/fhir/us/core/StructureDefinition/uscdi-requirement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-uscdi-requirement.json",
+      "fixture": "fixtures/uscdi-requirement.json",
+      "differentialElements": 3
+    }
+  ],
+  "skipped": []
+}

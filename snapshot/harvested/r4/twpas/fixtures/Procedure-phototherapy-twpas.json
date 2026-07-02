@@ -1,0 +1,162 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Procedure-phototherapy-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-phototherapy-twpas",
+  "version": "1.2.3",
+  "name": "ProcedurePhototherapyTWPAS",
+  "title": "照光治療-Procedure Phototherapy TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此照光治療-Procedure Phototherapy TWPAS Profile說明本IG如何進一步定義FHIR的Procedure Resource以呈現事前審查中治療資訊之照光治療相關資訊",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Procedure",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Procedure.meta",
+        "path": "Procedure.meta",
+        "min": 1
+      },
+      {
+        "id": "Procedure.meta.profile",
+        "path": "Procedure.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-phototherapy-twpas"
+      },
+      {
+        "id": "Procedure.status",
+        "path": "Procedure.status",
+        "short": "【因FHIR設計而需必填】"
+      },
+      {
+        "id": "Procedure.code",
+        "path": "Procedure.code",
+        "short": "照光治療種類",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-phototherapy"
+        }
+      },
+      {
+        "id": "Procedure.code.coding",
+        "path": "Procedure.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Procedure.code.coding.code",
+        "path": "Procedure.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.subject",
+        "path": "Procedure.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Procedure.performed[x]",
+        "path": "Procedure.performed[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.performed[x].start",
+        "path": "Procedure.performed[x].start",
+        "short": "照光治療起始日期，YYYY-MM-DD。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.performed[x].end",
+        "path": "Procedure.performed[x].end",
+        "short": "照光治療終止日期，YYYY-MM-DD。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.report",
+        "path": "Procedure.report",
+        "short": "照光治療紀錄",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Procedure.usedReference",
+        "path": "Procedure.usedReference",
+        "short": "照光治療總次數",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-phototherapy-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

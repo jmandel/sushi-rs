@@ -409,6 +409,7 @@
         "code" : "Extension",
         "profile" : ["http://hl7.org/fhir/StructureDefinition/workflow-supportingInfo"]
       }],
+      "condition" : ["ele-1"],
       "constraint" : [{
         "key" : "ele-1",
         "severity" : "error",

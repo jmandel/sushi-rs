@@ -1,0 +1,211 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Medication-eu-mpd",
+  "url": "http://hl7.eu/fhir/mpd/StructureDefinition/Medication-eu-mpd",
+  "version": "1.0.0",
+  "name": "MedicationEuMpd",
+  "title": "Medication: MPD",
+  "status": "active",
+  "date": "2026-05-11T17:24:08+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profile defines how to represent Medication data on ePrescription and eDispensation. The profile is equal to Medication EU Core and only adds obligations.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "script10.6",
+      "uri": "http://ncpdp.org/SCRIPT10_6",
+      "name": "Mapping to NCPDP SCRIPT 10.6"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Medication",
+  "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/medication-eu-core",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Medication",
+        "path": "Medication"
+      },
+      {
+        "id": "Medication.extension:productName",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.extension",
+        "sliceName": "productName"
+      },
+      {
+        "id": "Medication.identifier",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.identifier"
+      },
+      {
+        "id": "Medication.code",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.code"
+      },
+      {
+        "id": "Medication.form",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.form"
+      },
+      {
+        "id": "Medication.ingredient.item[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.ingredient.item[x]"
+      },
+      {
+        "id": "Medication.ingredient.item[x]:itemCodeableConcept",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.ingredient.item[x]",
+        "sliceName": "itemCodeableConcept",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ]
+      },
+      {
+        "id": "Medication.ingredient.strength",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Medication.ingredient.strength"
+      }
+    ]
+  }
+}

@@ -1,0 +1,355 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "modality-device",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "ii"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 2
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/uv/radiation-dose-summary/ImplementationGuide/hl7.fhir.uv.radiation-dose-summary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/uv/radiation-dose-summary/StructureDefinition/modality-device",
+  "version": "1.0.0",
+  "name": "ModalityDevice",
+  "title": "Modality Device",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-05-07T00:50:09+10:00",
+  "publisher": "HL7 International / Imaging Integration",
+  "contact": [
+    {
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "HL7 Imaging Integration Workgroup",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/imagemgt"
+        }
+      ]
+    },
+    {
+      "name": "Abderrazek Boufahja",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "abderrazek.boufahja@gehealthcare.com"
+        }
+      ]
+    }
+  ],
+  "description": "Modality profiling as a Device resource",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "001"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "dicom-sr",
+      "uri": "http://dicom.nema.org/medical/Dicom/2016b/output/chtml/part03/sect_C.7.5.html",
+      "name": "DICOM Equipement Module",
+      "comment": "The ModalityDevice can be extracted from General Equipment Module."
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "udi",
+      "uri": "http://fda.gov/UDI",
+      "name": "UDI Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Device",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Device",
+        "path": "Device",
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "General Equipment Module"
+          }
+        ]
+      },
+      {
+        "id": "Device.identifier",
+        "path": "Device.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "type"
+            }
+          ],
+          "description": "Identifiers for the radiation dose",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Device.identifier:deviceSerialNumber",
+        "path": "Device.identifier",
+        "sliceName": "deviceSerialNumber",
+        "short": "Describes the Device Serial Number, related to tag(0018,1000) Device Serial Number",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0018,1000) Device Serial Number"
+          }
+        ]
+      },
+      {
+        "id": "Device.identifier:deviceSerialNumber.type",
+        "path": "Device.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+              "code": "SNO",
+              "display": "Serial Number"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Device.identifier:deviceSerialNumber.value",
+        "path": "Device.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Device.identifier:aeTitle",
+        "path": "Device.identifier",
+        "sliceName": "aeTitle",
+        "short": "Describes the AETitle of the modality irradiating the patient",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.identifier:aeTitle.type",
+        "path": "Device.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/uv/radiation-dose-summary/CodeSystem/dicom-identifier-type",
+              "code": "application-entity",
+              "display": "Application Entity"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Device.identifier:aeTitle.value",
+        "path": "Device.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Device.identifier:deviceUID",
+        "path": "Device.identifier",
+        "sliceName": "deviceUID",
+        "short": "Describes the Device UID, related to tag(0018,1002) Device UID",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0018,1002) Device UID"
+          }
+        ]
+      },
+      {
+        "id": "Device.identifier:deviceUID.type",
+        "path": "Device.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/uv/radiation-dose-summary/CodeSystem/dicom-identifier-type",
+              "code": "device-uid",
+              "display": "Device UID"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Device.identifier:deviceUID.system",
+        "path": "Device.identifier.system",
+        "patternUri": "urn:dicom:uid"
+      },
+      {
+        "id": "Device.identifier:deviceUID.value",
+        "path": "Device.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Device.identifier:deviceID",
+        "path": "Device.identifier",
+        "sliceName": "deviceID",
+        "short": "Describes the Device ID, related to tag((0018,1003) Device ID",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Device.identifier:deviceID.type",
+        "path": "Device.identifier.type",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/uv/radiation-dose-summary/CodeSystem/dicom-identifier-type",
+              "code": "device-id",
+              "display": "Device ID"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Device.identifier:deviceID.value",
+        "path": "Device.identifier.value",
+        "min": 1
+      },
+      {
+        "id": "Device.manufacturer",
+        "path": "Device.manufacturer",
+        "short": "The manufacturer of the modality, related to tag(0008,0070) manufacturer",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0008,0070) manufacturer"
+          }
+        ]
+      },
+      {
+        "id": "Device.serialNumber",
+        "path": "Device.serialNumber",
+        "short": "The serial number of the modality, which is the Device Serial Number",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0018,1000) Device Serial Number"
+          }
+        ]
+      },
+      {
+        "id": "Device.deviceName",
+        "path": "Device.deviceName",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type"
+            }
+          ],
+          "description": "Name of the device",
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Device.deviceName:manufacturer",
+        "path": "Device.deviceName",
+        "sliceName": "manufacturer",
+        "short": "The manufacturer of the modality",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0008,0070) manufacturer"
+          }
+        ]
+      },
+      {
+        "id": "Device.deviceName:manufacturer.type",
+        "path": "Device.deviceName.type",
+        "patternCode": "manufacturer-name"
+      },
+      {
+        "id": "Device.deviceName:manufacturerModelName",
+        "path": "Device.deviceName",
+        "sliceName": "manufacturerModelName",
+        "short": "The model name of the modality",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "mapping": [
+          {
+            "identity": "dicom-sr",
+            "map": "tag(0008,1090) Manufacturer's Model Name"
+          }
+        ]
+      },
+      {
+        "id": "Device.deviceName:manufacturerModelName.type",
+        "path": "Device.deviceName.type",
+        "patternCode": "model-name"
+      },
+      {
+        "id": "Device.type",
+        "path": "Device.type",
+        "short": "Describes the main modality type (CT, MG, etc.)",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://dicom.nema.org/medical/dicom/current/output/chtml/part16/sect_CID_33.html|2025.2.20250411"
+        }
+      },
+      {
+        "id": "Device.version",
+        "path": "Device.version",
+        "short": "Describes the Software Versions of the device, related to tag(0018,1020) Software Versions"
+      }
+    ]
+  }
+}

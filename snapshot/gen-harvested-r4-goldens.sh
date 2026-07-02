@@ -39,6 +39,20 @@ if [[ -f "$HARVEST_DIR/manifest.json" ]]; then
   fi
 fi
 
+if [[ "${ORACLE_BATCH:-1}" != "0" ]]; then
+  batch="$LOGS/batch.tsv"
+  : >"$batch"
+  while IFS= read -r fixture; do
+    name="$(basename "$fixture" .json)"
+    out="$GOLDENS/$name.snapshot.json"
+    msg="$GOLDENS/$name.snapshot.json.tmp.messages.json"
+    rm -f "$out" "$msg"
+    printf '%s\t%s\t%s\n' "$fixture" "$out" "$msg" >>"$batch"
+  done < <(find "$FIXTURES" -maxdepth 1 -name '*.json' | sort)
+  bash "$REPO/snapshot/oracle/gen-snapshot.sh" --r4 "$OUTPUT_ARG" --sort --local-dir "$LOCAL_DIR" --batch-list "$batch" "${PACKAGES[@]}" 2>&1 | tee "$LOGS/batch.oracle.log"
+  exit 0
+fi
+
 total=0
 ok=0
 failed=0

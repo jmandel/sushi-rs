@@ -1,0 +1,126 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.ipa#1.1.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.ipa#1.1.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.ipa#1.1.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.ipa",
+    "version": "1.1.0",
+    "canonical": "http://hl7.org/fhir/uv/ipa",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "6.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.uv.smart-app-launch": "2.0.0"
+    }
+  },
+  "counts": {
+    "scanned": 12,
+    "harvested": 12,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "ipa-allergyintolerance",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-allergyintolerance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AllergyIntolerance",
+      "source": "StructureDefinition-ipa-allergyintolerance.json",
+      "fixture": "fixtures/ipa-allergyintolerance.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "ipa-condition",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-condition",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-ipa-condition.json",
+      "fixture": "fixtures/ipa-condition.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "ipa-documentreference",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-documentreference",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DocumentReference",
+      "source": "StructureDefinition-ipa-documentreference.json",
+      "fixture": "fixtures/ipa-documentreference.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "ipa-immunization",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-immunization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "source": "StructureDefinition-ipa-immunization.json",
+      "fixture": "fixtures/ipa-immunization.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "ipa-medication",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-medication",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-ipa-medication.json",
+      "fixture": "fixtures/ipa-medication.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "ipa-medicationrequest",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-ipa-medicationrequest.json",
+      "fixture": "fixtures/ipa-medicationrequest.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "ipa-medicationstatement",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-medicationstatement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "source": "StructureDefinition-ipa-medicationstatement.json",
+      "fixture": "fixtures/ipa-medicationstatement.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "ipa-observation",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-ipa-observation.json",
+      "fixture": "fixtures/ipa-observation.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "ipa-patient",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-patient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+      "source": "StructureDefinition-ipa-patient.json",
+      "fixture": "fixtures/ipa-patient.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "ipa-practitioner",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-practitioner",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Practitioner",
+      "source": "StructureDefinition-ipa-practitioner.json",
+      "fixture": "fixtures/ipa-practitioner.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "ipa-practitionerrole",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-practitionerrole",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/PractitionerRole",
+      "source": "StructureDefinition-ipa-practitionerrole.json",
+      "fixture": "fixtures/ipa-practitionerrole.json",
+      "differentialElements": 1
+    },
+    {
+      "id": "ipa-problem-list-item",
+      "url": "http://hl7.org/fhir/uv/ipa/StructureDefinition/ipa-problem-list-item",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-ipa-problem-list-item.json",
+      "fixture": "fixtures/ipa-problem-list-item.json",
+      "differentialElements": 7
+    }
+  ],
+  "skipped": []
+}

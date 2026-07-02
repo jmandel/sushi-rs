@@ -1,0 +1,6 @@
+snapshot/harvested/r4/carinbb/fixtures/C4BB-Coverage.json	snapshot/harvested/r4/carinbb/rust/C4BB-Coverage.snapshot.json
+snapshot/harvested/r4/carinbb/fixtures/C4BB-ExplanationOfBenefit.json	snapshot/harvested/r4/carinbb/rust/C4BB-ExplanationOfBenefit.snapshot.json
+snapshot/harvested/r4/carinbb/fixtures/C4BB-Organization.json	snapshot/harvested/r4/carinbb/rust/C4BB-Organization.snapshot.json
+snapshot/harvested/r4/carinbb/fixtures/C4BB-Patient.json	snapshot/harvested/r4/carinbb/rust/C4BB-Patient.snapshot.json
+snapshot/harvested/r4/carinbb/fixtures/C4BB-Practitioner.json	snapshot/harvested/r4/carinbb/rust/C4BB-Practitioner.snapshot.json
+snapshot/harvested/r4/carinbb/fixtures/C4BB-RelatedPerson.json	snapshot/harvested/r4/carinbb/rust/C4BB-RelatedPerson.snapshot.json

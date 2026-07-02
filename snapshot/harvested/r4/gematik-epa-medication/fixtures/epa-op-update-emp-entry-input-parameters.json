@@ -1,0 +1,218 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "epa-op-update-emp-entry-input-parameters",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-update-emp-entry-input-parameters",
+  "version": "1.3.2",
+  "name": "EPAOpUpdateEMPEntryInputParameters",
+  "title": "EPA Operation UpdateEMPEntry Input-Parameters",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "EPA Operation UpdateEMPEntry Input-Parameters",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Parameters",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Parameters.parameter",
+        "path": "Parameters.parameter",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "name"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 2,
+        "max": "3",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId",
+        "path": "Parameters.parameter",
+        "sliceName": "acknowledgedChronologyId",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "acknowledgedChronologyId",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "id"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.resource",
+        "path": "Parameters.parameter.resource",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:acknowledgedChronologyId.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier",
+        "path": "Parameters.parameter",
+        "sliceName": "medicationPlanIdentifier",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "medicationPlanIdentifier",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "https://gematik.de/fhir/ti/StructureDefinition/medication-plan-identifier"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type",
+        "path": "Parameters.parameter.value[x].type",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type.coding",
+        "path": "Parameters.parameter.value[x].type.coding",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type.coding.system",
+        "path": "Parameters.parameter.value[x].type.coding.system",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type.coding.version",
+        "path": "Parameters.parameter.value[x].type.coding.version",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type.coding.code",
+        "path": "Parameters.parameter.value[x].type.coding.code",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.value[x].type.coding.display",
+        "path": "Parameters.parameter.value[x].type.coding.display",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.resource",
+        "path": "Parameters.parameter.resource",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:medicationPlanIdentifier.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:empEntry",
+        "path": "Parameters.parameter",
+        "sliceName": "empEntry",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.name",
+        "path": "Parameters.parameter.name",
+        "patternString": "empEntry",
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.value[x]",
+        "path": "Parameters.parameter.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Parameters.parameter:empEntry.resource",
+        "path": "Parameters.parameter.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Parameters.parameter:empEntry.part",
+        "path": "Parameters.parameter.part",
+        "max": "0"
+      }
+    ]
+  }
+}

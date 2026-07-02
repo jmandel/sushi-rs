@@ -1,0 +1,192 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "device-eu-eps",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-imposeProfile",
+      "valueCanonical": "http://hl7.org/fhir/uv/ips/StructureDefinition/Device-uv-ips"
+    }
+  ],
+  "url": "http://hl7.eu/fhir/eps/StructureDefinition/device-eu-eps",
+  "version": "1.0.0-ballot",
+  "name": "DeviceEuEps",
+  "title": "Device (EPS)",
+  "status": "draft",
+  "date": "2026-06-06T08:56:20+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profile constrains the Device resource in the scope of the European Patient Summary.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "udi",
+      "uri": "http://fda.gov/UDI",
+      "name": "UDI Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Device",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Device.identifier",
+        "path": "Device.identifier",
+        "short": "Device Identifier"
+      },
+      {
+        "id": "Device.udiCarrier",
+        "path": "Device.udiCarrier",
+        "short": "Unique Device Identifier (UDI)"
+      },
+      {
+        "id": "Device.manufacturer",
+        "path": "Device.manufacturer",
+        "short": "Device Manufacturer"
+      },
+      {
+        "id": "Device.manufactureDate",
+        "path": "Device.manufactureDate",
+        "short": "Device Manufacture Date"
+      },
+      {
+        "id": "Device.expirationDate",
+        "path": "Device.expirationDate",
+        "short": "Device Expiration Date"
+      },
+      {
+        "id": "Device.lotNumber",
+        "path": "Device.lotNumber",
+        "short": "Device Lot Number"
+      },
+      {
+        "id": "Device.serialNumber",
+        "path": "Device.serialNumber",
+        "short": "Device Serial Number"
+      },
+      {
+        "id": "Device.deviceName.name",
+        "path": "Device.deviceName.name",
+        "short": "Device Name"
+      },
+      {
+        "id": "Device.modelNumber",
+        "path": "Device.modelNumber",
+        "short": "Device Model Number"
+      },
+      {
+        "id": "Device.type",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:populate-if-known"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Creator"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:handle"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          },
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:display"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "http://hl7.org/fhir/uv/ips/ActorDefinition/Consumer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Device.type",
+        "short": "Type of device.\r\nPreferably valued by using SNOMED CT.\r\nThe absence of information, or of devices relevant for purpose of this IPS, shall be explicitly stated by using the codes included in the absent-or-unknown-devices-uv-ips value set.",
+        "binding": {
+          "extension": [
+            {
+              "extension": [
+                {
+                  "url": "purpose",
+                  "valueCode": "candidate"
+                },
+                {
+                  "url": "valueSet",
+                  "valueCanonical": "http://terminology.ehdsi.eu/ValueSet/eHDSIMedicalDevice"
+                },
+                {
+                  "url": "documentation",
+                  "valueMarkdown": "Codes for medical devices from MyHealth@EU"
+                }
+              ],
+              "url": "http://hl7.org/fhir/tools/StructureDefinition/additional-binding"
+            }
+          ],
+          "strength": "preferred",
+          "valueSet": "http://hl7.org/fhir/uv/ips/ValueSet/medical-devices-uv-ips"
+        }
+      },
+      {
+        "id": "Device.version.value",
+        "path": "Device.version.value",
+        "short": "Device Version"
+      },
+      {
+        "id": "Device.note",
+        "path": "Device.note",
+        "short": "Device Note"
+      }
+    ]
+  }
+}

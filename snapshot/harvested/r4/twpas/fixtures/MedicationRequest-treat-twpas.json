@@ -1,0 +1,358 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "MedicationRequest-treat-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-treat-twpas",
+  "version": "1.2.3",
+  "name": "MedicationRequestTreatTWPAS",
+  "title": "用藥品項-MedicationRequest Treat TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此用藥品項-MedicationRequest Treat TWPAS Profile說明本IG如何進一步定義臺灣核心-藥品請求(TW Core MedicationRequest) Profile以呈現事前審查中治療資訊之用藥品項",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "script10.6",
+      "uri": "http://ncpdp.org/SCRIPT10_6",
+      "name": "Mapping to NCPDP SCRIPT 10.6"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationRequest",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/MedicationRequest-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationRequest.meta",
+        "path": "MedicationRequest.meta",
+        "min": 1
+      },
+      {
+        "id": "MedicationRequest.meta.profile",
+        "path": "MedicationRequest.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-treat-twpas"
+      },
+      {
+        "id": "MedicationRequest.status",
+        "path": "MedicationRequest.status",
+        "short": "藥物使用狀態"
+      },
+      {
+        "id": "MedicationRequest.statusReason",
+        "path": "MedicationRequest.statusReason",
+        "short": "藥物處方終止原因"
+      },
+      {
+        "id": "MedicationRequest.intent",
+        "path": "MedicationRequest.intent",
+        "patternCode": "order"
+      },
+      {
+        "id": "MedicationRequest.category",
+        "path": "MedicationRequest.category",
+        "short": "自費註記",
+        "max": "1",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-drug-category"
+        }
+      },
+      {
+        "id": "MedicationRequest.medication[x]",
+        "path": "MedicationRequest.medication[x]",
+        "short": "藥品代碼",
+        "type": [
+          {
+            "code": "CodeableConcept",
+            "profile": [
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"
+            ]
+          }
+        ],
+        "binding": {
+          "strength": "example",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-medication"
+        }
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationReference",
+        "path": "MedicationRequest.medication[x]",
+        "sliceName": "medicationReference",
+        "max": "0",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Medication-twcore"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept",
+        "path": "MedicationRequest.medication[x]",
+        "sliceName": "medicationCodeableConcept",
+        "min": 1,
+        "type": [
+          {
+            "code": "CodeableConcept",
+            "profile": [
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/CodeableConcept-tw"
+            ]
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "example",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-medication"
+        }
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding",
+        "path": "MedicationRequest.medication[x].coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "$this"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:fda-medication-tw",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "fda-medication-tw",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-medication-fda"
+        }
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:nhi-medication-tw",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "nhi-medication-tw",
+        "max": "0"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:nhi-medication-ch-herb-tw",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "nhi-medication-ch-herb-tw",
+        "max": "0"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:rxnorm-medication-us-core",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "rxnorm-medication-us-core",
+        "max": "0"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:atc-medication-code",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "atc-medication-code",
+        "max": "0"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:snomedct-medication-codes",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "snomedct-medication-codes",
+        "max": "0"
+      },
+      {
+        "id": "MedicationRequest.medication[x]:medicationCodeableConcept.coding:nhi-medication",
+        "path": "MedicationRequest.medication[x].coding",
+        "sliceName": "nhi-medication",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-medication"
+        }
+      },
+      {
+        "id": "MedicationRequest.subject",
+        "path": "MedicationRequest.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction",
+        "path": "MedicationRequest.dosageInstruction",
+        "min": 1
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing",
+        "path": "MedicationRequest.dosageInstruction.timing",
+        "min": 1
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.repeat",
+        "path": "MedicationRequest.dosageInstruction.timing.repeat",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x]",
+        "path": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x].start",
+        "path": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x].start",
+        "short": "藥物處方起始日期，YYYY-MM-DD。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x].end",
+        "path": "MedicationRequest.dosageInstruction.timing.repeat.bounds[x].end",
+        "short": "藥物處方終止日期，YYYY-MM-DD。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.code",
+        "path": "MedicationRequest.dosageInstruction.timing.code",
+        "short": "藥品使用頻率及服用時間。",
+        "min": 1,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/medication-frequency-hl7-nhi"
+        }
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.code.coding",
+        "path": "MedicationRequest.dosageInstruction.timing.code.coding",
+        "short": "藥品使用頻率及服用時間。",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/medication-frequency-hl7-nhi"
+        }
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.timing.code.text",
+        "path": "MedicationRequest.dosageInstruction.timing.code.text",
+        "short": "藥品使用頻率及服用時間。"
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.route",
+        "path": "MedicationRequest.dosageInstruction.route",
+        "short": "給藥途徑／作用部位。",
+        "min": 1,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/medication-path-sct-tw"
+        }
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.route.coding",
+        "path": "MedicationRequest.dosageInstruction.route.coding",
+        "short": "給藥途徑／作用部位。",
+        "min": 1,
+        "max": "1",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/medication-path-sct-tw"
+        }
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/StructureDefinition/SimpleQuantity"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].value",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].value",
+        "short": "藥物每次處方劑量，數字，每次使用之顆數、支數等，依產品規格。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].system",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].system",
+        "short": "藥物每次處方劑量單位之代碼系統，固定為「http://unitsofmeasure.org」。",
+        "min": 1,
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].code",
+        "path": "MedicationRequest.dosageInstruction.doseAndRate.dose[x].code",
+        "short": "藥物每次處方劑量單位",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "用藥單位的代碼範圍請參考[Common UCUM units](https://hl7.org/fhir/R4/valueset-ucum-common.html)。",
+          "valueSet": "http://hl7.org/fhir/ValueSet/ucum-units"
+        }
+      }
+    ]
+  }
+}

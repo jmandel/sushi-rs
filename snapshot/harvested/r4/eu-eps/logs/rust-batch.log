@@ -1,0 +1,24 @@
+OK rust MedicationStatement-eu-eps
+OK rust allergyintolerance-obl-eu-eps
+OK rust bundle-eu-eps
+OK rust composition-eu-eps
+OK rust condition-obl-eu-eps
+OK rust consent-eu-eps
+OK rust device-eu-eps
+OK rust deviceUseStatement-eu-eps
+OK rust diagnosticReport-eu-eps
+OK rust flag-alert-obl-eu-eps
+OK rust immunization-obl-eu-eps
+OK rust medication-obl-eu-eps
+OK rust medicationrequest-obl-eu-eps
+OK rust observation-pregnancy-edd-eu-eps
+OK rust observation-pregnancy-gestationalAge-eu-eps
+OK rust observation-pregnancy-outcome-eu-eps
+OK rust observation-pregnancy-status-eu-ips
+OK rust observation-travel-eu-eps
+OK rust organization-obl-eu-eps
+OK rust patient-eu-eps
+OK rust practitioner-obl-eu-eps
+OK rust practitionerrole-obl-eu-eps
+OK rust procedure-eu-eps
+RUST BATCH: ok=23 failed=0 total=23

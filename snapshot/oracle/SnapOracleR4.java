@@ -4,6 +4,7 @@
 //
 // args:
 //   [--sort] [--output-r5|--output-r4] [--local-dir <dir>] [--messages <messages.json>] <cacheFolder> <pkgId#ver>... <inputProfile.json> <outputSnapshot.json>
+//   [--sort] [--output-r5|--output-r4] [--local-dir <dir>] --batch-list <tsv> <cacheFolder> <pkgId#ver>...
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_40_50;
 import org.hl7.fhir.r5.context.SimpleWorkerContext;
 import org.hl7.fhir.r5.conformance.profile.ProfileUtilities;
@@ -24,6 +25,7 @@ public class SnapOracleR4 {
     boolean outputR5 = true;
     String messagesFile = null;
     String localDir = null;
+    String batchList = null;
     int pos = 0;
     while (pos < a.length && a[pos].startsWith("--")) {
       if ("--sort".equals(a[pos])) {
@@ -41,19 +43,27 @@ public class SnapOracleR4 {
       } else if ("--messages".equals(a[pos])) {
         messagesFile = a[pos + 1];
         pos += 2;
+      } else if ("--batch-list".equals(a[pos])) {
+        batchList = a[pos + 1];
+        pos += 2;
       } else {
         throw new IllegalArgumentException("unknown option: " + a[pos]);
       }
     }
-    if (a.length - pos < 4) {
+    if (batchList == null && a.length - pos < 4) {
       throw new IllegalArgumentException("usage: SnapOracleR4 [--sort] [--output-r5|--output-r4] [--local-dir <dir>] [--messages <messages.json>] <cacheFolder> <pkgId#ver>... <inputProfile.json> <outputSnapshot.json>");
+    }
+    if (batchList != null && a.length - pos < 1) {
+      throw new IllegalArgumentException("usage: SnapOracleR4 [--sort] [--output-r5|--output-r4] [--local-dir <dir>] --batch-list <tsv> <cacheFolder> <pkgId#ver>...");
     }
 
     String cache = a[pos];
-    String inFile = a[a.length-2], outFile = a[a.length-1];
+    String inFile = batchList == null ? a[a.length-2] : null;
+    String outFile = batchList == null ? a[a.length-1] : null;
     FilesystemPackageCacheManager pcm = new FilesystemPackageCacheManager.Builder().withCacheFolder(cache).build();
     SimpleWorkerContext ctx = null;
-    for (int i = pos + 1; i <= a.length-3; i++) {
+    int packageEnd = batchList == null ? a.length - 3 : a.length;
+    for (int i = pos + 1; i < packageEnd; i++) {
       String[] pv = a[i].split("#");
       NpmPackage npm = pcm.loadPackageFromCacheOnly(pv[0], pv[1]);
       if (ctx == null) {
@@ -61,17 +71,66 @@ public class SnapOracleR4 {
       } else {
         ctx.loadFromPackage(npm, null);
       }
+      loadPackageFallbackR4CanonicalResources(ctx, cache, a[i]);
     }
     ctx.setExpansionParameters(new org.hl7.fhir.r5.model.Parameters());
     if (localDir != null) {
       loadLocalR4CanonicalResources(ctx, localDir);
     }
 
+    if (batchList != null) {
+      runBatch(batchList, ctx, sort, outputR5);
+      return;
+    }
+    RunResult result = runOne(ctx, sort, outputR5, inFile, outFile, messagesFile);
+    System.out.println("OK r4 publisher-path output=" + (outputR5 ? "r5" : "r4") + " sort=" + sort + " snapshot.element=" + result.snapshotElements + " messages=" + result.messages + " sortErrors=" + result.sortErrors);
+  }
+
+  private static void runBatch(String batchList, SimpleWorkerContext ctx, boolean sort, boolean outputR5) throws Exception {
+    int total = 0;
+    int ok = 0;
+    int failed = 0;
+    try (BufferedReader reader = new BufferedReader(new FileReader(batchList))) {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        if (line.trim().isEmpty() || line.startsWith("#")) {
+          continue;
+        }
+        total++;
+        String[] parts = line.split("\t", -1);
+        if (parts.length < 2) {
+          failed++;
+          System.err.println("FAIL oracle malformed batch line " + total + ": " + line);
+          continue;
+        }
+        String inFile = parts[0];
+        String outFile = parts[1];
+        String messagesFile = parts.length > 2 && !parts[2].isEmpty() ? parts[2] : null;
+        String name = new File(inFile).getName().replaceFirst("\\.json$", "");
+        try {
+          RunResult result = runOne(ctx, sort, outputR5, inFile, outFile, messagesFile);
+          ok++;
+          System.out.println("OK oracle " + name + " snapshot.element=" + result.snapshotElements + " messages=" + result.messages + " sortErrors=" + result.sortErrors);
+        } catch (Exception e) {
+          failed++;
+          new File(outFile).delete();
+          System.err.println("FAIL oracle " + name + ": " + e.getMessage());
+          e.printStackTrace(System.err);
+        }
+      }
+    }
+    System.out.println("R4 ORACLE BATCH (" + (outputR5 ? "native-r5" : "r4") + "): ok=" + ok + " failed=" + failed + " total=" + total);
+    if (failed != 0) {
+      System.exit(1);
+    }
+  }
+
+  private static RunResult runOne(SimpleWorkerContext ctx, boolean sort, boolean outputR5, String inFile, String outFile, String messagesFile) throws Exception {
     org.hl7.fhir.r4.model.StructureDefinition derivedR4 =
       (org.hl7.fhir.r4.model.StructureDefinition) new org.hl7.fhir.r4.formats.JsonParser(true, true).parse(new FileInputStream(inFile));
     StructureDefinition derived = (StructureDefinition) VersionConvertorFactory_40_50.convertResource(derivedR4);
     StructureDefinition base = ctx.fetchResource(StructureDefinition.class, derived.getBaseDefinition());
-    if (base == null) { System.err.println("base not found: " + derived.getBaseDefinition()); System.exit(2); }
+    if (base == null) { throw new IOException("base not found: " + derived.getBaseDefinition()); }
     List<ValidationMessage> messages = new ArrayList<>();
     ProfileUtilities pu = new ProfileUtilities(ctx, messages, null);
     pu.setForPublication(true);
@@ -92,16 +151,30 @@ public class SnapOracleR4 {
     if (outputR5) {
       org.hl7.fhir.r5.formats.JsonParser jp = new org.hl7.fhir.r5.formats.JsonParser();
       jp.setOutputStyle(IParser.OutputStyle.PRETTY);
+      new File(outFile).getParentFile().mkdirs();
       jp.compose(new FileOutputStream(outFile), derived);
     } else {
       org.hl7.fhir.r4.formats.JsonParser jp = new org.hl7.fhir.r4.formats.JsonParser();
       jp.setOutputStyle(org.hl7.fhir.r4.formats.IParser.OutputStyle.PRETTY);
+      new File(outFile).getParentFile().mkdirs();
       jp.compose(new FileOutputStream(outFile), VersionConvertorFactory_40_50.convertResource(derived));
     }
     if (messagesFile != null) {
       writeMessages(messagesFile, messages, sortErrors);
     }
-    System.out.println("OK r4 publisher-path output=" + (outputR5 ? "r5" : "r4") + " sort=" + sort + " snapshot.element=" + derived.getSnapshot().getElement().size() + " messages=" + messages.size() + " sortErrors=" + sortErrors.size());
+    return new RunResult(derived.getSnapshot().getElement().size(), messages.size(), sortErrors.size());
+  }
+
+  private static class RunResult {
+    final int snapshotElements;
+    final int messages;
+    final int sortErrors;
+
+    RunResult(int snapshotElements, int messages, int sortErrors) {
+      this.snapshotElements = snapshotElements;
+      this.messages = messages;
+      this.sortErrors = sortErrors;
+    }
   }
 
   private static void loadLocalR4CanonicalResources(SimpleWorkerContext ctx, String dir) throws Exception {
@@ -123,6 +196,19 @@ public class SnapOracleR4 {
         ctx.cacheResource(VersionConvertorFactory_40_50.convertResource(r4));
       }
     }
+  }
+
+  private static void loadPackageFallbackR4CanonicalResources(SimpleWorkerContext ctx, String cache, String packageSpec) throws Exception {
+    File packageFolder = new File(new File(cache, packageSpec), "package");
+    File index = new File(packageFolder, ".index.json");
+    if (!packageFolder.isDirectory() || !index.isFile()) {
+      return;
+    }
+    String indexJson = java.nio.file.Files.readString(index.toPath());
+    if (!indexJson.matches("(?s).*\"files\"\\s*:\\s*\\[\\s*\\].*")) {
+      return;
+    }
+    loadLocalR4CanonicalResources(ctx, packageFolder.getAbsolutePath());
   }
 
   private static void writeMessages(String file, List<ValidationMessage> messages, List<String> sortErrors) throws IOException {

@@ -1,0 +1,623 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-claim-update",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-update",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.48"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASClaimUpdate",
+  "title": "PAS Claim Update",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "This profile defines constraints and extensions used when updating a previously submitted Claim instance.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Claim",
+  "baseDefinition": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Claim",
+        "path": "Claim"
+      },
+      {
+        "id": "Claim.extension:encounter",
+        "path": "Claim.extension",
+        "sliceName": "encounter",
+        "short": "Information about a hospital claim being requested.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/5.0/StructureDefinition/extension-Claim.encounter"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:encounter.extension",
+        "path": "Claim.extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Claim.extension:encounter.value[x]",
+        "path": "Claim.extension.value[x]",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-encounter|2.2.1"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Claim.extension:certificationType",
+        "path": "Claim.extension",
+        "sliceName": "certificationType",
+        "short": "A code representing the type of certification being requested (UM02)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier",
+        "path": "Claim.identifier",
+        "min": 1,
+        "max": "2"
+      },
+      {
+        "id": "Claim.related",
+        "path": "Claim.related",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.related.claim",
+        "path": "Claim.related.claim",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.related.relationship",
+        "path": "Claim.related.relationship",
+        "min": 1,
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/ex-relatedclaimrelationship",
+              "code": "prior"
+            }
+          ]
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo",
+        "path": "Claim.supportingInfo"
+      },
+      {
+        "id": "Claim.supportingInfo.extension",
+        "path": "Claim.supportingInfo.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo.extension:infoChanged",
+        "path": "Claim.supportingInfo.extension",
+        "sliceName": "infoChanged",
+        "short": "A code indicating how the piece of information has changed.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-infoChanged|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo.modifierExtension",
+        "path": "Claim.supportingInfo.modifierExtension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo.modifierExtension:infoCancelledFlag",
+        "path": "Claim.supportingInfo.modifierExtension",
+        "sliceName": "infoCancelledFlag",
+        "short": "Indicates that this piece of information is not to be used.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/modifierextension-infoCancelled|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation",
+        "path": "Claim.supportingInfo",
+        "sliceName": "AdditionalInformation",
+        "short": "Send additional paperwork or supporting information for the request.  This can be most commonly a DocumentReference profile although any type of information is allowed.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation.extension",
+        "path": "Claim.supportingInfo.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation.extension:documentInformation",
+        "path": "Claim.supportingInfo.extension",
+        "sliceName": "documentInformation",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-documentInformation"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes",
+              "code": "additionalInformation"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:AdditionalInformation.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "comment": "Although we allow of any type of information to be sent, when sending reference to documents, the US-Core DocumentReference profile SHOULD be used.",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-documentreference",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-questionnaireresponse|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-lab|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation|7.0.0",
+              "http://hl7.org/fhir/us/core/StructureDefinition/us-core-vital-signs|7.0.0",
+              "http://hl7.org/fhir/StructureDefinition/NutritionOrder",
+              "http://hl7.org/fhir/StructureDefinition/DeviceRequest",
+              "http://hl7.org/fhir/StructureDefinition/Bundle"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:MessageText",
+        "path": "Claim.supportingInfo",
+        "sliceName": "MessageText",
+        "short": "Send text messages to the UMO.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:MessageText.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes",
+              "code": "freeFormMessage"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:MessageText.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:MessageText.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis",
+        "path": "Claim.diagnosis",
+        "short": "Pertinent diagnosis information.  NOTE: Only the first 12 diagnoses can be sent in the X12 request."
+      },
+      {
+        "id": "Claim.diagnosis.extension",
+        "path": "Claim.diagnosis.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.extension:recordedDate",
+        "path": "Claim.diagnosis.extension",
+        "sliceName": "recordedDate",
+        "short": "The date that a diagnosis was recorded. (HIxx-4)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item",
+        "path": "Claim.item",
+        "min": 1,
+        "constraint": [
+          {
+            "key": "ImmediateLevelOfCare",
+            "severity": "error",
+            "human": "If Certification Type is an immediate appeal, then Level of Service Code must be present",
+            "expression": "extension.where(url='http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType' and value.code='1').exists() implies extension.where(url='http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-levelOfServiceCode').exists()",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-update|2.2.1"
+          }
+        ]
+      },
+      {
+        "id": "Claim.item.extension",
+        "path": "Claim.item.extension",
+        "min": 2
+      },
+      {
+        "id": "Claim.item.extension:requestType",
+        "path": "Claim.item.extension",
+        "sliceName": "requestType",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.extension:certificationType",
+        "path": "Claim.item.extension",
+        "sliceName": "certificationType",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.extension:epsdtIndicator",
+        "path": "Claim.item.extension",
+        "sliceName": "epsdtIndicator",
+        "short": "An indicator of whether early and periodic screen for diagnosis and treatment of children is involved.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-epsdtIndicator|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:nursingHomeResidentialStatus",
+        "path": "Claim.item.extension",
+        "sliceName": "nursingHomeResidentialStatus",
+        "short": "A code specifying the status of a nursing home resident at the time of service. (SV209)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeResidentialStatus|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:nursingHomeResidentialStatus.value[x]",
+        "path": "Claim.item.extension.value[x]",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "Codes specifying the status of a nursing home resident at the time of service. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions.",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000F/SV2/1/09/00/1345"
+        }
+      },
+      {
+        "id": "Claim.item.extension:nursingHomeLevelOfCare",
+        "path": "Claim.item.extension",
+        "sliceName": "nursingHomeLevelOfCare",
+        "short": "A code specifying the level of care provided by a nursing home facility. (SV120, SV210)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-nursingHomeLevelOfCare|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:revenueUnitRateLimit",
+        "path": "Claim.item.extension",
+        "sliceName": "revenueUnitRateLimit",
+        "short": "The limit on the rate per unit of revenue for hospital accomodation. (SV206)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-revenueUnitRateLimit|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:requestedService",
+        "path": "Claim.item.extension",
+        "sliceName": "requestedService",
+        "short": "The details of the service being requested.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-requestedService|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:infoChanged",
+        "path": "Claim.item.extension",
+        "sliceName": "infoChanged",
+        "short": "A code indicating how the piece of information has changed.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-infoChanged|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.modifierExtension",
+        "path": "Claim.item.modifierExtension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.item.modifierExtension:infoCancelledFlag",
+        "path": "Claim.item.modifierExtension",
+        "sliceName": "infoCancelledFlag",
+        "short": "Indicates that this piece of information is not to be used.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/modifierextension-infoCancelled|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.category",
+        "path": "Claim.item.category",
+        "short": "Since PAS requests only have item-level information, a category is required for conformance with the X12 278 request.",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.location[x]",
+        "path": "Claim.item.location[x]",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.unitPrice",
+        "path": "Claim.item.unitPrice",
+        "mustSupport": true
+      }
+    ]
+  }
+}

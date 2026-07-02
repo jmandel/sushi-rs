@@ -1,0 +1,98 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Substance-phototherapy-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-phototherapy-twpas",
+  "version": "1.2.3",
+  "name": "SubstancePhototherapyTWPAS",
+  "title": "照光治療總次數-Substance Phototherapy TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此照光治療總次數-Substance Phototherapy TWPAS Profile說明本IG如何進一步定義FHIR的Substance Resource以呈現事前審查中治療資訊之照光治療總次數",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "orim",
+      "uri": "http://hl7.org/orim",
+      "name": "Ontological RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Substance",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Substance",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Substance.meta",
+        "path": "Substance.meta",
+        "min": 1
+      },
+      {
+        "id": "Substance.meta.profile",
+        "path": "Substance.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-phototherapy-twpas"
+      },
+      {
+        "id": "Substance.code",
+        "path": "Substance.code",
+        "short": "照光治療種類",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-phototherapy"
+        }
+      },
+      {
+        "id": "Substance.ingredient",
+        "path": "Substance.ingredient",
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator",
+        "path": "Substance.ingredient.quantity.numerator",
+        "min": 1
+      },
+      {
+        "id": "Substance.ingredient.quantity.numerator.value",
+        "path": "Substance.ingredient.quantity.numerator.value",
+        "short": "照光治療總次數",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Substance.ingredient.substance[x]",
+        "path": "Substance.ingredient.substance[x]",
+        "short": "【因FHIR設計而需必填】",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-phototherapy"
+        }
+      }
+    ]
+  }
+}

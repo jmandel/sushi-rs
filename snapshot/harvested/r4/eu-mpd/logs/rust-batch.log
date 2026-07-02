@@ -1,0 +1,5 @@
+OK rust Dosage-eu-mpd
+OK rust Medication-eu-mpd
+OK rust MedicationDispense-eu-mpd
+OK rust MedicationRequest-eu-mpd
+RUST BATCH: ok=4 failed=0 total=4

@@ -1,0 +1,91 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Specimen-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas",
+  "version": "1.2.3",
+  "name": "SpecimenTWPAS",
+  "title": "基因檢測檢體-Specimen TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此基因檢測檢體-Specimen TWPAS Profile說明本IG如何進一步定義臺灣核心-檢體(TW Core Specimen) Profile以呈現事前審查中基因資訊之檢測檢體相關內容",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Specimen",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Specimen-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Specimen.meta",
+        "path": "Specimen.meta",
+        "min": 1
+      },
+      {
+        "id": "Specimen.meta.profile",
+        "path": "Specimen.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas"
+      },
+      {
+        "id": "Specimen.type",
+        "path": "Specimen.type",
+        "short": "基因檢測檢體類型",
+        "min": 1,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/specime-type"
+        }
+      },
+      {
+        "id": "Specimen.subject",
+        "path": "Specimen.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Specimen.receivedTime",
+        "path": "Specimen.receivedTime",
+        "short": "基因檢測日期",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

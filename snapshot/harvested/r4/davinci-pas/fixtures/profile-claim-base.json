@@ -1,0 +1,1191 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-claim-base",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.46"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASClaimBase",
+  "title": "PAS Claim Base",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "PAS constraints on Claim resource that are common to both the request and the inquiry.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": true,
+  "type": "Claim",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Claim",
+        "path": "Claim",
+        "short": "Preauthorization"
+      },
+      {
+        "id": "Claim.extension",
+        "path": "Claim.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.extension:transmissionIdentifiers",
+        "path": "Claim.extension",
+        "sliceName": "transmissionIdentifiers",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-TransmissionIdentifiers"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:levelOfServiceType",
+        "path": "Claim.extension",
+        "sliceName": "levelOfServiceType",
+        "short": "A code specifying the level of service being requested (UM06)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-levelOfServiceCode|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:conditionCode",
+        "path": "Claim.extension",
+        "sliceName": "conditionCode",
+        "short": "Used to indicate condition codes for various requests for service.",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-conditionCode|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:homeHealthCareInformation",
+        "path": "Claim.extension",
+        "sliceName": "homeHealthCareInformation",
+        "short": "Used to provide required information about home health care services. (CR6)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-homeHealthCareInformation|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:authorizationNumber",
+        "path": "Claim.extension",
+        "sliceName": "authorizationNumber",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizationNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.extension:administrationReferenceNumber",
+        "path": "Claim.extension",
+        "sliceName": "administrationReferenceNumber",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier",
+        "path": "Claim.identifier",
+        "short": "Business identifier for claim",
+        "type": [
+          {
+            "code": "Identifier",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-identifier|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier.system",
+        "path": "Claim.identifier.system",
+        "short": "SHOULD use a scheme of 'urn:trnorg:<TRN03>'"
+      },
+      {
+        "id": "Claim.status",
+        "path": "Claim.status",
+        "short": "This is fixed to active even if the CertificationType is indicating that the Claim is to be cancelled as it reflects that status of this instance and not the overall Claim",
+        "patternCode": "active",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.type",
+        "path": "Claim.type",
+        "short": "This is used as a high-level mapping of the X12 UM03 field",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/ClaimTypes"
+        }
+      },
+      {
+        "id": "Claim.use",
+        "path": "Claim.use",
+        "patternCode": "preauthorization",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.patient",
+        "path": "Claim.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-beneficiary|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.insurer",
+        "path": "Claim.insurer",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-insurer|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.provider",
+        "path": "Claim.provider",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-requestor|2.2.1",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitionerrole|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam",
+        "path": "Claim.careTeam",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "extension('http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-careTeamClaimScope').value.ofType(boolean)"
+            }
+          ],
+          "description": "Slice based on whether the care team member belongs to the overall claim or to an individual claim item.",
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam.extension",
+        "path": "Claim.careTeam.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.careTeam.extension:careTeamClaimScope",
+        "path": "Claim.careTeam.extension",
+        "sliceName": "careTeamClaimScope",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-careTeamClaimScope|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam.sequence",
+        "path": "Claim.careTeam.sequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam.provider",
+        "path": "Claim.careTeam.provider",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-organization|2.2.1",
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-practitionerrole|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam.role",
+        "path": "Claim.careTeam.role",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam.qualification",
+        "path": "Claim.careTeam.qualification",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember",
+        "path": "Claim.careTeam",
+        "sliceName": "OverallClaimMember",
+        "short": "Care Team Providers that are applicable to all services being requested.  NOTE: Only the first 14 can be sent in the X12 Request.",
+        "comment": "NOTE: Only the first 14 can be sent in the X12 Request.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember.extension",
+        "path": "Claim.careTeam.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember.extension:careTeamClaimScope",
+        "path": "Claim.careTeam.extension",
+        "sliceName": "careTeamClaimScope",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-careTeamClaimScope|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember.extension:careTeamClaimScope.value[x]",
+        "path": "Claim.careTeam.extension.value[x]",
+        "fixedBoolean": true,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember.role",
+        "path": "Claim.careTeam.role",
+        "binding": {
+          "strength": "required",
+          "description": "Codes identifying a provider specialty. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions.",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2010EA/NM1/1/01/00/98"
+        }
+      },
+      {
+        "id": "Claim.careTeam:OverallClaimMember.qualification",
+        "path": "Claim.careTeam.qualification",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2010EA/PRV/1/03/00/127"
+        }
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember",
+        "path": "Claim.careTeam",
+        "sliceName": "ItemClaimMember",
+        "short": "Care Team Providers that are applicable to a specific item (as referenced by that item).  NOTE: Only the first 10 can be sent in the X12 Request.",
+        "comment": "NOTE: Only the first 10 can be sent in the X12 Request.",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember.extension",
+        "path": "Claim.careTeam.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember.extension:careTeamClaimScope",
+        "path": "Claim.careTeam.extension",
+        "sliceName": "careTeamClaimScope",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-careTeamClaimScope|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember.extension:careTeamClaimScope.value[x]",
+        "path": "Claim.careTeam.extension.value[x]",
+        "fixedBoolean": false,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember.role",
+        "path": "Claim.careTeam.role",
+        "binding": {
+          "strength": "required",
+          "description": "Codes identifying a provider specialty. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions.",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2010F/NM1/1/01/00/98"
+        }
+      },
+      {
+        "id": "Claim.careTeam:ItemClaimMember.qualification",
+        "path": "Claim.careTeam.qualification",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2010F/PRV/1/03/00/127"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo",
+        "path": "Claim.supportingInfo",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "category"
+            }
+          ],
+          "description": "Slice based on the different types of supporting information that can be included in a authorization request.",
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo.sequence",
+        "path": "Claim.supportingInfo.sequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo.category",
+        "path": "Claim.supportingInfo.category",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/PASSupportingInfoType|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent",
+        "path": "Claim.supportingInfo",
+        "sliceName": "PatientEvent",
+        "short": "Information about the dates of the event that are being requested.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes",
+              "code": "patientEvent"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.timing[x]:timingDate",
+        "path": "Claim.supportingInfo.timing[x]",
+        "sliceName": "timingDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.timing[x]:timingPeriod",
+        "path": "Claim.supportingInfo.timing[x]",
+        "sliceName": "timingPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.timing[x]:timingPeriod.start",
+        "path": "Claim.supportingInfo.timing[x].start",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.timing[x]:timingPeriod.end",
+        "path": "Claim.supportingInfo.timing[x].end",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:PatientEvent.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates",
+        "path": "Claim.supportingInfo",
+        "sliceName": "AdmissionDates",
+        "short": "Information about the admission dates of a hospital admission being requested.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes",
+              "code": "admissionDates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.timing[x]:timingDate",
+        "path": "Claim.supportingInfo.timing[x]",
+        "sliceName": "timingDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.timing[x]:timingPeriod",
+        "path": "Claim.supportingInfo.timing[x]",
+        "sliceName": "timingPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.timing[x]:timingPeriod.start",
+        "path": "Claim.supportingInfo.timing[x].start",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.timing[x]:timingPeriod.end",
+        "path": "Claim.supportingInfo.timing[x].end",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:AdmissionDates.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:DischargeDates",
+        "path": "Claim.supportingInfo",
+        "sliceName": "DischargeDates",
+        "short": "Information about the discharge dates of a hospital admission being requested.",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:DischargeDates.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/us/davinci-pas/CodeSystem/PASTempCodes",
+              "code": "dischargeDates"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:DischargeDates.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:DischargeDates.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.diagnosis",
+        "path": "Claim.diagnosis",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.sequence",
+        "path": "Claim.diagnosis.sequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x]",
+        "path": "Claim.diagnosis.diagnosis[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278DiagnosisCodes|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.type",
+        "path": "Claim.diagnosis.type",
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278DiagnosisType|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.insurance",
+        "path": "Claim.insurance",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.insurance.sequence",
+        "path": "Claim.insurance.sequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.insurance.focal",
+        "path": "Claim.insurance.focal",
+        "patternBoolean": true
+      },
+      {
+        "id": "Claim.insurance.coverage",
+        "path": "Claim.insurance.coverage",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-coverage|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.accident",
+        "path": "Claim.accident",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.accident.date",
+        "path": "Claim.accident.date",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.accident.type",
+        "path": "Claim.accident.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "Codes identifying an accompanying cause of an illness, injury or an accident. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions.",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000E/UM/1/05/01/1362"
+        }
+      },
+      {
+        "id": "Claim.accident.location[x]",
+        "path": "Claim.accident.location[x]",
+        "type": [
+          {
+            "code": "Address"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item",
+        "path": "Claim.item",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension",
+        "path": "Claim.item.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.item.extension:itemTraceNumber",
+        "path": "Claim.item.extension",
+        "sliceName": "itemTraceNumber",
+        "short": "Uniquely identifies this claim item. (2000F-TRN)",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-itemTraceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:authorizationNumber",
+        "path": "Claim.item.extension",
+        "sliceName": "authorizationNumber",
+        "short": "A string assigned by the UMO to an authorized review outcome associated with this service item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-authorizationNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:administrationReferenceNumber",
+        "path": "Claim.item.extension",
+        "sliceName": "administrationReferenceNumber",
+        "short": "A string assigned by the UMO to the original disallowed review outcome associated with this service item.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-administrationReferenceNumber|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:requestType",
+        "path": "Claim.item.extension",
+        "sliceName": "requestType",
+        "short": "A code that identifies the type of service being requested.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-serviceItemRequestType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:certificationType",
+        "path": "Claim.item.extension",
+        "sliceName": "certificationType",
+        "short": "A code representing the type of certification being requested (UM02)",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-certificationType|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.extension:productOrServiceCodeEnd",
+        "path": "Claim.item.extension",
+        "sliceName": "productOrServiceCodeEnd",
+        "short": "Used to provide the last code in a series of codes for the service being requested.",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-productOrServiceCodeEnd|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.sequence",
+        "path": "Claim.item.sequence",
+        "short": "Sequence numbers SHALL stay the same across all instances of the Prior Authorization, eg the Claim, ClaimResponse, ClaimUpdate, ClaimUpdateResponse",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.careTeamSequence",
+        "path": "Claim.item.careTeamSequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.diagnosisSequence",
+        "path": "Claim.item.diagnosisSequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.informationSequence",
+        "path": "Claim.item.informationSequence",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.revenue",
+        "path": "Claim.item.revenue",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/AHANUBCRevenueCodes|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.item.category",
+        "path": "Claim.item.category",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "Codes identifying the classification of service. These codes are listed within an X12 implementation guide (TR3) and maintained by X12. All X12 work products are copyrighted. See their website for licensing terms and conditions.",
+          "valueSet": "https://valueset.x12.org/x217/005010/request/2000F/UM/1/03/00/1365"
+        }
+      },
+      {
+        "id": "Claim.item.productOrService",
+        "path": "Claim.item.productOrService",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceType|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.item.modifier",
+        "path": "Claim.item.modifier",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278RequestedServiceModifierType|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.item.serviced[x]",
+        "path": "Claim.item.serviced[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.serviced[x]:servicedDate",
+        "path": "Claim.item.serviced[x]",
+        "sliceName": "servicedDate",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "date"
+          }
+        ],
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.serviced[x]:servicedPeriod",
+        "path": "Claim.item.serviced[x]",
+        "sliceName": "servicedPeriod",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Period"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.serviced[x]:servicedPeriod.start",
+        "path": "Claim.item.serviced[x].start",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ]
+      },
+      {
+        "id": "Claim.item.serviced[x]:servicedPeriod.end",
+        "path": "Claim.item.serviced[x].end",
+        "constraint": [
+          {
+            "key": "FullDateRule",
+            "severity": "error",
+            "human": "Dates need to be a full date - YYYY-MM-DD",
+            "expression": "$this.toString().length() = 10",
+            "source": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-claim-base|2.2.1"
+          }
+        ]
+      },
+      {
+        "id": "Claim.item.location[x]",
+        "path": "Claim.item.location[x]",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pas/ValueSet/X12278LocationType|2.2.1"
+        }
+      },
+      {
+        "id": "Claim.item.quantity",
+        "path": "Claim.item.quantity",
+        "comment": "For any exchange that must be converted to an X12 request, units SHALL be restricted to international units, days, units, minutes, hours, months, or visits.",
+        "type": [
+          {
+            "code": "Quantity",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-quantity|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

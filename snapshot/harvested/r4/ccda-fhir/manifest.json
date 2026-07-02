@@ -1,0 +1,29 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.ccda#2.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.ccda#2.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.ccda#2.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.ccda",
+    "version": "2.0.0",
+    "canonical": "http://hl7.org/fhir/us/ccda",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.us.core": "6.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.1.0"
+    }
+  },
+  "counts": {
+    "scanned": 0,
+    "harvested": 0,
+    "skipped": 0
+  },
+  "entries": [],
+  "skipped": []
+}

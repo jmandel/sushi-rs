@@ -1,0 +1,8 @@
+OK rust be-ext-administeredProduct
+OK rust be-ext-simple-note
+OK rust be-ext-vaccination-confirmationStatus
+OK rust be-ext-vaccination-originalorder
+OK rust be-ext-vaccination-stock-funding-organization
+OK rust be-ext-vaccination-stock-location
+OK rust be-vaccination
+RUST BATCH: ok=7 failed=0 total=7

@@ -1,0 +1,336 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.davinci-pdex#2.1.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pdex#2.1.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.davinci-pdex#2.1.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.davinci-pdex",
+    "version": "2.1.0",
+    "canonical": "http://hl7.org/fhir/us/davinci-pdex",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.fhir.us.core": "7.0.0",
+      "hl7.fhir.us.core.v610": "6.1.0",
+      "hl7.fhir.us.core.3.1.1": "3.1.1",
+      "hl7.fhir.us.davinci-hrex": "1.1.0",
+      "hl7.fhir.us.carin-bb": "2.1.0",
+      "hl7.fhir.us.davinci-crd": "2.1.0",
+      "hl7.fhir.us.davinci-pas": "2.1.0",
+      "hl7.fhir.us.davinci-atr": "2.1.0",
+      "hl7.fhir.us.davinci-pdex-plan-net": "1.2.0",
+      "hl7.fhir.us.ndh": "1.0.0",
+      "hl7.fhir.us.davinci-dtr": "2.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.terminology.r4": "6.3.0"
+    }
+  },
+  "counts": {
+    "scanned": 37,
+    "harvested": 37,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "DispenseRefill",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/DispenseRefill",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-DispenseRefill.json",
+      "fixture": "fixtures/DispenseRefill.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "PriorAuthorizationUtilization",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/PriorAuthorizationUtilization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-PriorAuthorizationUtilization.json",
+      "fixture": "fixtures/PriorAuthorizationUtilization.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "ProvenanceSourceFrom",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/ProvenanceSourceFrom",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-ProvenanceSourceFrom.json",
+      "fixture": "fixtures/ProvenanceSourceFrom.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-associatedServers",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-associatedServers",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-associatedServers.json",
+      "fixture": "fixtures/base-ext-associatedServers.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-contactpoint-availabletime",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-contactpoint-availabletime",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-contactpoint-availabletime.json",
+      "fixture": "fixtures/base-ext-contactpoint-availabletime.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "base-ext-dynamicRegistration",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-dynamicRegistration",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-dynamicRegistration.json",
+      "fixture": "fixtures/base-ext-dynamicRegistration.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "base-ext-endpoint-rank",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-endpoint-rank",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-rank.json",
+      "fixture": "fixtures/base-ext-endpoint-rank.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-endpoint-usecase",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-endpoint-usecase",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpoint-usecase.json",
+      "fixture": "fixtures/base-ext-endpoint-usecase.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "base-ext-endpointAccessControlMechanism",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-endpointAccessControlMechanism",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-endpointAccessControlMechanism.json",
+      "fixture": "fixtures/base-ext-endpointAccessControlMechanism.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-fhir-ig",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-fhir-ig",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-fhir-ig.json",
+      "fixture": "fixtures/base-ext-fhir-ig.json",
+      "differentialElements": 15
+    },
+    {
+      "id": "base-ext-identifier-status",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-identifier-status",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-identifier-status.json",
+      "fixture": "fixtures/base-ext-identifier-status.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-last-transmission",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-last-transmission",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-last-transmission.json",
+      "fixture": "fixtures/base-ext-last-transmission.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-last-typefilter",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-last-typefilter",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-last-typefilter.json",
+      "fixture": "fixtures/base-ext-last-typefilter.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-last-types",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-last-types",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-last-types.json",
+      "fixture": "fixtures/base-ext-last-types.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-match-parameters",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-match-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-match-parameters.json",
+      "fixture": "fixtures/base-ext-match-parameters.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-members-opted-out",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-members-opted-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-members-opted-out.json",
+      "fixture": "fixtures/base-ext-members-opted-out.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-secureExchangeArtifacts",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-secureExchangeArtifacts",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-secureExchangeArtifacts.json",
+      "fixture": "fixtures/base-ext-secureExchangeArtifacts.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "base-ext-trustFramework",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-trustFramework",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-trustFramework.json",
+      "fixture": "fixtures/base-ext-trustFramework.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "base-ext-verification-status",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-verification-status",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-verification-status.json",
+      "fixture": "fixtures/base-ext-verification-status.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "base-ext-when-adjudicated",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/base-ext-when-adjudicated",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-base-ext-when-adjudicated.json",
+      "fixture": "fixtures/base-ext-when-adjudicated.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-levelOfServiceCode",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/extension-levelOfServiceCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-levelOfServiceCode.json",
+      "fixture": "fixtures/extension-levelOfServiceCode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "extension-reviewAction",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/extension-reviewAction",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-reviewAction.json",
+      "fixture": "fixtures/extension-reviewAction.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "extension-reviewActionCode",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/extension-reviewActionCode",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-extension-reviewActionCode.json",
+      "fixture": "fixtures/extension-reviewActionCode.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mtls-bundle",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/mtls-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-mtls-bundle.json",
+      "fixture": "fixtures/mtls-bundle.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "mtls-endpoint",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/mtls-endpoint",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Endpoint",
+      "source": "StructureDefinition-mtls-endpoint.json",
+      "fixture": "fixtures/mtls-endpoint.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "mtls-organization",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/mtls-organization",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization",
+      "source": "StructureDefinition-mtls-organization.json",
+      "fixture": "fixtures/mtls-organization.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "pdex-device",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-device",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Device",
+      "source": "StructureDefinition-pdex-device.json",
+      "fixture": "fixtures/pdex-device.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "pdex-medicationdispense",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-medicationdispense",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationdispense",
+      "source": "StructureDefinition-pdex-medicationdispense.json",
+      "fixture": "fixtures/pdex-medicationdispense.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "pdex-member-match-group",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-member-match-group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Group",
+      "source": "StructureDefinition-pdex-member-match-group.json",
+      "fixture": "fixtures/pdex-member-match-group.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "pdex-member-no-match-group",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-member-no-match-group",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Group",
+      "source": "StructureDefinition-pdex-member-no-match-group.json",
+      "fixture": "fixtures/pdex-member-no-match-group.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "pdex-mtls-signedobject-extension",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-mtls-signedobject-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-pdex-mtls-signedobject-extension.json",
+      "fixture": "fixtures/pdex-mtls-signedobject-extension.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "pdex-parameters-multi-member-match-bundle-in",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-parameters-multi-member-match-bundle-in",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-pdex-parameters-multi-member-match-bundle-in.json",
+      "fixture": "fixtures/pdex-parameters-multi-member-match-bundle-in.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "pdex-parameters-multi-member-match-bundle-out",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-parameters-multi-member-match-bundle-out",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-pdex-parameters-multi-member-match-bundle-out.json",
+      "fixture": "fixtures/pdex-parameters-multi-member-match-bundle-out.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "pdex-priorauthorization",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-priorauthorization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ExplanationOfBenefit",
+      "source": "StructureDefinition-pdex-priorauthorization.json",
+      "fixture": "fixtures/pdex-priorauthorization.json",
+      "differentialElements": 60
+    },
+    {
+      "id": "pdex-provenance",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-provenance",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-provenance",
+      "source": "StructureDefinition-pdex-provenance.json",
+      "fixture": "fixtures/pdex-provenance.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "pdex-provider-consent",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-provider-consent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Consent",
+      "source": "StructureDefinition-pdex-provider-consent.json",
+      "fixture": "fixtures/pdex-provider-consent.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "pdex-provider-group",
+      "url": "http://hl7.org/fhir/us/davinci-pdex/StructureDefinition/pdex-provider-group",
+      "baseDefinition": "http://hl7.org/fhir/us/davinci-atr/StructureDefinition/atr-group",
+      "source": "StructureDefinition-pdex-provider-group.json",
+      "fixture": "fixtures/pdex-provider-group.json",
+      "differentialElements": 11
+    }
+  ],
+  "skipped": []
+}

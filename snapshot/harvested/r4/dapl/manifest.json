@@ -1,0 +1,239 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.us.dapl#1.0.0-ballot",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.dapl#1.0.0-ballot/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.us.dapl#1.0.0-ballot/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.us.dapl",
+    "version": "1.0.0-ballot",
+    "canonical": "http://hl7.org/fhir/us/dapl",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.us.core": "8.0.1",
+      "us.nlm.vsac": "0.24.0"
+    }
+  },
+  "counts": {
+    "scanned": 26,
+    "harvested": 26,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "dapl-age-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-age-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-age-extension.json",
+      "fixture": "fixtures/dapl-age-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "dapl-anonymized-dataset",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-anonymized-dataset",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MeasureReport",
+      "source": "StructureDefinition-dapl-anonymized-dataset.json",
+      "fixture": "fixtures/dapl-anonymized-dataset.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "dapl-clinical-result-observation",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-clinical-result-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-dapl-clinical-result-observation.json",
+      "fixture": "fixtures/dapl-clinical-result-observation.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "dapl-coverage",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-coverage",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Coverage",
+      "source": "StructureDefinition-dapl-coverage.json",
+      "fixture": "fixtures/dapl-coverage.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "dapl-deidentified-adverseevent",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-adverseevent",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AdverseEvent",
+      "source": "StructureDefinition-dapl-deidentified-adverseevent.json",
+      "fixture": "fixtures/dapl-deidentified-adverseevent.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "dapl-deidentified-allergyintolerance",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-allergyintolerance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AllergyIntolerance",
+      "source": "StructureDefinition-dapl-deidentified-allergyintolerance.json",
+      "fixture": "fixtures/dapl-deidentified-allergyintolerance.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "dapl-deidentified-encounter",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-encounter",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Encounter",
+      "source": "StructureDefinition-dapl-deidentified-encounter.json",
+      "fixture": "fixtures/dapl-deidentified-encounter.json",
+      "differentialElements": 27
+    },
+    {
+      "id": "dapl-deidentified-instant-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-instant-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-deidentified-instant-extension.json",
+      "fixture": "fixtures/dapl-deidentified-instant-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "dapl-deidentified-location",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-location",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Location",
+      "source": "StructureDefinition-dapl-deidentified-location.json",
+      "fixture": "fixtures/dapl-deidentified-location.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "dapl-deidentified-organization",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-organization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Organization",
+      "source": "StructureDefinition-dapl-deidentified-organization.json",
+      "fixture": "fixtures/dapl-deidentified-organization.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "dapl-deidentified-patient",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-patient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+      "source": "StructureDefinition-dapl-deidentified-patient.json",
+      "fixture": "fixtures/dapl-deidentified-patient.json",
+      "differentialElements": 27
+    },
+    {
+      "id": "dapl-deidentified-relatedperson",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-deidentified-relatedperson",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/RelatedPerson",
+      "source": "StructureDefinition-dapl-deidentified-relatedperson.json",
+      "fixture": "fixtures/dapl-deidentified-relatedperson.json",
+      "differentialElements": 16
+    },
+    {
+      "id": "dapl-diagnosis",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-diagnosis",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Condition",
+      "source": "StructureDefinition-dapl-diagnosis.json",
+      "fixture": "fixtures/dapl-diagnosis.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "dapl-ethnicity-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-ethnicity-extension",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity",
+      "source": "StructureDefinition-dapl-ethnicity-extension.json",
+      "fixture": "fixtures/dapl-ethnicity-extension.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "dapl-event-recorded-datetime-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-event-recorded-datetime-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-event-recorded-datetime-extension.json",
+      "fixture": "fixtures/dapl-event-recorded-datetime-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "dapl-immunization",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-immunization",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Immunization",
+      "source": "StructureDefinition-dapl-immunization.json",
+      "fixture": "fixtures/dapl-immunization.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "dapl-income-observation",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-income-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-dapl-income-observation.json",
+      "fixture": "fixtures/dapl-income-observation.json",
+      "differentialElements": 10
+    },
+    {
+      "id": "dapl-lab-observation",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-lab-observation",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+      "source": "StructureDefinition-dapl-lab-observation.json",
+      "fixture": "fixtures/dapl-lab-observation.json",
+      "differentialElements": 19
+    },
+    {
+      "id": "dapl-measure-stratifier-component-value-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-measure-stratifier-component-value-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-measure-stratifier-component-value-extension.json",
+      "fixture": "fixtures/dapl-measure-stratifier-component-value-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "dapl-medicationrequest",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-medicationrequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-dapl-medicationrequest.json",
+      "fixture": "fixtures/dapl-medicationrequest.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "dapl-medicationstatement",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-medicationstatement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "source": "StructureDefinition-dapl-medicationstatement.json",
+      "fixture": "fixtures/dapl-medicationstatement.json",
+      "differentialElements": 11
+    },
+    {
+      "id": "dapl-procedure",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-procedure",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Procedure",
+      "source": "StructureDefinition-dapl-procedure.json",
+      "fixture": "fixtures/dapl-procedure.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "dapl-race-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-race-extension",
+      "baseDefinition": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race",
+      "source": "StructureDefinition-dapl-race-extension.json",
+      "fixture": "fixtures/dapl-race-extension.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "dapl-recordedDate-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-recordedDate-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-recordedDate-extension.json",
+      "fixture": "fixtures/dapl-recordedDate-extension.json",
+      "differentialElements": 3
+    },
+    {
+      "id": "dapl-servicerequest",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-servicerequest",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ServiceRequest",
+      "source": "StructureDefinition-dapl-servicerequest.json",
+      "fixture": "fixtures/dapl-servicerequest.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "dapl-sex-extension",
+      "url": "http://hl7.org/fhir/us/dapl/StructureDefinition/dapl-sex-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-dapl-sex-extension.json",
+      "fixture": "fixtures/dapl-sex-extension.json",
+      "differentialElements": 3
+    }
+  ],
+  "skipped": []
+}

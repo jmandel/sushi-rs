@@ -1,0 +1,283 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "plannet-InsurancePlan",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ImplementationGuide/hl7.fhir.us.davinci-pdex-plan-net"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-InsurancePlan",
+  "version": "1.2.0",
+  "name": "PlannetInsurancePlan",
+  "title": "Plan-Net InsurancePlan",
+  "status": "active",
+  "date": "2025-02-25T19:12:27+00:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fm@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "An InsurancePlan is a discrete package of health insurance coverage benefits that are offered under a particular network type. A given payer’s products typically differ by network type and/or covered benefits. A plan pairs a product’s covered benefits with the particular cost sharing structure offered to a consumer. A given product may comprise multiple plans (i.e. each plan offers different cost sharing requirements for the same set of covered benefits).\n\nInsurancePlan describes a health insurance offering comprised of a list of covered benefits (i.e. the product), costs associated with those benefits (i.e. the plan), and additional information about the offering, such as who it is owned and administered by, a coverage area, contact information, etc.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "InsurancePlan",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/InsurancePlan",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "InsurancePlan",
+        "path": "InsurancePlan",
+        "constraint": [
+          {
+            "key": "network-or-plan-Network",
+            "severity": "error",
+            "human": "If an insuranceplan does not define a network, then each plan must define one",
+            "expression": "network.exists() or plan.network.exists()",
+            "source": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-InsurancePlan"
+          },
+          {
+            "key": "plan-type-is-distinct",
+            "severity": "error",
+            "human": "Each InsurancePlan.plan should have a distinct plan.type.",
+            "expression": "plan.type.coding.code.isDistinct()",
+            "source": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-InsurancePlan"
+          }
+        ]
+      },
+      {
+        "id": "InsurancePlan.identifier.type",
+        "path": "InsurancePlan.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.identifier.value",
+        "path": "InsurancePlan.identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.identifier.assigner",
+        "path": "InsurancePlan.identifier.assigner",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.status",
+        "path": "InsurancePlan.status",
+        "min": 1,
+        "fixedCode": "active",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.type",
+        "path": "InsurancePlan.type",
+        "short": "Product Type",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/InsuranceProductTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.name",
+        "path": "InsurancePlan.name",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.alias",
+        "path": "InsurancePlan.alias",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.period",
+        "path": "InsurancePlan.period",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.ownedBy",
+        "path": "InsurancePlan.ownedBy",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.administeredBy",
+        "path": "InsurancePlan.administeredBy",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.coverageArea",
+        "path": "InsurancePlan.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact",
+        "path": "InsurancePlan.contact",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.name",
+        "path": "InsurancePlan.contact.name",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.name.text",
+        "path": "InsurancePlan.contact.name.text",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom",
+        "path": "InsurancePlan.contact.telecom",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom.system",
+        "path": "InsurancePlan.contact.telecom.system",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.contact.telecom.value",
+        "path": "InsurancePlan.contact.telecom.value",
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.endpoint",
+        "path": "InsurancePlan.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.network",
+        "path": "InsurancePlan.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Network"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan",
+        "path": "InsurancePlan.plan",
+        "short": "Cost sharing details for the plan"
+      },
+      {
+        "id": "InsurancePlan.plan.type",
+        "path": "InsurancePlan.plan.type",
+        "short": "Categorization of the cost sharing for the plan",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/InsurancePlanTypeVS"
+        }
+      },
+      {
+        "id": "InsurancePlan.plan.coverageArea",
+        "path": "InsurancePlan.plan.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "InsurancePlan.plan.network",
+        "path": "InsurancePlan.plan.network",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Network"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

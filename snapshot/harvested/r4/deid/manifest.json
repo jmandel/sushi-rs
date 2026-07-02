@@ -1,0 +1,42 @@
+{
+  "source": "package",
+  "package": "ihe.iti.deid#2.0.0-comment",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.deid#2.0.0-comment/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.deid#2.0.0-comment/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "ihe.iti.deid",
+    "version": "2.0.0-comment",
+    "canonical": "https://profiles.ihe.net/ITI/DeId",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "ihe.iti.balp": "1.1.4",
+      "hl7.fhir.uv.ips": "2.0.0",
+      "ihe.pcc.odh": "1.0.0",
+      "hl7.fhir.us.vr-common-library": "2.0.0",
+      "hl7.fhir.us.vrdr": "3.0.0"
+    }
+  },
+  "counts": {
+    "scanned": 1,
+    "harvested": 1,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "IHE.BasicAudit.DeIdentification.Source",
+      "url": "https://profiles.ihe.net/ITI/DeId/StructureDefinition/IHE.BasicAudit.DeIdentification.Source",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/AuditEvent",
+      "source": "StructureDefinition-IHE.BasicAudit.DeIdentification.Source.json",
+      "fixture": "fixtures/IHE.BasicAudit.DeIdentification.Source.json",
+      "differentialElements": 35
+    }
+  ],
+  "skipped": []
+}

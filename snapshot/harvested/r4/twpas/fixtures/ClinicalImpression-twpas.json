@@ -1,0 +1,98 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ClinicalImpression-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClinicalImpression-twpas",
+  "version": "1.2.3",
+  "name": "ClinicalImpressionTWPAS",
+  "title": "評估-ClinicalImpression TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此評估-ClinicalImpression TWPAS Profile說明本IG如何進一步定義FHIR的ClinicalImpression Resource以呈現免疫製劑事前審查之評估（A）",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "ClinicalImpression",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClinicalImpression",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ClinicalImpression.meta",
+        "path": "ClinicalImpression.meta",
+        "min": 1
+      },
+      {
+        "id": "ClinicalImpression.meta.profile",
+        "path": "ClinicalImpression.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClinicalImpression-twpas"
+      },
+      {
+        "id": "ClinicalImpression.subject",
+        "path": "ClinicalImpression.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ClinicalImpression.encounter",
+        "path": "ClinicalImpression.encounter",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-opd-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ClinicalImpression.summary",
+        "path": "ClinicalImpression.summary",
+        "short": "評估，由醫院自行填寫。",
+        "min": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+warning: Supported source version 'RELEASE_6' from annotation processor 'org.eclipse.sisu.scanners.index.SisuIndexAPT6' less than -source '17'
+Note: /home/jmandel/hobby/sushi-rs-snapshot/snapshot/oracle/SnapOracleR4.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+Can't find Identifier profile http://hl7.org.au/fhir/StructureDefinition/au-medicareprovidernumber but trying to go on
+OK r4 publisher-path output=r5 sort=true snapshot.element=51 messages=0 sortErrors=0

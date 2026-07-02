@@ -1,0 +1,64 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.eu.mpd#1.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.eu.mpd#1.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.eu.mpd#1.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.eu.mpd",
+    "version": "1.0.0",
+    "canonical": "http://hl7.eu/fhir/mpd",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.2.0",
+      "hl7.fhir.eu.base": "2.0.0",
+      "hl7.fhir.uv.xver-r5.r4": "0.1.0",
+      "ihe.pharm.mpd.r4": "1.0.0-comment-2"
+    }
+  },
+  "counts": {
+    "scanned": 4,
+    "harvested": 4,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "Dosage-eu-mpd",
+      "url": "http://hl7.eu/fhir/mpd/StructureDefinition/Dosage-eu-mpd",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Dosage",
+      "source": "StructureDefinition-Dosage-eu-mpd.json",
+      "fixture": "fixtures/Dosage-eu-mpd.json",
+      "differentialElements": 20
+    },
+    {
+      "id": "Medication-eu-mpd",
+      "url": "http://hl7.eu/fhir/mpd/StructureDefinition/Medication-eu-mpd",
+      "baseDefinition": "http://hl7.eu/fhir/base/StructureDefinition/medication-eu-core",
+      "source": "StructureDefinition-Medication-eu-mpd.json",
+      "fixture": "fixtures/Medication-eu-mpd.json",
+      "differentialElements": 8
+    },
+    {
+      "id": "MedicationDispense-eu-mpd",
+      "url": "http://hl7.eu/fhir/mpd/StructureDefinition/MedicationDispense-eu-mpd",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationDispense",
+      "source": "StructureDefinition-MedicationDispense-eu-mpd.json",
+      "fixture": "fixtures/MedicationDispense-eu-mpd.json",
+      "differentialElements": 13
+    },
+    {
+      "id": "MedicationRequest-eu-mpd",
+      "url": "http://hl7.eu/fhir/mpd/StructureDefinition/MedicationRequest-eu-mpd",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-MedicationRequest-eu-mpd.json",
+      "fixture": "fixtures/MedicationRequest-eu-mpd.json",
+      "differentialElements": 32
+    }
+  ],
+  "skipped": []
+}

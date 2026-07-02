@@ -1,0 +1,16 @@
+warning: Supported source version 'RELEASE_6' from annotation processor 'org.eclipse.sisu.scanners.index.SisuIndexAPT6' less than -source '17'
+Note: /home/jmandel/hobby/sushi-rs-snapshot/snapshot/oracle/SnapOracleR4.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+Exception generating snapshot for https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-request|1.3.2: Reference to invalid version in extension url http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationRequest.renderedDosageInstruction
+Exception in thread "main" org.hl7.fhir.exceptions.FHIRException: Reference to invalid version in extension url http://hl7.org/fhir/5.0/StructureDefinition/extension-MedicationRequest.renderedDosageInstruction
+	at org.hl7.fhir.r5.conformance.profile.ProfileUtilities.updateFromDefinition(ProfileUtilities.java:2631)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processSimplePathWithOneMatchingElementInDifferential(ProfilePathProcessor.java:813)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processSimplePath(ProfilePathProcessor.java:297)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processPaths(ProfilePathProcessor.java:209)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processSimplePathDefault(ProfilePathProcessor.java:443)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processSimplePath(ProfilePathProcessor.java:301)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processPaths(ProfilePathProcessor.java:209)
+	at org.hl7.fhir.r5.conformance.profile.ProfilePathProcessor.processPaths(ProfilePathProcessor.java:181)
+	at org.hl7.fhir.r5.conformance.profile.ProfileUtilities.generateSnapshot(ProfileUtilities.java:839)
+	at SnapOracleR4.main(SnapOracleR4.java:90)

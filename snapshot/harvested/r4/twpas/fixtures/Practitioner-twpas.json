@@ -1,0 +1,126 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Practitioner-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas",
+  "version": "1.2.3",
+  "name": "PractitionerTWPAS",
+  "title": "醫事人員-Practitioner TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此醫事人員-Practitioner TWPAS Profile說明本IG如何進一步定義臺灣核心-健康照護服務提供者(TW Core Practitioner) Profile以呈現事前審查之申請醫師、簽發影像報告醫師、簽發癌症分期報告醫師、檢查報告醫師、簽發檢驗(查)報告醫事人員、評估項目醫事人員及免疫製劑事前審查之門診醫師基本資料",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "servd",
+      "uri": "http://www.omg.org/spec/ServD/1.0/",
+      "name": "ServD"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Practitioner",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/emr/StructureDefinition/TWCorePractitioner",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Practitioner.meta",
+        "path": "Practitioner.meta",
+        "min": 1
+      },
+      {
+        "id": "Practitioner.meta.profile",
+        "path": "Practitioner.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+      },
+      {
+        "id": "Practitioner.identifier",
+        "path": "Practitioner.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "type.coding.code"
+            },
+            {
+              "type": "value",
+              "path": "type.coding.system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "2"
+      },
+      {
+        "id": "Practitioner.identifier:idCardNumber",
+        "path": "Practitioner.identifier",
+        "sliceName": "idCardNumber",
+        "short": "醫師身分證號"
+      },
+      {
+        "id": "Practitioner.identifier:idCardNumber.system",
+        "path": "Practitioner.identifier.system",
+        "short": "身分證號的命名空間（namespace），請固定填「http://www.moi.gov.tw」。"
+      },
+      {
+        "id": "Practitioner.identifier:passportNumber",
+        "path": "Practitioner.identifier",
+        "sliceName": "passportNumber",
+        "max": "0"
+      },
+      {
+        "id": "Practitioner.identifier:residentNumber",
+        "path": "Practitioner.identifier",
+        "sliceName": "residentNumber",
+        "short": "醫師居留證號碼"
+      },
+      {
+        "id": "Practitioner.identifier:residentNumber.system",
+        "path": "Practitioner.identifier.system",
+        "short": "居留證號碼的命名空間（namespace），請固定填「http://www.immigration.gov.tw」。"
+      },
+      {
+        "id": "Practitioner.identifier:medicalLicenseNumber",
+        "path": "Practitioner.identifier",
+        "sliceName": "medicalLicenseNumber",
+        "short": "醫師證號"
+      },
+      {
+        "id": "Practitioner.identifier:medicalLicenseNumber.system",
+        "path": "Practitioner.identifier.system",
+        "short": "醫師證號的命名空間（namespace），請固定填「https://dep.mohw.gov.tw/DOMA」。",
+        "patternUri": "https://dep.mohw.gov.tw/DOMA"
+      }
+    ]
+  }
+}

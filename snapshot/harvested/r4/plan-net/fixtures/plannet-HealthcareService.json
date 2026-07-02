@@ -1,0 +1,353 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "plannet-HealthcareService",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ImplementationGuide/hl7.fhir.us.davinci-pdex-plan-net"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-HealthcareService",
+  "version": "1.2.0",
+  "name": "PlannetHealthcareService",
+  "title": "Plan-Net HealthcareService",
+  "status": "active",
+  "date": "2025-02-25T19:12:27+00:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fm@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "The HealthCareService resource typically describes services offered by an organization/practitioner at a location. The resource may be used to encompass a variety of services covering the entire healthcare spectrum, including promotion, prevention, diagnostics, pharmacy, hospital and ambulatory care, home care, long-term care, and other health-related and community services.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "HealthcareService",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/HealthcareService",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "HealthcareService",
+        "path": "HealthcareService"
+      },
+      {
+        "id": "HealthcareService.extension",
+        "path": "HealthcareService.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "HealthcareService.extension:newpatients",
+        "path": "HealthcareService.extension",
+        "sliceName": "newpatients",
+        "short": "New Patients",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/newpatients"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.extension:deliverymethod",
+        "path": "HealthcareService.extension",
+        "sliceName": "deliverymethod",
+        "short": "Delivery Method",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/delivery-method"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.identifier.type",
+        "path": "HealthcareService.identifier.type",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.identifier.value",
+        "path": "HealthcareService.identifier.value",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.active",
+        "path": "HealthcareService.active",
+        "min": 1,
+        "patternBoolean": true,
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.providedBy",
+        "path": "HealthcareService.providedBy",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Organization"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.category",
+        "path": "HealthcareService.category",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "$this"
+            }
+          ],
+          "description": "Slice based on $this value",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.category:plan-net-category",
+        "path": "HealthcareService.category",
+        "sliceName": "plan-net-category",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/HealthcareServiceCategoryVS"
+        }
+      },
+      {
+        "id": "HealthcareService.type",
+        "path": "HealthcareService.type",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/HealthcareServiceTypeVS"
+        }
+      },
+      {
+        "id": "HealthcareService.specialty",
+        "path": "HealthcareService.specialty",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-pdex-plan-net/ValueSet/SpecialtiesVS"
+        }
+      },
+      {
+        "id": "HealthcareService.location",
+        "path": "HealthcareService.location",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.name",
+        "path": "HealthcareService.name",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.comment",
+        "path": "HealthcareService.comment",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.telecom",
+        "path": "HealthcareService.telecom",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.telecom.extension:contactpoint-availabletime",
+        "path": "HealthcareService.telecom.extension",
+        "sliceName": "contactpoint-availabletime",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/contactpoint-availabletime"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.telecom.extension:via-intermediary",
+        "path": "HealthcareService.telecom.extension",
+        "sliceName": "via-intermediary",
+        "short": "Via Intermediary",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/via-intermediary"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.telecom.system",
+        "path": "HealthcareService.telecom.system",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.telecom.value",
+        "path": "HealthcareService.telecom.value",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.coverageArea",
+        "path": "HealthcareService.coverageArea",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Location"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.appointmentRequired",
+        "path": "HealthcareService.appointmentRequired",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availableTime",
+        "path": "HealthcareService.availableTime",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availableTime.daysOfWeek",
+        "path": "HealthcareService.availableTime.daysOfWeek",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availableTime.allDay",
+        "path": "HealthcareService.availableTime.allDay",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availableTime.availableStartTime",
+        "path": "HealthcareService.availableTime.availableStartTime",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availableTime.availableEndTime",
+        "path": "HealthcareService.availableTime.availableEndTime",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.notAvailable",
+        "path": "HealthcareService.notAvailable",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.notAvailable.description",
+        "path": "HealthcareService.notAvailable.description",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.notAvailable.during",
+        "path": "HealthcareService.notAvailable.during",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.availabilityExceptions",
+        "path": "HealthcareService.availabilityExceptions",
+        "mustSupport": true
+      },
+      {
+        "id": "HealthcareService.endpoint",
+        "path": "HealthcareService.endpoint",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/plannet-Endpoint"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

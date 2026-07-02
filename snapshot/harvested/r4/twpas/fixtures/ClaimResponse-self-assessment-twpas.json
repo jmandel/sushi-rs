@@ -1,0 +1,210 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "ClaimResponse-self-assessment-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClaimResponse-self-assessment-twpas",
+  "version": "1.2.3",
+  "name": "ClaimResponseSelfAssessmentTWPAS",
+  "title": "自主審查-ClaimResponse Self Assessment TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此自主審查-ClaimResponse TWPAS Profile說明本IG如何進一步定義FHIR的ClaimResponse Resource以呈現自主審查之內容。 \r\n  \r\n現行開放自主事前審查項目僅有心臟及肝臟移植，若醫院要自主事前審查需向健保署申請，通過後，健保署會於署內系統維護，具有此資格之院所才可填報自主審查。",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "ClaimResponse",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/ClaimResponse",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "ClaimResponse.meta",
+        "path": "ClaimResponse.meta",
+        "min": 1
+      },
+      {
+        "id": "ClaimResponse.meta.profile",
+        "path": "ClaimResponse.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClaimResponse-self-assessment-twpas"
+      },
+      {
+        "id": "ClaimResponse.extension",
+        "path": "ClaimResponse.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "ClaimResponse.extension:requestor",
+        "path": "ClaimResponse.extension",
+        "sliceName": "requestor",
+        "short": "審查委員身分證號",
+        "min": 1,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claimResponse-requestor"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.status",
+        "path": "ClaimResponse.status",
+        "patternCode": "active"
+      },
+      {
+        "id": "ClaimResponse.type",
+        "path": "ClaimResponse.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/claim-type",
+              "code": "institutional"
+            }
+          ]
+        }
+      },
+      {
+        "id": "ClaimResponse.use",
+        "path": "ClaimResponse.use",
+        "patternCode": "preauthorization"
+      },
+      {
+        "id": "ClaimResponse.patient",
+        "path": "ClaimResponse.patient",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ClaimResponse.created",
+        "path": "ClaimResponse.created",
+        "short": "核定日期。若申請案件類別為3時須填寫。YYYY-MM-DD，西元年月日。",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.insurer",
+        "path": "ClaimResponse.insurer",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Organization-govt-twcore"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ClaimResponse.disposition",
+        "path": "ClaimResponse.disposition",
+        "short": "核定意見",
+        "mustSupport": true
+      },
+      {
+        "id": "ClaimResponse.item",
+        "path": "ClaimResponse.item",
+        "min": 1
+      },
+      {
+        "id": "ClaimResponse.item.itemSequence",
+        "path": "ClaimResponse.item.itemSequence",
+        "short": "請填寫對應的Claim.item.sequence"
+      },
+      {
+        "id": "ClaimResponse.item.adjudication",
+        "path": "ClaimResponse.item.adjudication",
+        "max": "1"
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.category",
+        "path": "ClaimResponse.item.adjudication.category",
+        "short": "【因FHIR設計而需必填】"
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.category.coding.system",
+        "path": "ClaimResponse.item.adjudication.category.coding.system",
+        "example": [
+          {
+            "label": "General",
+            "valueUri": "http://terminology.hl7.org/CodeSystem/adjudication"
+          }
+        ]
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.category.coding.code",
+        "path": "ClaimResponse.item.adjudication.category.coding.code",
+        "example": [
+          {
+            "label": "General",
+            "valueString": "submitted"
+          }
+        ]
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.reason",
+        "path": "ClaimResponse.item.adjudication.reason",
+        "short": "個別醫令核定註記。0:審核中 | 1:同意 | 2:不予同意 | 3:部份同意 | 4:補件 | 5:退件 | 6:不予同意:對應手術亦不支付 | 7:改核:如審查核定意見",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-approve-item-comment"
+        }
+      },
+      {
+        "id": "ClaimResponse.item.adjudication.value",
+        "path": "ClaimResponse.item.adjudication.value",
+        "short": "個別審查結果數量，若申請案件類別為3時須填寫。",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-administeredProduct.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-administeredProduct.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-simple-note.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-simple-note.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-vaccination-confirmationStatus.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-vaccination-confirmationStatus.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-vaccination-originalorder.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-vaccination-originalorder.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-vaccination-stock-funding-organization.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-vaccination-stock-funding-organization.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-ext-vaccination-stock-location.json	snapshot/harvested/r4/be-vaccination/rust/be-ext-vaccination-stock-location.snapshot.json
+snapshot/harvested/r4/be-vaccination/fixtures/be-vaccination.json	snapshot/harvested/r4/be-vaccination/rust/be-vaccination.snapshot.json

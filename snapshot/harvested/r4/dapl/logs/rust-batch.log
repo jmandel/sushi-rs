@@ -1,0 +1,27 @@
+OK rust dapl-age-extension
+OK rust dapl-anonymized-dataset
+OK rust dapl-clinical-result-observation
+OK rust dapl-coverage
+OK rust dapl-deidentified-adverseevent
+OK rust dapl-deidentified-allergyintolerance
+OK rust dapl-deidentified-encounter
+OK rust dapl-deidentified-instant-extension
+OK rust dapl-deidentified-location
+OK rust dapl-deidentified-organization
+OK rust dapl-deidentified-patient
+OK rust dapl-deidentified-relatedperson
+OK rust dapl-diagnosis
+OK rust dapl-ethnicity-extension
+OK rust dapl-event-recorded-datetime-extension
+OK rust dapl-immunization
+OK rust dapl-income-observation
+OK rust dapl-lab-observation
+OK rust dapl-measure-stratifier-component-value-extension
+OK rust dapl-medicationrequest
+OK rust dapl-medicationstatement
+OK rust dapl-procedure
+OK rust dapl-race-extension
+OK rust dapl-recordedDate-extension
+OK rust dapl-servicerequest
+OK rust dapl-sex-extension
+RUST BATCH: ok=26 failed=0 total=26

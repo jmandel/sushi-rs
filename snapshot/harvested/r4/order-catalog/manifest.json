@@ -1,0 +1,168 @@
+{
+  "source": "package",
+  "package": "hl7.fhir.uv.order-catalog#1.0.0",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.order-catalog#1.0.0/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/hl7.fhir.uv.order-catalog#1.0.0/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "hl7.fhir.uv.order-catalog",
+    "version": "1.0.0",
+    "canonical": "http://hl7.org/fhir/uv/order-catalog",
+    "fhirVersions": [
+      "5.0.0"
+    ],
+    "dependencies": {
+      "hl7.terminology.r5": "7.1.0",
+      "hl7.fhir.uv.extensions.r5": "5.3.0"
+    }
+  },
+  "counts": {
+    "scanned": 28,
+    "harvested": 0,
+    "skipped": 28
+  },
+  "entries": [],
+  "skipped": [
+    {
+      "id": "BillingSummary",
+      "source": "StructureDefinition-BillingSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "Catalog",
+      "source": "StructureDefinition-Catalog.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CatalogHeader",
+      "source": "StructureDefinition-CatalogHeader.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CatalogMessageDefinition",
+      "source": "StructureDefinition-CatalogMessageDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "CatalogReference",
+      "source": "StructureDefinition-CatalogReference.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ContraindicationDefinition",
+      "source": "StructureDefinition-ContraindicationDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DeviceModel",
+      "source": "StructureDefinition-DeviceModel.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DrugKnowledge",
+      "source": "StructureDefinition-DrugKnowledge.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "DrugPackage",
+      "source": "StructureDefinition-DrugPackage.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "IndicationDefinition",
+      "source": "StructureDefinition-IndicationDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InputObservationDefinition",
+      "source": "StructureDefinition-InputObservationDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "InteractionDefinition",
+      "source": "StructureDefinition-InteractionDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ItemTransactionRequest",
+      "source": "StructureDefinition-ItemTransactionRequest.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ItemTransactionResponse",
+      "source": "StructureDefinition-ItemTransactionResponse.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LabChargeItemDefinition",
+      "source": "StructureDefinition-LabChargeItemDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LabObservationDefinition",
+      "source": "StructureDefinition-LabObservationDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LabProcedureDefinition",
+      "source": "StructureDefinition-LabProcedureDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LabServiceDefinition",
+      "source": "StructureDefinition-LabServiceDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LabSpecimenDefinition",
+      "source": "StructureDefinition-LabSpecimenDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "LimitationSummary",
+      "source": "StructureDefinition-LimitationSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "RegulatorySummary",
+      "source": "StructureDefinition-RegulatorySummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ResultInterpretationSummary",
+      "source": "StructureDefinition-ResultInterpretationSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ScheduleSummary",
+      "source": "StructureDefinition-ScheduleSummary.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ServiceBillingCode",
+      "source": "StructureDefinition-ServiceBillingCode.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "SpecimenRequested",
+      "source": "StructureDefinition-SpecimenRequested.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "UndesirableEffectDefinition",
+      "source": "StructureDefinition-UndesirableEffectDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "ValidityPeriod",
+      "source": "StructureDefinition-ValidityPeriod.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    },
+    {
+      "id": "WarningDefinition",
+      "source": "StructureDefinition-WarningDefinition.json",
+      "reason": "not R4 fhirVersion: 5.0.0"
+    }
+  ]
+}

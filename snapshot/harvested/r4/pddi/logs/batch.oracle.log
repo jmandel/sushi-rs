@@ -1,0 +1,6 @@
+warning: Supported source version 'RELEASE_6' from annotation processor 'org.eclipse.sisu.scanners.index.SisuIndexAPT6' less than -source '17'
+Note: /home/jmandel/hobby/sushi-rs-snapshot/snapshot/oracle/SnapOracleR4.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+OK oracle pddi-cds-configuration-options snapshot.element=25 messages=0 sortErrors=0
+R4 ORACLE BATCH (native-r5): ok=1 failed=0 total=1

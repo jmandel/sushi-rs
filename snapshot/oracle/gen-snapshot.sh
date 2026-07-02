@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: snapshot/oracle/gen-snapshot.sh [--r4|--r5] [--sort|--direct] [--native-r5|--output-r5|--output-r4] [--local-dir <dir>] <input.json> <out.json> [pkg#ver ...]" >&2
+  echo "usage: snapshot/oracle/gen-snapshot.sh [--r4|--r5] [--sort|--direct] [--native-r5|--output-r5|--output-r4] [--local-dir <dir>] [--batch-list <tsv>] <input.json> <out.json> [pkg#ver ...]" >&2
   exit 2
 }
 
@@ -10,6 +10,7 @@ MODE="sort"
 FHIR_VERSION="r5"
 OUTPUT_MODE=""
 LOCAL_DIR=""
+BATCH_LIST=""
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --r4) FHIR_VERSION="r4"; shift ;;
@@ -19,12 +20,20 @@ while [[ "${1:-}" == --* ]]; do
     --native-r5|--output-r5) OUTPUT_MODE="r5"; shift ;;
     --output-r4) OUTPUT_MODE="r4"; shift ;;
     --local-dir) LOCAL_DIR="${2:-}"; [[ -n "$LOCAL_DIR" ]] || usage; shift 2 ;;
+    --batch-list) BATCH_LIST="${2:-}"; [[ -n "$BATCH_LIST" ]] || usage; shift 2 ;;
     *) usage ;;
   esac
 done
 
-[[ $# -ge 2 ]] || usage
-IN="$1"; OUT="$2"; shift 2
+if [[ -n "$BATCH_LIST" ]]; then
+  [[ "$FHIR_VERSION" == "r4" ]] || { echo "FATAL: --batch-list is currently supported only with --r4" >&2; exit 2; }
+  [[ $# -ge 0 ]] || usage
+  IN=""
+  OUT=""
+else
+  [[ $# -ge 2 ]] || usage
+  IN="$1"; OUT="$2"; shift 2
+fi
 PACKAGES=("$@")
 if [[ ${#PACKAGES[@]} -eq 0 ]]; then
   if [[ "$FHIR_VERSION" == "r4" ]]; then
@@ -39,13 +48,20 @@ REAL_HOME="${REAL_HOME:-$HOME}"
 FHIR_HOME="${FHIR_HOME:-$REPO/temp/fhir-home}"
 FHIR_CACHE="${FHIR_CACHE:-$FHIR_HOME/.fhir/packages}"
 FHIR_CORE_REPO="${FHIR_CORE_REPO:-/home/jmandel/hobby/fhir-perf/repos/fhir-core}"
-MSG="${OUT%.json}.messages.json"
+if [[ -n "$OUT" ]]; then
+  MSG="${OUT%.json}.messages.json"
+else
+  MSG=""
+fi
 
 source "$REPO/harness/_guard.sh"
 before="$(date +%s)"
 assert_isolated_fhir_home "$FHIR_HOME" "$REAL_HOME"
 
-mkdir -p "$FHIR_CACHE" "$(dirname "$OUT")" "$REPO/temp/snapshot-oracle/classes"
+mkdir -p "$FHIR_CACHE" "$REPO/temp/snapshot-oracle/classes"
+if [[ -n "$OUT" ]]; then
+  mkdir -p "$(dirname "$OUT")"
+fi
 if [[ "${NO_SEED:-0}" != "1" && -d "$REAL_HOME/.fhir/packages" ]]; then
   while IFS= read -r pkg; do
     base="$(basename "$pkg")"
@@ -98,8 +114,13 @@ fi
 if [[ -n "$LOCAL_DIR" ]]; then
   JAVA_ARGS+=(--local-dir "$LOCAL_DIR")
 fi
-JAVA_ARGS+=(--messages "$MSG" "$FHIR_CACHE")
-JAVA_ARGS+=("${PACKAGES[@]}" "$IN" "$OUT")
+if [[ -n "$BATCH_LIST" ]]; then
+  JAVA_ARGS+=(--batch-list "$BATCH_LIST" "$FHIR_CACHE")
+  JAVA_ARGS+=("${PACKAGES[@]}")
+else
+  JAVA_ARGS+=(--messages "$MSG" "$FHIR_CACHE")
+  JAVA_ARGS+=("${PACKAGES[@]}" "$IN" "$OUT")
+fi
 
 HOME="$FHIR_HOME" java -cp "$CP" "$JAVA_CLASS" "${JAVA_ARGS[@]}"
 assert_real_fhir_untouched "$REAL_HOME" "$before"

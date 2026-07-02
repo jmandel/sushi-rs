@@ -1,0 +1,352 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Observation-pat-assessment-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas",
+  "version": "1.2.3",
+  "name": "ObservationPatientAssessmentTWPAS",
+  "title": "病人狀態評估-Observation Patient Assessment TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此病人狀態評估-Observation Patient Assessment TWPAS Profile說明本IG如何進一步定義FHIR的Observation Resource以呈現事前審查中評估資訊之病人狀態評估",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "sct-concept",
+      "uri": "http://snomed.info/conceptdomain",
+      "name": "SNOMED CT Concept Domain Binding"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "sct-attr",
+      "uri": "http://snomed.org/attributebinding",
+      "name": "SNOMED CT Attribute Binding"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Observation",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Observation",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Observation",
+        "path": "Observation",
+        "constraint": [
+          {
+            "key": "pat-ast-value",
+            "severity": "error",
+            "human": "若病人狀態評估項目代碼(code)為88020-3，結果值(valueString)須填寫class1/class2/class3/class4其中一項；\r\n若病人狀態評估項目代碼(code)為98153-0，結果值(valueString)須填寫A/B/C其中一項；\r\n若病人狀態評估項目代碼(code)為89247-1，結果值(valueQuantity)須填寫0~5其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為89243-0，結果值(valueQuantity)須填寫0~100其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為IPS，結果值(valueQuantity)須填寫0~7其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為PDAI，結果值(valueQuantity)須填寫0~263其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為CIRS，結果值(valueQuantity)須填寫0~56其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為75633-8，結果值(valueQuantity)須填寫0~10其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為HCTCI，結果值(valueQuantity)須填寫0~26其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為MPNSAFTSS，結果值(valueQuantity)須填寫0~100其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為MPN10，結果值(valueQuantity)須填寫0~100其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為711434002，結果值(component.valueString)須填寫grade1/grade2/grade3/grade4/grade5其中一項；\r\n若病人狀態評估項目代碼(code)為429712009，結果值(valueQuantity)須填寫0~10其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為GPPGA，結果值(valueQuantity)須填寫0~4其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為273364009，結果值(valueQuantity)須填寫0~600其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為Mayo，結果值(valueQuantity)須填寫0~12其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為MayoE，結果值(valueQuantity)須填寫0~12其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為PUCAI，結果值(valueQuantity)須填寫0~90其中的值，可包含小數點下兩位；\r\n若病人狀態評估項目代碼(code)為PASI，結果值(valueQuantity)須填寫0~72其中的值，可包含小數點下兩位。",
+            "expression": "((code.coding.exists(code='88020-3')) implies (value.ofType(string) = 'class1' or value.ofType(string) = 'class2' or value.ofType(string) = 'class3' or value.ofType(string) = 'class4')) and ((code.coding.exists(code='98153-0')) implies (value.ofType(string) =  'A' or value.ofType(string) = 'B' or value.ofType(string) = 'C')) and \r\n((code.coding.exists(code='89247-1')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 5 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='89243-0')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 100 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='IPS')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 7 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='PDAI')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 263 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='CIRS')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 56 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='75633-8')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 10 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='HCTCI')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 26 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='MPNSAFTSS')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 100 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='MPN10')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 100 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='711434002')) implies (component.all(value.ofType(string) = 'grade1' or value.ofType(string) = 'grade2' or value.ofType(string) = 'grade3' or value.ofType(string) = 'grade4' or value.ofType(string) = 'grade5'))) and \r\n((code.coding.exists(code='429712009')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 10 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='GPPGA')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 4 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='273364009')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 600 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='Mayo')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 12 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='MayoE')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 12 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and \r\n((code.coding.exists(code='PUCAI')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 90 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value)) and\r\n((code.coding.exists(code='PASI')) implies (value.ofType(Quantity).value >= 0 and value.ofType(Quantity).value <= 72 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Observation.meta",
+        "path": "Observation.meta",
+        "min": 1
+      },
+      {
+        "id": "Observation.meta.profile",
+        "path": "Observation.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas"
+      },
+      {
+        "id": "Observation.category",
+        "path": "Observation.category",
+        "short": "因設計而須必填。",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "patientAssessment"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Observation.code",
+        "path": "Observation.code",
+        "short": "病人狀態評估項目代碼",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/pat-ast"
+        }
+      },
+      {
+        "id": "Observation.code.coding",
+        "path": "Observation.code.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Observation.code.coding.system",
+        "path": "Observation.code.coding.system",
+        "min": 1
+      },
+      {
+        "id": "Observation.code.coding.code",
+        "path": "Observation.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Observation.subject",
+        "path": "Observation.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.effective[x]",
+        "path": "Observation.effective[x]",
+        "short": "病人狀態評估日期，YYYY-MM-DD，西元年月日。",
+        "min": 1,
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.performer",
+        "path": "Observation.performer",
+        "short": "評估項目醫事人員身分證號",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.value[x]",
+        "path": "Observation.value[x]",
+        "short": "病人狀態評估結果",
+        "type": [
+          {
+            "code": "Quantity"
+          },
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.derivedFrom",
+        "path": "Observation.derivedFrom",
+        "short": "病人狀態評估報告（檔案路徑）及病人狀態評估報告名稱",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Observation.component",
+        "path": "Observation.component",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "code.coding"
+            }
+          ],
+          "rules": "closed"
+        }
+      },
+      {
+        "id": "Observation.component:hearing-impaired",
+        "path": "Observation.component",
+        "sliceName": "hearing-impaired",
+        "short": "Hearing impaired",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:hearing-impaired.code",
+        "path": "Observation.component.code",
+        "short": "Hearing impaired"
+      },
+      {
+        "id": "Observation.component:hearing-impaired.code.coding",
+        "path": "Observation.component.code.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-pat-ast",
+          "code": "C143528"
+        }
+      },
+      {
+        "id": "Observation.component:hearing-impaired.code.coding.system",
+        "path": "Observation.component.code.coding.system",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:hearing-impaired.code.coding.code",
+        "path": "Observation.component.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:hearing-impaired.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "grade1~5",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy",
+        "path": "Observation.component",
+        "sliceName": "peripheral-motor-neuropathy",
+        "short": "Peripheral motor neuropathy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy.code",
+        "path": "Observation.component.code",
+        "short": "Peripheral motor neuropathy"
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy.code.coding",
+        "path": "Observation.component.code.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-pat-ast",
+          "code": "C143750"
+        }
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy.code.coding.system",
+        "path": "Observation.component.code.coding.system",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy.code.coding.code",
+        "path": "Observation.component.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:peripheral-motor-neuropathy.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "grade1~5",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy",
+        "path": "Observation.component",
+        "sliceName": "peripheral-sensory-neuropathy",
+        "short": "Peripheral sensory neuropathy",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy.code",
+        "path": "Observation.component.code",
+        "short": "Peripheral sensory neuropathy"
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy.code.coding",
+        "path": "Observation.component.code.coding",
+        "min": 1,
+        "max": "1",
+        "patternCoding": {
+          "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-pat-ast",
+          "code": "C143752"
+        }
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy.code.coding.system",
+        "path": "Observation.component.code.coding.system",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy.code.coding.code",
+        "path": "Observation.component.code.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Observation.component:peripheral-sensory-neuropathy.value[x]",
+        "path": "Observation.component.value[x]",
+        "short": "grade1~5",
+        "min": 1,
+        "type": [
+          {
+            "code": "string"
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

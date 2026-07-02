@@ -1,0 +1,196 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "usdf-FormularyDrug",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "phx"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/ImplementationGuide/hl7.fhir.us.davinci-drug-formulary"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyDrug",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.25.74595174031514506193398850787025340071.42.8"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "FormularyDrug",
+  "title": "Formulary Drug",
+  "status": "active",
+  "date": "2025-02-26T17:11:51+00:00",
+  "publisher": "HL7 International / Pharmacy",
+  "contact": [
+    {
+      "name": "HL7 International / Pharmacy",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/medication"
+        },
+        {
+          "system": "email",
+          "value": "pharmacy@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "Drug information which may be part of a formulary including its RxNorm code and dose form.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "script10.6",
+      "uri": "http://ncpdp.org/SCRIPT10_6",
+      "name": "Mapping to NCPDP SCRIPT 10.6"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "MedicationKnowledge",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationKnowledge",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "MedicationKnowledge",
+        "path": "MedicationKnowledge",
+        "constraint": [
+          {
+            "key": "scd-sbd-requires-scdg-sbdg",
+            "severity": "error",
+            "human": "All drugs with RxNorm Term Type of Semantic Clinical Drug (SCD) or Semantic Branded Drug (SBD) SHALL have a coding repetition and RxNorm Term Type of Semantic Clinical Drug Group (SCDG) or Semantic Branded Drug Group (SBDG) respectively",
+            "expression": "code.where(coding[0].memberOf('http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/NonPackSemanticDrugVS')).exists() implies code.where(coding[1].memberOf('http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/SemanticDrugFormGroupVS')).exists()",
+            "source": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyDrug"
+          }
+        ]
+      },
+      {
+        "id": "MedicationKnowledge.meta.lastUpdated",
+        "path": "MedicationKnowledge.meta.lastUpdated",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code",
+        "path": "MedicationKnowledge.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code.coding",
+        "path": "MedicationKnowledge.code.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "$this"
+            }
+          ],
+          "description": "Slice based on code value",
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug",
+        "path": "MedicationKnowledge.code.coding",
+        "sliceName": "semantic-drug",
+        "short": "Semantic clinical or brand drug or pack including strength",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/SemanticDrugVS"
+        }
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug.system",
+        "path": "MedicationKnowledge.code.coding.system",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug.code",
+        "path": "MedicationKnowledge.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug-form-group",
+        "path": "MedicationKnowledge.code.coding",
+        "sliceName": "semantic-drug-form-group",
+        "short": "Semantic clinical or brand drug without strength",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://hl7.org/fhir/us/davinci-drug-formulary/ValueSet/SemanticDrugFormGroupVS"
+        }
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug-form-group.system",
+        "path": "MedicationKnowledge.code.coding.system",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.code.coding:semantic-drug-form-group.code",
+        "path": "MedicationKnowledge.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.status",
+        "path": "MedicationKnowledge.status",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "MedicationKnowledge.doseForm",
+        "path": "MedicationKnowledge.doseForm",
+        "mustSupport": true
+      }
+    ]
+  }
+}

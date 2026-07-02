@@ -1,0 +1,301 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Dosage-eu-mpd",
+  "url": "http://hl7.eu/fhir/mpd/StructureDefinition/Dosage-eu-mpd",
+  "version": "1.0.0",
+  "name": "DosageEuMpd",
+  "title": "Dosage: MPD",
+  "status": "active",
+  "date": "2026-05-11T17:24:08+02:00",
+  "publisher": "HL7 Europe",
+  "contact": [
+    {
+      "name": "HL7 Europe",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.eu"
+        }
+      ]
+    }
+  ],
+  "description": "This profile defines how to represent Dosage data on ePrescription and eDispensation. The profile is equal to FHIR Dosage and only adds obligations and source of requirements.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "http://unstats.un.org/unsd/methods/m49/m49.htm",
+          "code": "150",
+          "display": "Europe"
+        }
+      ]
+    }
+  ],
+  "copyright": "Copyright HL7 Europe. Licensed under creative commons public domain (CC0 1.0).",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Dosage",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Dosage",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Dosage",
+        "path": "Dosage"
+      },
+      {
+        "id": "Dosage.sequence",
+        "path": "Dosage.sequence",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.patientInstruction",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.patientInstruction",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.timing.repeat",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.bounds[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              },
+              {
+                "url": "documentation",
+                "valueMarkdown": "System SHALL support at least Duration data type for the element"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.timing.repeat.bounds[x]",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.duration",
+        "path": "Dosage.timing.repeat.duration",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.durationUnit",
+        "path": "Dosage.timing.repeat.durationUnit",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.frequency",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.timing.repeat.frequency",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.period",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.timing.repeat.period",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.periodUnit",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.timing.repeat.periodUnit",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.dayOfWeek",
+        "path": "Dosage.timing.repeat.dayOfWeek",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.timeOfDay",
+        "path": "Dosage.timing.repeat.timeOfDay",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.timing.repeat.when",
+        "path": "Dosage.timing.repeat.when",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.asNeeded[x]",
+        "path": "Dosage.asNeeded[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Dosage.asNeeded[x]:asNeededBoolean",
+        "path": "Dosage.asNeeded[x]",
+        "sliceName": "asNeededBoolean",
+        "requirements": "EHDSDosage",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      },
+      {
+        "id": "Dosage.site",
+        "path": "Dosage.site",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.route",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHOULD:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.route",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.doseAndRate",
+        "path": "Dosage.doseAndRate",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.doseAndRate.dose[x]",
+        "extension": [
+          {
+            "extension": [
+              {
+                "url": "code",
+                "valueCode": "SHALL:able-to-populate"
+              },
+              {
+                "url": "actor",
+                "valueCanonical": "https://www.xt-ehr.eu/specifications/fhir/actor-producer"
+              },
+              {
+                "url": "documentation",
+                "valueMarkdown": "System SHALL support at least Quantity data type for the element"
+              }
+            ],
+            "url": "http://hl7.org/fhir/StructureDefinition/obligation"
+          }
+        ],
+        "path": "Dosage.doseAndRate.dose[x]",
+        "requirements": "EHDSDosage"
+      },
+      {
+        "id": "Dosage.doseAndRate.rate[x]",
+        "path": "Dosage.doseAndRate.rate[x]",
+        "requirements": "EHDSDosage"
+      }
+    ]
+  }
+}

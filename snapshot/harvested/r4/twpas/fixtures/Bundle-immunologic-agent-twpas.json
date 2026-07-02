@@ -1,0 +1,914 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Bundle-immunologic-agent-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Bundle-immunologic-agent-twpas",
+  "version": "1.2.3",
+  "name": "BundleImmTWPAS",
+  "title": "免疫製劑事前審查-Bundle Immunologic Aagent TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此免疫製劑事前審查-Bundle Immunologic Aagent TWPAS Profile說明本IG如何進一步定義資料交換基本單位(TW Core Bundle) Profile以呈現免疫製劑事前審查之內容",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "cda",
+      "uri": "http://hl7.org/v3/cda",
+      "name": "CDA (R2)"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Bundle",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Bundle-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Bundle",
+        "path": "Bundle"
+      },
+      {
+        "id": "Bundle.meta",
+        "path": "Bundle.meta",
+        "min": 1
+      },
+      {
+        "id": "Bundle.meta.profile",
+        "path": "Bundle.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Bundle-immunologic-agent-twpas"
+      },
+      {
+        "id": "Bundle.identifier",
+        "path": "Bundle.identifier",
+        "short": "收件序號/案件編號，供案件追蹤與識別使用，醫院上傳時無須填寫。"
+      },
+      {
+        "id": "Bundle.type",
+        "path": "Bundle.type",
+        "patternCode": "collection"
+      },
+      {
+        "id": "Bundle.timestamp",
+        "path": "Bundle.timestamp",
+        "short": "緊急報備日期，YYYY-MM-DDTHH:MM:SS (需包含時區)；若本案件前已緊急報備過，本次為檢送完整資訊申請送件者，由機構將前次緊急報備時所填之申請日期，自填為緊急報備日期。",
+        "definition": "YYYY-MM-DDTHH:MM:SS (需包含時區)；若本案件前已緊急報備過，本次為檢送完整資訊申請送件者，由機構將前次緊急報備時所填之申請日期，自填為緊急報備日期。",
+        "comment": "緊急報備日期，YYYY-MM-DDTHH:MM:SS (需包含時區)；若本案件前已緊急報備過，本次為檢送完整資訊申請送件者，由機構將前次緊急報備時所填之申請日期，自填為緊急報備日期。",
+        "example": [
+          {
+            "label": "緊急報備日期",
+            "valueDateTime": "2024-05-30T13:50:58.000+08:00"
+          }
+        ]
+      },
+      {
+        "id": "Bundle.entry",
+        "path": "Bundle.entry",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "profile",
+              "path": "resource"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 8,
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:claim",
+        "path": "Bundle.entry",
+        "sliceName": "claim",
+        "short": "免疫製劑事前審查(Claim)",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:claim.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Claim",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-immunologic-agent-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:compositionOpd",
+        "path": "Bundle.entry",
+        "sliceName": "compositionOpd",
+        "short": "門診病歷",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:compositionOpd.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Composition",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Composition-opd-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:encounterOpd",
+        "path": "Bundle.entry",
+        "sliceName": "encounterOpd",
+        "short": "門診病歷",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:encounterOpd.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Encounter",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-opd-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:encounter",
+        "path": "Bundle.entry",
+        "sliceName": "encounter",
+        "short": "就醫科別",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:encounter.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Encounter",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:patient",
+        "path": "Bundle.entry",
+        "sliceName": "patient",
+        "short": "病人資訊",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:patient.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Patient",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:practitioner",
+        "path": "Bundle.entry",
+        "sliceName": "practitioner",
+        "short": "醫師(申請醫師／簽發影像報告醫師／檢查報告醫師／簽發檢驗(查)報告醫事人員／評估項目醫事人員／門診醫師)",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:practitioner.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Practitioner",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organization",
+        "path": "Bundle.entry",
+        "sliceName": "organization",
+        "short": "醫事機構／門診機構",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organization.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Organization",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:condition",
+        "path": "Bundle.entry",
+        "sliceName": "condition",
+        "short": "診斷",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:condition.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Condition",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Condition-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationBloodgroup",
+        "path": "Bundle.entry",
+        "sliceName": "observationBloodgroup",
+        "short": "血型",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationBloodgroup.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-blood-group-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:allergyIntolerance",
+        "path": "Bundle.entry",
+        "sliceName": "allergyIntolerance",
+        "short": "過敏史",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:allergyIntolerance.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "AllergyIntolerance",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/AllergyIntolerance-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationSubjective",
+        "path": "Bundle.entry",
+        "sliceName": "observationSubjective",
+        "short": "主觀描述(S)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationSubjective.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-subjective-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationObjective",
+        "path": "Bundle.entry",
+        "sliceName": "observationObjective",
+        "short": "客觀描述(O)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationObjective.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-objective-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:clinicalImpression",
+        "path": "Bundle.entry",
+        "sliceName": "clinicalImpression",
+        "short": "評估(A)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:clinicalImpression.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "ClinicalImpression",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClinicalImpression-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:carePlan",
+        "path": "Bundle.entry",
+        "sliceName": "carePlan",
+        "short": "計畫(P)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:carePlan.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "CarePlan",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/CarePlan-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:diagnosticReportImage",
+        "path": "Bundle.entry",
+        "sliceName": "diagnosticReportImage",
+        "short": "影像報告",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:diagnosticReportImage.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "DiagnosticReport",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:imageStudy",
+        "path": "Bundle.entry",
+        "sliceName": "imageStudy",
+        "short": "DICOM影像",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:imageStudy.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "ImagingStudy",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:media",
+        "path": "Bundle.entry",
+        "sliceName": "media",
+        "short": "非DICOM影像",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:media.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Media",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Media-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationCancerStage",
+        "path": "Bundle.entry",
+        "sliceName": "observationCancerStage",
+        "short": "癌症分期量表",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationCancerStage.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-cancer-stage-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:diagnosticReport",
+        "path": "Bundle.entry",
+        "sliceName": "diagnosticReport",
+        "short": "檢查報告",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:diagnosticReport.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "DiagnosticReport",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationDiagnostic",
+        "path": "Bundle.entry",
+        "sliceName": "observationDiagnostic",
+        "short": "基因資訊",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationDiagnostic.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:specimen",
+        "path": "Bundle.entry",
+        "sliceName": "specimen",
+        "short": "檢體",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:specimen.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Specimen",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Specimen-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organizationGen",
+        "path": "Bundle.entry",
+        "sliceName": "organizationGen",
+        "short": "基因檢測機構",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organizationGen.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Organization",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-genetic-testing-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:documentReference",
+        "path": "Bundle.entry",
+        "sliceName": "documentReference",
+        "short": "治療計畫文件／檢驗(查)附件／病人狀態評估報告",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:documentReference.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "DocumentReference",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationLaboratoryResult",
+        "path": "Bundle.entry",
+        "sliceName": "observationLaboratoryResult",
+        "short": "檢驗(查)",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationLaboratoryResult.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-laboratory-result-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationPatientAssessment",
+        "path": "Bundle.entry",
+        "sliceName": "observationPatientAssessment",
+        "short": "病人狀態評估",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationPatientAssessment.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:medicationRequestTreat",
+        "path": "Bundle.entry",
+        "sliceName": "medicationRequestTreat",
+        "short": "用藥品項",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:medicationRequestTreat.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-treat-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:procedureRadiotherapy",
+        "path": "Bundle.entry",
+        "sliceName": "procedureRadiotherapy",
+        "short": "放射治療",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:procedureRadiotherapy.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Procedure",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:substanceRadiotherapy",
+        "path": "Bundle.entry",
+        "sliceName": "substanceRadiotherapy",
+        "short": "放射治療總劑量",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:substanceRadiotherapy.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Substance",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:procedurePhototherapy",
+        "path": "Bundle.entry",
+        "sliceName": "procedurePhototherapy",
+        "short": "照光治療",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:procedurePhototherapy.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Procedure",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-phototherapy-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:substancePhototherapy",
+        "path": "Bundle.entry",
+        "sliceName": "substancePhototherapy",
+        "short": "照光治療總次數",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:substancePhototherapy.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Substance",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Substance-phototherapy-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationTreatmentAssessment",
+        "path": "Bundle.entry",
+        "sliceName": "observationTreatmentAssessment",
+        "short": "治療後疾病狀態評估",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:observationTreatmentAssessment.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Observation",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:medicationRequestApply",
+        "path": "Bundle.entry",
+        "sliceName": "medicationRequestApply",
+        "short": "事前審查品項",
+        "min": 1,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:medicationRequestApply.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "MedicationRequest",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-apply-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:coverage",
+        "path": "Bundle.entry",
+        "sliceName": "coverage",
+        "short": "健保事前審查計畫",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:coverage.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Coverage",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Coverage-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:claimResponse",
+        "path": "Bundle.entry",
+        "sliceName": "claimResponse",
+        "short": "自主審查。若申請案件類別(Claim.priority)為自主審查(#3)時，須填寫。",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:claimResponse.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "ClaimResponse",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ClaimResponse-self-assessment-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organizationOrg",
+        "path": "Bundle.entry",
+        "sliceName": "organizationOrg",
+        "short": "政府機構",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Bundle.entry:organizationOrg.resource",
+        "path": "Bundle.entry.resource",
+        "min": 1,
+        "type": [
+          {
+            "code": "Organization",
+            "profile": [
+              "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Organization-govt-twcore"
+            ]
+          }
+        ],
+        "mustSupport": true
+      }
+    ]
+  }
+}

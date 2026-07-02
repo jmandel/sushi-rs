@@ -1,0 +1,459 @@
+{
+  "source": "package",
+  "package": "de.gematik.epa.medication#1.3.4",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/de.gematik.epa.medication#1.3.4/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/de.gematik.epa.medication#1.3.4/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "de.gematik.epa.medication",
+    "version": "1.3.4",
+    "canonical": "https://gematik.de/fhir/epa-medication",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.2.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0",
+      "de.basisprofil.r4": "1.5.4",
+      "de.fhir.medication": "1.0.7",
+      "de.gematik.terminology": "1.0.9",
+      "de.gematik.ti": "1.3.1",
+      "de.gematik.epa": "1.3.1",
+      "de.gematik.fhir.directory": "1.0.1"
+    }
+  },
+  "counts": {
+    "scanned": 53,
+    "harvested": 53,
+    "skipped": 0
+  },
+  "entries": [
+    {
+      "id": "context-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/context-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-context-extension.json",
+      "fixture": "fixtures/context-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "drug-category-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/drug-category-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-drug-category-extension.json",
+      "fixture": "fixtures/drug-category-extension.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "emp-chronology-provenance",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-chronology-provenance",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Provenance",
+      "source": "StructureDefinition-emp-chronology-provenance.json",
+      "fixture": "fixtures/emp-chronology-provenance.json",
+      "differentialElements": 48
+    },
+    {
+      "id": "emp-medication-request",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication-request",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-emp-medication-request.json",
+      "fixture": "fixtures/emp-medication-request.json",
+      "differentialElements": 126
+    },
+    {
+      "id": "emp-medication",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medication",
+      "baseDefinition": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication",
+      "source": "StructureDefinition-emp-medication.json",
+      "fixture": "fixtures/emp-medication.json",
+      "differentialElements": 5
+    },
+    {
+      "id": "emp-medicationrequest-activity-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-medicationrequest-activity-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-emp-medicationrequest-activity-extension.json",
+      "fixture": "fixtures/emp-medicationrequest-activity-extension.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "emp-origin-medication-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-origin-medication-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-emp-origin-medication-extension.json",
+      "fixture": "fixtures/emp-origin-medication-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "epa-batch-emp-request-bundle",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-batch-emp-request-bundle",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Bundle",
+      "source": "StructureDefinition-epa-batch-emp-request-bundle.json",
+      "fixture": "fixtures/epa-batch-emp-request-bundle.json",
+      "differentialElements": 40
+    },
+    {
+      "id": "epa-medication-dispense",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-dispense",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationDispense",
+      "source": "StructureDefinition-epa-medication-dispense.json",
+      "fixture": "fixtures/epa-medication-dispense.json",
+      "differentialElements": 86
+    },
+    {
+      "id": "epa-medication-pharmaceutical-product",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-pharmaceutical-product",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-epa-medication-pharmaceutical-product.json",
+      "fixture": "fixtures/epa-medication-pharmaceutical-product.json",
+      "differentialElements": 147
+    },
+    {
+      "id": "epa-medication-pzn-ingredient",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-pzn-ingredient",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-epa-medication-pzn-ingredient.json",
+      "fixture": "fixtures/epa-medication-pzn-ingredient.json",
+      "differentialElements": 147
+    },
+    {
+      "id": "epa-medication-request",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-request",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationRequest",
+      "source": "StructureDefinition-epa-medication-request.json",
+      "fixture": "fixtures/epa-medication-request.json",
+      "differentialElements": 153
+    },
+    {
+      "id": "epa-medication-statement",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-statement",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/MedicationStatement",
+      "source": "StructureDefinition-epa-medication-statement.json",
+      "fixture": "fixtures/epa-medication-statement.json",
+      "differentialElements": 88
+    },
+    {
+      "id": "epa-medication-type-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-type-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-epa-medication-type-extension.json",
+      "fixture": "fixtures/epa-medication-type-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "epa-medication-unique-identifier",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication-unique-identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-epa-medication-unique-identifier.json",
+      "fixture": "fixtures/epa-medication-unique-identifier.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "epa-medication",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medication",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Medication",
+      "source": "StructureDefinition-epa-medication.json",
+      "fixture": "fixtures/epa-medication.json",
+      "differentialElements": 141
+    },
+    {
+      "id": "epa-medicationstatement-processing-event-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-medicationstatement-processing-event-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-epa-medicationstatement-processing-event-extension.json",
+      "fixture": "fixtures/epa-medicationstatement-processing-event-extension.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "epa-ms-operation-outcome",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-ms-operation-outcome",
+      "baseDefinition": "https://gematik.de/fhir/ti/StructureDefinition/operation-outcome",
+      "source": "StructureDefinition-epa-ms-operation-outcome.json",
+      "fixture": "fixtures/epa-ms-operation-outcome.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "epa-op-add-eml-entry-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-add-eml-entry-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-add-eml-entry-input-parameters.json",
+      "fixture": "fixtures/epa-op-add-eml-entry-input-parameters.json",
+      "differentialElements": 12
+    },
+    {
+      "id": "epa-op-add-emp-entry-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-add-emp-entry-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-add-emp-entry-input-parameters.json",
+      "fixture": "fixtures/epa-op-add-emp-entry-input-parameters.json",
+      "differentialElements": 37
+    },
+    {
+      "id": "epa-op-cancel-dispensation-erp-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-cancel-dispensation-erp-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-cancel-dispensation-erp-input-parameters.json",
+      "fixture": "fixtures/epa-op-cancel-dispensation-erp-input-parameters.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "epa-op-cancel-prescription-erp-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-cancel-prescription-erp-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-cancel-prescription-erp-input-parameters.json",
+      "fixture": "fixtures/epa-op-cancel-prescription-erp-input-parameters.json",
+      "differentialElements": 23
+    },
+    {
+      "id": "epa-op-eml-entry-output-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-eml-entry-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-eml-entry-output-parameters.json",
+      "fixture": "fixtures/epa-op-eml-entry-output-parameters.json",
+      "differentialElements": 17
+    },
+    {
+      "id": "epa-op-emp-commit-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-emp-commit-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-emp-commit-input-parameters.json",
+      "fixture": "fixtures/epa-op-emp-commit-input-parameters.json",
+      "differentialElements": 6
+    },
+    {
+      "id": "epa-op-emp-entry-output-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-emp-entry-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-emp-entry-output-parameters.json",
+      "fixture": "fixtures/epa-op-emp-entry-output-parameters.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "epa-op-link-emp-entry-output-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-link-emp-entry-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-link-emp-entry-output-parameters.json",
+      "fixture": "fixtures/epa-op-link-emp-entry-output-parameters.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "epa-op-link-emp-entry-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-link-emp-entry-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-link-emp-entry-parameters.json",
+      "fixture": "fixtures/epa-op-link-emp-entry-parameters.json",
+      "differentialElements": 18
+    },
+    {
+      "id": "epa-op-provide-dispensation-erp-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-provide-dispensation-erp-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-provide-dispensation-erp-input-parameters.json",
+      "fixture": "fixtures/epa-op-provide-dispensation-erp-input-parameters.json",
+      "differentialElements": 38
+    },
+    {
+      "id": "epa-op-provide-prescription-erp-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-provide-prescription-erp-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-provide-prescription-erp-input-parameters.json",
+      "fixture": "fixtures/epa-op-provide-prescription-erp-input-parameters.json",
+      "differentialElements": 43
+    },
+    {
+      "id": "epa-op-rx-dispensation-erp-output-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-rx-dispensation-erp-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-rx-dispensation-erp-output-parameters.json",
+      "fixture": "fixtures/epa-op-rx-dispensation-erp-output-parameters.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "epa-op-rx-prescription-erp-output-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-rx-prescription-erp-output-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-rx-prescription-erp-output-parameters.json",
+      "fixture": "fixtures/epa-op-rx-prescription-erp-output-parameters.json",
+      "differentialElements": 28
+    },
+    {
+      "id": "epa-op-update-emp-entry-input-parameters",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/epa-op-update-emp-entry-input-parameters",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Parameters",
+      "source": "StructureDefinition-epa-op-update-emp-entry-input-parameters.json",
+      "fixture": "fixtures/epa-op-update-emp-entry-input-parameters.json",
+      "differentialElements": 22
+    },
+    {
+      "id": "indicator-bvg-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/indicator-bvg-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-indicator-bvg-extension.json",
+      "fixture": "fixtures/indicator-bvg-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "indicator-ser-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/indicator-ser-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-indicator-ser-extension.json",
+      "fixture": "fixtures/indicator-ser-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "is-emp-chronology-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/is-emp-chronology-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-is-emp-chronology-extension.json",
+      "fixture": "fixtures/is-emp-chronology-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "is-emp-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/is-emp-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-is-emp-extension.json",
+      "fixture": "fixtures/is-emp-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-formulation-packaging-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-formulation-packaging-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-formulation-packaging-extension.json",
+      "fixture": "fixtures/medication-formulation-packaging-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-id-vaccine-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-id-vaccine-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-id-vaccine-extension.json",
+      "fixture": "fixtures/medication-id-vaccine-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-ingredient-amount-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-ingredient-amount-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-ingredient-amount-extension.json",
+      "fixture": "fixtures/medication-ingredient-amount-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-ingredient-darreichungsform-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-ingredient-darreichungsform-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-ingredient-darreichungsform-extension.json",
+      "fixture": "fixtures/medication-ingredient-darreichungsform-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-manufacturing-instructions-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-manufacturing-instructions-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-manufacturing-instructions-extension.json",
+      "fixture": "fixtures/medication-manufacturing-instructions-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-packaging-size-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-packaging-size-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-packaging-size-extension.json",
+      "fixture": "fixtures/medication-packaging-size-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "medication-total-quantity-formulation-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/medication-total-quantity-formulation-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-medication-total-quantity-formulation-extension.json",
+      "fixture": "fixtures/medication-total-quantity-formulation-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "multiple-prescription-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/multiple-prescription-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-multiple-prescription-extension.json",
+      "fixture": "fixtures/multiple-prescription-extension.json",
+      "differentialElements": 40
+    },
+    {
+      "id": "narcotics-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/narcotics-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-narcotics-extension.json",
+      "fixture": "fixtures/narcotics-extension.json",
+      "differentialElements": 14
+    },
+    {
+      "id": "patient-id-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/patient-id-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-patient-id-extension.json",
+      "fixture": "fixtures/patient-id-extension.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "patient-note-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/patient-note-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-patient-note-extension.json",
+      "fixture": "fixtures/patient-note-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "prescriber-id-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/prescriber-id-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-prescriber-id-extension.json",
+      "fixture": "fixtures/prescriber-id-extension.json",
+      "differentialElements": 9
+    },
+    {
+      "id": "reason-patient-instruction-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/reason-patient-instruction-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-reason-patient-instruction-extension.json",
+      "fixture": "fixtures/reason-patient-instruction-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "rx-originator-process-identifier",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/rx-originator-process-identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-rx-originator-process-identifier.json",
+      "fixture": "fixtures/rx-originator-process-identifier.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "rx-prescription-process-identifier-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/rx-prescription-process-identifier-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-rx-prescription-process-identifier-extension.json",
+      "fixture": "fixtures/rx-prescription-process-identifier-extension.json",
+      "differentialElements": 4
+    },
+    {
+      "id": "rx-prescription-process-identifier",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/rx-prescription-process-identifier",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Identifier",
+      "source": "StructureDefinition-rx-prescription-process-identifier.json",
+      "fixture": "fixtures/rx-prescription-process-identifier.json",
+      "differentialElements": 2
+    },
+    {
+      "id": "teratogenic-extension",
+      "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/teratogenic-extension",
+      "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+      "source": "StructureDefinition-teratogenic-extension.json",
+      "fixture": "fixtures/teratogenic-extension.json",
+      "differentialElements": 24
+    }
+  ],
+  "skipped": []
+}

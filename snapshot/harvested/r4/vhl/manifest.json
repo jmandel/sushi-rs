@@ -1,0 +1,28 @@
+{
+  "source": "package",
+  "package": "ihe.iti.vhl#1.0.0-comment",
+  "packageDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.vhl#1.0.0-comment/package",
+  "resourcesDir": "/home/jmandel/hobby/sushi-rs-snapshot/temp/fhir-home/.fhir/packages/ihe.iti.vhl#1.0.0-comment/package",
+  "includeLocalBase": true,
+  "limit": 0,
+  "packageJson": {
+    "name": "ihe.iti.vhl",
+    "version": "1.0.0-comment",
+    "canonical": "https://profiles.ihe.net/ITI/VHL",
+    "fhirVersions": [
+      "4.0.1"
+    ],
+    "dependencies": {
+      "hl7.fhir.r4.core": "4.0.1",
+      "hl7.terminology.r4": "7.1.0",
+      "hl7.fhir.uv.extensions.r4": "5.3.0"
+    }
+  },
+  "counts": {
+    "scanned": 0,
+    "harvested": 0,
+    "skipped": 0
+  },
+  "entries": [],
+  "skipped": []
+}

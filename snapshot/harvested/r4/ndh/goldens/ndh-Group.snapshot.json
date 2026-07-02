@@ -715,8 +715,8 @@
       "path" : "Group.extension",
       "sliceName" : "artifact-description",
       "short" : "Group Description",
-      "definition" : "A free text natural language description of the {{title}} from a consumer's perspective.",
-      "comment" : "This description can be used to capture details such as comments about misuse, instructions for clinical use and interpretation, literature references, examples from the paper world, etc. It is not a rendering of the {{title}} as conveyed in the 'text' field of the resource itself. This item SHOULD be populated unless the information is available from context (e.g. the language of the {{title}} is presumed to be the predominant language in the place the {{title}} was created).",
+      "definition" : "A free text natural language description of the artifact from a consumer's perspective.",
+      "comment" : "This description can be used to capture details such as comments about misuse, instructions for clinical use and interpretation, literature references, examples from the paper world, etc. It is not a rendering of the artifact as conveyed in the 'text' field of the resource itself. This item SHOULD be populated unless the information is available from context (e.g. the language of the artifact is presumed to be the predominant language in the place the artifact was created).",
       "min" : 0,
       "max" : "1",
       "base" : {
@@ -728,6 +728,7 @@
         "code" : "Extension",
         "profile" : ["http://hl7.org/fhir/StructureDefinition/artifact-description"]
       }],
+      "condition" : ["ele-1"],
       "constraint" : [{
         "key" : "ele-1",
         "severity" : "error",
@@ -750,7 +751,8 @@
       "path" : "Group.extension",
       "sliceName" : "artifact-effectivePeriod",
       "short" : "Group Effective Period",
-      "definition" : "An Extension",
+      "definition" : "The period during which the artifact content was or is planned to be in active use.",
+      "comment" : "The effective period for an artifact determines when the content is applicable for usage and is independent of publication and review dates. For example, an artifact intended to be used for the year 2016 might be published in 2015.",
       "min" : 0,
       "max" : "1",
       "base" : {
@@ -762,6 +764,7 @@
         "code" : "Extension",
         "profile" : ["http://hl7.org/fhir/StructureDefinition/artifact-effectivePeriod"]
       }],
+      "condition" : ["ele-1"],
       "constraint" : [{
         "key" : "ele-1",
         "severity" : "error",

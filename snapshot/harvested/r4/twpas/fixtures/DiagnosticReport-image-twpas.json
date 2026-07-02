@@ -1,0 +1,342 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "DiagnosticReport-image-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas",
+  "version": "1.2.3",
+  "name": "DiagnosticReportImageTWPAS",
+  "title": "影像報告-DiagnosticReport Image TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此影像報告-DiagnosticReport Image TWPAS Profile說明本IG如何進一步定義臺灣核心-診斷報告(TW Core DiagnosticReport) Profile以呈現事前審查之影像報告",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "DiagnosticReport",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/DiagnosticReport",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "DiagnosticReport.meta",
+        "path": "DiagnosticReport.meta",
+        "min": 1
+      },
+      {
+        "id": "DiagnosticReport.meta.profile",
+        "path": "DiagnosticReport.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas"
+      },
+      {
+        "id": "DiagnosticReport.category",
+        "path": "DiagnosticReport.category",
+        "min": 1,
+        "max": "1",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "imagingReport"
+            }
+          ]
+        }
+      },
+      {
+        "id": "DiagnosticReport.category.coding",
+        "path": "DiagnosticReport.category.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "DiagnosticReport.code",
+        "path": "DiagnosticReport.code",
+        "short": "影像報告，ICD-10-PCS。外院報告請依ICD-10-PCS填寫，若無法對應，可使用LOINC代碼呈現。",
+        "binding": {
+          "strength": "preferred",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-image"
+        }
+      },
+      {
+        "id": "DiagnosticReport.code.coding",
+        "path": "DiagnosticReport.code.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2023ICD10PCS",
+        "path": "DiagnosticReport.code.coding",
+        "sliceName": "TW2023ICD10PCS",
+        "short": "2023年中文版ICD 10 PCS-影像報告值集",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2023-image"
+        }
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2023ICD10PCS.system",
+        "path": "DiagnosticReport.code.coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2023ICD10PCS.code",
+        "path": "DiagnosticReport.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2014ICD10PCS",
+        "path": "DiagnosticReport.code.coding",
+        "sliceName": "TW2014ICD10PCS",
+        "short": "2014年中文版ICD 10 PCS-影像報告值集",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "description": "最新參考代碼清單請參考[此檔案](https://www.nhi.gov.tw/ch/dl-75853-85b695304c2c447a94a55a3788019ccf-1.ods)。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/icd-10-pcs-2014-image"
+        }
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2014ICD10PCS.system",
+        "path": "DiagnosticReport.code.coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.coding:TW2014ICD10PCS.code",
+        "path": "DiagnosticReport.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.coding:LOINC",
+        "path": "DiagnosticReport.code.coding",
+        "sliceName": "LOINC",
+        "short": "外院報告請依ICD-10-PCS填寫，若無法對應，可使用LOINC代碼呈現。",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/imaging-report"
+        }
+      },
+      {
+        "id": "DiagnosticReport.code.coding:LOINC.system",
+        "path": "DiagnosticReport.code.coding.system",
+        "min": 1,
+        "patternUri": "http://loinc.org",
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.coding:LOINC.code",
+        "path": "DiagnosticReport.code.coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.code.text",
+        "path": "DiagnosticReport.code.text",
+        "short": "影像檢查的身體部位",
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.subject",
+        "path": "DiagnosticReport.subject",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DiagnosticReport.effective[x]",
+        "path": "DiagnosticReport.effective[x]",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "type",
+              "path": "$this"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "DiagnosticReport.effective[x]:effectiveDateTime",
+        "path": "DiagnosticReport.effective[x]",
+        "sliceName": "effectiveDateTime",
+        "short": "影像報告日期，YYYY-MM-DD",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "dateTime"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.performer",
+        "path": "DiagnosticReport.performer",
+        "short": "簽發影像報告醫師身分證號",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.imagingStudy",
+        "path": "DiagnosticReport.imagingStudy",
+        "short": "DICOM影像，SNOMED CT",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/ImagingStudy-twpas"
+            ]
+          }
+        ],
+        "condition": [
+          "image-report"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.media",
+        "path": "DiagnosticReport.media",
+        "short": "非DICOM影像",
+        "condition": [
+          "image-report"
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.media.link",
+        "path": "DiagnosticReport.media.link",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Media-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "DiagnosticReport.conclusion",
+        "path": "DiagnosticReport.conclusion",
+        "short": "影像報告結果，請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm",
+        "path": "DiagnosticReport.presentedForm",
+        "short": "報告結果-MIMEType。若需要，可上傳影像報告的PDF檔。",
+        "constraint": [
+          {
+            "key": "UploadContent",
+            "severity": "error",
+            "human": "填寫格式：file://檔名.副檔名，例如：file://US01.jpg、file://PathologyReport01.pdf、file://GenReport01.pdf、file://王大明病歷.pdf",
+            "expression": "url.matches('^file://[a-zA-Z0-9_一-龥()-]+.[a-zA-Z]{2,5}$') and url.contains('.')",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.contentType",
+        "path": "DiagnosticReport.presentedForm.contentType",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.url",
+        "path": "DiagnosticReport.presentedForm.url",
+        "short": "影像報告（請填寫完整檔案路徑）",
+        "min": 1,
+        "example": [
+          {
+            "label": "General",
+            "valueUrl": "file://ImagingDiagnosticReport01.pdf"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "DiagnosticReport.presentedForm.title",
+        "path": "DiagnosticReport.presentedForm.title",
+        "short": "影像報告名稱",
+        "min": 1,
+        "mustSupport": true
+      }
+    ]
+  }
+}

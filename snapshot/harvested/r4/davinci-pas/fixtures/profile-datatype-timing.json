@@ -1,0 +1,201 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "profile-datatype-timing",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "fm"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+      "valueInteger": 4,
+      "_valueInteger": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "trial-use",
+      "_valueCode": {
+        "extension": [
+          {
+            "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "valueCanonical": "http://hl7.org/fhir/us/davinci-pas/ImplementationGuide/hl7.fhir.us.davinci-pas"
+          }
+        ]
+      }
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/profile-datatype-timing",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.24.42.55"
+    }
+  ],
+  "version": "2.2.1",
+  "name": "PASTiming",
+  "title": "PAS Timing",
+  "status": "active",
+  "date": "2026-03-27T13:58:48+11:00",
+  "publisher": "HL7 International / Financial Management",
+  "contact": [
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://hl7.org/Special/committees/fm"
+        },
+        {
+          "system": "email",
+          "value": "fmlists@lists.hl7.org"
+        }
+      ]
+    },
+    {
+      "name": "Jean Duteau",
+      "telecom": [
+        {
+          "system": "email",
+          "value": "mailto:jean@duteaudesign.com"
+        }
+      ]
+    },
+    {
+      "name": "HL7 International / Financial Management",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/fm"
+        }
+      ]
+    }
+  ],
+  "description": "PAS constraints on the Timing datatype used in the various service requests.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "type": "Timing",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Timing",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Timing",
+        "path": "Timing"
+      },
+      {
+        "id": "Timing.extension:calendarPattern",
+        "path": "Timing.extension",
+        "sliceName": "calendarPattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingcalendarpattern|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.extension:deliveryPattern",
+        "path": "Timing.extension",
+        "sliceName": "deliveryPattern",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-timingdeliverypattern|2.2.1"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat",
+        "path": "Timing.repeat",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.bounds[x]",
+        "path": "Timing.repeat.bounds[x]",
+        "short": "The number of periods over which the service is delivered.",
+        "type": [
+          {
+            "code": "Duration"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.count",
+        "path": "Timing.repeat.count",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.countMax",
+        "path": "Timing.repeat.countMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.frequency",
+        "path": "Timing.repeat.frequency",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.frequencyMax",
+        "path": "Timing.repeat.frequencyMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.period",
+        "path": "Timing.repeat.period",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.periodMax",
+        "path": "Timing.repeat.periodMax",
+        "mustSupport": true
+      },
+      {
+        "id": "Timing.repeat.periodUnit",
+        "path": "Timing.repeat.periodUnit",
+        "mustSupport": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+snapshot/harvested/r4/au-ps/fixtures/au-ps-allergyintolerance.json	snapshot/harvested/r4/au-ps/rust/au-ps-allergyintolerance.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-bundle.json	snapshot/harvested/r4/au-ps/rust/au-ps-bundle.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-composition.json	snapshot/harvested/r4/au-ps/rust/au-ps-composition.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-condition.json	snapshot/harvested/r4/au-ps/rust/au-ps-condition.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-diagnosticresult-path.json	snapshot/harvested/r4/au-ps/rust/au-ps-diagnosticresult-path.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-encounter.json	snapshot/harvested/r4/au-ps/rust/au-ps-encounter.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-immunization.json	snapshot/harvested/r4/au-ps/rust/au-ps-immunization.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-medication.json	snapshot/harvested/r4/au-ps/rust/au-ps-medication.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-medicationrequest.json	snapshot/harvested/r4/au-ps/rust/au-ps-medicationrequest.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-medicationstatement.json	snapshot/harvested/r4/au-ps/rust/au-ps-medicationstatement.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-organization.json	snapshot/harvested/r4/au-ps/rust/au-ps-organization.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-patient.json	snapshot/harvested/r4/au-ps/rust/au-ps-patient.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-practitioner.json	snapshot/harvested/r4/au-ps/rust/au-ps-practitioner.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-practitionerrole.json	snapshot/harvested/r4/au-ps/rust/au-ps-practitionerrole.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-procedure.json	snapshot/harvested/r4/au-ps/rust/au-ps-procedure.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-relatedperson.json	snapshot/harvested/r4/au-ps/rust/au-ps-relatedperson.snapshot.json
+snapshot/harvested/r4/au-ps/fixtures/au-ps-smokingstatus.json	snapshot/harvested/r4/au-ps/rust/au-ps-smokingstatus.snapshot.json

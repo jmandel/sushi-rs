@@ -1,0 +1,1544 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Claim-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas",
+  "version": "1.2.3",
+  "name": "ClaimTWPAS",
+  "title": "癌藥事前審查-Claim TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此癌藥事前審查-Claim TWPAS Profile說明本IG如何進一步定義FHIR的Claim Resource以呈現癌藥事前審查之內容",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Claim",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Claim",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Claim",
+        "path": "Claim",
+        "constraint": [
+          {
+            "key": "sequence-1",
+            "severity": "error",
+            "human": "diagnosis.sequence一定會有一個「1」，且只能出現一次。",
+            "expression": "diagnosis.where(sequence = 1).count() = 1",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          },
+          {
+            "key": "applType",
+            "severity": "error",
+            "human": "當Claim.subType(申報類別)為2(送核補件)、3(申復)、4(爭議審議)或5(申復補件)時，院所才需於Claim.identifier:old_acpt_no填寫原送核案件之受理編號。目前IG僅針對申報類別為3(申復)進行檢核。",
+            "expression": "(subType.coding.exists(code='3')) implies (identifier.where(use = 'secondary').exists())",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          },
+          {
+            "key": "supportingInfo",
+            "severity": "error",
+            "human": "當Claim.priority(案件類別)為1(一般事前審查申請)、3(自主審查)時，至少還需提供檢查報告、影像報告、基因資訊中任一樣資訊。如果Claim.diagnosis.diagnosisCodeableConcept(國際疾病分類代碼)為C61，且Claim.item.modifier:continuation(續用註記)為2，則可排除此條件。或Claim.diagnosis.diagnosisCodeableConcept(國際疾病分類代碼)為C90、C91或C92，則可排除此條件。",
+            "expression": "(priority.coding.code.matches('1|3')) implies (supportingInfo.category.exists(coding.code = 'examinationReport') or supportingInfo.category.exists(coding.code = 'imagingReport') or supportingInfo.category.exists(coding.code = 'geneInfo') or (diagnosis.diagnosis.ofType(CodeableConcept).coding.where(code.matches('^(C61)')).exists() and item.modifier.where(coding.system = 'https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-continuation-status').coding.exists(code = '2')) or (diagnosis.diagnosis.ofType(CodeableConcept).coding.where(code.matches('^(C90|C91|C92)')).exists()))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          },
+          {
+            "key": "supportingInfo-tests",
+            "severity": "error",
+            "human": "當Claim.diagnosis.diagnosisCodeableConcept(國際疾病分類代碼)為C61，且Claim.item.modifier:continuation(續用註記)為2，需提供檢驗(查)。",
+            "expression": "(diagnosis.diagnosis.ofType(CodeableConcept).coding.where(code.matches('^(C61)')).exists() and item.modifier.where(coding.system = 'https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-continuation-status').coding.code = '2') implies (supportingInfo.category.exists(coding.code = 'tests'))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          },
+          {
+            "key": "supportingInfo-c90-c91-c92",
+            "severity": "error",
+            "human": "當Claim.diagnosis.diagnosisCodeableConcept(國際疾病分類代碼)為C90、C91或C92，需提供檢驗(查)、影像報告、基因資訊、檢驗檢查中任一項資訊。",
+            "expression": "(diagnosis.diagnosis.ofType(CodeableConcept).coding.where(code.matches('^(C90|C91|C92)')).exists()) implies (supportingInfo.category.exists(coding.code = 'tests') or supportingInfo.category.exists(coding.code = 'imagingReport') or supportingInfo.category.exists(coding.code = 'geneInfo') or supportingInfo.category.exists(coding.code = 'examinationReport'))",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Claim.id",
+        "path": "Claim.id",
+        "short": "收件序號/案件編號，供案件追蹤與識別使用，醫院上傳時無須填寫。"
+      },
+      {
+        "id": "Claim.meta",
+        "path": "Claim.meta",
+        "min": 1
+      },
+      {
+        "id": "Claim.meta.lastUpdated",
+        "path": "Claim.meta.lastUpdated",
+        "short": "上傳日期時間。供案件追蹤與識別使用，醫院上傳時無須填寫。"
+      },
+      {
+        "id": "Claim.meta.profile",
+        "path": "Claim.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+      },
+      {
+        "id": "Claim.extension",
+        "path": "Claim.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.extension:encounter",
+        "path": "Claim.extension",
+        "sliceName": "encounter",
+        "short": "就醫科別，為細分科之就醫科別，作為審查分科用。【此為參考Da Vinci PAS IG的extension設計】",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-claim-encounter"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier",
+        "path": "Claim.identifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "use"
+            }
+          ],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier:acpt_no",
+        "path": "Claim.identifier",
+        "sliceName": "acpt_no",
+        "short": "受理編號。供案件追蹤與識別使用，醫院上傳時無須填寫。",
+        "min": 0,
+        "max": "*",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier:acpt_no.use",
+        "path": "Claim.identifier.use",
+        "min": 1,
+        "patternCode": "official"
+      },
+      {
+        "id": "Claim.identifier:orig_file_name",
+        "path": "Claim.identifier",
+        "sliceName": "orig_file_name",
+        "short": "原始檔名。供案件追蹤與識別使用，醫院上傳時無須填寫。",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier:orig_file_name.use",
+        "path": "Claim.identifier.use",
+        "min": 1,
+        "patternCode": "usual"
+      },
+      {
+        "id": "Claim.identifier:old_acpt_no",
+        "path": "Claim.identifier",
+        "sliceName": "old_acpt_no",
+        "short": "原受理編號。院所上傳送核(subType = #1)案件時，不需填寫「原受理編號」資訊，受理成功後會由系統自動產生受理編號。當Claim.subType(申報類別)為2(送核補件)、3(申復)、4(爭議審議)或5(申復補件)時，院所才需於Claim.identifier:old_acpt_no填寫原送核案件之受理編號。",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.identifier:old_acpt_no.use",
+        "path": "Claim.identifier.use",
+        "min": 1,
+        "patternCode": "secondary"
+      },
+      {
+        "id": "Claim.status",
+        "path": "Claim.status",
+        "patternCode": "active"
+      },
+      {
+        "id": "Claim.type",
+        "path": "Claim.type",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/claim-type",
+              "code": "institutional"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.subType",
+        "path": "Claim.subType",
+        "short": "申報類別，1:送核 | 2:送核補件 | 3:申復 | 4:爭議審議 | 5:申復補件 。院所上傳送核(subType = #1)案件時，不需填寫「原受理編號」資訊，受理成功後會由系統自動產生受理編號。當Claim.subType(申報類別)為2(送核補件)、3(申復)、4(爭議審議)或5(申復補件)時，院所才需於Claim.identifier填寫原送核案件之受理編號。",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-apply-type"
+        }
+      },
+      {
+        "id": "Claim.subType.coding",
+        "path": "Claim.subType.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Claim.subType.coding.system",
+        "path": "Claim.subType.coding.system",
+        "min": 1,
+        "patternUri": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-apply-type"
+      },
+      {
+        "id": "Claim.subType.coding.code",
+        "path": "Claim.subType.coding.code",
+        "short": "申報類別，1:送核 | 2:送核補件 | 3:申復 | 4:爭議審議 | 5:申復補件 。當申報類別為2(送核補件)、3(申復)、4(爭議審議)、5(申復補件)時，院所才需於Claim.identifier:old_acpt_no填寫原送核案件之受理編號。",
+        "min": 1
+      },
+      {
+        "id": "Claim.use",
+        "path": "Claim.use",
+        "patternCode": "preauthorization"
+      },
+      {
+        "id": "Claim.patient",
+        "path": "Claim.patient",
+        "short": "病人資訊",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.created",
+        "path": "Claim.created",
+        "short": "申請日期，YYYY-MM-DD，機構自填。健保署收案後另建受理日期，將呈現在ClaimResponse的disposition和created欄位。",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.enterer",
+        "path": "Claim.enterer",
+        "short": "申請醫師，必須存在於醫事人員基本資料檔內，並於合約生效起迄日內。",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Practitioner-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.provider",
+        "path": "Claim.provider",
+        "short": "醫事機構代碼，必須存在於醫事機構基本資料檔內。",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Organization-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.priority",
+        "path": "Claim.priority",
+        "short": "申請案件類別，1:一般事前審查申請 | 3:自主審查 | 4:緊急報備；專審系統識別用，對應PXXT_CODE(TMHB,001)。",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-tmhb-type"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo",
+        "path": "Claim.supportingInfo",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "category"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 2
+      },
+      {
+        "id": "Claim.supportingInfo.sequence",
+        "path": "Claim.supportingInfo.sequence",
+        "short": "因FHIR設計而必填、自動流水號（建議每次加1）、不得重複，作為每筆supportingInfo的唯一識別碼。最後一筆sequence號碼即表示總筆數。"
+      },
+      {
+        "id": "Claim.supportingInfo.category",
+        "path": "Claim.supportingInfo.category",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-supporting-info-type"
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:weight",
+        "path": "Claim.supportingInfo",
+        "sliceName": "weight",
+        "short": "病人體重",
+        "min": 1,
+        "max": "1",
+        "constraint": [
+          {
+            "key": "HTWT",
+            "severity": "error",
+            "human": "整數至多3位數及小數至多2位數",
+            "expression": "value.ofType(Quantity).value < 1000 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Claim.supportingInfo:weight.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "weight"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:weight.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:weight.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:weight.value[x].value",
+        "path": "Claim.supportingInfo.value[x].value",
+        "short": "體重，整數至多3位數及小數至多2位數。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:weight.value[x].system",
+        "path": "Claim.supportingInfo.value[x].system",
+        "min": 1,
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "Claim.supportingInfo:weight.value[x].code",
+        "path": "Claim.supportingInfo.value[x].code",
+        "min": 1,
+        "patternCode": "kg"
+      },
+      {
+        "id": "Claim.supportingInfo:height",
+        "path": "Claim.supportingInfo",
+        "sliceName": "height",
+        "short": "病人身高",
+        "min": 1,
+        "max": "1",
+        "constraint": [
+          {
+            "key": "HTWT",
+            "severity": "error",
+            "human": "整數至多3位數及小數至多2位數",
+            "expression": "value.ofType(Quantity).value < 1000 and ((value.ofType(Quantity).value * 100).round() / 100) = value.ofType(Quantity).value",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ]
+      },
+      {
+        "id": "Claim.supportingInfo:height.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "height"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:height.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:height.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Quantity"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:height.value[x].value",
+        "path": "Claim.supportingInfo.value[x].value",
+        "short": "身高(cm)，整數至多3位數及小數至多2位數。",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:height.value[x].system",
+        "path": "Claim.supportingInfo.value[x].system",
+        "min": 1,
+        "patternUri": "http://unitsofmeasure.org"
+      },
+      {
+        "id": "Claim.supportingInfo:height.value[x].code",
+        "path": "Claim.supportingInfo.value[x].code",
+        "min": 1,
+        "patternCode": "cm"
+      },
+      {
+        "id": "Claim.supportingInfo:pregnancy",
+        "path": "Claim.supportingInfo",
+        "sliceName": "pregnancy",
+        "short": "是否懷孕或哺乳",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Claim.supportingInfo:pregnancy.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "pregnancyBreastfeedingStatus"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:pregnancy.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:pregnancy.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "是否懷孕或哺乳，false:未懷孕或哺乳 | true:有懷孕或哺乳",
+        "min": 1,
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:imagingReport",
+        "path": "Claim.supportingInfo",
+        "sliceName": "imagingReport",
+        "short": "影像報告",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:imagingReport.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "imagingReport"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:imagingReport.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:imagingReport.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "影像報告",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-image-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:cancerStage",
+        "path": "Claim.supportingInfo",
+        "sliceName": "cancerStage",
+        "short": "癌症分期量表",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:cancerStage.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "cancerStage"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:cancerStage.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:cancerStage.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "癌症分期量表",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-cancer-stage-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:examinationReport",
+        "path": "Claim.supportingInfo",
+        "sliceName": "examinationReport",
+        "short": "檢查報告",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:examinationReport.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "examinationReport"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:examinationReport.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:examinationReport.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "檢查報告",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DiagnosticReport-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:geneInfo",
+        "path": "Claim.supportingInfo",
+        "sliceName": "geneInfo",
+        "short": "基因資訊",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:geneInfo.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "geneInfo"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:geneInfo.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:geneInfo.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "基因資訊",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-diagnostic-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:tests",
+        "path": "Claim.supportingInfo",
+        "sliceName": "tests",
+        "short": "檢驗(查)",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:tests.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "tests"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:tests.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:tests.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "檢驗(查)",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-laboratory-result-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:patientAssessment",
+        "path": "Claim.supportingInfo",
+        "sliceName": "patientAssessment",
+        "short": "病人狀態評估",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:patientAssessment.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "patientAssessment"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:patientAssessment.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:patientAssessment.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "病人狀態評估",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-pat-assessment-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:medicationRequest",
+        "path": "Claim.supportingInfo",
+        "sliceName": "medicationRequest",
+        "short": "用藥品項",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:medicationRequest.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "medicationRequest"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:medicationRequest.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:medicationRequest.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "用藥品項",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/MedicationRequest-treat-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:radiotherapy",
+        "path": "Claim.supportingInfo",
+        "sliceName": "radiotherapy",
+        "short": "放射治療",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:radiotherapy.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "radiotherapy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:radiotherapy.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:radiotherapy.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "放射治療",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Procedure-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:carePlanDocument",
+        "path": "Claim.supportingInfo",
+        "sliceName": "carePlanDocument",
+        "short": "治療計畫文件，P-IO(免疫檢查點抑制劑治療計畫)、P-CART(CAR-T多團隊會議紀錄)、P-STEMCELL(造血幹細胞移植計畫書)，附件形式PDF",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:carePlanDocument.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "carePlanDocument"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:carePlanDocument.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:carePlanDocument.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "治療計畫文件",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:medicalRecord",
+        "path": "Claim.supportingInfo",
+        "sliceName": "medicalRecord",
+        "short": "病歷資料（非屬影像報告檢查驗報告部分），可檢附其他佐證癌藥治療必要性之非結構化病歷。",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:medicalRecord.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "medicalRecord"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:medicalRecord.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:medicalRecord.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/DocumentReference-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:treatmentAssessment",
+        "path": "Claim.supportingInfo",
+        "sliceName": "treatmentAssessment",
+        "short": "結果資訊",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:treatmentAssessment.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "treatmentAssessment"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:treatmentAssessment.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:treatmentAssessment.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "結果資訊",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-tx-assessment-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:bloodgroup",
+        "path": "Claim.supportingInfo",
+        "sliceName": "bloodgroup",
+        "short": "血型",
+        "min": 0,
+        "max": "1"
+      },
+      {
+        "id": "Claim.supportingInfo:bloodgroup.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "bloodgroup"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:bloodgroup.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:bloodgroup.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "血型",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Observation-blood-group-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:opd",
+        "path": "Claim.supportingInfo",
+        "sliceName": "opd",
+        "short": "門診病歷",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:opd.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "opd"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:opd.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:opd.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "門診病歷",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Composition-opd-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.supportingInfo:allergy",
+        "path": "Claim.supportingInfo",
+        "sliceName": "allergy",
+        "short": "過敏史",
+        "min": 0,
+        "max": "*"
+      },
+      {
+        "id": "Claim.supportingInfo:allergy.category",
+        "path": "Claim.supportingInfo.category",
+        "patternCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-supporting-info-type",
+              "code": "allergy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "Claim.supportingInfo:allergy.timing[x]",
+        "path": "Claim.supportingInfo.timing[x]",
+        "max": "0"
+      },
+      {
+        "id": "Claim.supportingInfo:allergy.value[x]",
+        "path": "Claim.supportingInfo.value[x]",
+        "short": "過敏史",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/AllergyIntolerance-twpas"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis",
+        "path": "Claim.diagnosis",
+        "short": "sequence=1時為主要疾病；sequence>=2代表共病。",
+        "min": 1,
+        "constraint": [
+          {
+            "key": "diagnosis",
+            "severity": "error",
+            "human": "diagnosis.sequence=1時才需填寫診斷日期、簡要病摘(申請原因)",
+            "expression": "sequence=1 implies (extension.where(url = 'http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate').value.ofType(date).exists() and type.text.exists() )",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.extension",
+        "path": "Claim.diagnosis.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.extension:recordedDate",
+        "path": "Claim.diagnosis.extension",
+        "sliceName": "recordedDate",
+        "short": "診斷日期，sequence=1時為必填，表示為用藥事前審查之主要疾病；其他共病不須填寫診斷日期。YYYY-MM-DD，西元年月日。【此為參考Da Vinci PAS IG的extension設計】",
+        "min": 0,
+        "max": "*",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "http://hl7.org/fhir/us/davinci-pas/StructureDefinition/extension-diagnosisRecordedDate"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.sequence",
+        "path": "Claim.diagnosis.sequence",
+        "short": "sequence=1時為主要疾病；sequence>=2代表共病。"
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x]",
+        "path": "Claim.diagnosis.diagnosis[x]",
+        "short": "國際疾病分類代碼(含共病)，當前疾病狀態。ICD-10-CM。",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-cm-2023-tw"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding",
+        "path": "Claim.diagnosis.diagnosis[x].coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2023",
+        "path": "Claim.diagnosis.diagnosis[x].coding",
+        "sliceName": "icd10-cm-2023",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-cm-2023-tw"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2023.system",
+        "path": "Claim.diagnosis.diagnosis[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2023-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2023.code",
+        "path": "Claim.diagnosis.diagnosis[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2014",
+        "path": "Claim.diagnosis.diagnosis[x].coding",
+        "sliceName": "icd10-cm-2014",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "extensible",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-cm-2014-tw"
+        }
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2014.system",
+        "path": "Claim.diagnosis.diagnosis[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-cm-2014-tw",
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.diagnosis[x].coding:icd10-cm-2014.code",
+        "path": "Claim.diagnosis.diagnosis[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.diagnosis.type",
+        "path": "Claim.diagnosis.type",
+        "max": "1"
+      },
+      {
+        "id": "Claim.diagnosis.type.text",
+        "path": "Claim.diagnosis.type.text",
+        "short": "簡要病摘(申請理由)。連結院內HIS系統之簡要病摘，或填寫原事前審查之申請理由。請勿將醫事機構名稱、病人及醫師姓名等資訊列入結果中上傳，且不得包含HTML或XML等語法。",
+        "constraint": [
+          {
+            "key": "pas-2",
+            "severity": "error",
+            "human": "長度不得超過4000 bytes。",
+            "expression": "toString().length() <= 4000",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.procedure.date",
+        "path": "Claim.procedure.date",
+        "short": "手術(或其他處置)日期",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.procedure.procedure[x]",
+        "path": "Claim.procedure.procedure[x]",
+        "short": "手術(或其他處置)項目，經動脈導管肝臟腫瘤化學栓塞術(TACE)及冷凍療法等非屬手術。ICD-10-PCS 或 健保代碼 或 其他。",
+        "type": [
+          {
+            "code": "CodeableConcept"
+          }
+        ],
+        "mustSupport": true,
+        "binding": {
+          "strength": "preferred",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-pcs-2023-tw"
+        }
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding",
+        "path": "Claim.procedure.procedure[x].coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2023",
+        "path": "Claim.procedure.procedure[x].coding",
+        "sliceName": "icd10-pcs-2023",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-pcs-2023-tw"
+        }
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2023.system",
+        "path": "Claim.procedure.procedure[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2023-tw"
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2023.code",
+        "path": "Claim.procedure.procedure[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2014",
+        "path": "Claim.procedure.procedure[x].coding",
+        "sliceName": "icd10-pcs-2014",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/icd-10-pcs-2014-tw"
+        }
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2014.system",
+        "path": "Claim.procedure.procedure[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/icd-10-pcs-2014-tw"
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:icd10-pcs-2014.code",
+        "path": "Claim.procedure.procedure[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:medical-service-payment",
+        "path": "Claim.procedure.procedure[x].coding",
+        "sliceName": "medical-service-payment",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-medical-service-payment"
+        }
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:medical-service-payment.system",
+        "path": "Claim.procedure.procedure[x].coding.system",
+        "min": 1,
+        "patternUri": "https://twcore.mohw.gov.tw/ig/twcore/CodeSystem/medical-service-payment-tw"
+      },
+      {
+        "id": "Claim.procedure.procedure[x].coding:medical-service-payment.code",
+        "path": "Claim.procedure.procedure[x].coding.code",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.insurance.sequence",
+        "path": "Claim.insurance.sequence",
+        "patternPositiveInt": 1
+      },
+      {
+        "id": "Claim.insurance.coverage",
+        "path": "Claim.insurance.coverage",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Coverage-twpas"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Claim.item",
+        "path": "Claim.item",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.extension",
+        "path": "Claim.item.extension",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "url"
+            }
+          ],
+          "ordered": false,
+          "rules": "open"
+        },
+        "min": 1
+      },
+      {
+        "id": "Claim.item.extension:requestedService",
+        "path": "Claim.item.extension",
+        "sliceName": "requestedService",
+        "short": "事前審查品項【此為參考Da Vinci PAS IG的extension設計】",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/extension-requestedService"
+            ]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.productOrService",
+        "path": "Claim.item.productOrService",
+        "short": "醫令類別",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-order-type"
+        }
+      },
+      {
+        "id": "Claim.item.modifier",
+        "path": "Claim.item.modifier",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "value",
+              "path": "coding.system"
+            }
+          ],
+          "ordered": false,
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "2"
+      },
+      {
+        "id": "Claim.item.modifier:continuation",
+        "path": "Claim.item.modifier",
+        "sliceName": "continuation",
+        "short": "續用註記，1:初次使用 | 2:申請再次使用",
+        "min": 1,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-continuation-status"
+        }
+      },
+      {
+        "id": "Claim.item.modifier:continuation.coding",
+        "path": "Claim.item.modifier.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Claim.item.modifier:continuation.coding.system",
+        "path": "Claim.item.modifier.coding.system",
+        "min": 1,
+        "patternUri": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-continuation-status"
+      },
+      {
+        "id": "Claim.item.modifier:continuation.coding.code",
+        "path": "Claim.item.modifier.coding.code",
+        "short": "1:初次使用 | 2:申請再次使用",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.modifier:lot",
+        "path": "Claim.item.modifier",
+        "sliceName": "lot",
+        "short": "用藥線別，0:不適用 | 1:第一線治療 | 2:第二線治療 | 3:第三線治療 | 4:第四線治療 | 5:第五線治療",
+        "min": 0,
+        "max": "1",
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-line-of-therapy"
+        }
+      },
+      {
+        "id": "Claim.item.modifier:lot.coding",
+        "path": "Claim.item.modifier.coding",
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Claim.item.modifier:lot.coding.system",
+        "path": "Claim.item.modifier.coding.system",
+        "min": 1,
+        "patternUri": "https://nhicore.nhi.gov.tw/pas/CodeSystem/nhi-line-of-therapy"
+      },
+      {
+        "id": "Claim.item.modifier:lot.coding.code",
+        "path": "Claim.item.modifier.coding.code",
+        "short": "0:不適用 | 1:第一線治療 | 2:第二線治療 | 3:第三線治療 | 4:第四線治療 | 5:第五線治療",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.programCode",
+        "path": "Claim.item.programCode",
+        "short": "給付適應症條件，藥品給付規定內所規範之適應症或條件，若有特定事前審查品項代碼應以代碼填報。",
+        "min": 1,
+        "max": "1",
+        "condition": [
+          "applyReason-1",
+          "applyReason-2",
+          "applyReason-3"
+        ],
+        "constraint": [
+          {
+            "key": "pas-1",
+            "severity": "error",
+            "human": "text、coding至少需存在一個。",
+            "expression": "text.exists() or coding.exists()",
+            "source": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Claim-twpas"
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.programCode.coding",
+        "path": "Claim.item.programCode.coding",
+        "short": "給付適應症條件，當事前審查品項代碼為KC009612B5、KC010892B5、KC011112DE、KC011162B5、KC011362B5、KC01013229、KC01013230、KC01025219、KC01050238、KC01085229、KC00958229、JC00154261、KC01088229、KC01233224時，才可填寫。",
+        "max": "1",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-apply-reason"
+        }
+      },
+      {
+        "id": "Claim.item.programCode.text",
+        "path": "Claim.item.programCode.text",
+        "short": "給付適應症條件，事前審查品項代碼不為KC009612B5、KC010892B5、KC011112DE、KC011162B5、KC011362B5、KC01013229、KC01013230、KC01025219、KC01050238、KC01085229、KC00958229、JC00154261、KC01088229、KC01233224時，請自行輸入文字。"
+      },
+      {
+        "id": "Claim.item.quantity",
+        "path": "Claim.item.quantity",
+        "min": 1,
+        "mustSupport": true,
+        "binding": {
+          "strength": "required",
+          "description": "事前審查申請數量單位及包裝類型。",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/apply-quantity-unit"
+        }
+      },
+      {
+        "id": "Claim.item.quantity.value",
+        "path": "Claim.item.quantity.value",
+        "short": "事前審查申請數量",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.quantity.system",
+        "path": "Claim.item.quantity.system",
+        "short": "事前審查申請數量單位及包裝類型之代碼系統",
+        "min": 1
+      },
+      {
+        "id": "Claim.item.quantity.code",
+        "path": "Claim.item.quantity.code",
+        "short": "事前審查申請數量單位及包裝類型",
+        "min": 1,
+        "mustSupport": true
+      },
+      {
+        "id": "Claim.item.bodySite",
+        "path": "Claim.item.bodySite",
+        "short": "申請部位，R:右側 | L:左側 | B:兩側。(此專案暫不檢核，未來待確認)",
+        "binding": {
+          "strength": "required",
+          "valueSet": "https://nhicore.nhi.gov.tw/pas/ValueSet/nhi-apply-side"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "Encounter-twpas",
+  "url": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-twpas",
+  "version": "1.2.3",
+  "name": "EncounterTWPAS",
+  "title": "就醫科別-Encounter TWPAS",
+  "status": "active",
+  "date": "2026-05-27T12:01:55+08:00",
+  "publisher": "衛生福利部中央健康保險署",
+  "contact": [
+    {
+      "name": "衛生福利部中央健康保險署",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.nhi.gov.tw"
+        }
+      ]
+    }
+  ],
+  "description": "此就醫科別-Encounter TWPAS Profile說明本IG如何進一步定義臺灣核心-就醫事件(TW Core Encounter) Profile以呈現事前審查中院所資訊之就醫科別",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "v2",
+      "uri": "http://hl7.org/v2",
+      "name": "HL7 v2 Mapping"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "Encounter",
+  "baseDefinition": "https://twcore.mohw.gov.tw/ig/twcore/StructureDefinition/Encounter-twcore",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Encounter.meta",
+        "path": "Encounter.meta",
+        "min": 1
+      },
+      {
+        "id": "Encounter.meta.profile",
+        "path": "Encounter.meta.profile",
+        "min": 1,
+        "max": "1",
+        "patternCanonical": "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Encounter-twpas"
+      },
+      {
+        "id": "Encounter.status",
+        "path": "Encounter.status",
+        "short": "就醫現況。【因FHIR設計而需必填】",
+        "patternCode": "planned"
+      },
+      {
+        "id": "Encounter.class",
+        "path": "Encounter.class",
+        "short": "就醫分類。【因FHIR設計而需必填】",
+        "binding": {
+          "strength": "required",
+          "valueSet": "http://terminology.hl7.org/ValueSet/v3-ActEncounterCode"
+        }
+      },
+      {
+        "id": "Encounter.serviceType",
+        "path": "Encounter.serviceType",
+        "short": "就醫科別，完整代碼對應表請參照就醫科別對應表。",
+        "min": 1,
+        "binding": {
+          "strength": "preferred",
+          "description": "完整代碼對應表請參照[就醫科別對應表](https://build.fhir.org/ig/MOHW-TWCoreIG/cctwFHIRterm/ValueSet-medical-department-sct-tw.html#%E5%B0%B1%E9%86%AB%E7%A7%91%E5%88%A5%E5%B0%8D%E6%87%89%E8%A1%A8)。",
+          "valueSet": "https://twcore.mohw.gov.tw/ig/twcore/ValueSet/medical-department-sct-tw"
+        }
+      },
+      {
+        "id": "Encounter.serviceType.coding",
+        "path": "Encounter.serviceType.coding",
+        "slicing": {
+          "discriminator": [
+            {
+              "type": "pattern",
+              "path": "system"
+            }
+          ],
+          "rules": "closed"
+        },
+        "min": 1,
+        "max": "1"
+      },
+      {
+        "id": "Encounter.serviceType.coding.code",
+        "path": "Encounter.serviceType.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalDepartmentSCT",
+        "path": "Encounter.serviceType.coding",
+        "sliceName": "TWMedicalDepartmentSCT",
+        "short": "對應至SNOMED CT之就醫科別"
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalDepartmentSCT.code",
+        "path": "Encounter.serviceType.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalConsultationDepartment",
+        "path": "Encounter.serviceType.coding",
+        "sliceName": "TWMedicalConsultationDepartment",
+        "short": "無法對應至SNOMED CT之臺灣健保署就醫科別"
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalConsultationDepartment.code",
+        "path": "Encounter.serviceType.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalTreatmentDepartment",
+        "path": "Encounter.serviceType.coding",
+        "sliceName": "TWMedicalTreatmentDepartment",
+        "short": "無法對應至SNOMED CT之臺灣健保署診療科別"
+      },
+      {
+        "id": "Encounter.serviceType.coding:TWMedicalTreatmentDepartment.code",
+        "path": "Encounter.serviceType.coding.code",
+        "min": 1
+      },
+      {
+        "id": "Encounter.subject",
+        "path": "Encounter.subject",
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "https://nhicore.nhi.gov.tw/pas/StructureDefinition/Patient-twpas"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

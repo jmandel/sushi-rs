@@ -1,0 +1,106 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "qicore-keyelement",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "cqi"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement",
+  "version": "6.0.0",
+  "name": "QICORE_KeyElement",
+  "title": "QI-Core Key Element Extension",
+  "status": "active",
+  "date": "2023-04-03",
+  "publisher": "HL7 International / Clinical Quality Information",
+  "contact": [
+    {
+      "name": "Clinical Quality Information WG",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/cqi"
+        }
+      ]
+    }
+  ],
+  "description": "**This extension is only used in the QI-Core Implementation Guide's Profile StructureDefinition elements.** It flags elements that the quality improvement community has identified as significant to express the full intent of measures or decision support artifacts. See the [MustSupport Flag](index.html#mustsupport-flag) section in this IG for more information.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "copyright": "Used by permission of HL7 International, all rights reserved Creative Commons License",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "ElementDefinition"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition.type.targetProfile"
+    },
+    {
+      "type": "element",
+      "expression": "ElementDefinition.type"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "QI-Core Key Element Flag: ONLY USED FOR QI-Core Profile StructureDefinitions",
+        "definition": "**This extension is only used on QI-Core Profile StructureDefinition elements**. It flags elements that are QI-Core Key Elements.",
+        "min": 0,
+        "max": "1",
+        "isModifier": false,
+        "mapping": [
+          {
+            "identity": "v2",
+            "map": "No v2 equivalent"
+          },
+          {
+            "identity": "rim",
+            "map": "No RIM equivalent"
+          }
+        ]
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "http://hl7.org/fhir/us/qicore/StructureDefinition/qicore-keyelement"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "boolean"
+          }
+        ]
+      }
+    ]
+  }
+}

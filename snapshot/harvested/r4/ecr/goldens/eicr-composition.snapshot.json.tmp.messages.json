@@ -1,6 +1,6 @@
 {
   "sortErrors": [],
   "messages": [
-
+    {"level": "warning", "type": "value", "source": "ProfileValidator", "location": "StructureDefinition.snapshot.element[8]", "line": -1, "col": -1, "message": "The type of profile http://hl7.org/fhir/StructureDefinition/composition-clinicaldocument-versionNumber|5.2.0 cannot be checked as the profile is not known"}
   ]
 }

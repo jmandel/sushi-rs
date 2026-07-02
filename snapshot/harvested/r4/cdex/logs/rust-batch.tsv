@@ -1,0 +1,8 @@
+snapshot/harvested/r4/cdex/fixtures/cdex-parameters-submit-attachment.json	snapshot/harvested/r4/cdex/rust/cdex-parameters-submit-attachment.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-patient-demographics.json	snapshot/harvested/r4/cdex/rust/cdex-patient-demographics.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-practitionerrole.json	snapshot/harvested/r4/cdex/rust/cdex-practitionerrole.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-sdc-questionnaireresponse.json	snapshot/harvested/r4/cdex/rust/cdex-sdc-questionnaireresponse.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-signature-bundle.json	snapshot/harvested/r4/cdex/rust/cdex-signature-bundle.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-signature.json	snapshot/harvested/r4/cdex/rust/cdex-signature.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-task-attachment-request.json	snapshot/harvested/r4/cdex/rust/cdex-task-attachment-request.snapshot.json
+snapshot/harvested/r4/cdex/fixtures/cdex-task-data-request.json	snapshot/harvested/r4/cdex/rust/cdex-task-data-request.snapshot.json

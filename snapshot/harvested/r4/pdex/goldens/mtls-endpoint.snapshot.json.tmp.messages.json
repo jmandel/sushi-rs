@@ -1,0 +1,6 @@
+{
+  "sortErrors": [],
+  "messages": [
+    {"level": "warning", "type": "business-rule", "source": "ProfileValidator", "location": "mTLS Endpoint.Endpoint.payloadMimeType", "line": -1, "col": -1, "message": "Binding http://hl7.org/fhir/ValueSet/mimetypes|4.0.1 could not be expanded"}
+  ]
+}

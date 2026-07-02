@@ -1,0 +1,148 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "usdf-FormularyBulkDataGraphDefinition",
+  "extension": [
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "valueCode": "draft"
+    },
+    {
+      "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "valueCode": "phx"
+    }
+  ],
+  "url": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyBulkDataGraphDefinition",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.25.74595174031514506193398850787025340071.42.7"
+    }
+  ],
+  "version": "2.1.0",
+  "name": "FormularyBulkDataGraphDefinition",
+  "title": "Formulary Bulk Data Graph Definition",
+  "status": "draft",
+  "date": "2025-02-26T17:11:51+00:00",
+  "publisher": "HL7 International / Pharmacy",
+  "contact": [
+    {
+      "name": "HL7 International / Pharmacy",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/medication"
+        },
+        {
+          "system": "email",
+          "value": "pharmacy@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "description": "A GraphDefinition defining a graph of resources to return in a query for a Formulary related Bulk Data request.",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    },
+    {
+      "identity": "workflow",
+      "uri": "http://hl7.org/fhir/workflow",
+      "name": "Workflow Pattern"
+    },
+    {
+      "identity": "w5",
+      "uri": "http://hl7.org/fhir/fivews",
+      "name": "FiveWs Pattern Mapping"
+    },
+    {
+      "identity": "objimpl",
+      "uri": "http://hl7.org/fhir/object-implementation",
+      "name": "Object Implementation Information"
+    }
+  ],
+  "kind": "resource",
+  "abstract": false,
+  "type": "GraphDefinition",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/GraphDefinition",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "GraphDefinition",
+        "path": "GraphDefinition"
+      },
+      {
+        "id": "GraphDefinition.name",
+        "path": "GraphDefinition.name",
+        "patternString": "FormularyGraphDefinition"
+      },
+      {
+        "id": "GraphDefinition.status",
+        "path": "GraphDefinition.status",
+        "patternCode": "active"
+      },
+      {
+        "id": "GraphDefinition.start",
+        "path": "GraphDefinition.start",
+        "patternCode": "InsurancePlan"
+      },
+      {
+        "id": "GraphDefinition.profile",
+        "path": "GraphDefinition.profile",
+        "patternCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-Formulary"
+      },
+      {
+        "id": "GraphDefinition.link.target.type",
+        "path": "GraphDefinition.link.target.type",
+        "patternCode": "Basic"
+      },
+      {
+        "id": "GraphDefinition.link.target.params",
+        "path": "GraphDefinition.link.target.params",
+        "patternString": "formulary={ref}"
+      },
+      {
+        "id": "GraphDefinition.link.target.profile",
+        "path": "GraphDefinition.link.target.profile",
+        "patternCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyItem"
+      },
+      {
+        "id": "GraphDefinition.link.target.link",
+        "path": "GraphDefinition.link.target.link",
+        "type": [
+          {
+            "code": "BackboneElement"
+          }
+        ]
+      },
+      {
+        "id": "GraphDefinition.link.target.link.path",
+        "path": "GraphDefinition.link.target.link.path",
+        "patternString": "Basic.subject"
+      },
+      {
+        "id": "GraphDefinition.link.target.link.target.type",
+        "path": "GraphDefinition.link.target.link.target.type",
+        "patternCode": "MedicationKnowledge"
+      },
+      {
+        "id": "GraphDefinition.link.target.link.target.profile",
+        "path": "GraphDefinition.link.target.link.target.profile",
+        "patternCanonical": "http://hl7.org/fhir/us/davinci-drug-formulary/StructureDefinition/usdf-FormularyDrug"
+      }
+    ]
+  }
+}

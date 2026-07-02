@@ -1,0 +1,102 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "emp-origin-medication-extension",
+  "url": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-origin-medication-extension",
+  "version": "1.3.1",
+  "name": "EMPOriginMedicationExtension",
+  "title": "Origin Medication Reference (eMP)",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-03-20",
+  "publisher": "gematik GmbH",
+  "contact": [
+    {
+      "name": "gematik GmbH",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "https://www.gematik.de"
+        },
+        {
+          "system": "email",
+          "value": "patientteam [ at ] gematik.de"
+        }
+      ]
+    }
+  ],
+  "description": "Erlaubt einem eMP MedicationRequest, auf die ursprünglich verwendete Medication-Instanz zu referenzieren (Ursprung des eMP-Eintrags).",
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "DE"
+        }
+      ]
+    }
+  ],
+  "copyright": "gematik GmbH / Dieses Artefakt ist lizenziert unter [Apache License](./license.html), Version 2.0.",
+  "fhirVersion": "4.0.1",
+  "mapping": [
+    {
+      "identity": "rim",
+      "uri": "http://hl7.org/v3",
+      "name": "RIM Mapping"
+    }
+  ],
+  "kind": "complex-type",
+  "abstract": false,
+  "context": [
+    {
+      "type": "element",
+      "expression": "MedicationRequest"
+    }
+  ],
+  "type": "Extension",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Extension",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Extension",
+        "path": "Extension",
+        "short": "Origin Medication Reference (eMP)",
+        "definition": "Erlaubt einem eMP MedicationRequest, auf die ursprünglich verwendete Medication-Instanz zu referenzieren (Ursprung des eMP-Eintrags).",
+        "constraint": [
+          {
+            "key": "epa-no-history-reference",
+            "severity": "error",
+            "human": "Die Referenz darf keine History-Referenz enthalten ('/_history/' ist nicht erlaubt).",
+            "expression": "value.where($this is Reference).reference.exists() implies value.where($this is Reference).reference.contains('/_history/').not()",
+            "source": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-origin-medication-extension"
+          }
+        ]
+      },
+      {
+        "id": "Extension.extension",
+        "path": "Extension.extension",
+        "max": "0"
+      },
+      {
+        "id": "Extension.url",
+        "path": "Extension.url",
+        "fixedUri": "https://gematik.de/fhir/epa-medication/StructureDefinition/emp-origin-medication-extension"
+      },
+      {
+        "id": "Extension.value[x]",
+        "path": "Extension.value[x]",
+        "short": "Referenz auf die Ursprungs-Medication (Basis des eMP-Eintrags)",
+        "definition": "Diese Referenz stellt den Bezug zwischen einem MedicationRequest und der ursprünglichen Medication-Instanz her, die bei der Erstellung des eMP-Eintrags verwendet wurde. Sie dokumentiert den Ursprung (Origin) der Verschreibung und ermöglicht eine eindeutige Rückverfolgbarkeit. Dies ist insbesondere relevant, wenn sich im Verlauf unterschiedliche Medication-Instanzen (z. B. aufgrund von Versionsänderungen, Produktwechsel oder unterschiedlicher Quellkontexte) im eMP finden lassen. ",
+        "min": 1,
+        "type": [
+          {
+            "code": "Reference",
+            "targetProfile": [
+              "http://hl7.org/fhir/StructureDefinition/Medication"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

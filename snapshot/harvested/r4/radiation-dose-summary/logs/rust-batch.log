@@ -1,0 +1,5 @@
+OK rust indication-observation
+OK rust modality-device
+OK rust radiation-dose-summary
+OK rust radiation-summary-report
+RUST BATCH: ok=4 failed=0 total=4
