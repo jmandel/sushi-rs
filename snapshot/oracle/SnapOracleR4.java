@@ -79,7 +79,11 @@ public class SnapOracleR4 {
     String outFile = batchList == null ? a[a.length-1] : null;
     FilesystemPackageCacheManager pcm = new FilesystemPackageCacheManager.Builder().withCacheFolder(cache).build();
     SimpleWorkerContext ctx = null;
-    int packageEnd = batchList == null ? a.length - 3 : a.length;
+    // Single mode: the last two args are <inputProfile.json> <outputSnapshot.json>,
+    // so packages span [pos+1, a.length-2). (Was a.length-3: an off-by-one that
+    // silently dropped the LAST package in single-run mode; batch mode was correct
+    // and all goldens were batch-generated.)
+    int packageEnd = batchList == null ? a.length - 2 : a.length;
     for (int i = pos + 1; i < packageEnd; i++) {
       String[] pv = a[i].split("#");
       NpmPackage npm = pcm.loadPackageFromCacheOnly(pv[0], pv[1]);
