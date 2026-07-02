@@ -3,6 +3,13 @@
 This directory is for the Rust pure snapshot generator work on branch
 `snapshot-gen`.
 
+> **REWORK IN PROGRESS:** the generator is being rebuilt as a decision-
+> isomorphic walk engine. Read [`REWORK-PLAN.md`](./REWORK-PLAN.md) first.
+> **Oracle pin:** fhir-core commit `5c4d5a0ff` (2026-06-10), jar
+> `org.hl7.fhir.r5-6.9.10-SNAPSHOT.jar`, from
+> `/home/jmandel/hobby/fhir-perf/repos/fhir-core` (`FHIR_CORE_REPO`). Changing
+> the oracle version is a deliberate re-pin event recorded in REWORK-PLAN.md.
+
 ## Scope
 
 - Target: Layer-A `ProfileUtilities.generateSnapshot` behavior using the same
