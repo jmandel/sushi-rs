@@ -194,3 +194,20 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
   Legacy engine at full-corpus parity (see snapshot/AGENTS.md numbers).
   Wave 1 launched (4 parallel agents): W1a trace, W1b conversion oracle,
   W1c modularization, W1d walk spec.
+- 2026-07-02 (later): **Wave 1 + W2a landed** (commits 7c3230b..d7a24a1).
+  - W1c modularization: gates byte-identical (ips/us-core/qicore/sdc/ecr).
+  - W1b conversion oracle: `--dump-converted`, 39 goldens, spec.
+  - W1d walk spec: 901 lines; anchor-drift caveat added (authored against
+    tracer-instrumented tree; anchors ±10 lines, resolve on `snap-trace`).
+  - W1a trace: fhir-core `snap-trace` @ `047763f89`, 51 branch labels,
+    TRACE=1, trace-schema.md, diff-trace.cjs. Deployed r5+utilities jars in
+    FHIR_CORE_REPO target/ are now the INSTRUMENTED build (verified: output
+    byte-identical trace on/off AND batch output matches committed goldens).
+  - W2a conversion impl: convert.rs 39/39 converted goldens (order-
+    sensitive), 338-fixture smoke, `--dump-converted` CLI.
+  - **GOTCHA fixed:** SnapOracleR4 single-run mode dropped the LAST package
+    arg (off-by-one) since inception — single-mode runs silently missed e.g.
+    extensions.r4 and produced false diffs vs goldens. All goldens were
+    batch-generated (unaffected). Fixed; single mode now reproduces goldens.
+    Rule stands: prefer batch mode for golden generation; single mode is fine
+    for trace debugging now.
