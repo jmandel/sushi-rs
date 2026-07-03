@@ -255,6 +255,9 @@ pub fn raw_text(src: &str) -> String {
 fn render_inline_chars(chars: &[char], out: &mut String) {
     let n = chars.len();
     let mut i = 0;
+    // Open inline HTML elements (non-void), for kramdown-style auto-closing
+    // of unclosed tags at the end of the span context.
+    let mut open_stack: Vec<String> = Vec::new();
     while i < n {
         let c = chars[i];
         match c {
@@ -304,6 +307,54 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                     i = ni;
                 } else if let Some((raw, ni)) = try_raw_inline_html(chars, i) {
                     out.push_str(&raw);
+                    if let Some((name, is_close, is_self)) = inspect_tag(&raw) {
+                        if is_close {
+                            if let Some(pos) = open_stack.iter().rposition(|t| *t == name) {
+                                open_stack.truncate(pos);
+                            }
+                        } else if !is_self && !is_void_html(&name) {
+                            if is_raw_span_model(&name) {
+                                // RAW content model (code, kbd, script, …):
+                                // content passes through VERBATIM until the
+                                // matching close tag — no markdown processing.
+                                let close_pat: Vec<char> =
+                                    format!("</{name}>").chars().collect();
+                                let mut k = ni;
+                                let mut end = None;
+                                'scan: while k < n {
+                                    if chars[k] == '<' && k + close_pat.len() <= n {
+                                        let mut m = 0;
+                                        while m < close_pat.len() {
+                                            if chars[k + m].to_ascii_lowercase() != close_pat[m] {
+                                                break;
+                                            }
+                                            m += 1;
+                                        }
+                                        if m == close_pat.len() {
+                                            end = Some(k);
+                                            break 'scan;
+                                        }
+                                    }
+                                    k += 1;
+                                }
+                                if let Some(endp) = end {
+                                    let verbatim: String =
+                                        chars[ni..endp].iter().collect();
+                                    out.push_str(&verbatim);
+                                    out.push_str(&format!("</{name}>"));
+                                    i = endp + close_pat.len();
+                                    continue;
+                                } else {
+                                    let verbatim: String = chars[ni..].iter().collect();
+                                    out.push_str(&verbatim);
+                                    out.push_str(&format!("</{name}>"));
+                                    i = n;
+                                    continue;
+                                }
+                            }
+                            open_stack.push(name);
+                        }
+                    }
                     i = ni;
                 } else {
                     out.push_str("&lt;");
@@ -411,9 +462,11 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                 // = literal '\n'). kramdown PRESERVES a single trailing space
                 // before a soft break.
                 if out.ends_with("  ") {
-                    while out.ends_with(' ') {
-                        out.pop();
-                    }
+                    // kramdown's hard-break token is EXACTLY two spaces +
+                    // newline; any spaces beyond those two remain as text
+                    // (`a   \n` -> `a <br />`).
+                    out.pop();
+                    out.pop();
                     out.push_str("<br />\n");
                 } else {
                     // keep a lone trailing space, just append the newline.
@@ -427,6 +480,22 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
             }
         }
     }
+    // kramdown auto-closes inline HTML elements left open at the end of the
+    // span context (it parses to a tree; unclosed elements close on emit).
+    while let Some(name) = open_stack.pop() {
+        out.push_str(&format!("</{name}>"));
+    }
+}
+
+/// Inline elements with RAW content model whose inner text kramdown passes
+/// through untouched (html.rb HTML_CONTENT_MODEL_RAW: script style math option
+/// textarea pre code kbd samp var).
+fn is_raw_span_model(name: &str) -> bool {
+    matches!(
+        name,
+        "script" | "style" | "math" | "option" | "textarea" | "pre" | "code" | "kbd" | "samp"
+            | "var"
+    )
 }
 
 /// Skip a `{...}` group starting at `i` (used for consumed span extensions).
@@ -1117,6 +1186,41 @@ fn parse_link_dest(chars: &[char], open_paren: usize) -> Option<(String, Option<
         }
         j += 1;
         url_end = j;
+    }
+    if j < n && chars[j].is_whitespace() {
+        // kramdown link destinations may contain SPACES (`(NDH Exchange.png)`).
+        // If the whitespace-delimited scan does not land on a title or `)`,
+        // retry scanning to the matching close paren allowing spaces.
+        let save_j = j;
+        let mut k = j;
+        while k < n && chars[k] == ' ' {
+            k += 1;
+        }
+        if k < n && chars[k] != ')' && chars[k] != '"' && chars[k] != '\'' {
+            let mut depth2 = 0i32;
+            let mut m = url_start;
+            let mut end = None;
+            while m < n {
+                let c = chars[m];
+                if c == '(' {
+                    depth2 += 1;
+                } else if c == ')' {
+                    if depth2 == 0 {
+                        end = Some(m);
+                        break;
+                    }
+                    depth2 -= 1;
+                } else if c == '\n' {
+                    break;
+                }
+                m += 1;
+            }
+            if let Some(endp) = end {
+                let url: String = chars[url_start..endp].iter().collect();
+                return Some((url, None, endp + 1));
+            }
+        }
+        let _ = save_j;
     }
     let url: String = chars[url_start..url_end].iter().collect();
     let (title, nj) = parse_optional_title(chars, j)?;
