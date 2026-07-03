@@ -790,11 +790,29 @@ impl<'a> Parser<'a> {
                         if ci >= content_indent {
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
                             self.i += 1;
-                        } else if ci == base_indent && list_marker(cl).is_some() {
+                        } else if list_marker(cl).is_some() && ci <= base_indent {
                             break;
                         } else if ci > base_indent {
                             // nested or lazy: keep relative indent
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
+                            self.i += 1;
+                        } else if parse_block_ial_line(cl).is_some()
+                            || is_kramdown_ext_line(cl)
+                        {
+                            // A block IAL / extension line terminates the item so
+                            // it can attach to the list itself (e.g. `{:toc}`).
+                            break;
+                        } else if item_lines
+                            .last()
+                            .map(|l| !l.trim().is_empty())
+                            .unwrap_or(false)
+                        {
+                            // Lazy paragraph continuation: an under-indented,
+                            // non-marker line directly following item text stays
+                            // part of the item's paragraph (kramdown/CommonMark
+                            // lazy continuation). Preserve its leading indent so
+                            // inline soft-break spacing matches.
+                            item_lines.push(cl[content_indent.min(ci)..].to_string());
                             self.i += 1;
                         } else {
                             break;

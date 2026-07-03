@@ -93,6 +93,9 @@ pub fn normalize_html_block(raw: &str) -> String {
     let n = chars.len();
     let mut out = String::new();
     let mut i = 0;
+    // Stack of currently-open (non-void, non-self-closed) tag names. kramdown
+    // escapes a closing tag with no matching open tag as literal text.
+    let mut stack: Vec<String> = Vec::new();
     while i < n {
         let c = chars[i];
         if c == '<' {
@@ -112,7 +115,31 @@ pub fn normalize_html_block(raw: &str) -> String {
             }
             // tag?
             if let Some((norm, ni)) = try_raw_inline_html(&chars, i) {
-                out.push_str(&norm);
+                // Inspect the raw tag to maintain the open/close stack.
+                let raw_tag: String = chars[i..ni].iter().collect();
+                if let Some((name, is_close, is_selfclose)) = inspect_tag(&raw_tag) {
+                    if is_close {
+                        if stack.iter().any(|t| t == &name) {
+                            // matched open somewhere: pop to it
+                            while let Some(top) = stack.pop() {
+                                if top == name {
+                                    break;
+                                }
+                            }
+                            out.push_str(&norm);
+                        } else {
+                            // unmatched close tag -> escape as literal text
+                            out.push_str(&escape_html_text(&raw_tag));
+                        }
+                    } else {
+                        if !is_selfclose && !is_void_html(&name) {
+                            stack.push(name);
+                        }
+                        out.push_str(&norm);
+                    }
+                } else {
+                    out.push_str(&norm);
+                }
                 i = ni;
                 continue;
             }
@@ -571,6 +598,24 @@ fn normalize_inline_tag(raw: &str) -> String {
     out
 }
 
+/// Inspect a full tag string `<...>`; return (lowercased name, is_closing,
+/// is_self_closing). None if not a plain start/close tag (e.g. comment).
+fn inspect_tag(tag: &str) -> Option<(String, bool, bool)> {
+    if !tag.starts_with('<') || !tag.ends_with('>') || tag.starts_with("<!") {
+        return None;
+    }
+    let inner = &tag[1..tag.len() - 1];
+    let is_close = inner.starts_with('/');
+    let body = if is_close { &inner[1..] } else { inner };
+    let is_self = body.trim_end().ends_with('/');
+    let name_end = body.find(|c: char| c.is_whitespace() || c == '/').unwrap_or(body.len());
+    let name = body[..name_end].to_lowercase();
+    if name.is_empty() {
+        return None;
+    }
+    Some((name, is_close, is_self))
+}
+
 fn is_void_html(name: &str) -> bool {
     matches!(
         name,
@@ -579,40 +624,53 @@ fn is_void_html(name: &str) -> bool {
     )
 }
 
+/// Re-serialize a tag's attribute list the way kramdown does: attribute NAMES
+/// lowercased, VALUES preserved (case + content), quoting normalized to double
+/// quotes, whitespace around `=` removed, and inter-attribute whitespace
+/// collapsed to a single space. Each attribute is emitted as ` name="value"`
+/// (or bare ` name` when valueless).
 fn lowercase_attr_names(rest: &str) -> String {
-    let mut out = String::new();
     let chars: Vec<char> = rest.chars().collect();
     let n = chars.len();
     let mut i = 0;
-    while i < n {
-        let c = chars[i];
-        if c.is_whitespace() {
-            // kramdown collapses runs of whitespace between attributes to a
-            // single space (it re-serializes the parsed attribute hash).
-            while i < n && chars[i].is_whitespace() {
-                i += 1;
-            }
-            out.push(' ');
-            continue;
+    let mut out = String::new();
+    loop {
+        // skip whitespace between attributes
+        while i < n && chars[i].is_whitespace() {
+            i += 1;
         }
-        // read an attribute name up to '=' or whitespace
+        if i >= n {
+            break;
+        }
+        // read attribute name (up to whitespace or '=')
         let start = i;
         while i < n && !chars[i].is_whitespace() && chars[i] != '=' {
             i += 1;
         }
-        let name: String = chars[start..i].iter().collect();
-        out.push_str(&name.to_lowercase());
-        if i < n && chars[i] == '=' {
-            out.push('=');
+        if i == start {
+            // stray '=' or char with no name — skip it to avoid corruption
             i += 1;
-            // copy value; kramdown normalizes attribute quoting to DOUBLE
-            // quotes (single-quoted source values are re-emitted double-quoted).
+            continue;
+        }
+        let name: String = chars[start..i].iter().collect();
+        out.push(' ');
+        out.push_str(&name.to_lowercase());
+        // optional whitespace then '='
+        let mut j = i;
+        while j < n && chars[j].is_whitespace() {
+            j += 1;
+        }
+        if j < n && chars[j] == '=' {
+            i = j + 1;
+            while i < n && chars[i].is_whitespace() {
+                i += 1;
+            }
+            out.push('=');
             if i < n && (chars[i] == '"' || chars[i] == '\'') {
                 let q = chars[i];
                 out.push('"');
                 i += 1;
                 while i < n && chars[i] != q {
-                    // escape any embedded double-quote
                     if chars[i] == '"' {
                         out.push_str("&quot;");
                     } else {
@@ -625,12 +683,16 @@ fn lowercase_attr_names(rest: &str) -> String {
                     i += 1;
                 }
             } else {
+                // bare (unquoted) value -> quote it
+                out.push('"');
                 while i < n && !chars[i].is_whitespace() {
                     out.push(chars[i]);
                     i += 1;
                 }
+                out.push('"');
             }
         }
+        // else: valueless attribute, already emitted
     }
     out
 }
