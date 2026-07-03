@@ -33,6 +33,11 @@ pub struct Gen {
     pub def_path: String,
     /// `makeTargets` — true for the fragment path (HTG:810).
     pub make_targets: bool,
+    /// `HierarchicalTableGenerator.uuid` (HTG:128): a per-JVM-run random UUID
+    /// emitted as a comment in `treeFilterJS`. Genuinely non-deterministic in
+    /// the publisher; supplied here as run context (quirk-registry entry: the
+    /// corpus harness passes each IG's harvested run UUID).
+    pub run_uuid: String,
 }
 
 impl Gen {
@@ -47,6 +52,7 @@ impl Gen {
             treelines: true,
             def_path: String::new(),
             make_targets: true,
+            run_uuid: String::new(),
         }
     }
 
@@ -58,6 +64,7 @@ impl Gen {
             treelines: true,
             def_path: String::new(),
             make_targets: true,
+            run_uuid: String::new(),
         }
     }
 
@@ -103,6 +110,15 @@ pub fn path_url(a: &str, b: &str) -> String {
         s.push_str(arg);
     }
     s
+}
+
+/// `ManagedWebAccess.makeSecureRef` (ManagedWebAccess.java:195-201).
+pub fn make_secure_ref(url: &str) -> String {
+    if url.starts_with("http://") {
+        url.replacen("http://", "https://", 1)
+    } else {
+        url.to_string()
+    }
 }
 
 fn is_no_string(s: Option<&str>) -> bool {
@@ -199,8 +215,9 @@ pub fn init_normal_table(
 ) -> TableModel {
     let mut model = TableModel::new(id, is_active);
     model.alternating = alternating;
-    // mode == XHTML in the fragment path -> docoImg via pathURL(prefix, help16)
-    model.doco_img = Some(path_url(prefix, "help16.png"));
+    // mode == XHTML -> docoImg = pathURL(makeSecureRef(prefix), "help16.png")
+    // (HTG:873). makeSecureRef (ManagedWebAccess.java:195): http:// -> https://.
+    model.doco_img = Some(path_url(&make_secure_ref(prefix), "help16.png"));
     model.doco_ref = Some(path_url(
         "https://build.fhir.org/ig/FHIR/ig-guidance",
         "readingIgs.html#table-views",
@@ -298,7 +315,16 @@ fn assign_row_id(r: &mut Row, path: &str, index: usize, total: usize) {
 /// `generate(model, imagePath, border, outputTracker)` (HTG:941).
 pub fn generate(gen: &Gen, model: &mut TableModel, image_path: &str, border: i32) -> XhtmlNode {
     check_model(model);
-    // script/checkboxes only matter when active; inactive path skips the script.
+    // HTG:943-950: script = any title has filter or checkboxes; capture the
+    // checkbox map (label -> role) from the title that carries one.
+    let mut script = false;
+    let mut checkboxes: Option<Vec<(String, String)>> = None;
+    for t in &model.titles {
+        script = script || t.filter || !t.checkboxes.is_empty();
+        if !t.checkboxes.is_empty() {
+            checkboxes = Some(t.checkboxes.clone());
+        }
+    }
     let mut table = Elem::new("table");
     table
         .set_attr("border", border.to_string())
@@ -343,7 +369,30 @@ pub fn generate(gen: &Gen, model: &mut TableModel, image_path: &str, border: i32
             if let Some(prev) = last_th.take() {
                 tr.push_elem(prev);
             }
-            let mut th = build_cell(gen, &t.cell, "th", None, None, None, false, None, "white", 0, image_path, border, model, None, false);
+            // HTG:973: header renderCell passes suppressExternals=true, filter =
+            // model.active && t.isFilter(), mid = model.id, cbs = t.checkboxes.
+            let mut th = build_cell(
+                gen,
+                &t.cell,
+                "th",
+                None,
+                None,
+                None,
+                false,
+                None,
+                "white",
+                0,
+                image_path,
+                border,
+                model,
+                None,
+                true,
+                model.active && t.filter,
+                model.id.as_deref(),
+                // Java passes t.getCheckboxes() unconditionally (never null for
+                // a Title), so the checkbox sub-block gate is always "non-null".
+                Some(&t.checkboxes),
+            );
             // width (HTG:974): th.style("width: Npx") appended.
             if t.width != 0 {
                 th.style(&format!("width: {}px", t.width));
@@ -405,7 +454,40 @@ pub fn generate(gen: &Gen, model: &mut TableModel, image_path: &str, border: i32
         table.push_elem(tr);
     }
 
+    // HTG:1009-1011: the tree-filter script (raw model.active, not isActive()).
+    if model.active && script {
+        let mut sc = Elem::new("script");
+        sc.set_attr("type", "text/javascript");
+        sc.text(tree_filter_js(
+            gen,
+            model.id.as_deref().unwrap_or(""),
+            checkboxes.as_deref().unwrap_or(&[]),
+        ));
+        table.push_elem(sc);
+    }
+
     table.build()
+}
+
+/// `treeFilterJS(mid, checkboxes)` (HTG:929-939). Iterates checkbox LABELS in
+/// sorted order (Utilities.sorted over keySet).
+fn tree_filter_js(gen: &Gen, mid: &str, checkboxes: &[(String, String)]) -> String {
+    let mut js = format!("  // {}\n", gen.run_uuid);
+    let mut labels: Vec<&String> = checkboxes.iter().map(|(k, _)| k).collect();
+    labels.sort();
+    for s in labels {
+        let role = &checkboxes.iter().find(|(k, _)| k == s).unwrap().1;
+        let id = format!("cb{}-{}", mid, role);
+        js.push_str(&format!(
+            "document.getElementById('{}').checked = 'false' != localStorage.getItem('ht-table-states-{}');\n",
+            id, role
+        ));
+        js.push_str(&format!(
+            "filterDesc(document.getElementById('{}'), '{}', document.getElementById('cb{}-{}').checked, document.getElementById('pp{}'));\n",
+            mid, role, mid, role, mid
+        ));
+    }
+    js
 }
 
 /// The doco `<span style="float: right"><a title=... href=doco_ref><img
@@ -425,7 +507,9 @@ fn attach_doco_link(gen: &Gen, th: &mut Elem, doco_ref: &str, model: &TableModel
     img.set_attr("alt", "doco")
         .style("background-color: inherit")
         .set_attr("src", model.doco_img.clone().unwrap_or_default());
-    // model.isActive() is false in our path, so no onLoad.
+    if model.is_active() {
+        img.set_attr("onLoad", "fhirTableInit(this)");
+    }
     a.push_elem(img);
     span.push_elem(a);
     th.push_elem(span);
@@ -496,6 +580,9 @@ fn render_row(
             model,
             Some(r),
             first,
+            false,
+            model.id.as_deref(),
+            None,
         );
         tr.push_elem(tc);
         first = false;
@@ -532,6 +619,9 @@ fn build_cell(
     _model: &TableModel,
     row: Option<&Row>,
     suppress_externals: bool,
+    filter: bool,
+    mid: Option<&str>,
+    checkboxes: Option<&[(String, String)]>,
 ) -> Elem {
     let mut tc = Elem::new(name);
     tc.set_attr("class", "hierarchy");
@@ -607,23 +697,29 @@ fn build_cell(
                 .set_attr("alt", ".");
             content.push_elem(img);
         }
-        // final join image (HTG:1100). sfx is "" (table inactive).
+        // final join image (HTG:1100-1127). sfx "-open" + onClick for active
+        // tables with children.
         if !indents.is_empty() {
+            let sfx = if _model.is_active() && has_children { "-open" } else { "" };
             let last = indents[indents.len() - 1];
-            let file = match last {
-                NEW_REGULAR => "tbl_vjoin_end.png",
-                NEW_SLICER => "tbl_vjoin_end_slicer.png",
-                NEW_SLICE => "tbl_vjoin_end_slice.png",
-                CONTINUE_REGULAR => "tbl_vjoin.png",
-                CONTINUE_SLICER => "tbl_vjoin_slicer.png",
-                CONTINUE_SLICE => "tbl_vjoin_slice.png",
+            let base = match last {
+                NEW_REGULAR => "tbl_vjoin_end",
+                NEW_SLICER => "tbl_vjoin_end_slicer",
+                NEW_SLICE => "tbl_vjoin_end_slice",
+                CONTINUE_REGULAR => "tbl_vjoin",
+                CONTINUE_SLICER => "tbl_vjoin_slicer",
+                CONTINUE_SLICE => "tbl_vjoin_slice",
                 other => panic!("Unrecognized indent level: {}", other),
             };
+            let file = format!("{}{}.png", base, sfx);
             let mut img = Elem::new("img");
-            img.set_attr("src", src_for(gen, image_path, file))
+            img.set_attr("src", src_for(gen, image_path, &file))
                 .style("background-color: inherit")
                 .set_attr("class", "hierarchy")
                 .set_attr("alt", ".");
+            if _model.is_active() && has_children {
+                img.set_attr("onClick", "tableRowAction(this)");
+            }
             content.push_elem(img);
         }
     } else {
@@ -668,17 +764,94 @@ fn build_cell(
         render_piece(gen, &mut content, p, suppress_externals);
     }
 
-    // merge itc content into tc (non-inner-table path).
-    merge(&mut tc, content);
-
-    // anchor (HTG:1206): a child of tc, AFTER the pieces.
+    // The filter UI (HTG:1209-1235) is appended to itc BEFORE the itc content
+    // merges into tc, but AFTER the anchor... order in Java: pieces (itc),
+    // anchor (tc), filter (itc). Since itc == tc for non-inner cells, the
+    // emitted order is pieces, anchor, filter-UI.
     if gen.make_targets && !is_no_string(anchor) {
+        merge(&mut tc, content);
         let mut a = Elem::new("a");
         a.set_attr("name", gen.prefix_anchor(&nm_tokenize(anchor.unwrap())));
         a.text(" ");
         tc.push_elem(a);
+        // filter never co-occurs with an anchor (headers have no anchor), but
+        // keep Java's order if it ever did.
+        if filter {
+            append_filter_ui(&mut tc, mid.unwrap_or(""), checkboxes);
+        }
+        return tc;
     }
+
+    if filter {
+        append_filter_ui(&mut content, mid.unwrap_or(""), checkboxes);
+    }
+    merge(&mut tc, content);
     tc
+}
+
+/// The tree-filter UI block (HTG:1209-1235).
+fn append_filter_ui(itc: &mut Elem, mid: &str, checkboxes: Option<&[(String, String)]>) {
+    // itc.nbsp() x4
+    for _ in 0..4 {
+        itc.nbsp();
+    }
+    let mut span = Elem::new("span");
+    span.style("font-weight: normal");
+    span.tx("Filter: ");
+    // input("filter", "text", null, 10) (XhtmlNode.java:796): attrs name, type,
+    // size (placeholder null -> skipped).
+    let mut input = Elem::new("input");
+    input.set_attr("name", "filter");
+    input.set_attr("type", "text");
+    input.set_attr("size", "10");
+    input.style("border: 1px #F0F0F0 solid; background-color: rgb(254, 254, 231);");
+    input.set_attr(
+        "onInput",
+        format!("filterTree(document.getElementById('{}'), event.target.value)", mid),
+    );
+    span.push_elem(input);
+    if let Some(cbs) = checkboxes {
+        span.tx(" ");
+        // span.img("tree-filter.png", "Filters") (XhtmlFluent.java:224).
+        let mut img = Elem::new("img");
+        img.set_attr("src", "tree-filter.png");
+        img.set_attr("alt", "Filters");
+        img.set_attr(
+            "onClick",
+            format!(
+                "showPanel(event.target, document.getElementById('{}'), document.getElementById('pp{}'))",
+                mid, mid
+            ),
+        );
+        span.push_elem(img);
+        let mut panel = Elem::new("div");
+        panel.set_attr("id", format!("pp{}", mid));
+        panel.style("display: none; position: fixed; opacity : 1.0; background-color: rgb(254, 254, 231); border: 1px solid #ccc; padding: 10px; boxShadow: 0 2px 5px rgba(0,0,0,0.2); zIndex: 1000; borderRadius: 4px");
+        let mut labels: Vec<&String> = cbs.iter().map(|(k, _)| k).collect();
+        labels.sort();
+        for s in labels {
+            let v = &cbs.iter().find(|(k, _)| k == s).unwrap().1;
+            panel.tx(s.as_str());
+            panel.tx(" ");
+            let mut input = Elem::new("input");
+            input.set_attr("name", v.as_str());
+            input.set_attr("type", "checkbox");
+            input.set_attr("size", "1");
+            input.set_attr("id", format!("cb{}-{}", mid, v));
+            input.set_attr("checked", "true");
+            input.set_attr(
+                "onClick",
+                format!(
+                    "filterDesc(document.getElementById('{}'), '{}',event.target.checked, document.getElementById('pp{}'))",
+                    mid, v, mid
+                ),
+            );
+            panel.push_elem(input);
+            panel.push_elem(Elem::new("br"));
+        }
+        span.push_elem(panel);
+    }
+    itc.push_elem(span);
 }
 
 /// Move `content`'s children into `tc`.
@@ -749,9 +922,10 @@ fn render_piece(gen: &Gen, itc: &mut Elem, p: &Piece, suppress_externals: bool) 
         }
         if let Some(ti) = p.get_tag_img() {
             a.text(" ");
+            // a.img(src, null) (XhtmlFluent.java:224): src then alt=".".
             let mut img = Elem::new("img");
             img.set_attr("src", ti);
-            // XhtmlNode.img(src,null) sets src then alt? Check: img(src, alt).
+            img.set_attr("alt", ".");
             a.push_elem(img);
         }
         itc.push_elem(a);
@@ -814,8 +988,10 @@ fn render_piece(gen: &Gen, itc: &mut Elem, p: &Piece, suppress_externals: bool) 
         // own tagImg above and returned into itc). Faithful to HTG:1200.
         if is_no_string(p.get_reference()) && is_no_string(p.get_tag()) {
             itc.text(" ");
+            // itc.img(src, null): src then alt="." (XhtmlFluent.java:224).
             let mut img = Elem::new("img");
             img.set_attr("src", ti);
+            img.set_attr("alt", ".");
             itc.push_elem(img);
         }
     }
@@ -838,9 +1014,8 @@ pub mod phrase {
     pub const SD_HEAD_FLAGS_DESC: &str =
         "Information about the use of the element";
     pub const SD_HEAD_CARD_DESC: &str =
-        "Minimum and Maximum # of times the element can appear in the instance. Super-scripts indicate additional constraints on appearance";
-    pub const SD_HEAD_DESC_DESC: &str =
-        "Fixed values, length limits, vocabulary bindings and other usage notes";
+        "Minimum and Maximum # of times the element can appear in the instance";
+    pub const SD_HEAD_DESC_DESC: &str = "Additional information about the element";
 
     pub const SD_GRID_HEAD_NAME_DESC: &str =
         "The name of the element (Slice name in brackets).  Mouse-over provides definition";

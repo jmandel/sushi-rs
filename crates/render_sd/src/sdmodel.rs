@@ -96,6 +96,40 @@ impl<'a> Ed<'a> {
     pub fn base_min(&self) -> Option<i64> {
         self.base().and_then(|b| b.get("min")).and_then(|x| x.as_i64())
     }
+    pub fn short(&self) -> Option<&'a str> {
+        self.str("short")
+    }
+    pub fn is_summary(&self) -> bool {
+        self.v.get("isSummary").and_then(|x| x.as_bool()).unwrap_or(false)
+    }
+    pub fn must_have_value(&self) -> bool {
+        self.v.get("mustHaveValue").and_then(|x| x.as_bool()).unwrap_or(false)
+    }
+    pub fn order_meaning(&self) -> Option<&'a str> {
+        self.str("orderMeaning")
+    }
+    pub fn conditions(&self) -> Vec<&'a str> {
+        self.v
+            .get("condition")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().filter_map(|c| c.as_str()).collect())
+            .unwrap_or_default()
+    }
+    pub fn extensions(&self) -> Vec<&'a Value> {
+        self.v
+            .get("extension")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().collect())
+            .unwrap_or_default()
+    }
+    pub fn has_extension(&self, url: &str) -> bool {
+        self.extensions()
+            .iter()
+            .any(|e| e.get("url").and_then(|x| x.as_str()) == Some(url))
+    }
+    pub fn base_path(&self) -> Option<&'a str> {
+        self.base().and_then(|b| b.get("path")).and_then(|x| x.as_str())
+    }
     /// A fixed[x] value: returns (json-type-suffix, value) if any key starts with
     /// "fixed".
     pub fn fixed(&self) -> Option<(&'a str, &'a Value)> {
@@ -133,6 +167,37 @@ pub struct TypeRef<'a> {
 impl<'a> TypeRef<'a> {
     pub fn code(&self) -> &'a str {
         self.v.get("code").and_then(|x| x.as_str()).unwrap_or("")
+    }
+    /// Java `TypeRefComponent.getWorkingCode()`: the `structuredefinition-
+    /// fhir-type` extension on `code` wins over the raw code (this is how
+    /// `http://hl7.org/fhirpath/System.String` renders as `string`).
+    pub fn working_code(&self) -> &'a str {
+        if let Some(exts) = self
+            .v
+            .get("extension")
+            .or_else(|| self.v.get("_code").and_then(|c| c.get("extension")))
+            .and_then(|x| x.as_array())
+        {
+            for e in exts {
+                if e.get("url").and_then(|x| x.as_str())
+                    == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type")
+                {
+                    if let Some(v) = e
+                        .get("valueUrl")
+                        .or_else(|| e.get("valueUri"))
+                        .and_then(|x| x.as_str())
+                    {
+                        return v;
+                    }
+                }
+            }
+        }
+        self.code()
+    }
+    /// Java `TypeRefComponent.hasTarget()` (ElementDefinition.java:2628):
+    /// raw code in {Reference, canonical, CodeableReference}.
+    pub fn has_target(&self) -> bool {
+        matches!(self.code(), "Reference" | "canonical" | "CodeableReference")
     }
     pub fn profiles(&self) -> Vec<&'a str> {
         self.v

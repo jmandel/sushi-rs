@@ -317,9 +317,11 @@ impl Cell {
             p.add_style("color: black");
             // Faithful port of the Java precedence bug (HTG:521):
             // `"background-color: "+bgColor != null ? bgColor : "white"` parses
-            // as `("background-color: "+bgColor) != null ? bgColor : "white"`,
-            // and the left side is never null, so the result is always bgColor.
-            p.add_style(&format!("background-color: {}", bg_color.unwrap_or("null")));
+            // as `("background-color: "+bgColor) != null ? bgColor : "white"`;
+            // the left side is never null, so addStyle receives BARE bgColor —
+            // which is Java null here, and addStyle string-appends it as the
+            // literal "null" (golden: `color: black; null`).
+            p.add_style(bg_color.unwrap_or("null"));
         }
         self.pieces.push(p);
         self.pieces.len() - 1
@@ -426,6 +428,10 @@ pub struct TableModel {
     pub alternating: bool,
     pub show_headings: bool,
     pub border: bool,
+    /// `HierarchicalTableGenerator.ACTIVE_TABLES` (HTG:127) — a static the
+    /// publisher sets from the IG's `active-tables` parameter
+    /// (PublisherIGLoader.java:443). Per-run config, so an instance field here.
+    pub active_tables: bool,
 }
 
 impl TableModel {
@@ -440,16 +446,13 @@ impl TableModel {
             alternating: false,
             show_headings: true,
             border: false,
+            active_tables: false,
         }
     }
-    /// `isActive()` (HTG:752): `active && ACTIVE_TABLES`. ACTIVE_TABLES is false
-    /// in the publisher fragment path, so effective is always false.
+    /// `isActive()` (HTG:752): `active && ACTIVE_TABLES`.
     pub fn is_active(&self) -> bool {
-        self.active && ACTIVE_TABLES
+        self.active && self.active_tables
     }
 }
 
-/// HTG.ACTIVE_TABLES (HTG:127) — a static, default false. The publisher never
-/// sets it for fragment generation, so table.isActive() is false everywhere in
-/// our path.
-pub const ACTIVE_TABLES: bool = false;
+

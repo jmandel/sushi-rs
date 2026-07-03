@@ -10,7 +10,9 @@
 
 use std::path::{Path, PathBuf};
 
+use render_sd::context::IgContext;
 use render_sd::grid::render_grid;
+use render_sd::table::{render_table, TableConfig};
 use render_sd::{wrap_raw, Sd};
 
 const REPO: &str = "/home/jmandel/hobby/sushi-rs-snapshot";
@@ -45,13 +47,115 @@ fn golden_path(ig: &str, id: &str, suffix: &str) -> PathBuf {
     ))
 }
 
-fn render(kind: &str, sd: &Sd) -> Option<String> {
+fn render(
+    kind: &str,
+    sd: &Sd,
+    ctx: Option<&IgContext>,
+    run_uuid: &str,
+    active_tables: bool,
+) -> Option<String> {
     let def_file = format!("StructureDefinition-{}-definitions.html", sd.id());
     let body = match kind {
         "grid" => render_grid(sd, &def_file, ""),
+        "snapshot" => {
+            let mut cfg = TableConfig::snapshot(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
+        "snapshot-all" => {
+            let mut cfg = TableConfig::snapshot_all(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
         _ => return None,
     };
     Some(wrap_raw(&body))
+}
+
+/// Harvest the per-run HTG uuid from any golden snapshot fragment of the IG
+/// (documented quirk: HierarchicalTableGenerator.uuid is a per-JVM random).
+fn harvest_uuid(ig: &str) -> String {
+    let dir = format!("{}/render-goldens/{}/fragments", REPO, ig);
+    let Ok(rd) = std::fs::read_dir(&dir) else { return String::new() };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.ends_with("-snapshot.xhtml") {
+            if let Ok(text) = std::fs::read_to_string(e.path()) {
+                if let Some(i) = text.find("  // ") {
+                    let rest = &text[i + 5..];
+                    if let Some(j) = rest.find('\n') {
+                        let cand = &rest[..j];
+                        if cand.len() == 36 {
+                            return cand.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+/// The IG's `active-tables` parameter, read from the template's working IG
+/// (the file the publisher merged template params into). us-core sets false;
+/// the base/davinci templates default true (verified in F0 template dirs).
+fn ig_active_tables(ig: &str) -> bool {
+    let candidates = match ig {
+        "us-core" => vec![format!("{}/us-core/template/onGenerate-ig-working.json", F0), format!("{}/us-core/template/onLoad-ig-working.json", F0)],
+        "plan-net" => vec![format!("{}/plan-net/template/onGenerate-ig-working.json", F0), format!("{}/plan-net/template/onLoad-ig-working.json", F0)],
+        "cycle" => vec!["/home/jmandel/hobby/periodicity-impl/cycle/template/onGenerate-ig-working.json".to_string()],
+        _ => vec![],
+    };
+    for c in candidates {
+        let Ok(text) = std::fs::read_to_string(&c) else { continue };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+        if let Some(params) = v
+            .get("definition")
+            .and_then(|d| d.get("parameter"))
+            .and_then(|p| p.as_array())
+        {
+            for p in params {
+                let code = p.get("code").and_then(|c| {
+                    c.as_str()
+                        .map(String::from)
+                        .or_else(|| c.get("code").and_then(|x| x.as_str()).map(String::from))
+                });
+                if code.as_deref() == Some("active-tables") {
+                    return p.get("value").and_then(|x| x.as_str()) == Some("true");
+                }
+            }
+        }
+    }
+    false
+}
+
+fn build_ctx(ig: &str) -> Option<IgContext> {
+    let (own, pkgs, txc) = match ig {
+        "us-core" => (
+            format!("{}/us-core/output", F0),
+            format!("{}/us-core/.home/.fhir/packages", F0),
+            Some(format!("{}/us-core/input-cache/txcache", F0)),
+        ),
+        "plan-net" => (
+            format!("{}/plan-net/output", F0),
+            format!("{}/plan-net/.home/.fhir/packages", F0),
+            Some(format!("{}/plan-net/input-cache/txcache", F0)),
+        ),
+        "cycle" => (
+            "/home/jmandel/hobby/periodicity-impl/cycle/fsh-generated/resources".to_string(),
+            // cycle has no isolated F0 home; use the us-core one for core pkgs.
+            format!("{}/us-core/.home/.fhir/packages", F0),
+            None,
+        ),
+        _ => return None,
+    };
+    Some(IgContext::load_with_txcache(
+        Path::new(&own),
+        Path::new(&pkgs),
+        txc.as_deref().map(Path::new),
+    ))
 }
 
 fn first_divergence(a: &str, b: &str) -> usize {
@@ -69,6 +173,9 @@ fn main() {
     let verbose = args.iter().any(|a| a == "--verbose");
 
     let sd_dir = ig_sd_dir(ig);
+    let ctx = build_ctx(ig);
+    let run_uuid = harvest_uuid(ig);
+    let active_tables = ig_active_tables(ig);
     let mut pass = 0;
     let mut total = 0;
     let mut fails: Vec<(String, usize, usize)> = Vec::new();
@@ -104,7 +211,14 @@ fn main() {
             continue; // this SD does not produce this fragment kind
         }
         let golden = std::fs::read_to_string(&gp).unwrap();
-        let ours = match render(kind, &sd) {
+        // Quirk-registry: goldens that are publisher error artifacts ("I/O
+        // error writing PNG file!" spans) are invalid oracles — the publisher
+        // itself failed on them. Skip with a note (2 plan-net snapshots).
+        if golden.contains("<span style=\"color:red\">") && golden.len() < 120 {
+            eprintln!("  skip {} ({}): golden is a publisher error artifact", id, kind);
+            continue;
+        }
+        let ours = match render(kind, &sd, ctx.as_ref(), &run_uuid, active_tables) {
             Some(o) => o,
             None => {
                 eprintln!("unsupported kind {}", kind);
