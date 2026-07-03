@@ -305,3 +305,131 @@ impl over OPFS/IndexedDB (the `BundleSource` map can back it directly); moving
 read-path `std::fs` leaves the wasm build; the Web Worker protocol; and porting
 the byte-match parity gate (P0's `check-native.sh`) into a CI harness that runs
 the fixture ladder + a few corpus IGs against the wasm binary.
+
+## 9c. P2 status — wasm_api + worker protocol + parity harness DONE (2026-07-03)
+
+**Verdict: P2 gate PASS.** The production JS surface (`wasm_api`, wasm-bindgen)
+runs the compiler + walk snapshot engine on `wasm32-unknown-unknown` — the WASI
+route (P0) is fully retired. The 17-rung ladder + ips/mcode/sdc corpus gates pass
+**against the wasm build** to the same goldens the native gates use.
+
+**`wasm_api` surface** (`crates/wasm_api/src/lib.rs`, cdylib+rlib; bindgen stays
+out of the core crates):
+- `init(bundles_json) -> u32` — mount prebuilt package bundles into an in-memory
+  `BundleSource` (JSON `[{label, files:{name:base64}}]`; the browser fetches each
+  `.tgz`, inflates it, base64s the bytes). Returns packages mounted.
+- `compile(files_json, config, predefined_json) -> {resources, diagnostics,
+  timings}` — runs the compiler **in-memory** over a `{path: text}` FSH map + the
+  `sushi-config.yaml` TEXT + a `{path: json}` predefined-resource map. `resources`
+  carry the byte-identical SUSHI output + `{resourceType,id,url}` for the editor's
+  views. Stashes the outputs as local SDs for snapshot base resolution.
+- `set_local_resources(json) -> u32` — the in-memory `--local-dir` (the parity
+  harness / an editor loads a corpus's sibling SD set this way).
+- `generate_snapshot(input) -> {snapshot, messages}` — `input` is an inline SD
+  JSON or a canonical URL/id/name resolved against the last compile + the mounted
+  packages; runs the walk engine (R5-internal output).
+- `version() -> {version, commit, engine}` (commit from `WASM_API_GIT_COMMIT`).
+- `console_error_panic_hook` on wasm. No clock/`Instant` needed (the walk +
+  compiler have no runtime time calls); timings are measured JS-side at the call
+  boundary. `mimalloc` never enters this crate (it depends on the libs, not the
+  `rust_sushi` bin).
+
+**Compiler-crate additions (in-memory entry point) — same code path, proven
+equivalent:**
+- `compiler::compile_conformance(cfg_text, fsh_refs, &store, &predefined)` — the
+  compute core (import → global insert-rule expansion → export VS/CS, SD,
+  Instances in `FHIRExporter` order, serialized byte-identically) with **zero
+  `std::fs`** and no IG-project/cache path assumptions; every package read flows
+  through the `PackageStore`'s `PackageSource`. The disk `build_project_inner`
+  was refactored to gather its inputs then call this SAME function (not a fork).
+- `compiler::build_project_in_memory(cfg_text, fsh_files, predefined, source,
+  cache_dir)` — the wasm entry point: builds the store via a new
+  `PackageStore::for_project_with_config` (resolves deps from config TEXT, not a
+  disk read — the last read-path `std::fs`, per §4.3) + `PredefinedPackage::
+  load_from` (in-memory predefined), then `compile_conformance`. Returns the
+  conformance resources; the **ImplementationGuide resource is disk-only** and
+  excluded (it scans `input/pagecontent` + the cache dir for depends-on via
+  `std::fs` beyond the package-cache `PackageSource` boundary — not needed by the
+  editor's M1 views; abstracting those scans is deferred).
+- `snapshot_gen::PackageContext::load_local_resources(entries)` — in-memory
+  `load_local_dir` (parsed `(path, body)` SDs; bodies stashed so `fetch` serves
+  them without a source read). `package_store::parse_config_text`.
+- **Equivalence proof:** `crates/compiler/tests/compile_equiv.rs` runs the cycle
+  IG + 6 harvest mini-IGs through BOTH `build_project_with_cache` (disk) and
+  `build_project_in_memory` and asserts every non-IG resource is byte-for-byte
+  identical. Green.
+
+**Bundle sizes** (wasm-bindgen `nodejs`/`web` target, release; no `wasm-opt`
+available on this box — a `-Oz` pass is wired in both scripts and would cut this
+further; gzip on the wire is ~⅓):
+
+| artifact | size |
+|---|---|
+| raw `wasm_api.wasm` (cargo) | 2.6 MB |
+| wasm-bindgen `_bg.wasm` | 2.5 MB |
+
+**Worker demo** (`demo/wasm-p2/`, data gitignored, `prepare.sh` assembles it):
+a plain page + Web Worker (no framework) mounting the cycle IG's 5-package
+closure, compiling in-memory, and snapshotting every profile. Timings (headless
+Node driver, nodejs target — the browser uses the identical wasm + surface):
+
+| step | cycle IG |
+|---|---|
+| init (fetch + inflate + mount 5 bundles, cold) | ~4.0 s (16 MB full bundles, base64 in JS — one-time) |
+| compile (4 FSH → 10 resources) | ~89 ms |
+| snapshot / profile | ~38–50 ms |
+| **compute total (compile + 7 snapshots)** | **~0.37 s** |
+
+(Matches P0's ~0.27–0.32 s. The init cost is bundle-inflation of the *full*
+package closure, not the P0 strace-minimized subset; OPFS caching + lazy
+per-package fetch removes it after first load — that's the editor repo's job.)
+
+**Parity harness — `bash scripts/wasm-parity.sh`** (§4.6, byte parity
+native↔wasm proven): builds the wasm module, runs `wasm-bindgen`, builds the
+package bundles via `rust_sushi bundle`, then a Node driver
+(`scripts/wasm-parity-driver.mjs`) runs the ladder + 3 corpus gates against the
+wasm module, comparing `snapshot.element` to the native goldens. **Verbatim:**
+
+```
+engine: {"version":"0.1.0","commit":"6957654","engine":"rust_sushi + snapshot_gen (walk)"}
+PASS  ladder: 17/17 (expected 17)
+PASS  ips: 29/29 (expected 29)
+PASS  mcode: 46/46 (expected 46)
+PASS  sdc: 73/73 (expected 73)
+
+WASM PARITY GATE: PASS
+```
+
+(The driver mirrors `check-harvested-r4.sh` exactly: separate r4-core/r5-core
+contexts per ladder group; the corpus `--local-dir` = the manifest's
+`resourcesDir` full `fsh-generated/resources` set, else `fixtures/`.)
+
+**Native gates re-run green with all P2 changes in place:**
+- `cargo test --workspace` — **75 passed, 0 failed** (incl. new `compile_equiv`;
+  `wasm_api` links + tests native).
+- SUSHI-harvest gate — **326/326 cases, 256/256 byte-identical, 0 diffs**.
+- Sushi IPS build — **118 resources**, aggregate SHA-256 `8c4de17a…`
+  (unchanged from §9b — the disk build is byte-identical after the refactor).
+- Native snapshot corpus — ips 29/29, mcode 46/46, sdc 73/73, plus the P1
+  BundleSource fixture ladder.
+
+**Toolchain (Arch):** `wasm32-unknown-unknown` std ships prebuilt (simpler than
+wasip1 — no custom sysroot). Use a rustup-managed upstream toolchain matching the
+repo rustc + `rustup target add wasm32-unknown-unknown`, and
+`cargo install wasm-bindgen-cli --version <crate ver>` into a scratch root. The
+scripts honor `WASM_RUSTUP_HOME` / `WASM_CARGO_HOME` / `WASM_BINDGEN` overrides.
+
+**What remains for the editor repo (#16, `fhir-ig-editor`) to consume this:**
+- A wasm `PackageSource` over **OPFS/IndexedDB** for lazy per-package cold-start
+  (the `BundleSource` map backs it directly; kills the ~4 s full-inflate init).
+- **Monaco** + FSH grammar, file tree, the worker protocol wiring
+  (`init`/`compile`/`set_local_resources`/`generate_snapshot` are the seam — the
+  demo worker is the reference implementation), and the M1 views (JSON /
+  differential / **snapshot tree** / diagnostics / timings).
+- `compile` currently returns `diagnostics: []` — SUSHI-exact diagnostic
+  wording+spans exist in the compiler but are not yet threaded through
+  `compile_conformance`'s return; wiring them to the JS surface (→ Monaco markers)
+  is a small follow-up the editor will want.
+- The **ImplementationGuide resource** + site-preview (M2) need the IG-project/
+  cache-dir FS scans abstracted (deferred here); the site.db producer (#15) is
+  the other half of M2.

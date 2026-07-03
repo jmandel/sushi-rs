@@ -66,6 +66,21 @@ impl PredefinedPackage {
         pkg
     }
 
+    /// In-memory sibling of [`PredefinedPackage::load`] (no `std::fs`): take the
+    /// already-parsed `(path, body)` predefined resources — the browser feeds
+    /// `input/resources/**` JSON bodies decoded JS-side — and index them exactly as
+    /// the disk path does. `entries` MUST be in the same order the disk path would
+    /// visit them (`collect_predefined_paths` order: the fixed sub-dir list, then
+    /// `path-resource` params, each dir's files sorted). XML parsing is disk-only;
+    /// the browser hands JSON bodies straight through, so there is no reader here.
+    pub fn load_from(entries: Vec<(PathBuf, J)>) -> PredefinedPackage {
+        let mut pkg = PredefinedPackage::default();
+        for (path, body) in entries {
+            pkg.push(path, body);
+        }
+        pkg
+    }
+
     pub fn resources(&self) -> &[PredefinedResource] {
         &self.resources
     }

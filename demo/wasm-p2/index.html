@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WASM P2 — rust_sushi + snapshot_gen via wasm-bindgen</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; margin: 1.5rem; max-width: 60rem; }
+    h1 { font-size: 1.1rem; }
+    button { font: inherit; padding: .4rem .8rem; cursor: pointer; }
+    #log { white-space: pre-wrap; background: #0001; padding: .8rem; border-radius: 6px; margin-top: 1rem; }
+    table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+    th, td { text-align: left; padding: .25rem .6rem; border-bottom: 1px solid #8884; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { opacity: .6; }
+  </style>
+</head>
+<body>
+  <h1>WASM P2 — FSH compile + validation-grade snapshots, in a Web Worker</h1>
+  <p class="muted">
+    The rust_sushi compiler and the snapshot walk engine, built to
+    <code>wasm32-unknown-unknown</code> + wasm-bindgen, mounted over an in-memory
+    <code>BundleSource</code> package cache. Compiles the cycle IG and generates a
+    snapshot per profile — all in one Worker, off the UI thread.
+  </p>
+  <button id="run">Run: init → compile → snapshot every profile</button>
+  <div id="log">idle.</div>
+  <table id="timings" hidden>
+    <thead><tr><th>step</th><th class="num">ms</th><th>detail</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const tbody = document.querySelector('#timings tbody');
+    const log = (m) => { logEl.textContent += '\n' + m; };
+    const row = (step, ms, detail) => {
+      document.getElementById('timings').hidden = false;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${step}</td><td class="num">${ms == null ? '' : ms.toFixed(1)}</td><td class="muted">${detail || ''}</td>`;
+      tbody.appendChild(tr);
+    };
+
+    const worker = new Worker('worker.js', { type: 'module' });
+    let seq = 0;
+    const pending = new Map();
+    worker.onmessage = (e) => {
+      const { id, ok, result, error } = e.data;
+      const p = pending.get(id); pending.delete(id);
+      ok ? p.resolve(result) : p.reject(new Error(error));
+    };
+    const call = (type, extra = {}) =>
+      new Promise((resolve, reject) => {
+        const id = ++seq; pending.set(id, { resolve, reject });
+        worker.postMessage({ id, type, ...extra });
+      });
+
+    document.getElementById('run').onclick = async () => {
+      logEl.textContent = 'starting ...'; tbody.innerHTML = '';
+      document.getElementById('run').disabled = true;
+      try {
+        const init = await call('init');
+        log(`engine ${init.version.version} @ ${init.version.commit} — mounted ${init.mounted} packages`);
+        row('init (fetch + inflate + mount bundles)', init.initMs, `${init.mounted} packages`);
+
+        const compiled = await call('compile');
+        row('compile (FSH → FHIR, in-memory)', compiled.buildMs,
+            `${compiled.resources.length} resources from ${compiled.fileCount} FSH files`);
+        log(`compiled ${compiled.resources.length} resources`);
+
+        // Snapshot every profile StructureDefinition the compile produced.
+        const profiles = compiled.resources.filter(
+          (r) => r.resourceType === 'StructureDefinition' && r.url
+        );
+        let totalSnap = 0;
+        for (const p of profiles) {
+          const snap = await call('snapshot', { url: p.url });
+          const n = snap.snapshot && snap.snapshot.snapshot
+            ? snap.snapshot.snapshot.element.length : 0;
+          totalSnap += snap.snapshotMs;
+          row(`snapshot ${p.id}`, snap.snapshotMs,
+              snap.snapshot ? `${n} elements` : `ERROR: ${snap.messages.join('; ')}`);
+        }
+        row('— snapshot total —', totalSnap, `${profiles.length} profiles`);
+        log(`done: ${profiles.length} snapshots in ${totalSnap.toFixed(1)} ms`);
+      } catch (err) {
+        log('ERROR: ' + err.message);
+      } finally {
+        document.getElementById('run').disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

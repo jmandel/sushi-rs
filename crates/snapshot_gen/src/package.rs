@@ -52,6 +52,11 @@ pub struct PackageContext {
     // supplies a read-only in-memory source. Local-dir resources are always read
     // via `std::fs` (they are the native IG project, not the mounted cache).
     source: Box<dyn PackageSource>,
+    // Parsed bodies of in-memory local resources (`load_local_resources`), keyed by
+    // their synthetic path. There is no file behind these paths, so `fetch` reads
+    // them here instead of from `source`. Empty for the disk path (which reads
+    // local-dir files via `source`), so native behavior is untouched.
+    local_bodies: HashMap<PathBuf, Rc<Value>>,
 }
 
 #[derive(Clone, Debug)]
@@ -95,6 +100,7 @@ impl PackageContext {
             by_name: HashMap::new(),
             fetch_cache: RefCell::new(HashMap::new()),
             source: Box::new(source),
+            local_bodies: HashMap::new(),
         };
         for package in packages {
             ctx.load_package(cache_dir, package)?;
@@ -206,6 +212,29 @@ impl PackageContext {
         Ok(())
     }
 
+    /// In-memory sibling of [`PackageContext::load_local_dir`] (no `std::fs`):
+    /// index already-parsed local resources — the wasm build feeds the compiled
+    /// IG resources (from `compiler::build_project_in_memory`) here so a profile's
+    /// sibling bases resolve exactly as `--local-dir` does natively. `entries` is
+    /// `(synthetic path, body)`; the caller MUST pass them sorted by path (the
+    /// disk path sorts filenames) so `by_url`/`by_id`/`by_name` last-writer-wins
+    /// resolution is identical. Only `StructureDefinition`s are indexed (same as
+    /// the disk path); each is `local:true`, `package_id:None`.
+    pub fn load_local_resources<I>(&mut self, entries: I)
+    where
+        I: IntoIterator<Item = (PathBuf, Value)>,
+    {
+        for (path, json) in entries {
+            if json.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
+                // Index exactly as the disk path does (same `local:true`, same
+                // `insert_url` version-precedence), then stash the parsed body under
+                // the synthetic path so `fetch_rc` serves it without a `source` read.
+                self.index_structure_definition(path.clone(), &json, true, None);
+                self.local_bodies.insert(path, Rc::new(json));
+            }
+        }
+    }
+
     fn index_structure_definition(
         &mut self,
         path: PathBuf,
@@ -304,11 +333,16 @@ impl PackageContext {
         if let Some(cached) = self.fetch_cache.borrow().get(query) {
             return cached.clone();
         }
-        let parsed = self
-            .resource_path(query)
-            .and_then(|path| self.source.read(path).ok())
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .map(Rc::new);
+        let path = self.resource_path(query).cloned();
+        // In-memory local resources have no file behind their synthetic path; serve
+        // the stashed parsed body. Everything else reads through `source` (disk or
+        // bundle), byte-for-byte as before.
+        let parsed = path.as_deref().and_then(|p| self.local_bodies.get(p)).cloned().or_else(|| {
+            path.as_deref()
+                .and_then(|p| self.source.read(p).ok())
+                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                .map(Rc::new)
+        });
         self.fetch_cache
             .borrow_mut()
             .insert(query.to_string(), parsed.clone());

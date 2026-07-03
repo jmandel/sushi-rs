@@ -509,7 +509,6 @@ fn build_project_inner(
     let cfg_path = Path::new(ig_dir).join("sushi-config.yaml");
     let cfg_text = std::fs::read_to_string(&cfg_path)
         .map_err(|e| anyhow::anyhow!("reading {}: {e}", cfg_path.display()))?;
-    let cfg = config::Config::from_yaml(&cfg_text)?;
 
     // 2. Gather all input/fsh/**/*.fsh files (sorted for determinism).
     let fsh_root = Path::new(ig_dir).join("input").join("fsh");
@@ -538,35 +537,115 @@ fn build_project_inner(
         .collect::<anyhow::Result<_>>()?;
     let refs: Vec<(&str, &str)> = loaded.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
 
-    // 3. Import + global insert-rule expansion.
-    let mut imp = parser::Importer::new();
-    imp.import(&refs);
-    let mut docs = imp.docs;
-    let mut diag: Vec<String> = Vec::new();
-    run_global_expansion(&mut docs, &mut diag);
-
-    // 4. Export resources and write byte-identical JSON.
-    let resources_dir = Path::new(out_dir).join("fsh-generated").join("resources");
-    std::fs::create_dir_all(&resources_dir)?;
-
     // The FHIR package cache (needed by VS external-name resolution + SD export).
     let cache_dir = resolve_cache_dir(explicit_cache_dir)?;
     let store = package_store::PackageStore::for_project(ig_dir, &cache_dir)?;
     let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&cfg_text)?;
     let predefined = predefined::PredefinedPackage::load(ig_dir, &cfg_yaml, &store);
 
-    // Collect IG `definition.resource` metadata as we export.
-    use ig_export::{ConformanceRes, IgInputs};
+    // 3-4. Import + expansion + export the conformance resources (SD/VS/CS/
+    // Instances). This whole compute core is the same code the in-memory
+    // `compile_conformance` entry point runs — the only difference is where the
+    // config text / FSH sources / predefined resources come from (disk here, a JS
+    // Map in the browser) and whether the outputs are written or returned. The
+    // native `compile_equiv` test proves the two paths agree byte-for-byte on the
+    // cycle IG.
+    let compiled = compile_conformance(&cfg_text, &refs, &store, &predefined)?;
+
+    // Write the conformance resources byte-identically.
+    let resources_dir = Path::new(out_dir).join("fsh-generated").join("resources");
+    std::fs::create_dir_all(&resources_dir)?;
+    for res in &compiled.resources {
+        std::fs::write(resources_dir.join(&res.filename), &res.text)?;
+    }
+
+    // ImplementationGuide resource (last — references all of the above).
+    // If FSHOnly is true in the config, do not generate IG content (matches
+    // stock SUSHI app.ts: the IGExporter block is skipped entirely under FSHOnly).
+    //
+    // The IG resource is DISK-ONLY: `ig_export` scans the IG project tree
+    // (`input/pagecontent`, predefined re-collection) and the package cache dir
+    // (depends-on version resolution) via `std::fs` beyond the package-cache
+    // `PackageSource` boundary. The editor's M1 views (JSON / differential /
+    // snapshot) do not need it; wiring the IG-project + cache-dir scans through
+    // an abstraction is deferred (see docs/wasm-editor-plan.md §9c). The
+    // in-memory `compile_conformance` therefore stops before this step.
+    let cfg = config::Config::from_yaml(&cfg_text)?;
+    if !cfg.fsh_only {
+        use ig_export::IgInputs;
+        let inputs = IgInputs {
+            conformance: compiled.conformance,
+            instances: compiled.instance_ig.iter().collect(),
+            local_profile_logical: compiled.local_profile_logical,
+            has_custom_resources: compiled.has_custom_resources,
+            cache_dir: cache_dir.clone(),
+            ig_dir: ig_dir.to_string(),
+            predefined: &predefined,
+        };
+        if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
+            let text = json_emit::to_fhir_json_string(&ig.body);
+            std::fs::write(resources_dir.join(&ig.filename), text)?;
+        }
+    }
+    Ok(())
+}
+
+/// One compiled FHIR resource: the exact output filename SUSHI writes and the
+/// byte-identical serialized JSON body (from `json_emit::to_fhir_json_string`).
+/// The in-memory `compile_conformance` returns these instead of writing them.
+pub struct CompiledResource {
+    pub filename: String,
+    pub text: String,
+    /// The parsed body, so callers (the wasm API) can feed it to the snapshot
+    /// generator or inspect it without re-parsing `text`.
+    pub body: serde_json::Value,
+}
+
+/// The full result of the conformance compile core: the byte-identical resource
+/// files plus the IG-export metadata the disk path threads into `ig_export`
+/// (kept here so the caller that CAN reach the IG-project/cache filesystem can
+/// still produce the ImplementationGuide resource).
+pub struct CompiledProject {
+    pub resources: Vec<CompiledResource>,
+    conformance: Vec<ig_export::ConformanceRes>,
+    instance_ig: Vec<instance_export::IgInstanceMeta>,
+    local_profile_logical: std::collections::HashMap<String, String>,
+    has_custom_resources: bool,
+}
+
+/// The compute core shared by the disk build (`build_project_inner`) and the
+/// in-memory wasm build (`build_project_in_memory`): import the FSH, run global
+/// insert-rule expansion, and export every conformance resource
+/// (ValueSet/CodeSystem, then StructureDefinition, then Instance) in stock
+/// `FHIRExporter` order, serialized byte-identically. NO `std::fs` and NO
+/// IG-project/cache-dir path assumptions — every package read flows through
+/// `store` (a `PackageSource`), config/FSH/predefined are passed in. This is
+/// literally the same code the disk path used to run inline; only the input
+/// plumbing and the write-vs-return of outputs differ (proven by the
+/// `compile_equiv` native test on the cycle IG).
+pub fn compile_conformance(
+    cfg_text: &str,
+    fsh_refs: &[(&str, &str)],
+    store: &package_store::PackageStore,
+    predefined: &predefined::PredefinedPackage,
+) -> anyhow::Result<CompiledProject> {
+    let cfg = config::Config::from_yaml(cfg_text)?;
+
+    // Import + global insert-rule expansion.
+    let mut imp = parser::Importer::new();
+    imp.import(fsh_refs);
+    let mut docs = imp.docs;
+    let mut diag: Vec<String> = Vec::new();
+    run_global_expansion(&mut docs, &mut diag);
+
+    use ig_export::ConformanceRes;
     let mut vs_conformance: Vec<ConformanceRes> = Vec::new();
     let mut cs_conformance: Vec<ConformanceRes> = Vec::new();
+    let mut resources: Vec<CompiledResource> = Vec::new();
 
     // ValueSets + CodeSystems (Phase 4).
-    // Retain the fully-exported VS/CS bodies so the instance exporter can embed
-    // them whole when a Bundle/instance assigns one by name (stock: MasterFisher
-    // fishes the exported `pkg` first — InstanceExporter.fishForFHIR). These are
-    // exported before instances, matching stock's FHIRExporter order.
     let mut exported_conformance: Vec<std::rc::Rc<serde_json::Value>> = Vec::new();
-    for exported in export::export_all(&docs, &cfg, Some(&store)) {
+    for exported in export::export_all(&docs, &cfg, Some(store)) {
         let rt = exported
             .body
             .get("resourceType")
@@ -583,7 +662,11 @@ fn build_project_inner(
             }
         }
         let text = json_emit::to_fhir_json_string(&exported.body);
-        std::fs::write(resources_dir.join(&exported.filename), text)?;
+        resources.push(CompiledResource {
+            filename: exported.filename.clone(),
+            text,
+            body: exported.body.clone(),
+        });
         exported_conformance.push(std::rc::Rc::new(exported.body));
     }
 
@@ -591,28 +674,21 @@ fn build_project_inner(
     let tank = export::TankIndex::build(&docs, &cfg);
     let vs_url = |s: &str| tank.vs_url(s);
     let cs_url = |s: &str| tank.cs_url(s);
-    // Predefined ValueSets (input/resources/*.{xml,json}) feed the SD binding
-    // fisher so `* path from <Name>` resolves to the local canonical url before
-    // a wrong same-named package ValueSet.
     let predefined_vs = predefined.value_set_url_map();
     let ctx = sd_export::build_sd_context(
         &docs,
         &cfg,
-        &store,
-        &predefined,
+        store,
+        predefined,
         &vs_url,
         &cs_url,
         predefined_vs,
     );
 
-    // SD conformance (profiles, extensions, logicals — in tank order), local
-    // profile/logical urls, custom-resource detection.
     let mut sd_conformance: Vec<ConformanceRes> = Vec::new();
     let mut local_profile_logical: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     let mut has_custom_resources = false;
-    // `ctx.exported` can list an SD more than once (on-demand re-export during
-    // circular fishing); stock's pkg.profiles/extensions/logicals list each once.
     let mut seen_sd: std::collections::HashSet<String> = std::collections::HashSet::new();
     for e in &ctx.exported {
         use fsh_model::StructureKind;
@@ -643,38 +719,69 @@ fn build_project_inner(
     }
     for exported in sd_export::exported_files(&ctx) {
         let text = json_emit::to_fhir_json_string(&exported.body);
-        std::fs::write(resources_dir.join(&exported.filename), text)?;
+        resources.push(CompiledResource {
+            filename: exported.filename.clone(),
+            text,
+            body: exported.body.clone(),
+        });
     }
 
     // Instances (Phase 7).
     let instances = instance_export::export_instances(&docs, &cfg, &ctx, &exported_conformance);
+    let mut instance_ig: Vec<instance_export::IgInstanceMeta> = Vec::new();
     for inst in &instances {
         let text = json_emit::to_fhir_json_string(&inst.exported.body);
-        std::fs::write(resources_dir.join(&inst.exported.filename), text)?;
+        resources.push(CompiledResource {
+            filename: inst.exported.filename.clone(),
+            text,
+            body: inst.exported.body.clone(),
+        });
+        instance_ig.push(inst.ig.clone());
     }
 
-    // ImplementationGuide resource (last — references all of the above).
-    // If FSHOnly is true in the config, do not generate IG content (matches
-    // stock SUSHI app.ts: the IGExporter block is skipped entirely under FSHOnly).
-    if !cfg.fsh_only {
-        let mut conformance = sd_conformance;
-        conformance.append(&mut vs_conformance);
-        conformance.append(&mut cs_conformance);
-        let inputs = IgInputs {
-            conformance,
-            instances: instances.iter().map(|i| &i.ig).collect(),
-            local_profile_logical,
-            has_custom_resources,
-            cache_dir: cache_dir.clone(),
-            ig_dir: ig_dir.to_string(),
-            predefined: &predefined,
-        };
-        if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
-            let text = json_emit::to_fhir_json_string(&ig.body);
-            std::fs::write(resources_dir.join(&ig.filename), text)?;
-        }
-    }
-    Ok(())
+    // Assemble the IG-export conformance ordering (SD ++ VS ++ CS) the disk path
+    // wants, so the caller can generate the IG resource if it can reach the FS.
+    let mut conformance = sd_conformance;
+    conformance.append(&mut vs_conformance);
+    conformance.append(&mut cs_conformance);
+
+    Ok(CompiledProject {
+        resources,
+        conformance,
+        instance_ig,
+        local_profile_logical,
+        has_custom_resources,
+    })
+}
+
+/// In-memory SUSHI build for the wasm/editor surface (no `std::fs`). Takes the
+/// `sushi-config.yaml` text, the FSH sources as `(path, content)` pairs (the
+/// caller MUST pass them in the same sorted order the disk walk yields —
+/// `input/fsh/**/*.fsh` sorted by path — so import order matches), the predefined
+/// `input/resources/**` bodies as `(path, json)` pairs (same order
+/// `predefined::collect_predefined_paths` would visit), a package cache
+/// `PackageSource` + its cache root, and the project's dependency-resolving
+/// config (re-read from `cfg_text`). Returns the byte-identical conformance
+/// resources (SD/VS/CS/Instances). Does NOT emit the ImplementationGuide
+/// resource (disk-only; see `build_project_inner`).
+pub fn build_project_in_memory(
+    cfg_text: &str,
+    fsh_files: &[(String, String)],
+    predefined_resources: Vec<(std::path::PathBuf, serde_json::Value)>,
+    source: impl package_store::PackageSource + 'static,
+    cache_dir: &str,
+) -> anyhow::Result<Vec<CompiledResource>> {
+    // Build the store over the mounted package source, resolving deps from the
+    // config TEXT (no `std::fs` on the IG project).
+    let store =
+        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
+    let refs: Vec<(&str, &str)> = fsh_files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
+    Ok(compiled.resources)
 }
 
 /// Build a `ConformanceRes` from an exported VS/CS body (`name = title ?? name ?? id`).

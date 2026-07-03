@@ -194,7 +194,17 @@ fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
     let cfg_path = Path::new(ig_dir).join("sushi-config.yaml");
     let text = std::fs::read_to_string(&cfg_path)
         .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", cfg_path.display()))?;
-    let root: Value = serde_yaml::from_str(&text)?;
+    parse_config_text(&text)
+}
+
+/// Same dependency-graph resolution as [`parse_config`], but from the
+/// `sushi-config.yaml` TEXT rather than reading it off disk. This is the last
+/// read-path `std::fs` site the wasm build needed to shed (see
+/// docs/wasm-editor-plan.md §4.3): the browser passes the config text through the
+/// API. Native callers keep `parse_config` (identical behavior; it just reads
+/// then delegates here).
+fn parse_config_text(text: &str) -> anyhow::Result<ProjectConfig> {
+    let root: Value = serde_yaml::from_str(text)?;
 
     // fhirVersion: string or sequence; take the first.
     let fhir_version = match root.get("fhirVersion") {
@@ -683,13 +693,35 @@ impl PackageStore {
         ig_dir: &str,
         cache_dir: &str,
     ) -> anyhow::Result<Self> {
+        let cfg = parse_config(ig_dir)?;
+        Self::for_project_from_config(source, cfg, cache_dir)
+    }
+
+    /// Same as [`PackageStore::for_project_with`] but the project's dependency
+    /// list comes from the `sushi-config.yaml` TEXT, not a disk read. This is the
+    /// entry point the wasm build uses: the browser passes config text through the
+    /// API, so no `std::fs` touches the IG project. Native behavior is unchanged —
+    /// `for_project_with` reads the file then delegates to the same core.
+    pub fn for_project_with_config(
+        source: impl PackageSource + 'static,
+        cfg_text: &str,
+        cache_dir: &str,
+    ) -> anyhow::Result<Self> {
+        let cfg = parse_config_text(cfg_text)?;
+        Self::for_project_from_config(source, cfg, cache_dir)
+    }
+
+    fn for_project_from_config(
+        source: impl PackageSource + 'static,
+        cfg: ProjectConfig,
+        cache_dir: &str,
+    ) -> anyhow::Result<Self> {
         let cache = Path::new(cache_dir);
         if !source.is_dir(cache) {
             anyhow::bail!(
                 "package_store: cache dir does not exist or is not a directory: {cache_dir}"
             );
         }
-        let cfg = parse_config(ig_dir)?;
         let load_list = resolve_load_order(&source, &cfg, cache);
 
         let mut store = PackageStore {

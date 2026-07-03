@@ -12,6 +12,7 @@ members = [
     "crates/rust_sushi",
     "crates/snapshot_gen",
     "crates/site_db",
+    "crates/wasm_api",
 ]
 
 [workspace.package]

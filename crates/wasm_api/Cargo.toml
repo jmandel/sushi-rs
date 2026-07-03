@@ -1,0 +1,29 @@
+[package]
+name = "wasm_api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "wasm-bindgen JS surface for the rust_sushi compiler + snapshot walk engine"
+
+[lib]
+# cdylib for the wasm-bindgen build; rlib so native `cargo test --workspace` can
+# link the crate (the JS glue is inert on non-wasm targets — see lib.rs).
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+compiler = { workspace = true }
+snapshot_gen = { workspace = true }
+package_store = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+# wasm-bindgen is only linked into the wasm build. On native it still compiles
+# (the macros expand to inert code) so the workspace builds/tests as one unit.
+wasm-bindgen = "0.2"
+
+# console_error_panic_hook: surface Rust panics as readable JS console errors
+# (P2 asks for this). Cheap, wasm-only in effect.
+[target.'cfg(target_family = "wasm")'.dependencies]
+console_error_panic_hook = "0.1"
