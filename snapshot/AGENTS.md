@@ -150,12 +150,19 @@ bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/dtr \
   hl7.fhir.us.davinci-crd#2.2.1 hl7.fhir.us.davinci-pas#2.2.1 \
   hl7.fhir.uv.tools.r4#1.1.2
 
+# NOTE (2026-07-02): hl7.fhir.uv.extensions.r4#5.3.0 was ALWAYS part of the
+# eCR goldens' oracle context but was missing from this documented list (the
+# omission was masked at golden time by the since-fixed SnapOracleR4
+# single-mode last-package off-by-one). Verified: the pinned oracle
+# reproduces the committed ersd-plandefinition golden byte-for-byte WITH
+# extensions.r4 and not without.
 bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/ecr \
   hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 \
   hl7.fhir.us.core#6.1.0 us.nlm.vsac#0.23.0 \
   us.cdc.phinvads#0.12.0 hl7.fhir.us.bfdr#2.0.0 \
   hl7.fhir.us.odh#1.3.0 hl7.fhir.us.ph-library#2.0.0-snapshot \
-  hl7.fhir.uv.cql#2.0.0 hl7.fhir.uv.crmi#1.0.0
+  hl7.fhir.uv.cql#2.0.0 hl7.fhir.uv.crmi#1.0.0 \
+  hl7.fhir.uv.extensions.r4#5.3.0
 
 bash snapshot/check-harvested-r4.sh snapshot/harvested/r4/ndh \
   hl7.fhir.r4.core#4.0.1 hl7.fhir.uv.xver-r5.r4#0.1.0 \
