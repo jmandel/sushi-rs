@@ -57,6 +57,15 @@ pub struct PackageContext {
     // them here instead of from `source`. Empty for the disk path (which reads
     // local-dir files via `source`), so native behavior is untouched.
     local_bodies: HashMap<PathBuf, Rc<Value>>,
+    // The mounted package dirs (`<cache>/<pkg>/package`), in load order. Held ONLY
+    // for the opt-in Layer-B canonical-version resolver, which needs to see
+    // ValueSet/CodeSystem versions (Layer A indexes StructureDefinitions only).
+    package_dirs: Vec<PathBuf>,
+    // LAYER B (opt-in) canonical-version index: (resourceType, url) -> version,
+    // built lazily on first `resolve_canonical_version` call from the derived
+    // index (which lists EVERY resource, incl. VS/CS). Never consulted by Layer A
+    // — `by_url` is unchanged, so the OFF path is byte-identical.
+    canonical_versions: RefCell<Option<HashMap<(String, String), String>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -101,6 +110,8 @@ impl PackageContext {
             fetch_cache: RefCell::new(HashMap::new()),
             source: Box::new(source),
             local_bodies: HashMap::new(),
+            package_dirs: Vec::new(),
+            canonical_versions: RefCell::new(None),
         };
         for package in packages {
             ctx.load_package(cache_dir, package)?;
@@ -116,6 +127,8 @@ impl PackageContext {
         if !self.source.is_dir(&package_dir) {
             bail!("package directory does not exist: {}", package_dir.display());
         }
+        // Remember the dir for the opt-in Layer-B canonical-version resolver.
+        self.package_dirs.push(package_dir.clone());
 
         // Derived-columns index: one content-derived row per resource file
         // (filename/resourceType/id/url/version/kind/type/derivation/
@@ -324,6 +337,64 @@ impl PackageContext {
     /// per-hit deep clone the old `Value`-returning form paid on every fetch.
     pub fn fetch(&self, query: &str) -> Option<Rc<Value>> {
         self.fetch_rc(query)
+    }
+
+    /// LAYER B (opt-in): resolve the `version` of the canonical `url` when it
+    /// resolves to a resource of type `resource_type` in the loaded context —
+    /// mirroring Java's type-scoped `context.fetchResource(X.class, url)` used by
+    /// `CoreVersionPinner`. Unlike [`fetch`], this sees ValueSets/CodeSystems too
+    /// (Layer A indexes only StructureDefinitions). Returns `None` when the target
+    /// is absent, is a different resource type, or has no non-empty `version`.
+    ///
+    /// Built lazily + memoized from the derived index the first time it is called,
+    /// so a build that never opts into Layer B pays nothing. Local-dir resources
+    /// (loaded after packages) are consulted via `by_url` first so a local VS/SD
+    /// overrides a package one, matching load precedence.
+    pub fn resolve_canonical_version(&self, url: &str, resource_type: &str) -> Option<String> {
+        // Fast path: a locally-loaded resource indexed in by_url whose file we can
+        // parse (covers local-dir SDs; VS/CS locals fall through to the index).
+        if let Some(entry) = self.by_url.get(url) {
+            if let Some(v) = entry.version.as_deref().filter(|s| !s.is_empty()) {
+                // Confirm the resource type matches (by_url only holds SDs today, so
+                // this guards against a future VS being added there).
+                if resource_type == "StructureDefinition" {
+                    return Some(v.to_string());
+                }
+            }
+        }
+        self.ensure_canonical_index();
+        self.canonical_versions
+            .borrow()
+            .as_ref()
+            .and_then(|m| m.get(&(resource_type.to_string(), url.to_string())).cloned())
+            .filter(|v| !v.is_empty())
+    }
+
+    /// Build the (resourceType, url) -> version index from every loaded package's
+    /// derived index (all resource types). Idempotent; memoized.
+    fn ensure_canonical_index(&self) {
+        if self.canonical_versions.borrow().is_some() {
+            return;
+        }
+        let mut map: HashMap<(String, String), String> = HashMap::new();
+        for package_dir in &self.package_dirs {
+            let rows = derived_index::load(self.source.as_ref(), package_dir);
+            for row in &rows {
+                let (Some(rt), Some(url), Some(version)) =
+                    (&row.resource_type, &row.url, &row.version)
+                else {
+                    continue;
+                };
+                if version.is_empty() {
+                    continue;
+                }
+                // First loaded wins (package load order), matching by_url's
+                // insert precedence for the common single-version core case.
+                map.entry((rt.clone(), url.clone()))
+                    .or_insert_with(|| version.clone());
+            }
+        }
+        *self.canonical_versions.borrow_mut() = Some(map);
     }
 
     // Memoized parse of the resource file for `query`. Returns the shared parsed

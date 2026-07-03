@@ -44,6 +44,12 @@ pub struct BuildConfig {
     /// FHIR core package coordinate for snapshot base resolution (e.g.
     /// "hl7.fhir.r4.core#4.0.1").
     pub core_package: String,
+    /// OPT-IN Layer B (task #17): canonical version pinning (B1) + R4-artifact
+    /// projection (B0) over the walk snapshots, matching the IG Publisher's
+    /// package.db Resources.Json shape. Default OFF (empty = no overlay, so the
+    /// pipeline is byte-identical to the pre-Layer-B path). B0 (project_r4) is
+    /// applied only when `core_package` is an R4 core (version-conditional).
+    pub layer_b: snapshot_gen::LayerBOptions,
 }
 
 pub struct BuildOutcome {
@@ -141,10 +147,13 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         let src = std::fs::read(path)?;
         let node = format!("snapshot:{}", resource_ref(resource));
         let input_hash = BuildLedger::hash(&src);
-        let out = snapshot_gen::generate_snapshot(
+        // Layer A (walk) then the OPT-IN Layer-B overlay. With layer_b all-OFF
+        // (default) this is byte-identical to plain generate_snapshot.
+        let out = snapshot_gen::generate_snapshot_layer_b(
             resource.clone(),
             &ctx,
             snapshot_gen::SnapshotOptions::default(),
+            layer_b_for(config),
         )
         .with_context(|| format!("generate_snapshot for {}", path.display()))?;
         let out_bytes = json_emit::to_fhir_json_string(&out).into_bytes();
@@ -316,6 +325,18 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         ledger: report,
         resources_dir,
     })
+}
+
+/// Resolve the effective Layer-B options for this build. B1 (pin) is applied as
+/// requested; B0 (project_r4) is gated on an R4 core package (version-conditional
+/// — an R5 IG gets no projection, audit §2). `core_package` like
+/// `hl7.fhir.r4.core#4.0.1` -> R4.
+fn layer_b_for(config: &BuildConfig) -> snapshot_gen::LayerBOptions {
+    let is_r4 = config.core_package.starts_with("hl7.fhir.r4.core#4");
+    snapshot_gen::LayerBOptions {
+        pin: config.layer_b.pin,
+        project_r4: config.layer_b.project_r4 && is_r4,
+    }
 }
 
 /// project.liquidAssetDirs default for cycle: input/includes (§ project/cycle.ts).

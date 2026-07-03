@@ -87,6 +87,12 @@ pub(crate) struct WalkContext<'a> {
     pub derived_url: String,
     /// context.getSpecUrl() for the current generation (markdown link rewriting).
     pub spec_url: String,
+    /// LAYER B / B1 (opt-in, default false). When true, base/dep SD snapshots
+    /// resolved for inheritance are version-pinned (CoreVersionPinner mechanism A,
+    /// composition (a)) BEFORE the walk copies their elements — reproducing Java's
+    /// load-time pin that flows through snapshot inheritance. OFF = zero change to
+    /// Layer A (every existing gate proves it). See `layer_b::pin`.
+    pub pin_base_versions: bool,
 }
 
 impl<'a> WalkContext<'a> {

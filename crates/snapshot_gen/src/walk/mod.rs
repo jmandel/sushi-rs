@@ -47,6 +47,19 @@ pub fn generate_snapshot(
     pkg: &PackageContext,
     options: SnapshotOptions,
 ) -> anyhow::Result<Value> {
+    generate_snapshot_opt_pin(derived, pkg, options, false)
+}
+
+/// Layer-A walk with an OPT-IN base-version-pinning flag (Layer B B1,
+/// composition (a)). `pin_base_versions=false` is the ordinary Layer-A path,
+/// byte-identical to before. `true` pins inherited base/dep SD snapshots so the
+/// pins flow through inheritance (see `WalkContext::pin_base_versions`).
+pub(crate) fn generate_snapshot_opt_pin(
+    derived: Value,
+    pkg: &PackageContext,
+    options: SnapshotOptions,
+    pin_base_versions: bool,
+) -> anyhow::Result<Value> {
     let mut ctx = WalkContext {
         pkg,
         output: Vec::new(),
@@ -60,6 +73,7 @@ pub fn generate_snapshot(
         gen_stack: Vec::new(),
         derived_url: String::new(),
         spec_url: String::new(),
+        pin_base_versions,
     };
     // Convert R4 input to R5-internal.
     let derived = resolve::to_r5_internal(&derived)?;
@@ -87,6 +101,7 @@ pub(crate) fn generate_snapshot_inner(
         gen_stack: parent.gen_stack.clone(),
         derived_url: String::new(),
         spec_url: String::new(),
+        pin_base_versions: parent.pin_base_versions,
     };
     // Nested generation (PPP:810 / PU:762): plain generateSnapshot — the
     // driver-level sortDifferential and bare-root prepend do NOT apply.

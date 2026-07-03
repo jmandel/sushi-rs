@@ -23,7 +23,8 @@ fn main() -> Result<()> {
             eprintln!(
                 "usage: site_db build <cycle-repo> --sushi-out <dir> --cache <pkgcache> --out <site.db>\n\
                  \x20            [--build-date <epoch|RFC3339>] [--core <pkg#ver>] [--no-sushi]\n\
-                 \x20            [--branch <b>] [--revision <r>]"
+                 \x20            [--branch <b>] [--revision <r>]\n\
+                 \x20            [--layer-b | --layer-b-pin | --layer-b-project]  (task #17, default OFF)"
             );
             bail!("unknown or missing subcommand");
         }
@@ -64,6 +65,15 @@ fn run_build(args: &[String]) -> Result<()> {
     let revision = opt(args, "--revision").map(str::to_string);
     let build_epoch_secs = resolve_build_epoch(opt(args, "--build-date"))?;
 
+    // OPT-IN Layer B (task #17). `--layer-b` enables both stages (pin + R4
+    // projection); `--layer-b-pin` / `--layer-b-project` toggle them individually.
+    // All default OFF: without any flag the pipeline is byte-identical to before.
+    let all = has_flag(args, "--layer-b");
+    let layer_b = snapshot_gen::LayerBOptions {
+        pin: all || has_flag(args, "--layer-b-pin"),
+        project_r4: all || has_flag(args, "--layer-b-project"),
+    };
+
     let config = site_db::BuildConfig {
         ig_dir,
         sushi_out,
@@ -74,6 +84,7 @@ fn run_build(args: &[String]) -> Result<()> {
         revision,
         run_sushi,
         core_package,
+        layer_b,
     };
 
     let report = site_db::build_and_write(&config)?;

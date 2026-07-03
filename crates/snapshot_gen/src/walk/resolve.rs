@@ -20,6 +20,25 @@ use std::rc::Rc;
 use super::context::WalkContext;
 use crate::{convert_r4_sd_to_r5, PackageContext};
 
+/// LAYER B / B1 (composition (a)): pin a base/dep SD's canonicals in place iff
+/// `ctx.pin_base_versions` is set AND `url` is a PACKAGE-loaded (non-local)
+/// resource. Java's `CoreVersionPinner` runs at load ONLY over the core/dependency
+/// packages' structures — never the IG's own authored profiles
+/// (CoreVersionPinner is invoked from `SimpleWorkerContext.fromPackage`,
+/// SimpleWorkerContext.java:329; the IG's local profiles are loaded outside that
+/// path). Locally-authored profiles therefore never get pinned, and their
+/// differential-supplied canonicals (e.g. a re-stated `subject` targetProfile)
+/// stay UNPINNED even though they resolve — the profile snapshot only carries
+/// pins it INHERITED from the already-pinned core base. Pinning a local profile's
+/// snapshot here would re-pin those differential-supplied canonicals and diverge
+/// from Java (measured on period-tracking-fact `subject`/`device`). No-op when
+/// the flag is off, so Layer A is untouched.
+fn pin_base_if_enabled(ctx: &WalkContext, url: &str, sd: &mut Value) {
+    if ctx.pin_base_versions && !ctx.pkg.is_local(url) {
+        crate::layer_b::pin::pin_core_versions(sd, ctx.pkg);
+    }
+}
+
 /// Detect R4 by fhirVersion 4.x; if so convert to R5-internal model (full
 /// VersionConvertor path — for the input profile and local-dir resources).
 pub(crate) fn to_r5_internal(sd: &Value) -> anyhow::Result<Value> {
@@ -284,12 +303,18 @@ pub(crate) fn resolve_with_snapshot(
         .and_then(Value::as_array)
         .is_some()
     {
+        // LAYER B / B1 composition (a): pin this base/dep snapshot before it is
+        // cached + inherited (no-op when the flag is off).
+        pin_base_if_enabled(ctx, &url, &mut sd);
         let rc = Rc::new(sd);
         ctx.gen_cache.insert(url, rc.clone());
         return Ok(Some(rc));
     }
-    // No snapshot: recursively walk-generate one.
-    let generated = super::generate_snapshot_inner(ctx, sd)?;
+    // No snapshot: recursively walk-generate one. The recursive walk carries the
+    // same `pin_base_versions` flag, so its inherited canonicals are already
+    // pinned; we then pin this SD's own newly-materialized snapshot canonicals.
+    let mut generated = super::generate_snapshot_inner(ctx, sd)?;
+    pin_base_if_enabled(ctx, &url, &mut generated);
     let rc = Rc::new(generated);
     ctx.gen_cache.insert(url, rc.clone());
     Ok(Some(rc))
