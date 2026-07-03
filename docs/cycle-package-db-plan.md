@@ -153,8 +153,12 @@ same shape as cycle's experimental `publisher/terminology.ts`. Expansions are
 committed like goldens so builds are reproducible offline; tx drift is a
 deliberate refresh.
 
-Rejected: porting expansion into Rust (a whole subsystem; terminus exists;
-needs are small). The Phase-1 spike sidesteps the question entirely by
+Rejected: porting a terminology SERVICE into Rust (external-system
+subsumption/filters; terminus exists). Carve-out (2026-07-02, for the editor):
+a small `expand_enumerable()` evaluator in the engine for composes that are
+pure functions of IG content (local CS + enumerated external codes) — CI
+gates it against terminus output on the shared domain (editor spec §6).
+Authoritative site builds still use the tx client below for everything. The Phase-1 spike sidesteps the question entirely by
 reusing cycle's TS terminology step — that's part of what makes it a spike.
 
 **Tx surface beyond $expand (decided):** `$expand` is the ONLY terminology

@@ -96,15 +96,35 @@ Views: diagnostics → Monaco markers + problems panel
 3. **Local folder:** File System Access API directory handle (Chromium),
    drag-drop zip fallback elsewhere.
 
-## 6. Terminology stance (consistent with cycle plan §3)
+## 6. Terminology: in-editor re-expansion (revised 2026-07-02)
 
-No tx server in the browser. CI precomputes the expansion cache for the
-default IG by running **terminus** during the Pages build
-(`scripts/precompute-expansions.ts`), shipping the content-hash-keyed cache
-as static data. In-editor edits that change a ValueSet compose show an
-explicit "expansion not available (offline tx)" state on affected views —
-honest, visible staleness, never a silently partial expansion. A "refresh
-expansions" path against a user-supplied tx endpoint is a later feature.
+Editing a ValueSet is a first-class editor action — its expansion must
+recompute cleanly in the browser. Three tiers, decided:
+
+1. **Enumerable composes expand IN the engine (wasm), no tx.** Includes over
+   IG-local CodeSystems (with local filters/hierarchy) and explicitly
+   enumerated external codes (authored code+display lists) are pure functions
+   of IG content — a small `expand_enumerable()` evaluator in the engine
+   handles them per keystroke. This covers ALL of the cycle IG's ValueSets
+   and most authoring reality. NOT a tx server port: no external-CS
+   subsumption, ever (that boundary stays per cycle-plan §3).
+2. **Filter-based composes over external systems (SNOMED is-a etc.):**
+   cannot be computed without the external CS. The affected views show a
+   precise "needs terminology server" state naming the un-expandable
+   include, and — if the user configures a tx endpoint (their terminus, CORS
+   enabled) — the editor calls `$expand` live and caches the result in OPFS
+   (same content-hash cache keys as the CI cache). No configured tx =
+   visible, scoped degradation; never a silently partial expansion.
+3. **CI-precomputed cache (terminus)** still ships for the default IG as the
+   warm-start + the AUTHORITY: a CI gate asserts `expand_enumerable()`
+   output matches the terminus expansion for every enumerable VS in the
+   default IG — two expanders are tolerable only while provably agreeing on
+   the shared domain; on mismatch, terminus wins and the evaluator is fixed.
+
+Cascade correctness: an expansion is an S4 node in the same dependency
+ledger — VS edit → re-expand → ValueSet_Codes rows dirty → dependent pages
+re-render via read-set replay. The demo should show exactly this: edit a
+compose, watch the VS page's expansion table update.
 
 ## 7. What "viewing results" means, by milestone
 
