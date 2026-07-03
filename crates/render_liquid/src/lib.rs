@@ -81,13 +81,13 @@ pub fn tag_registry() -> Vec<TagDoc> {
         TagDoc { name: "for", kind: Supported, note: "T2: forloop.{index,index0,rindex,rindex0,first,last,length}; offset:/limit:/reversed; break/continue; for-else." },
         TagDoc { name: "break", kind: Supported, note: "T2." },
         TagDoc { name: "continue", kind: Supported, note: "T2." },
+        TagDoc { name: "case/when", kind: Supported, note: "T2: comma/or-separated when values, else. Liquid core; the survey measured it 'zero' but cdex (2 T2 includes) uses it, so it IS implemented (differential gate passes cdex conformance-*)." },
         TagDoc { name: "increment", kind: Supported, note: "Liquid counter (separate namespace, prints pre-increment)." },
         TagDoc { name: "decrement", kind: Supported, note: "Liquid counter (prints post-decrement, starts at -1)." },
         TagDoc { name: "lang-fragment", kind: Passthrough, note: "Localization tag: emits nothing (host may register a handler); out-of-core." },
         TagDoc { name: "fragment", kind: Passthrough, note: "Publisher fragment tag: emits nothing here (F4 fragment store handles it); QUIRK: Publisher evaluates it inside raw — see publisher_raw_quirk." },
-        TagDoc { name: "sql", kind: OutOfScope, note: "IG-Guidance-only documented feature; emits nothing (cycle-specific extension per survey (d))." },
-        TagDoc { name: "case/when", kind: OutOfScope, note: "Measured ZERO in corpus (survey b) — not implemented; would parse as UnknownTag (emits nothing)." },
-        TagDoc { name: "highlight/tablerow/cycle", kind: OutOfScope, note: "Measured ZERO in corpus — not implemented." },
+        TagDoc { name: "sql/sqlToData", kind: OutOfScope, note: "IG-Guidance/genomics-only documented feature; emits nothing (cycle-specific extension per survey (d)). The oracle (plain Jekyll) also can't parse it — a parse error, correctly out of scope." },
+        TagDoc { name: "highlight/tablerow/cycle", kind: OutOfScope, note: "Measured ZERO in corpus — not implemented (parse as UnknownTag, emit nothing)." },
         TagDoc { name: "layout", kind: OutOfScope, note: "Layout inheritance is the `page` crate's job (F5), not Liquid-core; out of scope here." },
     ]
 }

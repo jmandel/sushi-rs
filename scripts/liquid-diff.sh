@@ -65,7 +65,7 @@ case "${1:-fixtures}" in
     done
     ;;
   corpus)
-    # corpus manifest: lines of  TEMPLATE|CONTEXT|INCLUDES_DIR|DATA_DIR
+    # corpus manifest: lines of  TEMPLATE<TAB>CONTEXT<TAB>INCLUDES_DIR<TAB>DATA_DIR
     manifest="$FIX/../corpus/manifest.tsv"
     echo "== corpus pages =="
     while IFS=$'\t' read -r tpl ctx inc data; do
@@ -78,4 +78,10 @@ esac
 
 echo "----"
 echo "PASS=$pass DIFF=$diff ERR=$err"
+# A residual DIFF/ERR is only ACCEPTED on the gate if it is an explained
+# out-of-scope class (see docs / the classifier below). The `one` and
+# `fixtures`/`corpus` callers treat any DIFF/ERR as a failure; the corpus gate's
+# EXPLAINED accounting is done by the harness that invokes this per-file and
+# classifies (see scripts/liquid-classify.sh / report). Here we just exit
+# non-zero on any residual so CI is honest.
 [ $diff -eq 0 ] && [ $err -eq 0 ]

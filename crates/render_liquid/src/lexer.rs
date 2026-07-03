@@ -24,6 +24,15 @@ pub enum Token {
         trim_left: bool,
         trim_right: bool,
     },
+    /// `{% raw %}...{% endraw %}` — the VERBATIM inner body (exact bytes, no
+    /// normalization), so re-emitting it is byte-exact. Carries the trim flags
+    /// of the opening `{% raw %}` / closing `{% endraw %}` for whitespace
+    /// control on the surrounding raw text.
+    RawBlock {
+        body: String,
+        open_trim_left: bool,
+        close_trim_right: bool,
+    },
 }
 
 pub fn tokenize(src: &str) -> Vec<Token> {
@@ -65,15 +74,30 @@ pub fn tokenize(src: &str) -> Vec<Token> {
                 j += 1;
             }
             let Some(close_pos) = found else {
-                // unterminated: treat rest as raw
+                // unterminated markup: treat the rest as raw text.
                 raw_start = i;
-                i = bytes.len();
                 break;
             };
             let trim_right = bytes[close_pos] == b'-';
             let content_end = close_pos;
             let inner = src[content_start..content_end].trim().to_string();
             let after = if trim_right { close_pos + 3 } else { close_pos + 2 };
+
+            // Special-case `{% raw %}`: capture its body VERBATIM from source up
+            // to `{% endraw %}` (matching Liquid's raw, which does not re-tokenize
+            // its contents). This preserves exact spacing like `{{access_token}}`.
+            if !is_output && inner == "raw" {
+                if let Some((body, close_trim_right, next)) = scan_raw_body(src, after) {
+                    tokens.push(Token::RawBlock {
+                        body,
+                        open_trim_left: trim_left,
+                        close_trim_right,
+                    });
+                    raw_start = next;
+                    i = next;
+                    continue;
+                }
+            }
 
             if is_output {
                 tokens.push(Token::Output {
@@ -101,6 +125,46 @@ pub fn tokenize(src: &str) -> Vec<Token> {
     apply_whitespace_control(tokens)
 }
 
+/// Scan from `start` for `{% endraw %}` (allowing `{%-`/`-%}` variants),
+/// returning the verbatim body, whether the endraw had a right-trim, and the
+/// index just past `{% endraw %}`.
+fn scan_raw_body(src: &str, start: usize) -> Option<(String, bool, usize)> {
+    let bytes = src.as_bytes();
+    let mut k = start;
+    while k + 1 < bytes.len() {
+        if bytes[k] == b'{' && bytes[k + 1] == b'%' {
+            // parse this tag's inner to see if it's endraw
+            let os = k + 2;
+            let tl = os < bytes.len() && bytes[os] == b'-';
+            let cs = if tl { os + 1 } else { os };
+            // find close
+            let mut m = cs;
+            let mut close = None;
+            while m + 1 < bytes.len() {
+                if bytes[m] == b'%' && bytes[m + 1] == b'}' {
+                    close = Some((m, false));
+                    break;
+                }
+                if bytes[m] == b'-' && m + 2 < bytes.len() && bytes[m + 1] == b'%' && bytes[m + 2] == b'}' {
+                    close = Some((m, true));
+                    break;
+                }
+                m += 1;
+            }
+            if let Some((cpos, ctr)) = close {
+                let inner = src[cs..cpos].trim();
+                if inner == "endraw" {
+                    let body = src[start..k].to_string();
+                    let after = if ctr { cpos + 3 } else { cpos + 2 };
+                    return Some((body, ctr, after));
+                }
+            }
+        }
+        k += 1;
+    }
+    None
+}
+
 /// Apply `-` trim flags: strip trailing whitespace of the raw token to the LEFT
 /// of a `trim_left` marker, and leading whitespace of the raw token to the
 /// RIGHT of a `trim_right` marker.
@@ -123,6 +187,14 @@ fn apply_whitespace_control(mut tokens: Vec<Token>) -> Vec<Token> {
             } => {
                 trim_prev_right[k] = *trim_left;
                 trim_next_left[k] = *trim_right;
+            }
+            Token::RawBlock {
+                open_trim_left,
+                close_trim_right,
+                ..
+            } => {
+                trim_prev_right[k] = *open_trim_left;
+                trim_next_left[k] = *close_trim_right;
             }
             Token::Raw(_) => {}
         }

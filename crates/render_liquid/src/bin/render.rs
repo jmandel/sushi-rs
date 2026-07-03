@@ -63,17 +63,12 @@ fn main() {
         prov.site_extra = json_to_value(site);
     }
 
-    // includes
+    // includes (recurse into subdirs so `whats-new/v9.md` etc. resolve, using
+    // the path RELATIVE to the includes root as the include name — matching
+    // Jekyll's `_includes/<relpath>` resolution).
     if let Some(dir) = &includes_dir {
-        if let Ok(rd) = std::fs::read_dir(dir) {
-            for e in rd.flatten() {
-                if let Ok(name) = e.file_name().into_string() {
-                    if let Ok(body) = std::fs::read_to_string(e.path()) {
-                        prov.includes.insert(name, body);
-                    }
-                }
-            }
-        }
+        let root = std::path::Path::new(dir);
+        load_includes_recursive(root, root, &mut prov.includes);
     }
 
     // globals = every top-level key except `site` (served by provider).
@@ -129,6 +124,31 @@ impl DataProvider for MapProvider {
     }
     fn include_source(&self, name: &str) -> Option<String> {
         self.includes.get(name).cloned()
+    }
+}
+
+fn load_includes_recursive(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    map: &mut HashMap<String, String>,
+) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let path = e.path();
+        // follow symlinks to files/dirs (overlay uses symlinks)
+        let meta = match std::fs::metadata(&path) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.is_dir() {
+            load_includes_recursive(root, &path, map);
+        } else if let Ok(body) = std::fs::read_to_string(&path) {
+            if let Ok(rel) = path.strip_prefix(root) {
+                map.insert(rel.to_string_lossy().replace('\\', "/"), body);
+            }
+        }
     }
 }
 

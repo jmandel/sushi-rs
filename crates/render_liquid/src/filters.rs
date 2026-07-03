@@ -103,7 +103,7 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
         "where" => where_filter(&input, &a0, &a1),
         "sort" => sort_filter(&input, &a0),
         "sort_natural" => sort_natural(&input, &a0),
-        "group_by" => input, // rare; passthrough
+        "group_by" => group_by(&input, &arg_str(&a0)),
 
         // ---------------- misc / jekyll ------------------------------------
         "markdownify" => Value::str(format!("{}{}{}", MD_OPEN, input.to_str(), MD_CLOSE)),
@@ -281,13 +281,14 @@ fn sort_filter(input: &Value, property: &Option<Value>) -> Value {
         }
         Some(p) => {
             let prop = p.to_str();
-            // nils first (order = -1)
+            // nils FIRST (Jekyll default `nils = "first"`, sort_input order=-1;
+            // a nil property sorts BEFORE a non-nil one). Verified via oracle.
             arr.sort_by(|a, b| {
                 let pa = item_property(a, &prop);
                 let pb = item_property(b, &prop);
                 match (pa.is_nil(), pb.is_nil()) {
-                    (false, true) => std::cmp::Ordering::Less, // -order, order=-1 => Less
-                    (true, false) => std::cmp::Ordering::Greater,
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
                     _ => natural_cmp(&pa, &pb),
                 }
             });
@@ -326,6 +327,33 @@ fn natural_cmp(a: &Value, b: &Value) -> std::cmp::Ordering {
         }
     }
     a.to_str().cmp(&b.to_str())
+}
+
+/// Jekyll `group_by` (grouping_filters.rb): group items by
+/// `item_property(item, prop).to_s`, preserving first-occurrence key order
+/// (Ruby Enumerable#group_by), producing `[{name, items, size}]`.
+fn group_by(input: &Value, prop: &str) -> Value {
+    let items = to_array(input);
+    let mut order: Vec<String> = Vec::new();
+    let mut groups: std::collections::HashMap<String, Vec<Value>> = std::collections::HashMap::new();
+    for item in items {
+        let key = item_property(&item, prop).to_str();
+        if !groups.contains_key(&key) {
+            order.push(key.clone());
+        }
+        groups.entry(key).or_default().push(item);
+    }
+    let mut out = Vec::new();
+    for name in order {
+        let its = groups.remove(&name).unwrap();
+        let size = its.len();
+        out.push(make_hash(vec![
+            ("name".to_string(), Value::str(name)),
+            ("items".to_string(), Value::array(its)),
+            ("size".to_string(), Value::Int(size as i64)),
+        ]));
+    }
+    Value::array(out)
 }
 
 fn is_default_empty(v: &Value) -> bool {

@@ -38,6 +38,14 @@ pub enum Node {
         body: Template,
         else_body: Option<Template>,
     },
+    /// `{% case expr %}{% when a,b %}...{% else %}...{% endcase %}`
+    Case {
+        subject: Expr,
+        /// each `when` arm: a list of candidate values (comma/or separated) +
+        /// its body.
+        whens: Vec<(Vec<Term>, Template)>,
+        else_body: Option<Template>,
+    },
     Break,
     Continue,
     /// `{% include name.md k=v %}` (name may be a variable expr).
@@ -47,9 +55,12 @@ pub enum Node {
     },
     /// A tag we recognize by name but treat as a passthrough/no-op with a
     /// registry note (e.g. lang-fragment, fragment, sql). Emits nothing by
-    /// default; the host can register a handler.
+    /// default; `name`/`markup` are retained so a host can later register a
+    /// handler keyed on them (F4/F5 fragment + lang-fragment wiring).
     UnknownTag {
+        #[allow(dead_code)]
         name: String,
+        #[allow(dead_code)]
         markup: String,
     },
 }

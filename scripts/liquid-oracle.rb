@@ -63,7 +63,12 @@ MD_MARKER_CLOSE = "/MD"
 module Jekyll
   module Filters
     def markdownify(input)
-      "#{MD_MARKER_OPEN}#{input}#{MD_MARKER_CLOSE}"
+      # NOTE: use inline string literals, NOT interpolated frozen constants.
+      # Interpolating the frozen `MD_MARKER_OPEN`/`MD_MARKER_CLOSE` constants
+      # here makes Liquid emit \x01 span-guard bytes around the segments; inline
+      # literals stay clean. (Verified empirically; both markers are still
+      # exactly "MD"…"/MD" so the Rust stub matches byte-for-byte.)
+      "MD#{input}/MD"
     end
   end
 end
@@ -135,10 +140,14 @@ template_src = apply_publisher_raw_quirk(template_src) if options[:raw_quirk]
 # ---------------------------------------------------------------------------
 src_dir = Dir.mktmpdir
 dst_dir = Dir.mktmpdir
-at_exit do
+# Clean up on EVERY exit path (including SIGTERM/quota crashes) so a long gate
+# loop doesn't accumulate Jekyll's temp source/dest trees on a tight tmpfs.
+cleanup = lambda do
   FileUtils.remove_entry(src_dir) if Dir.exist?(src_dir)
   FileUtils.remove_entry(dst_dir) if Dir.exist?(dst_dir)
 end
+at_exit(&cleanup)
+%w[TERM INT].each { |s| Signal.trap(s) { cleanup.call; exit 1 } }
 # Point Jekyll's _includes at the IG's includes dir so its real {% include %}
 # tag (parameterized includes + include.* + recursive re-render) resolves files
 # exactly as the Publisher does.

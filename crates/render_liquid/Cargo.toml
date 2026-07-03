@@ -16,10 +16,12 @@ rust-version = "1.90"
 description = "Just-enough Jekyll/Liquid (T1+T2) engine at Publisher parity"
 
 [dependencies]
-serde_json = "1"
+# preserve_order: keep JSON object key order = Ruby/YAML insertion order, so
+# `{% for x in hash %}` iterates in the same order as the oracle.
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [features]
 default = []

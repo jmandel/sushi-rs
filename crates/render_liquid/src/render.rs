@@ -108,16 +108,53 @@ impl<'p> Renderer<'p> {
                 self.counters.insert(name.clone(), Value::Int(cur));
             }
             Node::If { branches, else_body } => {
+                // Liquid: a Block whose entire body is blank (only whitespace +
+                // blank tags like assign/capture/comment) emits NOTHING — the
+                // block is rendered with skip_output (block_body.rb:82,
+                // block.rb:59). So we render into a scratch buffer and discard
+                // it if the whole node is blank. (State changes from assigns
+                // inside must still apply, so we DO render, just drop output.)
+                let blank = node_is_blank(node);
+                let mut buf = String::new();
+                let target = if blank { &mut buf } else { out };
                 for (cond, body) in branches {
                     if self.eval_condition(cond) {
-                        return self.render_block(body, out);
+                        return self.render_block(body, target);
                     }
                 }
                 if let Some(eb) = else_body {
-                    return self.render_block(eb, out);
+                    return self.render_block(eb, target);
                 }
             }
-            Node::For { .. } => return self.render_for(node, out),
+            Node::For { .. } => {
+                if node_is_blank(node) {
+                    let mut buf = String::new();
+                    return self.render_for(node, &mut buf);
+                }
+                return self.render_for(node, out);
+            }
+            Node::Case { subject, whens, else_body } => {
+                let blank = node_is_blank(node);
+                let mut buf = String::new();
+                let target = if blank { &mut buf } else { out };
+                let subj = self.eval_expr(subject);
+                for (cands, body) in whens {
+                    let mut hit = false;
+                    for t in cands {
+                        let c = self.eval_term(t);
+                        if subj.liquid_eq(&c) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                    if hit {
+                        return self.render_block(body, target);
+                    }
+                }
+                if let Some(eb) = else_body {
+                    return self.render_block(eb, target);
+                }
+            }
             Node::Break => return Flow::Break,
             Node::Continue => return Flow::Continue,
             Node::Include { name, params } => self.render_include(name, params, out),
@@ -196,11 +233,19 @@ impl<'p> Renderer<'p> {
             }
         };
 
-        // Evaluate params -> the `include` hash.
-        let mut inc = OrderedMap::new();
-        for (k, expr) in params {
-            inc.insert(k.clone(), self.eval_expr(expr));
-        }
+        // Evaluate params -> the `include` hash. Jekyll (include.rb:120) ONLY
+        // reassigns `include` when the tag HAS params (`if @params`); a
+        // param-less nested include INHERITS the enclosing `include` hash
+        // (verified via oracle: nested obs_cat_guidance sees parent's category).
+        let inc: Option<Value> = if params.is_empty() {
+            None
+        } else {
+            let mut m = OrderedMap::new();
+            for (k, expr) in params {
+                m.insert(k.clone(), self.eval_expr(expr));
+            }
+            Some(Value::Hash(Rc::new(m)))
+        };
 
         let Some(src) = self.provider.include_source(&resolved_name) else {
             // include-not-found: emit nothing (host decides policy). Jekyll
@@ -215,10 +260,12 @@ impl<'p> Renderer<'p> {
         let Ok(tpl) = crate::parser::parse(&src) else {
             return;
         };
-        // Includes get a fresh scope with `include.*`; parent variables are
-        // still visible (Jekyll includes inherit the outer scope).
+        // Includes get a fresh scope; parent variables (incl. a param-less
+        // include's inherited `include`) are still visible via scope lookup.
         self.push_scope();
-        self.set_local("include", Value::Hash(Rc::new(inc)));
+        if let Some(inc) = inc {
+            self.set_local("include", inc);
+        }
         self.include_depth += 1;
         self.render_block(&tpl, out);
         self.include_depth -= 1;
@@ -397,31 +444,32 @@ impl<'p> Renderer<'p> {
     }
 
     fn eval_site(&mut self, segments: &[Segment]) -> Value {
-        // site.data.<...> is served by the provider; other site.* too.
+        // `site.data.<key>` is served by the provider at the FIRST key after
+        // `data`; any deeper path (`.foo`, `[7]`, `.[4]`) is then walked on the
+        // returned Value with proper typing (int indexes for arrays), NOT
+        // string-flattened. This makes deep mixed access like
+        // `site.data.x.parameter[7].part.[4].resource...` resolve correctly.
         if let Some(Segment::Field(first)) = segments.first() {
             if first == "data" {
-                // collect the remaining path as strings (dynamic indexes resolved)
-                let rest = self.resolve_path_strings(&segments[1..]);
-                let refs: Vec<&str> = rest.iter().map(|s| s.as_str()).collect();
-                return self.provider.site_data(&refs).unwrap_or(Value::Nil);
+                if let Some(Segment::Field(key)) = segments.get(1) {
+                    let base = self.provider.site_data(&[key.as_str()]).unwrap_or(Value::Nil);
+                    return self.walk_segments(base, &segments[2..]);
+                }
+                // `site.data` with a dynamic key: `site.data.[expr]`
+                if let Some(Segment::Index(e)) = segments.get(1) {
+                    let key = self.eval_expr(e).to_str();
+                    let base = self.provider.site_data(&[key.as_str()]).unwrap_or(Value::Nil);
+                    return self.walk_segments(base, &segments[2..]);
+                }
+                return Value::Nil;
             }
         }
-        let rest = self.resolve_path_strings(segments);
-        let refs: Vec<&str> = rest.iter().map(|s| s.as_str()).collect();
-        self.provider.site(&refs).unwrap_or(Value::Nil)
-    }
-
-    /// Resolve a segment path into a vec of string keys, evaluating dynamic
-    /// `[expr]` indexes.
-    fn resolve_path_strings(&mut self, segments: &[Segment]) -> Vec<String> {
-        let mut out = Vec::new();
-        for seg in segments {
-            match seg {
-                Segment::Field(f) => out.push(f.clone()),
-                Segment::Index(e) => out.push(self.eval_expr(e).to_str()),
-            }
+        // other `site.<key>` — first key via provider, rest walked.
+        if let Some(Segment::Field(first)) = segments.first() {
+            let base = self.provider.site(&[first.as_str()]).unwrap_or(Value::Nil);
+            return self.walk_segments(base, &segments[1..]);
         }
-        out
+        Value::Nil
     }
 
     fn walk_segments(&mut self, mut val: Value, segments: &[Segment]) -> Value {
@@ -532,6 +580,39 @@ fn value_is_empty(v: &Value) -> bool {
         Value::Hash(h) => h.is_empty(),
         _ => false,
     }
+}
+
+/// Liquid `blank?` for a node (block_body.rb / tag.rb / assign.rb):
+///  * raw text -> blank iff all-whitespace
+///  * assign / capture / comment / raw -> blank (true)
+///  * if / for -> blank iff EVERY child (all branches + else) is blank
+///  * output / include / increment / decrement / unknown -> not blank
+fn node_is_blank(node: &Node) -> bool {
+    match node {
+        Node::Raw(s) => s.trim().is_empty(),
+        Node::Assign { .. }
+        | Node::Capture { .. }
+        | Node::Comment
+        | Node::Raw2(_) => true,
+        Node::If { branches, else_body } => {
+            branches.iter().all(|(_, b)| block_is_blank(b))
+                && else_body.as_ref().map_or(true, |b| block_is_blank(b))
+        }
+        Node::For { body, else_body, .. } => {
+            block_is_blank(body) && else_body.as_ref().map_or(true, |b| block_is_blank(b))
+        }
+        Node::Case { whens, else_body, .. } => {
+            whens.iter().all(|(_, b)| block_is_blank(b))
+                && else_body.as_ref().map_or(true, |b| block_is_blank(b))
+        }
+        // Output, Include, Increment, Decrement, Break, Continue, UnknownTag:
+        // Liquid's default Tag#blank? is false.
+        _ => false,
+    }
+}
+
+fn block_is_blank(tpl: &Template) -> bool {
+    tpl.iter().all(node_is_blank)
 }
 
 /// Build the `forloop` drop for iteration i of length len.

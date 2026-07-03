@@ -35,6 +35,10 @@ impl Parser {
                     }
                     self.pos += 1;
                 }
+                Token::RawBlock { body, .. } => {
+                    out.push(Node::Raw2(body));
+                    self.pos += 1;
+                }
                 Token::Output { inner, .. } => {
                     let expr = parse_expr(&inner)?;
                     out.push(Node::Output(expr));
@@ -83,14 +87,14 @@ impl Parser {
                 self.expect_end("endcomment")?;
                 Ok(Some(Node::Comment))
             }
-            "raw" => {
-                // raw body is the concatenation of everything until endraw,
-                // reconstructed from source tokens verbatim.
-                let body = self.collect_raw_body()?;
-                Ok(Some(Node::Raw2(body)))
-            }
+            // `raw` is handled entirely in the lexer as a single verbatim
+            // RawBlock token (so exact spacing like `{{access_token}}` is
+            // preserved). A bare `raw` reaching here means an unterminated raw;
+            // emit nothing.
+            "raw" | "endraw" => Ok(None),
             "if" => self.parse_if(rest, false).map(Some),
             "unless" => self.parse_if(rest, true).map(Some),
+            "case" => self.parse_case(rest).map(Some),
             "for" => self.parse_for(rest).map(Some),
             "break" => Ok(Some(Node::Break)),
             "continue" => Ok(Some(Node::Continue)),
@@ -146,6 +150,49 @@ impl Parser {
         }
         Ok(Node::If {
             branches,
+            else_body,
+        })
+    }
+
+    fn parse_case(&mut self, subject_src: &str) -> Result<Node, ParseError> {
+        let subject = parse_expr(subject_src.trim())?;
+        let mut whens: Vec<(Vec<Term>, Template)> = Vec::new();
+        let mut else_body = None;
+        // Skip any raw/text between `{% case %}` and the first `{% when %}`
+        // (Liquid ignores it).
+        let stops = ["when", "else", "endcase"];
+        // Discard leading non-when content by parsing (and dropping) a block.
+        let _ = self.parse_block(&stops)?;
+        loop {
+            let Some(Token::Tag { inner, .. }) = self.tokens.get(self.pos).cloned() else {
+                break;
+            };
+            match first_word(&inner).as_str() {
+                "when" => {
+                    self.pos += 1;
+                    // `when a, b` or `when a or b` -> candidate terms
+                    let cand_src = inner["when".len()..].trim();
+                    let mut cands = Vec::new();
+                    for part in split_when_values(cand_src) {
+                        cands.push(parse_term(part.trim())?);
+                    }
+                    let body = self.parse_block(&stops)?;
+                    whens.push((cands, body));
+                }
+                "else" => {
+                    self.pos += 1;
+                    else_body = Some(self.parse_block(&["endcase"])?);
+                }
+                "endcase" => {
+                    self.pos += 1;
+                    break;
+                }
+                _ => break,
+            }
+        }
+        Ok(Node::Case {
+            subject,
+            whens,
             else_body,
         })
     }
@@ -229,32 +276,6 @@ impl Parser {
         }
     }
 
-    /// Collect the verbatim body of a `{% raw %}` block by re-serializing the
-    /// tokens between here and `{% endraw %}`.
-    fn collect_raw_body(&mut self) -> Result<String, ParseError> {
-        let mut out = String::new();
-        while self.pos < self.tokens.len() {
-            match &self.tokens[self.pos] {
-                Token::Tag { inner, .. } if first_word(inner) == "endraw" => {
-                    self.pos += 1;
-                    return Ok(out);
-                }
-                Token::Raw(s) => out.push_str(s),
-                Token::Output { inner, .. } => {
-                    out.push_str("{{ ");
-                    out.push_str(inner);
-                    out.push_str(" }}");
-                }
-                Token::Tag { inner, .. } => {
-                    out.push_str("{% ");
-                    out.push_str(inner);
-                    out.push_str(" %}");
-                }
-            }
-            self.pos += 1;
-        }
-        Ok(out)
-    }
 }
 
 // ------------------------------------------------------------------ helpers
@@ -276,6 +297,11 @@ fn negate_condition(c: Condition) -> Condition {
     // building `Comparison{ Truthy? }`. To keep the AST simple we introduce a
     // wrapper Condition via Or(false-eq). Instead: invert known simple forms.
     match c {
+        // `contains` has no inverse comparison operator, so wrap the whole
+        // comparison in NotTruthy rather than mis-inverting it.
+        Condition::Comparison { op: CompareOp::Contains, .. } => {
+            Condition::NotTruthy(Box::new(c))
+        }
         Condition::Comparison { left, op, right } => Condition::Comparison {
             left,
             op: invert_op(op),
@@ -411,6 +437,33 @@ fn trailing_kv(s: &str, key: &str) -> Option<(String, (usize, String))> {
     Some((key.to_string(), (idx, value)))
 }
 
+/// Split `{% when %}` candidate values: Liquid allows both `,` and `or` as
+/// separators (`{% when 'a', 'b' %}` / `{% when 'a' or 'b' %}`).
+fn split_when_values(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for by_comma in split_commas(s) {
+        // further split each on top-level ` or `
+        let mut rest = by_comma;
+        loop {
+            if let Some((l, _, r)) = split_first_or(&rest) {
+                out.push(l.trim().to_string());
+                rest = r.to_string();
+            } else {
+                out.push(rest.trim().to_string());
+                break;
+            }
+        }
+    }
+    out.into_iter().filter(|s| !s.is_empty()).collect()
+}
+
+fn split_first_or(s: &str) -> Option<(String, &'static str, String)> {
+    if let Some((l, r)) = split_once_word(s, "or") {
+        return Some((l.to_string(), "or", r.to_string()));
+    }
+    None
+}
+
 fn split_include_name(s: &str) -> (&str, &str) {
     // name = up to first whitespace that is followed (eventually) by `key=`.
     // Simplest robust rule matching corpus: name is the first whitespace-
@@ -532,9 +585,16 @@ fn parse_filter(src: &str) -> Result<FilterCall, ParseError> {
 
 /// Parse a base term: literal, range, or variable path.
 fn parse_term(src: &str) -> Result<Term, ParseError> {
-    let s = src.trim();
+    let mut s = src.trim();
     if s.is_empty() {
         return Ok(Term::Literal(Value::Nil));
+    }
+    // Jekyll quirk: `{{ expr }}` used INSIDE a tag (e.g.
+    // `{% assign x = {{site.data.fhir.path}} | append: ... %}`) is interpolated
+    // to the variable's value. Strip the braces and treat the inner as the
+    // term. (Verified via oracle.)
+    if s.starts_with("{{") && s.ends_with("}}") && s.len() >= 4 {
+        s = s[2..s.len() - 2].trim();
     }
     // range `(a..b)`
     if s.starts_with('(') && s.ends_with(')') {
@@ -589,6 +649,12 @@ fn parse_var_path(s: &str) -> Result<VarPath, ParseError> {
         match bytes[i] {
             b'.' => {
                 i += 1;
+                // Tolerate `foo.[expr]` (a `.` directly before a bracket, as in
+                // US Core's `site.data.[include.file]`): skip the empty field
+                // and let the next iteration handle the `[`.
+                if i < bytes.len() && bytes[i] == b'[' {
+                    continue;
+                }
                 let fs = i;
                 while i < bytes.len()
                     && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'-')

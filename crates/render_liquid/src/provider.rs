@@ -10,11 +10,14 @@ use crate::value::Value;
 
 /// Resolves the dynamic data surfaces of a Liquid render.
 pub trait DataProvider {
-    /// Resolve `site.data.<...>` given the path segments after `site.data`.
-    /// Returning `None` means "unknown" -> Liquid nil.
+    /// Resolve `site.data.<key>` at the FIRST key after `site.data`, returning
+    /// the whole subtree (Hash/Array/scalar). The engine walks any deeper path
+    /// itself with correct typing (int array indexes, `.[expr]`, etc.), so a
+    /// provider only implements one-level lookup and can return a large subtree
+    /// (or a lazy Drop later). `None` -> Liquid nil.
     ///
-    /// Example: `{{ site.data.fhir.path }}` calls
-    /// `site_data(&["fhir", "path"])`.
+    /// Example: `{{ site.data.fhir.path }}` calls `site_data(&["fhir"])` and the
+    /// engine then indexes `.path` on the returned value.
     fn site_data(&self, path: &[&str]) -> Option<Value> {
         let _ = path;
         None
