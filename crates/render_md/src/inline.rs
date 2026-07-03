@@ -267,8 +267,15 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                     out.push_str(&html);
                     i = ni;
                 } else {
-                    out.push('`');
-                    i += 1;
+                    // No matching closing run for this backtick run: kramdown
+                    // leaves the WHOLE run literal (it does not retry shorter
+                    // sub-runs). Emit all the backticks and skip past them.
+                    let mut j = i;
+                    while j < n && chars[j] == '`' {
+                        out.push('`');
+                        j += 1;
+                    }
+                    i = j;
                 }
             }
             '<' if chars.get(i + 1) == Some(&'<') && chars.get(i + 2) == Some(&' ') => {
