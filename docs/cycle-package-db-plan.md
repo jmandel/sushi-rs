@@ -45,29 +45,84 @@ That is an oracle + golden + comparator, ready-made for our methodology.
 the hard 90%. The genuinely missing piece is **ValueSet expansion**; the rest
 is a SQLite-assembly step (projections + bookkeeping).
 
-## 2b. The ingest augmentation (package.db → site.db) — its inputs count too
+## 2b. Target boundary (decided 2026-07-02): Rust emits **site.db**; TS only renders
 
-`ingest.ts` copies `package.db` to `temp/site-gen/site.db` and ADDS four
-tables (`Pages`, `Menu`, `SiteConfig`, `Assets`); `build.tsx` renders only
-from `site.db`. So the full replacement contract = package.db (§2) **plus the
-augmentation inputs**. We keep ingest as-is (it's part of the TS downstream),
-but a self-contained pipeline must ensure every one of these exists at
-ingest time:
+`ingest.ts` today copies `package.db` to `site.db` and ADDS four tables
+(`Pages`, `Menu`, `SiteConfig`, `Assets`); `build.tsx` renders only from
+`site.db`. Decision: **the Rust pipeline absorbs the ingest step** and emits
+`site.db` as the single artifact the TS code consumes. `build.tsx`/`core/db.ts`
+already read only `site.db`, so the TS change is just deleting/bypassing
+ingest and asserting the site.db contract (package.db contract + the four
+augmentation tables) at render start.
 
-| Ingest input | → table | Produced by | Notes for our pipeline |
-|---|---|---|---|
-| `input/pagecontent/<slug>.md` (or .xml); first `# H1` overrides title | `Pages` | repo-authored | Page SET comes from the IG resource's `definition.page` tree (which WE generate) — a page listed there but missing on disk breaks ingest; keep the same fail-loud behavior |
-| `sushi-config.yaml` (whole file → `SiteConfig`; `menu:` → `Menu`) | `Menu`, `SiteConfig` | repo-authored | Same file rust_sushi compiles from; no new work, but note ingest reads the RAW yaml (incl. fields SUSHI ignores) — don't "clean" it |
-| `input/images/**` (recursive, mime by extension) | `Assets` | repo-authored | pass-through |
-| `input/includes/<name>` — ONLY includes actually referenced by page markdown; nested text includes followed | `Assets` | repo-authored **+ build-generated**: the wrapper writes e.g. `sample-viewer-links.md` into includes BEFORE ingest | ⚠️ ordering dependency: any generated includes must be materialized before ingest runs. In cycle, that's the wrapper's job (viewer build); our pipeline orchestration must preserve the slot |
-| `input/images-source/<name>.plantuml` → rendered SVG when a referenced `.svg` is missing | `Assets` | repo-authored source + **PlantUML jar (Maven fetch) + `java -jar`** | ⚠️ the one ingest path that reintroduces Java + network. Mitigations: pre-render SVGs into `input/images/` in CI (jar never triggers), commit rendered SVGs, or swap ingest to a non-Java plantuml renderer later. Decide per-repo; for cycle a pre-render step is trivial |
-| env knobs: `PKG_DB`, `CONFIG`, `SITE_LIQUID_ASSET_DIRS`, `PLANTUML_JAR` | — | wrapper | our orchestration sets `PKG_DB` to the Rust-produced DB; the rest keep defaults |
+**PlantUML: OUT OF SCOPE.** Precondition instead: every SVG referenced by a
+page must already exist under `input/images/` (pre-rendered/committed). The
+producer fails loud with the list of missing images. No Java, no Maven fetch.
 
-Wrapper-level site assets that are NOT ingest inputs but ARE final-site
+### Processing model (explicit stages, each with declared inputs → outputs)
+
+```
+S1 parse      input/fsh/**/*.fsh ────────────────→ tank entities        (per file)
+S2 compile    tank + package cache ──────────────→ resource JSONs + IG  (rust_sushi, parity)
+S3 snapshot   SD JSONs + base/type SD closure ───→ snapshot-complete SDs (walk engine)
+S4 expand     VS + CS closure + tx pin ──────────→ expansion rows        (tx client, cached)
+S5 rows       S2-S4 + config + build meta ───────→ Resources/Concepts/
+                                                    ValueSet_Codes/Metadata rows
+S6 augment    definition.page tree (from OUR IG resource)
+              + input/pagecontent/<slug>.{md,xml}  → Pages rows (body verbatim;
+                first `# H1` overrides title; fail loud on missing page file)
+              + sushi-config.yaml RAW ────────────→ SiteConfig (verbatim yaml→json)
+              + sushi-config.yaml `menu:` ────────→ Menu rows (label/href/kind/
+                                                    parent/ord/depth)
+              + input/images/** ─────────────────→ Assets (mime by extension)
+              + include scan: {% include %} / {% lang-fragment %} refs in page
+                bodies, nested text includes followed → Assets (referenced only;
+                fail loud on missing; generated includes must exist BEFORE this
+                stage — the wrapper's viewer-build slot is a declared S6 input)
+S7 emit       all rows ──────────────────────────→ site.db (SQLite)
+```
+
+Rules: sushi-config.yaml is consumed twice (S2 compile semantics; S6 verbatim
+— never normalize it). Every stage declares its input set explicitly; nothing
+reads the filesystem outside its declared inputs (this is what makes §2c
+possible and keeps the wasm path open — S7 is a thin sink, swappable).
+
+## 2c. Incremental builds / dependency tracking (design requirement, not a bolt-on)
+
+Requirement: an edit to one IG source file must not compel a full-world
+rebuild — this serves both CI and the future editor loop.
+
+- **Build-state ledger**: a `BuildState` table inside site.db (or sidecar):
+  `node_key → input_hash → output_hash`, where node = {fsh file, md page,
+  asset, resource, snapshot(url), expansion(vs url), db row group}. Recompute
+  a node only when its input hash changed; propagate via output hashes.
+- **Honest granularity per stage** (respect global semantics, don't fake it):
+  - S1/S2: FSH semantics are tank-global (first-wins aliases, RuleSets,
+    fishing order). V1 policy: recompile ALL FSH on any .fsh/config change —
+    it's sub-second native for real IGs and milliseconds for cycle. Finer
+    per-entity invalidation is a later optimization, not v1. But S2's OUTPUT
+    is diffed per-resource (hash), so unchanged resources don't dirty S3+.
+  - S3: per-SD node, deps = own JSON + base/type/extension SD closure
+    (the walk already knows this closure; record it as the dep set).
+  - S4: per-VS node, deps = VS def + referenced CS defs + tx-server identity.
+    Expansions are the expensive/networked stage — cache keyed by content
+    hash means the tx server is hit ONLY when terminology actually changed.
+  - S6: per-file nodes (one md edit → one Pages row + its referenced assets).
+  - S7: UPDATE site.db in place (delete/insert dirty rows), not rewrite.
+- **Renderer-side incrementality for free**: because rows carry stable
+  content hashes in BuildState, the TS renderer can skip re-rendering pages
+  whose transitive row inputs are unchanged (page body hash + hashes of
+  resources its fragments touch). That's a TS-side follow-up, enabled — not
+  required — by this design.
+- **Determinism prerequisite**: `genDate`/`genDay` metadata must come from an
+  injected build timestamp (env/git commit time), never wall clock, or every
+  build is dirty by construction.
+
+Wrapper-level site assets that are NOT site.db inputs but ARE final-site
 inputs (copied after render): viewer bundles, sample SHL files, `skill.zip`,
 `CNAME`, `404.html`, `site-gen/project/package-list.json`, and the
-`output/qa*` cosmetic copies (Java-QA only; drop or stub when no Java run
-exists — decide what replaces the QA page in a Rust-only build).
+`output/qa*` cosmetic copies (Java-QA only; drop or stub in a Rust-only
+build).
 
 ## 3. The expansion gap — options
 
@@ -88,22 +143,30 @@ exists — decide what replaces the QA page in a Rust-only build).
   resource ingestion at `rust_sushi` output and REPLACE its `snapshots.ts`
   step with walk-engine snapshots (or pre-embed snapshots in the resource
   JSONs so its snapshot step becomes a no-op). Its own terminology.ts still
-  does expansions. Gate with `publisher/compare.ts` vs the committed Java
-  fixture DB. Proves end-to-end with minimal new code.
-- **Option B — Rust-native producer (the deliverable):** new crate
-  `package_db` in this workspace: `rust_sushi build` → walk snapshots for all
-  SDs → expansions via tx client (§3) → emit `package.db` with rusqlite,
-  satisfying `contract.ts` (vendored copy + a Rust-side contract test).
-  Gates: (i) contract assertion passes; (ii) `compare.ts` (or a port of it)
-  vs `site-gen/fixtures/package.db` with classified diffs; (iii) the real
-  gate — `bun run build:sitegen` against our DB renders a site that diffs
-  clean (or explained) vs the Java-produced site.
+  does expansions; the existing TS ingest still builds site.db. Gate with
+  `publisher/compare.ts` vs the committed Java fixture DB. Proves the §2
+  data path with near-zero new code.
+- **Option B — Rust-native `site_db` producer (the deliverable):** new crate
+  in this workspace implementing S1–S7 of §2b: `rust_sushi build` → walk
+  snapshots → expansions via tx client (§3) → S6 augmentation (faithful port
+  of ingest.ts semantics, PlantUML excluded) → emit `site.db` (rusqlite),
+  with the §2c BuildState ledger from day one (coarse S1/S2 granularity is
+  fine; the ledger schema is not). TS side: bypass ingest, render from our
+  site.db, assert the site.db contract at startup.
+  Gates: (i) package.db-contract assertion; (ii) row parity vs the TS
+  ingest's site.db built over the SAME inputs (the TS ingest is the
+  augmentation oracle — same methodology, new oracle); (iii) `compare.ts`
+  vs `site-gen/fixtures/package.db` for the §2 tables, diffs classified;
+  (iv) the real gate — rendered site diffs clean (or explained) vs the
+  Java-produced site; (v) incrementality gate — touch one md / one fsh /
+  one VS: only the declared dep cone recomputes (assert via BuildState
+  hashes), and a no-op rebuild is a no-op.
 - **Option C — full Publisher-shaped DB:** also populate ValueSetList/
   CodeSystemList/Properties/Designations per `schema.ts` for future
   `{% sql %}` pages. Only on demand.
 
-Recommendation: A as a spike to validate the contract understanding, then B.
-C deferred.
+Recommendation: A as a spike to validate the §2 contract understanding, then
+B. C deferred.
 
 ## 5. Notes / risks
 
@@ -122,11 +185,10 @@ C deferred.
 - The committed `site-gen/fixtures/package.db` + `compare.ts` make this
   project oracle-gated end to end — same methodology, much smaller scope than
   the snapshot rework.
-- **A Rust-only build has two residual Java touchpoints to plan around** (both
-  ingest/wrapper-side, not renderer-side): PlantUML rendering (pre-render SVGs
-  to avoid) and the `output/qa*` copies (no Java publisher run → no QA report;
-  decide replacement or drop). Neither blocks Option A/B — both have trivial
-  mitigations — but a "zero-Java CI" claim isn't true until they're handled.
+- **Residual Java touchpoints, resolved by decision (2026-07-02):** PlantUML
+  is OUT OF SCOPE — SVGs must be pre-rendered/committed, producer fails loud
+  on missing images (§2b). `output/qa*` copies: no Java run → no QA report;
+  drop or stub in a Rust-only build (open, cosmetic-only).
 
 ## 6. Sequencing
 
