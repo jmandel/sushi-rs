@@ -121,21 +121,48 @@ documented snapshot-source variance for cycle).
 |---|---|---|---|
 | **snapshot** | 6 / 7 † | 20 / 20 ‡ | **70 / 70** |
 | **snapshot-all** | 6 / 7 † | 20 / 20 ‡ | **70 / 70** |
-| **grid** | 0 / 7 | 8 / 22 | 11 / 70 |
+| **snapshot-by-mustsupport** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **snapshot-by-mustsupport-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **snapshot-by-key** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **snapshot-by-key-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **grid** | 6 / 7 §  | 14 / 22 § | 28 / 70 § |
 
 † cycle's one failure (period-tracking-fact) is byte-equal except the
   abstract-profile child-list ORDER — a genuinely non-deterministic publisher
   behavior (fetchResourcesByType → CanonicalResourceManager.getList() iterates
   an identity-hash HashSet; CanonicalResourceManager.java getList/allResources).
   Classified unstable-oracle; our order is deterministic (sorted).
-‡ plan-net total excludes 2 goldens that are publisher error artifacts
-  (`<span style="color:red">I/O error writing PNG file!</span>` — the
-  publisher itself failed on plannet-Network/plannet-Practitioner snapshots);
-  invalid oracles, skipped with a printed note.
+‡ plan-net snapshot total is 20 (excludes 2 publisher error-artifact goldens —
+  `I/O error writing PNG file!` spans, quirk #2). The by-key/by-mustsupport
+  totals are 22/22 because those goldens are NOT error artifacts (the failure was
+  snapshot-specific), so all 22 count.
+§ grid: every residual grid failure is the shared `Cell.addMarkdown` full-
+  markdown engine (Definition:/Comments: multi-paragraph text + `**bold**` +
+  `[link](url)` in multi-para prose) — a documented F3/F4 leaf, NOT a grid
+  renderer bug (classified per-fragment: all us-core/plan-net/cycle grid
+  divergences land inside a Definition/Comments markdown region). The grid
+  renderer itself is complete: types/target-links/bindings resolve through the
+  same IgContext oracle the snapshot path uses.
 
-Grid remains on the older hardcoded link table (links.rs) rather than IgContext
-— its failures are the known binding/profile-resolution cluster; migrating grid
-onto IgContext is follow-up work.
+### by-mustsupport / by-key (2026-07-03) — the filtered-view kinds
+
+Both route the SUMMARY `generateTable` engine over a filtered `sdCopy` element
+list (no new render engine). All GREEN corpus-wide.
+- **by-mustsupport** (SDR:552): list = getMustSupportElements (MS elements +
+  ancestors, example cleared, binding/constraint cleared on non-MS copies, MS
+  flag zeroed); non-MS-below-root rows dimmed via render_opaque→opacity 0.5.
+  mustSupportMode threads through gen_types/make_choice_rows: type/target/profile
+  filters (`!all&&!any` allTypesMustSupport / allProfilesMustSupport) + S-flag
+  suppression. Load-bearing fix: pattern genFixedValue `skipnoValue =
+  mustSupportOnly` (SDR:2085) suppresses empty pattern properties in the MS view.
+- **by-key** (SDR:532): list = getKeyElements — non-logical constraint profiles
+  filter to the "key" set (scanForKeyElements oldMS||newMS predicate vs the
+  base-type element); else all elements. allInvariants=T (NOT F — the publisher
+  arg order: allInv is position 12 = true, mustSupport position 14 = false).
+
+`resolve_binding` + `BindingRes` + `strip_version` now live in `context.rs`
+(shared by table + grid). The dead `links.rs` (grid's old hardcoded table) was
+removed once grid moved onto IgContext.
 
 ## Resolution engine (IgContext) — the publisher-parity link/binding oracle
 
@@ -200,6 +227,16 @@ not a quirk).
 5. **`active-tables`** is per-IG template config (PublisherIGLoader.java:443):
    us-core false, plan-net/cycle true. Read from the template's
    onGenerate-ig-working.json.
+6. **Grid name-cell bold is dead** (SDR:2625 `genGridElement`): the bold branch
+   tests `element.getType().get(0).isPrimitive()`, but `isPrimitive()` is
+   `Base.isPrimitive()` (Base.java:266) — hard-coded `return false` and never
+   overridden on `TypeRefComponent`. So the grid name piece is NEVER bold.
+   Reproduced by never bolding. (Same shape as quirk #4: a dead Java branch.)
+7. **byKey additionalBindings comparison is a no-op** (publisher
+   scanForKeyElements, SDR:747-749): `getAdditional(binding.getAdditional())`
+   is compared to `getAdditional(binding.getAdditional())` — the SAME value on
+   both sides (a copy-paste bug; the base binding is never consulted). So the
+   additional-bindings signal never flips `bindingChanged`. Reproduced by omission.
 
 Faithful ports of Java warts (not quirks — reproduced exactly): (previously listed)
 - `addStyledText` background-color precedence bug (HTG:521) → emits the literal
@@ -209,24 +246,45 @@ Faithful ports of Java warts (not quirks — reproduced exactly): (previously li
   `Gen.mode: Option`, `None` for grid.
 - `context.prefixAnchor` (RenderingContext) is null-prefix for grid, so the
   "g-" anchor prefix is applied exactly once (by the HTG, in renderCell).
+- Pattern genFixedValue `skipnoValue = mustSupportOnly` (SDR:2085), fixed
+  genFixedValue `skipnoValue = false` (SDR:2069): in the by-mustsupport view
+  empty pattern properties are suppressed; empty fixed properties are not.
 
 ## Remaining
 
-- **diff / diff-all**: needs `SnapshotGenerationPreProcessor.
-  supplementMissingDiffElements` (the rendered element list = differential +
-  missing parents) and the dimming machinery (`SNAPSHOT_DERIVATION_EQUALS` →
-  `opacity: 0.5` via checkForNoChange; must be recomputed from base-element
-  comparison since JSON input carries no userdata).
-- **by-key / by-mustsupport (+ -all)**: the publisher-side element filters
-  (`getKeyElements` / `getMustSupportElements`, publisher SDR:562-770) feeding
-  the same generateTable; plus `render_opaque` row dimming for non-MS ancestors.
+DONE this cycle: grid→IgContext migration (renderer-complete; residual is the
+markdown engine), by-mustsupport, by-mustsupport-all, by-key, by-key-all (all
+GREEN corpus-wide). 8 SD table kinds now GREEN (snapshot/-all, by-mustsupport
+/-all, by-key/-all) + grid renderer-complete.
+
+- **diff / diff-all** (MOST demo-visible, but LARGE): the element list is
+  `supplementMissingDiffElements` (differential + synthetic root + sparse-parent
+  fill — `insertMissingSparseElements`, SnapshotGenerationPreProcessor.java:1102;
+  small, ~60 LOC, straightforward). BLOCKER: the `opacity: 0.5` dimming is driven
+  by `SNAPSHOT_DERIVATION_EQUALS` userdata SET DURING SNAPSHOT GENERATION (23 set
+  sites in ProfileUtilities). The diff render reads that userdata off the
+  differential-derived elements; our JSON input carries none. Verified real
+  (64 opacity spans in us-core-patient-diff; even `min` changed-from-base shows
+  dimmed `..`/`max`). Reproducing it faithfully = porting the snapshot
+  generator's diff-equals annotation — C4-scale, NOT a quick win. The element
+  list alone (no dimming) will diverge on every changed element. Recommend
+  pairing with the snapshot-generator port, not attempting standalone.
 - **obligations / bindings modes**: `initCustomTable` + scanBindings /
   scanObligations columns + genElementBindings/genElementObligations
   (fhir-core SDR:759-880, 1225-1316); ObligationsRenderer table (C5 spec
-  extracted, in the fork report).
+  extracted, in the fork report). NOTE: these set `context.setStructureMode`
+  (BINDINGS/OBLIGATIONS) which changes generateTableInner's `initCustomTable`
+  branch — a different column model than SUMMARY, so more than a flag toggle.
 - **span/spanall**: `generateSpanningTable` (SDR:3713) — separate entry point.
-- **grid onto IgContext**: replace links.rs hardcoded table; expected to move
-  grid to near-green given the snapshot engine's resolution parity.
+- **grid markdown**: every residual grid failure is `Cell.addMarkdown` full-
+  markdown (Definition:/Comments:). Shared with the SD leaf work; owned by the
+  markdown engine (render_md is a separate agent). When that lands, grid should
+  jump to near-green with no grid.rs change.
+- **Simplification candidate (logged)**: grid.rs `gen_types`/`gen_target_link`
+  are branch-for-branch duplicates of table.rs's (both port the SAME Java
+  `genTypes`/`genTargetLink`). A shared free-function `render_types(ctx,
+  core_path, sd_url, e, types, root, ms_mode)` would unify them; deferred to a
+  consolidation pass (would touch the green table path, so gate carefully).
 - Residual gap markers in table.rs (each fires loudly): choice groups
   (readChoices/processConstraint), aggregation modes, standards-status flag,
   cross-structure contained targets, complex merged-pattern partner rows,

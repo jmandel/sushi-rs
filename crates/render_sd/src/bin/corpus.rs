@@ -244,11 +244,16 @@ fn main() {
                 std::process::exit(2);
             }
         };
-        // Optional: dump ours + golden for one id (debug). --dump <id>
+        // Optional: dump ours + golden for one id (debug). `--dump <id>` writes
+        // dump-ours.xhtml / dump-gold.xhtml under $CORPUS_DUMP_DIR (or std temp).
         if let Some(pos) = args.iter().position(|a| a == "--dump") {
             if args.get(pos + 1).map(|s| s.as_str()) == Some(id.as_str()) {
-                std::fs::write("/tmp/claude-1000/-home-jmandel-hobby/33fc8265-3f9a-4a4b-8eaf-39a38ad53b3d/scratchpad/dump-ours.xhtml", &ours).ok();
-                std::fs::write("/tmp/claude-1000/-home-jmandel-hobby/33fc8265-3f9a-4a4b-8eaf-39a38ad53b3d/scratchpad/dump-gold.xhtml", &golden).ok();
+                let dir = std::env::var("CORPUS_DUMP_DIR")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|_| std::env::temp_dir());
+                std::fs::write(dir.join("dump-ours.xhtml"), &ours).ok();
+                std::fs::write(dir.join("dump-gold.xhtml"), &golden).ok();
+                eprintln!("dumped {} to {}", id, dir.display());
             }
         }
         total += 1;
