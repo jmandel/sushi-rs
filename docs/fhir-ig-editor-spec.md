@@ -31,9 +31,9 @@ fhir-ig-editor/
       vfs/                # OPFS-backed project store + loaders (see §5)
   data/                   # build-time generated static data (NOT committed):
       packages/           #   package bundles {tgz + prebuilt index}
-      expansions/         #   precomputed tx cache for the default IG
-  scripts/                # CI glue: build-wasm.sh, bundle-packages.ts,
-                          #   precompute-expansions.ts (runs terminus)
+      expansions/         #   committed tx cache for the default IG
+  scripts/                # glue: build-wasm.sh, bundle-packages.ts,
+                          #   refresh-expansions.ts (maintainer-run, tx.fhir.org)
   .github/workflows/pages.yml
   SPEC.md                 # this document, moved over
 ```
@@ -111,15 +111,18 @@ recompute cleanly in the browser. Three tiers, decided:
 2. **Filter-based composes over external systems (SNOMED is-a etc.):**
    cannot be computed without the external CS. The affected views show a
    precise "needs terminology server" state naming the un-expandable
-   include, and — if the user configures a tx endpoint (their terminus, CORS
-   enabled) — the editor calls `$expand` live and caches the result in OPFS
+   include, and — if the user configures a tx endpoint (any FHIR tx server
+   with CORS) — the editor calls `$expand` live and caches the result in OPFS
    (same content-hash cache keys as the CI cache). No configured tx =
    visible, scoped degradation; never a silently partial expansion.
-3. **CI-precomputed cache (terminus)** still ships for the default IG as the
-   warm-start + the AUTHORITY: a CI gate asserts `expand_enumerable()`
-   output matches the terminus expansion for every enumerable VS in the
-   default IG — two expanders are tolerable only while provably agreeing on
-   the shared domain; on mismatch, terminus wins and the evaluator is fixed.
+3. **Committed expansion cache (tx.fhir.org-sourced)** ships for the default
+   IG as warm-start + AUTHORITY. The cache is refreshed DELIBERATELY (a
+   maintainer runs the refresh script against tx.fhir.org and commits the
+   results, like goldens) — CI itself never calls a tx server, so builds are
+   hermetic. A CI gate asserts `expand_enumerable()` matches the cached
+   expansion for every enumerable VS in the default IG — two expanders are
+   tolerable only while provably agreeing on the shared domain; on mismatch
+   the cached tx answer wins and the evaluator is fixed.
 
 Cascade correctness: an expansion is an S4 node in the same dependency
 ledger — VS edit → re-expand → ValueSet_Codes rows dirty → dependent pages
@@ -147,7 +150,8 @@ compose, watch the VS page's expansion table update.
 3. `cargo build --target wasm32-unknown-unknown -p wasm_api` + wasm-bindgen
    + wasm-opt.
 4. Bundle packages (r4.core + cycle deps) into `data/packages/`.
-5. Precompute expansions via terminus into `data/expansions/`.
+5. Copy the committed expansion cache into `data/expansions/` (no tx calls
+   in CI; refresh is a deliberate maintainer action).
 6. Export the default-IG manifest from `vendor/cycle`.
 7. Vite build → deploy to Pages.
 

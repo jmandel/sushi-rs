@@ -148,16 +148,19 @@ engine's messages channel is the future QA source; revisit on demand).
 
 The producer calls `$expand` through a **pluggable tx client** with an
 on-disk cache keyed by content hash of (valueset, referenced code systems,
-tx-server identity): **terminus** locally/CI, tx.fhir.org as fallback — the
+tx-server identity). Default endpoint: **tx.fhir.org** — the same server the
+Java IG Publisher uses, which also makes it the right parity choice — the
 same shape as cycle's experimental `publisher/terminology.ts`. Expansions are
-committed like goldens so builds are reproducible offline; tx drift is a
-deliberate refresh.
+committed like goldens so builds are reproducible offline (the tx server is
+touched only on deliberate refresh); the pluggable interface means a
+different/local server can slot in later, but NO plan depends on one
+existing.
 
 Rejected: porting a terminology SERVICE into Rust (external-system
-subsumption/filters; terminus exists). Carve-out (2026-07-02, for the editor):
+subsumption/filters). Carve-out (2026-07-02, for the editor):
 a small `expand_enumerable()` evaluator in the engine for composes that are
 pure functions of IG content (local CS + enumerated external codes) — CI
-gates it against terminus output on the shared domain (editor spec §6).
+gates it against the cached tx expansions on the shared domain (editor §6).
 Authoritative site builds still use the tx client below for everything. The Phase-1 spike sidesteps the question entirely by
 reusing cycle's TS terminology step — that's part of what makes it a spike.
 
@@ -172,8 +175,9 @@ not a redesign. Reproducibility: cache each `$expand` WITH the response's
 `expansion.parameter` (the code-system versions the server actually used) —
 the tx-side equivalent of our oracle pin; a changed server-side CS version is
 a visible cache-key event, not silent drift. Precondition to state: filter/
-`is-a` composes require terminus to have the referenced external code systems
-loaded — fail loud when it doesn't, never emit a partial expansion.
+`is-a` composes require the configured tx server to have the referenced
+external code systems loaded — fail loud when it doesn't, never emit a
+partial expansion.
 
 ## 4. Plan
 
