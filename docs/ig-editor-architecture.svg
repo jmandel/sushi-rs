@@ -1,0 +1,289 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1240" viewBox="0 0 1560 1240" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c2410c"/>
+    </marker>
+    <marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1d4ed8"/>
+    </marker>
+  </defs>
+
+  <rect width="1560" height="1240" fill="#fafaf9"/>
+  <text x="30" y="42" font-size="24" font-weight="700" fill="#1c1917">fhir-ig-editor — architecture &amp; dataflow</text>
+  <text x="30" y="64" font-size="13" fill="#57534e">joshuamandel.com/fhir-ig-editor · everything client-side after first load · solid = live today · dashed = in flight / planned (F-phases)</text>
+
+  <!-- Legend -->
+  <g font-size="12">
+    <rect x="1050" y="28" width="14" height="14" fill="#fff7ed" stroke="#c2410c" stroke-width="1.5"/>
+    <text x="1070" y="39" fill="#44403c">Rust (native+wasm)</text>
+    <rect x="1210" y="28" width="14" height="14" fill="#eff6ff" stroke="#1d4ed8" stroke-width="1.5"/>
+    <text x="1230" y="39" fill="#44403c">TypeScript</text>
+    <rect x="1330" y="28" width="14" height="14" fill="#f0fdf4" stroke="#15803d" stroke-width="1.5"/>
+    <text x="1350" y="39" fill="#44403c">Storage</text>
+    <rect x="1430" y="28" width="14" height="14" fill="#faf5ff" stroke="#7e22ce" stroke-width="1.5"/>
+    <text x="1450" y="39" fill="#44403c">Static / CI</text>
+  </g>
+
+  <!-- ═══════════ BAND 1: CI / STATIC ═══════════ -->
+  <rect x="20" y="80" width="1520" height="120" rx="10" fill="#faf5ff" stroke="#e9d5ff"/>
+  <text x="36" y="103" font-size="14" font-weight="700" fill="#7e22ce">CI (GitHub Actions) → GitHub Pages — build-time, hermetic</text>
+
+  <rect x="36" y="115" width="250" height="70" rx="6" fill="#fff" stroke="#7e22ce"/>
+  <text x="46" y="134" font-size="12.5" font-weight="600" fill="#1c1917">engine build (vendor/sushi-rs pin)</text>
+  <text x="46" y="150" font-size="11.5" fill="#57534e">cargo wasm32 + wasm-bindgen + binaryen 117</text>
+  <text x="46" y="165" font-size="11.5" fill="#57534e">gates: engine tests · wasm-vs-native byte-match</text>
+  <text x="46" y="180" font-size="11.5" fill="#57534e">→ pkg/wasm_api_bg.wasm (2.2 MB)</text>
+
+  <rect x="306" y="115" width="230" height="70" rx="6" fill="#fff" stroke="#7e22ce"/>
+  <text x="316" y="134" font-size="12.5" font-weight="600" fill="#1c1917">package bundles</text>
+  <text x="316" y="150" font-size="11.5" fill="#57534e">registry fetch → {tgz + .index +</text>
+  <text x="316" y="165" font-size="11.5" fill="#57534e">.derived-index} per package</text>
+  <text x="316" y="180" font-size="11.5" fill="#57534e">+ lockfile manifest</text>
+
+  <rect x="556" y="115" width="220" height="70" rx="6" fill="#fff" stroke="#7e22ce"/>
+  <text x="566" y="134" font-size="12.5" font-weight="600" fill="#1c1917">committed tx cache</text>
+  <text x="566" y="150" font-size="11.5" fill="#57534e">maintainer-refreshed $expand</text>
+  <text x="566" y="165" font-size="11.5" fill="#57534e">results + expansion.parameter pins</text>
+  <text x="566" y="180" font-size="11.5" fill="#57534e">(CI never calls a tx server)</text>
+
+  <rect x="796" y="115" width="200" height="70" rx="6" fill="#fff" stroke="#7e22ce"/>
+  <text x="806" y="134" font-size="12.5" font-weight="600" fill="#1c1917">baked demo IG</text>
+  <text x="806" y="150" font-size="11.5" fill="#57534e">cycle sources (fsh, pagecontent,</text>
+  <text x="806" y="165" font-size="11.5" fill="#57534e">config, images) → manifest</text>
+
+  <rect x="1016" y="115" width="220" height="70" rx="6" fill="#fff" stroke="#7e22ce" stroke-dasharray="6 4"/>
+  <text x="1026" y="134" font-size="12.5" font-weight="600" fill="#1c1917">template bundles (F6)</text>
+  <text x="1026" y="150" font-size="11.5" fill="#57534e">hl7.fhir.template / fhir.base as</text>
+  <text x="1026" y="165" font-size="11.5" fill="#57534e">DATA: layouts, includes, config,</text>
+  <text x="1026" y="180" font-size="11.5" fill="#57534e">liquid dir — interpreted, not ported</text>
+
+  <rect x="1256" y="115" width="270" height="70" rx="6" fill="#fff" stroke="#7e22ce"/>
+  <text x="1266" y="134" font-size="12.5" font-weight="600" fill="#1c1917">SPA build (Vite + React + Monaco)</text>
+  <text x="1266" y="150" font-size="11.5" fill="#57534e">app bundle + worker + shims</text>
+  <text x="1266" y="165" font-size="11.5" fill="#57534e">cycle site-gen imported via @cycle/* alias</text>
+  <text x="1266" y="180" font-size="11.5" fill="#57534e">E2E gate drives the LIVE url post-deploy</text>
+
+  <!-- ═══════════ BAND 2: UI THREAD ═══════════ -->
+  <rect x="20" y="230" width="1520" height="190" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="36" y="253" font-size="14" font-weight="700" fill="#1d4ed8">Browser — UI thread (never blocks)</text>
+
+  <rect x="36" y="266" width="260" height="140" rx="6" fill="#fff" stroke="#1d4ed8"/>
+  <text x="46" y="286" font-size="12.5" font-weight="600" fill="#1c1917">Monaco editor + file tree</text>
+  <text x="46" y="303" font-size="11.5" fill="#57534e">FSH Monarch grammar · tabs</text>
+  <text x="46" y="318" font-size="11.5" fill="#57534e">diagnostics → markers (squiggles)</text>
+  <text x="46" y="333" font-size="11.5" fill="#57534e">edits debounced ~300 ms</text>
+  <text x="46" y="355" font-size="11.5" font-weight="600" fill="#1c1917">Open IG:</text>
+  <text x="46" y="370" font-size="11.5" fill="#57534e">baked cycle · GitHub repo · local dir</text>
+  <text x="46" y="392" font-size="11.5" fill="#0f766e">edit→feedback ≈ 100 ms live</text>
+
+  <rect x="316" y="266" width="340" height="140" rx="6" fill="#fff" stroke="#1d4ed8"/>
+  <text x="326" y="286" font-size="12.5" font-weight="600" fill="#1c1917">Engine views (per selected resource)</text>
+  <text x="326" y="303" font-size="11.5" fill="#57534e">Problems panel (SUSHI-exact wording + file:line)</text>
+  <text x="326" y="318" font-size="11.5" fill="#57534e">Resource JSON · Differential table</text>
+  <text x="326" y="333" font-size="11.5" fill="#57534e">Snapshot element tree (walk engine, 955/955 parity)</text>
+  <text x="326" y="352" font-size="11.5" fill="#57534e" font-style="italic">#22 in flight:</text>
+  <text x="326" y="367" font-size="11.5" fill="#57534e">ValueSet expansion tab (tier-1, live per keystroke)</text>
+  <text x="326" y="382" font-size="11.5" fill="#57534e">"needs tx server (include N)" refusal states</text>
+  <text x="326" y="397" font-size="11.5" fill="#57534e">init progress + lazy bundle loading</text>
+
+  <rect x="676" y="266" width="330" height="140" rx="6" fill="#fff" stroke="#1d4ed8"/>
+  <text x="686" y="286" font-size="12.5" font-weight="600" fill="#1c1917">Site Preview tab (sandboxed iframe)</text>
+  <text x="686" y="303" font-size="11.5" fill="#57534e">real rendered IG page (srcDoc)</text>
+  <text x="686" y="318" font-size="11.5" fill="#57534e">design assets via &lt;base&gt;, images via blob:</text>
+  <text x="686" y="333" font-size="11.5" fill="#57534e">render-on-demand per visible page</text>
+  <text x="686" y="352" font-size="11.5" fill="#0f766e">profile page byte-identical to native</text>
+  <text x="686" y="367" font-size="11.5" fill="#0f766e">TS pipeline · 12 ms render (live)</text>
+
+  <rect x="1026" y="266" width="230" height="140" rx="6" fill="#fff" stroke="#1d4ed8" stroke-dasharray="6 4"/>
+  <text x="1036" y="286" font-size="12.5" font-weight="600" fill="#1c1917">Template selector (F6)</text>
+  <text x="1036" y="303" font-size="11.5" fill="#57534e">chooses an ADAPTER:</text>
+  <text x="1036" y="320" font-size="11.5" fill="#57534e">• hl7.fhir.template (Rust)</text>
+  <text x="1036" y="335" font-size="11.5" fill="#57534e">• fhir.base.template (Rust)</text>
+  <text x="1036" y="350" font-size="11.5" fill="#57534e">• cycle site-gen (TS, live)</text>
+  <text x="1036" y="365" font-size="11.5" fill="#57534e">• custom TS generators</text>
+  <text x="1036" y="385" font-size="11.5" fill="#57534e">same site.db under all of them</text>
+
+  <rect x="1276" y="266" width="250" height="140" rx="6" fill="#fff" stroke="#1d4ed8" stroke-dasharray="6 4"/>
+  <text x="1286" y="286" font-size="12.5" font-weight="600" fill="#1c1917">tx settings (#22)</text>
+  <text x="1286" y="303" font-size="11.5" fill="#57534e">optional hosted tx endpoint</text>
+  <text x="1286" y="318" font-size="11.5" fill="#57534e">"Expand via server" for filter</text>
+  <text x="1286" y="333" font-size="11.5" fill="#57534e">composes (SNOMED is-a …)</text>
+  <text x="1286" y="350" font-size="11.5" fill="#57534e">states: none / fetching /</text>
+  <text x="1286" y="365" font-size="11.5" fill="#57534e">cached@version / error</text>
+
+  <!-- ═══════════ BAND 3: WORKER ═══════════ -->
+  <rect x="20" y="470" width="1520" height="280" rx="10" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="36" y="493" font-size="14" font-weight="700" fill="#1d4ed8">Web Worker — typed protocol: compile · snapshot · buildSiteDb · expand · renderPage · fileOps</text>
+
+  <rect x="36" y="510" width="300" height="220" rx="6" fill="#fff" stroke="#1d4ed8"/>
+  <text x="46" y="530" font-size="12.5" font-weight="600" fill="#1c1917">Project VFS + loaders</text>
+  <text x="46" y="547" font-size="11.5" fill="#57534e">{path → text} file map (FSH, pagecontent,</text>
+  <text x="46" y="562" font-size="11.5" fill="#57534e">sushi-config raw, images, includes)</text>
+  <text x="46" y="582" font-size="12.5" font-weight="600" fill="#1c1917">Lazy package provider (#22)</text>
+  <text x="46" y="599" font-size="11.5" fill="#57534e">fetch bundle on first engine need</text>
+  <text x="46" y="614" font-size="11.5" fill="#57534e">inflate → OPFS persist (warm ≈ 2 s)</text>
+  <text x="46" y="634" font-size="12.5" font-weight="600" fill="#1c1917">RowStore (TS)</text>
+  <text x="46" y="651" font-size="11.5" fill="#57534e">implements core/db.ts query surface</text>
+  <text x="46" y="666" font-size="11.5" fill="#57534e">over wasm-produced site.db rows</text>
+  <text x="46" y="681" font-size="11.5" fill="#57534e">(no sqlite in the browser)</text>
+
+  <rect x="366" y="510" width="560" height="220" rx="6" fill="#fff" stroke="#1d4ed8"/>
+  <text x="376" y="530" font-size="12.5" font-weight="600" fill="#1c1917">Site-generator ADAPTER registry — registerSiteGenerator(adapter)</text>
+  <text x="376" y="547" font-size="11.5" fill="#57534e">init({rows, fragments, assets, template?}) → listPages() → renderPage(slug) → html</text>
+
+  <rect x="380" y="560" width="255" height="75" rx="5" fill="#eff6ff" stroke="#1d4ed8"/>
+  <text x="390" y="578" font-size="12" font-weight="600" fill="#1c1917">cycle TS generator (LIVE)</text>
+  <text x="390" y="594" font-size="11" fill="#57534e">React SSR + liquidjs + markdown-it</text>
+  <text x="390" y="608" font-size="11" fill="#57534e">imports submodule components</text>
+  <text x="390" y="622" font-size="11" fill="#57534e">via @cycle/* · dbShim redirect</text>
+
+  <rect x="650" y="560" width="260" height="75" rx="5" fill="#fff7ed" stroke="#c2410c" stroke-dasharray="6 4"/>
+  <text x="660" y="578" font-size="12" font-weight="600" fill="#1c1917">stock-template Rust shim (F5/F6)</text>
+  <text x="660" y="594" font-size="11" fill="#57534e">~50-line TS wrapper over wasm</text>
+  <text x="660" y="608" font-size="11" fill="#57534e">render_page(templateBundle, slug)</text>
+  <text x="660" y="622" font-size="11" fill="#57534e">one renderer × many template entries</text>
+
+  <rect x="380" y="645" width="530" height="70" rx="5" fill="#eff6ff" stroke="#1d4ed8" stroke-dasharray="6 4"/>
+  <text x="390" y="663" font-size="12" font-weight="600" fill="#1c1917">FragmentApi + fragment store — first-include-miss (F5/F6)</text>
+  <text x="390" y="679" font-size="11" fill="#57534e">fragment(ref, kind) → key = hash(resource, kind, opts, renderer-ver) → cache hit? : wasm render_fragment</text>
+  <text x="390" y="693" font-size="11" fill="#57534e">shared by ALL adapters: custom TS chrome may embed publisher-grade snapshot/dict/expansion tables</text>
+  <text x="390" y="707" font-size="11" fill="#57534e">no eager menu (Publisher wastes 68%) · no template scanning (rapido's regex) · staleness is structural</text>
+
+  <rect x="956" y="510" width="280" height="220" rx="6" fill="#eff6ff" stroke="#1d4ed8" stroke-dasharray="6 4"/>
+  <text x="966" y="530" font-size="12.5" font-weight="600" fill="#1c1917">Incrementality ledgers</text>
+  <text x="966" y="550" font-size="11.5" font-weight="600" fill="#44403c">Ledger 1 (Rust, BuildState)</text>
+  <text x="966" y="566" font-size="11.5" fill="#57534e">source → row/snapshot/fragment</text>
+  <text x="966" y="581" font-size="11.5" fill="#57534e">lineage, input/output hashes;</text>
+  <text x="966" y="596" font-size="11.5" fill="#57534e">no-op rebuild proven no-op</text>
+  <text x="966" y="618" font-size="11.5" font-weight="600" fill="#44403c">Ledger 2 (TS, RenderDeps)</text>
+  <text x="966" y="634" font-size="11.5" fill="#57534e">per-page READ SET recorded via</text>
+  <text x="966" y="649" font-size="11.5" fill="#57534e">RowStore/FragmentApi proxy;</text>
+  <text x="966" y="664" font-size="11.5" fill="#57534e">invalidate = replay queries, compare</text>
+  <text x="966" y="679" font-size="11.5" fill="#57534e">result hashes → re-render only</text>
+  <text x="966" y="694" font-size="11.5" fill="#57534e">read-set-dirty pages</text>
+
+  <rect x="1266" y="510" width="260" height="220" rx="6" fill="#f0fdf4" stroke="#15803d"/>
+  <text x="1276" y="530" font-size="12.5" font-weight="600" fill="#1c1917">OPFS (origin-private FS)</text>
+  <text x="1276" y="550" font-size="11.5" fill="#57534e">• project files (persists edits —</text>
+  <text x="1276" y="565" font-size="11.5" fill="#57534e">  reload keeps your work)</text>
+  <text x="1276" y="583" font-size="11.5" fill="#57534e">• inflated package bundles</text>
+  <text x="1276" y="601" font-size="11.5" fill="#57534e">• tier-2 $expand cache, keyed by</text>
+  <text x="1276" y="616" font-size="11.5" fill="#57534e">  content hash, stored WITH</text>
+  <text x="1276" y="631" font-size="11.5" fill="#57534e">  expansion.parameter pins (#22)</text>
+  <text x="1276" y="649" font-size="11.5" fill="#57534e">• fragment store (F5)</text>
+
+  <!-- ═══════════ BAND 4: WASM ENGINE ═══════════ -->
+  <rect x="20" y="800" width="1520" height="280" rx="10" fill="#fff7ed" stroke="#fed7aa"/>
+  <text x="36" y="823" font-size="14" font-weight="700" fill="#c2410c">wasm engine — ONE instance, state stays resident between calls (crates: compiler · snapshot_gen · site_db · wasm_api)</text>
+
+  <rect x="36" y="840" width="270" height="110" rx="6" fill="#fff" stroke="#c2410c"/>
+  <text x="46" y="860" font-size="12.5" font-weight="600" fill="#1c1917">rust_sushi compiler</text>
+  <text x="46" y="877" font-size="11.5" fill="#57534e">FSH → resources + IG resource</text>
+  <text x="46" y="892" font-size="11.5" fill="#57534e">byte-parity vs stock SUSHI</text>
+  <text x="46" y="907" font-size="11.5" fill="#57534e">(harvest 326/326) · SUSHI-exact</text>
+  <text x="46" y="922" font-size="11.5" fill="#57534e">diagnostics w/ file:line</text>
+  <text x="46" y="941" font-size="11.5" fill="#0f766e">cycle full build ≈ 90 ms in-tab</text>
+
+  <rect x="326" y="840" width="270" height="110" rx="6" fill="#fff" stroke="#c2410c"/>
+  <text x="336" y="860" font-size="12.5" font-weight="600" fill="#1c1917">walk snapshot engine</text>
+  <text x="336" y="877" font-size="11.5" fill="#57534e">decision-isomorphic ProfileUtilities</text>
+  <text x="336" y="892" font-size="11.5" fill="#57534e">port · 955/955 profiles, 34 IGs ·</text>
+  <text x="336" y="907" font-size="11.5" fill="#57534e">decision-trace parity vs Java ·</text>
+  <text x="336" y="922" font-size="11.5" fill="#57534e">quirk registry: EMPTY</text>
+  <text x="336" y="941" font-size="11.5" fill="#0f766e">≈ 20–50 ms / profile in-tab</text>
+
+  <rect x="616" y="840" width="270" height="110" rx="6" fill="#fff" stroke="#c2410c"/>
+  <text x="626" y="860" font-size="12.5" font-weight="600" fill="#1c1917">site_db rows (S5+S6)</text>
+  <text x="626" y="877" font-size="11.5" fill="#57534e">Resources (snapshot-complete Json)</text>
+  <text x="626" y="892" font-size="11.5" fill="#57534e">Concepts · Metadata · Pages · Menu ·</text>
+  <text x="626" y="907" font-size="11.5" fill="#57534e">SiteConfig · Assets — sqlite-free row</text>
+  <text x="626" y="922" font-size="11.5" fill="#57534e">model over the wasm boundary</text>
+  <text x="626" y="941" font-size="11.5" fill="#0f766e">rows == native disk producer (gated)</text>
+
+  <rect x="906" y="840" width="250" height="110" rx="6" fill="#fff" stroke="#c2410c"/>
+  <text x="916" y="860" font-size="12.5" font-weight="600" fill="#1c1917">expand_enumerable (tier-1)</text>
+  <text x="916" y="877" font-size="11.5" fill="#57534e">pure fn of IG content: local CS +</text>
+  <text x="916" y="892" font-size="11.5" fill="#57534e">enumerated codes + local filters</text>
+  <text x="916" y="907" font-size="11.5" fill="#57534e">9/9 vs tx.fhir.org oracle · precise</text>
+  <text x="916" y="922" font-size="11.5" fill="#57534e">NotEnumerable refusals → UI state</text>
+
+  <rect x="1176" y="840" width="350" height="110" rx="6" fill="#fff" stroke="#c2410c" stroke-dasharray="6 4"/>
+  <text x="1186" y="860" font-size="12.5" font-weight="600" fill="#1c1917">stock-template renderer (F1–F5, building)</text>
+  <text x="1186" y="877" font-size="11.5" fill="#57534e">render_xhtml ✅ (0 divergences) · render_liquid ✅ T1+T2</text>
+  <text x="1186" y="892" font-size="11.5" fill="#57534e">(US Core byte-exact) · render_md (kramdown, running)</text>
+  <text x="1186" y="907" font-size="11.5" fill="#57534e">tables C2 + sd_render C1 (the XL critical path) →</text>
+  <text x="1186" y="922" font-size="11.5" fill="#57534e">render_fragment(ref, kind) + render_page(template, slug)</text>
+  <text x="1186" y="941" font-size="11.5" fill="#57534e">oracle: Publisher-run fragment goldens (F0, running)</text>
+
+  <rect x="36" y="965" width="560" height="100" rx="6" fill="#fff" stroke="#c2410c"/>
+  <text x="46" y="985" font-size="12.5" font-weight="600" fill="#1c1917">PackageSource / BundleSource</text>
+  <text x="46" y="1002" font-size="11.5" fill="#57534e">trait over all package reads (corpus 955/955 gated over it) · browser mounts bundles in-memory</text>
+  <text x="46" y="1017" font-size="11.5" fill="#57534e">.derived-index sidecars (CAS-derived: name/derivation/baseDefinition) — no per-process probing</text>
+  <text x="46" y="1032" font-size="11.5" fill="#57534e">Layer B (opt-in, off in editor): CoreVersionPinner + R4 artifact projection</text>
+  <text x="46" y="1047" font-size="11.5" fill="#57534e">tier-1 expansion cache key discipline shared with committed CI cache (consistency gate)</text>
+
+  <rect x="616" y="965" width="540" height="100" rx="6" fill="#fff" stroke="#c2410c" stroke-dasharray="6 4"/>
+  <text x="626" y="985" font-size="12.5" font-weight="600" fill="#1c1917">BuildState (Ledger 1, in-engine)</text>
+  <text x="626" y="1002" font-size="11.5" fill="#57534e">node = {fsh file, resource, snapshot(url), expansion(vs), row group, fragment(ref,kind), md page}</text>
+  <text x="626" y="1017" font-size="11.5" fill="#57534e">recompute only when input hash changed · S1/S2 tank-global by design (sub-second anyway)</text>
+  <text x="626" y="1032" font-size="11.5" fill="#57534e">edit flow: FSH change → resource hash changes → dependent snapshot/fragment/row nodes dirty →</text>
+  <text x="626" y="1047" font-size="11.5" fill="#57534e">Ledger 2 replays page read-sets → only dirty pages re-render</text>
+
+  <rect x="1176" y="965" width="350" height="100" rx="6" fill="#f5f5f4" stroke="#78716c" stroke-dasharray="6 4"/>
+  <text x="1186" y="985" font-size="12.5" font-weight="600" fill="#1c1917">hosted tx server (optional, tier-2)</text>
+  <text x="1186" y="1002" font-size="11.5" fill="#57534e">tx.fhir.org (or any CORS-enabled FHIR tx)</text>
+  <text x="1186" y="1017" font-size="11.5" fill="#57534e">$expand for external-system filter composes only</text>
+  <text x="1186" y="1032" font-size="11.5" fill="#57534e">— external CS content is GB-scale, never local —</text>
+  <text x="1186" y="1047" font-size="11.5" fill="#57534e">result → OPFS cache with expansion.parameter pin</text>
+
+  <!-- ═══════════ FLOWS ═══════════ -->
+  <!-- CI to browser -->
+  <path d="M 780 200 L 780 230" stroke="#7e22ce" stroke-width="2" marker-end="url(#arr)" fill="none"/>
+  <text x="790" y="222" font-size="11" fill="#7e22ce">first load: app + wasm + manifests (bundles fetched lazily)</text>
+
+  <!-- UI <-> worker -->
+  <path d="M 170 406 L 170 470" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arrB)" fill="none"/>
+  <text x="178" y="443" font-size="11" fill="#1d4ed8">edits (debounced)</text>
+  <path d="M 430 470 L 430 406" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arrB)" fill="none"/>
+  <text x="438" y="443" font-size="11" fill="#1d4ed8">diagnostics · JSON · snapshot tree</text>
+  <path d="M 800 470 L 800 406" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arrB)" fill="none"/>
+  <text x="808" y="443" font-size="11" fill="#1d4ed8">rendered page html → iframe</text>
+  <path d="M 1120 406 L 1120 470" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arrB)" stroke-dasharray="6 4" fill="none"/>
+  <text x="1128" y="443" font-size="11" fill="#1d4ed8">adapter choice</text>
+
+  <!-- worker <-> wasm -->
+  <path d="M 130 730 L 130 840" stroke="#c2410c" stroke-width="2" marker-end="url(#arrO)" fill="none"/>
+  <text x="138" y="762" font-size="11" fill="#c2410c">compile(files, config, predefined)</text>
+  <text x="138" y="777" font-size="11" fill="#c2410c">→ resources + diagnostics + timings</text>
+
+  <path d="M 480 730 L 480 840" stroke="#c2410c" stroke-width="2" marker-end="url(#arrO)" fill="none"/>
+  <text x="488" y="762" font-size="11" fill="#c2410c">generate_snapshot(url) — memoized</text>
+
+  <path d="M 700 730 L 700 840" stroke="#c2410c" stroke-width="2" marker-end="url(#arrO)" fill="none"/>
+  <text x="708" y="762" font-size="11" fill="#c2410c">build_site_db() → rows JSON → RowStore</text>
+
+  <path d="M 1000 730 L 1000 840" stroke="#c2410c" stroke-width="2" marker-end="url(#arrO)" fill="none"/>
+  <text x="1008" y="762" font-size="11" fill="#c2410c">expand_enumerable(vs, resources)</text>
+  <text x="1008" y="777" font-size="11" fill="#c2410c">→ expansion | NotEnumerable{include, why}</text>
+
+  <path d="M 1300 730 L 1300 840" stroke="#c2410c" stroke-width="2" marker-end="url(#arrO)" stroke-dasharray="6 4" fill="none"/>
+  <text x="1308" y="762" font-size="11" fill="#c2410c">render_fragment(ref, kind) on cache miss</text>
+  <text x="1308" y="777" font-size="11" fill="#c2410c">render_page(template, slug) — F5/F6</text>
+
+  <!-- adapter to fragmentapi flow annotation -->
+  <path d="M 640 635 L 640 645" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrB)" fill="none"/>
+
+  <!-- OPFS link -->
+  <path d="M 1266 620 L 1236 620" stroke="#15803d" stroke-width="2" marker-end="url(#arr)" fill="none"/>
+
+  <!-- footer: the JIT loop -->
+  <rect x="20" y="1105" width="1520" height="110" rx="10" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text x="36" y="1130" font-size="14" font-weight="700" fill="#0f766e">The just-in-time loop (one keystroke, warm)</text>
+  <text x="36" y="1152" font-size="12.5" fill="#134e4a">edit FSH → worker compile (~90 ms) → changed resource hashes dirty their snapshot/row/fragment nodes (Ledger 1) →</text>
+  <text x="36" y="1170" font-size="12.5" fill="#134e4a">adapter re-renders ONLY the visible / read-set-dirty page (Ledger 2) → page includes hit FragmentApi → cache miss? wasm renders that ONE fragment (ms) →</text>
+  <text x="36" y="1188" font-size="12.5" fill="#134e4a">iframe updates. US Core's 70 profiles never render eagerly — only pages you visit materialize, and only fragments those pages include are ever generated.</text>
+  <text x="36" y="1206" font-size="12" fill="#0f766e" font-style="italic">Contrast: the Java Publisher eagerly generates the complete fragment menu (68% never included by the template) on every build.</text>
+</svg>
