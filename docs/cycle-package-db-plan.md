@@ -120,10 +120,20 @@ rebuild — this serves both CI and the future editor loop.
   cheap SQLite SELECTs; handles `{% sql %}` and fragment fishing for free —
   instrument the data boundary, never analyze templates). Global inputs
   (Menu/Metadata/layout/generator version) roll into one "chrome hash" that
-  is a dep of every page. Prerequisites owned by the Rust producer NOW:
+  is a dep of every page. Prerequisites owned by the Rust producer:
   stable row identities + content hashes in site.db; render-time
-  determinism. Ledger 2 itself is a TS follow-up, enabled — not required —
-  by this design (cycle-sized sites render fully in ~no time).
+  determinism.
+  **Scope decision (2026-07-02): Ledger 2 is DAY-1 scope**, not a follow-up —
+  the TS renderer must handle SDC/IPS-scale IGs (hundreds of pages,
+  per-resource fragment rendering), where full re-render per edit doesn't
+  hold and the editor loop makes it worse. Deliverable order inside Option B:
+  (1) producer ships hashes/determinism; (2) TS recording proxy + RenderDeps
+  + replay-skip lands with it; (3) benchmark checkpoint: full cold render of
+  SDC and IPS (generalizing site-gen beyond cycle is a cycle-repo concern,
+  but OUR gate includes those two corpora), then warm single-edit renders
+  must touch only the affected pages. Cold-render cost is measured, not
+  assumed — if it's already trivial the ledger still pays for the editor
+  loop.
 - **Determinism prerequisite**: `genDate`/`genDay` metadata must come from an
   injected build timestamp (env/git commit time), never wall clock, or every
   build is dirty by construction.
@@ -168,9 +178,12 @@ build).
   augmentation oracle — same methodology, new oracle); (iii) `compare.ts`
   vs `site-gen/fixtures/package.db` for the §2 tables, diffs classified;
   (iv) the real gate — rendered site diffs clean (or explained) vs the
-  Java-produced site; (v) incrementality gate — touch one md / one fsh /
-  one VS: only the declared dep cone recomputes (assert via BuildState
-  hashes), and a no-op rebuild is a no-op.
+  Java-produced site; (v) incrementality gate, producer side — touch one
+  md / one fsh / one VS: only the declared dep cone recomputes (assert via
+  BuildState hashes), and a no-op rebuild is a no-op; (vi) incrementality
+  gate, renderer side (day-1 per §2c) — after a single-file edit the
+  renderer re-renders only pages whose replayed read sets changed; verified
+  on an SDC/IPS-scale corpus, with cold-render benchmarks recorded.
 - **Option C — full Publisher-shaped DB:** also populate ValueSetList/
   CodeSystemList/Properties/Designations per `schema.ts` for future
   `{% sql %}` pages. Only on demand.
