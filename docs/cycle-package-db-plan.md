@@ -109,11 +109,21 @@ rebuild — this serves both CI and the future editor loop.
     hash means the tx server is hit ONLY when terminology actually changed.
   - S6: per-file nodes (one md edit → one Pages row + its referenced assets).
   - S7: UPDATE site.db in place (delete/insert dirty rows), not rewrite.
-- **Renderer-side incrementality for free**: because rows carry stable
-  content hashes in BuildState, the TS renderer can skip re-rendering pages
-  whose transitive row inputs are unchanged (page body hash + hashes of
-  resources its fragments touch). That's a TS-side follow-up, enabled — not
-  required — by this design.
+- **Renderer-side incrementality — the two-ledger split.** Nobody can know a
+  page's transitive data inputs statically (liquid fragments, baseDefinition
+  walks, arbitrary `{% sql %}`). So: Ledger 1 (Rust, above) tracks
+  source→row lineage; Ledger 2 (TS, later) OBSERVES each page's read set at
+  render time by wrapping the single data choke point (`core/db.ts` +
+  the `sql()` tag) in a recording proxy → `RenderDeps` table of
+  (page → query fingerprint → result hash). Next build: re-render a page iff
+  replaying its recorded queries yields a changed result hash (replay is
+  cheap SQLite SELECTs; handles `{% sql %}` and fragment fishing for free —
+  instrument the data boundary, never analyze templates). Global inputs
+  (Menu/Metadata/layout/generator version) roll into one "chrome hash" that
+  is a dep of every page. Prerequisites owned by the Rust producer NOW:
+  stable row identities + content hashes in site.db; render-time
+  determinism. Ledger 2 itself is a TS follow-up, enabled — not required —
+  by this design (cycle-sized sites render fully in ~no time).
 - **Determinism prerequisite**: `genDate`/`genDay` metadata must come from an
   injected build timestamp (env/git commit time), never wall clock, or every
   build is dirty by construction.
