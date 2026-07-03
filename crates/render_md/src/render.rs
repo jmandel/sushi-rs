@@ -431,7 +431,12 @@ impl Renderer {
                     .map(|nd| matches!(nd.block, Block::Paragraph { .. }))
                     .unwrap_or(false);
                 let second_blank = nodes.get(1).map(|nd| nd.blank_before).unwrap_or(false);
-                let sibling_blank = it.followed_by_blank && idx + 1 < n;
+                // A trailing blank (sibling separator) appends a `:blank` as the
+                // item's LAST child. It only forces a real <p> when the item is a
+                // lone paragraph (so the `:blank` becomes the 2nd child); if the
+                // item already has a following block (e.g. a nested list) that
+                // block is the 2nd child and governs transparency instead.
+                let sibling_blank = it.followed_by_blank && idx + 1 < n && nodes.len() == 1;
                 first_is_para && !second_blank && !sibling_blank
             })
             .collect();
