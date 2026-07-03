@@ -216,7 +216,7 @@ impl Renderer {
                 is_toc,
             } => {
                 if *is_toc {
-                    self.render_toc(*ordered, out, indent);
+                    self.render_toc(*ordered, attrs, out, indent);
                 } else {
                     self.render_list(*ordered, *start, items, *tight, attrs, out, indent);
                 }
@@ -526,9 +526,11 @@ impl Renderer {
         out.push_str("</li>\n");
     }
 
-    fn render_toc(&mut self, ordered: bool, out: &mut String, indent: usize) {
+    fn render_toc(&mut self, ordered: bool, attrs: &Attrs, out: &mut String, indent: usize) {
         // kramdown replaces a {:toc} list with a nested list of heading links,
         // filtered to toc_levels (1..3 per FHIR config), given id="markdown-toc".
+        // IAL attributes on the {:toc} list (e.g. class="no_toc") are emitted
+        // BEFORE the auto id.
         let pad = " ".repeat(indent);
         let tag = if ordered { "ol" } else { "ul" };
         let entries: Vec<(u8, String, String)> = self
@@ -538,7 +540,12 @@ impl Renderer {
             .cloned()
             .collect();
         out.push_str(&pad);
-        out.push_str(&format!("<{tag} id=\"markdown-toc\">\n"));
+        out.push_str(&format!("<{tag}"));
+        out.push_str(&attr_string(attrs, false));
+        if attrs.id().is_none() {
+            out.push_str(" id=\"markdown-toc\"");
+        }
+        out.push_str(">\n");
         let mut pos = 0;
         render_toc_level(&entries, &mut pos, u8::MAX, tag, indent + 2, out);
         out.push_str(&pad);

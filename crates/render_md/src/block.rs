@@ -347,10 +347,18 @@ impl Parser {
     fn parse_until(&mut self, stop: impl Fn(&str) -> bool) -> Vec<BlockNode> {
         let mut nodes: Vec<BlockNode> = Vec::new();
         let mut pending_blank = false;
+        // An IAL that could not attach to a PRECEDING block (start of doc, or
+        // separated from the previous block by a blank line) is held and
+        // applied to the NEXT block (kramdown stores it in @block_ial).
+        let mut pending_ial: Option<Attrs> = None;
         macro_rules! push {
             ($b:expr) => {{
+                let mut b = $b;
+                if let Some(a) = pending_ial.take() {
+                    set_block_attrs(&mut b, a);
+                }
                 nodes.push(BlockNode {
-                    block: $b,
+                    block: b,
                     blank_before: pending_blank,
                 });
                 pending_blank = false;
@@ -380,10 +388,23 @@ impl Parser {
                 self.i += 1;
                 continue;
             }
-            // Standalone block IAL attaches to previous block.
+            // Standalone block IAL: attaches to the previous block when
+            // DIRECTLY adjacent (no blank line between); otherwise held for
+            // the NEXT block (kramdown block-IAL placement rules).
             if let Some(attrs) = parse_block_ial_line(&line) {
                 self.i += 1;
-                attach_ial_nodes(&mut nodes, attrs);
+                if !pending_blank && !nodes.is_empty() {
+                    attach_ial_nodes(&mut nodes, attrs);
+                } else {
+                    pending_ial = Some(match pending_ial.take() {
+                        None => attrs,
+                        Some(mut prev) => {
+                            let mut a = attrs;
+                            merge_attrs(&mut prev, &mut a);
+                            prev
+                        }
+                    });
+                }
                 continue;
             }
             let trimmed = line.trim();
@@ -469,11 +490,29 @@ impl Parser {
         let mut text = rest.trim().to_string();
         // strip trailing closing hashes
         text = strip_trailing_hashes(&text);
+        // kramdown HEADER_ID (parser/kramdown/header.rb):
+        // `/(?:[ \t]+\{#((?:\w|[\w-:.])+)\})?/` — a trailing ` {#id}` on the
+        // header line sets an explicit id.
+        let mut attrs = Attrs::default();
+        if text.ends_with('}') {
+            if let Some(open) = text.rfind("{#") {
+                let id = &text[open + 2..text.len() - 1];
+                if !id.is_empty()
+                    && id
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | ':' | '.'))
+                    && text[..open].ends_with([' ', '\t'])
+                {
+                    attrs.set_id(id.to_string());
+                    text = text[..open].trim_end().to_string();
+                }
+            }
+        }
         self.i += 1;
         Some(Block::Heading {
             level: level as u8,
             text,
-            attrs: Attrs::default(),
+            attrs,
         })
     }
 
@@ -1510,11 +1549,20 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
         return None;
     }
     // bullet — third tuple value is the marker WIDTH relative to the content
-    // after the line's leading indent (marker char + one space = 2).
+    // after the line's leading indent: marker char + the WHOLE run of spaces
+    // that follows (kramdown computes the item's content indent from the full
+    // marker match, so `-   x` has content indent 4).
     if (bytes[0] == b'-' || bytes[0] == b'*' || bytes[0] == b'+')
         && bytes.get(1).map(|&c| c == b' ' || c == b'\t').unwrap_or(rest.len() == 1)
     {
-        return Some((false, None, 2));
+        let mut w = 1;
+        while bytes.get(w).map(|&c| c == b' ' || c == b'\t').unwrap_or(false) {
+            w += 1;
+        }
+        if w == 1 {
+            w = 2; // marker at end of line: nominal single-space width
+        }
+        return Some((false, None, w));
     }
     // ordered: digits then '.' or ')'
     let mut i = 0;
@@ -1525,8 +1573,15 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
         let has_space = bytes.get(i + 1).map(|&c| c == b' ' || c == b'\t').unwrap_or(rest.len() == i + 1);
         if has_space {
             let num: u64 = rest[..i].parse().unwrap_or(1);
-            // width = digits + delimiter + space
-            return Some((true, Some(num), i + 2));
+            // width = digits + delimiter + the whole run of spaces
+            let mut w = i + 1;
+            while bytes.get(w).map(|&c| c == b' ' || c == b'\t').unwrap_or(false) {
+                w += 1;
+            }
+            if w == i + 1 {
+                w = i + 2;
+            }
+            return Some((true, Some(num), w));
         }
     }
     None
