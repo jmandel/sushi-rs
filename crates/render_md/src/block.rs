@@ -2,7 +2,33 @@
 
 use crate::ial::{parse_block_ial_line, Attrs};
 
+/// kramdown's HTML_SPAN_ELEMENTS (kramdown-2.5.0 parser/html.rb:57-59). A raw
+/// HTML tag whose name is in this set is treated as INLINE (span) content: it
+/// does NOT start an HTML block and does NOT interrupt a paragraph.
+const HTML_SPAN_ELEMENTS: &[&str] = &[
+    "a", "abbr", "acronym", "b", "big", "bdo", "br", "button", "cite", "code", "del", "dfn", "em",
+    "i", "img", "input", "ins", "kbd", "label", "mark", "option", "q", "rb", "rbc", "rp", "rt",
+    "rtc", "ruby", "samp", "select", "small", "span", "strong", "sub", "sup", "time", "tt", "u",
+    "var",
+];
+
+fn is_span_element(name: &str) -> bool {
+    HTML_SPAN_ELEMENTS.contains(&name)
+}
+
+/// kramdown block-extension line, e.g. `{::options toc_levels="1..4"/}` or
+/// `{::comment}`/`{::nomarkdown}`. Distinguished from a block IAL (`{: ... }`)
+/// by the DOUBLE colon `{::`. These extensions produce no direct HTML output;
+/// we consume the line (treated like a blank line for block boundaries). Full
+/// extension semantics (comment/nomarkdown bodies) are out of scope — the
+/// corpus uses only the self-contained `{::options .../}` / `{::download}`
+/// forms.
+fn is_kramdown_ext_line(l: &str) -> bool {
+    l.trim_start().starts_with("{::")
+}
+
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // `Blank` is a defensive variant; filtered but not built.
 pub enum Block {
     Heading {
         level: u8,
@@ -18,11 +44,15 @@ pub enum Block {
         lang: String,
         code: String,
     },
-    /// GFM pipe table.
+    /// kramdown pipe table. `header` is present only when the source had a
+    /// separator (`|---|`) row; otherwise all rows are body rows (no <thead>).
     Table {
-        header: Vec<String>,
+        header: Option<Vec<String>>,
         aligns: Vec<Align>,
-        rows: Vec<Vec<String>>,
+        /// Body row groups. Each group becomes a `<tbody>`; a `=` footer line
+        /// splits groups and the last becomes `<tfoot>`.
+        body: Vec<Vec<Vec<String>>>,
+        footer: Option<Vec<Vec<String>>>,
         attrs: Attrs,
     },
     /// A bullet/ordered list.
@@ -47,6 +77,9 @@ pub enum Block {
     HtmlBlockMd {
         open_tag: String,
         inner: Vec<BlockNode>,
+        /// Whether the inner content ended with a blank line before the close
+        /// tag (kramdown emits a corresponding trailing blank inside).
+        inner_trailing_blank: bool,
         close_tag: String,
     },
     HorizontalRule,
@@ -72,6 +105,7 @@ pub struct ListItem {
     pub blocks: Vec<BlockNode>,
     /// Whether this item's paragraph should be tight (no <p>) — decided at list
     /// level, but kept per-item for flexibility.
+    #[allow(dead_code)]
     pub tight: bool,
 }
 
@@ -93,21 +127,103 @@ pub struct Doc {
     pub nodes: Vec<BlockNode>,
     pub leading_blank: bool,
     pub trailing_blank: bool,
+    /// Link reference definitions found in this document: normalized label ->
+    /// (destination, optional title).
+    pub link_refs: std::collections::HashMap<String, (String, Option<String>)>,
+}
+
+/// Extract link reference definitions (`[label]: dest "title"`) from `src`,
+/// returning the source with those lines removed and the collected map. Only
+/// definition lines at a block boundary (not indented as code) are taken; a
+/// `[//]: # (...)` "markdown comment" is also a link definition and is removed.
+fn extract_link_refs(
+    src: &str,
+) -> (
+    String,
+    std::collections::HashMap<String, (String, Option<String>)>,
+) {
+    let mut map = std::collections::HashMap::new();
+    let mut kept: Vec<&str> = Vec::new();
+    for line in src.split('\n') {
+        if let Some((label, dest, title)) = parse_link_ref_def(line) {
+            map.entry(crate::inline::normalize_ref_label(&label))
+                .or_insert((dest, title));
+            // drop the line
+            continue;
+        }
+        kept.push(line);
+    }
+    (kept.join("\n"), map)
+}
+
+/// Parse a single line as a link reference definition. Returns
+/// (label, destination, title) if it matches `[label]: dest ["title"]` with at
+/// most 3 leading spaces.
+fn parse_link_ref_def(line: &str) -> Option<(String, String, Option<String>)> {
+    let indent = line.len() - line.trim_start().len();
+    if indent > 3 {
+        return None;
+    }
+    let t = line.trim_start();
+    if !t.starts_with('[') {
+        return None;
+    }
+    // A `[^...]:` line is a FOOTNOTE definition, not a link reference.
+    if t.starts_with("[^") {
+        return None;
+    }
+    let close = t.find("]:")?;
+    let label = &t[1..close];
+    if label.is_empty() || label.contains('[') {
+        return None;
+    }
+    let rest = t[close + 2..].trim();
+    if rest.is_empty() {
+        return None;
+    }
+    // destination = first whitespace-delimited token (or <...>)
+    let (dest, after) = if let Some(stripped) = rest.strip_prefix('<') {
+        let end = stripped.find('>')?;
+        (stripped[..end].to_string(), stripped[end + 1..].trim())
+    } else {
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        (rest[..end].to_string(), rest[end..].trim())
+    };
+    // optional title: "..." '...' (...)
+    let title = if after.is_empty() {
+        None
+    } else if (after.starts_with('"') && after.ends_with('"') && after.len() >= 2)
+        || (after.starts_with('\'') && after.ends_with('\'') && after.len() >= 2)
+    {
+        Some(after[1..after.len() - 1].to_string())
+    } else if after.starts_with('(') && after.ends_with(')') && after.len() >= 2 {
+        Some(after[1..after.len() - 1].to_string())
+    } else {
+        // Trailing junk (e.g. `[//]: # ## heading`) — still a definition; the
+        // remainder is treated as an (ignored) title.
+        Some(after.to_string())
+    };
+    Some((label.to_string(), dest, title))
 }
 
 /// Parse a full document. `lines` is the raw source split on '\n'.
 pub fn parse_doc(src: &str) -> Doc {
+    let (src_owned, link_refs) = extract_link_refs(src);
+    let src = src_owned.as_str();
     let lines: Vec<&str> = src.split('\n').collect();
     let mut p = Parser {
         lines: &lines,
         i: 0,
         block_start: 0,
     };
-    // Leading blank: any blank line(s) before the first block.
+    // Leading blank: any blank line(s) — or consumed kramdown extension lines —
+    // before the first real block.
     let mut leading_blank = false;
     {
         let mut k = 0;
-        while k < lines.len() && lines[k].trim().is_empty() {
+        while k < lines.len()
+            && (lines[k].trim().is_empty() || is_kramdown_ext_line(lines[k]))
+        {
             leading_blank = true;
             k += 1;
         }
@@ -117,32 +233,28 @@ pub fn parse_doc(src: &str) -> Doc {
         }
     }
     let nodes = p.parse_until(|_| false);
-    // Trailing blank: source ended with blank line(s) after last content.
+    // Trailing blank: the source ended with a blank line after the last
+    // content. Strip ONE trailing '\n' (the file terminator) so it isn't
+    // mistaken for a blank line, then check whether a blank line remains at the
+    // end. Any blank line beyond the terminator => kramdown emits an extra
+    // trailing '\n'.
     let trailing_blank = {
-        // find last non-empty line index
-        let mut last_content = None;
-        for (idx, l) in lines.iter().enumerate() {
-            if !l.trim().is_empty() {
-                last_content = Some(idx);
-            }
-        }
-        // The final element after split('\n') on a "\n"-terminated file is an
-        // artifact empty string (the terminator), NOT a blank line. A real
-        // trailing blank line requires >= 2 trailing empty elements.
-        match last_content {
-            Some(idx) => lines.iter().skip(idx + 1).filter(|l| l.trim().is_empty()).count() >= 2,
-            None => false,
-        }
+        let body = src.strip_suffix('\n').unwrap_or(src);
+        // remove trailing spaces/tabs on the last line
+        let trimmed = body.trim_end_matches([' ', '\t']);
+        trimmed.ends_with('\n')
     };
     Doc {
         nodes,
         leading_blank,
         trailing_blank,
+        link_refs,
     }
 }
 
 /// Back-compat: parse to a plain block list (used by nested contexts that
 /// don't need the doc-level flags).
+#[allow(dead_code)]
 pub fn parse_blocks(src: &str) -> Vec<Block> {
     parse_doc(src).nodes.into_iter().map(|n| n.block).collect()
 }
@@ -175,6 +287,13 @@ impl<'a> Parser<'a> {
             let line = self.lines[self.i];
             if stop(line) {
                 break;
+            }
+            // kramdown block extension `{::...}` — consume, no output, treated
+            // as a block boundary (like a blank line).
+            if is_kramdown_ext_line(line) {
+                pending_blank = true;
+                self.i += 1;
+                continue;
             }
             // Standalone block IAL attaches to previous block.
             if let Some(attrs) = parse_block_ial_line(line) {
@@ -373,37 +492,90 @@ impl<'a> Parser<'a> {
     }
 
     fn try_table(&mut self) -> Option<Block> {
-        // Need a header line with | and a delimiter line next.
+        // kramdown pipe table (parser/kramdown/table.rb). A table starts at a
+        // block boundary on a line containing an unescaped `|`. The separator
+        // (`|---|`) is OPTIONAL: without it there is no <thead> and all rows are
+        // body rows.
         let line = self.lines[self.i];
-        if !line.contains('|') {
+        if !table_line_has_pipe(line) {
             return None;
         }
-        if self.i + 1 >= self.lines.len() {
+        // Don't misfire on a standalone block IAL.
+        if parse_block_ial_line(line).is_some() {
             return None;
         }
-        let delim = self.lines[self.i + 1];
-        let aligns = parse_delim_row(delim)?;
-        let header = split_table_row(line);
-        if header.is_empty() {
-            return None;
-        }
-        self.i += 2;
-        let mut rows: Vec<Vec<String>> = Vec::new();
+
+        let mut header: Option<Vec<String>> = None;
+        let mut aligns: Vec<Align> = Vec::new();
+        let mut groups: Vec<Vec<Vec<String>>> = Vec::new();
+        let mut footer: Option<Vec<Vec<String>>> = None;
+        let mut pending: Vec<Vec<String>> = Vec::new();
+        let mut has_footer = false;
+        let start = self.i;
+
         while self.i < self.lines.len() {
             let l = self.lines[self.i];
-            if l.trim().is_empty() || !l.contains('|') {
+            if l.trim().is_empty() {
                 break;
             }
             if parse_block_ial_line(l).is_some() {
                 break;
             }
-            rows.push(split_table_row(l));
+            if !table_line_has_pipe(l) {
+                break;
+            }
+            if is_table_sep_line(l) {
+                if pending.is_empty() {
+                    // ignore consecutive separators
+                    self.i += 1;
+                    continue;
+                }
+                if aligns.is_empty() && header.is_none() && !has_footer {
+                    // first separator: preceding rows become the header.
+                    header = Some(pending.remove(0));
+                    // Any extra pending rows before the separator are unusual;
+                    // fold them into the first body group.
+                    if !pending.is_empty() {
+                        groups.push(std::mem::take(&mut pending));
+                    }
+                    aligns = parse_sep_aligns(l);
+                } else {
+                    groups.push(std::mem::take(&mut pending));
+                }
+                self.i += 1;
+                continue;
+            }
+            if is_table_footer_line(l) {
+                if !pending.is_empty() {
+                    groups.push(std::mem::take(&mut pending));
+                }
+                has_footer = true;
+                self.i += 1;
+                continue;
+            }
+            pending.push(split_table_row(l));
             self.i += 1;
+        }
+        // finalize remaining rows
+        if !pending.is_empty() {
+            if has_footer {
+                footer = Some(std::mem::take(&mut pending));
+            } else {
+                groups.push(std::mem::take(&mut pending));
+            }
+        }
+        // A table must have a body (kramdown ignores a table with no body).
+        let total_body: usize = groups.iter().map(|g| g.len()).sum();
+        if total_body == 0 && footer.is_none() {
+            // not a real table; rewind so the paragraph parser handles it.
+            self.i = start;
+            return None;
         }
         Some(Block::Table {
             header,
             aligns,
-            rows,
+            body: groups,
+            footer,
             attrs: Attrs::default(),
         })
     }
@@ -432,6 +604,12 @@ impl<'a> Parser<'a> {
         }
         // Must look like an HTML tag <name ...>
         let tagname = html_tag_name(t)?;
+        // Span/inline elements (<br>, <img>, <span>, <a>, …) do NOT start an
+        // HTML block — they are handled inline within a paragraph. (kramdown
+        // parser/kramdown/html.rb:79 `!HTML_SPAN_ELEMENTS.include?`.)
+        if is_span_element(&tagname) {
+            return None;
+        }
         // Detect markdown="1" on the opening tag (possibly spanning the block).
         // First, gather the full opening tag (could span lines).
         let (open_tag, after_open_line, after_open_col) = self.read_open_tag()?;
@@ -460,10 +638,11 @@ impl<'a> Parser<'a> {
             // depth counting on this tag name).
             let (inner_text, close_tag) =
                 self.collect_until_close(&tagname, after_open_line, after_open_col);
-            let inner_blocks = parse_block_nodes(&inner_text);
+            let inner_doc = parse_doc(&inner_text);
             return Some(Block::HtmlBlockMd {
                 open_tag,
-                inner: inner_blocks,
+                inner: inner_doc.nodes,
+                inner_trailing_blank: inner_doc.trailing_blank,
                 close_tag,
             });
         }
@@ -595,7 +774,11 @@ impl<'a> Parser<'a> {
                                 && leading_spaces(self.lines[k]) >= content_indent
                                 && list_marker_at_indent(self.lines[k], base_indent).is_none()
                             {
-                                tight = false;
+                                // Blank line WITHIN an item (continuation still
+                                // indented under this item). This does NOT make
+                                // the list loose — kramdown looseness is decided
+                                // by blank lines BETWEEN sibling items. It does
+                                // give the item multiple blocks.
                                 item_lines.push(String::new());
                                 self.i = k;
                                 continue;
@@ -705,9 +888,34 @@ impl<'a> Parser<'a> {
         if is_hr(l.trim()) {
             return true;
         }
-        if t.starts_with('<') && html_tag_name(t).is_some() {
-            return true;
+        if t.starts_with('<') {
+            if let Some(name) = html_tag_name(t) {
+                // Only block-level HTML interrupts a paragraph; inline/span tags
+                // (<br>, <img>, <span>, <a>, …) flow with the paragraph.
+                if !is_span_element(&name) {
+                    return true;
+                }
+            }
         }
+        // GFM: a list can interrupt a paragraph. A bullet (`-`/`*`/`+`) always
+        // may; an ordered list may only if it starts at 1 and (GFM) the item is
+        // non-empty. kramdown+GFM here follows suit for our corpus.
+        if let Some((ordered, start, _)) = list_marker(l) {
+            // The content after the marker must be non-empty to interrupt.
+            let content = list_item_content_nonempty(l);
+            if !content {
+                return false;
+            }
+            if !ordered {
+                return true;
+            }
+            if start == Some(1) {
+                return true;
+            }
+        }
+        // A blockquote / table delimiter also interrupts; tables handled by the
+        // next-line delimiter check in try_table, so a header row alone won't
+        // interrupt (kramdown needs the delimiter line).
         false
     }
 
@@ -810,11 +1018,22 @@ fn set_block_attrs(b: &mut Block, mut a: Attrs) {
 }
 
 fn merge_attrs(dst: &mut Attrs, src: &mut Attrs) {
-    if src.id.is_some() {
-        dst.id = src.id.take();
+    // Append the source IAL's ordered attributes, merging classes and keeping
+    // kramdown's insertion order.
+    for (k, v) in src.ordered.drain(..) {
+        if k == "class" {
+            if let Some(slot) = dst.ordered.iter_mut().find(|(kk, _)| kk == "class") {
+                slot.1.push(' ');
+                slot.1.push_str(&v);
+            } else {
+                dst.ordered.push(("class".to_string(), v));
+            }
+        } else if let Some(slot) = dst.ordered.iter_mut().find(|(kk, _)| kk == &k) {
+            slot.1 = v;
+        } else {
+            dst.ordered.push((k, v));
+        }
     }
-    dst.classes.append(&mut src.classes);
-    dst.kv.append(&mut src.kv);
     dst.refs.append(&mut src.refs);
 }
 
@@ -964,6 +1183,17 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
     None
 }
 
+/// True if the list item on `l` has non-empty content after its marker.
+fn list_item_content_nonempty(l: &str) -> bool {
+    if let Some((_, _, ml)) = list_marker(l) {
+        let indent = leading_spaces(l);
+        let start = indent + ml;
+        l.len() > start && !l[start.min(l.len())..].trim().is_empty()
+    } else {
+        false
+    }
+}
+
 fn list_marker_at_indent(l: &str, indent: usize) -> Option<(bool, Option<u64>, usize)> {
     if leading_spaces(l) == indent {
         list_marker(l)
@@ -972,34 +1202,115 @@ fn list_marker_at_indent(l: &str, indent: usize) -> Option<(bool, Option<u64>, u
     }
 }
 
-fn parse_delim_row(l: &str) -> Option<Vec<Align>> {
-    let t = l.trim();
-    if !t.contains('-') {
-        return None;
+/// kramdown TABLE_PIPE_CHECK: a line with a leading `|` OR an unescaped `|`
+/// somewhere. A `|` that occurs only inside a backtick code span does NOT
+/// count (kramdown parses code spans before splitting table cells), so a line
+/// whose only pipes are inside `` `...` `` is a paragraph, not a table.
+fn table_line_has_pipe(l: &str) -> bool {
+    let t = l.trim_start();
+    let chars: Vec<char> = t.chars().collect();
+    let n = chars.len();
+    // A leading pipe (outside code) always qualifies.
+    if chars.first() == Some(&'|') {
+        return true;
     }
+    let mut i = 0;
+    let mut prev = '\0';
+    while i < n {
+        let c = chars[i];
+        if c == '`' {
+            // skip a code span: run of `fence` backticks to matching run.
+            let mut fence = 0;
+            while i < n && chars[i] == '`' {
+                fence += 1;
+                i += 1;
+            }
+            // find closing run of exactly fence
+            let mut closed = false;
+            while i < n {
+                if chars[i] == '`' {
+                    let mut run = 0;
+                    while i < n && chars[i] == '`' {
+                        run += 1;
+                        i += 1;
+                    }
+                    if run == fence {
+                        closed = true;
+                        break;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            if !closed {
+                // unterminated code span — treat rest as literal text
+            }
+            prev = '`';
+            continue;
+        }
+        if c == '|' && prev != '\\' {
+            return true;
+        }
+        prev = c;
+        i += 1;
+    }
+    false
+}
+
+/// kramdown TABLE_SEP_LINE: `^([+|: \t-]*?-[+|: \t-]*?)[ \t]*\n` — a line made
+/// only of `+ | : space tab -` and containing at least one `-`.
+fn is_table_sep_line(l: &str) -> bool {
+    let t = l.trim_end();
+    if t.trim().is_empty() {
+        return false;
+    }
+    let mut has_dash = false;
+    for c in t.chars() {
+        match c {
+            '-' => has_dash = true,
+            '+' | '|' | ':' | ' ' | '\t' => {}
+            _ => return false,
+        }
+    }
+    has_dash
+}
+
+/// kramdown TABLE_FSEP_LINE: only `+ | : space tab =` and at least one `=`.
+fn is_table_footer_line(l: &str) -> bool {
+    let t = l.trim_end();
+    if t.trim().is_empty() {
+        return false;
+    }
+    let mut has_eq = false;
+    for c in t.chars() {
+        match c {
+            '=' => has_eq = true,
+            '+' | '|' | ':' | ' ' | '\t' => {}
+            _ => return false,
+        }
+    }
+    has_eq
+}
+
+/// Parse alignment from a separator line, per kramdown TABLE_HSEP_ALIGN:
+/// `:---` = left, `---:` = right, `:--:` = center, `---` = default.
+fn parse_sep_aligns(l: &str) -> Vec<Align> {
     let cells = split_table_row(l);
-    if cells.is_empty() {
-        return None;
-    }
-    let mut aligns = Vec::new();
-    for cell in &cells {
-        let c = cell.trim();
-        if c.is_empty() || !c.chars().all(|ch| ch == '-' || ch == ':' || ch == ' ') {
-            return None;
-        }
-        if !c.contains('-') {
-            return None;
-        }
-        let left = c.starts_with(':');
-        let right = c.ends_with(':');
-        aligns.push(match (left, right) {
-            (true, true) => Align::Center,
-            (true, false) => Align::Left,
-            (false, true) => Align::Right,
-            (false, false) => Align::None,
-        });
-    }
-    Some(aligns)
+    cells
+        .iter()
+        .filter(|c| !c.trim().is_empty())
+        .map(|cell| {
+            let c = cell.trim();
+            let left = c.starts_with(':');
+            let right = c.ends_with(':');
+            match (left, right) {
+                (true, true) => Align::Center,
+                (true, false) => Align::Left,
+                (false, true) => Align::Right,
+                (false, false) => Align::None,
+            }
+        })
+        .collect()
 }
 
 fn split_table_row(l: &str) -> Vec<String> {

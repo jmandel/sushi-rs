@@ -3,7 +3,9 @@
 
 use crate::block::{parse_doc, Align, Block, BlockNode, ListItem};
 use crate::ial::Attrs;
-use crate::inline::{raw_text, render_inline};
+use crate::inline::{
+    collect_footnote_refs, normalize_html_block, raw_text, render_inline,
+};
 use crate::util::{escape_html_attr, IdGen};
 
 /// Rendering options. Defaults mirror the FHIR IG Publisher's Jekyll config.
@@ -32,26 +34,45 @@ pub fn render_with(src: &str, opts: &Options) -> String {
         idgen: IdGen::new(),
         opts: opts.clone(),
         footnotes: Vec::new(),
+        footnote_numbers: std::collections::HashMap::new(),
         toc_headings: Vec::new(),
     };
+    // Install link reference definitions for reference-style links.
+    crate::inline::set_link_refs(doc.link_refs.clone());
     let mut top = doc.nodes;
     // First pass: assign heading ids (needed for TOC).
     r.assign_ids(&mut top);
+    // Footnote pre-pass: number references in first-reference order across all
+    // inline text, so `[^label]` refs and the endnotes section agree.
+    let mut fn_order: Vec<String> = Vec::new();
+    collect_footnote_refs_in_blocks(&top, &mut fn_order);
+    let mut fn_numbers = std::collections::HashMap::new();
+    for (idx, label) in fn_order.iter().enumerate() {
+        fn_numbers.insert(label.clone(), idx + 1);
+    }
+    r.footnote_numbers = fn_numbers.clone();
+    crate::inline::set_footnote_numbers(fn_numbers);
     let mut out = String::new();
     r.render_blocks(&top, &mut out, 0, true);
+    let had_footnotes_before = out.len();
     // Append footnotes section if any were defined and referenced.
     r.render_footnotes(&mut out);
+    let footnotes_rendered = out.len() != had_footnotes_before;
     let trimmed = out.trim_end_matches('\n');
     let mut result = trimmed.to_string();
     if result.is_empty() {
-        return result;
+        // kramdown emits a single newline for empty / whitespace-only input.
+        return "\n".to_string();
     }
     // kramdown mirrors leading/trailing source blank lines.
     if doc.leading_blank {
         result.insert(0, '\n');
     }
     result.push('\n');
-    if doc.trailing_blank {
+    // The footnotes endnote section is always the last block and carries no
+    // extra trailing blank, so the source-trailing-blank mirror is suppressed
+    // when footnotes were emitted.
+    if doc.trailing_blank && !footnotes_rendered {
         result.push('\n');
     }
     result
@@ -61,6 +82,7 @@ struct Renderer {
     idgen: IdGen,
     opts: Options,
     footnotes: Vec<(String, Vec<BlockNode>)>,
+    footnote_numbers: std::collections::HashMap<String, usize>,
     toc_headings: Vec<(u8, String, String)>, // (level, id, inner_html)
 }
 
@@ -72,17 +94,28 @@ impl Renderer {
         for node in blocks.iter_mut() {
             match &mut node.block {
                 Block::Heading { text, attrs, level } => {
-                    let id = if let Some(id) = &attrs.id {
-                        id.clone()
+                    let id = if let Some(id) = attrs.id() {
+                        id.to_string()
                     } else if self.opts.auto_ids {
                         let rt = raw_text(text);
                         let id = self.idgen.generate(&rt);
-                        attrs.id = Some(id.clone());
+                        // Auto-id is APPENDED after any IAL classes (kramdown
+                        // emits `class="no_toc" id="..."` for `{:.no_toc}` +
+                        // auto-id), so use set_id which appends when absent.
+                        attrs.set_id(id.clone());
                         id
                     } else {
                         String::new()
                     };
-                    if !attrs.has_ref("no_toc") && !id.is_empty() {
+                    // A heading is excluded from the TOC if it carries the
+                    // `no_toc` marker — kramdown accepts it as a class
+                    // (`{:.no_toc}`) or a bare ref (`{:no_toc}`).
+                    let no_toc = attrs.has_ref("no_toc")
+                        || attrs
+                            .ordered
+                            .iter()
+                            .any(|(k, v)| k == "class" && v.split_whitespace().any(|c| c == "no_toc"));
+                    if !no_toc && !id.is_empty() {
                         let inner = render_inline(text);
                         self.toc_headings.push((*level, id, inner));
                     }
@@ -166,10 +199,11 @@ impl Renderer {
             Block::Table {
                 header,
                 aligns,
-                rows,
+                body,
+                footer,
                 attrs,
             } => {
-                self.render_table(header, aligns, rows, attrs, out, indent);
+                self.render_table(header, aligns, body, footer, attrs, out, indent);
             }
             Block::List {
                 ordered,
@@ -186,21 +220,35 @@ impl Renderer {
                 }
             }
             Block::HtmlBlock { raw } => {
-                // Raw passthrough, verbatim (no re-indent).
-                out.push_str(raw);
+                // kramdown parses raw HTML blocks and re-serializes: tag names
+                // lowercased, void tags self-closed as ` />`. Indentation and
+                // text are preserved. Comments pass through verbatim.
+                if raw.trim_start().starts_with("<!--") {
+                    out.push_str(raw);
+                } else {
+                    out.push_str(&normalize_html_block(raw));
+                }
             }
             Block::HtmlBlockMd {
                 open_tag,
                 inner,
+                inner_trailing_blank,
                 close_tag,
             } => {
                 out.push_str(&pad);
-                out.push_str(open_tag.trim_end());
+                // kramdown consumes the `markdown="1"` attribute (it triggers
+                // re-parsing) and does NOT emit it. Also normalize the tag.
+                let cleaned = strip_markdown_attr(open_tag);
+                out.push_str(normalize_html_block(&cleaned).trim_end());
                 out.push('\n');
                 // kramdown renders inner content indented by 2 within the
                 // markdown="1" element (matching blockquote-style nesting).
                 self.render_blocks(inner, out, indent + 2, false);
                 out.push('\n');
+                // A blank line before the close tag in the source is mirrored.
+                if *inner_trailing_blank {
+                    out.push('\n');
+                }
                 out.push_str(&pad);
                 out.push_str(close_tag);
             }
@@ -224,61 +272,95 @@ impl Renderer {
         out.push_str("</code></pre>");
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_table(
         &self,
-        header: &[String],
+        header: &Option<Vec<String>>,
         aligns: &[Align],
-        rows: &[Vec<String>],
+        body: &[Vec<Vec<String>>],
+        footer: &Option<Vec<Vec<String>>>,
         attrs: &Attrs,
         out: &mut String,
         indent: usize,
     ) {
         let pad = " ".repeat(indent);
+        // Column count: kramdown uses the number of alignment columns, falling
+        // back to the widest row.
+        let ncols = if !aligns.is_empty() {
+            aligns.len()
+        } else {
+            let hcols = header.as_ref().map(|h| h.len()).unwrap_or(0);
+            let bcols = body
+                .iter()
+                .flatten()
+                .chain(footer.iter().flatten())
+                .map(|r| r.len())
+                .max()
+                .unwrap_or(0);
+            hcols.max(bcols)
+        };
         out.push_str(&pad);
         out.push_str("<table");
         out.push_str(&attr_string(attrs, false));
         out.push_str(">\n");
-        // thead
-        out.push_str(&pad);
-        out.push_str("  <thead>\n");
-        out.push_str(&pad);
-        out.push_str("    <tr>\n");
-        for (i, cell) in header.iter().enumerate() {
-            let a = aligns.get(i).copied().unwrap_or(Align::None);
+        if let Some(h) = header {
             out.push_str(&pad);
-            out.push_str("      <th");
-            out.push_str(&align_style(a));
-            out.push('>');
-            out.push_str(&render_inline(cell));
-            out.push_str("</th>\n");
+            out.push_str("  <thead>\n");
+            self.render_table_row(h, aligns, ncols, "th", &pad, out);
+            out.push_str(&pad);
+            out.push_str("  </thead>\n");
         }
-        out.push_str(&pad);
-        out.push_str("    </tr>\n");
-        out.push_str(&pad);
-        out.push_str("  </thead>\n");
-        // tbody
-        out.push_str(&pad);
-        out.push_str("  <tbody>\n");
-        for row in rows {
+        for group in body {
             out.push_str(&pad);
-            out.push_str("    <tr>\n");
-            for i in 0..header.len() {
-                let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
-                let a = aligns.get(i).copied().unwrap_or(Align::None);
-                out.push_str(&pad);
-                out.push_str("      <td");
-                out.push_str(&align_style(a));
-                out.push('>');
-                out.push_str(&render_inline(cell));
-                out.push_str("</td>\n");
+            out.push_str("  <tbody>\n");
+            for row in group {
+                self.render_table_row(row, aligns, ncols, "td", &pad, out);
             }
             out.push_str(&pad);
-            out.push_str("    </tr>\n");
+            out.push_str("  </tbody>\n");
+        }
+        if let Some(f) = footer {
+            out.push_str(&pad);
+            out.push_str("  <tfoot>\n");
+            for row in f {
+                self.render_table_row(row, aligns, ncols, "td", &pad, out);
+            }
+            out.push_str(&pad);
+            out.push_str("  </tfoot>\n");
         }
         out.push_str(&pad);
-        out.push_str("  </tbody>\n");
-        out.push_str(&pad);
         out.push_str("</table>");
+    }
+
+    fn render_table_row(
+        &self,
+        row: &[String],
+        aligns: &[Align],
+        ncols: usize,
+        cell_tag: &str,
+        pad: &str,
+        out: &mut String,
+    ) {
+        out.push_str(pad);
+        out.push_str("    <tr>\n");
+        for i in 0..ncols {
+            let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
+            let a = aligns.get(i).copied().unwrap_or(Align::None);
+            out.push_str(pad);
+            out.push_str(&format!("      <{cell_tag}"));
+            out.push_str(&align_style(a));
+            out.push('>');
+            // kramdown renders an empty table cell as a single non-breaking
+            // space (U+00A0), not an empty element.
+            if cell.trim().is_empty() {
+                out.push('\u{a0}');
+            } else {
+                out.push_str(&render_inline(cell));
+            }
+            out.push_str(&format!("</{cell_tag}>\n"));
+        }
+        out.push_str(pad);
+        out.push_str("    </tr>\n");
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -295,73 +377,106 @@ impl Renderer {
         let pad = " ".repeat(indent);
         let tag = if ordered { "ol" } else { "ul" };
         out.push_str(&pad);
+        // kramdown does NOT emit a `start` attribute for ordered lists that
+        // begin at a number other than 1 — the marker value is ignored in the
+        // HTML output. (Verified against oracle: `7.`-started list -> `<ol>`.)
+        let _ = (start, tight);
         out.push_str(&format!("<{tag}"));
-        if ordered {
-            if let Some(s) = start {
-                if s != 1 {
-                    out.push_str(&format!(" start=\"{s}\""));
-                }
-            }
-        }
         out.push_str(&attr_string(attrs, false));
         out.push_str(">\n");
-        for item in items {
-            self.render_list_item(item, tight, out, indent + 2);
+
+        // Compute per-item first-paragraph transparency, replicating kramdown
+        // (parser/kramdown/list.rb:132-139). An item's first paragraph is
+        // transparent (no <p>) when it is a paragraph not immediately followed
+        // by a blank line, with a special rule for the LAST item: it is
+        // transparent only if some EARLIER item is itself non-transparent-first
+        // (i.e. the list is not uniformly tight-simple). See below.
+        let n = items.len();
+        // base condition per item: first is paragraph AND second not blank-sep.
+        let base: Vec<bool> = items
+            .iter()
+            .map(|it| {
+                let nodes: Vec<&BlockNode> = it
+                    .blocks
+                    .iter()
+                    .filter(|nd| !matches!(nd.block, Block::Blank))
+                    .collect();
+                let first_is_para = nodes
+                    .first()
+                    .map(|nd| matches!(nd.block, Block::Paragraph { .. }))
+                    .unwrap_or(false);
+                let second_blank = nodes.get(1).map(|nd| nd.blank_before).unwrap_or(false);
+                first_is_para && !second_blank
+            })
+            .collect();
+        let mut transparent = base.clone();
+        if n >= 2 {
+            // For the last item, transparency also requires that some earlier
+            // item's first child is NOT a plain (non-transparent) paragraph.
+            let earlier_has_non_p_or_transparent = (0..n - 1).any(|i| {
+                let it = &items[i];
+                let first = it
+                    .blocks
+                    .iter()
+                    .find(|nd| !matches!(nd.block, Block::Blank));
+                match first {
+                    None => true,
+                    Some(nd) => !matches!(nd.block, Block::Paragraph { .. }) || transparent[i],
+                }
+            });
+            if !earlier_has_non_p_or_transparent {
+                transparent[n - 1] = false;
+            }
+        }
+
+        for (i, item) in items.iter().enumerate() {
+            self.render_list_item(item, transparent[i], out, indent + 2);
         }
         out.push_str(&pad);
         out.push_str(&format!("</{tag}>"));
     }
 
-    fn render_list_item(&mut self, item: &ListItem, tight: bool, out: &mut String, indent: usize) {
+    fn render_list_item(&mut self, item: &ListItem, transparent: bool, out: &mut String, indent: usize) {
         let pad = " ".repeat(indent);
         out.push_str(&pad);
         out.push_str("<li>");
-        // Determine content rendering: for a tight item whose content is a
-        // single paragraph, kramdown emits the inline content directly with no
-        // <p> and no surrounding newlines. Otherwise block content is rendered
-        // indented.
-        let non_blank: Vec<&Block> = item
+        let nodes: Vec<&BlockNode> = item
             .blocks
             .iter()
-            .map(|n| &n.block)
-            .filter(|b| !matches!(b, Block::Blank))
+            .filter(|n| !matches!(n.block, Block::Blank))
             .collect();
-        if tight && non_blank.len() == 1 {
-            if let Block::Paragraph { text, .. } = non_blank[0] {
+
+        if nodes.is_empty() {
+            out.push_str("</li>\n");
+            return;
+        }
+
+        if transparent {
+            // First paragraph inline; remaining blocks (if any) on their own
+            // lines with their source-derived separators.
+            if let Block::Paragraph { text, .. } = &nodes[0].block {
                 out.push_str(&render_inline(text));
+            }
+            if nodes.len() == 1 {
                 out.push_str("</li>\n");
                 return;
             }
-        }
-        if tight
-            && non_blank
-                .first()
-                .map(|b| matches!(b, Block::Paragraph { .. }))
-                .unwrap_or(false)
-        {
-            // First block paragraph inline, rest block-rendered (e.g. nested list).
-            let mut idx = 0;
-            if let Block::Paragraph { text, .. } = non_blank[0] {
-                out.push_str(&render_inline(text));
-                idx = 1;
-            }
-            for b in &non_blank[idx..] {
+            for n in &nodes[1..] {
                 out.push('\n');
-                self.render_block(b, out, indent + 2);
+                if n.blank_before {
+                    out.push('\n');
+                }
+                self.render_block(&n.block, out, indent + 2);
             }
             out.push('\n');
             out.push_str(&pad);
             out.push_str("</li>\n");
             return;
         }
-        // Loose or complex: block content on its own lines.
+
+        // Non-transparent: block content on its own lines.
         out.push('\n');
-        let owned: Vec<BlockNode> = item
-            .blocks
-            .iter()
-            .filter(|n| !matches!(n.block, Block::Blank))
-            .cloned()
-            .collect();
+        let owned: Vec<BlockNode> = nodes.iter().map(|n| (*n).clone()).collect();
         self.render_blocks(&owned, out, indent + 2, false);
         out.push('\n');
         out.push_str(&pad);
@@ -381,29 +496,40 @@ impl Renderer {
             .collect();
         out.push_str(&pad);
         out.push_str(&format!("<{tag} id=\"markdown-toc\">\n"));
-        // Build nested structure.
-        render_toc_entries(&entries, 0, tag, out, indent + 2);
+        let mut pos = 0;
+        render_toc_level(&entries, &mut pos, u8::MAX, tag, indent + 2, out);
         out.push_str(&pad);
         out.push_str(&format!("</{tag}>"));
     }
 
     fn render_footnotes(&mut self, out: &mut String) {
-        if self.footnotes.is_empty() {
+        // Only footnotes that are actually referenced appear, in reference
+        // order (kramdown numbers/orders footnotes by first reference).
+        let defs: std::collections::HashMap<String, Vec<BlockNode>> =
+            self.footnotes.iter().cloned().collect();
+        let mut ordered: Vec<(usize, String)> = self
+            .footnote_numbers
+            .iter()
+            .filter(|(label, _)| defs.contains_key(*label))
+            .map(|(label, n)| (*n, label.clone()))
+            .collect();
+        ordered.sort_by_key(|(n, _)| *n);
+        if ordered.is_empty() {
             return;
         }
         // kramdown emits <div class="footnotes" role="doc-endnotes"><ol>...
         out.push('\n');
         out.push_str("\n<div class=\"footnotes\" role=\"doc-endnotes\">\n  <ol>\n");
-        for (i, (label, blocks)) in self.footnotes.clone().iter().enumerate() {
-            let num = i + 1;
-            let _ = label;
-            out.push_str(&format!("    <li id=\"fn:{num}\">\n"));
-            // Render blocks; append backlink to last paragraph.
+        for (_num, label) in &ordered {
+            let esc = escape_html_attr(label);
+            out.push_str(&format!("    <li id=\"fn:{esc}\">\n"));
+            let blocks = defs.get(label).cloned().unwrap_or_default();
             let mut inner = String::new();
-            self.render_blocks(blocks, &mut inner, 6, false);
-            // Insert backlink before closing </p> of last paragraph.
+            self.render_blocks(&blocks, &mut inner, 6, false);
+            // kramdown separates the footnote text from the backlink with a
+            // non-breaking space (U+00A0), not an ordinary space.
             let backlink = format!(
-                " <a href=\"#fnref:{num}\" class=\"reversefootnote\" role=\"doc-backlink\">\u{21a9}</a>"
+                "\u{a0}<a href=\"#fnref:{esc}\" class=\"reversefootnote\" role=\"doc-backlink\">&#8617;</a>"
             );
             if let Some(pos) = inner.rfind("</p>") {
                 inner.insert_str(pos, &backlink);
@@ -418,40 +544,89 @@ impl Renderer {
     }
 }
 
-fn render_toc_entries(
+/// Render one level of the TOC. Consumes entries whose level is `> parent_lvl`
+/// until an entry at `<= parent_lvl` is reached. Matches kramdown's exact
+/// layout: a child `<ul>` opens on the SAME line as the parent link (preceded
+/// by 4 spaces), and each link gets `id="markdown-toc-<heading-id>"`.
+fn render_toc_level(
     entries: &[(u8, String, String)],
-    start: usize,
+    pos: &mut usize,
+    parent_lvl: u8,
     tag: &str,
-    out: &mut String,
     indent: usize,
-) -> usize {
+    out: &mut String,
+) {
     let pad = " ".repeat(indent);
-    let mut i = start;
-    while i < entries.len() {
-        let (lvl, id, inner) = &entries[i];
+    while *pos < entries.len() {
+        let (lvl, id, inner) = entries[*pos].clone();
+        // Stop this nested level when we reach a heading at the parent's level
+        // or shallower (u8::MAX = top level, never stops).
+        if parent_lvl != u8::MAX && lvl <= parent_lvl {
+            return;
+        }
+        *pos += 1;
         out.push_str(&pad);
-        out.push_str(&format!("<li><a href=\"#{id}\">{inner}</a>"));
-        // Look ahead for deeper children.
-        if i + 1 < entries.len() && entries[i + 1].0 > *lvl {
-            out.push('\n');
-            out.push_str(&pad);
-            out.push_str(&format!("  <{tag}>\n"));
-            let next = render_toc_entries(entries, i + 1, tag, out, indent + 4);
+        out.push_str(&format!(
+            "<li><a href=\"#{id}\" id=\"markdown-toc-{id}\">{inner}</a>"
+        ));
+        // Does the next entry go deeper? Then open a nested list on this line.
+        let has_child = *pos < entries.len() && entries[*pos].0 > lvl;
+        if has_child {
+            // The nested list opens on the same line, preceded by (indent + 2)
+            // spaces (matching kramdown's layout).
+            out.push_str(&" ".repeat(indent + 2));
+            out.push_str(&format!("<{tag}>\n"));
+            render_toc_level(entries, pos, lvl, tag, indent + 4, out);
             out.push_str(&pad);
             out.push_str(&format!("  </{tag}>\n"));
             out.push_str(&pad);
             out.push_str("</li>\n");
-            i = next;
         } else {
             out.push_str("</li>\n");
-            i += 1;
-        }
-        // Stop if the next entry is shallower than this branch's level.
-        if i < entries.len() && entries[i].0 < *lvl {
-            break;
         }
     }
-    i
+}
+
+/// Remove a `markdown="1"` / `markdown='1'` attribute (and its surrounding
+/// whitespace) from an opening tag string.
+fn strip_markdown_attr(open_tag: &str) -> String {
+    let mut s = open_tag.to_string();
+    for pat in [" markdown=\"1\"", " markdown='1'", "markdown=\"1\"", "markdown='1'"] {
+        s = s.replace(pat, "");
+    }
+    s
+}
+
+/// Walk the block tree collecting footnote reference labels in first-reference
+/// order (footnote DEFINITION bodies are excluded — a footnote referenced only
+/// inside another footnote is numbered when first cited in the main text).
+fn collect_footnote_refs_in_blocks(nodes: &[BlockNode], order: &mut Vec<String>) {
+    for node in nodes {
+        match &node.block {
+            Block::Paragraph { text, .. } | Block::Heading { text, .. } => {
+                collect_footnote_refs(text, order);
+            }
+            Block::Table { header, body, footer, .. } => {
+                for cell in header.iter().flatten() {
+                    collect_footnote_refs(cell, order);
+                }
+                for row in body.iter().flatten().chain(footer.iter().flatten()) {
+                    for cell in row {
+                        collect_footnote_refs(cell, order);
+                    }
+                }
+            }
+            Block::BlockQuote { blocks, .. } | Block::HtmlBlockMd { inner: blocks, .. } => {
+                collect_footnote_refs_in_blocks(blocks, order);
+            }
+            Block::List { items, .. } => {
+                for it in items {
+                    collect_footnote_refs_in_blocks(&it.blocks, order);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn align_style(a: Align) -> String {
@@ -463,30 +638,15 @@ fn align_style(a: Align) -> String {
     }
 }
 
-/// Build the HTML attribute string for a block, matching kramdown's emission
-/// order. kramdown emits `id` first (when present), then other attributes in
-/// insertion order, then `class` last. Verified against oracle output
-/// (`<h2 id="x" class="y">`, `<p class="cls">`).
+/// Build the HTML attribute string for a block. kramdown emits attributes in
+/// the insertion order of its attribute Hash — which `Attrs::ordered` records
+/// exactly (`{:.no_toc #id}` -> `class="no_toc" id="id"`; auto-ids appended
+/// after IAL classes).
 fn attr_string(attrs: &Attrs, _is_heading: bool) -> String {
     let mut s = String::new();
-    if let Some(id) = &attrs.id {
-        s.push_str(&format!(" id=\"{}\"", escape_html_attr(id)));
-    }
-    for (k, v) in &attrs.kv {
-        // Skip kramdown control refs that never become HTML attrs.
+    for (k, v) in &attrs.ordered {
         s.push_str(&format!(" {}=\"{}\"", k, escape_html_attr(v)));
-    }
-    if let Some(cls) = attrs.class_attr() {
-        s.push_str(&format!(" class=\"{}\"", escape_html_attr(&cls)));
     }
     s
 }
 
-/// Re-export for tests / harness convenience.
-pub fn render_document(src: &str) -> String {
-    render(src)
-}
-
-// Silence unused import warning path for parse_blocks re-use in tests.
-#[allow(unused_imports)]
-use crate::block as _block;

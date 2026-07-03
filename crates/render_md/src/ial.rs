@@ -12,43 +12,70 @@
 //! are essentially unused in the authored corpus; not implemented (documented
 //! boundary).
 
+/// Parsed IAL attributes.
+///
+/// kramdown stores attributes in an insertion-ordered Hash: `#id` sets the
+/// `id` key; each `.class` appends to a `class` key (created at the first
+/// class); `k="v"` sets key `k`. The HTML is emitted in that Hash order.
+/// `ordered` records exactly that order so the renderer reproduces kramdown's
+/// attribute sequence (e.g. `{:.no_toc #id}` -> `class="no_toc" id="id"`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Attrs {
-    pub id: Option<String>,
-    pub classes: Vec<String>,
-    /// key="value" pairs, in source order.
-    pub kv: Vec<(String, String)>,
-    /// Bare references (`{:ref}`) — e.g. `toc`, `no_toc`. kramdown resolves
-    /// these against ALDs; we track them so callers can special-case
-    /// `toc`/`no_toc`.
+    /// Final attributes in kramdown emission order: (name, value).
+    pub ordered: Vec<(String, String)>,
+    /// Bare references (`{:ref}`) — e.g. `toc`, `no_toc`.
     pub refs: Vec<String>,
 }
 
 impl Attrs {
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
-        self.id.is_none()
-            && self.classes.is_empty()
-            && self.kv.is_empty()
-            && self.refs.is_empty()
+        self.ordered.is_empty() && self.refs.is_empty()
     }
 
     pub fn has_ref(&self, name: &str) -> bool {
         self.refs.iter().any(|r| r == name)
     }
 
-    /// Serialize to HTML attribute string (leading space included when
-    /// non-empty), matching kramdown attribute ordering: kramdown stores attrs
-    /// in a hash and emits them sorted by key, with `id` and `class` handled
-    /// specially. Empirically kramdown emits `id` first (when set via IAL it is
-    /// stored under key "id"), then remaining attrs in insertion/sorted order,
-    /// then class. To keep parity we emit in the order: other kv (sorted),
-    /// then id, then class — see html_attr_string for the exact rule used by
-    /// the renderer.
-    pub fn class_attr(&self) -> Option<String> {
-        if self.classes.is_empty() {
-            None
+    pub fn id(&self) -> Option<&str> {
+        self.ordered
+            .iter()
+            .find(|(k, _)| k == "id")
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Set the auto-generated id. kramdown appends the auto-id AFTER any IAL
+    /// attributes already present (e.g. `class`), so we append when absent.
+    pub fn set_id(&mut self, id: String) {
+        if let Some(slot) = self.ordered.iter_mut().find(|(k, _)| k == "id") {
+            slot.1 = id;
         } else {
-            Some(self.classes.join(" "))
+            self.ordered.push(("id".to_string(), id));
+        }
+    }
+
+    fn push_class(&mut self, cls: &str) {
+        if let Some(slot) = self.ordered.iter_mut().find(|(k, _)| k == "class") {
+            slot.1.push(' ');
+            slot.1.push_str(cls);
+        } else {
+            self.ordered.push(("class".to_string(), cls.to_string()));
+        }
+    }
+
+    fn set_kv(&mut self, k: &str, v: &str) {
+        if let Some(slot) = self.ordered.iter_mut().find(|(kk, _)| kk == k) {
+            slot.1 = v.to_string();
+        } else {
+            self.ordered.push((k.to_string(), v.to_string()));
+        }
+    }
+
+    fn set_id_ordered(&mut self, id: &str) {
+        if let Some(slot) = self.ordered.iter_mut().find(|(k, _)| k == "id") {
+            slot.1 = id.to_string();
+        } else {
+            self.ordered.push(("id".to_string(), id.to_string()));
         }
     }
 }
@@ -82,7 +109,7 @@ pub fn parse_ial_body(body: &str) -> Attrs {
                 }
                 let cls = &body[start..i];
                 if !cls.is_empty() {
-                    attrs.classes.push(cls.to_string());
+                    attrs.push_class(cls);
                 }
             }
             '#' => {
@@ -97,7 +124,7 @@ pub fn parse_ial_body(body: &str) -> Attrs {
                 }
                 let id = &body[start..i];
                 if !id.is_empty() {
-                    attrs.id = Some(id.to_string());
+                    attrs.set_id_ordered(id);
                 }
             }
             _ => {
@@ -140,7 +167,7 @@ pub fn parse_ial_body(body: &str) -> Attrs {
                         body[vstart..i].to_string()
                     };
                     if !key.is_empty() {
-                        attrs.kv.push((key.to_string(), val));
+                        attrs.set_kv(key, &val);
                     }
                 } else if !key.is_empty() {
                     attrs.refs.push(key.to_string());

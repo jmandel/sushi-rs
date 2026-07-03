@@ -4,7 +4,192 @@
 //!
 //! Raw HTML inline tags are passed through untouched (mandatory per survey).
 
-use crate::util::escape_html_text;
+use crate::util::{escape_html_attr, escape_html_text};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+thread_local! {
+    /// Map of footnote label -> assigned number, populated by the renderer
+    /// before inline rendering (numbers assigned in first-reference order).
+    /// Empty when the document has no footnotes.
+    static FOOTNOTE_NUMBERS: RefCell<HashMap<String, usize>> = RefCell::new(HashMap::new());
+
+    /// Link reference definitions: normalized label -> (destination, title).
+    static LINK_REFS: RefCell<HashMap<String, (String, Option<String>)>> =
+        RefCell::new(HashMap::new());
+}
+
+/// Install link reference definitions (normalized labels) for subsequent
+/// render_inline calls.
+pub fn set_link_refs(map: HashMap<String, (String, Option<String>)>) {
+    LINK_REFS.with(|m| *m.borrow_mut() = map);
+}
+
+fn lookup_link_ref(label: &str) -> Option<(String, Option<String>)> {
+    let key = normalize_ref_label(label);
+    LINK_REFS.with(|m| m.borrow().get(&key).cloned())
+}
+
+/// kramdown/CommonMark reference-label normalization: trim, collapse internal
+/// whitespace runs to a single space, and case-fold (ASCII downcase suffices
+/// for the corpus).
+pub fn normalize_ref_label(label: &str) -> String {
+    let mut out = String::new();
+    let mut prev_ws = false;
+    for c in label.trim().chars() {
+        if c.is_whitespace() {
+            if !prev_ws {
+                out.push(' ');
+            }
+            prev_ws = true;
+        } else {
+            out.extend(c.to_lowercase());
+            prev_ws = false;
+        }
+    }
+    out
+}
+
+/// Install the footnote label->number map for subsequent render_inline calls.
+pub fn set_footnote_numbers(map: HashMap<String, usize>) {
+    FOOTNOTE_NUMBERS.with(|m| *m.borrow_mut() = map);
+}
+
+fn footnote_number(label: &str) -> Option<usize> {
+    FOOTNOTE_NUMBERS.with(|m| m.borrow().get(label).copied())
+}
+
+/// Scan `src` for footnote references `[^label]` in order, appending any new
+/// labels to `order`.
+pub fn collect_footnote_refs(src: &str, order: &mut Vec<String>) {
+    let chars: Vec<char> = src.chars().collect();
+    let n = chars.len();
+    let mut i = 0;
+    while i < n {
+        if chars[i] == '[' && chars.get(i + 1) == Some(&'^') {
+            let mut j = i + 2;
+            while j < n && chars[j] != ']' {
+                j += 1;
+            }
+            if j < n {
+                let label: String = chars[i + 2..j].iter().collect();
+                if !label.is_empty() && !order.contains(&label) {
+                    order.push(label);
+                }
+                i = j + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Normalize the HTML tags inside a raw HTML block, matching kramdown's
+/// re-serialization: recognized tags get lowercased names and self-closing void
+/// tags get ` />`. Text, whitespace, comments and line structure are preserved
+/// verbatim (kramdown does NOT reindent raw HTML block content).
+pub fn normalize_html_block(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().collect();
+    let n = chars.len();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
+        if c == '<' {
+            // comment?
+            if chars.get(i + 1) == Some(&'!') {
+                // copy through '>' (comments/doctype/CDATA) verbatim
+                let mut j = i;
+                while j < n && chars[j] != '>' {
+                    j += 1;
+                }
+                if j < n {
+                    j += 1;
+                }
+                out.extend(&chars[i..j]);
+                i = j;
+                continue;
+            }
+            // tag?
+            if let Some((norm, ni)) = try_raw_inline_html(&chars, i) {
+                out.push_str(&norm);
+                i = ni;
+                continue;
+            }
+        }
+        // Text content of a raw HTML block: kramdown escapes bare reserved
+        // characters (`<` that isn't a tag, and `>`), while keeping existing
+        // character entities verbatim (`&nbsp;` stays `&nbsp;`). A bare `&` that
+        // does not start an entity is escaped to `&amp;`.
+        match c {
+            '>' => {
+                out.push_str("&gt;");
+                i += 1;
+            }
+            '<' => {
+                // '<' that wasn't consumed as a tag/comment above: escape it.
+                out.push_str("&lt;");
+                i += 1;
+            }
+            '&' => {
+                // keep a valid entity verbatim; escape a stray '&'.
+                if entity_len(&chars, i).is_some() {
+                    out.push('&');
+                } else {
+                    out.push_str("&amp;");
+                }
+                i += 1;
+            }
+            _ => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// If a character entity (`&name;`/`&#n;`/`&#xN;`) starts at `i`, return its
+/// length in chars; else None.
+fn entity_len(chars: &[char], i: usize) -> Option<usize> {
+    let n = chars.len();
+    if chars.get(i) != Some(&'&') {
+        return None;
+    }
+    let mut j = i + 1;
+    if chars.get(j) == Some(&'#') {
+        j += 1;
+        let hex = matches!(chars.get(j), Some('x') | Some('X'));
+        if hex {
+            j += 1;
+        }
+        let start = j;
+        while j < n && chars[j] != ';' {
+            let ok = if hex {
+                chars[j].is_ascii_hexdigit()
+            } else {
+                chars[j].is_ascii_digit()
+            };
+            if !ok {
+                return None;
+            }
+            j += 1;
+        }
+        if j < n && j > start {
+            return Some(j - i + 1);
+        }
+        return None;
+    }
+    let start = j;
+    while j < n && chars[j].is_ascii_alphanumeric() {
+        j += 1;
+    }
+    if j < n && chars[j] == ';' && j > start {
+        Some(j - i + 1)
+    } else {
+        None
+    }
+}
 
 /// Render inline markdown `src` to an HTML fragment.
 pub fn render_inline(src: &str) -> String {
@@ -100,6 +285,16 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                     i += 1;
                 }
             }
+            '[' if chars.get(i + 1) == Some(&'^') => {
+                // Footnote reference [^label].
+                if let Some((html, ni)) = try_footnote_ref(chars, i) {
+                    out.push_str(&html);
+                    i = ni;
+                } else {
+                    out.push('[');
+                    i += 1;
+                }
+            }
             '[' => {
                 if let Some((html, ni)) = try_link(chars, i) {
                     out.push_str(&html);
@@ -142,20 +337,17 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                 i += 3;
             }
             '\n' => {
-                // Hard line break: 2+ trailing spaces before the newline
-                // (hard_wrap is false, so a bare single newline stays a soft
-                // break = literal '\n').
+                // Hard line break: 2+ trailing spaces before the newline become
+                // <br /> (hard_wrap is false, so a bare newline is a soft break
+                // = literal '\n'). kramdown PRESERVES a single trailing space
+                // before a soft break.
                 if out.ends_with("  ") {
-                    // strip all trailing spaces then emit <br />
                     while out.ends_with(' ') {
                         out.pop();
                     }
                     out.push_str("<br />\n");
                 } else {
-                    // trailing single space is dropped by kramdown; keep newline
-                    while out.ends_with(' ') {
-                        out.pop();
-                    }
+                    // keep a lone trailing space, just append the newline.
                     out.push('\n');
                 }
                 i += 1;
@@ -316,7 +508,7 @@ fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
                     in_str = Some(c);
                 } else if c == '>' {
                     let raw: String = chars[i..k + 1].iter().collect();
-                    return Some((raw, k + 1));
+                    return Some((normalize_inline_tag(&raw), k + 1));
                 } else if c == '<' {
                     return None;
                 }
@@ -325,6 +517,144 @@ fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
         k += 1;
     }
     None
+}
+
+/// kramdown re-serializes recognized inline HTML tags: it lowercases the tag
+/// name and attribute names, and self-closing void tags are emitted as
+/// `<tag ... />` (a space before `/>`). Verified against oracle:
+///   `<IMG SRC="q"/>` -> `<img src="q" />`,  `<br/>` -> `<br />`.
+/// Attribute VALUES and non-recognized tags are left as-is.
+fn normalize_inline_tag(raw: &str) -> String {
+    // raw looks like "<name ...>" or "</name>" or "<name .../>"
+    let inner = &raw[1..raw.len() - 1]; // strip < >
+    let closing = inner.starts_with('/');
+    let body = if closing { &inner[1..] } else { inner };
+    // self-closing?
+    let (body, self_close) = if let Some(stripped) = body.strip_suffix('/') {
+        (stripped.trim_end(), true)
+    } else {
+        (body, false)
+    };
+    // split off tag name
+    let name_end = body
+        .find(|c: char| c.is_whitespace())
+        .unwrap_or(body.len());
+    let name = &body[..name_end];
+    let rest = &body[name_end..];
+    let lname = name.to_lowercase();
+    // Only normalize recognized HTML elements (kramdown lowercases only those).
+    if !is_known_html(&lname) {
+        return raw.to_string();
+    }
+    let mut out = String::new();
+    out.push('<');
+    if closing {
+        out.push('/');
+    }
+    out.push_str(&lname);
+    // Lowercase attribute NAMES in rest (values untouched). We do a light-touch
+    // pass: lowercase the identifier before each '='; leave quoted values.
+    // Trailing whitespace before `>` is dropped by kramdown (`<a ... >` -> `>`).
+    let attrs_norm = lowercase_attr_names(rest);
+    out.push_str(attrs_norm.trim_end());
+    // kramdown emits void elements (HTML_ELEMENTS_WITHOUT_BODY) self-closed with
+    // ` />`, whether or not the source had a slash. Non-void tags keep their
+    // form (a source `<x/>` stays self-closed).
+    let void = is_void_html(&lname) && !closing;
+    if self_close || void {
+        let trimmed = out.trim_end().to_string();
+        out = trimmed;
+        out.push_str(" />");
+    } else {
+        out.push('>');
+    }
+    out
+}
+
+fn is_void_html(name: &str) -> bool {
+    matches!(
+        name,
+        "area" | "base" | "br" | "col" | "command" | "embed" | "hr" | "img" | "input" | "keygen"
+            | "link" | "meta" | "param" | "source" | "track" | "wbr"
+    )
+}
+
+fn lowercase_attr_names(rest: &str) -> String {
+    let mut out = String::new();
+    let chars: Vec<char> = rest.chars().collect();
+    let n = chars.len();
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
+        if c.is_whitespace() {
+            // kramdown collapses runs of whitespace between attributes to a
+            // single space (it re-serializes the parsed attribute hash).
+            while i < n && chars[i].is_whitespace() {
+                i += 1;
+            }
+            out.push(' ');
+            continue;
+        }
+        // read an attribute name up to '=' or whitespace
+        let start = i;
+        while i < n && !chars[i].is_whitespace() && chars[i] != '=' {
+            i += 1;
+        }
+        let name: String = chars[start..i].iter().collect();
+        out.push_str(&name.to_lowercase());
+        if i < n && chars[i] == '=' {
+            out.push('=');
+            i += 1;
+            // copy value; kramdown normalizes attribute quoting to DOUBLE
+            // quotes (single-quoted source values are re-emitted double-quoted).
+            if i < n && (chars[i] == '"' || chars[i] == '\'') {
+                let q = chars[i];
+                out.push('"');
+                i += 1;
+                while i < n && chars[i] != q {
+                    // escape any embedded double-quote
+                    if chars[i] == '"' {
+                        out.push_str("&quot;");
+                    } else {
+                        out.push(chars[i]);
+                    }
+                    i += 1;
+                }
+                if i < n {
+                    out.push('"');
+                    i += 1;
+                }
+            } else {
+                while i < n && !chars[i].is_whitespace() {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+            }
+        }
+    }
+    out
+}
+
+fn is_known_html(name: &str) -> bool {
+    // Union of kramdown's span + block + void element name sets (the ones it
+    // lowercases). Cover the common ones used in the corpus.
+    const KNOWN: &[&str] = &[
+        // span
+        "a", "abbr", "acronym", "b", "big", "bdo", "br", "button", "cite", "code", "del", "dfn",
+        "em", "i", "img", "input", "ins", "kbd", "label", "mark", "option", "q", "rb", "rbc", "rp",
+        "rt", "rtc", "ruby", "samp", "select", "small", "span", "strong", "sub", "sup", "time",
+        "tt", "u", "var",
+        // block
+        "address", "article", "aside", "applet", "body", "blockquote", "caption", "col", "colgroup",
+        "dd", "div", "dl", "dt", "fieldset", "figcaption", "footer", "form", "h1", "h2", "h3", "h4",
+        "h5", "h6", "header", "hgroup", "hr", "html", "head", "iframe", "legend", "menu", "li",
+        "main", "map", "nav", "ol", "optgroup", "p", "pre", "section", "summary", "table", "tbody",
+        "td", "th", "thead", "tfoot", "tr", "ul",
+        // void
+        "area", "base", "command", "embed", "keygen", "link", "meta", "param", "source", "track",
+        "wbr",
+    ];
+    KNOWN.contains(&name)
 }
 
 fn try_entity(chars: &[char], i: usize) -> Option<(String, usize)> {
@@ -419,6 +749,25 @@ fn try_image(chars: &[char], i: usize) -> Option<(String, usize)> {
     Some((tag, nj))
 }
 
+/// Render a footnote reference `[^label]` to kramdown's `<sup>` markup.
+fn try_footnote_ref(chars: &[char], i: usize) -> Option<(String, usize)> {
+    let n = chars.len();
+    let mut j = i + 2;
+    while j < n && chars[j] != ']' {
+        j += 1;
+    }
+    if j >= n {
+        return None;
+    }
+    let label: String = chars[i + 2..j].iter().collect();
+    let num = footnote_number(&label)?;
+    let esc = escape_html_attr(&label);
+    let html = format!(
+        "<sup id=\"fnref:{esc}\"><a href=\"#fn:{esc}\" class=\"footnote\" rel=\"footnote\" role=\"doc-noteref\">{num}</a></sup>"
+    );
+    Some((html, j + 1))
+}
+
 fn try_link(chars: &[char], i: usize) -> Option<(String, usize)> {
     // [text](url "title")
     let n = chars.len();
@@ -440,22 +789,56 @@ fn try_link(chars: &[char], i: usize) -> Option<(String, usize)> {
         return None;
     }
     let text: Vec<char> = chars[text_start..j].to_vec();
+    let after_text = j; // index of the ']'
     j += 1;
-    if j >= n || chars[j] != '(' {
-        return None;
+
+    // Inline link: [text](dest "title")
+    if j < n && chars[j] == '(' {
+        let (url, title, nj) = parse_link_dest(chars, j)?;
+        return Some((build_link(&text, &url, title.as_deref()), nj));
     }
-    let (url, title, nj) = parse_link_dest(chars, j)?;
+
+    // Reference link: [text][ref] / [text][] / shortcut [text]
+    // Collapsed/full reference: [text][ref]
+    if j < n && chars[j] == '[' {
+        // read ref label up to ']'
+        let mut k = j + 1;
+        while k < n && chars[k] != ']' {
+            k += 1;
+        }
+        if k < n {
+            let reflabel: String = chars[j + 1..k].iter().collect();
+            let label = if reflabel.trim().is_empty() {
+                text.iter().collect::<String>()
+            } else {
+                reflabel
+            };
+            if let Some((url, title)) = lookup_link_ref(&label) {
+                return Some((build_link(&text, &url, title.as_deref()), k + 1));
+            }
+            return None;
+        }
+    }
+    // Shortcut reference: [text] where text itself is a defined label.
+    let label: String = chars[text_start..after_text].iter().collect();
+    if let Some((url, title)) = lookup_link_ref(&label) {
+        return Some((build_link(&text, &url, title.as_deref()), after_text + 1));
+    }
+    None
+}
+
+fn build_link(text: &[char], url: &str, title: Option<&str>) -> String {
     let mut inner = String::new();
-    render_inline_chars(&text, &mut inner);
-    let url_esc = escape_attr_inline(&url);
+    render_inline_chars(text, &mut inner);
+    let url_esc = escape_attr_inline(url);
     let mut tag = format!("<a href=\"{url_esc}\"");
     if let Some(t) = title {
-        tag.push_str(&format!(" title=\"{}\"", escape_attr_inline(&t)));
+        tag.push_str(&format!(" title=\"{}\"", escape_attr_inline(t)));
     }
     tag.push('>');
     tag.push_str(&inner);
     tag.push_str("</a>");
-    Some((tag, nj))
+    tag
 }
 
 fn parse_link_dest(chars: &[char], open_paren: usize) -> Option<(String, Option<String>, usize)> {
@@ -540,7 +923,8 @@ fn try_emphasis(chars: &[char], i: usize) -> Option<(String, usize)> {
         run += 1;
         j += 1;
     }
-    let want = if run >= 2 { 2 } else { 1 };
+    // A run of 3+ markers = strong+em (`***x***` -> <strong><em>x</em></strong>).
+    let want = run.min(3);
     let content_start = i + want;
     // For `_`, kramdown (GFM) requires it not be intra-word; keep simple:
     // require the char before opening not be alnum for `_`.
@@ -553,7 +937,7 @@ fn try_emphasis(chars: &[char], i: usize) -> Option<(String, usize)> {
     if content_start >= n || chars[content_start].is_whitespace() {
         return None;
     }
-    // find closing run of `want` markers, not preceded by space
+    // find closing run of >= want markers, not preceded by space
     let mut k = content_start;
     while k < n {
         if chars[k] == marker {
@@ -572,10 +956,10 @@ fn try_emphasis(chars: &[char], i: usize) -> Option<(String, usize)> {
                 let inner_chars = &chars[content_start..k];
                 let mut inner = String::new();
                 render_inline_chars(inner_chars, &mut inner);
-                let (tag_open, tag_close) = if want == 2 {
-                    ("<strong>", "</strong>")
-                } else {
-                    ("<em>", "</em>")
+                let (tag_open, tag_close) = match want {
+                    3 => ("<strong><em>", "</em></strong>"),
+                    2 => ("<strong>", "</strong>"),
+                    _ => ("<em>", "</em>"),
                 };
                 let consumed = k + want;
                 return Some((format!("{tag_open}{inner}{tag_close}"), consumed));
@@ -685,6 +1069,21 @@ fn raw_text_chars(chars: &[char], out: &mut String) {
                     i = ni;
                 } else {
                     out.push('`');
+                    i += 1;
+                }
+            }
+            '<' => {
+                // Inline HTML tag / autolink in a heading contributes no text to
+                // the id (kramdown's raw_text only accumulates text/codespan/
+                // entity/smart-quote content — html_element children are skipped).
+                if let Some((_, ni)) = try_autolink(chars, i) {
+                    // autolink text IS its URL in kramdown output, but for id
+                    // raw_text the link URL is not the header text; skip.
+                    i = ni;
+                } else if let Some((_, ni)) = try_raw_inline_html(chars, i) {
+                    i = ni;
+                } else {
+                    out.push('<');
                     i += 1;
                 }
             }
