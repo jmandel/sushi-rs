@@ -152,6 +152,7 @@ fn render(
         "contained-index" | "history" => render_sd::leaf::empty_body(),
         "pseudo-ttl" => render_sd::leaf::pseudo_ttl(),
         "pseudo-xml" => render_sd::leaf::pseudo_xml(),
+        "pseudo-json" => render_sd::pseudojson::pseudo_json(sd, ctx?, &core_path_for(sd)),
         "inv" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Snap, true),
         "inv-key" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Key, true),
         "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),

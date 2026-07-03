@@ -84,6 +84,14 @@ impl<'a> Ed<'a> {
             .map(|a| a.iter().map(|c| Constraint { v: c }).collect())
             .unwrap_or_default()
     }
+    /// Raw constraint JSON values (for callers that read source/key/human).
+    pub fn constraint_values(&self) -> Vec<&'a Value> {
+        self.v
+            .get("constraint")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().collect())
+            .unwrap_or_default()
+    }
     pub fn binding(&self) -> Option<&'a Value> {
         self.v.get("binding")
     }
