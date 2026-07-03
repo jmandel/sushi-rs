@@ -38,7 +38,7 @@ That is an oracle + golden + comparator, ready-made for our methodology.
 | `ValueSet_Codes` (expansion: System/Code/Display per ValueSetUri) | **terminology $expand** | ❌ **The one real gap.** Not in our pipeline. Options in §3 |
 | `Metadata` (~10 consumed keys: path/canonical/packageId/igId/igName/igVer/version/releaseLabel/genDate/genDay) | publisher bookkeeping | ✅ Trivial (config + clock) |
 | `Resources.standardStatus` | derived bookkeeping | ✅ Port `rows.ts:167-197` |
-| `ValueSetList*` / `CodeSystemList*` tables | publisher indexed lists | ⚠️ Contract requires tables to EXIST; renderer never reads them. Create empty for v1; populate later only for `compare.ts` parity or future `{% sql %}` pages |
+| `ValueSetList*` / `CodeSystemList*` tables | publisher indexed lists | ✅ Created empty-but-present (contract requires existence; renderer never reads them — see §4 "not doing") |
 | Narrative/fragments/includes | render-time synthesis | ✅ Nothing to produce |
 
 **Bottom line:** with the snapshot rework done, our pipeline already produces
@@ -126,7 +126,7 @@ rebuild — this serves both CI and the future editor loop.
   **Scope decision (2026-07-02): Ledger 2 is DAY-1 scope**, not a follow-up —
   the TS renderer must handle SDC/IPS-scale IGs (hundreds of pages,
   per-resource fragment rendering), where full re-render per edit doesn't
-  hold and the editor loop makes it worse. Deliverable order inside Option B:
+  hold and the editor loop makes it worse. Deliverable order inside Phase 2:
   (1) producer ships hashes/determinism; (2) TS recording proxy + RenderDeps
   + replay-skip lands with it; (3) benchmark checkpoint: full cold render of
   SDC and IPS (generalizing site-gen beyond cycle is a cycle-repo concern,
@@ -141,55 +141,56 @@ rebuild — this serves both CI and the future editor loop.
 Wrapper-level site assets that are NOT site.db inputs but ARE final-site
 inputs (copied after render): viewer bundles, sample SHL files, `skill.zip`,
 `CNAME`, `404.html`, `site-gen/project/package-list.json`, and the
-`output/qa*` cosmetic copies (Java-QA only; drop or stub in a Rust-only
-build).
+`output/qa*` copies — DROPPED in a Rust-only build (Java-QA only; the walk
+engine's messages channel is the future QA source; revisit on demand).
 
-## 3. The expansion gap — options
+## 3. The expansion gap — decision
 
-1. **Pluggable tx client** (recommended): the producer calls `$expand` on a
-   configured terminology server with an on-disk cache keyed by
-   (valueset, version, tx-version). Point it at **terminus** (Josh's Bun/TS
-   FHIR terminology server) locally/CI, or tx.fhir.org as fallback — exactly
-   what cycle's experimental `publisher/terminology.ts` does today.
-2. Reuse cycle's existing TS terminology step and only replace the
-   resource/snapshot inputs (see Option A below) — zero new code.
-3. Port expansion into Rust — **rejected for now** (a whole subsystem;
-   terminus already exists and cycle's VS needs are small).
+The producer calls `$expand` through a **pluggable tx client** with an
+on-disk cache keyed by content hash of (valueset, referenced code systems,
+tx-server identity): **terminus** locally/CI, tx.fhir.org as fallback — the
+same shape as cycle's experimental `publisher/terminology.ts`. Expansions are
+committed like goldens so builds are reproducible offline; tx drift is a
+deliberate refresh.
 
-## 4. Implementation options
+Rejected: porting expansion into Rust (a whole subsystem; terminus exists;
+needs are small). The Phase-1 spike sidesteps the question entirely by
+reusing cycle's TS terminology step — that's part of what makes it a spike.
 
-- **Option A — hybrid proof (days):** run cycle's existing experimental TS
-  producer (`site-gen/publisher/build.ts`) but feed it OUR outputs: point its
-  resource ingestion at `rust_sushi` output and REPLACE its `snapshots.ts`
-  step with walk-engine snapshots (or pre-embed snapshots in the resource
-  JSONs so its snapshot step becomes a no-op). Its own terminology.ts still
-  does expansions; the existing TS ingest still builds site.db. Gate with
-  `publisher/compare.ts` vs the committed Java fixture DB. Proves the §2
-  data path with near-zero new code.
-- **Option B — Rust-native `site_db` producer (the deliverable):** new crate
-  in this workspace implementing S1–S7 of §2b: `rust_sushi build` → walk
-  snapshots → expansions via tx client (§3) → S6 augmentation (faithful port
-  of ingest.ts semantics, PlantUML excluded) → emit `site.db` (rusqlite),
-  with the §2c BuildState ledger from day one (coarse S1/S2 granularity is
-  fine; the ledger schema is not). TS side: bypass ingest, render from our
-  site.db, assert the site.db contract at startup.
-  Gates: (i) package.db-contract assertion; (ii) row parity vs the TS
-  ingest's site.db built over the SAME inputs (the TS ingest is the
-  augmentation oracle — same methodology, new oracle); (iii) `compare.ts`
-  vs `site-gen/fixtures/package.db` for the §2 tables, diffs classified;
-  (iv) the real gate — rendered site diffs clean (or explained) vs the
-  Java-produced site; (v) incrementality gate, producer side — touch one
-  md / one fsh / one VS: only the declared dep cone recomputes (assert via
-  BuildState hashes), and a no-op rebuild is a no-op; (vi) incrementality
-  gate, renderer side (day-1 per §2c) — after a single-file edit the
-  renderer re-renders only pages whose replayed read sets changed; verified
-  on an SDC/IPS-scale corpus, with cold-render benchmarks recorded.
-- **Option C — full Publisher-shaped DB:** also populate ValueSetList/
-  CodeSystemList/Properties/Designations per `schema.ts` for future
-  `{% sql %}` pages. Only on demand.
+## 4. Plan
 
-Recommendation: A as a spike to validate the §2 contract understanding, then
-B. C deferred.
+**Phase 1 — spike (days):** run cycle's existing experimental TS producer
+(`site-gen/publisher/build.ts`) fed by OUR outputs: point its resource
+ingestion at `rust_sushi` output with walk-engine snapshots pre-embedded (its
+snapshot step becomes a no-op). Its terminology.ts still does expansions; the
+existing TS ingest still builds site.db. Gate: `publisher/compare.ts` vs the
+committed Java fixture DB. Purpose: validate the §2 contract understanding
+with near-zero new code before building anything.
+
+**Phase 2 — the deliverable:** a Rust-native `site_db` crate in this
+workspace implementing S1–S7 of §2b: `rust_sushi build` → walk snapshots →
+expansions via the tx client (§3) → S6 augmentation (faithful port of
+ingest.ts semantics, PlantUML excluded) → emit `site.db` (rusqlite), with the
+§2c BuildState producer ledger from day one (coarse S1/S2 granularity is
+fine; the ledger schema is not) AND the day-1 TS renderer ledger (§2c).
+TS side: delete/bypass ingest, render from our site.db, assert the site.db
+contract at startup.
+
+Gates for Phase 2: (i) package.db-contract assertion; (ii) row parity vs the
+TS ingest's site.db built over the SAME inputs (the TS ingest is the
+augmentation oracle — same methodology, new oracle); (iii) `compare.ts` vs
+`site-gen/fixtures/package.db` for the §2 tables, diffs classified; (iv) the
+real gate — rendered site diffs clean (or explained) vs the Java-produced
+site; (v) producer incrementality — touch one md / one fsh / one VS: only the
+declared dep cone recomputes (asserted via BuildState hashes), and a no-op
+rebuild is a no-op; (vi) renderer incrementality — after a single-file edit,
+only pages whose replayed read sets changed re-render; verified at SDC/IPS
+scale with cold-render benchmarks recorded.
+
+**Explicitly not doing:** populating the full Publisher-shaped extra tables
+(ValueSetList/CodeSystemList/Properties/Designations per `schema.ts`). They
+are created empty to satisfy the contract; the producer README documents that
+boundary. Revisit only when an actual page needs `{% sql %}` over them.
 
 ## 5. Notes / risks
 
@@ -198,8 +199,9 @@ B. C deferred.
   same data model so a wasm build can emit rows as JSON for a JS-side writer
   (or wa-sqlite) later. Do not let sqlite types leak into the pipeline.
 - **`{% sql %}` open surface**: pages may query arbitrary tables. Today cycle
-  uses none. Option B satisfies the asserted contract; anything beyond is
-  Option C territory — document that boundary in the producer README.
+  uses none. Phase 2 satisfies the asserted contract; the extra tables stay
+  empty per §4 "not doing", with that boundary documented in the producer
+  README.
 - **`base` version pinning + `standardStatus` derivation** are the two
   bookkeeping behaviors with real logic; port from `rows.ts` with citations,
   same discipline as the snapshot work.
@@ -211,10 +213,11 @@ B. C deferred.
 - **Residual Java touchpoints, resolved by decision (2026-07-02):** PlantUML
   is OUT OF SCOPE — SVGs must be pre-rendered/committed, producer fails loud
   on missing images (§2b). `output/qa*` copies: no Java run → no QA report;
-  drop or stub in a Rust-only build (open, cosmetic-only).
+  DROPPED (cosmetic-only; see §2c wrapper-assets note).
 
 ## 6. Sequencing
 
 After the post-rework roadmap's perf/clarity pass (task #12). Independent of
-the WASM demo (#13) — can run in parallel or after, user's choice. Rough
-effort: Option A spike ~1-2 days; Option B ~1 week including gates.
+the WASM demo (#13); run it after #13 unless priorities change. Rough
+effort: Phase 1 spike ~1-2 days; Phase 2 ~1.5 weeks including gates and the
+renderer ledger.
