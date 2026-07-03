@@ -136,12 +136,15 @@ documented snapshot-source variance for cycle).
 | **diff-bindings-all** | **7 / 7** | **22 / 22** | **70 / 70** |
 | **diff-obligations** | **7 / 7** | **22 / 22** | **70 / 70** |
 | **diff-obligations-all** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **span** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **spanall** | **7 / 7** | **22 / 22** | **70 / 70** |
 
-**15/15 kinds GREEN corpus-wide** (2026-07-03, session 4): + bindings/obligations
-modes and their diff variants. The bindings/obligations kinds pass cleanly on
-cycle (7/7) because the mode is the LOAD-BEARING difference, not the snapshot
-input — the cycle snapshot-source variance (quirk †) only bites the SUMMARY
-element rows, which the by-Name custom tables mostly don't restate.
+**ALL kinds GREEN corpus-wide** (2026-07-03, session 4): bindings/obligations
+modes + their diff variants + span/spanall. All the non-SUMMARY kinds pass
+cleanly on cycle (7/7): the mode/entry-point is the LOAD-BEARING difference, not
+the snapshot input — the cycle snapshot-source variance (quirk †) only bites the
+SUMMARY element rows (which the by-Name custom tables mostly don't restate, and
+which span doesn't render at all).
 
 † cycle's one failure (period-tracking-fact) is byte-equal except the
   abstract-profile child-list ORDER — a genuinely non-deterministic publisher
@@ -379,13 +382,38 @@ genElement (SDR:1022-1035). Findings:
   cells in BINDINGS/OBLIGATIONS (SDR:1078/1107/1143) vs SUMMARY's 4-cell pattern
   — unified in `push_scaffold_tail`.
 
+## span / spanall (2026-07-03, session 4) — generateSpanningTable
+
+DONE GREEN corpus-wide. `render_sd::span` (~330 LOC): a separate entry point
+(SDR:3713), NOT generateTable. A constraint profile's focus row + one hop into
+each typed, non-max-0 element's first Reference-targetProfile that is itself an
+in-IG constraint (`onlyConstraints=true`, `constraintPrefix=igpkp.getCanonical()`).
+Findings:
+- **span vs spanall differ ONLY in the HTG anchor prefix** ("sp" vs "spall",
+  PublisherGenerator:2080/2084) — both pass onlyConstraints=true + the same
+  canonical. Golden anchors `sp-…` / `spall-…`.
+- **genSpanEntry does NOT call makeAnchorUnique** (SDR:3690-3694): the SAME
+  child profile under two references gets the SAME anchor (golden: two
+  `sp-us-core-patient`, no `.2`). This was the one bug — I had ported the
+  makeAnchorUnique dedup from generateTable; removing it took us-core 53→70.
+- **initSpanningTable** (SDR:3674): active=true (isActive), docoRef=
+  `formats.html#table` (NOT readingIgs), docoImg=`pathURL("","help16.png")`=
+  `help16.png` (no makeSecureRef, no https), 4 titles Property/Card./Content/
+  Description. Mode null → no no-external (Gen::new).
+- `constraintPrefix` = the IG canonical, newly captured in IgContext
+  (`own_canonical_prefix`, the ImplementationGuide url minus /ImplementationGuide/id).
+- getCardinality (SDR:3751) walks parents tightening min/max; the content cell
+  links the child profile's webPath with the resType text; description = the
+  child profile.getName(). Observation.code key-property fixed summary
+  (isKeyProperty, SDR:3669) ported but rarely hit.
+
 ## Remaining
 
 Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
 (session 2); grid + diff/-all GREEN (session 3, commonmark + pointer recon).
 
-- **span/spanall**: `generateSpanningTable` (SDR:3713) — separate entry point.
-  (Only remaining kind NOT ported. Goldens exist: 7/22/70.)
+- **No SD table kinds remain.** All snapshot/diff/grid/by-*/bindings/obligations/
+  span kinds are byte-parity corpus-wide across us-core/plan-net/cycle.
 - **Simplification candidates (logged)**: (a) grid.rs `gen_types`/
   `gen_target_link` are branch-for-branch duplicates of table.rs's (both port
   the SAME Java `genTypes`/`genTargetLink`); table.rs's now additionally

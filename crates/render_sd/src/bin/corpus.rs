@@ -63,6 +63,16 @@ fn render(
     let def_file = format!("StructureDefinition-{}-definitions.html", sd.id());
     let body = match kind {
         "grid" => render_grid(sd, ctx?, &def_file, ""),
+        "span" => {
+            let mut c = render_sd::span::SpanConfig::span();
+            c.active_tables = active_tables;
+            render_sd::span::render_span(sd, ctx?, &c)
+        }
+        "spanall" => {
+            let mut c = render_sd::span::SpanConfig::spanall();
+            c.active_tables = active_tables;
+            render_sd::span::render_span(sd, ctx?, &c)
+        }
         "snapshot" => {
             let mut cfg = TableConfig::snapshot(run_uuid);
             cfg.active_tables = active_tables;

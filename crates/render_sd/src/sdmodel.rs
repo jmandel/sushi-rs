@@ -279,6 +279,10 @@ impl Sd {
             root: serde_json::from_str(s)?,
         })
     }
+    /// Wrap an owned SD `Value` (e.g. a clone of a `load_resource` Rc).
+    pub fn from_value(root: Value) -> Sd {
+        Sd { root }
+    }
     pub fn id(&self) -> &str {
         self.root.get("id").and_then(|x| x.as_str()).unwrap_or("")
     }

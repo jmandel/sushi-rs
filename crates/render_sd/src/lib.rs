@@ -17,6 +17,7 @@ pub mod diff;
 pub mod grid;
 pub mod markdown;
 pub mod sdmodel;
+pub mod span;
 pub mod table;
 
 pub use sdmodel::Sd;

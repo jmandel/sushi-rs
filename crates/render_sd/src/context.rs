@@ -83,6 +83,10 @@ pub struct IgContext {
     /// tx-server-fetched resources (input-cache/txcache/vs-externals.json):
     /// canonical -> (server, file). Last-resort resolution, external=true.
     tx_externals: HashMap<String, (String, PathBuf)>,
+    /// The IG's canonical base (`igpkp.getCanonical()`) — the ImplementationGuide
+    /// url minus its `/ImplementationGuide/<id>` tail. Used as span's
+    /// `constraintPrefix` (only in-IG constraint profiles are spanned).
+    own_canonical: Option<String>,
 }
 
 impl IgContext {
@@ -104,6 +108,7 @@ impl IgContext {
         let mut own = HashMap::new();
         let mut deps: Vec<(String, String)> = Vec::new(); // (pkgId, version)
         let mut ig_fhir_version: Option<String> = None;
+        let mut own_canonical: Option<String> = None;
         if let Ok(rd) = std::fs::read_dir(own_dir) {
             for e in rd.flatten() {
                 let p = e.path();
@@ -127,6 +132,13 @@ impl IgContext {
                         .and_then(|x| x.as_str())
                     {
                         ig_fhir_version = Some(fv.to_string());
+                    }
+                    // igpkp.getCanonical(): the IG url minus /ImplementationGuide/<id>.
+                    if let Some(u) = v.get("url").and_then(|x| x.as_str()) {
+                        own_canonical = Some(match u.find("/ImplementationGuide/") {
+                            Some(i) => u[..i].to_string(),
+                            None => u.to_string(),
+                        });
                     }
                     for d in v
                         .get("dependsOn")
@@ -261,7 +273,13 @@ impl IgContext {
             cache: RefCell::new(HashMap::new()),
             res_cache: RefCell::new(HashMap::new()),
             tx_externals,
+            own_canonical,
         }
+    }
+
+    /// The IG canonical base (`igpkp.getCanonical()`), span's constraintPrefix.
+    pub fn own_canonical_prefix(&self) -> Option<String> {
+        self.own_canonical.clone()
     }
 
     /// Resolve a canonical URL (versionless or `url|version`).
