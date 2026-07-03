@@ -537,11 +537,20 @@ fn break_blocks_with_lines_node(node: &mut XhtmlNode) {
 }
 
 /// Java `breakBlocksWithLines(List<XhtmlNode>)` (XhtmlComposer.java:92).
+///
+/// Faithful port: Java captures `node = list.get(i)` (the block) BEFORE any
+/// insert, then always recurses into THAT node (line 101). So the sibling-insert
+/// at `i` never diverts the recursion onto the freshly-inserted text node. We
+/// reproduce this by recursing into `list[i]` (the block) FIRST — recursion
+/// touches only the block's children, which the sibling insert does not affect —
+/// and only THEN inserting the `\r\n` sibling before it.
 fn break_blocks_with_lines_list(list: &mut Vec<XhtmlNode>) {
+    // Java: for (i = size-1; i > 0; i--). i ranges over len-1..=1.
     let mut i = list.len();
-    // Java: for (i = size-1; i > 0; i--)
     while i > 1 {
         i -= 1;
+        // Recurse into the current node (the captured `node` in Java) first.
+        break_blocks_with_lines_node(&mut list[i]);
         let is_block =
             list[i].node_type() == NodeType::Element && is_block_name(list[i].name().unwrap_or(""));
         if is_block {
@@ -559,6 +568,6 @@ fn break_blocks_with_lines_list(list: &mut Vec<XhtmlNode>) {
                 list.insert(i, t);
             }
         }
-        break_blocks_with_lines_node(&mut list[i]);
     }
 }
+
