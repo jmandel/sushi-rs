@@ -163,9 +163,19 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
 2. Quirk audit: `quirks.rs` entries each have fixture + Java citation; count
    reported in this file. Legacy engine + transitional flags DELETED (incl.
    `--native-r5` transitional modes per snapshot/AGENTS.md scope note).
-3. Perf pass (only after cutover): memoized generated snapshots, id→index maps.
-4. Docs: METHODOLOGY.md/PLAN.md/AGENTS.md rewritten around the pipeline;
+3. Docs: METHODOLOGY.md/PLAN.md/AGENTS.md rewritten around the pipeline;
    PLAN.md's stale "reuses fhir_model" claim replaced by the actual decision.
+
+### After the rework (user-set roadmap, 2026-07-02; tasks #11–#13)
+1. **Merge latest origin/main into snapshot-gen** (re-fetch first — network
+   was down when scheduled); merge gate = full-corpus walk scorecard + tests.
+2. **Perf + clarity review pass across sushi AND snapshot generator** —
+   profile the walk engine on the biggest corpora (levers: cross-item
+   generated-snapshot memoization, id→index side maps); re-run the sushi
+   31-IG perf harness; then a clarity/simplification review with gates green
+   at every step.
+3. **Only after perf is covered: the WASM demo** (docs/wasm-editor-plan.md
+   P0). Perf pass moved OUT of wave 4 into this roadmap step.
 
 ### Non-negotiable protocol rules
 - A wave item is DONE only when the coordinator has re-run its gates personally.

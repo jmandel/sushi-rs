@@ -144,7 +144,8 @@ The browser build must pass the same gates as native:
 
 ## 7. Sequencing vs the snapshot rework
 
-Hard dependency: **wave-4 cutover first** (walk engine default, legacy
-deleted). P0 may start any time after, using whatever engine is default — but
-P1's storage-trait refactor must be gated by the post-cutover full-corpus
-scorecard, so do not interleave P1 with wave 3/4.
+Hard dependency chain (user-confirmed 2026-07-02, tracked as tasks #11–#13):
+**wave-4 cutover → merge latest origin/main into snapshot-gen → perf+clarity
+review pass (sushi + snapshot generator) → THEN P0 here.** P1's storage-trait
+refactor must additionally be gated by the post-cutover full-corpus
+scorecard. Do not interleave any of this with wave 3/4.
