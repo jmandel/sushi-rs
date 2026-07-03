@@ -214,6 +214,46 @@ scale with cold-render benchmarks recorded.
 are created empty to satisfy the contract; the producer README documents that
 boundary. Revisit only when an actual page needs `{% sql %}` over them.
 
+## 4b. Phase 1 spike — RESULTS (2026-07-03, task #15)
+
+Ran end-to-end with ZERO engine changes and zero cycle-repo code edits (env
+wiring only, `rust-feed-spike` branch). Verdicts:
+
+- **Row-parity gate: 0 differences.** Rust-fed (rust_sushi resources + walk
+  snapshots embedded) through the TS producer = byte-identical package.db
+  row set vs the TS producer's own-SUSHI run over identical sources — all 16
+  tables, 17 resources, Metadata/Concepts/IndexedLists exact.
+- **Render sanity: PASS.** ingest contract assertion passed; 39 HTML pages
+  rendered from OUR walk-engine snapshot.element; link check clean.
+- **Committed fixture is STALE**: fixtures/package.db was built from 0.1.0
+  sources matching no commit. Phase-2 gates (iii)/(iv) REQUIRE regenerating
+  it from HEAD with the Java Publisher — first cycle-repo task of Phase 2.
+- **Cycle needs zero expansions** (ValueSet_Codes empty even in the Java
+  fixture) → **S4 is deferred behind S5/S6/S7**; promoted only when a corpus
+  (SDC/IPS) actually has expandable non-local ValueSets.
+- **Resources.Json byte-parity vs Java needs two engine-level behaviors we
+  deliberately do not have in Layer A**: (1) `constraint.xpath` present in
+  the R4-artifact shape the Publisher stores in package.db (our native-R5
+  internal drops it — this is stage-6 PROJECT territory), and (2)
+  version-pinning of inherited canonicals (`|4.0.1` on binding.valueSet /
+  type.profile/targetProfile) — which is LAYER B (task #17) arriving early.
+  DECISION: Phase 2 gates on (a) row parity vs the TS-own oracle and (b)
+  rendered-site parity; full Resources.Json byte-parity vs Java folds into
+  #17 / stage-6 work and is NOT a Phase-2 gate. (Amusing datum: on
+  type.extension valueUrl the walk engine matches Java and SUSHI is the
+  outlier — our snapshots are closer to Java than SUSHI's are.)
+- **rust_sushi gap found**: IG export emits `exampleBoolean:false` where
+  SUSHI/Java emit `exampleCanonical:<profile-url>` for profile-associated
+  examples (association from sushi-config). Drives ProfilePage "Examples"
+  lists. Isolated engine fix, schedule deliberately.
+
+**Phase-2 sequencing (revised by spike evidence):** (1) S7 emit + S5 rows
+first, gated on the TS-own oracle; (2) the snapshot deltas needed for
+RENDERED parity only; (3) rust_sushi exampleCanonical fix; (4) S6 augment
+(ingest.ts port — semantics already pinned by the spike); (5) S4 + tx client
+LAST and not on cycle's gate; BuildState ledger schema from day one.
+Fixture regen from HEAD precedes gates (iii)/(iv).
+
 ## 5. Notes / risks
 
 - **SQLite in Rust**: rusqlite (bundled C sqlite) is fine natively; it does
