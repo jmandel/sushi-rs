@@ -45,6 +45,30 @@ That is an oracle + golden + comparator, ready-made for our methodology.
 the hard 90%. The genuinely missing piece is **ValueSet expansion**; the rest
 is a SQLite-assembly step (projections + bookkeeping).
 
+## 2b. The ingest augmentation (package.db → site.db) — its inputs count too
+
+`ingest.ts` copies `package.db` to `temp/site-gen/site.db` and ADDS four
+tables (`Pages`, `Menu`, `SiteConfig`, `Assets`); `build.tsx` renders only
+from `site.db`. So the full replacement contract = package.db (§2) **plus the
+augmentation inputs**. We keep ingest as-is (it's part of the TS downstream),
+but a self-contained pipeline must ensure every one of these exists at
+ingest time:
+
+| Ingest input | → table | Produced by | Notes for our pipeline |
+|---|---|---|---|
+| `input/pagecontent/<slug>.md` (or .xml); first `# H1` overrides title | `Pages` | repo-authored | Page SET comes from the IG resource's `definition.page` tree (which WE generate) — a page listed there but missing on disk breaks ingest; keep the same fail-loud behavior |
+| `sushi-config.yaml` (whole file → `SiteConfig`; `menu:` → `Menu`) | `Menu`, `SiteConfig` | repo-authored | Same file rust_sushi compiles from; no new work, but note ingest reads the RAW yaml (incl. fields SUSHI ignores) — don't "clean" it |
+| `input/images/**` (recursive, mime by extension) | `Assets` | repo-authored | pass-through |
+| `input/includes/<name>` — ONLY includes actually referenced by page markdown; nested text includes followed | `Assets` | repo-authored **+ build-generated**: the wrapper writes e.g. `sample-viewer-links.md` into includes BEFORE ingest | ⚠️ ordering dependency: any generated includes must be materialized before ingest runs. In cycle, that's the wrapper's job (viewer build); our pipeline orchestration must preserve the slot |
+| `input/images-source/<name>.plantuml` → rendered SVG when a referenced `.svg` is missing | `Assets` | repo-authored source + **PlantUML jar (Maven fetch) + `java -jar`** | ⚠️ the one ingest path that reintroduces Java + network. Mitigations: pre-render SVGs into `input/images/` in CI (jar never triggers), commit rendered SVGs, or swap ingest to a non-Java plantuml renderer later. Decide per-repo; for cycle a pre-render step is trivial |
+| env knobs: `PKG_DB`, `CONFIG`, `SITE_LIQUID_ASSET_DIRS`, `PLANTUML_JAR` | — | wrapper | our orchestration sets `PKG_DB` to the Rust-produced DB; the rest keep defaults |
+
+Wrapper-level site assets that are NOT ingest inputs but ARE final-site
+inputs (copied after render): viewer bundles, sample SHL files, `skill.zip`,
+`CNAME`, `404.html`, `site-gen/project/package-list.json`, and the
+`output/qa*` cosmetic copies (Java-QA only; drop or stub when no Java run
+exists — decide what replaces the QA page in a Rust-only build).
+
 ## 3. The expansion gap — options
 
 1. **Pluggable tx client** (recommended): the producer calls `$expand` on a
@@ -98,6 +122,11 @@ C deferred.
 - The committed `site-gen/fixtures/package.db` + `compare.ts` make this
   project oracle-gated end to end — same methodology, much smaller scope than
   the snapshot rework.
+- **A Rust-only build has two residual Java touchpoints to plan around** (both
+  ingest/wrapper-side, not renderer-side): PlantUML rendering (pre-render SVGs
+  to avoid) and the `output/qa*` copies (no Java publisher run → no QA report;
+  decide replacement or drop). Neither blocks Option A/B — both have trivial
+  mitigations — but a "zero-Java CI" claim isn't true until they're handled.
 
 ## 6. Sequencing
 
