@@ -231,6 +231,11 @@ impl Renderer {
                     out.push_str(raw);
                 } else {
                     let norm = normalize_html_block(raw);
+                    // kramdown's block-start regex consumes the opening line's
+                    // leading indent, so strip leading whitespace on the first
+                    // line only; interior lines keep their indentation. Trailing
+                    // whitespace on the final line is trimmed.
+                    let norm = norm.trim_start_matches([' ', '\t']);
                     out.push_str(norm.trim_end_matches([' ', '\t']));
                 }
             }
