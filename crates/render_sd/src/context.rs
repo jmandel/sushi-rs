@@ -46,6 +46,33 @@ pub struct Resolved {
     /// True when the resource was fetched from a terminology server
     /// (`render_external_link` userdata in the publisher) -> external.png flag.
     pub external: bool,
+    /// Source-package metadata (publisher `Resource.getSourcePackage()` =
+    /// PackageInformation) when resolved from a dependency package. None for
+    /// own-IG resources (the publisher gives those the IG's own package — the
+    /// tx Source-cell "This IG" branch keys off the RELATIVE webPath before
+    /// package identity, so None is behavior-equivalent) and tx-cache externals.
+    pub pkg: Option<PkgMeta>,
+    /// The terminology server base (`render_external_link` userdata value) when
+    /// `external` — e.g. "https://tx.fhir.org/r4".
+    pub tx_server: Option<String>,
+}
+
+/// Publisher `PackageInformation` subset (id/canonical/title/version/web) for
+/// the tx Source-cell attribution (psdr getSourcePackageName/presentVersion +
+/// txItem source branch).
+#[derive(Debug, Clone)]
+pub struct PkgMeta {
+    /// package id (package.json `name`, e.g. "hl7.terminology.r4").
+    pub id: String,
+    /// package.json `canonical` (the getSourcePackageName switch key).
+    pub canonical: Option<String>,
+    /// package.json `title` (PackageInformation.getName()).
+    pub title: Option<String>,
+    /// package version.
+    pub version: String,
+    /// package web base (package.json `url` via fixPackageUrl) —
+    /// PackageInformation.getWeb(), the Source-cell link.
+    pub web: String,
 }
 
 impl Resolved {
@@ -61,6 +88,12 @@ impl Resolved {
 struct PkgEntry {
     base_url: String,
     version: String,
+    /// package.json `name` (the package id).
+    id: String,
+    /// package.json `canonical`.
+    canonical: Option<String>,
+    /// package.json `title` (PackageInformation.getName()).
+    title: Option<String>,
     /// The IG's fhirVersion-matched core package (the "master" package —
     /// PackageInformation.isMaster; its CodeSystem/ValueSet/base-SD copies own
     /// `masterDefinitions`, CanonicalResourceManager.java:394-400).
@@ -167,6 +200,8 @@ impl IgContext {
                         derivation: v.get("derivation").and_then(|x| x.as_str()).map(String::from),
                         file: Some(p.clone()),
                         external: false,
+                        pkg: None,
+                        tx_server: None,
                     },
                 );
             }
@@ -347,6 +382,8 @@ impl IgContext {
                                 derivation,
                                 file: Some(fpath),
                                 external: false,
+                                pkg: Some(pkg_meta(pkg)),
+                                tx_server: None,
                             });
                             self.cache.borrow_mut().insert(key, out.clone());
                             return out;
@@ -414,6 +451,8 @@ impl IgContext {
                     derivation,
                     file: Some(fpath),
                     external: false,
+                    pkg: Some(pkg_meta(pkg)),
+                    tx_server: None,
                 };
                 // Highest RESOURCE version wins (CanonicalResourceManager
                 // sort); tie -> highest PACKAGE version (the golden picks
@@ -468,6 +507,8 @@ impl IgContext {
                             derivation: None,
                             file: Some(file.clone()),
                             external: true,
+                            pkg: None,
+                            tx_server: Some(server.clone()),
                         });
                     }
                 }
@@ -700,6 +741,9 @@ fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
     let pj: Value =
         serde_json::from_str(&std::fs::read_to_string(pdir.join("package.json")).ok()?).ok()?;
     let base_url = fix_package_url(pj.get("url").and_then(|x| x.as_str())?);
+    let pkg_id = pj.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let pkg_canonical = pj.get("canonical").and_then(|x| x.as_str()).map(String::from);
+    let pkg_title = pj.get("title").and_then(|x| x.as_str()).map(String::from);
     let mut files = HashMap::new();
     if let Ok(text) = std::fs::read_to_string(pdir.join(".index.json")) {
         if let Ok(idx) = serde_json::from_str::<Value>(&text) {
@@ -744,11 +788,25 @@ fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
     Some(PkgEntry {
         base_url,
         version: ver.to_string(),
+        id: pkg_id,
+        canonical: pkg_canonical,
+        title: pkg_title,
         is_master: false,
         files,
         dir: pdir.to_path_buf(),
         spec_paths,
     })
+}
+
+/// PackageInformation view of a loaded package (tx Source-cell attribution).
+fn pkg_meta(pkg: &PkgEntry) -> PkgMeta {
+    PkgMeta {
+        id: pkg.id.clone(),
+        canonical: pkg.canonical.clone(),
+        title: pkg.title.clone(),
+        version: pkg.version.clone(),
+        web: pkg.base_url.clone(),
+    }
 }
 
 fn read_meta_source(path: &Path) -> Option<String> {

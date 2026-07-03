@@ -20,14 +20,14 @@ use crate::sdmodel::Sd;
 // td.ah(url)). We build over render_xhtml's low-level add_tag/add_text.
 // ---------------------------------------------------------------------------
 
-fn el(name: &str) -> XhtmlNode {
+pub(crate) fn el(name: &str) -> XhtmlNode {
     // makeTag semantics: sets notPretty for the inline element set (b, code, a,
     // span, br, ...) so the composer's pretty path matches fhir-core byte-for-byte.
     XhtmlNode::new_tag(name)
 }
 
 /// `XhtmlNode.tx(text)` — appends a text node child, returns self.
-fn tx(parent: &mut XhtmlNode, text: &str) {
+pub(crate) fn tx(parent: &mut XhtmlNode, text: &str) {
     parent.add_text(text.to_string());
 }
 
@@ -35,7 +35,7 @@ fn tx(parent: &mut XhtmlNode, text: &str) {
 /// (xml=false, pretty=true) => HTML pretty, via the `compose(XhtmlNodeList)`
 /// overload (no breakBlocksWithLines). Used by invOldMode/tx/txDiff (psdr:1262,
 /// 837, 890).
-fn compose_children_html_pretty(div: &XhtmlNode) -> String {
+pub(crate) fn compose_children_html_pretty(div: &XhtmlNode) -> String {
     let mut c = XhtmlComposer::new(Config::html_pretty());
     c.compose_nodes(div.child_nodes())
 }

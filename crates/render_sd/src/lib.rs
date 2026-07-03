@@ -23,6 +23,7 @@ pub mod publisher_markdown;
 pub mod sdmodel;
 pub mod span;
 pub mod table;
+pub mod tx;
 
 pub use sdmodel::Sd;
 
