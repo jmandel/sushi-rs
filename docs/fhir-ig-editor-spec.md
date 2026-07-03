@@ -112,11 +112,12 @@ expansions" path against a user-supplied tx endpoint is a later feature.
   table, **snapshot element tree** (the walk engine's output), diagnostics
   panel, build timings. This is already more than any in-browser FSH tool
   shows today.
-- **M2 (stretch, after cycle Phase 2):** single-page site preview — run the
-  cycle site-gen renderer against an in-browser site.db (requires the Rust
-  site.db producer compiled into the wasm build + a wa-sqlite or JS-side row
-  store for `core/db.ts`). Explicitly NOT in the demo bar; tracked, not
-  promised.
+- **M2 (in the demo bar — decided 2026-07-02):** site preview — run the
+  cycle site-gen renderer against an in-browser site.db (the Rust site.db
+  producer, task #15, is a PREREQUISITE of this repo; compiled into the wasm
+  build with a wa-sqlite or JS-side row store for `core/db.ts`). The demo
+  shows the actual rendered IG pages updating on edit, not just resource
+  views.
 
 ## 8. CI / deploy (`pages.yml`)
 
@@ -136,7 +137,7 @@ expansions" path against a user-supplied tx endpoint is a later feature.
 |---|---|---|
 | M0 | Repo scaffold, submodules pinned, CI deploys a hello-world page that instantiates the wasm engine and compiles one FSH string | Pages URL up; engine version + build time shown |
 | M1 | Full demo: open cycle IG, edit FSH, live diagnostics + JSON + snapshot tree; offline after first load | Edit→feedback < 1s for cycle; wasm outputs byte-match native for the whole cycle IG (CI assert); works in Chrome+Firefox |
-| M2 | Site-page preview (stretch) | one rendered page matches the real site build |
+| M2 | Site preview (in demo bar) | rendered pages match the real site build; page updates on edit touch only read-set-dirty pages (Ledger 2) |
 
 ## 10. Dependencies & sequencing
 
@@ -144,8 +145,8 @@ expansions" path against a user-supplied tx endpoint is a later feature.
   P2 `wasm_api` + wasm parity harness. The editor repo consumes releases of
   these via submodule bump — it never forks engine code.
 - Order per REWORK-PLAN §7 roadmap: cutover → main merge → perf/clarity →
-  wasm P0-P2 (sushi-rs) → **this repo M0-M1** (task #16). Cycle site.db
-  producer (task #15) is independent until M2.
+  wasm P0-P2 (sushi-rs) + **cycle site.db producer (task #15, PREREQUISITE)**
+  → this repo M0-M2 (task #16).
 
 ## 11. Risks
 

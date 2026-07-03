@@ -232,6 +232,7 @@ boundary. Revisit only when an actual page needs `{% sql %}` over them.
 ## 6. Sequencing
 
 After the post-rework roadmap's perf/clarity pass (task #12). Independent of
-the WASM demo (#13); run it after #13 unless priorities change. Rough
+the WASM P0 (#13) and a PREREQUISITE of the editor demo repo (#16, decided
+2026-07-02 — the demo's site preview depends on this producer). Rough
 effort: Phase 1 spike ~1-2 days; Phase 2 ~1.5 weeks including gates and the
 renderer ledger.
