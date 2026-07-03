@@ -63,6 +63,18 @@ fn render(
             let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
             b
         }
+        "snapshot-by-mustsupport" => {
+            let mut cfg = TableConfig::snapshot_by_mustsupport(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
+        "snapshot-by-mustsupport-all" => {
+            let mut cfg = TableConfig::snapshot_by_mustsupport_all(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
         _ => return None,
     };
     Some(wrap_raw(&body))
@@ -220,6 +232,13 @@ fn main() {
                 std::process::exit(2);
             }
         };
+        // Optional: dump ours + golden for one id (debug). --dump <id>
+        if let Some(pos) = args.iter().position(|a| a == "--dump") {
+            if args.get(pos + 1).map(|s| s.as_str()) == Some(id.as_str()) {
+                std::fs::write("/tmp/claude-1000/-home-jmandel-hobby/33fc8265-3f9a-4a4b-8eaf-39a38ad53b3d/scratchpad/dump-ours.xhtml", &ours).ok();
+                std::fs::write("/tmp/claude-1000/-home-jmandel-hobby/33fc8265-3f9a-4a4b-8eaf-39a38ad53b3d/scratchpad/dump-gold.xhtml", &golden).ok();
+            }
+        }
         total += 1;
         if ours == golden {
             pass += 1;

@@ -32,6 +32,16 @@ fn harvest_uuid(ig: &str) -> String {
 }
 
 fn check(ig: &str, id: &str, active_tables: bool) {
+    check_kind(ig, id, active_tables, "snapshot", |u| TableConfig::snapshot(u));
+}
+
+fn check_kind(
+    ig: &str,
+    id: &str,
+    active_tables: bool,
+    suffix: &str,
+    mk: impl Fn(&str) -> TableConfig,
+) {
     let (own, pkgs, txc): (String, String, Option<String>) = match ig {
         "us-core" => (
             format!("{}/us-core/output", F0),
@@ -57,16 +67,16 @@ fn check(ig: &str, id: &str, active_tables: bool) {
     );
     let sd = Sd::from_json(&std::fs::read_to_string(&sd_path).unwrap()).unwrap();
     let def_file = format!("StructureDefinition-{}-definitions.html", sd.id());
-    let mut cfg = TableConfig::snapshot(&harvest_uuid(ig));
+    let mut cfg = mk(&harvest_uuid(ig));
     cfg.active_tables = active_tables;
     let (body, _gaps) = render_table(&sd, &ctx, &def_file, &cfg);
     let ours = wrap_raw(&body);
     let golden = std::fs::read_to_string(format!(
-        "{}/render-goldens/{}/fragments/StructureDefinition-{}-snapshot.xhtml",
-        REPO, ig, id
+        "{}/render-goldens/{}/fragments/StructureDefinition-{}-{}.xhtml",
+        REPO, ig, id, suffix
     ))
     .unwrap();
-    assert_eq!(ours, golden, "snapshot parity failed for {}/{}", ig, id);
+    assert_eq!(ours, golden, "{} parity failed for {}/{}", suffix, ig, id);
 }
 
 #[test]
@@ -92,4 +102,37 @@ fn snapshot_plan_net_healthcareservice() {
 #[test]
 fn snapshot_plan_net_organization() {
     check("plan-net", "plannet-Organization", true);
+}
+
+#[test]
+fn by_mustsupport_us_core_patient() {
+    check_kind(
+        "us-core",
+        "us-core-patient",
+        false,
+        "snapshot-by-mustsupport",
+        TableConfig::snapshot_by_mustsupport,
+    );
+}
+
+#[test]
+fn by_mustsupport_us_core_medicationrequest() {
+    check_kind(
+        "us-core",
+        "us-core-medicationrequest",
+        false,
+        "snapshot-by-mustsupport",
+        TableConfig::snapshot_by_mustsupport,
+    );
+}
+
+#[test]
+fn by_mustsupport_plan_net_organization() {
+    check_kind(
+        "plan-net",
+        "plannet-Organization",
+        true,
+        "snapshot-by-mustsupport",
+        TableConfig::snapshot_by_mustsupport,
+    );
 }

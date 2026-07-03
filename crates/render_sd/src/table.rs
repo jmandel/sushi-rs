@@ -70,6 +70,28 @@ impl TableConfig {
             ..TableConfig::snapshot(run_uuid)
         }
     }
+    /// `byMustSupport()` (publisher SDR:552): generateTable on the MS-filtered
+    /// element copy with diff=F, snapshot=T, allInv=F, mustSupport=T, prefix
+    /// "m"/"ma", idSfx M/MA.
+    pub fn snapshot_by_mustsupport(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            diff: false,
+            snapshot: true,
+            all_invariants: false,
+            must_support: true,
+            prefix: "m".into(),
+            id_sfx: "M".into(),
+            run_uuid: run_uuid.into(),
+            active_tables: false,
+        }
+    }
+    pub fn snapshot_by_mustsupport_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "ma".into(),
+            id_sfx: "MA".into(),
+            ..TableConfig::snapshot_by_mustsupport(run_uuid)
+        }
+    }
 }
 
 /// Render one SD table fragment body (unwrapped).
@@ -104,11 +126,33 @@ pub fn render_table(
     );
     model.active_tables = cfg.active_tables;
 
-    let all: Vec<Ed> = sd.snapshot_elements();
+    // Element list. For byMustSupport the publisher renders a `sdCopy` whose
+    // snapshot is `getMustSupportElements()` (MS elements + ancestors, with
+    // example cleared and non-MS elements dimmed via render_opaque + binding/
+    // constraints cleared). We build owned modified element JSON for that case.
+    let owned: Vec<serde_json::Value>;
+    let all: Vec<Ed> = if cfg.must_support {
+        owned = must_support_elements(sd);
+        owned.iter().map(Ed::new).collect()
+    } else {
+        Vec::new()
+    };
+    let borrowed: Vec<Ed> = if cfg.must_support {
+        Vec::new()
+    } else {
+        sd.snapshot_elements()
+    };
+    let all: &[Ed] = if cfg.must_support { &all } else { &borrowed };
+    // render_opaque ids (SDR:996): non-MS elements below the root in the MS view.
+    let opaque_ids: std::collections::HashSet<String> = if cfg.must_support {
+        owned_opaque_ids(sd)
+    } else {
+        std::collections::HashSet::new()
+    };
     let mut t = TCtx {
         ctx,
         sd,
-        all: &all,
+        all,
         cfg,
         gen: &gen,
         anchors: HashMap::new(),
@@ -118,10 +162,11 @@ pub fn render_table(
             Some(format!("{}#", def_file))
         },
         core_path,
-        is_constraint_mode: sd.derivation() == "constraint" && uses_must_support(&all),
+        is_constraint_mode: sd.derivation() == "constraint" && uses_must_support(all),
         key_rows: Vec::new(),
         gaps: Vec::new(),
         merged_pattern_values: HashMap::new(),
+        opaque_ids,
     };
 
     let mut rows: Vec<Row> = Vec::new();
@@ -150,6 +195,8 @@ struct TCtx<'a> {
     /// `mergedPatternValues` (SDR:611, 2927-2942): element index (in `all`) ->
     /// merged pattern child values.
     merged_pattern_values: HashMap<usize, Vec<serde_json::Value>>,
+    /// Element ids carrying `render_opaque` (byMustSupport non-MS rows, SDR:996).
+    opaque_ids: std::collections::HashSet<String>,
 }
 
 struct UnusedTracker {
@@ -260,6 +307,11 @@ impl<'a> TCtx<'a> {
         } else {
             row.set_icon("icon_resource.png", Some("Resource".into()));
         }
+        // render_opaque dimming (SDR:996): byMustSupport non-MS rows.
+        if self.opaque_ids.contains(element.id()) {
+            row.opacity = Some("0.5".into());
+        }
+
         let types_row = types.len() > 1 && !all_are_reference(&types);
 
         let mut used = UnusedTracker { used: true };
@@ -799,9 +851,16 @@ impl<'a> TCtx<'a> {
             }
             return c;
         }
+        let ms_mode = self.cfg.must_support;
+        let all_types_ms = all_types_must_support(types);
         let mut first = true;
         for t in types {
-            // mustSupportMode=false -> all types pass
+            // mustSupportMode type filter (SDR:2375): show a type iff the mode is
+            // off, OR no types are MS-marked (allTypesMustSupport), OR this type
+            // is MS-marked.
+            if ms_mode && !all_types_ms && !type_is_must_support_full(t) {
+                continue;
+            }
             if first {
                 first = false;
             } else {
@@ -838,7 +897,7 @@ impl<'a> TCtx<'a> {
                     ));
                 }
                 // " S" flag when isMustSupportDirect(t) && e.mustSupport
-                if type_is_must_support(t) && e.must_support() {
+                if !ms_mode && type_is_must_support(t) && e.must_support() {
                     c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                     c.add_styled_text(
                         Some("This type must be supported".into()),
@@ -850,15 +909,20 @@ impl<'a> TCtx<'a> {
                     );
                 }
                 c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
+                let tp_all_ms = all_canonicals_must_support(t, &t.target_profiles());
                 let mut tfirst = true;
                 for u in t.target_profiles() {
+                    // targetProfile MS filter (SDR:2406).
+                    if ms_mode && !tp_all_ms && !canonical_is_must_support(t, u) {
+                        continue;
+                    }
                     if tfirst {
                         tfirst = false;
                     } else {
                         c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
                     self.gen_target_link(&mut c, t, u);
-                    if canonical_is_must_support(t, u) && e.must_support() {
+                    if !ms_mode && canonical_is_must_support(t, u) && e.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                         // SDR:2414: targetProfile S also uses STRUC_DEF_TYPE_SUPP.
                         c.add_styled_text(
@@ -880,8 +944,13 @@ impl<'a> TCtx<'a> {
                 && (t.working_code() != "Extension" || is_profiled_type(&t.profiles()))
             {
                 // profiled type (SDR:2428-2461)
+                let pf_all_ms = all_canonicals_must_support(t, &t.profiles());
                 let mut pfirst = true;
                 for p in t.profiles() {
+                    // profile MS filter (SDR:2435).
+                    if ms_mode && !pf_all_ms && !canonical_is_must_support(t, p) {
+                        continue;
+                    }
                     if pfirst {
                         pfirst = false;
                     } else {
@@ -908,7 +977,7 @@ impl<'a> TCtx<'a> {
                             None,
                         ));
                     }
-                    if canonical_is_must_support(t, p) && e.must_support() {
+                    if !ms_mode && canonical_is_must_support(t, p) && e.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                         c.add_styled_text(
                             Some("This profile must be supported".into()),
@@ -944,7 +1013,7 @@ impl<'a> TCtx<'a> {
                 } else {
                     c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
                 }
-                if type_is_must_support(t) && e.must_support() {
+                if !ms_mode && type_is_must_support(t) && e.must_support() {
                     c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                     c.add_styled_text(
                         Some("This type must be supported".into()),
@@ -1083,9 +1152,15 @@ impl<'a> TCtx<'a> {
         c
     }
 
-    /// `makeChoiceRows` (SDR:3362), mustSupportMode=false.
+    /// `makeChoiceRows` (SDR:3362). In mustSupportMode a type is shown iff the
+    /// mode is off, no types are MS-marked, or this type is MS (SDR:3376).
     fn make_choice_rows(&mut self, sub_rows: &mut Vec<Row>, element: Ed<'a>, types: &[TypeRef<'a>]) {
+        let ms_mode = self.cfg.must_support;
+        let all_types_ms = all_types_must_support(types);
         for tr in types {
+            if ms_mode && !all_types_ms && !type_is_must_support_full(tr) {
+                continue;
+            }
             let mut used = false;
             let mut choicerow = Row::new();
             choicerow.set_id(element.path().to_string());
@@ -1132,7 +1207,7 @@ impl<'a> TCtx<'a> {
                     ));
                 }
                 // SDR:3393-3396: type-level S before "(".
-                if type_is_must_support(tr) && element.must_support() {
+                if !ms_mode && type_is_must_support(tr) && element.must_support() {
                     c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                     c.add_styled_text(
                         Some("This type must be supported".into()),
@@ -1144,14 +1219,19 @@ impl<'a> TCtx<'a> {
                     );
                 }
                 c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
+                let ctp_all_ms = all_canonicals_must_support(tr, &tr.target_profiles());
                 let mut first = true;
                 for rt in tr.target_profiles() {
+                    // targetProfile MS filter (SDR:3411).
+                    if ms_mode && !ctp_all_ms && !canonical_is_must_support(tr, rt) {
+                        continue;
+                    }
                     if !first {
                         c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
                     self.gen_target_link(&mut c, tr, rt);
                     // SDR:3405-3408: per-target S.
-                    if canonical_is_must_support(tr, rt) && element.must_support() {
+                    if !ms_mode && canonical_is_must_support(tr, rt) && element.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                         c.add_styled_text(
                             Some("This target must be supported".into()),
@@ -1191,7 +1271,7 @@ impl<'a> TCtx<'a> {
                             None,
                         );
                         // SDR:3435-3438: " S" when the type is must-support.
-                        if type_is_must_support(tr) && element.must_support() {
+                        if !ms_mode && type_is_must_support(tr) && element.must_support() {
                             c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                             c.add_styled_text(
                                 Some("This target must be supported".into()),
@@ -1223,7 +1303,7 @@ impl<'a> TCtx<'a> {
                             None,
                         );
                         // SDR:3447-3450: " S" when the type is must-support.
-                        if type_is_must_support(tr) && element.must_support() {
+                        if !ms_mode && type_is_must_support(tr) && element.must_support() {
                             c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                             c.add_styled_text(
                                 Some("This type must be supported".into()),
@@ -1691,12 +1771,14 @@ impl<'a> TCtx<'a> {
                 val.add_style("color: darkgreen");
                 c.pieces.push(val);
                 let (ty, _) = definition.pattern().unwrap();
+                // skipnoValue = mustSupportOnly (SDR:2085): in the MS view,
+                // empty pattern properties are suppressed.
                 self.gen_fixed_value(
                     &mut partner_rows,
                     ty,
                     v,
                     true,
-                    false,
+                    self.cfg.must_support,
                     Some(definition.path().to_string()),
                     Some(definition.id().to_string()),
                 );
@@ -2771,6 +2853,132 @@ fn gen_cardinality_impl(min: Option<i64>, max: Option<&str>, tracker: &mut Unuse
 
 pub fn is_profiled_type(profiles: &[&str]) -> bool {
     profiles.iter().any(|p| p.contains(':'))
+}
+
+/// The set of element ids in the `getMustSupport()` map (publisher SDR:602 →
+/// scanForMustSupport): every MS element plus all its ancestors. The root
+/// (empty parent list) is always included.
+fn must_support_id_set(sd: &Sd) -> std::collections::HashSet<String> {
+    let elems = sd.snapshot_elements();
+    let mut set = std::collections::HashSet::new();
+    // scanForMustSupport(element, parents): if parents empty OR element is MS,
+    // add element + all parents. Recurse into getChildren.
+    fn scan(
+        all: &[Ed<'_>],
+        element: Ed<'_>,
+        parents: &[Ed<'_>],
+        set: &mut std::collections::HashSet<String>,
+    ) {
+        if parents.is_empty() || (element.has_must_support() && element.must_support()) {
+            set.insert(element.id().to_string());
+            for p in parents {
+                set.insert(p.id().to_string());
+            }
+        }
+        let children = get_children(all, element);
+        for child in children {
+            let mut np: Vec<Ed> = parents.to_vec();
+            np.push(element);
+            scan(all, child, &np, set);
+        }
+    }
+    if let Some(first) = elems.first() {
+        scan(&elems, *first, &[], &mut set);
+    }
+    set
+}
+
+/// `getMustSupportElements()` (publisher SDR:562): the snapshot elements whose
+/// id is in the MS set, each COPIED with example cleared and — for non-MS
+/// elements below the root — binding/constraint cleared (render_opaque dimming
+/// handled separately). mustSupport flag itself is cleared on every copy.
+fn must_support_elements(sd: &Sd) -> Vec<serde_json::Value> {
+    let ms = must_support_id_set(sd);
+    let elems = sd.snapshot_elements();
+    let mut out = Vec::new();
+    for ed in &elems {
+        if !ms.contains(ed.id()) {
+            continue;
+        }
+        let mut copy = ed.v.clone();
+        let obj = copy.as_object_mut().unwrap();
+        obj.remove("example");
+        let is_ms = ed.has_must_support() && ed.must_support();
+        if !is_ms {
+            // render_opaque is gated on path.contains(".") (owned_opaque_ids),
+            // but binding + constraint are cleared for ALL non-MS copies
+            // (SDR:574-577), including the root.
+            obj.remove("binding");
+            obj.remove("constraint");
+        }
+        obj.remove("mustSupport");
+        obj.insert("mustSupport".into(), serde_json::Value::Bool(false));
+        out.push(copy);
+    }
+    out
+}
+
+/// The ids that get `render_opaque` in the MS view (SDR:574): non-MS elements
+/// below the root that are in the MS set (kept as ancestors of MS elements).
+fn owned_opaque_ids(sd: &Sd) -> std::collections::HashSet<String> {
+    let ms = must_support_id_set(sd);
+    let elems = sd.snapshot_elements();
+    let mut out = std::collections::HashSet::new();
+    for ed in &elems {
+        if !ms.contains(ed.id()) {
+            continue;
+        }
+        let is_ms = ed.has_must_support() && ed.must_support();
+        if !is_ms && ed.path().contains('.') {
+            out.insert(ed.id().to_string());
+        }
+    }
+    out
+}
+
+/// `isMustSupport(TypeRefComponent)` (SDR): the type ext is true, OR any
+/// profile/targetProfile canonical carries the type-must-support ext.
+fn type_is_must_support_full(t: &TypeRef<'_>) -> bool {
+    if type_is_must_support(t) {
+        return true;
+    }
+    for u in t.profiles() {
+        if canonical_is_must_support(t, u) {
+            return true;
+        }
+    }
+    for u in t.target_profiles() {
+        if canonical_is_must_support(t, u) {
+            return true;
+        }
+    }
+    false
+}
+
+/// `allProfilesMustSupport(profiles)` (SDR): returns true when NO canonical in
+/// the list is MS-marked (`!all && !any`).
+fn all_canonicals_must_support(t: &TypeRef<'_>, canonicals: &[&str]) -> bool {
+    let mut all = true;
+    let mut any = false;
+    for u in canonicals {
+        let ms = canonical_is_must_support(t, u);
+        all = all && ms;
+        any = any || ms;
+    }
+    !all && !any
+}
+
+/// `allTypesMustSupport(e)` (SDR): returns true when NO type is MS-marked
+/// (`!all && !any`) — the "the MS filter shouldn't apply" case.
+fn all_types_must_support(types: &[TypeRef<'_>]) -> bool {
+    let mut all = true;
+    let mut any = false;
+    for t in types {
+        let ms = type_is_must_support_full(t);
+        all = all && ms;
+        any = any || ms;
+    }
+    !all && !any
 }
 
 /// isMustSupportDirect(t)/isMustSupport(t): the type carries the
