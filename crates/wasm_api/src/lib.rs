@@ -64,7 +64,12 @@ impl PackageSource for SharedBundle {
 
 #[derive(Default)]
 struct Engine {
-    bundle: Option<SharedBundle>,
+    /// The bundle source packages are mounted into, wrapped in an `Rc` so each
+    /// `compile`/`snapshot` call shares the (large) mounted bytes with a cheap
+    /// clone. `mount_bundles` appends lazily-fetched packages by `Rc::make_mut`
+    /// (copy-on-write only when the Rc is uniquely held, which it is between
+    /// calls) — so per-keystroke compiles never copy the bundle bytes.
+    bundle: Option<Rc<BundleSource>>,
     cache_root: PathBuf,
     /// The `<id>#<ver>` labels of the packages mounted, in mount order — the
     /// package list a `PackageContext` loads.
@@ -154,25 +159,79 @@ pub fn init(bundles_json: &str) -> Result<u32, JsError> {
         .map_err(|e| JsError::new(&format!("init: bad bundles JSON: {e}")))?;
     let mut src = BundleSource::new();
     let mut labels = Vec::new();
-    for pkg in &parsed {
-        let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(pkg.files.len());
-        for (name, b64) in &pkg.files {
-            let bytes = base64_decode(b64)
-                .map_err(|e| JsError::new(&format!("init: bad base64 for {name}: {e}")))?;
-            entries.push((name.clone(), bytes));
-        }
-        src.mount_package(&pkg.label, entries);
-        labels.push(pkg.label.clone());
-    }
+    mount_into(&mut src, &parsed, &mut labels, "init")?;
     let cache_root = src.cache_root().to_path_buf();
     ENGINE.with(|e| {
         let mut e = e.borrow_mut();
-        e.bundle = Some(SharedBundle(Rc::new(src)));
+        e.bundle = Some(Rc::new(src));
         e.cache_root = cache_root;
         e.packages = labels;
         e.last_compiled.clear();
     });
     Ok(parsed.len() as u32)
+}
+
+/// Mount ADDITIONAL package bundles into the already-initialized engine (lazy
+/// per-bundle loading, editor spec §1). Bundles whose label is already mounted
+/// are skipped (idempotent). Returns the total package count after mounting.
+///
+/// This is the additive seam the editor's cold-start optimization needs: `init`
+/// mounts only the compile-critical closure (fast first paint); the heavy,
+/// snapshot-only `r5.core` bundle is fetched + `mount_bundles`'d on first
+/// snapshot / site-build. Correctness is preserved — a snapshot is never run
+/// before its bundle is mounted (the editor gates that call on this returning).
+#[wasm_bindgen]
+pub fn mount_bundles(bundles_json: &str) -> Result<u32, JsError> {
+    set_panic_hook();
+    let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
+        .map_err(|e| JsError::new(&format!("mount_bundles: bad bundles JSON: {e}")))?;
+    ENGINE.with(|e| {
+        let mut e = e.borrow_mut();
+        // Work on a CLONE of the mounted state and only commit it back to ENGINE
+        // AFTER a successful mount — so a mid-mount error (e.g. bad base64 in a
+        // lazily-fetched bundle) leaves the engine's existing state intact rather
+        // than uninitialized. (Mirrors `init`, which builds locally then assigns.)
+        let mut src = (**e
+            .bundle
+            .as_ref()
+            .ok_or_else(|| JsError::new("mount_bundles: engine not initialized; call init() first"))?)
+        .clone();
+        let mut labels = e.packages.clone();
+        let already: std::collections::BTreeSet<String> = labels.iter().cloned().collect();
+        let fresh: Vec<BundleInput> = parsed
+            .into_iter()
+            .filter(|p| !already.contains(&p.label))
+            .collect();
+        // Fallible: on Err we return WITHOUT having touched `e.bundle`/`e.packages`.
+        mount_into(&mut src, &fresh, &mut labels, "mount_bundles")?;
+        // Commit only after success.
+        e.cache_root = src.cache_root().to_path_buf();
+        e.bundle = Some(Rc::new(src));
+        let total = labels.len() as u32;
+        e.packages = labels;
+        Ok(total)
+    })
+}
+
+/// Decode + mount each bundle's base64 files under its label. Appends newly
+/// mounted labels to `labels`.
+fn mount_into(
+    src: &mut BundleSource,
+    parsed: &[BundleInput],
+    labels: &mut Vec<String>,
+    who: &str,
+) -> Result<(), JsError> {
+    for pkg in parsed {
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(pkg.files.len());
+        for (name, b64) in &pkg.files {
+            let bytes = base64_decode(b64)
+                .map_err(|e| JsError::new(&format!("{who}: bad base64 for {name}: {e}")))?;
+            entries.push((name.clone(), bytes));
+        }
+        src.mount_package(&pkg.label, entries);
+        labels.push(pkg.label.clone());
+    }
+    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -332,6 +391,125 @@ pub fn generate_snapshot(input: &str) -> Result<String, JsError> {
         },
     };
     serde_json::to_string(&out).map_err(|e| JsError::new(&format!("serialize: {e}")))
+}
+
+// ---------------------------------------------------------------------------
+// expand_enumerable — tier-1 in-engine ValueSet expansion (spec §6 tier 1)
+// ---------------------------------------------------------------------------
+
+/// Expand a ValueSet's compose IN the engine, for the composes that are pure
+/// functions of IG content (enumerated codes, whole local CodeSystems, local-CS
+/// filters, nested enumerable references). A thin wrapper over
+/// [`compiler::terminology::expand_enumerable`] (the #21 recommended surface):
+/// no tx server, no external-system subsumption — a filter over content we do
+/// not hold locally returns the precise refusal the editor renders verbatim.
+///
+/// `valueset_json` is a FHIR `ValueSet` resource (the compiler's export body).
+/// `resources_json` is a JSON ARRAY of the IG-local + cached `ValueSet` /
+/// `CodeSystem` resources the compose may reference (the editor passes the last
+/// compile's conformance resources; a whole-package scan is unnecessary for the
+/// enumerable domain and would be wasteful per keystroke).
+///
+/// Returns a JSON string, one of:
+///   `{ "ok": true,  "expansion": { total, parameter?, contains[] },
+///      "usedCodeSystems": [{ "system", "version"? }, ...],
+///      "copyright": ["..."] }`
+///   `{ "ok": false, "notEnumerable": { component, index, system?, kind, reason } }`
+/// where `reason` is the exact single-line refusal string (spec §6: "shown
+/// verbatim as the needs-terminology-server state").
+#[wasm_bindgen]
+pub fn expand_enumerable(valueset_json: &str, resources_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    use compiler::terminology::{
+        expand_enumerable as expand, MapResolver, NotEnumerable, RefusalKind,
+    };
+
+    let vs: Value = serde_json::from_str(valueset_json)
+        .map_err(|e| JsError::new(&format!("expand_enumerable: bad ValueSet JSON: {e}")))?;
+
+    // `resources_json` may be an array (preferred) or an object map path->body
+    // (accepted for convenience — the editor's predefined map shape). Build the
+    // resolver from whatever `ValueSet`/`CodeSystem` resources are present.
+    let mut resolver = MapResolver::new();
+    let parsed: Value = if resources_json.trim().is_empty() {
+        Value::Array(Vec::new())
+    } else {
+        serde_json::from_str(resources_json)
+            .map_err(|e| JsError::new(&format!("expand_enumerable: bad resources JSON: {e}")))?
+    };
+    match parsed {
+        Value::Array(items) => {
+            for r in items {
+                resolver.insert(r);
+            }
+        }
+        Value::Object(map) => {
+            for (_k, r) in map {
+                resolver.insert(r);
+            }
+        }
+        _ => {
+            return Err(JsError::new(
+                "expand_enumerable: resources must be a JSON array or object",
+            ))
+        }
+    }
+
+    let out = match expand(&vs, &resolver) {
+        Ok(exp) => {
+            let expansion = exp.to_expansion_json();
+            // Lift used-codesystems out of the expansion.parameter for the
+            // editor's "code system versions" table (it also stays in parameter[]).
+            let used: Vec<Value> = expansion
+                .get("parameter")
+                .and_then(Value::as_array)
+                .map(|params| {
+                    params
+                        .iter()
+                        .filter(|p| p.get("name").and_then(Value::as_str) == Some("used-codesystem"))
+                        .filter_map(|p| p.get("valueUri").and_then(Value::as_str))
+                        .map(|uri| match uri.split_once('|') {
+                            Some((sys, ver)) => {
+                                serde_json::json!({ "system": sys, "version": ver })
+                            }
+                            None => serde_json::json!({ "system": uri }),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            serde_json::json!({
+                "ok": true,
+                "expansion": expansion,
+                "usedCodeSystems": used,
+                "copyright": exp.copyright(),
+            })
+        }
+        Err(ne @ NotEnumerable { .. }) => {
+            let kind = match ne.kind {
+                RefusalKind::ExternalSystemFilter => "ExternalSystemFilter",
+                RefusalKind::UnresolvableOrIncompleteSystem => "UnresolvableOrIncompleteSystem",
+                RefusalKind::UnresolvableValueSet => "UnresolvableValueSet",
+                RefusalKind::NestedNotEnumerable => "NestedNotEnumerable",
+                RefusalKind::UnsupportedLocalFilter => "UnsupportedLocalFilter",
+                RefusalKind::Malformed => "Malformed",
+                RefusalKind::CycleGuard => "CycleGuard",
+            };
+            serde_json::json!({
+                "ok": false,
+                "notEnumerable": {
+                    "component": ne.component,
+                    "index": ne.index,
+                    "system": ne.system,
+                    "kind": kind,
+                    // The verbatim single-line refusal (Display = "component[i]: reason").
+                    "reason": ne.reason,
+                    "display": ne.to_string(),
+                }
+            })
+        }
+    };
+    serde_json::to_string(&out)
+        .map_err(|e| JsError::new(&format!("expand_enumerable: serialize: {e}")))
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +741,9 @@ fn engine_source() -> Result<(SharedBundle, PathBuf, Vec<String>), JsError> {
             .bundle
             .clone()
             .ok_or_else(|| JsError::new("engine not initialized: call init(bundles) first"))?;
-        Ok((bundle, e.cache_root.clone(), e.packages.clone()))
+        // Cheap: `bundle` is an `Rc<BundleSource>` clone (refcount bump), so the
+        // mounted bytes are SHARED with the engine, never copied per compile call.
+        Ok((SharedBundle(bundle), e.cache_root.clone(), e.packages.clone()))
     })
 }
 

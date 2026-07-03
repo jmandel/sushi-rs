@@ -92,7 +92,7 @@ impl Default for BundleManifest {
 /// A read-only in-memory [`PackageSource`]. Holds every mounted file's bytes keyed
 /// by its full path under a synthetic cache root, plus the set of directories that
 /// exist (so `is_dir`/`read_dir` answer faithfully without a real FS).
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BundleSource {
     /// Synthetic cache root the mounted packages hang under. All the
     /// `<cache>/<id>#<ver>/package/...` paths the caller builds must join this
