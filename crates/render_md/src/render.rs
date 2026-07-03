@@ -4,6 +4,7 @@
 use crate::block::{parse_doc, Align, Block, BlockNode, ListItem};
 use crate::ial::Attrs;
 use crate::inline::{
+    normalize_open_tag,
     collect_footnote_refs, normalize_html_block, raw_text, render_inline,
 };
 use crate::util::{escape_html_attr, IdGen};
@@ -255,7 +256,7 @@ impl Renderer {
                 // kramdown consumes the `markdown="1"` attribute (it triggers
                 // re-parsing) and does NOT emit it. Also normalize the tag.
                 let cleaned = strip_markdown_attr(open_tag);
-                let open_norm = normalize_html_block(&cleaned);
+                let open_norm = normalize_open_tag(&cleaned);
                 out.push_str(&pad);
                 out.push_str(open_norm.trim_end());
                 out.push('\n');
@@ -277,7 +278,7 @@ impl Renderer {
                 // rendered at span level with newlines preserved verbatim; no
                 // nested block elements, no re-indentation.
                 let cleaned = strip_markdown_attr(open_tag);
-                let open_norm = normalize_html_block(&cleaned);
+                let open_norm = normalize_open_tag(&cleaned);
                 out.push_str(&pad);
                 out.push_str(open_norm.trim_end());
                 out.push_str(&render_inline(inner_text));

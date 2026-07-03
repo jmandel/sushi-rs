@@ -88,6 +88,18 @@ pub fn collect_footnote_refs(src: &str, order: &mut Vec<String>) {
 /// re-serialization: recognized tags get lowercased names and self-closing void
 /// tags get ` />`. Text, whitespace, comments and line structure are preserved
 /// verbatim (kramdown does NOT reindent raw HTML block content).
+/// Normalize a lone OPENING tag (e.g. the `<div ...>` of a markdown="1"
+/// element): tag re-serialization only, no auto-closing.
+pub fn normalize_open_tag(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().collect();
+    if let Some((norm, ni)) = try_raw_inline_html(&chars, 0) {
+        let rest: String = chars[ni..].iter().collect();
+        format!("{norm}{rest}")
+    } else {
+        raw.to_string()
+    }
+}
+
 pub fn normalize_html_block(raw: &str) -> String {
     let chars: Vec<char> = raw.chars().collect();
     let n = chars.len();
@@ -133,16 +145,14 @@ pub fn normalize_html_block(raw: &str) -> String {
                 let raw_tag: String = chars[i..ni].iter().collect();
                 if let Some((name, is_close, is_selfclose)) = inspect_tag(&raw_tag) {
                     if is_close {
-                        if stack.iter().any(|t| t == &name) {
-                            // matched open somewhere: pop to it
-                            while let Some(top) = stack.pop() {
-                                if top == name {
-                                    break;
-                                }
-                            }
+                        // kramdown (html.rb parse_raw_html): a closing tag
+                        // matches ONLY the CURRENT (innermost) open element;
+                        // otherwise it is "invalidly used" and becomes literal
+                        // text.
+                        if stack.last().map(|t| t == &name).unwrap_or(false) {
+                            stack.pop();
                             out.push_str(&norm);
                         } else {
-                            // unmatched close tag -> escape as literal text
                             out.push_str(&escape_html_text(&raw_tag));
                         }
                     } else {
@@ -186,6 +196,14 @@ pub fn normalize_html_block(raw: &str) -> String {
                 i += 1;
             }
         }
+    }
+    // kramdown auto-closes elements left open at the end of the raw HTML
+    // block ("Found no end tag ... auto-closing it"), emitting the close tags
+    // compactly at the end.
+    let trimmed_end = out.trim_end_matches([' ', '\t']).len();
+    out.truncate(trimmed_end);
+    while let Some(name) = stack.pop() {
+        out.push_str(&format!("</{name}>"));
     }
     out
 }
