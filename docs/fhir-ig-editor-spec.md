@@ -83,6 +83,17 @@ Views: diagnostics → Monaco markers + problems panel
   BuildState/ledger machinery from the cycle plan slots in here later
   unchanged — same engine, same hashes.
 
+## 4b. Package acquisition in the browser (revised 2026-07-03, task #32)
+
+Dependency RESOLUTION stays in Rust; the host is transport only. The interim
+build-time pinned closure (scripts/packages.list → bundle manifest) is
+DEBT: it bypasses the resolver and breaks arbitrary-IG loading on unpinned
+deps. Target: wasm `resolve_project_packages(config, registry_index)` →
+ordered PackageRequests (SUSHI-exact semantics; `latest` resolved against a
+host-SUPPLIED version index — data in, decisions in Rust) → JS fetches each
+bundle → mount_bundles → re-resolve to closure. packages.list becomes a
+resolver-generated lockfile. Missing packages = precise UI states.
+
 ## 5. Loading an IG (three modes, all → OPFS project)
 
 1. **Baked default (demo path):** the cycle IG's `input/**`, `sushi-config.yaml`
