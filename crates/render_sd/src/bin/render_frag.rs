@@ -28,16 +28,22 @@ fn main() {
     };
     let core_path = if args.len() > 4 { args[4].clone() } else { String::new() };
 
+    // us-core context hardwired for the debug bins (grid + snapshot).
+    let f0 = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds";
+    let dbg_ctx = || {
+        IgContext::load_with_txcache(
+            std::path::Path::new(&format!("{}/us-core/output", f0)),
+            std::path::Path::new(&format!("{}/us-core/.home/.fhir/packages", f0)),
+            Some(std::path::Path::new(&format!("{}/us-core/input-cache/txcache", f0))),
+        )
+    };
     let body = match kind.as_str() {
-        "grid" => render_grid(&sd, &def_file, &core_path),
+        "grid" => {
+            let ctx = dbg_ctx();
+            render_grid(&sd, &ctx, &def_file, &core_path)
+        }
         "snapshot" => {
-            // debug path: us-core context hardwired
-            let f0 = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds";
-            let ctx = IgContext::load_with_txcache(
-                std::path::Path::new(&format!("{}/us-core/output", f0)),
-                std::path::Path::new(&format!("{}/us-core/.home/.fhir/packages", f0)),
-                Some(std::path::Path::new(&format!("{}/us-core/input-cache/txcache", f0))),
-            );
+            let ctx = dbg_ctx();
             let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot(""));
             for g in gaps { eprintln!("gap: {}", g); }
             b

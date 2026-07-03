@@ -13,7 +13,6 @@
 
 pub mod context;
 pub mod grid;
-pub mod links;
 pub mod markdown;
 pub mod sdmodel;
 pub mod table;

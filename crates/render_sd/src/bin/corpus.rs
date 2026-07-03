@@ -50,7 +50,7 @@ fn render(
 ) -> Option<String> {
     let def_file = format!("StructureDefinition-{}-definitions.html", sd.id());
     let body = match kind {
-        "grid" => render_grid(sd, &def_file, ""),
+        "grid" => render_grid(sd, ctx?, &def_file, ""),
         "snapshot" => {
             let mut cfg = TableConfig::snapshot(run_uuid);
             cfg.active_tables = active_tables;

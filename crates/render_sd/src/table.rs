@@ -24,7 +24,7 @@ use render_tables::model::{Cell, Piece, Row, TableGenerationMode};
 use render_tables::{generate, Gen};
 use render_xhtml::{Config, XhtmlComposer};
 
-use crate::context::{IgContext, Resolved};
+use crate::context::{strip_version, BindingRes, IgContext, Resolved};
 use crate::markdown;
 use crate::sdmodel::{Ed, Sd, TypeRef};
 
@@ -2286,103 +2286,7 @@ impl<'a> TCtx<'a> {
 
     /// `resolveBinding` (IGKnowledgeProvider:587-701).
     fn resolve_binding(&mut self, vs_ref: &str) -> BindingRes {
-        if vs_ref.is_empty() {
-            return BindingRes {
-                url: Some("terminologies.html#unbound".into()),
-                display: "(unbound)".into(),
-                uri: None,
-                external: false,
-            };
-        }
-        // v3 special (branch 1)
-        if let Some(rest) = vs_ref.strip_prefix("http://hl7.org/fhir/ValueSet/v3-") {
-            return BindingRes {
-                url: Some(format!("http://hl7.org/fhir/R4/v3/{}/vs.html", rest)),
-                display: rest.to_string(),
-                uri: Some(vs_ref.to_string()),
-                external: false,
-            };
-        }
-        if let Some(rest) = vs_ref.strip_prefix("http://hl7.org/fhir/ValueSet/v2-") {
-            return BindingRes {
-                url: Some(format!("http://hl7.org/fhir/R4/v2/{}/index.html", rest)),
-                display: rest.to_string(),
-                uri: Some(vs_ref.to_string()),
-                external: false,
-            };
-        }
-        // core VS (branch 3): display = getName, uri = vs.getUrl()
-        if vs_ref.starts_with("http://hl7.org/fhir/ValueSet/") {
-            if let Some(vs) = self.ctx.resolve(vs_ref) {
-                return BindingRes {
-                    url: Some(vs.web_path.clone()),
-                    display: vs.name.clone().unwrap_or_default(),
-                    uri: Some(strip_version(vs_ref)),
-                    external: false,
-                };
-            }
-            let rest = &vs_ref[29..];
-            return BindingRes {
-                url: None,
-                display: format!("{} (??)", rest),
-                uri: None,
-                external: false,
-            };
-        }
-        // LOINC vs
-        if vs_ref.starts_with("http://loinc.org/vs/") {
-            let code = &vs_ref[20..];
-            let display = if code.starts_with("LL") {
-                format!("LOINC Answer List {}", code)
-            } else {
-                format!("LOINC {}", code)
-            };
-            return BindingRes {
-                url: Some(format!("https://loinc.org/{}/", code)),
-                display,
-                uri: Some(vs_ref.to_string()),
-                external: false,
-            };
-        }
-        // general (branch 6, IGKP:669-683): `url|ver` -> "Name (ver)";
-        // else present() when webPath set.
-        if let Some(vs) = self.ctx.resolve(vs_ref) {
-            let display = if vs_ref.contains('|') {
-                format!("{} ({})", vs.name.clone().unwrap_or_default(), vs.version)
-            } else {
-                vs.present()
-            };
-            return BindingRes {
-                url: Some(vs.web_path.clone()),
-                display,
-                uri: Some(strip_version(vs_ref)),
-                external: vs.external,
-            };
-        }
-        // VSAC
-        if vs_ref.contains("cts.nlm.nih.gov") {
-            let oid = vs_ref.rsplit('/').next().unwrap_or("");
-            return BindingRes {
-                url: Some(format!("https://vsac.nlm.nih.gov/valueset/{}/expansion", oid)),
-                display: format!("VSAC {}", oid),
-                uri: Some(vs_ref.to_string()),
-                external: true,
-            };
-        }
-        if vs_ref.starts_with("http://") || vs_ref.starts_with("https://") {
-            return BindingRes {
-                url: Some(vs_ref.to_string()),
-                display: vs_ref.to_string(),
-                uri: None,
-                external: false,
-            };
-        }
-        BindingRes {
-            url: None,
-            display: vs_ref.to_string(),
-            uri: None,
-            external: false,
-        }
+        self.ctx.resolve_binding(vs_ref)
     }
 
     /// `determineNarrativeStatus` (SDR@6.9.11): expand the narrative element's
@@ -2630,13 +2534,6 @@ fn collect_additional_bindings(binding: &serde_json::Value) -> Vec<AddBindingDet
     out
 }
 
-struct BindingRes {
-    url: Option<String>,
-    display: String,
-    uri: Option<String>,
-    external: bool,
-}
-
 // ---- free helpers ----
 
 /// The core-spec web root (with trailing slash) for an IG's fhirVersion.
@@ -2872,13 +2769,13 @@ fn gen_cardinality_impl(min: Option<i64>, max: Option<&str>, tracker: &mut Unuse
     cell
 }
 
-fn is_profiled_type(profiles: &[&str]) -> bool {
+pub fn is_profiled_type(profiles: &[&str]) -> bool {
     profiles.iter().any(|p| p.contains(':'))
 }
 
 /// isMustSupportDirect(t)/isMustSupport(t): the type carries the
 /// elementdefinition-type-must-support extension = true.
-fn type_is_must_support(t: &TypeRef<'_>) -> bool {
+pub fn type_is_must_support(t: &TypeRef<'_>) -> bool {
     t.v.get("extension")
         .and_then(|x| x.as_array())
         .map(|a| {
@@ -2894,7 +2791,7 @@ fn type_is_must_support(t: &TypeRef<'_>) -> bool {
 /// isMustSupport(CanonicalType u): the canonical (profile/targetProfile entry)
 /// carries the type-must-support extension. In JSON these live in the parallel
 /// `_targetProfile`/`_profile` arrays.
-fn canonical_is_must_support(t: &TypeRef<'_>, u: &str) -> bool {
+pub fn canonical_is_must_support(t: &TypeRef<'_>, u: &str) -> bool {
     for key in ["_targetProfile", "_profile"] {
         let Some(shadow) = t.v.get(key).and_then(|x| x.as_array()) else { continue };
         let Some(vals) = t
@@ -2930,7 +2827,7 @@ fn canonical_is_must_support(t: &TypeRef<'_>, u: &str) -> bool {
 }
 
 /// `buildJson` (SDR:3506): primitives as string value; complex as JSON.
-fn build_json(v: &serde_json::Value) -> String {
+pub fn build_json(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::String(s) => s.clone(),
         serde_json::Value::Bool(b) => b.to_string(),
@@ -2939,12 +2836,12 @@ fn build_json(v: &serde_json::Value) -> String {
     }
 }
 
-fn is_primitive_value(v: &serde_json::Value) -> bool {
+pub fn is_primitive_value(v: &serde_json::Value) -> bool {
     !matches!(v, serde_json::Value::Object(_) | serde_json::Value::Array(_))
 }
 
 /// `describeSlice` (SDR:3514): "{Ordered|Unordered}, {rules} by {discriminators}".
-fn describe_slice(slicing: &serde_json::Value) -> String {
+pub fn describe_slice(slicing: &serde_json::Value) -> String {
     let ordered = slicing
         .get("ordered")
         .and_then(|x| x.as_bool())
@@ -2979,7 +2876,7 @@ fn describe_slice(slicing: &serde_json::Value) -> String {
 }
 
 /// BindingStrength.getDefinition() (Enumerations.java:1515-1518).
-fn strength_definition(code: &str) -> &'static str {
+pub fn strength_definition(code: &str) -> &'static str {
     match code {
         "required" => "To be conformant, the concept in this element SHALL be from the specified value set.",
         "extensible" => "To be conformant, the concept in this element SHALL be from the specified value set if any of the codes within the value set can apply to the concept being communicated.  If the value set does not cover the concept (based on human review), alternate codings (or, data type allowing, text) may be included instead.",
@@ -2998,21 +2895,14 @@ fn join2(sep: &str, last_sep: &str, items: &[String]) -> String {
     }
 }
 
-fn strip_version(url: &str) -> String {
-    match url.split_once('|') {
-        Some((u, _)) => u.to_string(),
-        None => url.to_string(),
-    }
-}
-
 /// `MarkDownProcessor.isSimpleMarkdown` — a description with no markdown block
 /// structure. Conservative approximation aligned with the plain-prose test.
-fn is_simple_markdown(s: &str) -> bool {
+pub fn is_simple_markdown(s: &str) -> bool {
     !s.contains('\n')
 }
 
 /// sd.getTypeName() for a resolved type (name field of the SD).
-fn type_name_of(sd: &Resolved, fallback: &str) -> String {
+pub fn type_name_of(sd: &Resolved, fallback: &str) -> String {
     sd.name.clone().unwrap_or_else(|| fallback.to_string())
 }
 

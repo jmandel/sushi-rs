@@ -559,6 +559,123 @@ impl IgContext {
             .insert(canonical.to_string(), out.clone());
         out
     }
+
+    /// `IGKnowledgeProvider.resolveBinding` (the `context.getPkp().resolveBinding`
+    /// call at SDR:2005/3150/5280 etc). Given a ValueSet canonical reference,
+    /// return the display, webPath link, and URI shown in the binding piece.
+    /// Ported from IGKnowledgeProvider.java:640-690 (the v3/v2 specials, the
+    /// core-VS branch, LOINC, VSAC, and the general resolve). Shared by the
+    /// snapshot table path and the grid path.
+    pub fn resolve_binding(&self, vs_ref: &str) -> BindingRes {
+        if vs_ref.is_empty() {
+            return BindingRes {
+                url: Some("terminologies.html#unbound".into()),
+                display: "(unbound)".into(),
+                uri: None,
+                external: false,
+            };
+        }
+        if let Some(rest) = vs_ref.strip_prefix("http://hl7.org/fhir/ValueSet/v3-") {
+            return BindingRes {
+                url: Some(format!("http://hl7.org/fhir/R4/v3/{}/vs.html", rest)),
+                display: rest.to_string(),
+                uri: Some(vs_ref.to_string()),
+                external: false,
+            };
+        }
+        if let Some(rest) = vs_ref.strip_prefix("http://hl7.org/fhir/ValueSet/v2-") {
+            return BindingRes {
+                url: Some(format!("http://hl7.org/fhir/R4/v2/{}/index.html", rest)),
+                display: rest.to_string(),
+                uri: Some(vs_ref.to_string()),
+                external: false,
+            };
+        }
+        if vs_ref.starts_with("http://hl7.org/fhir/ValueSet/") {
+            if let Some(vs) = self.resolve(vs_ref) {
+                return BindingRes {
+                    url: Some(vs.web_path.clone()),
+                    display: vs.name.clone().unwrap_or_default(),
+                    uri: Some(strip_version(vs_ref)),
+                    external: false,
+                };
+            }
+            let rest = &vs_ref[29..];
+            return BindingRes {
+                url: None,
+                display: format!("{} (??)", rest),
+                uri: None,
+                external: false,
+            };
+        }
+        if vs_ref.starts_with("http://loinc.org/vs/") {
+            let code = &vs_ref[20..];
+            let display = if code.starts_with("LL") {
+                format!("LOINC Answer List {}", code)
+            } else {
+                format!("LOINC {}", code)
+            };
+            return BindingRes {
+                url: Some(format!("https://loinc.org/{}/", code)),
+                display,
+                uri: Some(vs_ref.to_string()),
+                external: false,
+            };
+        }
+        if let Some(vs) = self.resolve(vs_ref) {
+            let display = if vs_ref.contains('|') {
+                format!("{} ({})", vs.name.clone().unwrap_or_default(), vs.version)
+            } else {
+                vs.present()
+            };
+            return BindingRes {
+                url: Some(vs.web_path.clone()),
+                display,
+                uri: Some(strip_version(vs_ref)),
+                external: vs.external,
+            };
+        }
+        if vs_ref.contains("cts.nlm.nih.gov") {
+            let oid = vs_ref.rsplit('/').next().unwrap_or("");
+            return BindingRes {
+                url: Some(format!("https://vsac.nlm.nih.gov/valueset/{}/expansion", oid)),
+                display: format!("VSAC {}", oid),
+                uri: Some(vs_ref.to_string()),
+                external: true,
+            };
+        }
+        if vs_ref.starts_with("http://") || vs_ref.starts_with("https://") {
+            return BindingRes {
+                url: Some(vs_ref.to_string()),
+                display: vs_ref.to_string(),
+                uri: None,
+                external: false,
+            };
+        }
+        BindingRes {
+            url: None,
+            display: vs_ref.to_string(),
+            uri: None,
+            external: false,
+        }
+    }
+}
+
+/// The result of `resolveBinding`: the ValueSet piece's link/display/uri.
+#[derive(Debug, Clone)]
+pub struct BindingRes {
+    pub url: Option<String>,
+    pub display: String,
+    pub uri: Option<String>,
+    pub external: bool,
+}
+
+/// Strip a trailing `|version` from a canonical URL.
+pub fn strip_version(url: &str) -> String {
+    match url.split_once('|') {
+        Some((u, _)) => u.to_string(),
+        None => url.to_string(),
+    }
 }
 
 fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
