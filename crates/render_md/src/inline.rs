@@ -331,8 +331,21 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                 out.push_str("&gt;");
                 i += 1;
             }
+            '{' if chars.get(i + 1) == Some(&':') && chars.get(i + 2) == Some(&':') => {
+                // Span extension `{::name ...}` / `{::name ... /}` — kramdown
+                // consumes it; unknown extensions produce a warning and no
+                // output (parser/kramdown/extensions.rb). Corpus uses only the
+                // self-contained form (`{::download="true"}` etc.).
+                if let Some(ni) = skip_brace_group(chars, i) {
+                    i = ni;
+                } else {
+                    out.push('{');
+                    i += 1;
+                }
+            }
             '!' if i + 1 < n && chars[i + 1] == '[' => {
                 if let Some((html, ni)) = try_image(chars, i) {
+                    let (html, ni) = apply_span_ial(chars, ni, html);
                     out.push_str(&html);
                     i = ni;
                 } else {
@@ -352,6 +365,7 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
             }
             '[' => {
                 if let Some((html, ni)) = try_link(chars, i) {
+                    let (html, ni) = apply_span_ial(chars, ni, html);
                     out.push_str(&html);
                     i = ni;
                 } else {
@@ -413,6 +427,81 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
             }
         }
     }
+}
+
+/// Skip a `{...}` group starting at `i` (used for consumed span extensions).
+/// Respects double-quoted strings. Returns the index after the closing `}`.
+fn skip_brace_group(chars: &[char], i: usize) -> Option<usize> {
+    let n = chars.len();
+    let mut k = i + 1;
+    let mut in_str: Option<char> = None;
+    while k < n {
+        let c = chars[k];
+        match in_str {
+            Some(q) => {
+                if c == q {
+                    in_str = None;
+                }
+            }
+            None => {
+                if c == '"' || c == '\'' {
+                    in_str = Some(c);
+                } else if c == '}' {
+                    return Some(k + 1);
+                } else if c == '\n' {
+                    return None;
+                }
+            }
+        }
+        k += 1;
+    }
+    None
+}
+
+/// If a span IAL `{: ...}` immediately follows position `ni`, parse it and
+/// merge its attributes into the just-emitted element `html` (kramdown applies
+/// a span IAL to the directly preceding span element, appending the attributes
+/// after the element's existing ones). Returns the (possibly patched) html and
+/// the new position.
+fn apply_span_ial(chars: &[char], ni: usize, html: String) -> (String, usize) {
+    let n = chars.len();
+    if ni >= n || chars[ni] != '{' || chars.get(ni + 1) != Some(&':') {
+        return (html, ni);
+    }
+    // `{::` is an extension, not an IAL.
+    if chars.get(ni + 2) == Some(&':') {
+        return (html, ni);
+    }
+    let end = match skip_brace_group(chars, ni) {
+        Some(e) => e,
+        None => return (html, ni),
+    };
+    let body: String = chars[ni + 2..end - 1].iter().collect();
+    let attrs = crate::ial::parse_ial_body(&body);
+    if attrs.is_empty() {
+        return (html, end);
+    }
+    let mut attr_str = String::new();
+    for (k, v) in &attrs.ordered {
+        attr_str.push_str(&format!(" {}=\"{}\"", k, escape_html_attr(v)));
+    }
+    // Insert into the OUTER element's opening tag: for a self-closing element
+    // (the whole html is one tag, e.g. <img ... />) before its ` />`; otherwise
+    // before the first `>` (attribute values are HTML-escaped, so a literal `>`
+    // cannot appear inside the opening tag).
+    let patched = if html.starts_with("<img") && html.ends_with("/>") {
+        let pos = html.rfind(" />").unwrap_or(html.len());
+        let mut s = html.clone();
+        s.insert_str(pos, &attr_str);
+        s
+    } else if let Some(pos) = html.find('>') {
+        let mut s = html.clone();
+        s.insert_str(pos, &attr_str);
+        s
+    } else {
+        html
+    };
+    (patched, end)
 }
 
 fn is_escapable(c: char) -> bool {

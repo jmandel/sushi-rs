@@ -111,6 +111,10 @@ pub struct ListItem {
     /// of the list). kramdown appends a trailing `:blank` to such an item,
     /// which forces its first paragraph to render as a real `<p>` (loose).
     pub followed_by_blank: bool,
+    /// Attributes from a LIST_ITEM_IAL — an IAL at the very start of the
+    /// item's content (`- {:#id}text`), applied to the `<li>`
+    /// (kramdown parser/kramdown/list.rb:19-20, 76-80).
+    pub attrs: Attrs,
 }
 
 /// A block plus whether it was preceded by a blank line in the source. The
@@ -214,9 +218,9 @@ fn parse_link_ref_def(line: &str) -> Option<(String, String, Option<String>)> {
 pub fn parse_doc(src: &str) -> Doc {
     let (src_owned, link_refs) = extract_link_refs(src);
     let src = src_owned.as_str();
-    let lines: Vec<&str> = src.split('\n').collect();
+    let lines: Vec<String> = src.split('\n').map(String::from).collect();
     let mut p = Parser {
-        lines: &lines,
+        lines,
         i: 0,
         block_start: 0,
     };
@@ -225,14 +229,14 @@ pub fn parse_doc(src: &str) -> Doc {
     let mut leading_blank = false;
     {
         let mut k = 0;
-        while k < lines.len()
-            && (lines[k].trim().is_empty() || is_kramdown_ext_line(lines[k]))
+        while k < p.lines.len()
+            && (p.lines[k].trim().is_empty() || is_kramdown_ext_line(&p.lines[k]))
         {
             leading_blank = true;
             k += 1;
         }
         // Only count as leading blank if there IS a first block.
-        if k >= lines.len() {
+        if k >= p.lines.len() {
             leading_blank = false;
         }
     }
@@ -267,14 +271,17 @@ fn parse_block_nodes(src: &str) -> Vec<BlockNode> {
     parse_doc(src).nodes
 }
 
-struct Parser<'a> {
-    lines: &'a [&'a str],
+struct Parser {
+    /// Owned lines so the parser can SPLICE: when a raw-HTML block's close tag
+    /// is followed by more content on the same line, the remainder is inserted
+    /// as a new line and parsed as the next block (kramdown behavior).
+    lines: Vec<String>,
     i: usize,
     /// Set by read_open_tag to allow raw-HTML re-scan from the element start.
     block_start: usize,
 }
 
-impl<'a> Parser<'a> {
+impl Parser {
     fn parse_until(&mut self, stop: impl Fn(&str) -> bool) -> Vec<BlockNode> {
         let mut nodes: Vec<BlockNode> = Vec::new();
         let mut pending_blank = false;
@@ -288,19 +295,19 @@ impl<'a> Parser<'a> {
             }};
         }
         while self.i < self.lines.len() {
-            let line = self.lines[self.i];
-            if stop(line) {
+            let line = self.lines[self.i].clone();
+            if stop(&line) {
                 break;
             }
             // kramdown block extension `{::...}` — consume, no output, treated
             // as a block boundary (like a blank line).
-            if is_kramdown_ext_line(line) {
+            if is_kramdown_ext_line(&line) {
                 pending_blank = true;
                 self.i += 1;
                 continue;
             }
             // Standalone block IAL attaches to previous block.
-            if let Some(attrs) = parse_block_ial_line(line) {
+            if let Some(attrs) = parse_block_ial_line(&line) {
                 self.i += 1;
                 attach_ial_nodes(&mut nodes, attrs);
                 continue;
@@ -362,11 +369,13 @@ impl<'a> Parser<'a> {
     }
 
     fn try_atx_heading(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
-        let t = line.trim_start();
-        if !t.starts_with('#') {
+        let line = self.lines[self.i].clone();
+        // kramdown/GFM ATX headers must start at COLUMN 0 (gfm.rb:146
+        // `/^(?<level>\#{1,6})[\t ]+/` — no OPT_SPACE). ` # x` is a paragraph.
+        if !line.starts_with('#') {
             return None;
         }
+        let t = line.as_str();
         let mut level = 0;
         for c in t.chars() {
             if c == '#' {
@@ -410,8 +419,8 @@ impl<'a> Parser<'a> {
     /// fences is taken RAW (no dedenting). A 4+-space "fence" is an indented
     /// code block instead.
     fn try_fenced_code(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
-        let indent = leading_spaces(line);
+        let line = self.lines[self.i].clone();
+        let indent = leading_spaces(&line);
         if indent > 3 {
             return None;
         }
@@ -443,7 +452,7 @@ impl<'a> Parser<'a> {
         // block in kramdown (the regex requires the closing line).
         let mut close_idx = None;
         for k in self.i + 1..self.lines.len() {
-            let l = self.lines[k];
+            let l = &self.lines[k];
             let li = leading_spaces(l);
             if li > 3 {
                 continue;
@@ -480,8 +489,8 @@ impl<'a> Parser<'a> {
     ///   2. `data.gsub!(INDENT, '')` — the 4-space/tab indent is stripped
     ///      from every line.
     fn try_indented_code(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
-        if !is_indent_line(line) || line.trim().is_empty() {
+        let line = self.lines[self.i].clone();
+        if !is_indent_line(&line) || line.trim().is_empty() {
             return None;
         }
         let mut raw: Vec<String> = Vec::new();
@@ -494,7 +503,7 @@ impl<'a> Parser<'a> {
                 j += 1;
             }
             if j >= self.lines.len()
-                || !is_indent_line(self.lines[j])
+                || !is_indent_line(&self.lines[j])
                 || self.lines[j].trim().is_empty()
             {
                 break;
@@ -505,7 +514,7 @@ impl<'a> Parser<'a> {
             self.i = j;
             // 1+ indented non-blank lines
             while self.i < self.lines.len()
-                && is_indent_line(self.lines[self.i])
+                && is_indent_line(&self.lines[self.i])
                 && !self.lines[self.i].trim().is_empty()
             {
                 raw.push(self.lines[self.i].to_string());
@@ -514,14 +523,14 @@ impl<'a> Parser<'a> {
             // 0+ lazy non-blank continuation lines (any indent), stopping at
             // block IALs / extensions (kramdown's negative lookahead).
             while self.i < self.lines.len() {
-                let l = self.lines[self.i];
+                let l = self.lines[self.i].clone();
                 if l.trim().is_empty()
-                    || parse_block_ial_line(l).is_some()
-                    || is_kramdown_ext_line(l)
+                    || parse_block_ial_line(&l).is_some()
+                    || is_kramdown_ext_line(&l)
                 {
                     break;
                 }
-                if is_indent_line(l) {
+                if is_indent_line(&l) {
                     // still indented — handled by the inner loop next round
                     raw.push(l.to_string());
                     self.i += 1;
@@ -567,7 +576,7 @@ impl<'a> Parser<'a> {
     }
 
     fn try_footnote_def(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
+        let line = self.lines[self.i].clone();
         let t = line.trim_start();
         // [^label]: text
         if !t.starts_with("[^") {
@@ -580,17 +589,17 @@ impl<'a> Parser<'a> {
         // continuation lines: indented (>=4 spaces) or blank-then-indented
         let mut cont: Vec<String> = Vec::new();
         while self.i < self.lines.len() {
-            let l = self.lines[self.i];
+            let l = self.lines[self.i].clone();
             if l.trim().is_empty() {
                 // peek next
-                if self.i + 1 < self.lines.len() && leading_spaces(self.lines[self.i + 1]) >= 4 {
+                if self.i + 1 < self.lines.len() && leading_spaces(&self.lines[self.i + 1]) >= 4 {
                     cont.push(String::new());
                     self.i += 1;
                     continue;
                 }
                 break;
             }
-            if leading_spaces(l) >= 4 {
+            if leading_spaces(&l) >= 4 {
                 cont.push(l[4..].to_string());
                 self.i += 1;
             } else {
@@ -612,12 +621,12 @@ impl<'a> Parser<'a> {
         // block boundary on a line containing an unescaped `|`. The separator
         // (`|---|`) is OPTIONAL: without it there is no <thead> and all rows are
         // body rows.
-        let line = self.lines[self.i];
-        if !table_line_has_pipe(line) {
+        let line = self.lines[self.i].clone();
+        if !table_line_has_pipe(&line) {
             return None;
         }
         // Don't misfire on a standalone block IAL.
-        if parse_block_ial_line(line).is_some() {
+        if parse_block_ial_line(&line).is_some() {
             return None;
         }
 
@@ -630,17 +639,17 @@ impl<'a> Parser<'a> {
         let start = self.i;
 
         while self.i < self.lines.len() {
-            let l = self.lines[self.i];
+            let l = self.lines[self.i].clone();
             if l.trim().is_empty() {
                 break;
             }
-            if parse_block_ial_line(l).is_some() {
+            if parse_block_ial_line(&l).is_some() {
                 break;
             }
-            if !table_line_has_pipe(l) {
+            if !table_line_has_pipe(&l) {
                 break;
             }
-            if is_table_sep_line(l) {
+            if is_table_sep_line(&l) {
                 if pending.is_empty() {
                     // ignore consecutive separators
                     self.i += 1;
@@ -654,14 +663,14 @@ impl<'a> Parser<'a> {
                     if !pending.is_empty() {
                         groups.push(std::mem::take(&mut pending));
                     }
-                    aligns = parse_sep_aligns(l);
+                    aligns = parse_sep_aligns(&l);
                 } else {
                     groups.push(std::mem::take(&mut pending));
                 }
                 self.i += 1;
                 continue;
             }
-            if is_table_footer_line(l) {
+            if is_table_footer_line(&l) {
                 if !pending.is_empty() {
                     groups.push(std::mem::take(&mut pending));
                 }
@@ -669,7 +678,7 @@ impl<'a> Parser<'a> {
                 self.i += 1;
                 continue;
             }
-            pending.push(split_table_row(l));
+            pending.push(split_table_row(&l));
             self.i += 1;
         }
         // finalize remaining rows
@@ -697,16 +706,26 @@ impl<'a> Parser<'a> {
     }
 
     fn try_html_block(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
+        let line = self.lines[self.i].clone();
+        // kramdown allows up to 3 leading spaces for an HTML element block
+        // (OPT_SPACE in HTML_BLOCK_START, parser/kramdown/html.rb:70).
+        if leading_spaces(&line) > 3 {
+            return None;
+        }
         let t = line.trim_start();
         if !t.starts_with('<') {
             return None;
         }
-        // Comment block
+        // Comment block — must start at COLUMN 0 (an indented `<!--` falls
+        // through to the paragraph parser and renders as an inline comment
+        // inside a <p>; verified against the oracle).
         if t.starts_with("<!--") {
+            if !line.starts_with("<!--") {
+                return None;
+            }
             let mut collected: Vec<String> = Vec::new();
             while self.i < self.lines.len() {
-                let l = self.lines[self.i];
+                let l = self.lines[self.i].clone();
                 collected.push(l.to_string());
                 if l.contains("-->") {
                     self.i += 1;
@@ -746,7 +765,7 @@ impl<'a> Parser<'a> {
             self.i = self.block_start;
             let mut collected: Vec<String> = Vec::new();
             while self.i < self.lines.len() {
-                let l = self.lines[self.i];
+                let l = self.lines[self.i].clone();
                 if l.trim().is_empty() {
                     break;
                 }
@@ -784,17 +803,53 @@ impl<'a> Parser<'a> {
         // For raw passthrough we want the whole element verbatim.
         let start = self.block_start;
         self.i = start;
+        let open_pat = format!("<{tagname}");
         let mut depth = 0i32;
         while self.i < self.lines.len() {
-            let l = self.lines[self.i];
-            let opens = count_occurrences(l, &format!("<{tagname}"));
-            let closes = count_occurrences(l, &close);
-            collected.push(l.to_string());
-            depth += opens as i32 - closes as i32;
-            self.i += 1;
-            if depth <= 0 && (l.contains(&close) || is_void_like(l, &tagname)) {
+            let l = self.lines[self.i].clone();
+            // Scan this line's open/close occurrences of `tagname` in order so
+            // we can find the exact position where depth returns to 0.
+            let mut pos = 0usize;
+            let mut end_at: Option<usize> = None;
+            loop {
+                let next_open = l[pos..].find(&open_pat).map(|p| p + pos);
+                let next_close = l[pos..].find(&close).map(|p| p + pos);
+                match (next_open, next_close) {
+                    (Some(o), Some(c)) if o < c => {
+                        depth += 1;
+                        pos = o + open_pat.len();
+                    }
+                    (_, Some(c)) => {
+                        depth -= 1;
+                        pos = c + close.len();
+                        if depth <= 0 {
+                            end_at = Some(pos);
+                            break;
+                        }
+                    }
+                    (Some(o), None) => {
+                        depth += 1;
+                        pos = o + open_pat.len();
+                    }
+                    (None, None) => break,
+                }
+            }
+            if let Some(endp) = end_at {
+                // Block ends at the close tag. Content AFTER it on the same
+                // line becomes the next line to parse (kramdown continues
+                // block parsing right after the end tag — e.g.
+                // `</div> <!-- x -->` yields the div block then a paragraph).
+                let (head, rest) = l.split_at(endp);
+                collected.push(head.to_string());
+                let rest = rest.to_string();
+                self.i += 1;
+                if !rest.trim().is_empty() {
+                    self.lines.insert(self.i, rest);
+                }
                 break;
             }
+            collected.push(l.to_string());
+            self.i += 1;
             if depth <= 0 && l.trim().is_empty() {
                 break;
             }
@@ -805,13 +860,13 @@ impl<'a> Parser<'a> {
     }
 
     fn try_blockquote(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
+        let line = self.lines[self.i].clone();
         if !line.trim_start().starts_with('>') {
             return None;
         }
         let mut inner_lines: Vec<String> = Vec::new();
         while self.i < self.lines.len() {
-            let l = self.lines[self.i];
+            let l = self.lines[self.i].clone();
             let ts = l.trim_start();
             if ts.starts_with('>') {
                 let stripped = ts[1..].strip_prefix(' ').unwrap_or(&ts[1..]);
@@ -819,7 +874,7 @@ impl<'a> Parser<'a> {
                 self.i += 1;
             } else if l.trim().is_empty() {
                 break;
-            } else if parse_block_ial_line(l).is_some() || is_kramdown_ext_line(l) {
+            } else if parse_block_ial_line(&l).is_some() || is_kramdown_ext_line(&l) {
                 // A block IAL / extension on a non-`>` line ends the blockquote
                 // so it attaches to the blockquote itself (e.g. `{: .dragon}`).
                 break;
@@ -838,16 +893,16 @@ impl<'a> Parser<'a> {
     }
 
     fn try_list(&mut self) -> Option<Block> {
-        let line = self.lines[self.i];
-        let (ordered, start, _marker_len) = list_marker(line)?;
+        let line = self.lines[self.i].clone();
+        let (ordered, start, _marker_len) = list_marker(&line)?;
         let mut items: Vec<ListItem> = Vec::new();
         let mut tight = true;
-        let base_indent = leading_spaces(line);
+        let base_indent = leading_spaces(&line);
         loop {
             if self.i >= self.lines.len() {
                 break;
             }
-            let l = self.lines[self.i];
+            let l = self.lines[self.i].clone();
             if l.trim().is_empty() {
                 // blank line: could be between items (loose) or end of list.
                 // Peek ahead.
@@ -856,15 +911,15 @@ impl<'a> Parser<'a> {
                     k += 1;
                 }
                 if k < self.lines.len()
-                    && leading_spaces(self.lines[k]) == base_indent
-                    && list_marker(self.lines[k]).map(|(o, _, _)| o == ordered).unwrap_or(false)
+                    && leading_spaces(&self.lines[k]) == base_indent
+                    && list_marker(&self.lines[k]).map(|(o, _, _)| o == ordered).unwrap_or(false)
                 {
                     // Same-type marker after a blank line: loose separator.
                     tight = false;
                     self.i = k;
                     continue;
                 }
-                if k < self.lines.len() && leading_spaces(self.lines[k]) > base_indent {
+                if k < self.lines.len() && leading_spaces(&self.lines[k]) > base_indent {
                     // continuation of current item after blank -> loose
                     tight = false;
                     self.i = k;
@@ -872,12 +927,12 @@ impl<'a> Parser<'a> {
                 }
                 break;
             }
-            let this_indent = leading_spaces(l);
+            let this_indent = leading_spaces(&l);
             if this_indent < base_indent {
                 break;
             }
             if this_indent == base_indent {
-                if let Some((o2, _s2, ml)) = list_marker(l) {
+                if let Some((o2, _s2, ml)) = list_marker(&l) {
                     if o2 != ordered {
                         // different list type -> stop
                         if items.is_empty() {
@@ -893,7 +948,7 @@ impl<'a> Parser<'a> {
                     self.i += 1;
                     // gather continuation lines belonging to this item
                     while self.i < self.lines.len() {
-                        let cl = self.lines[self.i];
+                        let cl = self.lines[self.i].clone();
                         if cl.trim().is_empty() {
                             // could be loose separator; look ahead
                             let mut k = self.i;
@@ -901,8 +956,8 @@ impl<'a> Parser<'a> {
                                 k += 1;
                             }
                             if k < self.lines.len()
-                                && leading_spaces(self.lines[k]) >= content_indent
-                                && list_marker_at_indent(self.lines[k], base_indent).is_none()
+                                && leading_spaces(&self.lines[k]) >= content_indent
+                                && list_marker_at_indent(&self.lines[k], base_indent).is_none()
                             {
                                 // Blank line WITHIN an item (continuation still
                                 // indented under this item). This does NOT make
@@ -916,18 +971,18 @@ impl<'a> Parser<'a> {
                                 break;
                             }
                         }
-                        let ci = leading_spaces(cl);
+                        let ci = leading_spaces(&cl);
                         if ci >= content_indent {
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
                             self.i += 1;
-                        } else if list_marker(cl).is_some() && ci <= base_indent {
+                        } else if list_marker(&cl).is_some() && ci <= base_indent {
                             break;
                         } else if ci > base_indent {
                             // nested or lazy: keep relative indent
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
                             self.i += 1;
-                        } else if parse_block_ial_line(cl).is_some()
-                            || is_kramdown_ext_line(cl)
+                        } else if parse_block_ial_line(&cl).is_some()
+                            || is_kramdown_ext_line(&cl)
                         {
                             // A block IAL / extension line terminates the item so
                             // it can attach to the list itself (e.g. `{:toc}`).
@@ -948,7 +1003,23 @@ impl<'a> Parser<'a> {
                             break;
                         }
                     }
-                    let item_src = item_lines.join("\n");
+                    let mut item_src = item_lines.join("\n");
+                    // LIST_ITEM_IAL (list.rb:19-20): an IAL at the very start of
+                    // the item content applies to the <li> itself.
+                    let mut item_attrs = Attrs::default();
+                    {
+                        let t = item_src.trim_start();
+                        if t.starts_with("{:") && !t.starts_with("{::") {
+                            if let Some(close) = t.find('}') {
+                                let candidate = &t[..=close];
+                                if let Some(a) = parse_block_ial_line(candidate) {
+                                    item_attrs = a;
+                                    let skip = item_src.len() - t.len() + close + 1;
+                                    item_src = item_src[skip..].trim_start().to_string();
+                                }
+                            }
+                        }
+                    }
                     let blocks = parse_block_nodes(&item_src);
                     // The item is "followed by blank" if the line that ended it
                     // is a blank line (kramdown then appends a trailing :blank to
@@ -959,6 +1030,7 @@ impl<'a> Parser<'a> {
                         blocks,
                         tight: true,
                         followed_by_blank,
+                        attrs: item_attrs,
                     });
                     continue;
                 }
@@ -982,12 +1054,12 @@ impl<'a> Parser<'a> {
         let mut para_lines: Vec<String> = Vec::new();
         let start_idx = self.i;
         while self.i < self.lines.len() {
-            let l = self.lines[self.i];
+            let l = self.lines[self.i].clone();
             let t = l.trim();
             if t.is_empty() {
                 break;
             }
-            if parse_block_ial_line(l).is_some() {
+            if parse_block_ial_line(&l).is_some() {
                 break;
             }
             // setext underline?
@@ -1004,7 +1076,7 @@ impl<'a> Parser<'a> {
                 }
             }
             // interruptors: a new block start ends the paragraph.
-            if !para_lines.is_empty() && self.paragraph_interrupted(l) {
+            if !para_lines.is_empty() && self.paragraph_interrupted(&l) {
                 break;
             }
             para_lines.push(l.to_string());
@@ -1025,10 +1097,10 @@ impl<'a> Parser<'a> {
 
     fn paragraph_interrupted(&self, l: &str) -> bool {
         let t = l.trim_start();
-        if t.starts_with('#') {
-            // atx heading
-            let hashes = t.chars().take_while(|&c| c == '#').count();
-            let rest = &t[hashes..];
+        if l.starts_with('#') {
+            // atx heading (column 0 only, per kramdown/GFM)
+            let hashes = l.chars().take_while(|&c| c == '#').count();
+            let rest = &l[hashes..];
             if hashes >= 1 && hashes <= 6 && (rest.is_empty() || rest.starts_with(' ')) {
                 return true;
             }
@@ -1077,13 +1149,13 @@ impl<'a> Parser<'a> {
     fn read_open_tag(&mut self) -> Option<(String, usize, usize)> {
         // record start
         self.block_start = self.i;
-        let start_line = self.lines[self.i];
-        let col = leading_spaces(start_line);
+        let start_line = self.lines[self.i].clone();
+        let col = leading_spaces(&start_line);
         let mut acc = String::new();
         let mut line_idx = self.i;
         let mut ci = col;
         loop {
-            let l = self.lines[line_idx];
+            let l = self.lines[line_idx].clone();
             let slice = &l[ci..];
             if let Some(gt) = slice.find('>') {
                 acc.push_str(&slice[..=gt]);
@@ -1119,7 +1191,7 @@ impl<'a> Parser<'a> {
                 self.i = line_idx;
                 return (inner.join("\n"), close_pat);
             }
-            let l = self.lines[line_idx];
+            let l = self.lines[line_idx].clone();
             let slice = &l[col.min(l.len())..];
             // Look for close tag on this slice.
             if let Some(pos) = slice.find(&close_pat) {

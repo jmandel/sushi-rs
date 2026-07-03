@@ -478,7 +478,9 @@ impl Renderer {
     fn render_list_item(&mut self, item: &ListItem, transparent: bool, out: &mut String, indent: usize) {
         let pad = " ".repeat(indent);
         out.push_str(&pad);
-        out.push_str("<li>");
+        out.push_str("<li");
+        out.push_str(&attr_string(&item.attrs, false));
+        out.push('>');
         let nodes: Vec<&BlockNode> = item
             .blocks
             .iter()
