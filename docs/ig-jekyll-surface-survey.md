@@ -264,3 +264,21 @@ Corpus + scripts under `scratchpad/ig-survey/` (`repos.txt` lists repo→dir). S
 `periodicity-impl/cycle/site-gen/core/liquid.ts` + `site-gen/liquid-subset.md`. Counts produced with
 `grep -oE` over authored `input/{pagecontent,pages,intro-notes}` files, includes inventoried
 separately.
+
+
+---
+
+## Scope decision (Josh, 2026-07-03)
+
+**T2 (the US-Core-shaped layer) is IN scope for the Rust engine, if feasible**
+— not an optional tier. Concretely that adds, on top of T1:
+`{% for %}` (incl. `forloop.*`, `offset:`, `limit:`), full `if`/`elsif`/
+`unless` with `contains`/`.size` operands, the array filters
+`split | where | sort | uniq | map | join`, and parameterized includes
+(`{% include x.md param="v" %}` + `include.param`, incl. US Core's
+`where:`-style data-join includes). This is standard Liquid semantics —
+bounded, deterministic — so the feasibility question is not "can it be
+implemented" but "can output parity be proven": the gate is US Core's own
+939-page… corpus subset rendered byte-comparable vs the Jekyll output
+(kramdown interaction + whitespace being the risk concentration). The
+synthesis doc must size T2 explicitly and give it its own gate.
