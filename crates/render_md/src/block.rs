@@ -707,6 +707,10 @@ impl<'a> Parser<'a> {
                 self.i += 1;
             } else if l.trim().is_empty() {
                 break;
+            } else if parse_block_ial_line(l).is_some() || is_kramdown_ext_line(l) {
+                // A block IAL / extension on a non-`>` line ends the blockquote
+                // so it attaches to the blockquote itself (e.g. `{: .dragon}`).
+                break;
             } else {
                 // lazy continuation
                 inner_lines.push(l.to_string());
