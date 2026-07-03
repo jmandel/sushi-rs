@@ -223,12 +223,15 @@ impl Renderer {
             }
             Block::HtmlBlock { raw } => {
                 // kramdown parses raw HTML blocks and re-serializes: tag names
-                // lowercased, void tags self-closed as ` />`. Indentation and
-                // text are preserved. Comments pass through verbatim.
+                // lowercased, void tags self-closed as ` />`. Interior
+                // indentation/whitespace is preserved, but trailing whitespace
+                // on the block's final (closing) line is trimmed. Comments pass
+                // through verbatim.
                 if raw.trim_start().starts_with("<!--") {
                     out.push_str(raw);
                 } else {
-                    out.push_str(&normalize_html_block(raw));
+                    let norm = normalize_html_block(raw);
+                    out.push_str(norm.trim_end_matches([' ', '\t']));
                 }
             }
             Block::HtmlBlockMd {
