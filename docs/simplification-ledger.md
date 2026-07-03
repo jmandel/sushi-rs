@@ -38,6 +38,18 @@
 
 ## Done
 
+- (2026-07-03, F3 close) **render_sd genTypes dedup**: grid.rs's
+  `gen_types`/`gen_target_link` (branch-for-branch duplicates of table.rs's) and
+  table.rs's `gen_types_erased`/`gen_types_inner_for_ext` (the lifetime-erased
+  ext-value copy) BOTH collapsed into a shared `gentypes::TypesHost` trait
+  (default methods, generic over the element lifetime `'e`; host supplies
+  ctx/core_path/sd_root/gap/pointer/must_support_mode). grid = the
+  dim=false/pointer=None/must_support_mode=false specialization; the ext-value
+  path calls the trait directly (now MORE faithful — honors SDR:1402's ambient
+  mustSupport). ~510 lines of duplicate removed for ~331 in gentypes.rs. Gate:
+  all 19 kind×IG combos byte-identical (only the pre-existing cycle
+  period-tracking-fact unstable-oracle differs, as before). NET simpler + one
+  source of truth for the type cell.
 - (2026-07-03) #12 clarity pass: CAS derived-index deleted three probing
   code paths; fetch Rc; dead-code sweep — the template for these passes.
 - (2026-07-03) F0 interim byte-scans (perf pass) deleted same-day by the

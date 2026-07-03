@@ -25,6 +25,7 @@ use render_tables::{generate, Gen};
 use render_xhtml::{Config, XhtmlComposer};
 
 use crate::context::{strip_version, BindingRes, IgContext, Resolved};
+use crate::gentypes::TypesHost;
 use crate::markdown;
 use crate::sdmodel::{Ed, Sd, TypeRef};
 
@@ -1261,401 +1262,24 @@ impl<'a> TCtx<'a> {
         }
     }
 
-    /// `genTypes` (SDR:2317), SUMMARY/mustSupportMode=false.
-    ///
-    /// `dim` = the types came from the DERIVATION_POINTER in diff mode
-    /// (SDR:2357-2364 stamps each copied TypeRefComponent with
-    /// SNAPSHOT_DERIVATION_EQUALS) — the checkForNoChange-WRAPPED pieces render
-    /// with `opacity: 0.5`. NOT every piece is wrapped in the Java: the
-    /// Reference-with-target branch's pieces (SDR:2383-2430 — the reference
-    /// link, "(", " | ", target links, ")", aggregation) are unwrapped and stay
-    /// bright; wrapped are the top-level ", " separators (SDR:2379), the
-    /// profiled-type pieces (SDR:2439-2459) and the plain-code pieces
-    /// (SDR:2472-2500).
-    fn gen_types(&mut self, e: Ed<'a>, types: &[TypeRef<'a>], root: bool, dim: bool) -> Cell {
-        let mut c = Cell::new();
-        if let Some(cr) = e.content_reference() {
-            // (SDR:2320-2334 + getElementByName): the snapshot generator writes
-            // absolute contentReferences ("http://...#Path"); a bare "#Path"
-            // resolves in this profile.
-            let (url, frag) = match cr.split_once('#') {
-                Some((u, f)) => (u, f),
-                None => ("", cr),
-            };
-            if url.is_empty() || url == self.sd_url() {
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
-                c.pieces.push(Piece::ref_text(
-                    Some(format!("#{}", frag)),
-                    Some(tail(frag).to_string()),
-                    Some(frag.to_string()),
-                ));
-            } else if let Some(src) = self.ctx.resolve(url) {
-                let type_name = src
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| tail(url).to_string());
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
-                c.pieces.push(Piece::ref_text(
-                    Some(format!("{}#{}", src.web_path, frag)),
-                    Some(format!("{} ({})", tail(frag), type_name)),
-                    Some(frag.to_string()),
-                ));
-            } else {
-                self.gap("unresolved contentReference");
-            }
-            return c;
-        }
-        if types.is_empty() {
-            if root {
-                // base branch (SDR:2337-2350)
-                let base_url = self
-                    .sd
-                    .root
-                    .get("baseDefinition")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                if let Some(bsd) = self.ctx.resolve(base_url) {
-                    // SDR:2340-2343: "(version)" when the base canonical has
-                    // multiple loaded versions.
-                    let v = if base_url.contains('|') || self.ctx.version_count(base_url) > 1 {
-                        format!("({})", bsd.version)
-                    } else {
-                        String::new()
-                    };
-                    let name = format!("{}{}", bsd.name.clone().unwrap_or_default(), v);
-                    let wp = bsd.web_path.clone();
-                    // isAbsoluteUrl(webPath) ? webPath : imagePath+webPath;
-                    // imagePath="" so relative stays relative.
-                    c.pieces.push(Piece::ref_text(Some(wp), Some(name), None));
-                }
-                return c;
-            }
-            // diff mode, non-root, no restated types: take the pointer's types,
-            // each marked SNAPSHOT_DERIVATION_EQUALS (SDR:2357-2364) so the
-            // checkForNoChange-wrapped pieces render dimmed.
-            if let Some(p) = self.pointer(e) {
-                let pt = p.types();
-                if !pt.is_empty() {
-                    return self.gen_types(e, &pt, root, true);
-                }
-            }
-            return c;
-        }
-        let ms_mode = self.cfg.must_support;
-        let all_types_ms = all_types_must_support(types);
-        let mut first = true;
-        for t in types {
-            // mustSupportMode type filter (SDR:2375): show a type iff the mode is
-            // off, OR no types are MS-marked (allTypesMustSupport), OR this type
-            // is MS-marked.
-            if ms_mode && !all_types_ms && !type_is_must_support_full(t) {
-                continue;
-            }
-            if first {
-                first = false;
-            } else {
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
-            }
-            if t.has_target() {
-                // Reference/canonical (SDR:2379-2427)
-                if !t.profiles().is_empty() {
-                    let ref_ = t.profiles()[0];
-                    if let Some(tsd) = self.ctx.resolve(ref_) {
-                        // SDR:2385-2389: "(version)" when multiple versions.
-                        let name = if ref_.contains('|') || self.ctx.version_count(ref_) > 1 {
-                            tsd.name.clone().map(|n| format!("{}({})", n, tsd.version))
-                        } else {
-                            tsd.name.clone()
-                        };
-                        c.pieces.push(Piece::ref_text(
-                            Some(tsd.web_path.clone()),
-                            name,
-                            Some(tsd.present()),
-                        ));
-                    } else {
-                        c.pieces.push(Piece::ref_text(
-                            Some(format!("{}references.html", self.core_path)),
-                            Some(t.working_code().to_string()),
-                            None,
-                        ));
-                    }
-                } else {
-                    c.pieces.push(Piece::ref_text(
-                        Some(format!("{}references.html", self.core_path)),
-                        Some(t.working_code().to_string()),
-                        None,
-                    ));
-                }
-                // " S" flag when isMustSupportDirect(t) && e.mustSupport
-                if !ms_mode && type_is_must_support(t) && e.must_support() {
-                    c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                    c.add_styled_text(
-                        Some("This type must be supported".into()),
-                        Some("S".into()),
-                        Some("white"),
-                        Some(RED_BACKGROUND_COLOR),
-                        None,
-                        false,
-                    );
-                }
-                c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
-                let tp_all_ms = all_canonicals_must_support(t, &t.target_profiles());
-                let mut tfirst = true;
-                for u in t.target_profiles() {
-                    // targetProfile MS filter (SDR:2406).
-                    if ms_mode && !tp_all_ms && !canonical_is_must_support(t, u) {
-                        continue;
-                    }
-                    if tfirst {
-                        tfirst = false;
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
-                    }
-                    self.gen_target_link(&mut c, t, u, dim);
-                    if !ms_mode && canonical_is_must_support(t, u) && e.must_support() {
-                        c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                        // SDR:2414: targetProfile S also uses STRUC_DEF_TYPE_SUPP.
-                        c.add_styled_text(
-                            Some("This type must be supported".into()),
-                            Some("S".into()),
-                            Some("white"),
-                            Some(RED_BACKGROUND_COLOR),
-                            None,
-                            false,
-                        );
-                    }
-                }
-                c.pieces.push(Piece::ref_text(None, Some(")".into()), None));
-                // aggregation modes (SDR:2416-2427) — rare; gap if present
-                if t.v.get("aggregation").is_some() {
-                    self.gap("aggregation modes");
-                }
-            } else if !t.profiles().is_empty()
-                && (t.working_code() != "Extension" || is_profiled_type(&t.profiles()))
-            {
-                // profiled type (SDR:2428-2461)
-                let pf_all_ms = all_canonicals_must_support(t, &t.profiles());
-                let mut pfirst = true;
-                for p in t.profiles() {
-                    // profile MS filter (SDR:2435).
-                    if ms_mode && !pf_all_ms && !canonical_is_must_support(t, p) {
-                        continue;
-                    }
-                    if pfirst {
-                        pfirst = false;
-                    } else {
-                        c.pieces
-                            .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
-                    }
-                    // getLinkForProfile -> webPath|name, name gains
-                    // "(version)" when multiple versions of the canonical are
-                    // loaded (IGKP:719-723).
-                    if let Some(psd) = self.ctx.resolve(p) {
-                        let name = if p.contains('|') || self.ctx.version_count(p) > 1 {
-                            psd.name.clone().map(|n| format!("{}({})", n, psd.version))
-                        } else {
-                            psd.name.clone()
-                        };
-                        c.pieces.push(dim_piece(Piece::ref_text(
-                            Some(psd.web_path.clone()),
-                            name,
-                            Some(t.working_code().to_string()),
-                        ), dim));
-                    } else {
-                        c.pieces.push(dim_piece(Piece::ref_text(
-                            None,
-                            Some(t.working_code().to_string()),
-                            None,
-                        ), dim));
-                    }
-                    if !ms_mode && canonical_is_must_support(t, p) && e.must_support() {
-                        c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                        c.add_styled_text(
-                            Some("This profile must be supported".into()),
-                            Some("S".into()),
-                            Some("white"),
-                            Some(RED_BACKGROUND_COLOR),
-                            None,
-                            false,
-                        );
-                    }
-                }
-            } else {
-                // plain type (SDR:2462-2501)
-                let tc = t.working_code();
-                if tc.starts_with("http://") || tc.starts_with("https://") {
-                    if let Some(sd) = self.ctx.resolve_type(tc) {
-                        // getLinkFor(corePath, tc) -> webPath; text = typeName
-                        let tn = type_name_of(&sd, tc);
-                        c.pieces.push(dim_piece(
-                            Piece::ref_text(Some(sd.web_path.clone()), Some(tn), None),
-                            dim,
-                        ));
-                    } else {
-                        c.pieces
-                            .push(dim_piece(Piece::ref_text(None, Some(tc.to_string()), None), dim));
-                    }
-                } else if self.ctx.has_link_for(tc) {
-                    // pkp.hasLinkFor gate (IGKP:568): derivation must be
-                    // specialization — base abstract types (Resource, Element)
-                    // render as plain text.
-                    let sd = self.ctx.resolve_type(tc).unwrap();
-                    c.pieces.push(dim_piece(Piece::ref_text(
-                        Some(sd.web_path.clone()),
-                        Some(tc.to_string()),
-                        None,
-                    ), dim));
-                } else {
-                    c.pieces
-                        .push(dim_piece(Piece::ref_text(None, Some(tc.to_string()), None), dim));
-                }
-                if !ms_mode && type_is_must_support(t) && e.must_support() {
-                    c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                    c.add_styled_text(
-                        Some("This type must be supported".into()),
-                        Some("S".into()),
-                        Some("white"),
-                        Some(RED_BACKGROUND_COLOR),
-                        None,
-                        false,
-                    );
-                }
-            }
-        }
-        c
-    }
-
-    /// `genTargetLink` (SDR:2534-2565). EVERY piece it adds is wrapped in
-    /// `checkForNoChange(t, ...)` (SDR:2539/2542/2560/2562/2564) — so pointer-
-    /// derived (EQUALS) types dim their target links while the enclosing
-    /// "Reference"/"("/" | "/")" pieces (added by genTypes, unwrapped) stay
-    /// bright.
-    fn gen_target_link(&mut self, c: &mut Cell, _t: &TypeRef<'a>, u: &str, dim: bool) {
-        if u.starts_with("http://hl7.org/fhir/StructureDefinition/") {
-            if let Some(sd) = self.ctx.resolve(u) {
-                let disp = sd.title.clone().or(sd.name.clone()).unwrap_or_default();
-                c.pieces.push(dim_piece(
-                    Piece::ref_text(Some(sd.web_path.clone()), Some(disp), None),
-                    dim,
-                ));
-            } else {
-                let rn = &u[40..];
-                let link = self.ctx.resolve_type(rn).map(|r| r.web_path);
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(link, Some(rn.to_string()), None), dim));
-            }
-        } else if u.starts_with("http://") || u.starts_with("https://") {
-            if let Some(sd) = self.ctx.resolve(u) {
-                let disp = sd.present();
-                // href = getLinkForProfile == webPath (| stripped)
-                let mut href = sd.web_path.clone();
-                if let Some(i) = href.find('|') {
-                    href.truncate(i);
-                }
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(Some(href), Some(disp), None), dim));
-            } else {
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(None, Some(u.to_string()), None), dim));
-            }
-        } else if u.starts_with('#') {
-            self.gap("contained target profile link");
-        }
-    }
+    // `genTypes` (SDR:2317) and `genTargetLink` (SDR:2534) now live in the
+    // shared `gentypes::TypesHost` trait (impl below) — the grid path uses the
+    // SAME code with must_support_mode=false / pointer=None / dim=false.
 
     /// The value[x] cell for a simple extension (SDR:1402): genTypes on the
     /// extension's value definition.
-    fn gen_types_for_value(&mut self, vd: &ValueDefn, e: Ed<'a>) -> Cell {
-        // Build a synthetic Ed over the stored JSON.
+    fn gen_types_for_value(&mut self, vd: &ValueDefn, _e: Ed<'a>) -> Cell {
+        // genTypes(gen, row, valueDefn, ..., root=false, mustSupport, diff)
+        // (SDR:1402): Java passes the VALUE DEFN as `e`, so the mustSupport "S"
+        // flags read the value defn's own mustSupport (usually absent) and its
+        // types. The value defn's JSON (vd.json) outlives this call but not the
+        // borrowed snapshot `'a`; the shared `gen_types` is generic over the
+        // element lifetime, so we call it directly (root=false, dim=false — value
+        // defn types are never pointer-derived; must_support_mode threads via the
+        // host, matching Java's ambient `mustSupport` arg).
         let ed = Ed::new(&vd.json);
         let types = ed.types();
-        self.gen_types_inner_for_ext(ed, &types, e)
-    }
-
-    fn gen_types_inner_for_ext(&mut self, ed: Ed<'_>, types: &[TypeRef<'_>], outer: Ed<'a>) -> Cell {
-        // genTypes(gen, row, valueDefn, ...) with root=false, ms=false. The
-        // mustSupport "S" flags check the VALUE DEFN's types but the OUTER
-        // element's mustSupport; Java passes the value defn as `e` so
-        // e.getMustSupport() is the value defn's (usually absent). Reproduce
-        // Java exactly: use the value defn for both.
-        let _ = outer;
-        // Reuse gen_types via a temporary TCtx borrow — duplicated logic kept
-        // in gen_types; call it with root=false.
-        // SAFETY: gen_types only uses self + args.
-        // (We simply transmute lifetimes by re-borrowing the JSON value.)
-        // Simplest: inline call.
-        let e2: Ed<'_> = ed;
-        // gen_types expects Ed<'a>; the JSON lives in ValueDefn which outlives
-        // the call. We do a raw call through a helper that doesn't capture.
-        self.gen_types_erased(e2, types)
-    }
-
-    fn gen_types_erased(&mut self, _e: Ed<'_>, types: &[TypeRef<'_>]) -> Cell {
-        // A lifetime-erased duplicate of gen_types' body for non-'a elements.
-        // To avoid divergence, we only support the common cases the extension
-        // value path hits (plain types, references, profiled datatypes).
-        let mut c = Cell::new();
-        let mut first = true;
-        for t in types {
-            if first {
-                first = false;
-            } else {
-                c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
-            }
-            if t.has_target() {
-                c.pieces.push(Piece::ref_text(
-                    Some(format!("{}references.html", self.core_path)),
-                    Some(t.working_code().to_string()),
-                    None,
-                ));
-                c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
-                let mut tfirst = true;
-                for u in t.target_profiles() {
-                    if tfirst {
-                        tfirst = false;
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
-                    }
-                    if u.starts_with("http://hl7.org/fhir/StructureDefinition/") {
-                        if let Some(sd) = self.ctx.resolve(u) {
-                            let disp = sd.title.clone().or(sd.name.clone()).unwrap_or_default();
-                            c.pieces.push(Piece::ref_text(
-                                Some(sd.web_path.clone()),
-                                Some(disp),
-                                None,
-                            ));
-                            continue;
-                        }
-                    }
-                    if let Some(sd) = self.ctx.resolve(u) {
-                        c.pieces.push(Piece::ref_text(
-                            Some(sd.web_path.clone()),
-                            Some(sd.present()),
-                            None,
-                        ));
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(u.to_string()), None));
-                    }
-                }
-                if t.target_profiles().is_empty() {
-                    // Java: `Any` only in makeChoiceRows; genTypes prints ()
-                }
-                c.pieces.push(Piece::ref_text(None, Some(")".into()), None));
-            } else {
-                let tc = t.working_code();
-                if let Some(sd) = self.ctx.resolve_type(tc) {
-                    c.pieces.push(Piece::ref_text(
-                        Some(sd.web_path.clone()),
-                        Some(tc.to_string()),
-                        None,
-                    ));
-                } else {
-                    c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
-                }
-            }
-        }
-        c
+        self.gen_types(ed, &types, false, false)
     }
 
     /// `makeChoiceRows` (SDR:3362). In mustSupportMode a type is shown iff the
@@ -3070,6 +2694,31 @@ impl<'a> TCtx<'a> {
     }
 }
 
+impl<'a> crate::gentypes::TypesHost<'a> for TCtx<'a> {
+    fn ctx(&self) -> &IgContext {
+        self.ctx
+    }
+    fn core_path(&self) -> &str {
+        self.core_path
+    }
+    fn sd_root(&self) -> &serde_json::Value {
+        &self.sd.root
+    }
+    fn gap(&mut self, what: &str) {
+        self.gaps.push(what.to_string());
+    }
+    fn pointer(&self, e: Ed<'_>) -> Option<Ed<'a>> {
+        if self.cfg.diff {
+            self.pointers.get(e.id()).copied()
+        } else {
+            None
+        }
+    }
+    fn must_support_mode(&self) -> bool {
+        self.cfg.must_support
+    }
+}
+
 struct ExtDefn {
     url: String,
     sd: std::rc::Rc<serde_json::Value>,
@@ -3724,7 +3373,7 @@ fn dechoice_candidates(id: &str) -> Vec<String> {
 
 /// checkForNoChange (SDR:2305-2310): add `opacity: 0.5` when the source
 /// carries SNAPSHOT_DERIVATION_EQUALS (reconstructed as a bool here).
-fn dim_piece(mut p: Piece, dim: bool) -> Piece {
+pub(crate) fn dim_piece(mut p: Piece, dim: bool) -> Piece {
     if dim {
         p.add_style(OPACITY);
     }
@@ -4026,7 +3675,7 @@ fn owned_opaque_ids(sd: &Sd) -> std::collections::HashSet<String> {
 
 /// `isMustSupport(TypeRefComponent)` (SDR): the type ext is true, OR any
 /// profile/targetProfile canonical carries the type-must-support ext.
-fn type_is_must_support_full(t: &TypeRef<'_>) -> bool {
+pub(crate) fn type_is_must_support_full(t: &TypeRef<'_>) -> bool {
     if type_is_must_support(t) {
         return true;
     }
@@ -4045,7 +3694,7 @@ fn type_is_must_support_full(t: &TypeRef<'_>) -> bool {
 
 /// `allProfilesMustSupport(profiles)` (SDR): returns true when NO canonical in
 /// the list is MS-marked (`!all && !any`).
-fn all_canonicals_must_support(t: &TypeRef<'_>, canonicals: &[&str]) -> bool {
+pub(crate) fn all_canonicals_must_support(t: &TypeRef<'_>, canonicals: &[&str]) -> bool {
     let mut all = true;
     let mut any = false;
     for u in canonicals {
@@ -4058,7 +3707,7 @@ fn all_canonicals_must_support(t: &TypeRef<'_>, canonicals: &[&str]) -> bool {
 
 /// `allTypesMustSupport(e)` (SDR): returns true when NO type is MS-marked
 /// (`!all && !any`) — the "the MS filter shouldn't apply" case.
-fn all_types_must_support(types: &[TypeRef<'_>]) -> bool {
+pub(crate) fn all_types_must_support(types: &[TypeRef<'_>]) -> bool {
     let mut all = true;
     let mut any = false;
     for t in types {

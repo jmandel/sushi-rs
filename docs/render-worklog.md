@@ -414,13 +414,14 @@ Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
 
 - **No SD table kinds remain.** All snapshot/diff/grid/by-*/bindings/obligations/
   span kinds are byte-parity corpus-wide across us-core/plan-net/cycle.
-- **Simplification candidates (logged)**: (a) grid.rs `gen_types`/
-  `gen_target_link` are branch-for-branch duplicates of table.rs's (both port
-  the SAME Java `genTypes`/`genTargetLink`); table.rs's now additionally
-  carries the `dim` param — unifying would let grid drop its copy (grid never
-  dims: non-diff). Deferred to a consolidation pass (touches two green paths,
-  gate carefully). (b) table.rs `gen_types_erased` (the lifetime-erased
-  ext-value duplicate) could fold into gen_types with a lifetime refactor.
+- **Simplification DONE (F3 close)**: the genTypes dedup landed. grid.rs's
+  duplicate `gen_types`/`gen_target_link` AND table.rs's `gen_types_erased`/
+  `gen_types_inner_for_ext` collapsed into `gentypes::TypesHost` (trait default
+  methods, generic over the element lifetime `'e`; host supplies ctx/core_path/
+  sd_root/gap/pointer/must_support_mode). grid = the non-dim/non-pointer/non-MS
+  specialization; the ext-value cell calls the trait directly (now honors
+  SDR:1402's ambient mustSupport). ~510 dup lines → ~331 shared. Gate: all 19
+  kind×IG combos byte-identical. (Ledger updated.)
 - Residual gap markers in table.rs (each fires loudly): choice groups
   (readChoices/processConstraint), aggregation modes, standards-status flag,
   cross-structure contained targets, complex merged-pattern partner rows,

@@ -14,6 +14,7 @@
 pub mod commonmark;
 pub mod context;
 pub mod diff;
+pub mod gentypes;
 pub mod grid;
 pub mod markdown;
 pub mod sdmodel;

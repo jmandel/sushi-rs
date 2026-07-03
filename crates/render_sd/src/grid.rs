@@ -21,14 +21,12 @@ use render_tables::{generate, Gen};
 use render_xhtml::{Config, XhtmlComposer};
 
 use crate::context::IgContext;
+use crate::gentypes::TypesHost;
 use crate::markdown;
 use crate::sdmodel::{Ed, Sd};
 use crate::table::{
-    build_json, canonical_is_must_support, core_path_for, describe_slice, is_profiled_type,
-    is_simple_markdown, strength_definition, tail, type_is_must_support, type_name_of,
+    build_json, core_path_for, describe_slice, is_simple_markdown, strength_definition, tail,
 };
-
-use crate::table::RED_BACKGROUND_COLOR;
 
 /// `generateGrid` (SDR:537). Returns the composed grid fragment string
 /// (`new XhtmlComposer(XhtmlComposer.HTML).compose(node)`), matching the
@@ -146,7 +144,8 @@ impl<'a> GridCtx<'a> {
         // Type cell (SDR:2630-2633): hasDef && !"0".equals(max) -> genTypes.
         let max_is_zero = element.max() == Some("0");
         if !max_is_zero {
-            let c = self.gen_types(element, root);
+            // grid: non-diff (dim=false), non-MS (must_support_mode=false).
+            let c = self.gen_types(element, &element.types(), root, false);
             row.cells.push(c);
         } else {
             row.cells.push(Cell::new());
@@ -171,227 +170,9 @@ impl<'a> GridCtx<'a> {
         }
     }
 
-    /// `genTypes` (SDR:2320), mustSupportMode=false, diff=false. A branch-for-
-    /// branch mirror of the SUMMARY table path's `gen_types`.
-    fn gen_types(&mut self, e: Ed<'a>, root: bool) -> Cell {
-        let mut c = Cell::new();
-        if let Some(cr) = e.content_reference() {
-            let (url, frag) = match cr.split_once('#') {
-                Some((u, f)) => (u, f),
-                None => ("", cr),
-            };
-            if url.is_empty() || url == self.sd_url() {
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
-                c.pieces.push(Piece::ref_text(
-                    Some(format!("#{}", frag)),
-                    Some(tail(frag).to_string()),
-                    Some(frag.to_string()),
-                ));
-            } else if let Some(src) = self.ctx.resolve(url) {
-                let type_name = src.name.clone().unwrap_or_else(|| tail(url).to_string());
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
-                c.pieces.push(Piece::ref_text(
-                    Some(format!("{}#{}", src.web_path, frag)),
-                    Some(format!("{} ({})", tail(frag), type_name)),
-                    Some(frag.to_string()),
-                ));
-            }
-            return c;
-        }
-        let types = e.types();
-        if types.is_empty() {
-            if root {
-                // base branch (SDR:2337-2350)
-                let base_url = self
-                    .sd
-                    .root
-                    .get("baseDefinition")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                if let Some(bsd) = self.ctx.resolve(base_url) {
-                    let v = if base_url.contains('|') || self.ctx.version_count(base_url) > 1 {
-                        format!("({})", bsd.version)
-                    } else {
-                        String::new()
-                    };
-                    let name = format!("{}{}", bsd.name.clone().unwrap_or_default(), v);
-                    c.pieces
-                        .push(Piece::ref_text(Some(bsd.web_path.clone()), Some(name), None));
-                }
-            }
-            return c;
-        }
-        let mut first = true;
-        for t in &types {
-            if first {
-                first = false;
-            } else {
-                c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
-            }
-            if t.has_target() {
-                // Reference/canonical (SDR:2382-2427)
-                if !t.profiles().is_empty() {
-                    let ref_ = t.profiles()[0];
-                    if let Some(tsd) = self.ctx.resolve(ref_) {
-                        let name = if ref_.contains('|') || self.ctx.version_count(ref_) > 1 {
-                            tsd.name.clone().map(|n| format!("{}({})", n, tsd.version))
-                        } else {
-                            tsd.name.clone()
-                        };
-                        c.pieces.push(Piece::ref_text(
-                            Some(tsd.web_path.clone()),
-                            name,
-                            Some(tsd.present()),
-                        ));
-                    } else {
-                        c.pieces.push(Piece::ref_text(
-                            Some(format!("{}references.html", self.core_path)),
-                            Some(t.working_code().to_string()),
-                            None,
-                        ));
-                    }
-                } else {
-                    c.pieces.push(Piece::ref_text(
-                        Some(format!("{}references.html", self.core_path)),
-                        Some(t.working_code().to_string()),
-                        None,
-                    ));
-                }
-                if type_is_must_support(t) && e.must_support() {
-                    c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                    c.add_styled_text(
-                        Some("This type must be supported".into()),
-                        Some("S".into()),
-                        Some("white"),
-                        Some(RED_BACKGROUND_COLOR),
-                        None,
-                        false,
-                    );
-                }
-                c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
-                let mut tfirst = true;
-                for u in t.target_profiles() {
-                    if tfirst {
-                        tfirst = false;
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
-                    }
-                    self.gen_target_link(&mut c, u);
-                    if canonical_is_must_support(t, u) && e.must_support() {
-                        c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                        c.add_styled_text(
-                            Some("This type must be supported".into()),
-                            Some("S".into()),
-                            Some("white"),
-                            Some(RED_BACKGROUND_COLOR),
-                            None,
-                            false,
-                        );
-                    }
-                }
-                c.pieces.push(Piece::ref_text(None, Some(")".into()), None));
-            } else if !t.profiles().is_empty()
-                && (t.working_code() != "Extension" || is_profiled_type(&t.profiles()))
-            {
-                // profiled type (SDR:2432-2461)
-                let mut pfirst = true;
-                for p in t.profiles() {
-                    if pfirst {
-                        pfirst = false;
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
-                    }
-                    if let Some(psd) = self.ctx.resolve(p) {
-                        let name = if p.contains('|') || self.ctx.version_count(p) > 1 {
-                            psd.name.clone().map(|n| format!("{}({})", n, psd.version))
-                        } else {
-                            psd.name.clone()
-                        };
-                        c.pieces.push(Piece::ref_text(
-                            Some(psd.web_path.clone()),
-                            name,
-                            Some(t.working_code().to_string()),
-                        ));
-                    } else {
-                        c.pieces.push(Piece::ref_text(
-                            None,
-                            Some(t.working_code().to_string()),
-                            None,
-                        ));
-                    }
-                    if canonical_is_must_support(t, p) && e.must_support() {
-                        c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                        c.add_styled_text(
-                            Some("This profile must be supported".into()),
-                            Some("S".into()),
-                            Some("white"),
-                            Some(RED_BACKGROUND_COLOR),
-                            None,
-                            false,
-                        );
-                    }
-                }
-            } else {
-                // plain type (SDR:2462-2501)
-                let tc = t.working_code();
-                if tc.starts_with("http://") || tc.starts_with("https://") {
-                    if let Some(sd) = self.ctx.resolve_type(tc) {
-                        let tn = type_name_of(&sd, tc);
-                        c.pieces.push(Piece::ref_text(Some(sd.web_path.clone()), Some(tn), None));
-                    } else {
-                        c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
-                    }
-                } else if self.ctx.has_link_for(tc) {
-                    let sd = self.ctx.resolve_type(tc).unwrap();
-                    c.pieces.push(Piece::ref_text(
-                        Some(sd.web_path.clone()),
-                        Some(tc.to_string()),
-                        None,
-                    ));
-                } else {
-                    c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
-                }
-                if type_is_must_support(t) && e.must_support() {
-                    c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
-                    c.add_styled_text(
-                        Some("This type must be supported".into()),
-                        Some("S".into()),
-                        Some("white"),
-                        Some(RED_BACKGROUND_COLOR),
-                        None,
-                        false,
-                    );
-                }
-            }
-        }
-        c
-    }
-
-    /// `genTargetLink` (SDR:2529). Same port as the SUMMARY table path.
-    fn gen_target_link(&mut self, c: &mut Cell, u: &str) {
-        if u.starts_with("http://hl7.org/fhir/StructureDefinition/") {
-            if let Some(sd) = self.ctx.resolve(u) {
-                let disp = sd.title.clone().or(sd.name.clone()).unwrap_or_default();
-                c.pieces
-                    .push(Piece::ref_text(Some(sd.web_path.clone()), Some(disp), None));
-            } else {
-                let rn = &u[40..];
-                let link = self.ctx.resolve_type(rn).map(|r| r.web_path);
-                c.pieces.push(Piece::ref_text(link, Some(rn.to_string()), None));
-            }
-        } else if u.starts_with("http://") || u.starts_with("https://") {
-            if let Some(sd) = self.ctx.resolve(u) {
-                let disp = sd.present();
-                let mut href = sd.web_path.clone();
-                if let Some(i) = href.find('|') {
-                    href.truncate(i);
-                }
-                c.pieces.push(Piece::ref_text(Some(href), Some(disp), None));
-            } else {
-                c.pieces.push(Piece::ref_text(None, Some(u.to_string()), None));
-            }
-        }
-    }
+    // `genTypes` / `genTargetLink` are provided by the shared
+    // `gentypes::TypesHost` trait (impl below): the grid is the
+    // must_support_mode=false / pointer=None / dim=false specialization.
 
     /// `generateGridDescription` (SDR:3100). The whole body is gated on
     /// `used` (SDR:3104) — a prohibited (max=0) element gets an empty cell.
@@ -634,6 +415,29 @@ impl<'a> GridCtx<'a> {
             self.anchors.insert(anchor.clone(), 1);
             anchor
         }
+    }
+}
+
+impl<'a> TypesHost<'a> for GridCtx<'a> {
+    fn ctx(&self) -> &IgContext {
+        self.ctx
+    }
+    fn core_path(&self) -> &str {
+        self.core_path
+    }
+    fn sd_root(&self) -> &serde_json::Value {
+        &self.sd.root
+    }
+    /// Grid never collects gaps (non-diff, non-MS; its residual gaps are
+    /// paths no golden hits). The publisher's genTypes on grid can't gap.
+    fn gap(&mut self, _what: &str) {}
+    /// Grid is never diff mode -> no SNAPSHOT_DERIVATION_POINTER.
+    fn pointer(&self, _e: Ed<'_>) -> Option<Ed<'a>> {
+        None
+    }
+    /// Grid is never the by-mustsupport view.
+    fn must_support_mode(&self) -> bool {
+        false
     }
 }
 
