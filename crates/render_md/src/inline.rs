@@ -312,13 +312,23 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                     out.push_str(&raw);
                     i = ni;
                 } else if let Some((raw, ni)) = try_raw_inline_html(chars, i) {
-                    out.push_str(&raw);
                     if let Some((name, is_close, is_self)) = inspect_tag(&raw) {
                         if is_close {
                             if let Some(pos) = open_stack.iter().rposition(|t| *t == name) {
+                                out.push_str(&raw);
                                 open_stack.truncate(pos);
+                            } else {
+                                // Unmatched inline closing tag (no open element
+                                // in this span context): kramdown treats it as
+                                // literal text and escapes it.
+                                let orig: String = chars[i..ni].iter().collect();
+                                out.push_str(&escape_html_text(&orig));
                             }
-                        } else if !is_self && !is_void_html(&name) {
+                            i = ni;
+                            continue;
+                        }
+                        out.push_str(&raw);
+                        if !is_close && !is_self && !is_void_html(&name) {
                             if is_raw_span_model(&name) {
                                 // RAW content model (code, kbd, script, …):
                                 // content passes through VERBATIM until the
@@ -360,6 +370,9 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                             }
                             open_stack.push(name);
                         }
+                    } else {
+                        // Not a plain tag (e.g. an inline comment): passthrough.
+                        out.push_str(&raw);
                     }
                     i = ni;
                 } else {
@@ -1299,6 +1312,13 @@ fn try_emphasis(chars: &[char], i: usize) -> Option<(String, usize)> {
             if rr >= want && k > content_start && !chars[k - 1].is_whitespace() {
                 // for `_`, closing must not be followed by alnum
                 if marker == '_' && m < n && chars[m].is_alphanumeric() {
+                    k = m;
+                    continue;
+                }
+                // A run of 2+ markers inside a single-marker span is a nested
+                // STRONG delimiter, not our closer (`*(x **y** z)*` — the
+                // outer em closes at the final single `*`).
+                if want == 1 && rr >= 2 {
                     k = m;
                     continue;
                 }
