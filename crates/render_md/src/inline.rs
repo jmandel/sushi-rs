@@ -288,6 +288,13 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                 if let Some((html, ni)) = try_autolink(chars, i) {
                     out.push_str(&html);
                     i = ni;
+                } else if let Some((raw, ni)) = try_orphan_block_close(chars, i) {
+                    // Orphan closing tag for a block-level element in paragraph
+                    // text (its open lives in a block that never reached inline
+                    // context) — kramdown escapes it. Applies only to the true
+                    // inline path, not raw-HTML-block normalization.
+                    out.push_str(&raw);
+                    i = ni;
                 } else if let Some((raw, ni)) = try_raw_inline_html(chars, i) {
                     out.push_str(&raw);
                     i = ni;
@@ -509,6 +516,34 @@ fn is_email(s: &str) -> bool {
     }
 }
 
+/// If a closing tag `</name>` for a block-level element starts at `i`, return
+/// it HTML-escaped as literal text (kramdown treats such an orphan close in
+/// paragraph text as literal). Used only on the inline paragraph path.
+fn try_orphan_block_close(chars: &[char], i: usize) -> Option<(String, usize)> {
+    let n = chars.len();
+    if chars.get(i + 1) != Some(&'/') {
+        return None;
+    }
+    let mut k = i + 2;
+    let start = k;
+    while k < n && (chars[k].is_ascii_alphanumeric() || chars[k] == '-') {
+        k += 1;
+    }
+    let name: String = chars[start..k].iter().collect::<String>().to_lowercase();
+    if name.is_empty() || !is_block_html(&name) {
+        return None;
+    }
+    // require the tag to close with '>'
+    while k < n && chars[k] != '>' && chars[k] != '<' {
+        k += 1;
+    }
+    if k >= n || chars[k] != '>' {
+        return None;
+    }
+    let raw: String = chars[i..k + 1].iter().collect();
+    Some((escape_html_text(&raw), k + 1))
+}
+
 fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
     // Pass through an inline HTML tag: <tag ...>, </tag>, <!-- comment -->, <br/>
     let n = chars.len();
@@ -642,6 +677,21 @@ fn is_void_html(name: &str) -> bool {
         name,
         "area" | "base" | "br" | "col" | "command" | "embed" | "hr" | "img" | "input" | "keygen"
             | "link" | "meta" | "param" | "source" | "track" | "wbr"
+    )
+}
+
+/// kramdown HTML_BLOCK_ELEMENTS (parser/html.rb:60-63) — block-level element
+/// names. An inline closing tag for one of these in paragraph text is an
+/// orphan and gets escaped.
+fn is_block_html(name: &str) -> bool {
+    matches!(
+        name,
+        "address" | "article" | "aside" | "applet" | "body" | "blockquote" | "caption" | "col"
+            | "colgroup" | "dd" | "div" | "dl" | "dt" | "fieldset" | "figcaption" | "footer"
+            | "form" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "header" | "hgroup" | "hr"
+            | "html" | "head" | "iframe" | "legend" | "menu" | "li" | "main" | "map" | "nav"
+            | "ol" | "optgroup" | "p" | "pre" | "section" | "summary" | "table" | "tbody" | "td"
+            | "th" | "thead" | "tfoot" | "tr" | "ul"
     )
 }
 

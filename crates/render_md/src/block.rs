@@ -606,6 +606,14 @@ impl<'a> Parser<'a> {
                 raw: collected.join("\n"),
             });
         }
+        // A line starting with a CLOSING tag `</...>` does not open a block at
+        // the top level — an orphan close tag (e.g. left by a stripped Liquid
+        // include) is rendered as a paragraph with the tag escaped inline
+        // (kramdown behavior). Matched closes are consumed within their open
+        // element's block, so they never reach here.
+        if t.starts_with("</") {
+            return None;
+        }
         // Must look like an HTML tag <name ...>
         let tagname = html_tag_name(t)?;
         // Span/inline elements (<br>, <img>, <span>, <a>, …) do NOT start an
