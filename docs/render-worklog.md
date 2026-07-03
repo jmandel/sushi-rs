@@ -682,12 +682,37 @@ Red div + SDR_EXT_DEPR + the nested `structuredefinition-standards-status-reason
 markdown via `preProcessMarkdown → md_process → XhtmlParser re-parse`. us-core
 67/70+3gap → 70/70 GREEN corpus-wide.
 
+### pseudo-json GREEN corpus-wide (session 6, forked port)
+
+us-core **70/70**, plan-net **22/22**, cycle **7/7**. `pseudojson.rs` (~700 LOC,
+index-based snapshot walk over psdr pseudoJson:1722-2240) + `Ed::constraint_values`.
+getSrcFile/getLinkForProfile both resolve through ctx.resolve(_type).web_path
+(own SD → local page; core types → spec.internals `datatypes.html#code` joined
+with the R4 base); `suffix(link,code)` keeps an existing `#anchor` else appends
+`#code`. Quirks (cited in-module):
+1. getInvariants allInvariants=FALSE (no invOldMode-style genMode escape) —
+   inherited ele-1 dropped → empty `C?` titles (834 corpus-verified).
+2. Binding link is ALWAYS `{corePath}null.html` — vs `render_filename` userdata
+   null at pseudoJson time; 834/834 golden links are `.../R4/null.html`.
+3. Java `List.toString()` leak: non-core targetProfile/profile branch emits
+   `[CanonicalType[url]]` verbatim.
+4. Version-suffixed target type (`CarePlan|4.0.1`): hasType/hasResource miss →
+   raw text, no link.
+5. contentReference leaf (empty type array, no children): finished JSON drops the
+   in-memory null-code type → `<n/a>` branch; widened to types.len()<=1.
+6. describeSlicing leading space; the Java ternary is literal (ordered==false →
+   SDR_SORTED, ordered==true → SDR_ANY_ORDER).
+7. Complex-extension no-value → `SDR_NOT_HANDLED_EXT` double-nested
+   "Not handled yet: complex extension {url}" string.
+
 ### F4 remaining after session 6
 - **DONE green corpus-wide:** contained-index, history, pseudo-ttl, pseudo-xml,
-  inv/-key/-diff, sd-use-context, summary/-all (−1 practitioner cited residual).
-- **In flight:** pseudo-json (JsonXhtmlRenderer ~520 LOC self-contained; forked).
+  inv/-key/-diff, sd-use-context, pseudo-json, summary/-all (−1 practitioner
+  cited residual).
 - **Terminology (reclassified):** tx/-diff/-key/-ms (VS resolution + version-
-  reference, NOT markdown), VS cld/expansion, CS content.
+  reference renderVersionReference 8-branch + source-package attribution, NOT
+  markdown — non-empty denominators 65/17/7), VS cld/expansion, CS content.
+  Needs IgContext to expose source-package (id/version/web) for resolved VS.
 - **Whole-IG + markdown:** dict (renderDict + processMarkdown), sd-xref/uses/maps
   (mappings uses processMarkdown at psdr:1482 — now unblocked), IG aggregates.
 
