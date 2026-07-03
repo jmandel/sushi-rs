@@ -13,17 +13,34 @@
 //! * `smart_quotes: [apos, apos, quot, quot]` — the FHIR template maps all
 //!   curly quotes back to ASCII `'` and `"` (i.e. smart quotes *disabled*).
 //! * `typographic_symbols: {laquo: "<<", raquo: ">>"}`.
-//! * IAL `{: .class #id key="v"}` on the line after a block (or a span IAL).
-//! * `{:toc}` / `no_toc`, footnotes, `markdown="1"` HTML-block re-entry, and
-//!   raw-HTML passthrough.
+//! * IALs: block IAL before/after a block, span IAL after a span element,
+//!   list-item-start IAL, heading `{#id}` — with kramdown's attribute
+//!   emission order.
+//! * `{:toc}` / `no_toc`, footnotes, indented + fenced code (with kramdown's
+//!   lazy-join quirks), pipe tables (headerless, footer, code-span-aware cell
+//!   split, nbsp/space cell padding), GFM task lists, link reference
+//!   definitions, `markdown="1"/0/span/block"` HTML re-entry per content
+//!   model, stateful `{::options parse_block_html}`, raw-HTML passthrough
+//!   with kramdown's re-serialization (innermost-close matching, auto-close,
+//!   attribute normalization, smart-amp).
 //!
-//! # Out of scope (documented boundary — see tests/README and the F1b report)
+//! Differential gate (task F1b): all 459 authored `input/pagecontent/*.md`
+//! pages of the 16-IG survey corpus render BYTE-IDENTICAL to kramdown 2.5.0 +
+//! kramdown-parser-gfm 1.1.0 under the publisher's Jekyll config
+//! (`scripts/md-diff.py`; Liquid stripped first — that layer belongs to the
+//! `liquid` crate).
 //!
-//! * Rouge syntax highlighting of `~~~lang` / ```lang` fences. render_md emits
-//!   kramdown's own `<pre><code class="language-X">` form; Rouge token markup
-//!   is a separate library, gated as an out-of-scope diff class.
+//! # Out of scope (documented boundary — see the F1b report)
+//!
+//! * Rouge syntax highlighting of ```` ```lang ````/`~~~lang` fences. render_md
+//!   emits kramdown's own `<pre><code class="language-X">` form; Rouge token
+//!   markup is a separate library layered on by Jekyll
+//!   (`syntax_highlighter: rouge`). 20 corpus pages carry language fences
+//!   whose full-Jekyll output differs only inside the highlighter markup;
+//!   this is confronted at F5 with real page goldens.
 //! * kramdown features not exercised by the survey corpus (definition lists,
-//!   math, `abbreviations`, `{::comment}` extensions, end-of-block `^`, etc.).
+//!   math, abbreviations, `{::comment}`/`{::nomarkdown}` bodies, EOB markers,
+//!   ALDs `{:name: ...}`).
 
 mod block;
 mod ial;
