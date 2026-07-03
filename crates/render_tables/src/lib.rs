@@ -21,7 +21,7 @@ pub mod hashorder;
 pub mod model;
 
 pub use generate::{
-    generate, init_grid_table, init_normal_table, path_url, phrase, Gen,
+    generate, init_custom_table, init_grid_table, init_normal_table, path_url, phrase, Column, Gen,
 };
 pub use model::{
     Cell, Counter, Piece, Row, TableGenerationMode, TableModel, TextAlignment, Title,

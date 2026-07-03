@@ -33,6 +33,18 @@ pub const OPACITY: &str = "opacity: 0.5"; // RenderingContext.getOpacity() (Rend
 pub const CONSTRAINT_CHAR: &str = "C"; // SDR:392
 pub const CONSTRAINT_STYLE: &str = "padding-left: 3px; padding-right: 3px; border: 1px maroon solid; font-weight: bold; color: #301212; background-color: #fdf4f4;"; // SDR:393
 
+/// `context.getStructureMode()` (StructureDefinitionRendererMode). Selects the
+/// column model in generateTableInner (SDR:627-648) and the per-element cell
+/// builder in genElement (SDR:1022-1035). SUMMARY = initNormalTable (Flags/
+/// Card/Type/Description). BINDINGS / OBLIGATIONS = initCustomTable (Name +
+/// scanned columns). MAPPINGS is not exercised by this corpus (no goldens).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructureMode {
+    Summary,
+    Bindings,
+    Obligations,
+}
+
 /// Per-fragment configuration (the publisher wrapper flags).
 #[derive(Debug, Clone)]
 pub struct TableConfig {
@@ -42,6 +54,8 @@ pub struct TableConfig {
     pub must_support: bool,
     /// byKey view: filter to the key-element set (constraint SDs only).
     pub key: bool,
+    /// `context.getStructureMode()` — the column/cell model (SDR:627).
+    pub mode: StructureMode,
     /// uniqueLocalPrefix on the HTG ("s"/"sa"/"k"/"ka"/"m"/"ma"; "" for diff).
     pub prefix: String,
     /// id suffix on the table model id ("S","SA","D","DA","K","KA","M","MA").
@@ -61,6 +75,7 @@ impl TableConfig {
             all_invariants: true,
             must_support: false,
             key: false,
+            mode: StructureMode::Summary,
             prefix: "s".into(),
             id_sfx: "S".into(),
             run_uuid: run_uuid.into(),
@@ -84,6 +99,7 @@ impl TableConfig {
             all_invariants: false,
             must_support: true,
             key: false,
+            mode: StructureMode::Summary,
             prefix: "m".into(),
             id_sfx: "M".into(),
             run_uuid: run_uuid.into(),
@@ -106,6 +122,7 @@ impl TableConfig {
             all_invariants: true,
             must_support: false,
             key: true,
+            mode: StructureMode::Summary,
             prefix: "k".into(),
             id_sfx: "K".into(),
             run_uuid: run_uuid.into(),
@@ -129,6 +146,7 @@ impl TableConfig {
             all_invariants: false,
             must_support: false,
             key: false,
+            mode: StructureMode::Summary,
             prefix: "".into(),
             id_sfx: "D".into(),
             run_uuid: run_uuid.into(),
@@ -142,6 +160,75 @@ impl TableConfig {
             ..TableConfig::diff_view(run_uuid)
         }
     }
+
+    // --- BINDINGS mode (publisher SDR wrapper `snapshot(...BINDINGS...)`:510) ---
+    // Same snapshot flags (diff=F, snapshot=T, allInv=T, ms=F) as `snapshot`,
+    // with StructureMode::BINDINGS. uniqueLocalPrefix = mc(BINDINGS)+"s" = "bs"
+    // / "bsa"; idSfx S/SA.
+    pub fn snapshot_bindings(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            mode: StructureMode::Bindings,
+            prefix: "bs".into(),
+            ..TableConfig::snapshot(run_uuid)
+        }
+    }
+    pub fn snapshot_bindings_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "bsa".into(),
+            id_sfx: "SA".into(),
+            ..TableConfig::snapshot_bindings(run_uuid)
+        }
+    }
+    // --- snapshot-obligations: publisher `snapshot(..., OBLIGATIONS, all)`
+    // (PublisherGenerator:1920) — the SNAPSHOT wrapper with the OBLIGATIONS mode
+    // param, NOT the `obligations()` wrapper (which makes the distinct
+    // `-obligations` fragment). So: snapshot flags (diff=F, snapshot=T, allInv=T,
+    // ms=F), uniqueLocalPrefix = mc(OBLIGATIONS)+"s" = "os"/"osa", idSfx S/SA.
+    pub fn snapshot_obligations(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            mode: StructureMode::Obligations,
+            prefix: "os".into(),
+            ..TableConfig::snapshot(run_uuid)
+        }
+    }
+    pub fn snapshot_obligations_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "osa".into(),
+            id_sfx: "SA".into(),
+            ..TableConfig::snapshot_obligations(run_uuid)
+        }
+    }
+    // --- diff + mode variants (publisher `diff(...mode...)`:487) ---
+    // diff flags (diff=T, snapshot=F, allInv=F, ms=F). uniqueLocalPrefix =
+    // mc(mode) [+ "a"]; idSfx D/DA.
+    pub fn diff_bindings(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            mode: StructureMode::Bindings,
+            prefix: "b".into(),
+            ..TableConfig::diff_view(run_uuid)
+        }
+    }
+    pub fn diff_bindings_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "ba".into(),
+            id_sfx: "DA".into(),
+            ..TableConfig::diff_bindings(run_uuid)
+        }
+    }
+    pub fn diff_obligations(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            mode: StructureMode::Obligations,
+            prefix: "o".into(),
+            ..TableConfig::diff_view(run_uuid)
+        }
+    }
+    pub fn diff_obligations_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "oa".into(),
+            id_sfx: "DA".into(),
+            ..TableConfig::diff_obligations(run_uuid)
+        }
+    }
 }
 
 /// Render one SD table fragment body (unwrapped).
@@ -151,30 +238,26 @@ pub fn render_table(
     def_file: &str,
     cfg: &TableConfig,
 ) -> (String, Vec<String>) {
-    let mut gen = Gen::new_normal(
-        if cfg.prefix.is_empty() {
-            None
-        } else {
-            Some(cfg.prefix.clone())
-        },
-        TableGenerationMode::Xhtml,
-    );
+    let prefix = if cfg.prefix.is_empty() {
+        None
+    } else {
+        Some(cfg.prefix.clone())
+    };
+    // HTG.mode: initNormalTable (SUMMARY) sets this.mode = XHTML (HTG:858), which
+    // gates the `no-external`/`data-no-external` link attrs (HTG:972/1153).
+    // initCustomTable (BINDINGS/OBLIGATIONS, SDR:885) NEVER sets this.mode, so it
+    // stays null — hence those tables carry NO no-external attrs (golden-
+    // confirmed: 0 no-external in -bindings/-obligations, same as grid).
+    let mut gen = match cfg.mode {
+        StructureMode::Summary => Gen::new_normal(prefix, TableGenerationMode::Xhtml),
+        StructureMode::Bindings | StructureMode::Obligations => Gen::new(prefix),
+    };
     gen.run_uuid = cfg.run_uuid.clone();
 
     // corePath: the publisher passes the core-spec web root with trailing
     // slash (verified in goldens: terminologies.html/conformance-rules links
     // and the https help16.png all live under http://hl7.org/fhir/R4/).
     let core_path = core_path_for(sd.fhir_version());
-    // initNormalTable(corePath, isLogical=false, alternating=true,
-    // id=profile.id+idSfx, isActive=IG_PUBLISHER(true), mode=XHTML) (SDR:641).
-    let mut model = generate::init_normal_table(
-        core_path,
-        false,
-        true,
-        Some(format!("{}{}", sd.id(), cfg.id_sfx)),
-        true,
-    );
-    model.active_tables = cfg.active_tables;
 
     // Element list. For byMustSupport the publisher renders a `sdCopy` whose
     // snapshot is `getMustSupportElements()` (MS elements + ancestors, with
@@ -271,6 +354,33 @@ pub fn render_table(
     } else {
         HashMap::new()
     };
+    // Column model + table factory (generateTableInner:623-648). SUMMARY ->
+    // initNormalTable (Flags/Card/Type/Description). BINDINGS/OBLIGATIONS ->
+    // scan the element list for columns, then initCustomTable (Name + columns).
+    let columns: Vec<render_tables::Column> = match cfg.mode {
+        StructureMode::Summary => Vec::new(),
+        StructureMode::Bindings => scan_bindings(all),
+        StructureMode::Obligations => scan_obligations(ctx, all),
+    };
+    let mut model = match cfg.mode {
+        StructureMode::Summary => generate::init_normal_table(
+            core_path,
+            false,
+            true,
+            Some(format!("{}{}", sd.id(), cfg.id_sfx)),
+            true,
+        ),
+        StructureMode::Bindings | StructureMode::Obligations => generate::init_custom_table(
+            core_path,
+            false,
+            true,
+            Some(format!("{}{}", sd.id(), cfg.id_sfx)),
+            true,
+            &columns,
+        ),
+    };
+    model.active_tables = cfg.active_tables;
+
     let mut t = TCtx {
         ctx,
         sd,
@@ -290,6 +400,7 @@ pub fn render_table(
         gaps: Vec::new(),
         merged_pattern_values: HashMap::new(),
         opaque_ids,
+        columns,
     };
 
     let mut rows: Vec<Row> = Vec::new();
@@ -323,6 +434,10 @@ struct TCtx<'a> {
     merged_pattern_values: HashMap<usize, Vec<serde_json::Value>>,
     /// Element ids carrying `render_opaque` (byMustSupport non-MS rows, SDR:996).
     opaque_ids: std::collections::HashSet<String>,
+    /// BINDINGS/OBLIGATIONS custom columns (scanBindings/scanObligations); empty
+    /// for SUMMARY. genElementBindings/genElementObligations add one cell per
+    /// column to each row (SDR:1024/1027).
+    columns: Vec<render_tables::Column>,
 }
 
 struct UnusedTracker {
@@ -432,8 +547,17 @@ impl<'a> TCtx<'a> {
     /// slicing row, plus its id, so the caller can route slice siblings into
     /// `rows[idx].sub_rows`.
     fn gen_element(&mut self, rows: &mut Vec<Row>, element: Ed<'a>, root: bool) -> Option<(usize, String)> {
+        // SDR:930: the whole element (row + children walk) is emitted only when
+        // NOT (onlyInformationIsMapping || (OBLIGATIONS && no obligations here or
+        // below)). onlyInformationIsMapping ~ never true for real corpora. In
+        // OBLIGATIONS mode, an element with no obligations on it or any
+        // descendant is skipped ENTIRELY (no row, no anchor bump, no recursion).
+        if self.cfg.mode == StructureMode::Obligations
+            && !self.element_or_descendents_have_obligations(element)
+        {
+            return None;
+        }
         let children = get_children(self.all, element);
-        // onlyInformationIsMapping ~ never true for real corpora.
         let mut row = Row::new();
         // 6.9.11 (the golden jar's fhir-core): anchor = element ID, path
         // fallback (SDR@6.9.11:933; the ONLY behavioral 6.9.10->6.9.11 change
@@ -529,18 +653,28 @@ impl<'a> TCtx<'a> {
 
         // name cell (SDR:1318)
         let name_cell_idx = self.gen_element_name_cell(&mut row, element, ref_.clone(), s_name.clone());
-        // SUMMARY cells (SDR:1030)
-        self.gen_element_cells(
-            &mut row,
-            element,
-            &types,
-            ext,
-            types_row,
-            root,
-            &mut used,
-            name_cell_idx,
-            !children.is_empty(),
-        );
+        // Per-mode cells (SDR:1022-1035).
+        match self.cfg.mode {
+            StructureMode::Summary => {
+                self.gen_element_cells(
+                    &mut row,
+                    element,
+                    &types,
+                    ext,
+                    types_row,
+                    root,
+                    &mut used,
+                    name_cell_idx,
+                    !children.is_empty(),
+                );
+            }
+            StructureMode::Bindings => {
+                self.gen_element_bindings(&mut row, element);
+            }
+            StructureMode::Obligations => {
+                self.gen_element_obligations(&mut row, element);
+            }
+        }
 
         // slicing icon overrides (SDR:1033-1048)
         let mut this_is_slicer = false;
@@ -607,16 +741,7 @@ impl<'a> TCtx<'a> {
                 Some("".into()),
                 None,
             ));
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::with(
-                None,
-                None,
-                Some("Content/Rules for all slices".into()),
-                Some("".into()),
-                None,
-            ));
+            self.push_scaffold_tail(&mut hrow, "Content/Rules for all slices");
             rows[row_idx].sub_rows.push(hrow);
             has_holder = true;
         }
@@ -635,16 +760,7 @@ impl<'a> TCtx<'a> {
                 Some("".into()),
                 None,
             ));
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::new());
-            hrow.cells.push(Cell::with(
-                None,
-                None,
-                Some("Content/Rules for all Types".into()),
-                Some("".into()),
-                None,
-            ));
+            self.push_scaffold_tail(&mut hrow, "Content/Rules for all Types");
             rows[row_idx].sub_rows.push(hrow);
             has_holder = true;
         }
@@ -683,16 +799,7 @@ impl<'a> TCtx<'a> {
                             Some("".into()),
                             None,
                         ));
-                        parent.cells.push(Cell::new());
-                        parent.cells.push(Cell::new());
-                        parent.cells.push(Cell::new());
-                        parent.cells.push(Cell::with(
-                            None,
-                            None,
-                            Some("Content/Rules for all slices".into()),
-                            Some("".into()),
-                            None,
-                        ));
+                        self.push_scaffold_tail(&mut parent, "Content/Rules for all slices");
                         let target = target_subrows(rows, row_idx, has_holder);
                         target.push(parent);
                         let loc = vec![target.len() - 1];
@@ -719,10 +826,12 @@ impl<'a> TCtx<'a> {
             }
         }
 
-        // choice [x] type rows (SDR:1170-1172): appended to typesRow.getSubRows()
-        // — the element's TOP row's sub_rows (typesRow == row; the holder is a
-        // child within it, so choice rows come after the holder).
-        if types_row && !prohibited(element) {
+        // choice [x] type rows (SDR:1173): appended to typesRow.getSubRows() —
+        // the element's TOP row's sub_rows (typesRow == row; the holder is a
+        // child within it, so choice rows come after the holder). Java gates
+        // this on `context.getStructureMode() == SUMMARY` — BINDINGS/OBLIGATIONS
+        // never emit the per-type choice rows.
+        if types_row && !prohibited(element) && self.cfg.mode == StructureMode::Summary {
             let container = &mut rows[row_idx].sub_rows;
             let mut choice_rows = std::mem::take(container);
             self.make_choice_rows(&mut choice_rows, element, &types);
@@ -818,6 +927,165 @@ impl<'a> TCtx<'a> {
         );
         row.cells.push(left);
         row.cells.len() - 1
+    }
+
+    /// Push the mode-appropriate trailing cells to a scaffold row (:All Slices /
+    /// :All Types / Slices-for holder). SUMMARY (SDR:1082-1087/1111-1116/1147-
+    /// 1152) pushes 3 empty cells + a "Content/Rules …" cell. BINDINGS/
+    /// OBLIGATIONS/MAPPINGS (SDR:1078-1080 etc) push ONE empty cell per column.
+    /// The name cell is assumed already pushed.
+    fn push_scaffold_tail(&self, row: &mut Row, content_rules_text: &str) {
+        match self.cfg.mode {
+            StructureMode::Summary => {
+                row.cells.push(Cell::new());
+                row.cells.push(Cell::new());
+                row.cells.push(Cell::new());
+                row.cells.push(Cell::with(
+                    None,
+                    None,
+                    Some(content_rules_text.into()),
+                    Some("".into()),
+                    None,
+                ));
+            }
+            StructureMode::Bindings | StructureMode::Obligations => {
+                for _ in 0..self.columns.len() {
+                    row.cells.push(Cell::new());
+                }
+            }
+        }
+    }
+
+    /// `elementOrDescendentsHaveObligations` (SDR:1180): this element, or any
+    /// descendant in `all` (path prefix match), carries an obligation extension.
+    fn element_or_descendents_have_obligations(&self, element: Ed<'a>) -> bool {
+        if element.has_extension(EXT_OBLIGATION_CORE) || element.has_extension(EXT_OBLIGATION_TOOLS)
+        {
+            return true;
+        }
+        let prefix = format!("{}.", element.path());
+        let start = self.all.iter().position(|e| e.id() == element.id());
+        let Some(start) = start else { return false };
+        for e in &self.all[start + 1..] {
+            if !e.path().starts_with(&prefix) {
+                break;
+            }
+            if e.has_extension(EXT_OBLIGATION_CORE) || e.has_extension(EXT_OBLIGATION_TOOLS) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `genElementObligations` (SDR:1228): one cell per column, each rendering
+    /// the element's obligations for that actor via ObligationsRenderer.renderList.
+    /// GAP: the ObligationsRenderer body (renderCodes + CodeResolver) is NOT
+    /// ported — no golden in this corpus has obligation columns (all 3 IGs use
+    /// zero obligation extensions), so every obligations table is Name-only and
+    /// this loop runs zero times. If a future IG hits it, this fires a gap.
+    fn gen_element_obligations(&mut self, row: &mut Row, _element: Ed<'a>) {
+        if !self.columns.is_empty() {
+            self.gap("genElementObligations: obligation-column content (ObligationsRenderer.renderList) not ported");
+        }
+        for _ in 0..self.columns.len() {
+            row.cells.push(Cell::new());
+        }
+    }
+
+    /// `genElementBindings` (SDR:1259): one cell per column; each gathers the
+    /// element's bindings for that purpose (collectBindings) and renders them
+    /// via AdditionalBindingsRenderer.render(children, list, sd) (ABR:437).
+    fn gen_element_bindings(&mut self, row: &mut Row, element: Ed<'a>) {
+        // Clone columns to avoid borrowing self immutably across the mutable
+        // resolve_binding calls below.
+        let col_ids: Vec<String> = self.columns.iter().map(|c| c.id.clone()).collect();
+        for col_id in &col_ids {
+            let mut gc = Cell::new();
+            let bindings = collect_bindings(element, col_id);
+            if !bindings.is_empty() {
+                // gen.new Piece(null): a bare tag=null piece whose children carry
+                // the rendered nodes (a null-tag Piece composes as just its
+                // children — HTG Piece with tag==null && reference==null).
+                let mut piece = Piece::ref_text(None, None, None);
+                let children = self.render_binding_list(&bindings);
+                for ch in children {
+                    piece.add_html(ch);
+                }
+                gc.pieces.push(piece);
+            }
+            row.cells.push(gc);
+        }
+    }
+
+    /// `AdditionalBindingsRenderer.render(children, list, sd)` (ABR:437-480):
+    /// one binding -> inline; many -> a `<ul><li>` list. Each binding renders as
+    /// `<a href title>display</a>` (or `<code>` when unlinked) + optional
+    /// `: shortDoco` + optional ` (…)` usage. This is the CELL-column path, NOT
+    /// the SUMMARY additional-bindings TABLE (render_additional_bindings_table).
+    fn render_binding_list(&mut self, list: &[BindingColDetail]) -> Vec<render_xhtml::XhtmlNode> {
+        use render_tables::build::Elem;
+        if list.len() == 1 {
+            // ABR:439 appends directly to the piece's children (no wrapper).
+            let mut holder = Elem::new("span"); // transient; we lift its children out
+            self.render_one_binding(&mut holder, &list[0]);
+            let mut node = holder.build();
+            std::mem::take(node.child_nodes_mut())
+        } else {
+            let mut ul = Elem::new("ul");
+            for b in list {
+                let mut li = Elem::new("li");
+                self.render_one_binding(&mut li, b);
+                ul.push_elem(li);
+            }
+            vec![ul.build()]
+        }
+    }
+
+    /// `render(children, b, sd)` (ABR:448-480) for one additional binding.
+    fn render_one_binding(&mut self, parent: &mut render_tables::build::Elem, b: &BindingColDetail) {
+        use render_tables::build::Elem;
+        if b.value_set.is_empty() {
+            return; // ABR:449 — no valueSet, nothing rendered.
+        }
+        let br = self.resolve_binding(&b.value_set);
+        // ABR:453: ahOrCode(url, title). url==None -> <code>; else <a href>.
+        // determineUrl/prependLinks: our resolve_binding already returns the
+        // absolute-or-relative webPath the publisher would emit.
+        let title = b.documentation.clone().or_else(|| br.uri.clone());
+        match &br.url {
+            Some(url) => {
+                let mut a = Elem::new("a");
+                a.set_attr("href", url.clone());
+                if let Some(t) = &title {
+                    a.set_attr("title", t.clone());
+                }
+                a.tx(br.display.clone());
+                parent.push_elem(a);
+            }
+            None => {
+                // ahOrCode with null url -> <code> (title carried, but code has
+                // no href; the title becomes a code with no attr in Java).
+                let mut code = Elem::new("code");
+                code.tx(br.display.clone());
+                parent.push_elem(code);
+            }
+        }
+        if let Some(sd) = &b.short_doco {
+            parent.tx(": ");
+            parent.tx(sd.clone());
+        }
+        if b.any || b.has_usage {
+            // ABR:463-479: " (…)" — any-repeat marker + usage. Usage rendering
+            // needs CodeResolver (not ported); fire a gap if present.
+            parent.tx(" (");
+            if b.any {
+                parent.tx("any repeat");
+            }
+            if b.has_usage {
+                self.gap("genElementBindings: additional-binding usage context (CodeResolver) not ported");
+            }
+            parent.tx(")");
+        }
     }
 
     /// `genElementCells` SUMMARY path (SDR:1348).
@@ -3005,6 +3273,273 @@ pub const EXT_OBLIGATION_TOOLS: &str =
     "http://hl7.org/fhir/tools/StructureDefinition/obligation";
 pub const EXT_STANDARDS_STATUS: &str =
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status";
+
+// ---- BINDINGS mode: scanBindings + collectBindings (SDR:762-832, 1272) ----
+
+/// The two additional-binding container extension urls (R5 tools + R4 shadow).
+const EXT_BINDING_ADDITIONAL: &str =
+    "http://hl7.org/fhir/tools/StructureDefinition/additional-binding";
+const EXT_BINDING_ADDITIONAL_R4: &str =
+    "http://hl7.org/fhir/5.0/StructureDefinition/extension-ElementDefinition.binding.additional";
+const EXT_MAX_VALUESET: &str =
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet";
+const EXT_MIN_VALUESET: &str =
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet";
+
+/// `scanBindings(columns, list)` (SDR:762): recurse the element tree collecting
+/// the set of column keys, then emit columns in the FIXED order (SDR:765-797).
+/// Each Column carries (id=code, title, hint) — the phrase strings.
+fn scan_bindings(all: &[Ed<'_>]) -> Vec<render_tables::Column> {
+    use std::collections::HashSet;
+    let mut cols: HashSet<String> = HashSet::new();
+    if let Some(root) = all.first() {
+        scan_bindings_rec(all, *root, &mut cols);
+    }
+    let mut out = Vec::new();
+    // The fixed emission order + phrase strings (SDR:765-797). `id` is the code
+    // scanBindings/collectBindings key: strengths use the lowercase strength
+    // code; purposes use the AdditionalBindingPurpose code.
+    let mk = |id: &str, title: &str, hint: &str| render_tables::Column::new(id, title, hint);
+    if cols.contains("required") {
+        out.push(mk("required", "Required", "Concepts must come from this value set"));
+    }
+    if cols.contains("extensible") {
+        out.push(mk("extensible", "Extensible", "Concepts must come from this value set if appropriate concept is in this value set"));
+    }
+    if cols.contains("maximum") {
+        out.push(mk("maximum", "Maximum", "A required binding, for use when the binding strength is 'extensible' or 'preferred'"));
+    }
+    if cols.contains("minimum") {
+        out.push(mk("minimum", "Minimum", "The minimum allowable value set - any conformant system SHALL support all these codes"));
+    }
+    if cols.contains("candidate") {
+        out.push(mk("candidate", "Candidate", "This value set is a candidate to substitute for the overall conformance value set in some situations; usually these are defined in the documentation"));
+    }
+    if cols.contains("current") {
+        out.push(mk("current", "Current", "New records are required to use this value set, but legacy records may use other codes. The definition of ''new record'' is difficult, since systems often create new records based on pre-existing data. Usually ''current'' bindings are mandated by an external authority that makes clear rules around this"));
+    }
+    if cols.contains("preferred") {
+        out.push(mk("preferred", "Preferred", "This is the value set that is preferred in a given context (documentation should explain why)"));
+    }
+    if cols.contains("ui") {
+        out.push(mk("ui", "UI", "This value set is provided for user look up in a given context. Typically, these valuesets only include a subset of codes relevant for input in a context"));
+    }
+    if cols.contains("starter") {
+        out.push(mk("starter", "Starter", "This value set is a good set of codes to start with when designing your system"));
+    }
+    if cols.contains("component") {
+        out.push(mk("component", "Component", "This value set is a component of the base value set. Usually this is called out so that documentation can be written about a portion of the value set"));
+    }
+    if cols.contains("example") {
+        out.push(mk("example", "Example", "Instances are not expected or even encouraged to draw from the specified value set. The value set merely provides examples of the types of concepts intended to be included."));
+    }
+    out
+}
+
+/// `scanBindings(cols, list, ed)` (SDR:800): add this element's binding strength
+/// (as the lowercase strength code) + additional-binding purposes, then recurse.
+fn scan_bindings_rec(all: &[Ed<'_>], ed: Ed<'_>, cols: &mut std::collections::HashSet<String>) {
+    if let Some(binding) = ed.binding() {
+        let vs = binding.get("valueSet").and_then(|x| x.as_str());
+        let strength = binding.get("strength").and_then(|x| x.as_str());
+        if let (Some(_), Some(s)) = (vs, strength) {
+            // SDR:803-818 maps each strength to its LOWERCASE strength phrase
+            // (STRUC_DEF_EXAM="example", ...). default (other strengths): none.
+            match s {
+                "example" => cols.insert("example".into()),
+                "extensible" => cols.insert("extensible".into()),
+                "preferred" => cols.insert("preferred".into()),
+                "required" => cols.insert("required".into()),
+                _ => false,
+            };
+        }
+        // additional bindings (native + ext) contribute their purpose code.
+        for ab in binding.get("additional").and_then(|x| x.as_array()).into_iter().flatten() {
+            if let Some(p) = ab.get("purpose").and_then(|x| x.as_str()) {
+                cols.insert(p.to_string());
+            }
+        }
+        for ext in binding.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+            let url = ext.get("url").and_then(|x| x.as_str()).unwrap_or("");
+            if url == EXT_BINDING_ADDITIONAL || url == EXT_BINDING_ADDITIONAL_R4 {
+                if let Some(p) = ext_sub_string(ext, "purpose") {
+                    cols.insert(p);
+                }
+            }
+        }
+    }
+    for child in get_children(all, ed) {
+        scan_bindings_rec(all, child, cols);
+    }
+}
+
+/// `scanObligations(columns, list)` (SDR:834): recurse collecting actor ids /
+/// `$all`, then emit columns. Since NO IG in this corpus uses obligations, this
+/// returns empty in practice; kept faithful (fires a gap if it ever populates).
+fn scan_obligations(_ctx: &IgContext, all: &[Ed<'_>]) -> Vec<render_tables::Column> {
+    use std::collections::HashSet;
+    let mut cols: HashSet<String> = HashSet::new();
+    if let Some(root) = all.first() {
+        scan_obligations_rec(all, *root, &mut cols);
+    }
+    // Emission (SDR:838-850): $all first, then actor columns. Actor resolution
+    // needs ActorDefinition fetch (not ported). No corpus golden exercises this.
+    let mut out = Vec::new();
+    if cols.contains("$all") {
+        out.push(render_tables::Column::new("$all", "All Actors", "Obligations that apply to all actors"));
+    }
+    for c in &cols {
+        if c != "$all" {
+            // GAP: actor-column title/hint need ActorDefinition resolution.
+            let tail = c.rsplit('/').next().unwrap_or(c);
+            out.push(render_tables::Column::new(c.clone(), tail.to_string(), String::new()));
+        }
+    }
+    out
+}
+
+fn scan_obligations_rec(all: &[Ed<'_>], ed: Ed<'_>, cols: &mut std::collections::HashSet<String>) {
+    for ob in ed.extensions() {
+        let url = ob.get("url").and_then(|x| x.as_str()).unwrap_or("");
+        if url == EXT_OBLIGATION_CORE || url == EXT_OBLIGATION_TOOLS {
+            let actors: Vec<&str> = ob
+                .get("extension")
+                .and_then(|x| x.as_array())
+                .into_iter()
+                .flatten()
+                .filter(|e| {
+                    matches!(e.get("url").and_then(|u| u.as_str()), Some("actor") | Some("actorId"))
+                })
+                .filter_map(|e| e.get("valueCanonical").and_then(|x| x.as_str()))
+                .collect();
+            if actors.is_empty() {
+                cols.insert("$all".into());
+            } else {
+                for a in actors {
+                    cols.insert(a.to_string());
+                }
+            }
+        }
+    }
+    for child in get_children(all, ed) {
+        scan_obligations_rec(all, child, cols);
+    }
+}
+
+/// One binding gathered for a BINDINGS column (a projection of
+/// ElementDefinitionBindingAdditionalComponent — the fields ABR:448-480 reads).
+pub struct BindingColDetail {
+    value_set: String,
+    documentation: Option<String>,
+    short_doco: Option<String>,
+    any: bool,
+    has_usage: bool,
+}
+
+/// `collectBindings(element, type)` (SDR:1272): gather the bindings whose
+/// purpose matches `type` for this element, in the publisher's order —
+/// (1) the strength binding itself when its strength code == type (as a
+/// synthetic ab with the binding's description + valueSet),
+/// (2) maxValueSet ext for "maximum", minValueSet ext for "minimum",
+/// (3) native binding.additional filtered by purpose,
+/// (4) ext-additional filtered by purpose.
+fn collect_bindings(element: Ed<'_>, type_: &str) -> Vec<BindingColDetail> {
+    let mut res = Vec::new();
+    let Some(b) = element.binding() else { return res };
+    let strength = b.get("strength").and_then(|x| x.as_str());
+    if let Some(s) = strength {
+        if s == type_ {
+            res.push(BindingColDetail {
+                value_set: b.get("valueSet").and_then(|x| x.as_str()).unwrap_or("").into(),
+                documentation: b.get("description").and_then(|x| x.as_str()).map(String::from),
+                short_doco: None,
+                any: false,
+                has_usage: false,
+            });
+        }
+    }
+    if type_ == "maximum" {
+        if let Some(vs) = ext_value_string(b, EXT_MAX_VALUESET) {
+            res.push(BindingColDetail { value_set: vs, documentation: None, short_doco: None, any: false, has_usage: false });
+        }
+    }
+    if type_ == "minimum" {
+        if let Some(vs) = ext_value_string(b, EXT_MIN_VALUESET) {
+            res.push(BindingColDetail { value_set: vs, documentation: None, short_doco: None, any: false, has_usage: false });
+        }
+    }
+    for ab in b.get("additional").and_then(|x| x.as_array()).into_iter().flatten() {
+        if ab.get("purpose").and_then(|x| x.as_str()) == Some(type_) {
+            res.push(BindingColDetail {
+                value_set: ab.get("valueSet").and_then(|x| x.as_str()).unwrap_or("").into(),
+                documentation: ab.get("documentation").and_then(|x| x.as_str()).map(String::from),
+                short_doco: ab.get("shortDoco").and_then(|x| x.as_str()).map(String::from),
+                any: ab.get("any").and_then(|x| x.as_bool()).unwrap_or(false),
+                has_usage: ab.get("usage").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false),
+            });
+        }
+    }
+    for ext in b.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+        let url = ext.get("url").and_then(|x| x.as_str()).unwrap_or("");
+        if url == EXT_BINDING_ADDITIONAL || url == EXT_BINDING_ADDITIONAL_R4 {
+            if ext_sub_string(ext, "purpose").as_deref() == Some(type_) {
+                res.push(BindingColDetail {
+                    value_set: ext_sub_string(ext, "valueSet").unwrap_or_default(),
+                    documentation: ext_sub_string(ext, "documentation"),
+                    short_doco: ext_sub_string(ext, "shortDoco"),
+                    any: ext_sub_bool(ext, "any"),
+                    has_usage: ext_sub_present(ext, "usage"),
+                });
+            }
+        }
+    }
+    res
+}
+
+/// Read a nested sub-extension's primitive value[x] as a string.
+fn ext_sub_string(ext: &serde_json::Value, name: &str) -> Option<String> {
+    ext.get("extension")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.iter().find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .and_then(|s| {
+            for k in ["valueCode", "valueCanonical", "valueUri", "valueString", "valueMarkdown", "valueBoolean"] {
+                if let Some(v) = s.get(k) {
+                    return v.as_str().map(String::from).or_else(|| v.as_bool().map(|b| b.to_string()));
+                }
+            }
+            None
+        })
+}
+
+fn ext_sub_bool(ext: &serde_json::Value, name: &str) -> bool {
+    ext.get("extension")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.iter().find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .and_then(|s| s.get("valueBoolean").and_then(|x| x.as_bool()))
+        .unwrap_or(false)
+}
+
+fn ext_sub_present(ext: &serde_json::Value, name: &str) -> bool {
+    ext.get("extension")
+        .and_then(|x| x.as_array())
+        .map(|a| a.iter().any(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .unwrap_or(false)
+}
+
+/// A top-level extension's value[x] as a string (for max/minValueSet).
+fn ext_value_string(binding: &serde_json::Value, url: &str) -> Option<String> {
+    binding
+        .get("extension")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.iter().find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .and_then(|e| {
+            e.get("valueCanonical")
+                .or_else(|| e.get("valueUri"))
+                .or_else(|| e.get("valueString"))
+                .and_then(|x| x.as_str())
+                .map(String::from)
+        })
+}
 
 fn sd_has_obligations(root: &serde_json::Value) -> bool {
     root.get("extension")

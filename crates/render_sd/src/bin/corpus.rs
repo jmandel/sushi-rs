@@ -41,6 +41,18 @@ fn golden_path(ig: &str, id: &str, suffix: &str) -> PathBuf {
     ))
 }
 
+fn cfg_render(
+    mut cfg: TableConfig,
+    active_tables: bool,
+    sd: &Sd,
+    ctx: &IgContext,
+    def_file: &str,
+) -> String {
+    cfg.active_tables = active_tables;
+    let (b, _gaps) = render_table(sd, ctx, def_file, &cfg);
+    b
+}
+
 fn render(
     kind: &str,
     sd: &Sd,
@@ -99,6 +111,14 @@ fn render(
             let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
             b
         }
+        "snapshot-bindings" => cfg_render(TableConfig::snapshot_bindings(run_uuid), active_tables, sd, ctx?, &def_file),
+        "snapshot-bindings-all" => cfg_render(TableConfig::snapshot_bindings_all(run_uuid), active_tables, sd, ctx?, &def_file),
+        "snapshot-obligations" => cfg_render(TableConfig::snapshot_obligations(run_uuid), active_tables, sd, ctx?, &def_file),
+        "snapshot-obligations-all" => cfg_render(TableConfig::snapshot_obligations_all(run_uuid), active_tables, sd, ctx?, &def_file),
+        "diff-bindings" => cfg_render(TableConfig::diff_bindings(run_uuid), active_tables, sd, ctx?, &def_file),
+        "diff-bindings-all" => cfg_render(TableConfig::diff_bindings_all(run_uuid), active_tables, sd, ctx?, &def_file),
+        "diff-obligations" => cfg_render(TableConfig::diff_obligations(run_uuid), active_tables, sd, ctx?, &def_file),
+        "diff-obligations-all" => cfg_render(TableConfig::diff_obligations_all(run_uuid), active_tables, sd, ctx?, &def_file),
         _ => return None,
     };
     Some(wrap_raw(&body))

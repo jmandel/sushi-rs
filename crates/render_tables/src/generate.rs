@@ -282,6 +282,73 @@ pub fn init_normal_table(
     model
 }
 
+/// A scanned custom column (StructureDefinitionRenderer.Column). `title` and
+/// `hint` become a `Title` in `init_custom_table`; `id` is the scan key used to
+/// gather each element's cell content.
+#[derive(Debug, Clone)]
+pub struct Column {
+    pub id: String,
+    pub title: String,
+    pub hint: String,
+}
+
+impl Column {
+    pub fn new(id: impl Into<String>, title: impl Into<String>, hint: impl Into<String>) -> Column {
+        Column {
+            id: id.into(),
+            title: title.into(),
+            hint: hint.into(),
+        }
+    }
+}
+
+/// `initCustomTable(prefix, isLogical, alternating, id, isActive, columns)`
+/// (SDR:885). The BINDINGS / OBLIGATIONS column model: a Name title (same
+/// GENERAL_NAME/GENERAL_LOGICAL_NAME as normal) plus one Title per scanned
+/// Column. NOTE (load-bearing): docoImg = `pathURL(prefix, "help16.png")`
+/// WITHOUT `makeSecureRef` (SDR:892) — so the custom-table help16 src stays
+/// `http://` where the normal table's is upgraded to `https://` (golden-
+/// confirmed: -bindings/-obligations carry http://, -snapshot carries https://).
+pub fn init_custom_table(
+    prefix: &str,
+    _is_logical: bool,
+    alternating: bool,
+    id: Option<String>,
+    is_active: bool,
+    columns: &[Column],
+) -> TableModel {
+    let mut model = TableModel::new(id, is_active);
+    model.alternating = alternating;
+    // SDR:889-893: VALID_RESOURCE/inlineGraphics -> help16AsData; else pathURL
+    // (NO makeSecureRef). Our fragment path is always IG_PUBLISHER (not
+    // VALID_RESOURCE) and inlineGraphics=false, so the pathURL branch.
+    model.doco_img = Some(path_url(prefix, "help16.png"));
+    model.doco_ref = Some(path_url(
+        "https://build.fhir.org/ig/FHIR/ig-guidance",
+        "readingIgs.html#table-views",
+    ));
+    let dr = model.doco_ref.clone();
+    model.titles.push(Title::new(
+        None,
+        dr.clone(),
+        Some(phrase::GENERAL_NAME.into()),
+        Some(phrase::GENERAL_LOGICAL_NAME.into()),
+        None,
+        0,
+    ));
+    for col in columns {
+        model.titles.push(Title::new(
+            None,
+            dr.clone(),
+            Some(col.title.clone()),
+            Some(col.hint.clone()),
+            None,
+            0,
+        ));
+    }
+    model
+}
+
 // ---- checkModel: assigns row ids (a., b., ... or index.) ----
 
 /// `checkModel` (HTG:1330) -> `check(Row,...)` (HTG:1354). The only observable

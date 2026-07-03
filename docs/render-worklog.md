@@ -128,6 +128,20 @@ documented snapshot-source variance for cycle).
 | **grid** | **7 / 7** | **22 / 22** | **70 / 70** |
 | **diff** | 6 / 7 † | **22 / 22** | **70 / 70** |
 | **diff-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **snapshot-bindings** | **7 / 7** | 21 / 21 ‡ | **70 / 70** |
+| **snapshot-bindings-all** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **snapshot-obligations** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **snapshot-obligations-all** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **diff-bindings** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **diff-bindings-all** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **diff-obligations** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **diff-obligations-all** | **7 / 7** | **22 / 22** | **70 / 70** |
+
+**15/15 kinds GREEN corpus-wide** (2026-07-03, session 4): + bindings/obligations
+modes and their diff variants. The bindings/obligations kinds pass cleanly on
+cycle (7/7) because the mode is the LOAD-BEARING difference, not the snapshot
+input — the cycle snapshot-source variance (quirk †) only bites the SUMMARY
+element rows, which the by-Name custom tables mostly don't restate.
 
 † cycle's one failure (period-tracking-fact) is byte-equal except the
   abstract-profile child-list ORDER — a genuinely non-deterministic publisher
@@ -308,32 +322,70 @@ Faithful ports of Java warts (not quirks — reproduced exactly): (previously li
   `; null` style suffix (`color: black; null`), byte-verified.
 - Grid tables leave `mode` unset (null) so grid `<a>`s never get
   `no-external`/`data-no-external` (guard `mode == XHTML`, HTG:1160) —
-  `Gen.mode: Option`, `None` for grid.
+  `Gen.mode: Option`, `None` for grid. **Same for BINDINGS/OBLIGATIONS**:
+  initCustomTable (SDR:885) never sets `this.mode` (only initNormalTable does,
+  HTG:858), so those tables also emit zero no-external — `Gen::new` (mode None).
+- **initCustomTable help16 src is not makeSecureRef'd** (SDR:892
+  `pathURL(prefix,…)` vs initNormalTable HTG:866 `pathURL(makeSecureRef(prefix),…)`)
+  — BINDINGS/OBLIGATIONS help16 stays `http://`, SUMMARY is `https://`. Ported
+  in `init_custom_table` (render_tables).
 - `context.prefixAnchor` (RenderingContext) is null-prefix for grid, so the
   "g-" anchor prefix is applied exactly once (by the HTG, in renderCell).
 - Pattern genFixedValue `skipnoValue = mustSupportOnly` (SDR:2085), fixed
   genFixedValue `skipnoValue = false` (SDR:2069): in the by-mustsupport view
   empty pattern properties are suppressed; empty fixed properties are not.
 
+## bindings / obligations modes (2026-07-03, session 4) — StructureMode
+
+DONE: **snapshot-bindings/-all, snapshot-obligations/-all + diff-bindings/-all,
+diff-obligations/-all** ALL GREEN corpus-wide. `StructureMode` enum threaded
+through TableConfig; the mode selects `initCustomTable` (Name + scanned columns)
+vs `initNormalTable` (SDR:627-648) and the per-element cell builder in
+genElement (SDR:1022-1035). Findings:
+
+- **`snapshot-obligations` uses the `snapshot()` wrapper, not `obligations()`**
+  (PublisherGenerator:1920 `sdr.snapshot(..., OBLIGATIONS, all)`). So idSfx =
+  S/SA (NOT O/OA) and uniqueLocalPrefix = `mc(OBLIGATIONS)+"s"` = os/osa. The
+  `obligations()` wrapper (prefix oo/ooa, idSfx O/OA) makes the DISTINCT
+  `-obligations`/`-obligations-all` fragments (not in the F3 set). us-core's
+  active-tables=false hid this (no id emitted); plan-net (active-tables=true)
+  revealed it — the golden id is `…S`. snapshot-bindings likewise: bs/bsa, S/SA.
+- **initCustomTable leaves HTG.mode = null** (SDR:885 never sets `this.mode`;
+  only initNormalTable does, HTG:858). So BINDINGS/OBLIGATIONS tables carry ZERO
+  `no-external`/`data-no-external` link attrs (HTG:972/1153 gate on
+  `mode == XHTML`) — same as grid. Reproduced with `Gen::new` (mode None) for
+  these modes. (NEW faithful port, below.)
+- **initCustomTable help16 src stays `http://`** — SDR:892 `pathURL(prefix,…)`
+  WITHOUT makeSecureRef, where initNormalTable (HTG:866) upgrades to `https://`.
+  Golden-confirmed: -bindings/-obligations = http://, -snapshot = https://.
+  (NEW faithful port.)
+- **OBLIGATIONS skip gate** (SDR:930): an element with no obligation on it or any
+  descendant is skipped ENTIRELY (no row, no anchor bump, no recursion). Since NO
+  IG in this corpus uses obligation extensions, every obligations table is
+  Name-only header + footer, ZERO data rows. The ObligationsRenderer body
+  (renderCodes/CodeResolver) is NOT ported — it fires a loud gap if columns ever
+  populate (zero corpus hits). scan_obligations actor-column titles likewise gap.
+- **BINDINGS choice-row guard** (SDR:1173): makeChoiceRows is `mode == SUMMARY`
+  only; the per-type `[x]` choice rows do NOT appear in BINDINGS/OBLIGATIONS.
+  This was the one structural bug (5 extra scaffold rows on `onset[x]` → wrong
+  tree-line `tbl_bckNN` on every following row); fixed with the mode guard.
+- **genElementBindings** (SDR:1259) uses the ABR:437 `render(children, list, sd)`
+  path — one binding → inline `<a href title>display</a>`, many → `<ul><li>` —
+  NOT the SUMMARY additional-bindings TABLE. `collect_bindings(element, col.id)`
+  gathers: strength binding (as synthetic ab when strength==col), max/minValueSet
+  exts, native binding.additional, ext-additional — filtered by purpose.
+  Reused the existing `resolve_binding` (the C4 oracle already in context.rs).
+- Holder rows (:All Slices / :All Types / Slices-for) push `columns.len()` empty
+  cells in BINDINGS/OBLIGATIONS (SDR:1078/1107/1143) vs SUMMARY's 4-cell pattern
+  — unified in `push_scaffold_tail`.
+
 ## Remaining
 
-DONE this cycle (2026-07-03, session 3): **grid** GREEN corpus-wide (commonmark
-cell engine + quirk #8 + used-gate), **diff**, **diff-all** GREEN corpus-wide
-(pointer reconstruction — no snapshot_gen change). **11 SD table kinds now
-GREEN** (snapshot/-all, by-mustsupport/-all, by-key/-all, grid, diff/-all).
-Prior cycle: grid→IgContext migration, by-mustsupport/-all, by-key/-all.
+Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
+(session 2); grid + diff/-all GREEN (session 3, commonmark + pointer recon).
 
-- **obligations / bindings modes** (4 kinds: snapshot-bindings/-all,
-  snapshot-obligations/-all + diff-bindings/diff-obligations): `initCustomTable`
-  + scanBindings / scanObligations columns + genElementBindings /
-  genElementObligations (fhir-core SDR:759-880, 1225-1316); ObligationsRenderer
-  table (C5 spec extracted, in the fork report). NOTE: these set
-  `context.setStructureMode` (BINDINGS/OBLIGATIONS) which switches
-  generateTableInner to `initCustomTable` (SDR:627-641) — a different column
-  model than SUMMARY, and mode-branches inside genElement (SDR:1022/1074/1103/
-  1139/1173), so more than a flag toggle. The diff-mode pointer machinery from
-  this cycle carries over (diff-bindings/diff-obligations reuse it).
 - **span/spanall**: `generateSpanningTable` (SDR:3713) — separate entry point.
+  (Only remaining kind NOT ported. Goldens exist: 7/22/70.)
 - **Simplification candidates (logged)**: (a) grid.rs `gen_types`/
   `gen_target_link` are branch-for-branch duplicates of table.rs's (both port
   the SAME Java `genTypes`/`genTargetLink`); table.rs's now additionally
