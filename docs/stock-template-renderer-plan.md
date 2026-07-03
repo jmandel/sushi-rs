@@ -37,9 +37,21 @@ parity**, re-rendering only what the edit dirtied.
      `markdown="1"` re-entry).
    - `liquid` — T1+T2 engine (survey cutline; US-Core layer IN scope).
    - `page` — layouts + `site.data.*` (backed by site.db queries) + menu.
-4. **Editor render paths**: template selector chooses (a) stock-template Rust
-   renderer (wasm) or (b) cycle TS site-gen over site.db (existing M2 path).
-   Both consume the same site.db + fragment store.
+4. **Editor render paths — pluggable by contract (Josh, 2026-07-03)**: the
+   template selector chooses among SITE-GENERATOR ADAPTERS, all consuming the
+   same site.db + fragment store:
+   (a) the stock-template Rust renderer (wasm; this plan's F5/F6);
+   (b) cycle's TS generator (the live M2 path — to be refactored onto the
+       named adapter contract in F6);
+   (c) any custom TS generator implementing the contract:
+       `init(siteDbRows, fragmentApi, assets)` → `renderPage(slug) → html`.
+   The `fragmentApi` (first-include-miss) is exposed to ALL adapters — custom
+   generators may embed publisher-grade fragments (snapshot tables, dicts,
+   expansions) inside custom chrome without reimplementing them.
+   DEFERRED decision: how arbitrary user-supplied TS adapters load in-browser
+   (prebuilt-ESM convention vs esbuild-wasm transpile vs sandbox) — build-time
+   integration (Vite alias, the cycle model) is the supported path until a
+   concrete second custom generator forces the choice.
 5. **Perf model for "almost immediately"**: cold page = liquid render + the
    handful of fragments that page includes, generated on miss (ms-scale each
    in Rust); edits invalidate by content hash (Ledger 1) and re-render only
