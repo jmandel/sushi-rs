@@ -1,0 +1,36 @@
+[package]
+name = "site_db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "site_db"
+path = "src/main.rs"
+
+[lib]
+name = "site_db"
+path = "src/lib.rs"
+
+[dependencies]
+# Internal crates — consumed via PUBLIC APIs only.
+compiler.workspace = true          # build_project_with_cache (S1/S2)
+snapshot_gen.workspace = true      # generate_snapshot + PackageContext (S3)
+json_emit.workspace = true         # to_fhir_json_string (byte-stable FHIR JSON)
+
+# External
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+walkdir = { workspace = true }
+
+# SQLite sink (native only; the row model is sqlite-free so a wasm build can
+# emit rows as JSON for a JS-side writer — see writer.rs / §5 of the plan).
+rusqlite = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

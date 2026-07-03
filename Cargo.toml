@@ -11,6 +11,7 @@ members = [
     "crates/json_emit",
     "crates/rust_sushi",
     "crates/snapshot_gen",
+    "crates/site_db",
 ]
 
 [workspace.package]
@@ -49,6 +50,7 @@ tar = "0.4"
 tempfile = "3"
 ureq = { version = "2", features = ["json"] }
 walkdir = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
 
 [profile.release]
 opt-level = 3
