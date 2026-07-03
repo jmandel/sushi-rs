@@ -20,6 +20,54 @@
 
 use crate::sdmodel::Sd;
 use serde_json::{json, Value};
+use std::collections::HashMap;
+
+/// Reconstruct the `SNAPSHOT_DERIVATION_POINTER` for every DIFFERENTIAL element
+/// (PU:2591: derived.setUserData(POINTER, base), base = the base clone that
+/// becomes the output snapshot element). Returns `diff element id -> index into
+/// sd.snapshot_elements()`. Same aliasing the diff table path uses
+/// (render_table): exact id, then the `base[x]:baseType`->`baseType` sliced-
+/// choice alias, then the unsliced camelCase `stem[x]` rewrite.
+pub fn reconstruct_diff_pointers(sd: &Sd) -> HashMap<String, usize> {
+    let snap = sd.snapshot_elements();
+    let mut exact: HashMap<&str, usize> = HashMap::new();
+    let mut alias: HashMap<String, usize> = HashMap::new();
+    for (i, e) in snap.iter().enumerate() {
+        exact.insert(e.id(), i);
+        let mut changed = false;
+        let alias_id: Vec<String> = e
+            .id()
+            .split('.')
+            .map(|seg| {
+                if let Some((l, r)) = seg.split_once("[x]:") {
+                    if r.starts_with(l) {
+                        changed = true;
+                        return r.to_string();
+                    }
+                }
+                seg.to_string()
+            })
+            .collect();
+        if changed {
+            alias.insert(alias_id.join("."), i);
+        }
+    }
+    let mut map: HashMap<String, usize> = HashMap::new();
+    for d in sd.differential_elements() {
+        let id = d.id();
+        if let Some(i) = exact.get(id).or_else(|| alias.get(id)) {
+            map.insert(id.to_string(), *i);
+            continue;
+        }
+        for cand in crate::table::dechoice_candidates_pub(id) {
+            if let Some(i) = exact.get(cand.as_str()) {
+                map.insert(id.to_string(), *i);
+                break;
+            }
+        }
+    }
+    map
+}
 
 /// Build the diff-view element list (owned JSON values). Order and synthetic
 /// path/id fill match SGPP exactly.

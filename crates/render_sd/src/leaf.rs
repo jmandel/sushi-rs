@@ -114,6 +114,9 @@ pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v:
     }
 
     let diff = sd.differential_elements();
+    // Reconstructed SNAPSHOT_DERIVATION_POINTER for the nested-mandatory split
+    // (psdr parentChainHasOptional:318). diff id -> snapshot element index.
+    let pointers = crate::diff::reconstruct_diff_pointers(sd);
 
     let mut refs: Vec<String> = Vec::new();
     let mut ext: Vec<String> = Vec::new();
@@ -129,7 +132,7 @@ pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v:
             continue;
         }
         if ed.min() == Some(1) {
-            if parent_chain_has_optional(sd, ed) {
+            if parent_chain_has_optional(sd, ed, &pointers) {
                 required_nesteds += 1;
             } else {
                 required_outrights += 1;
@@ -483,29 +486,50 @@ fn rules_display(code: &str) -> &'static str {
     }
 }
 
-/// psdr parentChainHasOptional:318. Pointer(diffElem) = the profile's own
-/// SNAPSHOT element with the same id; walk snapshot parents, true if any has
-/// min==0. If no pointer match, returns true (psdr:323 "common in existing").
+/// psdr parentChainHasOptional:318 — faithful port.
 ///
-/// RESIDUAL: the true predicate walks the SNAPSHOT_DERIVATION_POINTER (the
-/// intermediate BASE-profile element set during snapshot gen, PU:2591), whose
-/// min can differ from both the own snapshot min and element.base.min. Using
-/// the own-snapshot min undercounts nested; using base.min overcounts. Exact
-/// parity needs the reconstructed pointer chain (same machinery diff.rs uses).
-/// This mismatches the outright/nested SPLIT only (the total mandatory count is
-/// always correct) on 4 us-core SDs (practitioner, observation-occupation/
-/// -pregnancyintent/-pregnancystatus). Documented; low value vs the markdown
-/// blocker. Fires no gap (silent approximation — total is right).
-fn parent_chain_has_optional(sd: &Sd, ed: &crate::sdmodel::Ed) -> bool {
+/// `match = SNAPSHOT_DERIVATION_POINTER(ed)` (reconstructed: the profile's own
+/// snapshot element the diff element derived from — exact-id, sliced-choice, or
+/// unsliced-camelCase alias; see `diff::reconstruct_diff_pointers`). If no pointer
+/// (`match == null`) return true (psdr:323 "common in existing profiles").
+/// Then `while match.path contains ".": if match.min == 0 return true; match =
+/// getElementParent(snapshot, match); if match == null return true`. Return false.
+///
+/// `getElementParent` (psdr:340) = the nearest PRECEDING snapshot element whose
+/// path is `match.path` minus its last segment — walked by list index, NOT by a
+/// fresh id search, so a sliced/renamed pointer still walks the real snapshot
+/// ancestry. This reconstruction drove observation-occupation / -pregnancyintent
+/// / -pregnancystatus to byte-parity (was the silent-approx set).
+///
+/// RESIDUAL — us-core-practitioner only (1 SD, cited). Its 5 diff-mandatory are
+/// {identifier, identifier.system, identifier.value, name, name.family}; the
+/// golden splits 3 outright / 2 nested. identifier/name are outright (own pointer,
+/// snapshot min 1). The sub-elements identifier.system/.value + name.family are
+/// NOT present in the immediate base (core Practitioner expands neither Identifier
+/// nor HumanName), so the publisher's SNAPSHOT_DERIVATION_POINTER for them is the
+/// base-clone captured mid-`updateFromDefinition` (PU:2586) whose `.min` reflects
+/// the datatype default (0) at the instant `getMin()` is read for the split — a
+/// value that is later overwritten to 1 in the SAME object and so is NOT
+/// recoverable from the finished snapshot JSON (min already 1). The exact split
+/// (2 of those 3 nested) depends on that transient in-memory state; reconstructing
+/// it would require re-running snapshot generation with pointer capture. Our
+/// own-snapshot pointers read min 1 for all three -> 3 extra outrights (total
+/// mandatory count still correct: 5). Documented; the finished-JSON oracle cannot
+/// distinguish the 2/1 sub-split without the live snapshot-gen pointer state.
+fn parent_chain_has_optional(
+    sd: &Sd,
+    ed: &crate::sdmodel::Ed,
+    pointers: &std::collections::HashMap<String, usize>,
+) -> bool {
     if !ed.path().contains('.') {
         return false;
     }
     let snap = sd.snapshot_elements();
-    let id = ed.id();
-    // find snapshot elem with same id
-    let Some(mut idx) = snap.iter().position(|e| e.id() == id) else {
+    // match = pointer(ed); null -> true.
+    let Some(&start) = pointers.get(ed.id()) else {
         return true;
     };
+    let mut idx = start;
     loop {
         let e = &snap[idx];
         if !e.path().contains('.') {
@@ -514,11 +538,8 @@ fn parent_chain_has_optional(sd: &Sd, ed: &crate::sdmodel::Ed) -> bool {
         if e.min() == Some(0) {
             return true;
         }
-        // parent = the preceding snapshot element whose path is this path minus last segment
-        let ppath = match e.path().rfind('.') {
-            Some(p) => &e.path()[..p],
-            None => return false,
-        };
+        // getElementParent: preceding snapshot element with path == parent path.
+        let ppath = &e.path()[..e.path().rfind('.').unwrap()];
         let mut found = None;
         let mut i = idx as i64 - 1;
         while i >= 0 {

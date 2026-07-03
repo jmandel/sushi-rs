@@ -3353,6 +3353,11 @@ fn list_constraints_and_conditions(e: Ed<'_>) -> String {
 /// concretized (`valueQuantity` -> `value[x]`): for every camelCase boundary in
 /// every segment, propose the `stem[x]` rewrite (checked against the snapshot
 /// id set by the caller). Segments with a slice marker keep their slice.
+/// Public wrapper for the shared summary nested-split pointer reconstruction.
+pub fn dechoice_candidates_pub(id: &str) -> Vec<String> {
+    dechoice_candidates(id)
+}
+
 fn dechoice_candidates(id: &str) -> Vec<String> {
     let segs: Vec<&str> = id.split('.').collect();
     let mut out = Vec::new();
