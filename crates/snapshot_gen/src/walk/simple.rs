@@ -587,7 +587,7 @@ pub(crate) fn path_tail(d: &Value) -> String {
 }
 
 /// PU:1897 baseWalksInto.
-fn base_walks_into(base: &[Value], cursor: usize) -> bool {
+pub(crate) fn base_walks_into(base: &[Value], cursor: usize) -> bool {
     if cursor >= base.len() {
         return false;
     }
@@ -596,17 +596,84 @@ fn base_walks_into(base: &[Value], cursor: usize) -> bool {
     path.starts_with(&format!("{prev}."))
 }
 
-/// PU:1906 fillOutFromBase — fill-missing-only from `usage` into a copy of `profile`.
+/// PU:1906 fillOutFromBase — fill-missing-only from `usage` into a copy of
+/// `profile`, restricted to Java's exact field allow-list (notably NOT
+/// `condition`, `type`, `base`, `slicing`, `mapping`, `id`, `path`).
 fn fill_out_from_base(profile: &Value, usage: &Value) -> Value {
     let mut out = profile.clone();
-    if let (Some(out_obj), Some(usage_obj)) = (out.as_object_mut(), usage.as_object()) {
-        for (k, v) in usage_obj {
-            if !out_obj.contains_key(k) {
+    let Some(out_obj) = out.as_object_mut() else { return out };
+    let Some(usage_obj) = usage.as_object() else { return out };
+
+    // scalar fill-if-missing
+    for k in [
+        "sliceName", "label", "definition", "short", "comment", "requirements",
+        "min", "max", "maxLength", "mustSupport", "isSummary", "isModifier",
+        "isModifierReason", "mustHaveValue", "binding",
+    ] {
+        if !out_obj.contains_key(k) {
+            if let Some(v) = usage_obj.get(k) {
+                out_obj.insert(k.to_string(), v.clone());
+            }
+        }
+    }
+    // polymorphic fill-if-missing: fixed[x]/pattern[x]/minValue[x]/maxValue[x]
+    for prefix in ["fixed", "pattern", "minValue", "maxValue"] {
+        let has = out_obj.keys().any(|k| is_choice_key(k, prefix));
+        if !has {
+            if let Some((k, v)) = usage_obj.iter().find(|(k, _)| is_choice_key(k, prefix)) {
                 out_obj.insert(k.clone(), v.clone());
             }
         }
     }
+    // example[]: fill only if absent (Java setExample when !res.hasExample()).
+    if !out_obj.contains_key("example") {
+        if let Some(v) = usage_obj.get("example") {
+            out_obj.insert("example".to_string(), v.clone());
+        }
+    }
+    // code[]: additive by value
+    additive_array(out_obj, usage_obj, "code", |a, b| a == b);
+    // alias[]: additive by value
+    additive_array(out_obj, usage_obj, "alias", |a, b| a == b);
+    // constraint[]: additive by key
+    additive_array(out_obj, usage_obj, "constraint", |a, b| {
+        a.get("key") == b.get("key")
+    });
+    // extension[]: additive by url
+    additive_array(out_obj, usage_obj, "extension", |a, b| {
+        a.get("url") == b.get("url")
+    });
     out
+}
+
+/// True if `key` is a `prefix` + capitalized-type polymorphic field (e.g.
+/// prefix "fixed" matches "fixedString" but not "fixed" or "fixedxyz").
+fn is_choice_key(key: &str, prefix: &str) -> bool {
+    key.strip_prefix(prefix)
+        .and_then(|rest| rest.chars().next())
+        .map(|c| c.is_ascii_uppercase())
+        .unwrap_or(false)
+}
+
+/// Additive array merge into `out[key]`: append each `usage[key]` entry not
+/// already present per `same`.
+fn additive_array(
+    out: &mut serde_json::Map<String, Value>,
+    usage: &serde_json::Map<String, Value>,
+    key: &str,
+    same: impl Fn(&Value, &Value) -> bool,
+) {
+    let Some(src) = usage.get(key).and_then(Value::as_array) else { return };
+    if src.is_empty() {
+        return;
+    }
+    let mut existing = out.get(key).and_then(Value::as_array).cloned().unwrap_or_default();
+    for s in src {
+        if !existing.iter().any(|d| same(d, s)) {
+            existing.push(s.clone());
+        }
+    }
+    out.insert(key.to_string(), Value::Array(existing));
 }
 
 pub(crate) fn snapshot_elements(sd: &Value) -> Vec<Value> {

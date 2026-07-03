@@ -180,6 +180,29 @@ pub(crate) fn update_from_definition(
     copy_choice_prefix(dest, source, "fixed");
     copy_choice_prefix(dest, source, "pattern");
 
+    // example[]: additive merge (PU:2827-2856). Each derived example not already
+    // present in base (by label+value) is appended. The EXT_ED_SUPPRESS delete
+    // path ($all / suppress) is rare and not yet exercised; append-if-missing.
+    if let Some(derived_examples) = source.get("example").and_then(Value::as_array) {
+        let mut base_examples = dest
+            .get("example")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for ex in derived_examples {
+            let found = base_examples.iter().any(|be| {
+                be.get("label") == ex.get("label")
+                    && example_value(be) == example_value(ex)
+            });
+            if !found {
+                base_examples.push(ex.clone());
+            }
+        }
+        if !base_examples.is_empty() {
+            set_field(dest, "example", Value::Array(base_examples));
+        }
+    }
+
     // maxLength / maxValue[x] / minValue[x]: override
     if source.get("maxLength").is_some() && source.get("maxLength") != dest.get("maxLength") {
         copy_if_present(dest, source, "maxLength");
@@ -284,6 +307,12 @@ pub(crate) fn update_from_definition(
             merge_type_entries(dest, dtypes);
         }
     }
+
+    // mapping: MappingAssistant.merge(derived, base) at PU:3111 — differential
+    // element mappings come FIRST, then inherited base mappings, deduped by
+    // (identity, map) with map trimmed (R4/non-R5Plus path; rename map omitted —
+    // not exercised by current corpus, would need SD-level mapping declarations).
+    merge_mappings(dest, source);
 
     // constraint: stamp base SNAPSHOT_IS_DERIVED + fill source; then additive
     fill_constraint_sources(dest, src_sd_url);
@@ -439,12 +468,18 @@ fn apply_profile_root_doco(ctx: &mut WalkContext, dest: &mut Value, source: &Val
     else {
         return;
     };
-    if let Some(d) = root.get("definition") {
-        set_field(dest, "definition", d.clone());
+    // Java (PU:2686/2688) rewrites the copied root definition / binding.description
+    // markdown links via processRelativeUrls(..., true) against the context spec url.
+    if let Some(d) = root.get("definition").and_then(Value::as_str) {
+        let rewritten =
+            crate::text::process_relative_markdown_urls(d, &ctx.spec_url, true);
+        set_field(dest, "definition", Value::String(rewritten));
     }
-    if let Some(bd) = root.get("binding").and_then(|b| b.get("description")) {
+    if let Some(bd) = root.get("binding").and_then(|b| b.get("description")).and_then(Value::as_str) {
         if let Some(binding) = dest.get_mut("binding") {
-            set_field(binding, "description", bd.clone());
+            let rewritten =
+                crate::text::process_relative_markdown_urls(bd, &ctx.spec_url, true);
+            set_field(binding, "description", Value::String(rewritten));
         }
     }
     // base.setShort(e.getShort()) — unconditional in Java; extension roots always
@@ -468,6 +503,55 @@ fn apply_profile_root_doco(ctx: &mut WalkContext, dest: &mut Value, source: &Val
         Some(m) => set_field(dest, "mapping", m.clone()),
         None => remove_field(dest, "mapping"),
     }
+}
+
+/// PU:3111 MappingAssistant.merge(derived, base) — build [diff-mappings ++
+/// base-mappings] deduped by (identity, trimmed map). `dest` holds the base
+/// (inherited) mappings; `source` is the differential element. If the diff has
+/// no mappings, dest is unchanged.
+fn merge_mappings(dest: &mut Value, source: &Value) {
+    let Some(diff_mappings) = source.get("mapping").and_then(Value::as_array) else {
+        return;
+    };
+    if diff_mappings.is_empty() {
+        return;
+    }
+    let base_mappings = dest.get("mapping").and_then(Value::as_array).cloned().unwrap_or_default();
+    let map_key = |m: &Value| -> (String, String) {
+        (
+            m.get("identity").and_then(Value::as_str).unwrap_or("").to_string(),
+            m.get("map").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+        )
+    };
+    let mut list: Vec<Value> = Vec::new();
+    // addMappings(list, derived-element mappings) first (Java's `base` param).
+    for m in diff_mappings {
+        let k = map_key(m);
+        if !list.iter().any(|d| map_key(d) == k) {
+            list.push(m.clone());
+        }
+    }
+    // then addMappings(list, base-element mappings).
+    for m in &base_mappings {
+        let k = map_key(m);
+        if !list.iter().any(|d| map_key(d) == k) {
+            list.push(m.clone());
+        }
+    }
+    set_field(dest, "mapping", Value::Array(list));
+}
+
+/// Extract an example component's polymorphic `value[x]` (key, value) for
+/// dedup comparison (Base.compareDeep on getValue()).
+fn example_value(ex: &Value) -> Option<(String, Value)> {
+    ex.as_object()?.iter().find_map(|(k, v)| {
+        if let Some(rest) = k.strip_prefix("value") {
+            if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+                return Some((k.clone(), v.clone()));
+            }
+        }
+        None
+    })
 }
 
 const EXT_TRANSLATABLE: &str = "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable";

@@ -5,12 +5,12 @@ OK rust profile-appointment-base
 OK rust profile-bundle-base
 OK rust profile-communicationrequest
 OK rust profile-coverage
-OK rust profile-device
 OK rust profile-devicerequest
+OK rust profile-device
 OK rust profile-encounter
 OK rust profile-location
-OK rust profile-medication
 OK rust profile-medicationrequest
+OK rust profile-medication
 OK rust profile-nutritionorder
 OK rust profile-organization
 OK rust profile-patient

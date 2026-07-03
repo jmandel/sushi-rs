@@ -43,7 +43,14 @@ pub(crate) fn process_path_with_sliced_base(
             trace::id(&diff_matches[0]).as_deref(),
             None,
         );
-        anyhow::bail!("processPathWithSlicedBaseWhereDiffsConstrainTypes not implemented (type-slicing on sliced base)");
+        types::process_path_with_sliced_base_where_diffs_constrain_types(
+            ctx,
+            cur,
+            frame,
+            current_base_path,
+            diff_match_idx,
+            type_list,
+        )?;
     } else {
         trace::rec(
             "processPathWithSlicedBase",
@@ -67,11 +74,12 @@ fn process_path_with_sliced_base_empty(
     cur: &mut WalkCursor,
     frame: &WalkFrame,
     current_base: &Value,
-    _current_base_path: &str,
+    current_base_path: &str,
     path: &str,
 ) -> anyhow::Result<()> {
     if has_inner_diff_matches(&ctx.diff, path, cur.diff_cursor, frame.diff_limit, true) {
         let mut outcome = clone_element(current_base);
+        update_urls(&mut outcome, &frame.url, &frame.spec_url);
         let new_path = fixed_path_dest(
             frame.context_path_target.as_deref(),
             path_of(&outcome),
@@ -105,7 +113,48 @@ fn process_path_with_sliced_base_empty(
             super::loop_::process_paths(ctx, &mut ncur, &nframe, None)?;
             cur.base_cursor = index_of_first_non_child(&cur.base, cur.base_cursor, frame.base_limit);
         } else {
-            anyhow::bail!("sliced-base empty-diff type unfold not implemented");
+            // PPP:1855-1882 — the diff walks in but the base has no children:
+            // unfold from the datatype SD.
+            let (dt, dt_url) = super::simple::resolve_type_sd(ctx, &outcome)?;
+            trace::rec(
+                "processPathWithSlicedBaseAndEmptyDiffMatches",
+                "processSlicedBaseEmptyDiffMatches.unfoldType",
+                trace::id(current_base).as_deref(),
+                ctx.diff.get(cur.diff_cursor).and_then(trace::id).as_deref(),
+                Some(json!({ "typeSD": dt_url })),
+            );
+            cur.context_name = dt_url.clone();
+            let start = cur.diff_cursor;
+            if cur.diff_cursor < ctx.diff.len()
+                && path_of(&ctx.diff[cur.diff_cursor]) == current_base_path
+            {
+                cur.diff_cursor += 1;
+            }
+            let cb_dot = format!("{current_base_path}.");
+            while cur.diff_cursor < ctx.diff.len()
+                && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &cb_dot)
+            {
+                cur.diff_cursor += 1;
+            }
+            if cur.diff_cursor > start {
+                let dt_elements = super::simple::snapshot_elements(&dt);
+                let mut nc = WalkCursor {
+                    base_source_url: dt_url.clone(),
+                    base: Rc::new(dt_elements.clone()),
+                    base_cursor: 1,
+                    diff_cursor: start,
+                    context_name: cur.context_name.clone(),
+                    result_path_base: cur.result_path_base.clone(),
+                };
+                let mut nframe = frame.clone();
+                nframe.base_limit = dt_elements.len().saturating_sub(1);
+                nframe.diff_limit = cur.diff_cursor as isize - 1;
+                nframe.context_path_source = Some(current_base_path.to_string());
+                nframe.context_path_target = Some(path_of(&outcome).to_string());
+                nframe.redirector = Vec::new();
+                nframe.slicing = SlicingParams::default();
+                super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
+            }
         }
         cur.base_cursor += 1;
     } else {
@@ -121,6 +170,7 @@ fn process_path_with_sliced_base_empty(
             && path_of(&cur.base[cur.base_cursor]).starts_with(path)
         {
             let mut outcome = clone_element(&cur.base[cur.base_cursor]);
+            update_urls(&mut outcome, &frame.url, &frame.spec_url);
             let new_path = fixed_path_dest(
                 frame.context_path_target.as_deref(),
                 path_of(&outcome),
@@ -163,6 +213,7 @@ fn process_path_with_sliced_base_default(
 
     // Emit the anchor.
     let mut outcome = clone_element(current_base);
+    update_urls(&mut outcome, &frame.url, &frame.spec_url);
     let new_path = fixed_path_dest(
         frame.context_path_target.as_deref(),
         path_of(&outcome),
@@ -216,6 +267,7 @@ fn process_path_with_sliced_base_default(
         );
         for i in (cur.base_cursor + 1)..=new_base_limit {
             let mut o = clone_element(&cur.base[i]);
+            update_urls(&mut o, &frame.url, &frame.spec_url);
             let np = fixed_path_dest(
                 frame.context_path_target.as_deref(),
                 path_of(&o),
@@ -233,6 +285,7 @@ fn process_path_with_sliced_base_default(
         cur.base_cursor = base_item_idx;
         let base_item = cur.base[base_item_idx].clone();
         let mut outcome = clone_element(&base_item);
+        update_urls(&mut outcome, &frame.url, &frame.spec_url);
         update_from_base(&mut outcome, current_base);
         let np = fixed_path_dest(
             frame.context_path_target.as_deref(),
@@ -297,6 +350,7 @@ fn process_path_with_sliced_base_default(
                 && path_of(&cur.base[cur.base_cursor]) != path
             {
                 let mut o = clone_element(&cur.base[cur.base_cursor]);
+                update_urls(&mut o, &frame.url, &frame.spec_url);
                 let np = fixed_path_dest(
                     frame.context_path_target.as_deref(),
                     path_of(&o),
@@ -340,6 +394,7 @@ fn process_path_with_sliced_base_default(
             current_base.clone()
         };
         let mut outcome = clone_element(&template);
+        update_urls(&mut outcome, &frame.url, &frame.spec_url);
         let np = fixed_path_dest(
             frame.context_path_target.as_deref(),
             path_of(&outcome),
@@ -365,7 +420,142 @@ fn process_path_with_sliced_base_default(
             false,
         );
         ctx.output[out_idx] = o;
+
+        // PPP:1544-1560 — pick up min/max constraints from a single profiled type.
+        let mut outcome = ctx.output[out_idx].clone();
+        let profiles: Vec<String> = outcome
+            .get("type")
+            .and_then(Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|tr| tr.get("profile").and_then(Value::as_array))
+                    .flat_map(|a| a.iter())
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if profiles.len() == 1 {
+            if let Some(sdt) = super::resolve::resolve_with_snapshot(ctx, &profiles[0])? {
+                if let Some(edt) = super::simple::snapshot_elements(&sdt).first() {
+                    let edt_min = edt.get("min").and_then(Value::as_u64).unwrap_or(0);
+                    let edt_max = edt.get("max").and_then(Value::as_str).unwrap_or("*").to_string();
+                    let out_min = outcome.get("min").and_then(Value::as_u64).unwrap_or(0);
+                    let out_max = outcome.get("max").and_then(Value::as_str).unwrap_or("*").to_string();
+                    if edt_min >= 1 && out_min < 1 {
+                        set_field(&mut outcome, "min", Value::from(edt_min));
+                    }
+                    if edt_max == "1" && out_max != "1" {
+                        set_field(&mut outcome, "max", Value::from("1"));
+                    }
+                    ctx.output[out_idx] = outcome.clone();
+                }
+            }
+        } else if profiles.len() > 1 {
+            anyhow::bail!(
+                "Not handled: multiple profiles at {}:{:?}",
+                path_of(&outcome),
+                outcome.get("sliceName")
+            );
+        }
+
         cur.diff_cursor = diff_item_idx + 1;
+
+        // PPP:1562-1610 — unfold the slice's type children when the diff walks in.
+        let out_path = path_of(&outcome).to_string();
+        let anchor_dot = format!("{}.", path_of(&diff0));
+        let has_type = outcome
+            .get("type")
+            .and_then(Value::as_array)
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+        if has_type
+            && cur.diff_cursor < ctx.diff.len()
+            && out_path.contains('.')
+            && !super::simple::base_walks_into(&cur.base, cur.base_cursor)
+            && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &anchor_dot)
+        {
+            let tcode = outcome
+                .get("type")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|t| t.get("code"))
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let type_count = outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            if type_count > 1 {
+                for tr in outcome.get("type").and_then(Value::as_array).into_iter().flatten() {
+                    if tr.get("code").and_then(Value::as_str) != Some("Reference") {
+                        anyhow::bail!(
+                            "_HAS_CHILDREN__AND_MULTIPLE_TYPES__IN_PROFILE_ at {}",
+                            path_of(&diff0)
+                        );
+                    }
+                }
+            }
+            let start = cur.diff_cursor;
+            while cur.diff_cursor < ctx.diff.len()
+                && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &anchor_dot)
+            {
+                cur.diff_cursor += 1;
+            }
+            if matches!(tcode, "Base" | "Element" | "BackboneElement") {
+                // PPP:1572-1585 — recurse over the base's own children window.
+                let base_start = cur.base_cursor + 1;
+                let mut base_max = base_start + 1;
+                let cb_dot = format!("{}.", path_of(current_base));
+                while base_max < cur.base.len() && path_of(&cur.base[base_max]).starts_with(&cb_dot) {
+                    base_max += 1;
+                }
+                let mut nc = WalkCursor {
+                    base_source_url: cur.base_source_url.clone(),
+                    base: cur.base.clone(),
+                    base_cursor: base_start,
+                    diff_cursor: start.saturating_sub(1), // PPP:1580 start-1
+                    context_name: cur.context_name.clone(),
+                    result_path_base: cur.result_path_base.clone(),
+                };
+                let mut nframe = frame.clone();
+                nframe.base_limit = base_max - 1;
+                nframe.diff_limit = cur.diff_cursor as isize - 1;
+                nframe.profile_name = format!("{}{}", frame.profile_name, path_tail(&diff0));
+                nframe.context_path_source = Some(path_of(&cur.base[0]).to_string());
+                nframe.context_path_target = Some(path_of(&cur.base[0]).to_string());
+                nframe.slicing = SlicingParams::default();
+                super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
+            } else {
+                // PPP:1587-1608 — recurse into the resolved datatype/profile SD.
+                let (dt, dt_url) = super::simple::resolve_type_sd(ctx, &outcome)?;
+                cur.context_name = dt_url.clone();
+                let dt_elements = super::simple::snapshot_elements(&dt);
+                let mut nc = WalkCursor {
+                    base_source_url: dt_url.clone(),
+                    base: Rc::new(dt_elements.clone()),
+                    base_cursor: 1,
+                    diff_cursor: start.saturating_sub(1), // PPP:1595 start-1
+                    context_name: cur.context_name.clone(),
+                    result_path_base: cur.result_path_base.clone(),
+                };
+                let mut nframe = frame.clone();
+                nframe.base_limit = dt_elements.len().saturating_sub(1);
+                nframe.diff_limit = cur.diff_cursor as isize - 1;
+                nframe.profile_name = format!("{}{}", frame.profile_name, path_tail(&diff0));
+                nframe.context_path_source = Some(path_of(&diff0).to_string());
+                nframe.context_path_target = Some(out_path.clone());
+                nframe.redirector = Vec::new();
+                nframe.slicing = SlicingParams::default();
+                super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
+            }
+        }
+
+        // PPP:1616 — contentReference + type ⇒ clear type.
+        if outcome.get("contentReference").is_some() && has_type {
+            let mut fixed = outcome;
+            if let Some(obj) = fixed.as_object_mut() {
+                obj.remove("type");
+            }
+            ctx.output[out_idx] = fixed;
+        }
         diffpos += 1;
     }
     cur.base_cursor += 1;

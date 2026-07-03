@@ -13,8 +13,8 @@ OK rust mcode-comorbidities
 OK rust mcode-deauville-scale
 OK rust mcode-ecog-performance-status
 OK rust mcode-genomic-region-studied
-OK rust mcode-genomic-variant
 OK rust mcode-genomics-report
+OK rust mcode-genomic-variant
 OK rust mcode-histologic-behavior-and-type
 OK rust mcode-histologic-grade
 OK rust mcode-histology-morphology-behavior

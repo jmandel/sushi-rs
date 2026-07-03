@@ -11,6 +11,17 @@ use super::paths::*;
 use super::trace;
 use crate::merge::set_field;
 
+/// Public wrapper: resolve `currentBase`'s contentReference target (walking
+/// backwards from `current_index`, skipping slices). Mirrors Java
+/// `resolveContentReference(base, currentBase)` where start = indexOf(currentBase).
+pub(crate) fn resolve_content_reference_pub(
+    base: &[Value],
+    current_index: usize,
+    content_ref: &str,
+) -> Option<usize> {
+    resolve_content_reference(base, current_index, content_ref)
+}
+
 /// PU:520 resolveContentReference — find the base element the `#frag` points to.
 fn resolve_content_reference(base: &[Value], current_index: usize, content_ref: &str) -> Option<usize> {
     let frag = &content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..];

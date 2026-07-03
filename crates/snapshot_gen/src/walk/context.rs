@@ -63,6 +63,8 @@ pub(crate) struct WalkContext<'a> {
     pub gen_stack: Vec<String>,
     /// The derived profile url (for messages).
     pub derived_url: String,
+    /// context.getSpecUrl() for the current generation (markdown link rewriting).
+    pub spec_url: String,
 }
 
 impl<'a> WalkContext<'a> {

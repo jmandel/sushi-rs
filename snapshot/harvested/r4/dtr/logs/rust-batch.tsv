@@ -1,5 +1,3 @@
-snapshot/harvested/r4/dtr/fixtures/DTR-QPackageBundle.json	snapshot/harvested/r4/dtr/rust/DTR-QPackageBundle.snapshot.json
-snapshot/harvested/r4/dtr/fixtures/DTR-QRBundle.json	snapshot/harvested/r4/dtr/rust/DTR-QRBundle.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/activeRole.json	snapshot/harvested/r4/dtr/rust/activeRole.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/alternativeExpression.json	snapshot/harvested/r4/dtr/rust/alternativeExpression.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/containedReference.json	snapshot/harvested/r4/dtr/rust/containedReference.snapshot.json
@@ -7,8 +5,10 @@ snapshot/harvested/r4/dtr/fixtures/dtr-base-questionnaire.json	snapshot/harveste
 snapshot/harvested/r4/dtr/fixtures/dtr-log-errors-input-parameters.json	snapshot/harvested/r4/dtr/rust/dtr-log-errors-input-parameters.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-next-question-input-parameters.json	snapshot/harvested/r4/dtr/rust/dtr-next-question-input-parameters.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-next-question-output-parameters.json	snapshot/harvested/r4/dtr/rust/dtr-next-question-output-parameters.snapshot.json
+snapshot/harvested/r4/dtr/fixtures/DTR-QPackageBundle.json	snapshot/harvested/r4/dtr/rust/DTR-QPackageBundle.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-qpackage-input-parameters.json	snapshot/harvested/r4/dtr/rust/dtr-qpackage-input-parameters.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-qpackage-output-parameters.json	snapshot/harvested/r4/dtr/rust/dtr-qpackage-output-parameters.snapshot.json
+snapshot/harvested/r4/dtr/fixtures/DTR-QRBundle.json	snapshot/harvested/r4/dtr/rust/DTR-QRBundle.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-questionnaire-adapt-search.json	snapshot/harvested/r4/dtr/rust/dtr-questionnaire-adapt-search.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-questionnaireresponse.json	snapshot/harvested/r4/dtr/rust/dtr-questionnaireresponse.snapshot.json
 snapshot/harvested/r4/dtr/fixtures/dtr-supported-Payers.json	snapshot/harvested/r4/dtr/rust/dtr-supported-Payers.snapshot.json

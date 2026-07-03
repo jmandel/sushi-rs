@@ -153,6 +153,7 @@ pub(crate) fn process_simple_path_default(
             })),
         );
         let mut outcome = clone_element(current_base);
+        update_urls(&mut outcome, &frame.url, &frame.spec_url);
         let new_path = fixed_path_dest(
             frame.context_path_target.as_deref(),
             path_of(&outcome),
@@ -220,9 +221,101 @@ pub(crate) fn process_simple_path_default(
                 &frame.source_sd_url,
                 false,
             );
-            ctx.output[anchor_idx] = anchor;
+            ctx.output[anchor_idx] = anchor.clone();
             ctx.mark_consumed(diff0_idx);
-            // (inner children / contentReference dump not needed for value slicing rungs)
+
+            // PPP:419-470: the anchor is the base definition of the slice; if the
+            // diff walks into it, unfold its type / dump its contentReference.
+            if has_inner_diff_matches(
+                &ctx.diff,
+                current_base_path,
+                cur.diff_cursor,
+                frame.diff_limit,
+                false,
+            ) {
+                if base_has_children(&cur.base, cur.base_cursor) {
+                    anyhow::bail!(
+                        "sliceGroupBaseDefinition inner-diff with base children not handled at {current_base_path}"
+                    );
+                }
+                // unfoldType (PPP:425-447): recurse into the datatype SD.
+                let (dt, dt_url) = super::simple::resolve_type_sd(ctx, &anchor)?;
+                cur.context_name = dt_url.clone();
+                cur.diff_cursor += 1;
+                let unfold_start = cur.diff_cursor;
+                let cb_dot = format!("{current_base_path}.");
+                while cur.diff_cursor < ctx.diff.len()
+                    && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &cb_dot)
+                {
+                    cur.diff_cursor += 1;
+                }
+                cur.diff_cursor -= 1;
+                trace::rec(
+                    "processSimplePathDefault",
+                    "processSimplePathDefault.unfoldType",
+                    trace::id(current_base).as_deref(),
+                    trace::id(&diff0).as_deref(),
+                    Some(json!({ "typeSD": dt_url })),
+                );
+                let dt_elements = super::simple::snapshot_elements(&dt);
+                let mut ncur = WalkCursor {
+                    base_source_url: dt_url.clone(),
+                    base: std::rc::Rc::new(dt_elements.clone()),
+                    base_cursor: 1,
+                    diff_cursor: unfold_start,
+                    context_name: cur.context_name.clone(),
+                    result_path_base: cur.result_path_base.clone(),
+                };
+                let mut nframe = frame.clone();
+                nframe.base_limit = dt_elements.len().saturating_sub(1);
+                nframe.diff_limit = cur.diff_cursor as isize;
+                nframe.context_path_source = Some(current_base_path.to_string());
+                nframe.context_path_target = Some(path_of(&anchor).to_string());
+                nframe.redirector = Vec::new();
+                nframe.slicing = SlicingParams::default();
+                let slicer_local = ctx.output[anchor_idx].clone();
+                super::loop_::process_paths(ctx, &mut ncur, &nframe, Some(&slicer_local))?;
+            } else if anchor.get("contentReference").is_some()
+                && !base_has_children(&cur.base, cur.base_cursor)
+            {
+                // contentReferenceInlineDump (PPP:449-470): dump the referenced
+                // element's children inline, path-fixed under the anchor.
+                let content_ref = anchor
+                    .get("contentReference")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let frag = content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..].to_string();
+                if let Some(bstart) =
+                    super::contentref::resolve_content_reference_pub(&cur.base, cur.base_cursor, &content_ref)
+                {
+                    let bend = find_end_of_element_no_slices(&cur.base, bstart);
+                    trace::rec(
+                        "processSimplePathDefault",
+                        "processSimplePathDefault.contentReferenceInlineDump",
+                        trace::id(current_base).as_deref(),
+                        trace::id(&diff0).as_deref(),
+                        Some(json!({ "contentReference": content_ref, "count": bend - bstart })),
+                    );
+                    let anchor_path = path_of(&anchor).to_string();
+                    for i in (bstart + 1)..=bend {
+                        let src = cur.base[i].clone();
+                        let mut o = clone_element(&src);
+                        update_urls(&mut o, &frame.url, &frame.spec_url);
+                        clear_id(&mut o);
+                        let fixed = path_of(&o).replace(&frag, &anchor_path);
+                        let np = fixed_path_dest(
+                            frame.context_path_target.as_deref(),
+                            &fixed,
+                            &frame.redirector,
+                            frame.context_path_source.as_deref(),
+                        );
+                        set_field(&mut o, "path", Value::String(np));
+                        update_from_base(&mut o, &src);
+                        ctx.add_to_result(o, None);
+                    }
+                }
+            }
             start += 1;
         } else {
             trace::rec(

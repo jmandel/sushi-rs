@@ -18,9 +18,9 @@ snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-metrics.json	snap
 snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-output.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis-output.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-protocol-performed.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis-protocol-performed.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-regions.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis-regions.snapshot.json
+snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-specimen.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis-specimen.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis-title.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis-title.snapshot.json
-snapshot/harvested/r4/genomics/fixtures/genomic-study-analysis.json	snapshot/harvested/r4/genomics/rust/genomic-study-analysis.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-reference.json	snapshot/harvested/r4/genomics/rust/genomic-study-reference.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study-referrer-ext.json	snapshot/harvested/r4/genomics/rust/genomic-study-referrer-ext.snapshot.json
 snapshot/harvested/r4/genomics/fixtures/genomic-study.json	snapshot/harvested/r4/genomics/rust/genomic-study.snapshot.json

@@ -13,8 +13,8 @@ snapshot/harvested/r4/mcode/fixtures/mcode-comorbidities.json	snapshot/harvested
 snapshot/harvested/r4/mcode/fixtures/mcode-deauville-scale.json	snapshot/harvested/r4/mcode/rust/mcode-deauville-scale.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-ecog-performance-status.json	snapshot/harvested/r4/mcode/rust/mcode-ecog-performance-status.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-genomic-region-studied.json	snapshot/harvested/r4/mcode/rust/mcode-genomic-region-studied.snapshot.json
-snapshot/harvested/r4/mcode/fixtures/mcode-genomic-variant.json	snapshot/harvested/r4/mcode/rust/mcode-genomic-variant.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-genomics-report.json	snapshot/harvested/r4/mcode/rust/mcode-genomics-report.snapshot.json
+snapshot/harvested/r4/mcode/fixtures/mcode-genomic-variant.json	snapshot/harvested/r4/mcode/rust/mcode-genomic-variant.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-histologic-behavior-and-type.json	snapshot/harvested/r4/mcode/rust/mcode-histologic-behavior-and-type.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-histologic-grade.json	snapshot/harvested/r4/mcode/rust/mcode-histologic-grade.snapshot.json
 snapshot/harvested/r4/mcode/fixtures/mcode-histology-morphology-behavior.json	snapshot/harvested/r4/mcode/rust/mcode-histology-morphology-behavior.snapshot.json

@@ -61,6 +61,7 @@ pub fn generate_snapshot(
         gen_cache: std::collections::HashMap::new(),
         gen_stack: Vec::new(),
         derived_url: String::new(),
+        spec_url: String::new(),
     };
     // Convert R4 input to R5-internal.
     let derived = resolve::to_r5_internal(&derived)?;
@@ -87,6 +88,7 @@ pub(crate) fn generate_snapshot_inner(
         gen_cache: std::mem::take(&mut parent.gen_cache),
         gen_stack: parent.gen_stack.clone(),
         derived_url: String::new(),
+        spec_url: String::new(),
     };
     // Nested generation (PPP:810 / PU:762): plain generateSnapshot — the
     // driver-level sortDifferential and bare-root prepend do NOT apply.
@@ -263,6 +265,7 @@ fn generate_snapshot_with_opts(
         spec_url: spec_url_for(&base),
         slicing: SlicingParams::default(),
     };
+    ctx.spec_url = frame.spec_url.clone();
 
     loop_::process_paths(ctx, &mut cur, &frame, None)?;
 

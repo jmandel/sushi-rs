@@ -18,9 +18,9 @@ OK rust genomic-study-analysis-metrics
 OK rust genomic-study-analysis-output
 OK rust genomic-study-analysis-protocol-performed
 OK rust genomic-study-analysis-regions
+OK rust genomic-study-analysis
 OK rust genomic-study-analysis-specimen
 OK rust genomic-study-analysis-title
-OK rust genomic-study-analysis
 OK rust genomic-study-reference
 OK rust genomic-study-referrer-ext
 OK rust genomic-study
