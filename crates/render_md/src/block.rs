@@ -988,78 +988,80 @@ impl Parser {
         // the INNERMOST open element (html.rb parse_raw_html). An element left
         // open consumes to the end of the document (kramdown auto-closes it in
         // the converter — handled by normalize_html_block).
-        let mut collected: Vec<String> = Vec::new();
         let start = self.block_start;
         self.i = start;
         let _ = &close;
+        // Scan the JOINED remaining text so tags spanning lines (an opening
+        // tag with a multi-line attribute value) parse like kramdown's stream
+        // scanner does.
+        let all_text = self.lines[start..].join("\n");
+        let achars: Vec<char> = all_text.chars().collect();
+        let an = achars.len();
         let mut stack: Vec<String> = Vec::new();
-        let mut done = false;
-        while self.i < self.lines.len() && !done {
-            let l = self.lines[self.i].clone();
-            let lchars: Vec<char> = l.chars().collect();
-            let mut pos = 0usize;
-            let mut end_at: Option<usize> = None;
-            while pos < lchars.len() {
-                if lchars[pos] != '<' {
-                    pos += 1;
-                    continue;
-                }
-                // comments skip
-                if lchars.get(pos + 1) == Some(&'!') {
-                    // skip to --> or >
-                    let seg: String = lchars[pos..].iter().collect();
-                    let adv = if seg.starts_with("<!--") {
-                        seg.find("-->").map(|p| p + 3).unwrap_or(seg.len())
-                    } else {
-                        seg.find('>').map(|p| p + 1).unwrap_or(seg.len())
-                    };
-                    pos += adv;
-                    continue;
-                }
-                if let Some((_norm, ni)) = crate::inline::probe_tag(&lchars, pos) {
-                    let raw_tag: String = lchars[pos..ni].iter().collect();
-                    if let Some((name, is_close, is_self)) =
-                        crate::inline::inspect_tag_pub(&raw_tag)
-                    {
-                        if is_close {
-                            if stack.last().map(|t| t == &name).unwrap_or(false) {
-                                stack.pop();
-                                if stack.is_empty() {
-                                    end_at = Some(ni);
-                                    break;
-                                }
-                            }
-                            // non-matching close: literal text (normalizer
-                            // escapes it); does not affect the stack.
-                        } else if !is_self && !is_void_tag(&name) {
-                            stack.push(name);
-                        }
-                    }
-                    pos = ni;
-                    continue;
-                }
+        let mut pos = 0usize;
+        let mut end_at: Option<usize> = None;
+        while pos < an {
+            if achars[pos] != '<' {
                 pos += 1;
+                continue;
             }
-            if let Some(endp) = end_at {
-                // Block ends at the close tag; the char index maps to a byte
-                // index for split.
-                let byte_end: usize = lchars[..endp].iter().map(|c| c.len_utf8()).sum();
-                let (head, rest) = l.split_at(byte_end);
-                collected.push(head.to_string());
-                let rest = rest.to_string();
-                self.i += 1;
-                if !is_blank(&rest) {
-                    self.lines.insert(self.i, rest);
+            if achars.get(pos + 1) == Some(&'!') {
+                let seg: String = achars[pos..].iter().collect();
+                let adv = if seg.starts_with("<!--") {
+                    seg.find("-->").map(|p| p + 3).unwrap_or(seg.len())
+                } else {
+                    seg.find('>').map(|p| p + 1).unwrap_or(seg.len())
+                };
+                pos += adv;
+                continue;
+            }
+            if let Some((_norm, ni)) = crate::inline::probe_tag(&achars, pos) {
+                let raw_tag: String = achars[pos..ni].iter().collect();
+                if let Some((name, is_close, is_self)) = crate::inline::inspect_tag_pub(&raw_tag)
+                {
+                    if is_close {
+                        if stack.last().map(|t| t == &name).unwrap_or(false) {
+                            stack.pop();
+                            if stack.is_empty() {
+                                end_at = Some(ni);
+                                break;
+                            }
+                        }
+                        // non-matching close: literal text (normalizer escapes
+                        // it); does not affect the stack.
+                    } else if !is_self && !is_void_tag(&name) {
+                        stack.push(name);
+                    }
                 }
-                done = true;
-                break;
+                pos = ni;
+                continue;
             }
-            collected.push(l.to_string());
-            self.i += 1;
+            pos += 1;
         }
-        Some(Block::HtmlBlock {
-            raw: collected.join("\n"),
-        })
+        let raw: String;
+        match end_at {
+            Some(endp) => {
+                raw = achars[..endp].iter().collect();
+                let remainder: String = achars[endp..].iter().collect();
+                // Advance past the lines the block consumed; the tail of the
+                // close-tag line (up to its newline) is spliced back for
+                // continued block parsing.
+                let consumed_newlines = raw.matches('\n').count();
+                self.i = start + consumed_newlines + 1;
+                let line_rest = remainder.split('\n').next().unwrap_or("");
+                if !is_blank(line_rest) {
+                    let line_rest = line_rest.to_string();
+                    self.lines.insert(self.i, line_rest);
+                }
+            }
+            None => {
+                // Unclosed root: kramdown consumes the REST of the document
+                // into the raw block and auto-closes.
+                raw = all_text;
+                self.i = self.lines.len();
+            }
+        }
+        Some(Block::HtmlBlock { raw })
     }
 
     fn try_blockquote(&mut self) -> Option<Block> {
