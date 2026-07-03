@@ -1,10 +1,15 @@
 # Snapshot Generator Notes
 
-This directory is for the Rust pure snapshot generator work on branch
-`snapshot-gen`.
+This directory is for the Rust pure snapshot generator on branch `snapshot-gen`.
 
-> **REWORK IN PROGRESS:** the generator is being rebuilt as a decision-
-> isomorphic walk engine. Read [`REWORK-PLAN.md`](./REWORK-PLAN.md) first.
+> **SINGLE ENGINE (cutover complete, 2026-07-02).** The generator is the
+> decision-isomorphic **walk engine** (`crates/snapshot_gen/src/walk/`) — there is
+> no other engine. The legacy diff-order interpreter, its quirk registry, and all
+> transitional CLI/output flags are deleted. `generate_snapshot` runs the walk;
+> the CLI always emits the Publisher-native R5 internal model. Read
+> [`REWORK-PLAN.md`](./REWORK-PLAN.md) for the architecture and §9 for the
+> full-corpus scorecard; the per-increment derivation log is
+> [`specs/walk-worklog.md`](./specs/walk-worklog.md).
 > **Oracle pin:** fhir-core commit `5c4d5a0ff` (2026-06-10), jar
 > `org.hl7.fhir.r5-6.9.10-SNAPSHOT.jar`, from
 > `/home/jmandel/hobby/fhir-perf/repos/fhir-core` (`FHIR_CORE_REPO`). Changing
@@ -18,17 +23,15 @@ This directory is for the Rust pure snapshot generator work on branch
   model and runs `org.hl7.fhir.r5.conformance.profile.ProfileUtilities`, then
   downconverts to R4 only when writing R4 artifacts. Do not use old
   `org.hl7.fhir.r4.conformance.ProfileUtilities` as the R4 oracle target.
-- Default implementation path sorts/normalizes the input differential before
-  generation. Direct raw Java behavior is still available with `--direct`.
-- Transitional CLI flags (`--native-r5`, `--output-r5`, `--output-r4`) exist to
-  keep old fixture checks useful while we move the target. Do not let this turn
-  into two production paths: the steady-state Rust target is the Publisher
-  native internal model path, with R4 artifact downconversion kept only if we
-  intentionally build that as a separate output step.
-- Cleanup requirement: once the migration fixtures no longer need them, remove
-  transitional output flags from the Rust CLI/harness or move downconversion
-  behind a clearly separate artifact-projection command. The main snapshot path
-  should be one Publisher-native Layer-A path.
+- The Rust generator always sorts/normalizes the input differential (preprocess +
+  sortDifferential) before the walk. `--direct`/`--no-sort` disables that step for
+  oracle trace debugging.
+- Single production path: R4 inputs are converted into the R5 model at load and
+  the snapshot is generated R5-internal (native, `fhirVersion` preserved). There
+  is no R4 artifact downconversion in this crate; if that is ever wanted it must
+  be built as a clearly separate artifact-projection command (REWORK-PLAN §2,
+  stage 6 PROJECT). The old `--native-r5`/`--output-r5`/`--output-r4` flags are
+  gone — native R5 is the only behaviour.
 - Out of scope for now: Publisher canonical version pinning, narrative work,
   validation orchestration, and broader IG Publisher Layer-B policy.
 
@@ -111,6 +114,11 @@ R4 Publisher-path oracle creates ambiguous duplicate R4/R5 types (for example
 has no `4.*` entry and canonicalizes `hl7.fhir.r4.core#4.0.0` to `4.0.1`.
 
 ## Rust Commands
+
+Single engine: run the CLI directly (no `--engine`, no `ENGINE=` env, no
+`--native-r5` — those are deleted). `check-harvested-r4.sh` gates each harvested
+IG against its Java native-R5 goldens; the per-IG package lists below are the
+oracle context and must be passed verbatim.
 
 ```sh
 cargo run -p snapshot_gen -- --cache temp/fhir-home/.fhir/packages \

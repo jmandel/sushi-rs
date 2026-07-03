@@ -618,6 +618,85 @@ oracle/package.rs/convert.rs changes. resolve.rs: added `fix_loaded_resource`
 (C). Owned files touched: walk/{finalize,slicing,sliced,simple,context}.rs,
 resolve.rs, text.rs.
 
+## Increment 13: cutover (task #9) — 2026-07-02, WAVE 4
+
+### Fix 1 (pre-cutover): Java-exact PackageHackerR5 extensions.r4 removeIf scoping
+The `fix_loaded_resource` R5-only-datatype removeIf (integer64/CodeableReference/
+RatioRange/Availability/ExtendedContactDetail) was applied to EVERY R4-loaded SD.
+Java (PackageHackerR5.java:115) scopes it EXACTLY to
+`packageInfo.getId().equals("hl7.fhir.uv.extensions.r4")` — the OWNING package id,
+not fhirVersion. Made Java-exact:
+- `package.rs`: `ResourceIndexEntry` gained `package_id: Option<String>` (npm id =
+  part of `<id>#<ver>` before `#`), threaded through `load_package` (indexed +
+  versioned url entries), `scan_package_structure_definitions`, and
+  `index_structure_definition`. New `PackageContext::package_id_for(query)` (url
+  first, then path-match fallback for id/name lookups). Local-dir resources get
+  `None` (Java loads those outside the package loader).
+- `resolve.rs`: `fix_loaded_resource(sd, package_id)` gates the removeIf on
+  `package_id == Some("hl7.fhir.uv.extensions.r4")`; both callers (`fetch_sd`,
+  `resolve_with_snapshot`) pass `pkg.package_id_for(url).or(package_id_for(query))`.
+- **Regression caught + fixed**: the first cut also flipped scan-fallback
+  (empty-`.index.json`) resources from `local:true` to `local:false`, which broke
+  `davinci-pas/profile-subscription` (80→79: the `subscriptions-backport.r4` base's
+  inherited DomainResource `dom-*` constraint xpath extensions were dropped by the
+  lenient package read instead of preserved by the full conversion the empty-index
+  scan path historically took). Reverted that side effect — scan resources stay
+  `local:true`; only the package_id is newly recorded. davinci-pas back to 80/80.
+Gate: full 34-IG corpus re-run on ENGINE=walk — all green at wave-3 numbers
+(au-core 26/26 confirms the removeIf still fires for extensions.r4-owned SDs;
+davinci-pas/ndh/subscriptions-backport unaffected).
+
+### Cutover: walk is the only engine
+- `generate_snapshot` (public API) now runs the walk. Deleted `src/legacy.rs`
+  (3994 lines), `src/quirks.rs` (426), `src/projection.rs` (1008),
+  `tests/snapshot_parity.rs` (120 — walk_parity supersedes it; it already gates
+  the one fixture snapshot_parity dropped, `r4-patient-card-ms`). Removed the
+  `Engine` enum / `--engine` / `ENGINE` env / `run_engine`, the transitional
+  `--native-r5`/`--output-r5` flags, and the `native_r5`/`apply_extension_root_doco`
+  `SnapshotOptions` fields (walk always produces native R5 + applies extension-root
+  doco). `SnapshotOptions` is now just `{ sort_differential }`.
+- lib.rs items only legacy used, deleted: `structure_with_r4_snapshot`,
+  `profile_with_snapshot`, `normalize_inherited_element`, `trim_inherited_text_fields`,
+  `fill_missing_constraint_sources_on_constrained_element`, `structure_url_or`,
+  `spec_url_for_structure`, `strips_non_inherited_extensions`, `spec_url_from_version`,
+  `is_r4_spec_url`, `structure_source`, `snapshot_source_value`,
+  `sort_differential_by_base` (+ `base_element_order`/`sort_key` + the sort unit test).
+- merge.rs helpers only legacy used, deleted: `merge_extensions_from_definition`,
+  `allows_duplicate_extension_url`, `TextMerge`/`merge_text_field`/`merge_markdown`,
+  `merge_unique_values_prepend`/`merged_contains_by_semantic_key`/`merge_unique_by_key`,
+  `dedupe_extension_values`(+`_except`), `is_root_element`,
+  `merge_min_cardinality`/`merge_max_cardinality`, `has_slice_marker`. Kept
+  `STRUCTUREDEFINITION_HIERARCHY_URL` (moved into merge.rs; still used by walk).
+  package.rs: dropped `resource_has_loaded_snapshot` + `snapshot_cache` (legacy-only).
+- `check-harvested-r4.sh`: removed the `ENGINE`/`ENGINE_ARGS` plumbing and the
+  `--native-r5` flag from both invocation paths.
+- **CAUGHT by the ips gate during cutover:** the cli.rs rewrite initially dropped
+  the `--batch-list` arg case; the harvest gate failed loudly (`unknown option:
+  --batch-list`) and it was restored. Nothing deleted-past-a-failure.
+- Remaining `never used` warnings (`take_messages`, `resolve_by_path`) are
+  pre-existing walk-internal stubs, NOT legacy orphans — left for the roadmap-item
+  simplify pass.
+
+### Load-bearing legacy-only items and their disposition
+- `structure_with_r4_snapshot` / `profile_with_snapshot`: legacy's on-demand
+  recursive base/profile snapshot generation. Walk has its own equivalent
+  (`resolve::resolve_with_snapshot`, memoized in gen_cache), so these are dead —
+  deleted, not ported.
+- `normalize_inherited_element` + the R4→native-R5 output projection
+  (`project_r4_snapshot_to_native_r5`, all of projection.rs): legacy applied R4→R5
+  shape as an OUTPUT projection over R4-form snapshots. The walk's R5-internal load
+  split (resolve.rs) means there is no output projection — the loaded base simply
+  never carries R4 leftovers (worklog Increment 2). So projection.rs was entirely
+  legacy-only; deleted. The two functions merge.rs borrowed from it
+  (`remove_non_inherited_extensions_with_binding_policy`,
+  `has_semantic_element_extensions`) were only reachable via legacy's
+  `merge_extensions_from_definition` — all deleted together.
+
+Gate after cutover: full 34-IG corpus green single-engine (no ENGINE/--native-r5),
+955/955; ladder + convert_parity + `cargo test --workspace` green;
+rust_sushi IPS 32/32 SD byte-parity (compiler untouched). Scorecard in
+REWORK-PLAN.md §9.
+
 ## Least-confident areas (updated for the coordinator, post-Increment 11)
 - ~~xver R5-backport base snapshots~~ RESOLVED: was the cross-SD contentReference
   stub + the legacy checkExtensionDoco guard, both fixed in Increment 11 (load

@@ -81,13 +81,15 @@ pub(crate) fn lenient_r5_read_r4(sd: &Value) -> Value {
 
 /// Port of `PackageHackerR5.fixLoadedResource` (BaseWorkerContext:417, called
 /// from `registerResourceFromPackage` for every package-loaded resource). These
-/// are load-time content fixups on specific core R4 StructureDefinitions, all
-/// gated by exact url + `fhirVersion == 4.0.1`, so they only ever fire on the
-/// named core resources (never on IG profiles). Idempotent. Only the SD hacks
-/// are ported (the CodeSystem/ValueSet `.hack()` version fixes and the
-/// packageInfo-keyed r2b/extensions.r4 removeIf are not exercised by this
-/// corpus). See PackageHackerR5.java:14-135.
-pub(crate) fn fix_loaded_resource(sd: &mut Value) {
+/// are load-time content fixups on package-loaded StructureDefinitions. The
+/// url-keyed hacks are gated by exact url + `fhirVersion == 4.0.1`, so they only
+/// ever fire on the named core resources (never on IG profiles). The
+/// extensions.r4 R5-only-datatype removeIf is gated by the OWNING package id
+/// (`packageInfo.getId()`), Java-exact — `package_id` is threaded from
+/// PackageContext. Idempotent. The CodeSystem/ValueSet `.hack()` version fixes
+/// and the r2b removeIf are not exercised by this corpus. See
+/// PackageHackerR5.java:14-135.
+pub(crate) fn fix_loaded_resource(sd: &mut Value, package_id: Option<&str>) {
     let url = sd.get("url").and_then(Value::as_str).unwrap_or("").to_string();
     let ver = sd.get("fhirVersion").and_then(Value::as_str).unwrap_or("");
     let rtype = sd.get("type").and_then(Value::as_str).unwrap_or("").to_string();
@@ -175,14 +177,14 @@ pub(crate) fn fix_loaded_resource(sd: &mut Value) {
 
     // extensions.r4 R5-only datatype removal (PackageHackerR5:115): the R4 build
     // of the extensions pack carries R5-only datatypes in its element `type[]`
-    // lists; the loader strips them. Java scopes this to
-    // `packageInfo.getId() == "hl7.fhir.uv.extensions.r4"`, but these five codes
-    // are genuinely R5-only and cannot validly appear in any R4 resource, so
-    // stripping them from every R4-loaded SD's `type[]` is behaviourally
-    // identical for this corpus while staying inside resolve.rs (no package.rs
-    // per-resource-package plumbing needed). Fixes AU Core
-    // `au-core-rsg-sexassignedab` Extension.value[x] (54→49 types).
-    {
+    // lists; the loader strips them. Java scopes this EXACTLY to
+    // `packageInfo.getId().equals("hl7.fhir.uv.extensions.r4")` (the OWNING
+    // package id of the loaded resource), not to fhirVersion — so an R4 SD from
+    // any other package keeps these type codes even if it (invalidly) declares
+    // them. We mirror that scoping via the owning package id plumbed from
+    // PackageContext. Fixes AU Core `au-core-rsg-sexassignedab`
+    // Extension.value[x] (54→49 types).
+    if package_id == Some("hl7.fhir.uv.extensions.r4") {
         const R5_ONLY: [&str; 5] = [
             "integer64",
             "CodeableReference",
@@ -240,7 +242,8 @@ pub(crate) fn fetch_sd(pkg: &PackageContext, query: &str) -> Option<Value> {
     } else {
         lenient_r5_read_r4(&raw)
     };
-    fix_loaded_resource(&mut out);
+    let package_id = pkg.package_id_for(url).or_else(|| pkg.package_id_for(query));
+    fix_loaded_resource(&mut out, package_id.as_deref());
     Some(out)
 }
 
@@ -268,7 +271,11 @@ pub(crate) fn resolve_with_snapshot(
     } else {
         lenient_r5_read_r4(&raw)
     };
-    fix_loaded_resource(&mut sd);
+    let package_id = ctx
+        .pkg
+        .package_id_for(&url)
+        .or_else(|| ctx.pkg.package_id_for(query));
+    fix_loaded_resource(&mut sd, package_id.as_deref());
     if sd
         .get("snapshot")
         .and_then(|s| s.get("element"))

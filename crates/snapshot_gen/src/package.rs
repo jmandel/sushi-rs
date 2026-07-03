@@ -17,12 +17,11 @@ pub struct PackageContext {
     by_url: HashMap<String, ResourceIndexEntry>,
     by_id: HashMap<String, PathBuf>,
     by_name: HashMap<String, PathBuf>,
-    // Interior-mutability memoization. Observation-equivalent to reading+parsing
-    // the resource file on every call: the on-disk packages are immutable for the
-    // lifetime of a run, so caching parsed values and the snapshot-presence check
-    // cannot change output — only avoid repeated disk reads and JSON parses.
+    // Interior-mutability memoization. Equivalent to reading+parsing the resource
+    // file on every call: the on-disk packages are immutable for the lifetime of a
+    // run, so caching parsed values cannot change output — only avoid repeated
+    // disk reads and JSON parses.
     fetch_cache: RefCell<HashMap<String, Option<Rc<Value>>>>,
-    snapshot_cache: RefCell<HashMap<String, bool>>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +29,12 @@ pub(crate) struct ResourceIndexEntry {
     path: PathBuf,
     version: Option<String>,
     local: bool,
+    /// The owning npm package id (e.g. `hl7.fhir.uv.extensions.r4`), mirroring
+    /// Java's `PackageInformation.getId()`. `None` for local-dir resources (Java
+    /// loads those outside the package loader, so `PackageHackerR5` never sees a
+    /// package id for them). Derived from the cache path
+    /// `.../packages/<id>#<ver>/package/<file>`.
+    package_id: Option<String>,
 }
 
 impl PackageContext {
@@ -46,7 +51,6 @@ impl PackageContext {
             by_id: HashMap::new(),
             by_name: HashMap::new(),
             fetch_cache: RefCell::new(HashMap::new()),
-            snapshot_cache: RefCell::new(HashMap::new()),
         };
         for package in packages {
             ctx.load_package(cache_dir, package)?;
@@ -55,6 +59,9 @@ impl PackageContext {
     }
 
     fn load_package(&mut self, cache_dir: &Path, package: &str) -> anyhow::Result<()> {
+        // Java's PackageInformation.getId() is the npm package name, i.e. the
+        // part of `<id>#<version>` before the `#`.
+        let package_id = package.split('#').next().unwrap_or(package).to_string();
         let package_dir = cache_dir.join(package).join("package");
         let index_path = package_dir.join(".index.json");
         let index: Value = serde_json::from_slice(
@@ -83,7 +90,13 @@ impl PackageContext {
                     .get("version")
                     .and_then(Value::as_str)
                     .map(str::to_string);
-                self.insert_url(url, path.clone(), version.clone(), false);
+                self.insert_url(
+                    url,
+                    path.clone(),
+                    version.clone(),
+                    false,
+                    Some(package_id.clone()),
+                );
                 if let Some(version) = entry.get("version").and_then(Value::as_str) {
                     self.by_url.insert(
                         format!("{url}|{version}"),
@@ -91,6 +104,7 @@ impl PackageContext {
                             path: path.clone(),
                             version: Some(version.to_string()),
                             local: false,
+                            package_id: Some(package_id.clone()),
                         },
                     );
                 }
@@ -101,12 +115,16 @@ impl PackageContext {
             loaded += 1;
         }
         if loaded == 0 {
-            self.scan_package_structure_definitions(&package_dir)?;
+            self.scan_package_structure_definitions(&package_dir, &package_id)?;
         }
         Ok(())
     }
 
-    fn scan_package_structure_definitions(&mut self, package_dir: &Path) -> anyhow::Result<()> {
+    fn scan_package_structure_definitions(
+        &mut self,
+        package_dir: &Path,
+        package_id: &str,
+    ) -> anyhow::Result<()> {
         let mut files = Vec::new();
         for entry in std::fs::read_dir(package_dir)
             .with_context(|| format!("cannot scan package directory {}", package_dir.display()))?
@@ -127,7 +145,13 @@ impl PackageContext {
                 continue;
             };
             if json.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-                self.index_structure_definition(path, &json);
+                // Scan-fallback (empty .index.json) resources have historically
+                // been indexed with `local: true` — several packages with empty
+                // indexes (e.g. subscriptions-backport.r4) rely on that path
+                // taking the full R4→R5 conversion, matching the oracle golden.
+                // Preserve that exactly; only record the owning package id (for
+                // the PackageHackerR5 removeIf scoping).
+                self.index_structure_definition(path, &json, true, Some(package_id.to_string()));
             }
         }
         Ok(())
@@ -161,13 +185,19 @@ impl PackageContext {
                 continue;
             };
             if json.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-                self.index_structure_definition(path, &json);
+                self.index_structure_definition(path, &json, true, None);
             }
         }
         Ok(())
     }
 
-    fn index_structure_definition(&mut self, path: PathBuf, json: &Value) {
+    fn index_structure_definition(
+        &mut self,
+        path: PathBuf,
+        json: &Value,
+        local: bool,
+        package_id: Option<String>,
+    ) {
         if let Some(id) = json.get("id").and_then(Value::as_str) {
             self.by_id.insert(id.to_string(), path.clone());
         }
@@ -176,14 +206,15 @@ impl PackageContext {
                 .get("version")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            self.insert_url(url, path.clone(), version.clone(), true);
+            self.insert_url(url, path.clone(), version.clone(), local, package_id.clone());
             if let Some(version) = version {
                 self.by_url.insert(
                     format!("{url}|{version}"),
                     ResourceIndexEntry {
                         path: path.clone(),
                         version: Some(version),
-                        local: true,
+                        local,
+                        package_id: package_id.clone(),
                     },
                 );
             }
@@ -193,7 +224,14 @@ impl PackageContext {
         }
     }
 
-    fn insert_url(&mut self, url: &str, path: PathBuf, version: Option<String>, local: bool) {
+    fn insert_url(
+        &mut self,
+        url: &str,
+        path: PathBuf,
+        version: Option<String>,
+        local: bool,
+        package_id: Option<String>,
+    ) {
         let replace = match self.by_url.get(url) {
             Some(existing) => match (&version, &existing.version) {
                 (Some(new), Some(old)) if new != old => later_version(new, old),
@@ -208,6 +246,7 @@ impl PackageContext {
                     path,
                     version,
                     local,
+                    package_id,
                 },
             );
         }
@@ -220,22 +259,19 @@ impl PackageContext {
             .unwrap_or(false)
     }
 
-    pub(crate) fn resource_has_loaded_snapshot(&self, query: &str) -> bool {
-        if let Some(cached) = self.snapshot_cache.borrow().get(query) {
-            return *cached;
+    /// The owning npm package id for the resource resolved by `query`, mirroring
+    /// Java's `PackageInformation.getId()`. Resolves by url first, then falls back
+    /// to matching the resolved path (id/name lookups) to a `by_url` entry.
+    /// `None` for local-dir resources or unresolved queries.
+    pub(crate) fn package_id_for(&self, query: &str) -> Option<String> {
+        if let Some(entry) = self.by_url.get(query) {
+            return entry.package_id.clone();
         }
-        let result = self
-            .fetch_rc(query)
-            .is_some_and(|json| {
-                json.get("snapshot")
-                    .and_then(|snapshot| snapshot.get("element"))
-                    .and_then(Value::as_array)
-                    .is_some()
-            });
-        self.snapshot_cache
-            .borrow_mut()
-            .insert(query.to_string(), result);
-        result
+        let path = self.resource_path(query)?;
+        self.by_url
+            .values()
+            .find(|e| &e.path == path)
+            .and_then(|e| e.package_id.clone())
     }
 
     pub fn fetch(&self, query: &str) -> Option<Value> {

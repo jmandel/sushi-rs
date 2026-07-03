@@ -1,76 +1,26 @@
-//! Command-line entry points: argument parsing, usage, batch runner, and the
-//! `Engine` selector plumbed into the generator.
+//! Command-line entry points: argument parsing, usage, and the batch runner.
+//! Single walk engine; the snapshot output is always the Publisher-native R5
+//! internal model.
 
-#![allow(unused_imports)]
 use anyhow::{bail, Context};
-use indexmap::IndexMap;
-use serde_json::{Map, Value};
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use serde_json::Value;
+use std::path::Path;
 
 use crate::*;
 
 #[derive(Clone, Debug)]
 pub struct SnapshotOptions {
+    /// Run the differential normalizer (sortDifferential + preprocess) before the
+    /// walk. True in normal use; `--direct`/`--no-sort` disables it for oracle
+    /// trace debugging.
     pub sort_differential: bool,
-    pub native_r5: bool,
-    /// Apply `checkExtensionDoco` to an extension profile's own untouched root.
-    /// Java only normalizes the root of the profile being generated, never a
-    /// dependency extension consumed elsewhere as a slice/overlay source, so this
-    /// is true only for the top-level entry point and false for recursive calls.
-    pub apply_extension_root_doco: bool,
 }
 
 impl Default for SnapshotOptions {
     fn default() -> Self {
         Self {
             sort_differential: true,
-            native_r5: false,
-            apply_extension_root_doco: false,
         }
-    }
-}
-
-/// Snapshot-generation engine selector. `Legacy` is the current diff-order patch
-/// engine (default until the walk engine reaches parity); `Walk` is the upcoming
-/// decision-isomorphic engine (not implemented yet). Threaded through the CLI
-/// entry points so the walk engine can slot in behind `run_engine` without
-/// touching callers.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Engine {
-    Legacy,
-    Walk,
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Engine::Legacy
-    }
-}
-
-impl Engine {
-    pub(crate) fn parse(value: &str) -> anyhow::Result<Engine> {
-        match value {
-            "legacy" => Ok(Engine::Legacy),
-            "walk" => Ok(Engine::Walk),
-            other => bail!("unknown --engine value: {other} (expected `legacy` or `walk`)"),
-        }
-    }
-}
-
-/// Generate a snapshot with the selected engine. The legacy engine delegates to
-/// `generate_snapshot` (unchanged public API); the walk engine is not yet
-/// implemented and returns a clear error.
-pub(crate) fn run_engine(
-    engine: Engine,
-    derived: Value,
-    ctx: &PackageContext,
-    options: SnapshotOptions,
-) -> anyhow::Result<Value> {
-    match engine {
-        Engine::Legacy => generate_snapshot(derived, ctx, options),
-        Engine::Walk => crate::walk::generate_snapshot(derived, ctx, options),
     }
 }
 
@@ -80,10 +30,8 @@ pub fn main_cli() -> anyhow::Result<()> {
     let mut packages: Vec<String> = Vec::new();
     let mut local_dirs: Vec<String> = Vec::new();
     let mut sort_differential = true;
-    let mut native_r5 = false;
     let mut batch_list: Option<String> = None;
     let mut input: Option<String> = None;
-    let mut engine: Option<String> = None;
     let mut dump_converted: Option<String> = None;
     let mut trace: Option<String> = None;
 
@@ -100,10 +48,8 @@ pub fn main_cli() -> anyhow::Result<()> {
             "--local-dir" => {
                 local_dirs.push(args.next().context("--local-dir needs a directory")?);
             }
-            "--engine" => engine = Some(args.next().context("--engine needs <legacy|walk>")?),
             "--sort" => sort_differential = true,
             "--no-sort" | "--direct" => sort_differential = false,
-            "--native-r5" | "--output-r5" => native_r5 = true,
             "--batch-list" => batch_list = args.next(),
             "-h" | "--help" => {
                 print_usage();
@@ -126,14 +72,6 @@ pub fn main_cli() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // Engine resolution: explicit --engine flag, else the ENGINE env var, else the
-    // default (legacy). An empty ENGINE is treated as unset so a plain
-    // `ENGINE=` in the environment keeps current behavior.
-    let engine = match engine.or_else(|| std::env::var("ENGINE").ok().filter(|v| !v.is_empty())) {
-        Some(value) => Engine::parse(&value)?,
-        None => Engine::default(),
-    };
-
     if batch_list.is_none() && input.is_none() {
         bail!("missing input StructureDefinition JSON");
     }
@@ -148,30 +86,28 @@ pub fn main_cli() -> anyhow::Result<()> {
         ctx.load_local_dir(local_dir)?;
     }
     // Trace: enabled via --trace <file> or SNAPSHOT_TRACE=<file>. Zero overhead
-    // when unset. Only meaningful for the walk engine (legacy ignores it).
-    if let Some(trace_path) = trace.or_else(|| std::env::var("SNAPSHOT_TRACE").ok().filter(|v| !v.is_empty())) {
-        crate::walk::enable_trace(&trace_path)
+    // when unset.
+    if let Some(trace_path) =
+        trace.or_else(|| std::env::var("SNAPSHOT_TRACE").ok().filter(|v| !v.is_empty()))
+    {
+        crate::enable_trace(&trace_path)
             .with_context(|| format!("failed to open trace file {trace_path}"))?;
     }
-    let options = SnapshotOptions {
-        sort_differential,
-        native_r5,
-        apply_extension_root_doco: true,
-    };
+    let options = SnapshotOptions { sort_differential };
     if let Some(batch_list) = batch_list {
-        return run_batch_list(&batch_list, &ctx, options, engine);
+        return run_batch_list(&batch_list, &ctx, options);
     }
     let input = input.expect("checked above");
     let source = std::fs::read_to_string(&input)?;
     let derived: Value = serde_json::from_str(&source)?;
-    let out = run_engine(engine, derived, &ctx, options)?;
+    let out = generate_snapshot(derived, &ctx, options)?;
     print!("{}", json_emit::to_fhir_json_string(&out));
     Ok(())
 }
 
 pub(crate) fn print_usage() {
     eprintln!(
-        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--engine <legacy|walk>] [--sort|--no-sort] [--native-r5] [--dump-converted <input.json>] [--batch-list <tsv>] <StructureDefinition.json>"
+        "usage: snapshot_gen [--cache <packages-dir>] [--package <pkg#ver> ...] [--local-dir <dir> ...] [--sort|--no-sort|--direct] [--dump-converted <input.json>] [--trace <file>] [--batch-list <tsv>] <StructureDefinition.json>"
     );
 }
 
@@ -179,7 +115,6 @@ pub(crate) fn run_batch_list(
     batch_list: &str,
     ctx: &PackageContext,
     options: SnapshotOptions,
-    engine: Engine,
 ) -> anyhow::Result<()> {
     let source = std::fs::read_to_string(batch_list)
         .with_context(|| format!("failed to read batch list {batch_list}"))?;
@@ -194,11 +129,7 @@ pub(crate) fn run_batch_list(
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() < 2 {
             failed += 1;
-            eprintln!(
-                "FAIL rust malformed batch line {}: {}",
-                line_index + 1,
-                line
-            );
+            eprintln!("FAIL rust malformed batch line {}: {}", line_index + 1, line);
             continue;
         }
         let input = parts[0];
@@ -210,7 +141,7 @@ pub(crate) fn run_batch_list(
         let result = (|| -> anyhow::Result<()> {
             let source = std::fs::read_to_string(input)?;
             let derived: Value = serde_json::from_str(&source)?;
-            let out = run_engine(engine, derived, ctx, options.clone())?;
+            let out = generate_snapshot(derived, ctx, options.clone())?;
             if let Some(parent) = Path::new(output).parent() {
                 std::fs::create_dir_all(parent)?;
             }

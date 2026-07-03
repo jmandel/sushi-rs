@@ -44,10 +44,17 @@ generation, and any R4 artifact shape is a separate downconversion/projection co
   the publisher runs over the finished snapshot; our oracle deliberately doesn't run them, and neither do we.
   This keeps the target clean and the generator a reusable pure function.
 
-## 5. Why reuse `fhir_model`
-The snapshot algorithm operates on the same `StructureDefinition`/`ElementDefinition` model the SUSHI
-port already implements (ordered element maps, id→path derivation, slice handling, find-by-path). The
-generator is a new crate (`snapshot_gen`) layered on `fhir_model`, not a from-scratch model.
+## 5. Element model — own substrate, plus decision traces
+The generator uses its **own** model over `serde_json::Value` (preserve_order), not the sushi-rs
+`fhir_model` typed model: the walk engine mirrors Java's `ElementDefinition` field-by-field over
+ordered JSON, which is what buys byte-parity with the oracle (REWORK-PLAN §2).
+
+The decisive anti-overfitting gate is **decision traces**, not just output diffs. The fhir-core
+checkout is instrumented (branch `snap-trace`) to emit one JSONL record per `processPaths` step
+(`{diffId|baseId, branch, cloneSource, slicing decision, consumed diff ids}`); the Rust walk emits the
+same records and `snapshot/diff-trace.cjs` compares them. Two engines can agree on outputs while
+disagreeing on decisions — trace parity on the fixture ladder + real IGs is what proves the walk
+matches Java's *decisions*, which is the whole point of the rework. See REWORK-PLAN.md §4.
 
 ## 6. Provenance of the spec
 `snapshot-fodder/` is an extract of the FHIR-core R5 snapshot engine (source files under `files/`, plus
@@ -56,43 +63,17 @@ line anchors) and `NON-OBVIOUS-BEHAVIORS.md` (the load-bearing helpers + `userDa
 When the spec and our output disagree, the **oracle** decides; the spec tells us *why* and *where to look*.
 
 ## 7. Status / next
-- Done: worktree, oracle driver compiles + runs, R5/R4 Publisher-path contexts load from the isolated
-  cache, goldens are generated, and `crates/snapshot_gen` gates strict semantic `snapshot.element[]`
-  parity for the fixture ladder plus harvested real R4 profiles: IPS 29/29, mCODE 46/46,
-  CRD 22/22, SDC 73/73, plus holdout IGs CARIN BB 6/6, Genomics 33/33, DTR 21/21,
-  eCR 28/28, NDH 50/50, and PAS 73/73. Published-package harvesting also gates
-  PDDI 1/1, MHD 42/42, DeID 1/1, EU EPS 23/23, EU MPD 4/4,
-  AU Core 2.0.0 26/26, AU PS 17/17, gematik ePA medication 49/49 usable profiles,
-  Belgium Vaccination 7/7, and PACIO TOC 4/4, DARTS 1/1, DAPL 26/26,
-  Radiation Dose Summary 4/4,
-  Taiwan PAS 43/43, US Core 9.0.0 70/70, IPA 1.1.0 12/12,
-  QI-Core 6.0.0 63/63 usable profiles, SMART App Launch 2.2.0 6/6,
-  Da Vinci CDex 2.1.0 8/8, Da Vinci PDex 2.1.0 37/37,
-  Da Vinci Plan Net 1.2.0 22/22, Da Vinci Drug Formulary 2.1.0
-  19/19 usable profiles, Da Vinci PAS 2.2.1 80/80 usable profiles, plus
-  Subscriptions Backport R4 1.1.0 9/9 usable profiles. SAFR, Bulk Data 2.0.0,
-  CDS Hooks 3.0.0-ballot, Application Feature,
-  IHE VHL, C-CDA R5.0, C-CDA on FHIR, PH Query, and Order Catalog harvested 0
-  usable R4 constraint StructureDefinitions through the published-package path.
-  The 2026-07-02 TWPAS fix pass reached Taiwan PAS 43/43; after the later
-  Coding-anchor refinement, the affected TWPAS coding profiles were rerun
-  20/20 plus focused Patient/Practitioner checks. The same pass was regression
-  checked against AU Core 26/26, AU PS 17/17, MHD 42/42, and EU EPS 23/23.
-  The official Da Vinci PAS pass added batch Java/Rust harness paths, an
-  empty-`.index.json` package scan fallback needed by subscriptions-backport.r4,
-  and tightened direct-slice child unfolding; regression checks stayed green for
-  PDDI 1/1, TWPAS 43/43, AU Core 26/26, AU PS 17/17, MHD 42/42, EU EPS 23/23,
-  and PAS 80/80.
-  Genomics, eCR, NDH, and the published-package goldens were checked against the
-  current Publisher-path oracle after extension-root condition/doco drift and R4/R5
-  dependency-closure ambiguity were found. The later 2026-07-02 native-extension
-  and direct-slice/MS pass rechecked IPS 29/29, mCODE 46/46, CARIN BB 6/6,
-  Genomics 33/33, eCR 28/28, NDH 50/50, PAS 73/73, Taiwan PAS 43/43, US Core
-  70/70, QI-Core 63/63, CRD 22/22, SDC 73/73, DTR 21/21, AU Core 26/26, and
-  the package-harvested sweep after tightening fhirQueryPattern,
-  variable-extension, direct Coding/Identifier slice materialization, and
-  direct-slice MS propagation behavior.
-- Next: keep broadening real profile coverage and close remaining Java pass structure gaps
-  (richer slicing/reslicing, type-slice groups, mapping/userData side-channel behavior, and structural
-  self-validation). Transitional output flags should be cleaned up once the migration no longer needs
-  old R4 fixture comparisons. See `PLAN.md` for phases.
+- **Cutover complete (2026-07-02, REWORK-PLAN wave 4).** The decision-isomorphic
+  walk engine (`crates/snapshot_gen/src/walk/`) is the **only** engine — the legacy
+  diff-order patch interpreter, its quirk registry, and all transitional CLI/output
+  flags are deleted. `generate_snapshot` IS the walk. The engine reaches full-corpus
+  parity with the pinned oracle (~955 profiles across 34 harvested IGs + the 17-rung
+  fixture ladder) with an **EMPTY quirk registry** — every behavior traces to a
+  Java branch or a Java-cited policy-list constant (`walk/consts.rs`) /
+  load-time fixup (`walk/resolve.rs fix_loaded_resource`, PackageHackerR5). The
+  per-IG scorecard lives in REWORK-PLAN.md §9; the per-increment derivation log is
+  `snapshot/specs/walk-worklog.md`.
+- **Next** (post-rework roadmap, REWORK-PLAN §7 "After the rework"): merge
+  origin/main into snapshot-gen; a perf + clarity/simplification pass over both
+  sushi and the generator; then the WASM editor demo; then Layer B as a separate
+  opt-in overlay. See REWORK-PLAN.md.

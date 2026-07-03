@@ -14,8 +14,11 @@ Part 0: Layer A is policy-free and deterministic, a pure function of *(base, der
   `ProfileUtilities.generateSnapshot(base, derived, ...)` → emits `derived.snapshot`. The wrapper defaults
   to an explicit `sortDifferential` input-normalization step before the pure call; `--direct` preserves raw
   Java behavior. No IG Publisher, so **no Layer-B pinning** — exactly the pure target.
-- We reuse the sushi-rs `fhir_model` crate (`StructureDefinition`/`ElementDefinition`, ordered JSON
-  element maps, id→path, slicing) — the snapshot generator is a new crate on top.
+- Element representation is our own: `serde_json::Value` (preserve_order) as the substrate, with
+  helper accessors in `merge.rs`/`walk/`. We deliberately do NOT reuse the sushi-rs `fhir_model`
+  typed model — the walk engine mirrors Java's `ElementDefinition` field-by-field over ordered JSON,
+  and a typed layer would only get in the way of byte-parity with the oracle. (A typed layer remains a
+  possible later optimization, not part of this rework — see REWORK-PLAN.md §2.)
 
 ## Methodology (mirrors the SUSHI port)
 oracle → fixtures (simple→complex) → committed goldens → Rust generator → **structural-diff gate**
@@ -69,7 +72,7 @@ Build `crates/snapshot_gen` incrementally, each pass gated against goldens:
 ## Deliverables
 - `snapshot/oracle/` (Java driver + scripts) — the pure oracle.
 - `snapshot/fixtures/` + `snapshot/goldens/` — the ladder + pre-computed pure snapshots.
-- `crates/snapshot_gen/` — the Rust Layer-A generator (reuses `fhir_model`).
+- `crates/snapshot_gen/` — the Rust Layer-A generator (own model over `serde_json::Value`).
 - `snapshot/AGENTS.md` — operating manual (oracle commands, version target, parity-trap log), like the SUSHI port.
 
 ## Open decisions / cleanup

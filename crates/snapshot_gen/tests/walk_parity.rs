@@ -87,7 +87,7 @@ fn walk_ladder_matches_goldens() -> anyhow::Result<()> {
         let input: Value = serde_json::from_slice(&std::fs::read(fixture_path)?)?;
         let expected: Value = serde_json::from_slice(&std::fs::read(golden_path)?)?;
         let ctx = if name.starts_with("r4-") { &r4_ctx } else { &r5_ctx };
-        let actual = match snapshot_gen::generate_snapshot_walk(input, ctx, Default::default()) {
+        let actual = match snapshot_gen::generate_snapshot(input, ctx, Default::default()) {
             Ok(v) => v,
             Err(e) => {
                 failures.push(format!("{name}: engine error: {e:#}"));

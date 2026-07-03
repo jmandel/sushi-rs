@@ -199,14 +199,39 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
 
 ## 8. Open questions / debt (keep current)
 
-- (seed) Legacy hardcoded behaviors to re-derive during Wave 3: eCR
+- **Walk quirk registry: EMPTY at cutover (2026-07-02).** The walk engine reached
+  full-corpus parity (~955 profiles across 34 IGs + the 17-rung ladder) with NO
+  `quirks.rs` (the file is deleted). Grep audit of `crates/snapshot_gen/src`
+  confirms zero IG-specific profile URLs / slice names in engine code: the only
+  policy-list constants are the Java-cited `walk/consts.rs`
+  (NON_INHERITED/DEFAULT_INHERITED/OVERRIDING/NON_OVERRIDING_ED_URLS, verbatim from
+  ProfileUtilities) and the url-keyed core fixups in `walk/resolve.rs`
+  `fix_loaded_resource` (PackageHackerR5.java:14-135, each gated by exact
+  Java-cited url + version or owning package id). Every §8 seed quirk below was
+  re-derived to a Java branch during Wave 3 (see snapshot/specs/walk-worklog.md):
+  the eCR PlanDefinition stamps became the cross-SD contentReference walk into
+  core PlanDefinition.action (Increment 11); cqf-fhirQueryPattern /
+  us-ph-named-eventtype doco became the unconditional Java-exact checkExtensionDoco
+  (Increment 11); the extension-root condition/xpath lists became the
+  updateFromDefinition profile-root-doco + local-snapshot generation paths; the
+  NATIVE_R5_VARIABLE_COMMENT / fhirquerypattern doco stamps were shown to be STALE
+  goldens (the fresh pinned oracle emits generic doco, which the walk matches).
+
+- (seed — RESOLVED) Legacy hardcoded behaviors re-derived during Wave 3: eCR
   PlanDefinition stamps (`checkSuspectedDisorder`/`checkReportable`), cqf-
   fhirQueryPattern quirks, extension-root condition URL lists
   (mcode-histology-morphology-behavior, condition-related, alternate-reference,
   us-ph-named-eventtype-extension, ndh base-ext-org-alias-*), codeOptions /
   artifact-versionAlgorithm generic-doco list, NATIVE_R5_VARIABLE_COMMENT.
-- (seed) Establish whether package-loaded vs local-dir R4 resources take
-  different conversion paths in the oracle driver (affects stage 1/2 contract).
+- (seed — RESOLVED, Increment 2) Package-loaded vs local-dir R4 resources DO take
+  different conversion paths: local-dir + the input profile get the full
+  VersionConvertor_40_50 conversion (`to_r5_internal`), while package-loaded R4
+  resources are read R5-parser-lenient (R4-only props like `constraint.xpath`
+  silently dropped) — mirroring SnapOracleR4's `loadLocalR4CanonicalResources` vs
+  `SimpleWorkerContextBuilder.fromPackage(loader==null)`. See `walk/resolve.rs`.
+  Caveat: packages with an empty `.index.json` (e.g. subscriptions-backport.r4)
+  fall through the scan path, which the oracle treats as the full-conversion path;
+  `package.rs` marks scan-loaded resources `local:true` to match.
 
 ## 9. Status log (update as tasks land)
 
@@ -231,3 +256,60 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
     batch-generated (unaffected). Fixed; single mode now reproduces goldens.
     Rule stands: prefer batch mode for golden generation; single mode is fine
     for trace debugging now.
+
+- **2026-07-02/03: Wave 3 + Wave 4 COMPLETE — walk engine is the only engine.**
+  Wave 3 (batch 1 IGs + batch 2 published-package sweep) brought every corpus IG
+  to legacy parity on the walk engine with an EMPTY quirk registry (see
+  snapshot/specs/walk-worklog.md, Increments 2-12). Wave 4 cutover (Increment 13):
+  - **Fix 1 (Java-exactness):** `PackageHackerR5.fixLoadedResource` extensions.r4
+    R5-only-datatype removeIf re-scoped from "every R4-loaded SD" to the Java-exact
+    owning-package gate `packageInfo.getId()=="hl7.fhir.uv.extensions.r4"`
+    (PackageHackerR5.java:115). `package.rs` now records each resource's owning npm
+    package id; `resolve.rs fix_loaded_resource(sd, package_id)` gates on it. A
+    regression (davinci-pas/profile-subscription 80→79, from a side-effect flip of
+    scan-fallback `local` flag) was caught by the corpus gate and fixed
+    (scan resources stay `local:true`; only package_id newly recorded).
+  - **Engine cutover:** `generate_snapshot` IS the walk. Deleted `src/legacy.rs`
+    (3994 lines), `src/quirks.rs` (426), `src/projection.rs` (1008), the legacy
+    gate `tests/snapshot_parity.rs` (120), the `Engine` enum + `--engine` flag +
+    `ENGINE` env + `run_engine`, the transitional `--native-r5`/`--output-r5`
+    flags and the `native_r5`/`apply_extension_root_doco` `SnapshotOptions` fields,
+    and every lib.rs item only legacy used. `check-harvested-r4.sh` lost its
+    `ENGINE`/`--native-r5` plumbing. Walk-used merge/text/convert/walk pieces stay.
+  - **Quirk audit:** grep of `crates/snapshot_gen/src` = ZERO IG-specific profile
+    URLs / slice names outside the Java-cited `walk/consts.rs` policy lists and
+    `walk/resolve.rs` url-keyed PackageHackerR5 core fixups. **Walk quirk registry:
+    EMPTY at cutover** (§8).
+
+  **FINAL SCORECARD** (single-engine CLI: no `--engine`, no `ENGINE`, no
+  `--native-r5`; every number equals the wave-3 legacy-parity counts):
+
+  | IG | ok/total | | IG | ok/total |
+  |---|---|---|---|---|
+  | ips | 29/29 | | pddi | 1/1 |
+  | mcode | 46/46 | | deid | 1/1 |
+  | genomics | 33/33 | | darts | 1/1 |
+  | crd | 22/22 | | radiation-dose-summary | 4/4 |
+  | sdc | 73/73 | | be-vaccination | 7/7 |
+  | carinbb | 6/6 | | smart-app-launch | 6/6 |
+  | dtr | 21/21 | | cdex | 8/8 |
+  | ecr | 28/28 | | plan-net | 22/22 |
+  | ndh | 50/50 | | pdex | 37/37 |
+  | pas | 73/73 | | drug-formulary | 19/19 |
+  | mhd | 42/42 | | subscriptions-backport | 9/9 |
+  | eu-eps | 23/23 | | twpas | 43/43 |
+  | eu-mpd | 4/4 | | davinci-pas | 80/80 |
+  | au-ps | 17/17 | | gematik-epa-medication | 49/49 |
+  | pacio-toc | 4/4 | | au-core | 26/26 |
+  | dapl | 26/26 | | ipa | 12/12 |
+  | us-core | 70/70 | | qicore | 63/63 |
+
+  **Corpus total: 955/955 usable profiles across 34 IGs, all failed=0.** Plus:
+  17-rung fixture ladder green (`walk_parity`), `convert_parity` green,
+  `cargo test --workspace` all suites green. Compiler side confirmed untouched:
+  `rust_sushi` (release) builds IPS with 32/32 StructureDefinition byte-parity and
+  117/118 overall vs committed stock (the 1 diff is a pre-existing example-Bundle
+  divergence, independent of `snapshot_gen`, which the compiler does not link).
+  (Zero-profile packages — SAFR, Bulk Data, CDS Hooks, Application Feature, IHE
+  VHL, C-CDA R5.0, C-CDA on FHIR, PH Query, Order Catalog — remain 0 usable R4
+  constraint SDs per AGENTS.md and are not in the scorecard.)

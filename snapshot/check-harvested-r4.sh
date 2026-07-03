@@ -41,13 +41,6 @@ for pkg in "${PACKAGES[@]}"; do
   PACKAGE_ARGS+=(--package "$pkg")
 done
 
-# When ENGINE is set, gate the named engine against the same goldens; unset (or
-# empty) leaves the rust invocations byte-for-byte unchanged.
-ENGINE_ARGS=()
-if [[ -n "${ENGINE:-}" ]]; then
-  ENGINE_ARGS+=(--engine "$ENGINE")
-fi
-
 if [[ "${RUST_BATCH:-1}" != "0" ]]; then
   batch="$LOGS/rust-batch.tsv"
   : >"$batch"
@@ -71,7 +64,7 @@ if [[ "${RUST_BATCH:-1}" != "0" ]]; then
 
   gen_failed=0
   if [[ -s "$batch" ]]; then
-    if ! "$REPO/target/debug/snapshot_gen" --native-r5 --local-dir "$LOCAL_DIR" --cache "$FHIR_CACHE" "${PACKAGE_ARGS[@]}" "${ENGINE_ARGS[@]}" --batch-list "$batch" >"$LOGS/rust-batch.log" 2>&1; then
+    if ! "$REPO/target/debug/snapshot_gen" --local-dir "$LOCAL_DIR" --cache "$FHIR_CACHE" "${PACKAGE_ARGS[@]}" --batch-list "$batch" >"$LOGS/rust-batch.log" 2>&1; then
       gen_failed=1
     fi
     cat "$LOGS/rust-batch.log"
@@ -114,7 +107,7 @@ while IFS= read -r golden; do
     failed=$((failed + 1))
     continue
   fi
-  if "$REPO/target/debug/snapshot_gen" --native-r5 --local-dir "$LOCAL_DIR" --cache "$FHIR_CACHE" "${PACKAGE_ARGS[@]}" "${ENGINE_ARGS[@]}" "$fixture" >"$actual" 2>"$run_log" \
+  if "$REPO/target/debug/snapshot_gen" --local-dir "$LOCAL_DIR" --cache "$FHIR_CACHE" "${PACKAGE_ARGS[@]}" "$fixture" >"$actual" 2>"$run_log" \
       && node "$REPO/snapshot/diff-snapshot.cjs" "$golden" "$actual" >"$diff_log" 2>&1; then
     ok=$((ok + 1))
     echo "OK rust $name"
