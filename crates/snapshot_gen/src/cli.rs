@@ -70,7 +70,7 @@ pub(crate) fn run_engine(
 ) -> anyhow::Result<Value> {
     match engine {
         Engine::Legacy => generate_snapshot(derived, ctx, options),
-        Engine::Walk => bail!("the `walk` engine is not implemented yet"),
+        Engine::Walk => crate::walk::generate_snapshot(derived, ctx, options),
     }
 }
 
@@ -85,9 +85,11 @@ pub fn main_cli() -> anyhow::Result<()> {
     let mut input: Option<String> = None;
     let mut engine: Option<String> = None;
     let mut dump_converted: Option<String> = None;
+    let mut trace: Option<String> = None;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--trace" => trace = args.next(),
             "--dump-converted" => {
                 dump_converted = Some(args.next().context("--dump-converted needs <input.json>")?);
             }
@@ -144,6 +146,12 @@ pub fn main_cli() -> anyhow::Result<()> {
     let mut ctx = PackageContext::new(&cache, &packages)?;
     for local_dir in local_dirs {
         ctx.load_local_dir(local_dir)?;
+    }
+    // Trace: enabled via --trace <file> or SNAPSHOT_TRACE=<file>. Zero overhead
+    // when unset. Only meaningful for the walk engine (legacy ignores it).
+    if let Some(trace_path) = trace.or_else(|| std::env::var("SNAPSHOT_TRACE").ok().filter(|v| !v.is_empty())) {
+        crate::walk::enable_trace(&trace_path)
+            .with_context(|| format!("failed to open trace file {trace_path}"))?;
     }
     let options = SnapshotOptions {
         sort_differential,

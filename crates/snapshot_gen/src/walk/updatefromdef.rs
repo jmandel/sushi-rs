@@ -1,0 +1,397 @@
+//! `updateFromDefinition` — per-field merge of one diff element onto one base
+//! clone (PU:2605-3157). Faithful port; reuses the clean `merge.rs` leaves.
+//! Deliberately-skipped (documented) branches:
+//!   - obligation-profile element merges (obligationProfiles empty under oracle → DEAD)
+//!   - tx-server binding subset validation (PU:2989-3029): messages only, needs a
+//!     terminology server; spec §4 row 24 marks it SKIPPABLE.
+//!   - EXT_TRANSLATABLE dup-drop (PU:2631) and EXT_PROFILE_ELEMENT handling (rare).
+//! Type-profile-root override (PU:2679-2717) lives in `simple.rs`'s template
+//! selection for the walk (clone source), so here we only do the field merges
+//! that always run.
+
+use serde_json::Value;
+
+use super::consts::{DEFAULT_INHERITED_ED_URLS, NON_INHERITED_ED_URLS, NON_OVERRIDING_ED_URLS};
+use super::context::{Severity, WalkContext};
+use super::trace;
+use crate::merge::*;
+use crate::{append_derived_text_to_base, check_extension_doco, merge_string};
+
+fn has(ed: &Value, key: &str) -> bool {
+    ed.get(key).map(|v| !v.is_null()).unwrap_or(false)
+}
+
+fn deep_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a == b,
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// Merge markdown the Java way: dest=derived, source=base. If derived starts
+/// "..." append base tail; if derived empty use base.
+fn merge_markdown_java(derived: &str, base: Option<&str>) -> String {
+    if derived.is_empty() {
+        base.unwrap_or("").to_string()
+    } else if derived.starts_with("...") {
+        append_derived_text_to_base(base, derived)
+    } else {
+        derived.to_string()
+    }
+}
+
+/// PU:2605 updateFromDefinition. `dest` is the base clone being built; `source`
+/// is the diff element. `src_sd_url` stamps constraint sources. `from_slicer`
+/// gates the mustSupport/mustHaveValue weakening error.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn update_from_definition(
+    ctx: &mut WalkContext,
+    dest: &mut Value,
+    source: &Value,
+    profile_name: &str,
+    trim_differential: bool,
+    src_sd_url: &str,
+    from_slicer: bool,
+) {
+    if trace::active() {
+        let x = serde_json::json!({
+            "fromSlicer": from_slicer,
+            "trimDifferential": trim_differential,
+            "isSliceRoot": has(source, "sliceName"),
+            "srcSD": src_sd_url,
+        });
+        trace::rec(
+            "updateFromDefinition",
+            "updateFromDefinition.entry",
+            trace::id(dest).as_deref(),
+            trace::id(source).as_deref(),
+            Some(x),
+        );
+    }
+    let is_extension = check_extension_doco(dest);
+    if is_extension && trace::active() {
+        trace::rec(
+            "updateFromDefinition",
+            "updateFromDefinition.checkExtensionDoco",
+            trace::id(dest).as_deref(),
+            trace::id(source).as_deref(),
+            None,
+        );
+    }
+
+    // PU:2631 hack: if dest has exactly two EXT_TRANSLATABLE, drop the 2nd.
+    drop_second_translatable(dest);
+    // updateExtensionsFromDefinition(dest, source) — element-level extensions.
+    update_extensions_from_definition(dest, source);
+
+    let path = dest.get("path").and_then(Value::as_str).unwrap_or("").to_string();
+    let derived_path = source.get("path").and_then(Value::as_str).unwrap_or("").to_string();
+
+    // sliceName copy
+    if let Some(sn) = source.get("sliceName") {
+        set_field(dest, "sliceName", sn.clone());
+    }
+
+    // short: plain override (deep-compare)
+    if let Some(d) = source.get("short") {
+        if dest.get("short") != Some(d) {
+            set_field(dest, "short", d.clone());
+        }
+    }
+    // definition: mergeMarkdown
+    if let Some(d) = source.get("definition").and_then(Value::as_str) {
+        if dest.get("definition").and_then(Value::as_str) != Some(d) {
+            let base = dest.get("definition").and_then(Value::as_str);
+            set_field(dest, "definition", Value::String(merge_markdown_java(d, base)));
+        }
+    }
+    // comment: mergeMarkdown
+    if let Some(d) = source.get("comment").and_then(Value::as_str) {
+        if dest.get("comment").and_then(Value::as_str) != Some(d) {
+            let base = dest.get("comment").and_then(Value::as_str);
+            set_field(dest, "comment", Value::String(merge_markdown_java(d, base)));
+        }
+    }
+    // label: mergeStrings
+    if let Some(d) = source.get("label").and_then(Value::as_str) {
+        if dest.get("label").and_then(Value::as_str) != Some(d) {
+            let base = dest.get("label").and_then(Value::as_str);
+            set_field(dest, "label", Value::String(merge_string(base, d)));
+        }
+    }
+    // requirements: mergeMarkdown
+    if let Some(d) = source.get("requirements").and_then(Value::as_str) {
+        if dest.get("requirements").and_then(Value::as_str) != Some(d) {
+            let base = dest.get("requirements").and_then(Value::as_str);
+            set_field(dest, "requirements", Value::String(merge_markdown_java(d, base)));
+        }
+    }
+    // sdf-9: drop requirements on root (path has no ".") in both
+    if !path.contains('.') {
+        remove_field(dest, "requirements");
+    }
+
+    // alias: additive union
+    if source.get("alias").and_then(Value::as_array).is_some() {
+        if source.get("alias") != dest.get("alias") {
+            merge_unique_array_strings(dest, source, "alias");
+        }
+    }
+
+    // min: override; ERROR if derived.min < base.min and not a slice
+    if let Some(dmin) = source.get("min").and_then(Value::as_u64) {
+        if dest.get("min").and_then(Value::as_u64) != Some(dmin) {
+            let bmin = dest.get("min").and_then(Value::as_u64).unwrap_or(0);
+            if dmin < bmin && !has(source, "sliceName") {
+                ctx.add_message(
+                    Severity::Error,
+                    &format!("{profile_name}.{derived_path}"),
+                    format!("Element {path}: derived min ({dmin}) cannot be less than the base min ({bmin}) in {src_sd_url}"),
+                );
+            }
+            set_field(dest, "min", Value::from(dmin));
+        }
+    }
+    // max: override; ERROR if isLargerMax
+    if let Some(dmax) = source.get("max").and_then(Value::as_str) {
+        if dest.get("max").and_then(Value::as_str) != Some(dmax) {
+            let bmax = dest.get("max").and_then(Value::as_str).unwrap_or("*");
+            if is_larger_max(dmax, bmax) {
+                ctx.add_message(
+                    Severity::Error,
+                    &format!("{profile_name}.{derived_path}"),
+                    format!("Element {path}: derived max ({dmax}) cannot be greater than the base max ({bmax})"),
+                );
+            }
+            set_field(dest, "max", Value::String(dmax.to_string()));
+        }
+    }
+
+    // fixed[x] / pattern[x]: override (choice-typed field)
+    copy_choice_prefix(dest, source, "fixed");
+    copy_choice_prefix(dest, source, "pattern");
+
+    // maxLength / maxValue[x] / minValue[x]: override
+    if source.get("maxLength").is_some() && source.get("maxLength") != dest.get("maxLength") {
+        copy_if_present(dest, source, "maxLength");
+    }
+    copy_choice_prefix(dest, source, "maxValue");
+    copy_choice_prefix(dest, source, "minValue");
+
+    // mustSupport: ERROR if base MS true and derived MS false and !fromSlicer
+    if let Some(dms) = source.get("mustSupport").and_then(Value::as_bool) {
+        let bms = dest.get("mustSupport").and_then(Value::as_bool);
+        if bms != Some(dms) {
+            if bms == Some(true) && !dms && !from_slicer {
+                ctx.add_message(
+                    Severity::Error,
+                    &format!("{profile_name}.{derived_path}"),
+                    "Illegal constraint [must-support = false] when [must-support = true] in the base profile".to_string(),
+                );
+            }
+            set_field(dest, "mustSupport", Value::Bool(dms));
+        }
+    }
+    // mustHaveValue: like mustSupport
+    if let Some(dmhv) = source.get("mustHaveValue").and_then(Value::as_bool) {
+        let bmhv = dest.get("mustHaveValue").and_then(Value::as_bool);
+        if bmhv != Some(dmhv) {
+            if bmhv == Some(true) && !dmhv && !from_slicer {
+                ctx.add_message(
+                    Severity::Error,
+                    &format!("{profile_name}.{derived_path}"),
+                    "Illegal constraint [must-have-value = false] when [must-have-value = true] in the base profile".to_string(),
+                );
+            }
+            set_field(dest, "mustHaveValue", Value::Bool(dmhv));
+        }
+    }
+    // valueAlternatives: additive union
+    if source.get("valueAlternatives").and_then(Value::as_array).is_some()
+        && source.get("valueAlternatives") != dest.get("valueAlternatives")
+    {
+        merge_unique_array_strings(dest, source, "valueAlternatives");
+    }
+
+    // isModifier / isModifierReason: only if isExtension
+    if is_extension {
+        if let Some(im) = source.get("isModifier") {
+            if dest.get("isModifier") != Some(im) {
+                set_field(dest, "isModifier", im.clone());
+            }
+        }
+        if let Some(imr) = source.get("isModifierReason") {
+            if dest.get("isModifierReason") != Some(imr) {
+                set_field(dest, "isModifierReason", imr.clone());
+            }
+        }
+        if dest.get("isModifier").and_then(Value::as_bool) == Some(true)
+            && !has(dest, "isModifierReason")
+        {
+            set_field(dest, "isModifierReason", Value::String(
+                "Modifier extensions are labelled as such because they modify the meaning or interpretation of the resource or element that contains them".to_string()));
+        }
+    }
+
+    // binding: only-narrow merge
+    if has(source, "binding") {
+        if !has(dest, "binding") || !deep_eq(source.get("binding"), dest.get("binding")) {
+            if dest.get("binding").and_then(|b| b.get("strength")).and_then(Value::as_str) == Some("required")
+                && source.get("binding").and_then(|b| b.get("strength")).and_then(Value::as_str) != Some("required")
+            {
+                ctx.add_message(
+                    Severity::Error,
+                    &format!("{profile_name}.{derived_path}"),
+                    format!("illegal attempt to change the binding on {derived_path}"),
+                );
+            }
+            merge_binding(dest, source);
+        }
+    } else if has(dest, "binding") {
+        // PU:3061 else-if: strip NON_INHERITED from base binding extensions.
+        if let Some(binding) = dest.get_mut("binding") {
+            if let Some(arr) = binding.get_mut("extension").and_then(Value::as_array_mut) {
+                arr.retain(|ext| {
+                    let url = ext.get("url").and_then(Value::as_str).unwrap_or("");
+                    !NON_INHERITED_ED_URLS.contains(&url)
+                });
+                if arr.is_empty() {
+                    remove_field(binding, "extension");
+                }
+            }
+        }
+    }
+
+    // isSummary: override; Error if base has isSummary and changed (version != 1.4.0)
+    if let Some(is) = source.get("isSummary") {
+        if dest.get("isSummary") != Some(is) {
+            set_field(dest, "isSummary", is.clone());
+        }
+    }
+
+    // type: replace wholesale
+    if let Some(dtypes) = source.get("type") {
+        if dest.get("type") != Some(dtypes) {
+            merge_type_entries(dest, dtypes);
+        }
+    }
+
+    // constraint: stamp base SNAPSHOT_IS_DERIVED + fill source; then additive
+    fill_constraint_sources(dest, src_sd_url);
+    if let Some(dcons) = source.get("constraint").and_then(Value::as_array) {
+        let existing_keys: Vec<String> = dest
+            .get("constraint")
+            .and_then(Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|c| c.get("key").and_then(Value::as_str).map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let dcons = dcons.clone();
+        for c in &dcons {
+            let key = c.get("key").and_then(Value::as_str);
+            if key.is_none() || !existing_keys.iter().any(|k| Some(k.as_str()) == key) {
+                ensure_array_field(dest, "constraint").push(c.clone());
+            }
+        }
+    }
+    // condition: additive
+    if source.get("condition").and_then(Value::as_array).is_some() {
+        merge_unique_values(dest, source, "condition");
+    }
+
+    // delete binding if no bindable type after merge
+    if has(dest, "binding") && !has_bindable_type(dest) {
+        remove_field(dest, "binding");
+    }
+}
+
+/// PU:3228 updateExtensionsFromDefinition (element-level).
+fn update_extensions_from_definition(dest: &mut Value, source: &Value) {
+    let source_urls: Vec<String> = source
+        .get("extension")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|e| e.get("url").and_then(Value::as_str).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if let Some(arr) = dest.get_mut("extension").and_then(Value::as_array_mut) {
+        arr.retain(|ext| {
+            let url = ext.get("url").and_then(Value::as_str).unwrap_or("");
+            !(NON_INHERITED_ED_URLS.contains(&url)
+                || (DEFAULT_INHERITED_ED_URLS.contains(&url) && source_urls.iter().any(|u| u == url)))
+        });
+        if arr.is_empty() {
+            remove_field(dest, "extension");
+        }
+    }
+    let Some(source_exts) = source.get("extension").and_then(Value::as_array) else {
+        return;
+    };
+    let source_exts = source_exts.clone();
+    for ext in &source_exts {
+        let url = ext.get("url").and_then(Value::as_str).unwrap_or("");
+        let dest_has = dest
+            .get("extension")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().any(|e| e.get("url").and_then(Value::as_str) == Some(url)))
+            .unwrap_or(false);
+        if !dest_has {
+            ensure_array_field(dest, "extension").push(ext.clone());
+        } else if NON_OVERRIDING_ED_URLS.contains(&url) {
+            // do nothing (keep dest's)
+        } else if let Some(arr) = dest.get_mut("extension").and_then(Value::as_array_mut) {
+            // OVERRIDING or default: default appends a duplicate (Java `else` branch).
+            arr.push(ext.clone());
+        }
+    }
+}
+
+const EXT_TRANSLATABLE: &str = "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable";
+
+/// PU:2631 hack workaround for R5 snapshots: if `dest` carries exactly two
+/// EXT_TRANSLATABLE extensions, remove the second.
+fn drop_second_translatable(dest: &mut Value) {
+    let Some(arr) = dest.get_mut("extension").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let positions: Vec<usize> = arr
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.get("url").and_then(Value::as_str) == Some(EXT_TRANSLATABLE))
+        .map(|(i, _)| i)
+        .collect();
+    if positions.len() == 2 {
+        arr.remove(positions[1]);
+    }
+}
+
+fn fill_constraint_sources(ed: &mut Value, url: &str) {
+    let Some(constraints) = ed.get_mut("constraint").and_then(Value::as_array_mut) else {
+        return;
+    };
+    for c in constraints {
+        if let Some(obj) = c.as_object_mut() {
+            if !obj.contains_key("source") {
+                obj.insert("source".to_string(), Value::String(url.to_string()));
+            }
+        }
+    }
+}
+
+/// PU:3409 isLargerMax.
+fn is_larger_max(derived: &str, base: &str) -> bool {
+    if base == "*" {
+        false
+    } else if derived == "*" {
+        true
+    } else {
+        let d = derived.parse::<i64>().unwrap_or(i64::MAX);
+        let b = base.parse::<i64>().unwrap_or(i64::MAX);
+        d > b
+    }
+}

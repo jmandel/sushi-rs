@@ -11,9 +11,11 @@ mod package;
 mod projection;
 mod quirks;
 mod text;
+mod walk;
 
 pub use cli::{main_cli, Engine, SnapshotOptions};
 pub use package::PackageContext;
+pub use walk::{disable_trace, enable_trace, generate_snapshot as generate_snapshot_walk};
 
 // Re-export every submodule item at crate root so modules can `use crate::*;`
 // and reach each other without per-item import churn.
