@@ -176,6 +176,16 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
    at every step.
 3. **Only after perf is covered: the WASM demo** (docs/wasm-editor-plan.md
    P0). Perf pass moved OUT of wave 4 into this roadmap step.
+4. **After the editor demo (task #17): Layer B as a separate OPT-IN stage** —
+   the Publisher post-passes over finished snapshots (canonical version
+   pinning `url|x.y.z` first; narrative/validation-edit scope decided by an
+   audit pass). This deliberately stays OUT of the Layer-A engine: Layer A
+   remains the pure, policy-free function; Layer B is a composable overlay.
+   Oracle shift: bare `generateSnapshot` cannot see these passes — the
+   harness must drive the Publisher's wrapper path (own pin, own goldens).
+   Layer B is known quirk-dense: same registry discipline from day one
+   (every behavior cited to Publisher code + a fixture; undocumented
+   behavior is debt, never silent).
 
 ### Non-negotiable protocol rules
 - A wave item is DONE only when the coordinator has re-run its gates personally.
