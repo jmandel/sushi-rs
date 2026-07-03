@@ -88,6 +88,20 @@ pub fn is_known_non_roundtrippable(basename: &str) -> bool {
         "dependency-table-nontech",
         "cross-version-analysis",
         "cross-version-analysis-inline",
+        // us-core copies of these aggregates carry markdown-injected raw HTML
+        // that fhir-core's own XhtmlParser+XhtmlComposer cannot round-trip
+        // (Java-oracle verified 2026-07-03: JAVA_RT_FAIL on the us-core
+        // copies; cycle/plan-net copies round-trip fine in BOTH engines and
+        // are gated normally by basename-independent parity).
+        "deprecated-list",
+        "expansion-params",
+        "summary-extensions",
+        // Two specific us-core VS expansion fragments mixing pre-escaped
+        // entity content with live markup — Java-oracle verified
+        // non-roundtrippable (2026-07-03). Listed EXACTLY (not by suffix) so
+        // any OTHER expansion fragment regressing still fails the gate.
+        "ValueSet-us-core-goal-description-expansion",
+        "ValueSet-us-core-procedure-code-expansion",
     ];
     if BASENAMES.contains(&stem) {
         return true;
