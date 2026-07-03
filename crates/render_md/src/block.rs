@@ -1051,10 +1051,15 @@ impl Parser {
 
     fn try_list(&mut self) -> Option<Block> {
         let line = self.lines[self.i].clone();
-        let (ordered, start, _marker_len) = list_marker(&line)?;
+        let (ordered, start, first_ml) = list_marker(&line)?;
         let mut items: Vec<ListItem> = Vec::new();
         let mut tight = true;
         let base_indent = leading_spaces(&line);
+        // A sibling item's marker may be indented deeper than the list start,
+        // as long as it sits BEFORE the item content column (kramdown accepts
+        // markers within the list indent zone). Track the current content
+        // indent to draw that line.
+        let mut cur_content_indent = base_indent + first_ml;
         loop {
             if self.i >= self.lines.len() {
                 break;
@@ -1068,7 +1073,8 @@ impl Parser {
                     k += 1;
                 }
                 if k < self.lines.len()
-                    && leading_spaces(&self.lines[k]) == base_indent
+                    && leading_spaces(&self.lines[k]) >= base_indent
+                    && leading_spaces(&self.lines[k]) < cur_content_indent
                     && list_marker(&self.lines[k]).map(|(o, _, _)| o == ordered).unwrap_or(false)
                 {
                     // Same-type marker after a blank line: loose separator.
@@ -1088,7 +1094,7 @@ impl Parser {
             if this_indent < base_indent {
                 break;
             }
-            if this_indent == base_indent {
+            if this_indent >= base_indent && this_indent < cur_content_indent {
                 if let Some((o2, _s2, ml)) = list_marker(&l) {
                     if o2 != ordered {
                         // different list type -> stop
@@ -1098,7 +1104,8 @@ impl Parser {
                         break;
                     }
                     // Start a new item.
-                    let content_indent = base_indent + ml;
+                    let content_indent = this_indent + ml;
+                    cur_content_indent = content_indent;
                     let mut item_lines: Vec<String> = Vec::new();
                     // first line content after marker
                     item_lines.push(l[content_indent.min(l.len())..].to_string());
@@ -1132,12 +1139,11 @@ impl Parser {
                         if ci >= content_indent {
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
                             self.i += 1;
-                        } else if list_marker(&cl).is_some() && ci <= base_indent {
+                        } else if list_marker(&cl).is_some() {
+                            // A marker before the content column is a SIBLING
+                            // item (possibly of a different-type list): end this
+                            // item and let the outer loop decide.
                             break;
-                        } else if ci > base_indent {
-                            // nested or lazy: keep relative indent
-                            item_lines.push(cl[content_indent.min(cl.len())..].to_string());
-                            self.i += 1;
                         } else if parse_block_ial_line(&cl).is_some()
                             || is_kramdown_ext_line(&cl)
                         {
@@ -1151,10 +1157,11 @@ impl Parser {
                         {
                             // Lazy paragraph continuation: an under-indented,
                             // non-marker line directly following item text stays
-                            // part of the item's paragraph (kramdown/CommonMark
-                            // lazy continuation). Preserve its leading indent so
-                            // inline soft-break spacing matches.
-                            item_lines.push(cl[content_indent.min(ci)..].to_string());
+                            // part of the item's paragraph. kramdown strips the
+                            // LIST-level indent, preserving indentation relative
+                            // to the list start (verified: a 1-space-indented
+                            // lazy line in a col-0 list keeps its single space).
+                            item_lines.push(cl[base_indent.min(ci)..].to_string());
                             self.i += 1;
                         } else {
                             break;
