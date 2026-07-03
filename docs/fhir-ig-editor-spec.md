@@ -111,10 +111,13 @@ recompute cleanly in the browser. Three tiers, decided:
 2. **Filter-based composes over external systems (SNOMED is-a etc.):**
    cannot be computed without the external CS. The affected views show a
    precise "needs terminology server" state naming the un-expandable
-   include, and — if the user configures a tx endpoint (any FHIR tx server
-   with CORS) — the editor calls `$expand` live and caches the result in OPFS
-   (same content-hash cache keys as the CI cache). No configured tx =
-   visible, scoped degradation; never a silently partial expansion.
+   include, and — if the user configures a tx endpoint — the editor calls
+   `$expand` live and caches the result in OPFS (same content-hash cache
+   keys as the committed cache). Reality check: external-system expansion
+   inherently needs GB-scale CS content (SNOMED/LOINC/...), so the realistic
+   endpoint is HOSTED tx.fhir.org, not anything local or in-browser; if it
+   lacks CORS, a minimal pass-through proxy is the workaround. No configured
+   tx = visible, scoped degradation; never a silently partial expansion.
 3. **Committed expansion cache (tx.fhir.org-sourced)** ships for the default
    IG as warm-start + AUTHORITY. The cache is refreshed DELIBERATELY (a
    maintainer runs the refresh script against tx.fhir.org and commits the
