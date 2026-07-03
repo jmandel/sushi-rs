@@ -75,6 +75,18 @@ fn render(
             let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
             b
         }
+        "snapshot-by-key" => {
+            let mut cfg = TableConfig::snapshot_by_key(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
+        "snapshot-by-key-all" => {
+            let mut cfg = TableConfig::snapshot_by_key_all(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
         _ => return None,
     };
     Some(wrap_raw(&body))

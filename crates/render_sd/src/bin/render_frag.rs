@@ -54,6 +54,12 @@ fn main() {
             for g in gaps { eprintln!("gap: {}", g); }
             b
         }
+        "snapshot-by-key" => {
+            let ctx = dbg_ctx();
+            let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot_by_key(""));
+            for g in gaps { eprintln!("gap: {}", g); }
+            b
+        }
         other => {
             eprintln!("unsupported kind: {}", other);
             exit(2);

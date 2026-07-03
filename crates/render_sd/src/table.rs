@@ -39,6 +39,8 @@ pub struct TableConfig {
     pub snapshot: bool,
     pub all_invariants: bool,
     pub must_support: bool,
+    /// byKey view: filter to the key-element set (constraint SDs only).
+    pub key: bool,
     /// uniqueLocalPrefix on the HTG ("s"/"sa"/"k"/"ka"/"m"/"ma"; "" for diff).
     pub prefix: String,
     /// id suffix on the table model id ("S","SA","D","DA","K","KA","M","MA").
@@ -57,6 +59,7 @@ impl TableConfig {
             snapshot: true,
             all_invariants: true,
             must_support: false,
+            key: false,
             prefix: "s".into(),
             id_sfx: "S".into(),
             run_uuid: run_uuid.into(),
@@ -79,6 +82,7 @@ impl TableConfig {
             snapshot: true,
             all_invariants: false,
             must_support: true,
+            key: false,
             prefix: "m".into(),
             id_sfx: "M".into(),
             run_uuid: run_uuid.into(),
@@ -90,6 +94,28 @@ impl TableConfig {
             prefix: "ma".into(),
             id_sfx: "MA".into(),
             ..TableConfig::snapshot_by_mustsupport(run_uuid)
+        }
+    }
+    /// `byKey()` (publisher SDR:532): generateTable on the key-element copy with
+    /// diff=F, snapshot=T, allInv=T, mustSupport=F, prefix "k"/"ka", idSfx K/KA.
+    pub fn snapshot_by_key(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            diff: false,
+            snapshot: true,
+            all_invariants: true,
+            must_support: false,
+            key: true,
+            prefix: "k".into(),
+            id_sfx: "K".into(),
+            run_uuid: run_uuid.into(),
+            active_tables: false,
+        }
+    }
+    pub fn snapshot_by_key_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "ka".into(),
+            id_sfx: "KA".into(),
+            ..TableConfig::snapshot_by_key(run_uuid)
         }
     }
 }
@@ -130,19 +156,24 @@ pub fn render_table(
     // snapshot is `getMustSupportElements()` (MS elements + ancestors, with
     // example cleared and non-MS elements dimmed via render_opaque + binding/
     // constraints cleared). We build owned modified element JSON for that case.
+    let use_owned = cfg.must_support || cfg.key;
     let owned: Vec<serde_json::Value>;
-    let all: Vec<Ed> = if cfg.must_support {
-        owned = must_support_elements(sd);
+    let all: Vec<Ed> = if use_owned {
+        owned = if cfg.must_support {
+            must_support_elements(sd)
+        } else {
+            key_elements(sd, ctx)
+        };
         owned.iter().map(Ed::new).collect()
     } else {
         Vec::new()
     };
-    let borrowed: Vec<Ed> = if cfg.must_support {
+    let borrowed: Vec<Ed> = if use_owned {
         Vec::new()
     } else {
         sd.snapshot_elements()
     };
-    let all: &[Ed] = if cfg.must_support { &all } else { &borrowed };
+    let all: &[Ed] = if use_owned { &all } else { &borrowed };
     // render_opaque ids (SDR:996): non-MS elements below the root in the MS view.
     let opaque_ids: std::collections::HashSet<String> = if cfg.must_support {
         owned_opaque_ids(sd)
@@ -2853,6 +2884,214 @@ fn gen_cardinality_impl(min: Option<i64>, max: Option<&str>, tracker: &mut Unuse
 
 pub fn is_profiled_type(profiles: &[&str]) -> bool {
     profiles.iter().any(|p| p.contains(':'))
+}
+
+/// `getKeyElements()` (publisher SDR:532). If the profile is a non-logical
+/// constraint, the elements are filtered to the "key" set (scanForKeyElements);
+/// otherwise ALL snapshot elements are returned. Elements are returned as
+/// copies (no clearing — byKey keeps binding/constraint intact).
+fn key_elements(sd: &Sd, ctx: &IgContext) -> Vec<serde_json::Value> {
+    let elems = sd.snapshot_elements();
+    let key_eligible = sd.derivation() == "constraint" && !sd.is_logical();
+    let mut key_set: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    if key_eligible {
+        let ms = must_support_id_set(sd);
+        let differential = differential_id_set(sd);
+        if let Some(root) = elems.first() {
+            scan_for_key_elements(&elems, *root, &ms, &differential, ctx, &mut key_set);
+        }
+    }
+    let mut out = Vec::new();
+    for (i, ed) in elems.iter().enumerate() {
+        if !key_eligible || key_set.contains(&i) {
+            out.push(ed.v.clone());
+        }
+    }
+    out
+}
+
+/// The differential-id set (publisher getDifferential): every differential
+/// element id plus its ancestor ids (marked present with null).
+fn differential_id_set(sd: &Sd) -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    if let Some(diff) = sd
+        .root
+        .get("differential")
+        .and_then(|d| d.get("element"))
+        .and_then(|e| e.as_array())
+    {
+        for e in diff {
+            if let Some(id) = e.get("id").and_then(|x| x.as_str()) {
+                set.insert(id.to_string());
+            }
+        }
+    }
+    set
+}
+
+const SIGNIFICANT_EXTENSIONS: &[&str] = &[
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-allowedUnits",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-bestPractice",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-graphConstraint",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxDecimalPlaces",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxSize",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-mimeType",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-minLength",
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-obligation",
+];
+
+/// `scanForKeyElements` (publisher SDR:685). Adds `element`, then for each child
+/// computes the oldMS/newMS predicate (comparing against the base type element)
+/// and recurses when true.
+fn scan_for_key_elements(
+    all: &[Ed<'_>],
+    element: Ed<'_>,
+    ms: &std::collections::HashSet<String>,
+    differential: &std::collections::HashSet<String>,
+    ctx: &IgContext,
+    key_set: &mut std::collections::HashSet<usize>,
+) {
+    if let Some(idx) = all.iter().position(|e| std::ptr::eq(e.v, element.v)) {
+        key_set.insert(idx);
+    }
+    for child in get_children(all, element) {
+        if child_is_key(child, ms, differential, ctx) {
+            scan_for_key_elements(all, child, ms, differential, ctx, key_set);
+        }
+    }
+}
+
+/// The `oldMS || newMS` key predicate (publisher SDR:730-764).
+fn child_is_key(
+    child: Ed<'_>,
+    ms: &std::collections::HashSet<String>,
+    differential: &std::collections::HashSet<String>,
+    ctx: &IgContext,
+) -> bool {
+    // significant extensions present?
+    let has_sig_ext = child
+        .extensions()
+        .iter()
+        .any(|e| {
+            e.get("url")
+                .and_then(|x| x.as_str())
+                .map(|u| SIGNIFICANT_EXTENSIONS.contains(&u))
+                .unwrap_or(false)
+        });
+    // base type element lookup (by base.path).
+    let base_path = child.base().and_then(|b| b.get("path")).and_then(|x| x.as_str());
+    let base_element = base_path.and_then(|bp| lookup_base_element(bp, ctx));
+
+    // bindingChanged (SDR:731-751)
+    let mut binding_changed = false;
+    if let Some(be) = &base_element {
+        let base_binding = be.get("binding");
+        if base_binding.is_none() {
+            binding_changed = true;
+        } else if let Some(binding) = child.binding() {
+            let bb = base_binding.unwrap();
+            let strength = binding.get("strength").and_then(|x| x.as_str());
+            let has_vs = binding.get("valueSet").is_some();
+            if has_vs && matches!(strength, Some("required") | Some("extensible")) {
+                let base_strength = bb.get("strength").and_then(|x| x.as_str());
+                if base_strength.is_none() || base_strength != strength {
+                    binding_changed = true;
+                } else {
+                    let base_vs = bb.get("valueSet").and_then(|x| x.as_str());
+                    let vs = binding.get("valueSet").and_then(|x| x.as_str());
+                    if base_vs.is_none() || base_vs != vs {
+                        binding_changed = true;
+                    }
+                }
+            }
+            // additionalBindings comparison in the publisher compares a value to
+            // itself (a no-op bug: getAdditional(binding.getAdditional()) twice),
+            // so it never flips bindingChanged. Reproduced by omission.
+        }
+    }
+    let _ = binding_changed; // folded into oldMS/newMS below via the child flags.
+
+    let child_min = child.min();
+    let base_min = base_element
+        .as_ref()
+        .and_then(|b| b.get("min"))
+        .and_then(|x| x.as_i64());
+    let child_max = child.max();
+    let base_max = child.base().and_then(|b| b.get("max")).and_then(|x| x.as_str());
+
+    let old_ms = ms.contains(child.id())
+        || child_min.map(|m| m != 0).unwrap_or(false)
+        || (child.conditions().len() > 1)
+        || child.is_modifier()
+        || (child.has_slicing()
+            && !child.path().ends_with(".extension")
+            && !child.path().ends_with(".modifierExtension"))
+        || child.has_slice_name()
+        || differential.contains(child.id())
+        || (child_max != base_max);
+
+    let new_ms = (child_min != base_min)
+        || child.fixed().is_some()
+        || child.pattern().is_some()
+        || has_min_max_value_change(child, base_element.as_ref(), "minValue")
+        || has_min_max_value_change(child, base_element.as_ref(), "maxValue")
+        || has_max_length_change(child, base_element.as_ref())
+        || child.must_have_value()
+        || child.has_extension("http://hl7.org/fhir/StructureDefinition/elementdefinition-value-alternatives")
+        || has_sig_ext;
+
+    old_ms || new_ms
+}
+
+/// Load the base type's snapshot element for a base path (e.g. "Observation.code"
+/// → the core Observation SD's element with that path).
+fn lookup_base_element(base_path: &str, ctx: &IgContext) -> Option<serde_json::Value> {
+    let type_name = base_path.split('.').next()?;
+    let url = format!("http://hl7.org/fhir/StructureDefinition/{}", type_name);
+    let sd = ctx.load_resource(&url)?;
+    let elems = sd.get("snapshot")?.get("element")?.as_array()?;
+    elems
+        .iter()
+        .find(|e| e.get("path").and_then(|x| x.as_str()) == Some(base_path))
+        .cloned()
+}
+
+fn has_min_max_value_change(child: Ed<'_>, base: Option<&serde_json::Value>, kind: &str) -> bool {
+    let has_child = child
+        .v
+        .as_object()
+        .map(|o| o.keys().any(|k| k.starts_with(kind)))
+        .unwrap_or(false);
+    if !has_child {
+        return false;
+    }
+    let cv = child
+        .v
+        .as_object()
+        .and_then(|o| o.iter().find(|(k, _)| k.starts_with(kind)).map(|(_, v)| v));
+    let bv = base
+        .and_then(|b| b.as_object())
+        .and_then(|o| o.iter().find(|(k, _)| k.starts_with(kind)).map(|(_, v)| v));
+    match (cv, bv) {
+        (Some(_), None) => true,
+        (Some(c), Some(b)) => c != b,
+        _ => false,
+    }
+}
+
+fn has_max_length_change(child: Ed<'_>, base: Option<&serde_json::Value>) -> bool {
+    let Some(cl) = child.max_length() else { return false };
+    let _ = cl;
+    if child.max_length().is_none() {
+        return false;
+    }
+    let bl = base
+        .and_then(|b| b.get("maxLength"))
+        .and_then(|x| x.as_i64());
+    match bl {
+        None => true,
+        Some(b) => child.max_length() != Some(b),
+    }
 }
 
 /// The set of element ids in the `getMustSupport()` map (publisher SDR:602 →

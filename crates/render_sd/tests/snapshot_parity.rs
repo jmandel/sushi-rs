@@ -136,3 +136,36 @@ fn by_mustsupport_plan_net_organization() {
         TableConfig::snapshot_by_mustsupport,
     );
 }
+
+#[test]
+fn by_key_us_core_patient() {
+    check_kind(
+        "us-core",
+        "us-core-patient",
+        false,
+        "snapshot-by-key",
+        TableConfig::snapshot_by_key,
+    );
+}
+
+#[test]
+fn by_key_us_core_head_circumference() {
+    check_kind(
+        "us-core",
+        "head-occipital-frontal-circumference-percentile",
+        false,
+        "snapshot-by-key",
+        TableConfig::snapshot_by_key,
+    );
+}
+
+#[test]
+fn by_key_plan_net_organization() {
+    check_kind(
+        "plan-net",
+        "plannet-Organization",
+        true,
+        "snapshot-by-key",
+        TableConfig::snapshot_by_key,
+    );
+}
