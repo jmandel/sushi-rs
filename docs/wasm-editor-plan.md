@@ -123,7 +123,7 @@ The browser build must pass the same gates as native:
 | P0 | WASI prototype: compile IPS + generate one snapshot in a browser page | IPS build < 3s in-browser; output byte-matches native | days |
 | P1 | `PackageSource` trait + OPFS impl + CDN bundle format | full native corpus gates green over the trait; browser cold-start < 5s for IPS closure | ~1 wk |
 | P2 | `wasm_api` crate + worker protocol + wasm parity harness in CI | ladder + 3-IG gates green on wasm build | ~1 wk |
-| P3 | Editor shell v1 (Monaco, diagnostics, diff/snapshot views, IPS demo) | golden demo usable end-to-end, offline-capable | 1–2 wk |
+| P3 | Editor shell v1 — now specced as its own repo `jmandel/fhir-ig-editor` (see docs/fhir-ig-editor-spec.md; default IG = cycle, submodule-pinned engine, GitHub Pages) | that spec's M1 gate | 1–2 wk |
 | P4 | Polish: bundle size, more packages on CDN, error UX, share links | public demo | open-ended |
 
 ## 6. Risks / open questions
