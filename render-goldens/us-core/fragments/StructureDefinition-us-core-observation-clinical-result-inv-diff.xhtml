@@ -1,0 +1,48 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-1</td>
+    <td>error</td>
+    <td>Observation.effective[x]</td>
+    <td>Datetime must be at least to day.</td>
+    <td>
+      <code>$this is dateTime implies $this.toString().length() &gt;= 10</code>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-2</td>
+    <td>error</td>
+    <td>Observation</td>
+    <td>If there is no component or hasMember element then either a value[x] or a data absent reason must be present</td>
+    <td>
+      <code>(component.empty() and hasMember.empty()) implies (dataAbsentReason.exists() or value.exists())</code>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-3</td>
+    <td>error</td>
+    <td>Observation.value[x]</td>
+    <td>The system SHALL be UCUM for coded quantity units.</td>
+    <td>
+      <code>ofType(Quantity).system.empty() or ofType(Quantity).system = 'http://unitsofmeasure.org'</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

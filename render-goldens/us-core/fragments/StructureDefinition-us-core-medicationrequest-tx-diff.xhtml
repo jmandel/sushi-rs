@@ -1,0 +1,129 @@
+{% raw %}<h4>Terminology Bindings (Differential)</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="A code specifying the state of the prescribing event. Describes the lifecycle of the prescription.">
+      <a style="opacity: 0.5" href="http://hl7.org/fhir/R4/valueset-medicationrequest-status.html">Medicationrequest  status</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/medicationrequest-status" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.intent</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="The kind of medication order.">
+      <a style="opacity: 0.5" href="http://hl7.org/fhir/R4/valueset-medicationrequest-intent.html">Medication request  intent</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/medicationrequest-intent" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.category:us-core</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="The type of medication order. Note that other codes are permitted in other slices, see [Required Bindings When Slicing by Value Sets](general-requirements.html#required-bindings-when-slicing-by-valuesets)">
+      <a style="opacity: 0.5" href="http://hl7.org/fhir/R4/valueset-medicationrequest-category.html">Medication request  category  codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/medicationrequest-category" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.medication[x]</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 0.5" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1010.4-20240606">Medication Clinical Drug</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20240606 has been used">⏿20240606</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.reasonCode</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 0.5" href="ValueSet-us-core-condition-code.html">US Core Condition Codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/us/core/ValueSet/us-core-condition-code" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to the version provided in this specification">&#x1F4E6;9.0.0</td>
+    <td>This IG</td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.dosageInstruction.​route</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td title="SNOMED CT and NCI Thesaurus SPL route of administration codes">
+      <a style="opacity: 0.5" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1267.22-20241015">Route of Administration of Therapeutic Agents</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.22" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20241015 has been used">⏿20241015</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationRequest.dosageInstruction.​doseAndRate.dose[x]</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td>
+      <a style="opacity: 0.5" href="http://hl7.org/fhir/R4/valueset-ucum-common.html">Common UCUM units</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/ucum-common" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+</table>
+{% endraw %}

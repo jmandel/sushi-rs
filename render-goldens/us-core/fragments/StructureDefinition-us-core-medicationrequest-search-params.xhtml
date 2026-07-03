@@ -1,0 +1,840 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-medicationrequest-authoredon.html">authoredon</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Return prescriptions written on this date</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.authoredOn</code>
+    </td>
+  </tr>
+  <tr>
+    <td>category</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns prescriptions with different categories</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.category</code>
+    </td>
+  </tr>
+  <tr>
+    <td>code</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: Code that identifies the allergy or intolerance
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: Code for the condition
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Code for what is being requested/ordered
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: The code for the report, as opposed to codes for the atomic results, which are the names on the observation resource referred to from the result
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: A search by a condition code
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: What the purpose of this list is
+          </li>
+
+          <li>
+            <a href="medication.html">Medication</a>
+: Returns medications for a specific code
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: Return administrations of this medication code
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: Returns dispenses of this medicine code
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Return prescriptions of this medication code
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Return statements of this medication code
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The code of the observation type
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: A code to identify a  procedure
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: What is being requested/ordered
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.code | AllergyIntolerance.reaction.substance | Condition.code | (DeviceRequest.code as CodeableConcept) | DiagnosticReport.code | FamilyMemberHistory.condition.code | List.code | Medication.code | (MedicationAdministration.medication as CodeableConcept) | (MedicationDispense.medication as CodeableConcept) | (MedicationRequest.medication as CodeableConcept) | (MedicationStatement.medication as CodeableConcept) | Observation.code | Procedure.code | ServiceRequest.code</code>
+    </td>
+  </tr>
+  <tr>
+    <td>date</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Returns medication request to be administered on a specific date
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.dosageInstruction.timing.event</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-medicationrequest-encounter.html">encounter</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Return prescriptions with this encounter identifier</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.encounter</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: External ids for this item
+          </li>
+
+          <li>
+            <a href="careplan.html">CarePlan</a>
+: External Ids for this plan
+          </li>
+
+          <li>
+            <a href="careteam.html">CareTeam</a>
+: External Ids for this team
+          </li>
+
+          <li>
+            <a href="composition.html">Composition</a>
+: Version-independent identifier for the Composition
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: A unique identifier of the condition record
+          </li>
+
+          <li>
+            <a href="consent.html">Consent</a>
+: Identifier for this record (external references)
+          </li>
+
+          <li>
+            <a href="detectedissue.html">DetectedIssue</a>
+: Unique id for the detected issue
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Business identifier for request/order
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: An identifier for the report
+          </li>
+
+          <li>
+            <a href="documentmanifest.html">DocumentManifest</a>
+: Unique Identifier for the set of documents
+          </li>
+
+          <li>
+            <a href="documentreference.html">DocumentReference</a>
+: Master Version Specific Identifier
+          </li>
+
+          <li>
+            <a href="encounter.html">Encounter</a>
+: Identifier(s) by which this encounter is known
+          </li>
+
+          <li>
+            <a href="episodeofcare.html">EpisodeOfCare</a>
+: Business Identifier(s) relevant for this EpisodeOfCare
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: A search by a record identifier
+          </li>
+
+          <li>
+            <a href="goal.html">Goal</a>
+: External Ids for this goal
+          </li>
+
+          <li>
+            <a href="imagingstudy.html">ImagingStudy</a>
+: Identifiers for the Study, such as DICOM Study Instance UID and Accession number
+          </li>
+
+          <li>
+            <a href="immunization.html">Immunization</a>
+: Business identifier
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: Business identifier
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: Return administrations with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: Returns dispenses with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Return prescriptions with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Return statements with this external identifier
+          </li>
+
+          <li>
+            <a href="nutritionorder.html">NutritionOrder</a>
+: Return nutrition orders with this external identifier
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The unique id for a particular observation
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: A unique identifier for a procedure
+          </li>
+
+          <li>
+            <a href="riskassessment.html">RiskAssessment</a>
+: Unique identifier for the assessment
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: Identifiers assigned to this order
+          </li>
+
+          <li>
+            <a href="supplydelivery.html">SupplyDelivery</a>
+: External identifier
+          </li>
+
+          <li>
+            <a href="supplyrequest.html">SupplyRequest</a>
+: Business Identifier for SupplyRequest
+          </li>
+
+          <li>
+            <a href="visionprescription.html">VisionPrescription</a>
+: Return prescriptions with this external identifier
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.identifier | CarePlan.identifier | CareTeam.identifier | Composition.identifier | Condition.identifier | Consent.identifier | DetectedIssue.identifier | DeviceRequest.identifier | DiagnosticReport.identifier | DocumentManifest.masterIdentifier | DocumentManifest.identifier | DocumentReference.masterIdentifier | DocumentReference.identifier | Encounter.identifier | EpisodeOfCare.identifier | FamilyMemberHistory.identifier | Goal.identifier | ImagingStudy.identifier | Immunization.identifier | List.identifier | MedicationAdministration.identifier | MedicationDispense.identifier | MedicationRequest.identifier | MedicationStatement.identifier | NutritionOrder.identifier | Observation.identifier | Procedure.identifier | RiskAssessment.identifier | ServiceRequest.identifier | SupplyDelivery.identifier | SupplyRequest.identifier | VisionPrescription.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>intended-dispenser</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns prescriptions intended to be dispensed by this Organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.dispenseRequest.performer</code>
+    </td>
+  </tr>
+  <tr>
+    <td>intended-performer</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns the intended performer of the administration of the medication request</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.performer</code>
+    </td>
+  </tr>
+  <tr>
+    <td>intended-performertype</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns requests for a specific type of performer</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.performerType</code>
+    </td>
+  </tr>
+  <tr>
+    <td>intent</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns prescriptions with different intents</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.intent</code>
+    </td>
+  </tr>
+  <tr>
+    <td>medication</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: Return administrations of this medication resource
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: Returns dispenses of this medicine resource
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Return prescriptions for this medication reference
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Return statements of this medication reference
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>(MedicationAdministration.medication as Reference) | (MedicationDispense.medication as Reference) | (MedicationRequest.medication as Reference) | (MedicationStatement.medication as Reference)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>patient</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: Who the sensitivity is for
+          </li>
+
+          <li>
+            <a href="careplan.html">CarePlan</a>
+: Who the care plan is for
+          </li>
+
+          <li>
+            <a href="careteam.html">CareTeam</a>
+: Who care team is for
+          </li>
+
+          <li>
+            <a href="clinicalimpression.html">ClinicalImpression</a>
+: Patient or group assessed
+          </li>
+
+          <li>
+            <a href="composition.html">Composition</a>
+: Who and/or what the composition is about
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: Who has the condition?
+          </li>
+
+          <li>
+            <a href="consent.html">Consent</a>
+: Who the consent applies to
+          </li>
+
+          <li>
+            <a href="detectedissue.html">DetectedIssue</a>
+: Associated patient
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Individual the service is ordered for
+          </li>
+
+          <li>
+            <a href="deviceusestatement.html">DeviceUseStatement</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: The subject of the report if a patient
+          </li>
+
+          <li>
+            <a href="documentmanifest.html">DocumentManifest</a>
+: The subject of the set of documents
+          </li>
+
+          <li>
+            <a href="documentreference.html">DocumentReference</a>
+: Who/what is the subject of the document
+          </li>
+
+          <li>
+            <a href="encounter.html">Encounter</a>
+: The patient or group present at the encounter
+          </li>
+
+          <li>
+            <a href="episodeofcare.html">EpisodeOfCare</a>
+: The patient who is the focus of this episode of care
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: The identity of a subject to list family member history items for
+          </li>
+
+          <li>
+            <a href="flag.html">Flag</a>
+: The identity of a subject to list flags for
+          </li>
+
+          <li>
+            <a href="goal.html">Goal</a>
+: Who this goal is intended for
+          </li>
+
+          <li>
+            <a href="imagingstudy.html">ImagingStudy</a>
+: Who the study is about
+          </li>
+
+          <li>
+            <a href="immunization.html">Immunization</a>
+: The patient for the vaccination record
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: If all resources have the same subject
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: The identity of a patient to list administrations  for
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: The identity of a patient to list dispenses  for
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Returns prescriptions for a specific patient
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Returns statements for a specific patient.
+          </li>
+
+          <li>
+            <a href="nutritionorder.html">NutritionOrder</a>
+: The identity of the person who requires the diet, formula or nutritional supplement
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The subject that the observation is about (if patient)
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="riskassessment.html">RiskAssessment</a>
+: Who/what does assessment apply to?
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="supplydelivery.html">SupplyDelivery</a>
+: Patient for whom the item is supplied
+          </li>
+
+          <li>
+            <a href="visionprescription.html">VisionPrescription</a>
+: The identity of a patient to list dispenses for
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.patient | CarePlan.subject.where(resolve() is Patient) | CareTeam.subject.where(resolve() is Patient) | ClinicalImpression.subject.where(resolve() is Patient) | Composition.subject.where(resolve() is Patient) | Condition.subject.where(resolve() is Patient) | Consent.patient | DetectedIssue.patient | DeviceRequest.subject.where(resolve() is Patient) | DeviceUseStatement.subject | DiagnosticReport.subject.where(resolve() is Patient) | DocumentManifest.subject.where(resolve() is Patient) | DocumentReference.subject.where(resolve() is Patient) | Encounter.subject.where(resolve() is Patient) | EpisodeOfCare.patient | FamilyMemberHistory.patient | Flag.subject.where(resolve() is Patient) | Goal.subject.where(resolve() is Patient) | ImagingStudy.subject.where(resolve() is Patient) | Immunization.patient | List.subject.where(resolve() is Patient) | MedicationAdministration.subject.where(resolve() is Patient) | MedicationDispense.subject.where(resolve() is Patient) | MedicationRequest.subject.where(resolve() is Patient) | MedicationStatement.subject.where(resolve() is Patient) | NutritionOrder.patient | Observation.subject.where(resolve() is Patient) | Procedure.subject.where(resolve() is Patient) | RiskAssessment.subject.where(resolve() is Patient) | ServiceRequest.subject.where(resolve() is Patient) | SupplyDelivery.patient | VisionPrescription.patient</code>
+    </td>
+  </tr>
+  <tr>
+    <td>priority</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns prescriptions with different priorities</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.priority</code>
+    </td>
+  </tr>
+  <tr>
+    <td>requester</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns prescriptions prescribed by this prescriber</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.requester</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-medicationrequest-status.html">status</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Status of the prescription</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>subject</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The identity of a patient to list orders  for</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>MedicationRequest.subject</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="http://hl7.org/fhir/extensions/5.3.0/SearchParameter-workflow-EpisodeOfCare.html">workflow-EpisodeOfCare</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+SearchParameter for           <a href="StructureDefinition-workflow-episodeOfCare.html">EpisodeOfCare extension</a>
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Resource.extension('http://hl7.org/fhir/StructureDefinition/workflow-episodeOfCare').value</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

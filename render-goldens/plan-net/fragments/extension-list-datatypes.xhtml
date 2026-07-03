@@ -1,0 +1,75 @@
+{% raw %}<table class="list" data-fhir="generated">
+  <tr>
+    <td>Identity</td>
+    <td>Card.</td>
+    <td>Type</td>
+    <td>Context</td>
+    <td>WG</td>
+    <td>Status</td>
+  </tr>
+  <tr>
+    <td>
+      <input size="15" id="filter-identity" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-card" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="8" id="filter-type" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="20" id="filter-context" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-wg" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="6" id="filter-status" type="text" class="filter-input"/>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5">
+      <b>Extensions defined for the datatypes data type</b>
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-contactpoint-availabletime.html" title="An extension representing the days and times a contact point is available">contactpoint-availabletime</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint">ContactPoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-via-intermediary.html" title="A reference to an alternative point of contact (plannet-PractitionerRole, plannet-Organization, plannet-OrganizationAffiliation, or plannet-Location) for this organization">via-intermediary</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint">ContactPoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+</table>
+<p>4 Extensions</p>
+<script src="assets/js/table.js"> </script>
+<button onclick="clearAllFilters()" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Clear All Filters</button>
+{% endraw %}

@@ -1,0 +1,244 @@
+{% raw %}<table class="box" data-fhir="generated">
+  <tr>
+    <td colspan="5" style="text-align: center">
+      <b>Observation</b>
+ :       <a href="http://hl7.org/fhir/R4/vitalsigns.html">Observation</a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5" style="border-bottom: 1px solid #666">
+This profile is based on the base       <a href="http://hl7.org/fhir/R4/observation-vitalsigns.html">FHIR Vital Signs Profile</a>
+  and defines       <em>additional</em>
+ constraints on the Observation resource to represent vital  signs observations. It specifies which core elements, extensions, vocabularies, and value sets       <strong>SHALL</strong>
+ be present in the resource and constrains how the elements are used. Providing the floor for standards development for specific use cases promotes interoperability and adoption.  This US Core profiles that are derived from this profile  are listed below.
+
+    </td>
+  </tr>
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.status" data-no-external="true">status</a>
+      <a name="Observation.status"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">registered | preliminary | final | amended +</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_slice.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Slice Definition" class="hierarchy"/>
+       <a style="font-style: italic; font-style: italic" no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.category" data-no-external="true">Slices for category</a>
+      <a name="Observation.category"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000; font-style: italic" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="font-style: italic"/>
+      <span style="font-style: italic">1</span>
+      <span style="font-style: italic">..</span>
+      <span style="font-style: italic">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="font-style: italic; font-style: italic" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5; font-style: italic">Classification of  type of observation</span>
+      <br style="font-style: italic"/>
+      <span style="font-weight:bold; font-style: italic">Slice: </span>
+      <span style="font-style: italic">Unordered, Open by value:coding.code, value:coding.system</span>
+      <br style="font-style: italic"/>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.code" data-no-external="true">code</a>
+      <a name="Observation.code"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+Coded vital sign result type      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113883.3.88.12.80.62-20251202" title="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113883.3.88.12.80.62" class="binding">
+Vital Sign Result Type <img src="external.png" alt="."/>      </a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#extensible" title="To be conformant, the concept in this element SHALL be from the specified value set if any of the codes within the value set can apply to the concept being communicated.  If the value set does not cover the concept (based on human review), alternate codings (or, data type allowing, text) may be included instead." class="binding">extensible</a>
+      <span title="null" class="binding">)</span>
+      <span title="null" class="binding">: </span>
+      <span title="null" class="binding">Vital sign result types</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.subject" data-no-external="true">subject</a>
+      <a name="Observation.subject"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Who and/or what the observation is about</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_choice.gif" alt="." style="background-color: white; background-color: inherit" title="Choice of Types" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.effective[x]" data-no-external="true">effective[x]</a>
+      <a name="Observation.effective_x_"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">Often just a dateTime for Vital Signs</td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.performer" data-no-external="true">performer</a>
+      <a name="Observation.performer"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-practitioner.html">US Core Practitioner Profile</a>
+ |       <a href="StructureDefinition-us-core-organization.html">US Core Organization Profile</a>
+ |       <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+ |       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+ |       <a href="StructureDefinition-us-core-careteam.html">US Core CareTeam Profile</a>
+ |       <a href="StructureDefinition-us-core-relatedperson.html">US Core RelatedPerson Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Who is responsible for the observation</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_choice.gif" alt="." style="background-color: white; background-color: inherit" title="Choice of Types" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.value[x]" title="Vital Signs value are typically recorded using the Quantity data type." data-no-external="true">value[x]</a>
+      <a name="Observation.value_x_"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+Vital Signs Value      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="http://hl7.org/fhir/R4/valueset-ucum-vitals-common.html" title="http://hl7.org/fhir/ValueSet/ucum-vitals-common" class="binding">VitalSignsUnits</a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#extensible" title="To be conformant, the concept in this element SHALL be from the specified value set if any of the codes within the value set can apply to the concept being communicated.  If the value set does not cover the concept (based on human review), alternate codings (or, data type allowing, text) may be included instead." class="binding">extensible</a>
+      <span title="null" class="binding">)</span>
+      <span title="null" class="binding">: </span>
+      <span title="null" class="binding">Common UCUM units for recording Vital Signs.</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.dataAbsentReason" data-no-external="true">dataAbsentReason</a>
+      <a name="Observation.dataAbsentReason"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Why the result is missing</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-vital-signs-definitions.html#Observation.component" title="Used when reporting component observation such as systolic and diastolic blood pressure." data-no-external="true">component</a>
+      <a name="Observation.component"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#BackboneElement">BackboneElement</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">Component observations</td>
+  </tr>
+
+
+</table>
+<style>
+table.box { margin-bottom: 10px; border: 1px black solid;  margin-right: inherit; }
+table.box th { border: none; }
+table.box td { border: none; font-size : 11px; }
+
+</style>
+{% endraw %}

@@ -1,0 +1,230 @@
+{% raw %}<table class="box" data-fhir="generated">
+  <tr>
+    <td colspan="5" style="text-align: center">
+      <b>Observation</b>
+ :       <a href="http://hl7.org/fhir/R4/observation.html">Observation</a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5" style="border-bottom: 1px solid #666">
+The US Core Simple Observation Profile inherits from the FHIR       <a href="https://hl7.org/fhir/R4/observation.html">Observation</a>
+ resource; refer to it for scope and usage definitions. This US Core FHIR Profile captures any &quot;simple&quot; observations not covered by other US Core Observation profiles. It represents any observation not classified as vital signs, laboratory,  imaging, or other specific observation types. This profile sets minimum expectations for the Observation resource to record, search, and retrieve observations such as a clinical observation or assertion about patient health status or other general observations. It specifies which core elements, extensions, vocabularies, and value sets       <strong>SHALL</strong>
+ be present and constrains how the elements are used. Providing the floor for standards development for specific use cases promotes interoperability and adoption.
+
+    </td>
+  </tr>
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.status" data-no-external="true">status</a>
+      <a name="Observation.status"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">registered | preliminary | final | amended +</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_slice.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Slice Definition" class="hierarchy"/>
+       <a style="font-style: italic; font-style: italic" no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.category" data-no-external="true">Slices for category</a>
+      <a name="Observation.category"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000; font-style: italic" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="font-style: italic"/>
+      <span style="font-style: italic">1</span>
+      <span style="font-style: italic">..</span>
+      <span style="opacity: 0.5; font-style: italic">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; font-style: italic; opacity: 0.5; font-style: italic" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5; font-style: italic">Classification of  type of observation</span>
+      <br style="font-style: italic"/>
+      <span style="font-weight:bold; font-style: italic">Slice: </span>
+      <span style="font-style: italic">Unordered, Open by value:$this</span>
+      <br style="font-style: italic" class="binding"/>
+      <span style="font-weight:bold; font-style: italic" title="null" class="binding">Binding: </span>
+      <a style="font-style: italic; font-style: italic" href="ValueSet-us-core-simple-observation-category.html" title="http://hl7.org/fhir/us/core/ValueSet/us-core-simple-observation-category" class="binding">US Core Simple Observation Category</a>
+      <span style="font-style: italic" title="null" class="binding"> (</span>
+      <a style="font-style: italic; font-style: italic" href="http://hl7.org/fhir/R4/terminologies.html#preferred" title="Instances are encouraged to draw from the specified codes for interoperability purposes but are not required to do so to be considered conformant." class="binding">preferred</a>
+      <span style="font-style: italic" title="null" class="binding">)</span>
+      <span style="font-style: italic" title="null" class="binding">: </span>
+      <span style="font-style: italic" title="null" class="binding">FHIR and US Core codes for high level observation categories.</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.code" data-no-external="true">code</a>
+      <a name="Observation.code"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Type of observation (code / type)</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/valueset-observation-codes.html" title="http://hl7.org/fhir/ValueSet/observation-codes" class="binding">LOINCCodes</a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#preferred" title="Instances are encouraged to draw from the specified codes for interoperability purposes but are not required to do so to be considered conformant." class="binding">preferred</a>
+      <span title="null" class="binding">)</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.subject" data-no-external="true">subject</a>
+      <a name="Observation.subject"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+1..      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="http://hl7.org/fhir/R4/group.html">Group</a>
+ |       <a href="StructureDefinition-us-core-device.html">US Core Device Profile</a>
+ |       <a href="StructureDefinition-us-core-location.html">US Core Location Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Who and/or what the observation is about</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_choice.gif" alt="." style="background-color: white; background-color: inherit" title="Choice of Types" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.effective[x]" title="The time or time-period the observed value is asserted as being true. For biological subjects - e.g., human patients - this is usually called the &quot;physiologically relevant time&quot;." data-no-external="true">effective[x]</a>
+      <a name="Observation.effective_x_"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Clinically relevant time/time-period for observation</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.performer" data-no-external="true">performer</a>
+      <a name="Observation.performer"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-practitioner.html">US Core Practitioner Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="StructureDefinition-us-core-organization.html">US Core Organization Profile</a>
+ |       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+ |       <a href="StructureDefinition-us-core-careteam.html">US Core CareTeam Profile</a>
+ |       <a href="StructureDefinition-us-core-relatedperson.html">US Core RelatedPerson Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Who is responsible for the observation</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_choice.gif" alt="." style="background-color: white; background-color: inherit" title="Choice of Types" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.value[x]" data-no-external="true">value[x]</a>
+      <a name="Observation.value_x_"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Actual result</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-simple-observation-definitions.html#Observation.derivedFrom" title="US Core Observations, DocumentReference, QuestionnaireResponse or other resource from which this observation value is derived." data-no-external="true">derivedFrom</a>
+      <a name="Observation.derivedFrom"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="http://hl7.org/fhir/R4/observation.html">Observation</a>
+ |       <a href="StructureDefinition-us-core-documentreference.html">US Core DocumentReference Profile</a>
+ |       <a href="StructureDefinition-us-core-questionnaireresponse.html">US Core QuestionnaireResponse Profile</a>
+ |       <a href="http://hl7.org/fhir/R4/imagingstudy.html">ImagingStudy</a>
+ |       <a href="http://hl7.org/fhir/R4/media.html">Media</a>
+ |       <a href="http://hl7.org/fhir/R4/molecularsequence.html">MolecularSequence</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">&#x1D5D4;&#x1D5D7;&#x1D5D7;&#x1D5DC;&#x1D5E7;&#x1D5DC;&#x1D5E2;&#x1D5E1;&#x1D5D4;&#x1D5DF; &#x1D5E8;&#x1D5E6;&#x1D5D6;&#x1D5D7;&#x1D5DC;: US Core Profiles or other resource the observation is made from</td>
+  </tr>
+
+
+</table>
+<style>
+table.box { margin-bottom: 10px; border: 1px black solid;  margin-right: inherit; }
+table.box th { border: none; }
+table.box td { border: none; font-size : 11px; }
+
+</style>
+{% endraw %}

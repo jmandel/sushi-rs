@@ -1,0 +1,308 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>device-name</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A server defined search that may match any of the string fields in Device.deviceName or Device.type.</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.deviceName.name | Device.type.coding.display | Device.type.text</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="http://hl7.org/fhir/extensions/5.1.0-snapshot1/SearchParameter-device-extensions-Device-din.html">din</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The donation identification number (DIN)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.extension('http://hl7.org/fhir/SearchParameter/device-extensions-Device-din').value</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Instance id from manufacturer, owner, and others</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>location</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>A location, where the resource is found</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.location</code>
+    </td>
+  </tr>
+  <tr>
+    <td>manufacturer</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>The manufacturer of the device</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.manufacturer</code>
+    </td>
+  </tr>
+  <tr>
+    <td>model</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>The model of the device</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.modelNumber</code>
+    </td>
+  </tr>
+  <tr>
+    <td>organization</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The organization responsible for the device</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.owner</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-device-patient.html">patient</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Patient information, if the resource is affixed to a person</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.patient</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-device-status.html">status</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>active | inactive | entered-in-error | unknown</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The type of the device</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.type</code>
+    </td>
+  </tr>
+  <tr>
+    <td>udi-carrier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>
+UDI Barcode (RFID or other technology) string in           <em>HRF</em>
+ format.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.udiCarrier.carrierHRF</code>
+    </td>
+  </tr>
+  <tr>
+    <td>udi-di</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>The udi Device Identifier (DI)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.udiCarrier.deviceIdentifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>url</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#uri">uri</a>
+    </td>
+    <td>
+      <div>
+        <p>Network address to contact device</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Device.url</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

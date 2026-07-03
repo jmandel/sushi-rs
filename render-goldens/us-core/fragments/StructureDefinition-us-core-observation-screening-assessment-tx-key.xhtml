@@ -1,0 +1,113 @@
+{% raw %}<h4>Terminology Bindings</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>Observation.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Codes providing the status of an observation.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-observation-status.html">ObservationStatus</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/observation-status|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Observation.category</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td title="Codes for high level observation categories.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-observation-category.html">Observation Category Codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/observation-category|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Observation.category:survey</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td title="Codes for high level observation categories.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-observation-category.html">Observation Category Codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/observation-category|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Observation.category:screening-assessment</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Note that other codes are permitted in other slices, see [Required Bindings When Slicing by Value Sets](general-requirements.html#required-bindings-when-slicing-by-valuesets)">
+      <a style="opacity: 1.0" href="ValueSet-us-core-screening-assessment-observation-maximum-category.html">US Core Screening Assessment Observation Maximum Category</a>
+      <button data-clipboard-text="http://hl7.org/fhir/us/core/ValueSet/us-core-screening-assessment-observation-maximum-category" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to the version provided in this specification">&#x1F4E6;9.0.0</td>
+    <td>This IG</td>
+  </tr>
+  <tr>
+    <td>Observation.code</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1267.13-20260422">Screening and Assessment Survey Codes</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.13" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20260422 has been used">⏿20260422</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Observation.dataAbsentReason</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td title="Codes specifying why the result (`Observation.value[x]`) is missing.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-data-absent-reason.html">DataAbsentReason</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/data-absent-reason|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+</table>
+{% endraw %}

@@ -1,0 +1,51 @@
+{% raw %}<table class="box" data-fhir="generated">
+  <tr>
+    <td colspan="5" style="text-align: center">
+      <b>Medication</b>
+ :       <a href="http://hl7.org/fhir/R4/medication.html">Medication</a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5" style="border-bottom: 1px solid #666">
+The US Core Medication Profile inherits from the FHIR       <a href="https://hl7.org/fhir/R4/medication.html">Medication</a>
+ resource; refer to it for scope and usage definitions. This profile sets minimum expectations for the Medication resource to record, search, and fetch medications associated with a patient. When referencing a medication, the MedicationRequest resource can use a code or refer to this profile. It specifies which core elements, extensions, vocabularies, and value sets       <strong>SHALL</strong>
+ be present and constrains how the elements are used. Providing the floor for standards development for specific use cases promotes interoperability and adoption.
+
+    </td>
+  </tr>
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-medication-definitions.html#Medication.code" data-no-external="true">code</a>
+      <a name="Medication.code"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+1..      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">Codes that identify this medication</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1010.4-20240606" title="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4" class="binding">
+Medication Clinical Drug <img src="external.png" alt="."/>      </a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#extensible" title="To be conformant, the concept in this element SHALL be from the specified value set if any of the codes within the value set can apply to the concept being communicated.  If the value set does not cover the concept (based on human review), alternate codings (or, data type allowing, text) may be included instead." class="binding">extensible</a>
+      <span title="null" class="binding">)</span>
+    </td>
+  </tr>
+
+
+</table>
+<style>
+table.box { margin-bottom: 10px; border: 1px black solid;  margin-right: inherit; }
+table.box th { border: none; }
+table.box td { border: none; font-size : 11px; }
+
+</style>
+{% endraw %}

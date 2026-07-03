@@ -1,0 +1,83 @@
+{% raw %}<h4>Terminology Bindings</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>Specimen.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Codes providing the status/availability of a specimen.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-specimen-status.html">SpecimenStatus</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/specimen-status|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Specimen.type</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1099.54-20240606">Specimen type</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1099.54" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20240606 has been used">⏿20240606</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Specimen.collection.​bodySite</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-body-site.html">SNOMED CT Body Structures</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/body-site" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Specimen.condition</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="ValueSet-us-core-specimen-condition.html">US Core Specimen Condition</a>
+      <button data-clipboard-text="http://hl7.org/fhir/us/core/ValueSet/us-core-specimen-condition" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to the version provided in this specification">&#x1F4E6;9.0.0</td>
+    <td>This IG</td>
+  </tr>
+</table>
+{% endraw %}

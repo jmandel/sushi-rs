@@ -1,0 +1,128 @@
+{% raw %}<table class="grid">
+  <tr>
+    <td>
+      <b>Resource</b>
+    </td>
+    <td>
+      <b>Change</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Reason</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="StructureDefinition-us-core-authentication-time.html">US Core Authentication Time Extension (StructureDefinition)</a>
+    </td>
+    <td></td>
+    <td>retired</td>
+    <td>
+      <div>
+        <p>
+THe US Core Authentication Time Extension extension has been superseded by the standard           <a href="https://hl7.org/fhir/uv/xver-r5.r4/0.0.1-snapshot-2/StructureDefinition-ext-R5-DocumentReference.attester.html">Cross-version Extension for R5.DocumentReference.attester for use in FHIR R4</a>
+ and is deprecated. It           <strong>SHOULD NOT</strong>
+ be used for new or revised content. It is retained for historical/backward compatibility purposes. Implementers           <strong>SHOULD</strong>
+ use the FHIR R5 DocumentReference.attester extension instead
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <div>
+        <p>This extension indicates when the information in the document was verified.</p>
+
+
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="CodeSystem-careplan-category.html">US Core CarePlan Category Extension Codes (CodeSystem)</a>
+    </td>
+    <td></td>
+    <td>retired</td>
+    <td>
+      <div>
+        <p>This code system is no longer required and is deprecated. The concept &quot;assess-plan&quot; can be replicated as a local code.</p>
+
+
+      </div>
+    </td>
+    <td>
+      <div>
+        <p>Set of codes that are needed for implementation of the US-Core CarePlan Profile. These codes are used as extensions to the FHIR ValueSet.</p>
+
+
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="StructureDefinition-us-core-genderIdentity.html">US Core Gender Identity Extension (StructureDefinition)</a>
+    </td>
+    <td></td>
+    <td>retired</td>
+    <td>
+      <div>
+        <p>
+This extension is no longer a USCDI requirement and is deprecated. It           <strong>SHOULD NOT</strong>
+ be used for new or revised content. It is retained for historical/backward compatibility purposes. Implementers can use the           <a href="http://hl7.org/fhir/StructureDefinition/individual-genderIdentity">HL7 standard extension</a>
+ instead
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <div>
+        <p>This extension represents an individual's sense of being a man, woman, boy, girl, nonbinary, or something else, ascertained by asking them what that identity is.</p>
+
+
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="StructureDefinition-us-core-sex.html">US Core Sex Extension (StructureDefinition)</a>
+    </td>
+    <td></td>
+    <td>retired</td>
+    <td>
+      <div>
+        <p>
+This extension is no longer a USCDI requirement and is deprecated. It           <strong>SHOULD NOT</strong>
+ be used for new or revised content. It is retained for historical/backward compatibility purposes. Implementers           <strong>SHOULD</strong>
+ use the           <a href="StructureDefinition-us-core-individual-sex.html">US Core Individual Sex Extension</a>
+ instead
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <div>
+        <p>
+The Sex Extension is used to reflect the documentation of a person's sex. Systems choosing to record sources of information should use the           <a href="element-level-provenance.html">Provenance resource</a>
+.
+        </p>
+
+        <p>
+USCDI includes a data element for sex, intended to support the exchange of a sex value that is not characterized as sex assigned at birth or birth sex. This Sex extension supports USCDI. Sex assigned at birth or birth sex can be recorded using the more specific           <a href="StructureDefinition-us-core-birthsex.html">US Core Birth Sex Extension</a>
+.
+Future versions of this extension may be informed by the content of the HL7 Cross Paradigm IG: Gender Harmony - Sex and Gender Representation, which may include additional guidance on its relationship to administrative gender (          <a href="StructureDefinition-us-core-patient-definitions.html#Patient.gender">Patient.gender</a>
+).
+        </p>
+
+
+      </div>
+    </td>
+  </tr>
+</table>
+{% endraw %}

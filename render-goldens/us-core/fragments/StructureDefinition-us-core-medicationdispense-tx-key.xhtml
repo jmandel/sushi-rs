@@ -1,0 +1,116 @@
+{% raw %}<h4>Terminology Bindings</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="A coded concept specifying the state of the dispense event.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-medicationdispense-status.html">Medication dispense  status  codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/medicationdispense-status|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.medication[x]</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1010.4-20240606">Medication Clinical Drug</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1010.4" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20240606 has been used">⏿20240606</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.type</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="http://terminology.hl7.org/7.2.0/ValueSet-v3-ActPharmacySupplyType.html">ActPharmacySupplyType</a>
+      <button data-clipboard-text="http://terminology.hl7.org/ValueSet/v3-ActPharmacySupplyType" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 3.0.0, the version found through the package references">&#x1F4E6;3.0.0</td>
+    <td>
+      <a href="http://terminology.hl7.org/7.2.0">THO v7.2</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.quantity</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-ucum-common.html">Common UCUM units</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/ucum-common" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.dosageInstruction.​route</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td title="SNOMED CT and NCI Thesaurus SPL route of administration codes">
+      <a style="opacity: 1.0" href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1267.22-20241015">Route of Administration of Therapeutic Agents</a>
+      <button data-clipboard-text="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.22" title="Click to copy URL" class="btn-copy"></button>
+      <img src="external.png" alt="."/>
+    </td>
+    <td style="opacity: 0.5" title="Version is not explicitly stated. When building this specification, the most recent version 20241015 has been used">⏿20241015</td>
+    <td>
+      <a href="https://tx.fhir.org/r4">tx.fhir.org</a>
+    </td>
+  </tr>
+  <tr>
+    <td>MedicationDispense.dosageInstruction.​doseAndRate.dose[x]</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-ucum-common.html">Common UCUM units</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/ucum-common" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+</table>
+{% endraw %}

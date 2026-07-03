@@ -1,0 +1,202 @@
+{% raw %}<table class="box" data-fhir="generated">
+  <tr>
+    <td colspan="5" style="text-align: center">
+      <b>CarePlan</b>
+ :       <a href="http://hl7.org/fhir/R4/careplan.html">CarePlan</a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5" style="border-bottom: 1px solid #666">
+The US Core CarePlan Profile inherits from the FHIR       <a href="https://hl7.org/fhir/R4/careplan.html">CarePlan</a>
+ resource; refer to it for scope and usage definitions. This profile sets minimum expectations for the CarePlan resource to record,  search, and fetch assessment and plan of treatment data associated with a patient. It specifies which core elements, extensions, vocabularies, and value sets       <strong>SHALL</strong>
+ be present and constrains how the elements are used. Providing the floor for standards development for specific use cases promotes interoperability and adoption.
+
+    </td>
+  </tr>
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.text" data-no-external="true">text</a>
+      <a name="CarePlan.text"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#Narrative">Narrative</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">Text summary of the resource, for human interpretation</td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.status" data-no-external="true">status</a>
+      <a name="CarePlan.status"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">draft | active | on-hold | revoked | completed | entered-in-error | unknown</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="http://hl7.org/fhir/R4/valueset-request-status.html" title="http://hl7.org/fhir/ValueSet/request-status" class="binding">RequestStatus</a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#required" title="To be conformant, the concept in this element SHALL be from the specified value set." class="binding">required</a>
+      <span title="null" class="binding">)</span>
+      <span title="null" class="binding">: </span>
+      <span title="null" class="binding">Indicates whether the plan is currently being acted upon, represents future intentions or is now a historical record.</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.intent" data-no-external="true">intent</a>
+      <a name="CarePlan.intent"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">proposal | plan | order | option</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="http://hl7.org/fhir/R4/valueset-care-plan-intent.html" title="http://hl7.org/fhir/ValueSet/care-plan-intent" class="binding">CarePlanIntent</a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#required" title="To be conformant, the concept in this element SHALL be from the specified value set." class="binding">required</a>
+      <span title="null" class="binding">)</span>
+      <span title="null" class="binding">: </span>
+      <span title="null" class="binding">Codes indicating the degree of authority/intentionality associated with a care plan</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.category" title="Type of plan." data-no-external="true">category</a>
+      <a name="CarePlan.category"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+0..      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Type of plan</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="http://hl7.org/fhir/R4/valueset-care-plan-category.html" title="http://hl7.org/fhir/ValueSet/care-plan-category" class="binding">CarePlanCategory</a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#preferred" title="Instances are encouraged to draw from the specified codes for interoperability purposes but are not required to do so to be considered conformant." class="binding">preferred</a>
+      <span title="null" class="binding">)</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: white; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.subject" title="Who care plan is for." data-no-external="true">subject</a>
+      <a name="CarePlan.subject"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="http://hl7.org/fhir/R4/group.html">Group</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Who the care plan is for</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.contributor" data-no-external="true">contributor</a>
+      <a name="CarePlan.contributor"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-practitioner.html">US Core Practitioner Profile</a>
+ |       <a href="StructureDefinition-us-core-organization.html">US Core Organization Profile</a>
+ |       <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+ |       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+ |       <a href="StructureDefinition-us-core-careteam.html">US Core CareTeam Profile</a>
+ |       <a href="StructureDefinition-us-core-relatedperson.html">US Core RelatedPerson Profile</a>
+ |       <a href="StructureDefinition-us-core-device.html">US Core Device Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">&#x1D5D4;&#x1D5D7;&#x1D5D7;&#x1D5DC;&#x1D5E7;&#x1D5DC;&#x1D5E2;&#x1D5E1;&#x1D5D4;&#x1D5DF; &#x1D5E8;&#x1D5E6;&#x1D5D6;&#x1D5D7;&#x1D5DC;: Who provided the content of the care plan</td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: white; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-careplan-definitions.html#CarePlan.addresses" data-no-external="true">addresses</a>
+      <a name="CarePlan.addresses"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-condition-problems-health-concerns.html">US Core Condition Problems and Health Concerns Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">&#x1D5D4;&#x1D5D7;&#x1D5D7;&#x1D5DC;&#x1D5E7;&#x1D5DC;&#x1D5E2;&#x1D5E1;&#x1D5D4;&#x1D5DF; &#x1D5E8;&#x1D5E6;&#x1D5D6;&#x1D5D7;&#x1D5DC;: Health issues this plan addresses</td>
+  </tr>
+
+
+</table>
+<style>
+table.box { margin-bottom: 10px; border: 1px black solid;  margin-right: inherit; }
+table.box th { border: none; }
+table.box td { border: none; font-size : 11px; }
+
+</style>
+{% endraw %}

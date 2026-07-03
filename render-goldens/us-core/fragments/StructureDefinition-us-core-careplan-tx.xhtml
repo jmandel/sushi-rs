@@ -1,0 +1,187 @@
+{% raw %}<h4>Terminology Bindings</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.language</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td title="A human language.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-languages.html">Common Languages</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/languages|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.text.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Constrained value set of narrative statuses.">
+      <a style="opacity: 1.0" href="ValueSet-us-core-narrative-status.html">US Core Narrative Status</a>
+      <button data-clipboard-text="http://hl7.org/fhir/us/core/ValueSet/us-core-narrative-status" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to the version provided in this specification">&#x1F4E6;9.0.0</td>
+    <td>This IG</td>
+  </tr>
+  <tr>
+    <td>CarePlan.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Indicates whether the plan is currently being acted upon, represents future intentions or is now a historical record.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-request-status.html">RequestStatus</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/request-status" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.intent</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Codes indicating the degree of authority/intentionality associated with a care plan">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-care-plan-intent.html">Care Plan Intent</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/care-plan-intent" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.category</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-care-plan-category.html">Care Plan Category</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/care-plan-category" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 4.0.1, the version found through the package references">&#x1F4E6;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.outcomeCodeableConcept</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[example]">example</a>
+    </td>
+    <td title="Identifies the results of the activity.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-care-plan-activity-outcome.html">Care Plan Activity Outcome</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/care-plan-activity-outcome|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.detail.​kind</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Resource types defined as part of FHIR that can be represented as in-line definitions of a care plan activity.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-care-plan-activity-kind.html">Care Plan Activity Kind</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/care-plan-activity-kind|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.detail.​code</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[example]">example</a>
+    </td>
+    <td title="Detailed description of the type of activity; e.g. What lab test, what procedure, what kind of encounter.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-procedure-code.html">Procedure Codes (SNOMED CT)</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/procedure-code|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.detail.​reasonCode</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[example]">example</a>
+    </td>
+    <td title="Identifies why a care plan activity is needed.  Can include any health condition codes as well as such concepts as &quot;general wellness&quot;, prophylaxis, surgical preparation, etc.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-clinical-findings.html">SNOMED CT Clinical Findings</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/clinical-findings|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.detail.​status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Codes that reflect the current state of a care plan activity within its overall life cycle.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-care-plan-activity-status.html">CarePlanActivityStatus</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/care-plan-activity-status|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>CarePlan.activity.detail.​product[x]</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[example]">example</a>
+    </td>
+    <td title="A product supplied or administered as part of a care plan activity.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-medication-codes.html">SNOMED CT Medication Codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/medication-codes|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+</table>
+{% endraw %}

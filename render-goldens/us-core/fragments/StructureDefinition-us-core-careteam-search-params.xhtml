@@ -1,0 +1,573 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>category</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Type of team</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.category</code>
+    </td>
+  </tr>
+  <tr>
+    <td>date</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: Date first version of the resource instance was recorded
+          </li>
+
+          <li>
+            <a href="careplan.html">CarePlan</a>
+: Time period plan covers
+          </li>
+
+          <li>
+            <a href="careteam.html">CareTeam</a>
+: Time period team covers
+          </li>
+
+          <li>
+            <a href="clinicalimpression.html">ClinicalImpression</a>
+: When the assessment was documented
+          </li>
+
+          <li>
+            <a href="composition.html">Composition</a>
+: Composition editing time
+          </li>
+
+          <li>
+            <a href="consent.html">Consent</a>
+: When this Consent was created or indexed
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: The clinically relevant time of the report
+          </li>
+
+          <li>
+            <a href="encounter.html">Encounter</a>
+: A date within the period the Encounter lasted
+          </li>
+
+          <li>
+            <a href="episodeofcare.html">EpisodeOfCare</a>
+: The provided date search value falls within the episode of care's period
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: When history was recorded or last updated
+          </li>
+
+          <li>
+            <a href="flag.html">Flag</a>
+: Time period when flag is active
+          </li>
+
+          <li>
+            <a href="immunization.html">Immunization</a>
+: Vaccination  (non)-Administration Date
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: When the list was prepared
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: Obtained date/time. If the obtained element is a period, a date that falls in the period
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: When the procedure was performed
+          </li>
+
+          <li>
+            <a href="riskassessment.html">RiskAssessment</a>
+: When was assessment made?
+          </li>
+
+          <li>
+            <a href="supplyrequest.html">SupplyRequest</a>
+: When the request was made
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.recordedDate | CarePlan.period | CareTeam.period | ClinicalImpression.date | Composition.date | Consent.dateTime | DiagnosticReport.effective | Encounter.period | EpisodeOfCare.period | FamilyMemberHistory.date | Flag.period | Immunization.occurrence | List.date | Observation.effective | Procedure.performed | (RiskAssessment.occurrence as dateTime) | SupplyRequest.authoredOn</code>
+    </td>
+  </tr>
+  <tr>
+    <td>encounter</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Encounter created as part of</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.encounter</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: External ids for this item
+          </li>
+
+          <li>
+            <a href="careplan.html">CarePlan</a>
+: External Ids for this plan
+          </li>
+
+          <li>
+            <a href="careteam.html">CareTeam</a>
+: External Ids for this team
+          </li>
+
+          <li>
+            <a href="composition.html">Composition</a>
+: Version-independent identifier for the Composition
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: A unique identifier of the condition record
+          </li>
+
+          <li>
+            <a href="consent.html">Consent</a>
+: Identifier for this record (external references)
+          </li>
+
+          <li>
+            <a href="detectedissue.html">DetectedIssue</a>
+: Unique id for the detected issue
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Business identifier for request/order
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: An identifier for the report
+          </li>
+
+          <li>
+            <a href="documentmanifest.html">DocumentManifest</a>
+: Unique Identifier for the set of documents
+          </li>
+
+          <li>
+            <a href="documentreference.html">DocumentReference</a>
+: Master Version Specific Identifier
+          </li>
+
+          <li>
+            <a href="encounter.html">Encounter</a>
+: Identifier(s) by which this encounter is known
+          </li>
+
+          <li>
+            <a href="episodeofcare.html">EpisodeOfCare</a>
+: Business Identifier(s) relevant for this EpisodeOfCare
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: A search by a record identifier
+          </li>
+
+          <li>
+            <a href="goal.html">Goal</a>
+: External Ids for this goal
+          </li>
+
+          <li>
+            <a href="imagingstudy.html">ImagingStudy</a>
+: Identifiers for the Study, such as DICOM Study Instance UID and Accession number
+          </li>
+
+          <li>
+            <a href="immunization.html">Immunization</a>
+: Business identifier
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: Business identifier
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: Return administrations with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: Returns dispenses with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Return prescriptions with this external identifier
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Return statements with this external identifier
+          </li>
+
+          <li>
+            <a href="nutritionorder.html">NutritionOrder</a>
+: Return nutrition orders with this external identifier
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The unique id for a particular observation
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: A unique identifier for a procedure
+          </li>
+
+          <li>
+            <a href="riskassessment.html">RiskAssessment</a>
+: Unique identifier for the assessment
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: Identifiers assigned to this order
+          </li>
+
+          <li>
+            <a href="supplydelivery.html">SupplyDelivery</a>
+: External identifier
+          </li>
+
+          <li>
+            <a href="supplyrequest.html">SupplyRequest</a>
+: Business Identifier for SupplyRequest
+          </li>
+
+          <li>
+            <a href="visionprescription.html">VisionPrescription</a>
+: Return prescriptions with this external identifier
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.identifier | CarePlan.identifier | CareTeam.identifier | Composition.identifier | Condition.identifier | Consent.identifier | DetectedIssue.identifier | DeviceRequest.identifier | DiagnosticReport.identifier | DocumentManifest.masterIdentifier | DocumentManifest.identifier | DocumentReference.masterIdentifier | DocumentReference.identifier | Encounter.identifier | EpisodeOfCare.identifier | FamilyMemberHistory.identifier | Goal.identifier | ImagingStudy.identifier | Immunization.identifier | List.identifier | MedicationAdministration.identifier | MedicationDispense.identifier | MedicationRequest.identifier | MedicationStatement.identifier | NutritionOrder.identifier | Observation.identifier | Procedure.identifier | RiskAssessment.identifier | ServiceRequest.identifier | SupplyDelivery.identifier | SupplyRequest.identifier | VisionPrescription.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>participant</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Who is involved</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.participant.member</code>
+    </td>
+  </tr>
+  <tr>
+    <td>patient</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: Who the sensitivity is for
+          </li>
+
+          <li>
+            <a href="careplan.html">CarePlan</a>
+: Who the care plan is for
+          </li>
+
+          <li>
+            <a href="careteam.html">CareTeam</a>
+: Who care team is for
+          </li>
+
+          <li>
+            <a href="clinicalimpression.html">ClinicalImpression</a>
+: Patient or group assessed
+          </li>
+
+          <li>
+            <a href="composition.html">Composition</a>
+: Who and/or what the composition is about
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: Who has the condition?
+          </li>
+
+          <li>
+            <a href="consent.html">Consent</a>
+: Who the consent applies to
+          </li>
+
+          <li>
+            <a href="detectedissue.html">DetectedIssue</a>
+: Associated patient
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Individual the service is ordered for
+          </li>
+
+          <li>
+            <a href="deviceusestatement.html">DeviceUseStatement</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: The subject of the report if a patient
+          </li>
+
+          <li>
+            <a href="documentmanifest.html">DocumentManifest</a>
+: The subject of the set of documents
+          </li>
+
+          <li>
+            <a href="documentreference.html">DocumentReference</a>
+: Who/what is the subject of the document
+          </li>
+
+          <li>
+            <a href="encounter.html">Encounter</a>
+: The patient or group present at the encounter
+          </li>
+
+          <li>
+            <a href="episodeofcare.html">EpisodeOfCare</a>
+: The patient who is the focus of this episode of care
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: The identity of a subject to list family member history items for
+          </li>
+
+          <li>
+            <a href="flag.html">Flag</a>
+: The identity of a subject to list flags for
+          </li>
+
+          <li>
+            <a href="goal.html">Goal</a>
+: Who this goal is intended for
+          </li>
+
+          <li>
+            <a href="imagingstudy.html">ImagingStudy</a>
+: Who the study is about
+          </li>
+
+          <li>
+            <a href="immunization.html">Immunization</a>
+: The patient for the vaccination record
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: If all resources have the same subject
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: The identity of a patient to list administrations  for
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: The identity of a patient to list dispenses  for
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Returns prescriptions for a specific patient
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Returns statements for a specific patient.
+          </li>
+
+          <li>
+            <a href="nutritionorder.html">NutritionOrder</a>
+: The identity of the person who requires the diet, formula or nutritional supplement
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The subject that the observation is about (if patient)
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="riskassessment.html">RiskAssessment</a>
+: Who/what does assessment apply to?
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: Search by subject - a patient
+          </li>
+
+          <li>
+            <a href="supplydelivery.html">SupplyDelivery</a>
+: Patient for whom the item is supplied
+          </li>
+
+          <li>
+            <a href="visionprescription.html">VisionPrescription</a>
+: The identity of a patient to list dispenses for
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.patient | CarePlan.subject.where(resolve() is Patient) | CareTeam.subject.where(resolve() is Patient) | ClinicalImpression.subject.where(resolve() is Patient) | Composition.subject.where(resolve() is Patient) | Condition.subject.where(resolve() is Patient) | Consent.patient | DetectedIssue.patient | DeviceRequest.subject.where(resolve() is Patient) | DeviceUseStatement.subject | DiagnosticReport.subject.where(resolve() is Patient) | DocumentManifest.subject.where(resolve() is Patient) | DocumentReference.subject.where(resolve() is Patient) | Encounter.subject.where(resolve() is Patient) | EpisodeOfCare.patient | FamilyMemberHistory.patient | Flag.subject.where(resolve() is Patient) | Goal.subject.where(resolve() is Patient) | ImagingStudy.subject.where(resolve() is Patient) | Immunization.patient | List.subject.where(resolve() is Patient) | MedicationAdministration.subject.where(resolve() is Patient) | MedicationDispense.subject.where(resolve() is Patient) | MedicationRequest.subject.where(resolve() is Patient) | MedicationStatement.subject.where(resolve() is Patient) | NutritionOrder.patient | Observation.subject.where(resolve() is Patient) | Procedure.subject.where(resolve() is Patient) | RiskAssessment.subject.where(resolve() is Patient) | ServiceRequest.subject.where(resolve() is Patient) | SupplyDelivery.patient | VisionPrescription.patient</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-careteam-role.html">role</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns CareTeam resources with a participant role matching the specified code.</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.participant.role</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>proposed | active | suspended | inactive | entered-in-error</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>subject</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Who care team is for</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>CareTeam.subject</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

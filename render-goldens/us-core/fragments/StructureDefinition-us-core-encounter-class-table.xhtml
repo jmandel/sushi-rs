@@ -1,0 +1,340 @@
+{% raw %}<table class="box" data-fhir="generated">
+  <tr>
+    <td colspan="5" style="text-align: center">
+      <b>Encounter</b>
+ :       <a href="http://hl7.org/fhir/R4/encounter.html">Encounter</a>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5" style="border-bottom: 1px solid #666">
+The US Core Encounter Profile inherits from the FHIR       <a href="https://hl7.org/fhir/R4/encounter.html">Encounter</a>
+ resource; refer to it for scope and usage definitions. This profile sets minimum expectations for the Encounter resource to record, search, and fetch basic encounter information for an individual patient. It specifies which core elements, extensions, vocabularies, and value sets       <strong>SHALL</strong>
+ be present and constrains how the elements are used. Providing the floor for standards development for specific use cases promotes interoperability and adoption.
+
+    </td>
+  </tr>
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.meta" data-no-external="true">meta</a>
+      <a name="Encounter.meta"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#Meta">Meta</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Metadata about the resource</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_slice.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Slice Definition" class="hierarchy"/>
+ Slices for extension      <a name="Encounter.extension"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy"/>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">Content/Rules for all slices</td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.identifier" data-no-external="true">identifier</a>
+      <a name="Encounter.identifier"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#Identifier">Identifier</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Identifier(s) by which this encounter is known</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.status" data-no-external="true">status</a>
+      <a name="Encounter.status"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">planned | arrived | triaged | in-progress | onleave | finished | cancelled +</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.class" data-no-external="true">class</a>
+      <a name="Encounter.class"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">1</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#Coding">Coding</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Classification of patient encounter</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.type" data-no-external="true">type</a>
+      <a name="Encounter.type"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+1..      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Specific type of encounter</span>
+      <br class="binding"/>
+      <span style="font-weight:bold" title="null" class="binding">Binding: </span>
+      <a href="https://tx.fhir.org/r4/ValueSet/2.16.840.1.113762.1.4.1267.23-20250510" title="http://cts.nlm.nih.gov/fhir/ValueSet/2.16.840.1.113762.1.4.1267.23" class="binding">
+Encounter Type <img src="external.png" alt="."/>      </a>
+      <span title="null" class="binding"> (</span>
+      <a href="http://hl7.org/fhir/R4/terminologies.html#extensible" title="To be conformant, the concept in this element SHALL be from the specified value set if any of the codes within the value set can apply to the concept being communicated.  If the value set does not cover the concept (based on human review), alternate codings (or, data type allowing, text) may be included instead." class="binding">extensible</a>
+      <span title="null" class="binding">)</span>
+      <span title="null" class="binding">: </span>
+      <span title="null" class="binding">Valueset to describe the Encounter Type</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: white; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.subject" data-no-external="true">subject</a>
+      <a name="Encounter.subject"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+1..      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-patient.html">US Core Patient Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="http://hl7.org/fhir/R4/group.html">Group</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">The patient or group present at the encounter</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.participant" data-no-external="true">participant</a>
+      <a name="Encounter.participant"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#BackboneElement">BackboneElement</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">List of participants involved in the encounter</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.period" data-no-external="true">period</a>
+      <a name="Encounter.period"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#Period">Period</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">The start and end time of the encounter</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.reasonCode" data-no-external="true">reasonCode</a>
+      <a name="Encounter.reasonCode"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Coded reason the encounter takes place</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: white; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.reasonReference" data-no-external="true">reasonReference</a>
+      <a name="Encounter.reasonReference"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+..*
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-condition-problems-health-concerns.html">US Core Condition Problems and Health Concerns Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="StructureDefinition-us-core-condition-encounter-diagnosis.html">US Core Condition Encounter Diagnosis Profile</a>
+       <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This type must be supported">S</span>
+ |       <a href="StructureDefinition-us-core-procedure.html">US Core Procedure Profile</a>
+ |       <a href="http://hl7.org/fhir/R4/observation.html">Observation</a>
+ |       <a href="http://hl7.org/fhir/R4/immunizationrecommendation.html">ImmunizationRecommendation</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Reason the encounter takes place (reference)</span>
+      <br/>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.hospitalization" data-no-external="true">hospitalization</a>
+      <a name="Encounter.hospitalization"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#BackboneElement">BackboneElement</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">Details about the admission to a healthcare service</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: white">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <img src="icon_element.gif" alt="." style="background-color: white; background-color: inherit" title="Element" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.location" data-no-external="true">location</a>
+      <a name="Encounter.location"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">*</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <a style="opacity: 0.5; opacity: 0.5" href="http://hl7.org/fhir/R4/datatypes.html#BackboneElement">BackboneElement</a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: white; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px" class="hierarchy">
+      <span style="opacity: 0.5">List of locations where the patient has been</span>
+    </td>
+  </tr>
+
+  <tr style="border: 0px #F0F0F0 solid; padding:0px; vertical-align: top; background-color: #F7F7F7">
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <img src="icon_reference.png" alt="." style="background-color: #F7F7F7; background-color: inherit" title="Reference to another Resource" class="hierarchy"/>
+       <a no-external="true" href="StructureDefinition-us-core-encounter-definitions.html#Encounter.serviceProvider" data-no-external="true">serviceProvider</a>
+      <a name="Encounter.serviceProvider"> </a>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="padding-left: 3px; padding-right: 3px; color: white; background-color: #D50000" title="This element must be supported">S</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">0</span>
+      <span style="opacity: 0.5">..</span>
+      <span style="opacity: 0.5">1</span>
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <a href="http://hl7.org/fhir/R4/references.html">Reference</a>
+(      <a href="StructureDefinition-us-core-organization.html">US Core Organization Profile</a>
+)
+    </td>
+    <td style="vertical-align: top; text-align : var(--ig-left,left); background-color: #F7F7F7; border: 0px #F0F0F0 solid; padding:0px 4px 0px 4px; border-bottom: 1px solid #666" class="hierarchy">
+      <span style="opacity: 0.5">The organization (facility) responsible for this encounter</span>
+    </td>
+  </tr>
+
+
+</table>
+<style>
+table.box { margin-bottom: 10px; border: 1px black solid;  margin-right: inherit; }
+table.box th { border: none; }
+table.box td { border: none; font-size : 11px; }
+
+</style>
+{% endraw %}

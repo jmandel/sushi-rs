@@ -1,0 +1,10 @@
+ImplementationGuide-hl7.fhir.us.core-xml-html.xhtml	1483190
+ImplementationGuide-hl7.fhir.us.core-ttl-html.xhtml	1589893
+DocumentReference-polst-xml-html.xhtml	1333356
+DocumentReference-polst-json-html.xhtml	1328482
+DocumentReference-polst-ttl-html.xhtml	1334564
+StructureDefinition-us-core-average-blood-pressure-ttl-html.xhtml	1098333
+StructureDefinition-us-core-pulse-oximetry-xml-html.xhtml	1093300
+StructureDefinition-us-core-pulse-oximetry-ttl-html.xhtml	1175009
+ValueSet-us-core-practitionerrole-specialty-expansion.xhtml	1313958
+ValueSet-us-core-practitionerrole-specialty-expansion-oids.xhtml	1301142

@@ -1,0 +1,411 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>active</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Whether this practitioner role record is in active use</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.active</code>
+    </td>
+  </tr>
+  <tr>
+    <td>date</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>The period during which the practitioner is authorized to perform in these role(s)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.period</code>
+    </td>
+  </tr>
+  <tr>
+    <td>email</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="patient.html">Patient</a>
+: A value in an email contact
+          </li>
+
+          <li>
+            <a href="person.html">Person</a>
+: A value in an email contact
+          </li>
+
+          <li>
+            <a href="practitioner.html">Practitioner</a>
+: A value in an email contact
+          </li>
+
+          <li>
+            <a href="practitionerrole.html">PractitionerRole</a>
+: A value in an email contact
+          </li>
+
+          <li>
+            <a href="relatedperson.html">RelatedPerson</a>
+: A value in an email contact
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Patient.telecom.where(system='email') | Person.telecom.where(system='email') | Practitioner.telecom.where(system='email') | PractitionerRole.telecom.where(system='email') | RelatedPerson.telecom.where(system='email')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>endpoint</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Technical endpoints providing access to services operated for the practitioner with this role</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.endpoint</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="http://hl7.org/fhir/extensions/5.3.0/SearchParameter-individual-genderIdentity.html">genderIdentity</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Search based on individual's gender identity</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>extension('http://hl7.org/fhir/StructureDefinition/individual-genderIdentity').extension('value').value</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>A practitioner's Identifier</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>location</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>One of the locations at which this practitioner provides care</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.location</code>
+    </td>
+  </tr>
+  <tr>
+    <td>organization</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The identity of the organization the practitioner represents / acts on behalf of</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.organization</code>
+    </td>
+  </tr>
+  <tr>
+    <td>phone</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="patient.html">Patient</a>
+: A value in a phone contact
+          </li>
+
+          <li>
+            <a href="person.html">Person</a>
+: A value in a phone contact
+          </li>
+
+          <li>
+            <a href="practitioner.html">Practitioner</a>
+: A value in a phone contact
+          </li>
+
+          <li>
+            <a href="practitionerrole.html">PractitionerRole</a>
+: A value in a phone contact
+          </li>
+
+          <li>
+            <a href="relatedperson.html">RelatedPerson</a>
+: A value in a phone contact
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Patient.telecom.where(system='phone') | Person.telecom.where(system='phone') | Practitioner.telecom.where(system='phone') | PractitionerRole.telecom.where(system='phone') | RelatedPerson.telecom.where(system='phone')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-practitionerrole-practitioner.html">practitioner</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Practitioner that is able to provide the defined services for the organization</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.practitioner</code>
+    </td>
+  </tr>
+  <tr>
+    <td>role</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The practitioner can perform this role at for the organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.code</code>
+    </td>
+  </tr>
+  <tr>
+    <td>service</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The list of healthcare services that this worker provides for this role's Organization/Location(s)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.healthcareService</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-practitionerrole-specialty.html">specialty</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>The practitioner has this specialty at an organization</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>PractitionerRole.specialty</code>
+    </td>
+  </tr>
+  <tr>
+    <td>telecom</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="patient.html">Patient</a>
+: The value in any kind of telecom details of the patient
+          </li>
+
+          <li>
+            <a href="person.html">Person</a>
+: The value in any kind of contact
+          </li>
+
+          <li>
+            <a href="practitioner.html">Practitioner</a>
+: The value in any kind of contact
+          </li>
+
+          <li>
+            <a href="practitionerrole.html">PractitionerRole</a>
+: The value in any kind of contact
+          </li>
+
+          <li>
+            <a href="relatedperson.html">RelatedPerson</a>
+: The value in any kind of contact
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Patient.telecom | Person.telecom | Practitioner.telecom | PractitionerRole.telecom | RelatedPerson.telecom</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

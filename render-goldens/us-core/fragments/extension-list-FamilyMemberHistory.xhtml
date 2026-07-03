@@ -1,0 +1,177 @@
+{% raw %}<table class="list" data-fhir="generated">
+  <tr>
+    <td>Identity</td>
+    <td>Card.</td>
+    <td>Type</td>
+    <td>Context</td>
+    <td>WG</td>
+    <td>Status</td>
+  </tr>
+  <tr>
+    <td>
+      <input size="15" id="filter-identity" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-card" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="8" id="filter-type" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="20" id="filter-context" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-wg" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="6" id="filter-status" type="text" class="filter-input"/>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5">
+      <b>Extensions defined for the FamilyMemberHistory resource</b>
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-ethnicity.html" title="Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The ethnicity codes used to represent these concepts are based upon the [Race &amp; Ethnicity - CDC (CDCREC)](https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238) code system. Detailed ethnicity concepts are grouped by and pre-mapped to the 2 OMB ethnicity categories:
+
+   - Hispanic or Latino
+   - Not Hispanic or Latino.">us-core-ethnicity</a>
+    </td>
+    <td>0..1</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-familymemberhistory-recorder.html" title="Individual who recorded the family member's health history and takes responsibility for its content. Because the recorder takes responsibility for accurately recording information in the record, the recorder is the most recent author. The recorder might or might not be the asserter.">us-core-familymemberhistory-recorder</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM2
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-individual-sex.html" title="USCDI includes a data element for Sex, intended to support the exchange of a recorded sex value. This extension aligns with the USCDI definition of Sex: &quot;Documentation of a specific instance of sex.&quot; It enables systems to share the sex value as it was documented in a particular context.  Systems choosing to record sources of information should use the [Provenance resource](element-level-provenance.html).">us-core-individual-sex</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#Coding">Coding</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-race.html" title="Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The race codes used to represent these concepts are based upon the [Race &amp; Ethnicity - CDC (CDCREC)](https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238) code system. Detailed race concepts are grouped by and pre-mapped to the 5 OMB race categories:
+
+ - American Indian or Alaska Native
+ - Asian
+ - Black or African American
+ - Native Hawaiian or Other Pacific Islander
+ - White.">us-core-race</a>
+    </td>
+    <td>0..1</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-tribal-affiliation.html" title="This Extension profile represents a tribe or band with which a person associates and, optionally, whether they are enrolled.">us-core-tribal-affiliation</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM3
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">
+      <b>Extensions defined for many resources including the FamilyMemberHistory resource</b>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">None found</td>
+  </tr>
+  <tr>
+    <td colspan="6">
+      <b>Extensions that refer to the FamilyMemberHistory resource</b>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">None found</td>
+  </tr>
+  <tr>
+    <td colspan="6">
+      <b>Extensions that refer to many resources including the FamilyMemberHistory resource</b>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">None found</td>
+  </tr>
+</table>
+<p>13 Extensions</p>
+<script src="assets/js/table.js"> </script>
+<button onclick="clearAllFilters()" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Clear All Filters</button>
+{% endraw %}

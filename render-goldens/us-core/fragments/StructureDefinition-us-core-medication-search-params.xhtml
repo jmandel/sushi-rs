@@ -1,0 +1,236 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>code</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="allergyintolerance.html">AllergyIntolerance</a>
+: Code that identifies the allergy or intolerance
+          </li>
+
+          <li>
+            <a href="condition.html">Condition</a>
+: Code for the condition
+          </li>
+
+          <li>
+            <a href="devicerequest.html">DeviceRequest</a>
+: Code for what is being requested/ordered
+          </li>
+
+          <li>
+            <a href="diagnosticreport.html">DiagnosticReport</a>
+: The code for the report, as opposed to codes for the atomic results, which are the names on the observation resource referred to from the result
+          </li>
+
+          <li>
+            <a href="familymemberhistory.html">FamilyMemberHistory</a>
+: A search by a condition code
+          </li>
+
+          <li>
+            <a href="list.html">List</a>
+: What the purpose of this list is
+          </li>
+
+          <li>
+            <a href="medication.html">Medication</a>
+: Returns medications for a specific code
+          </li>
+
+          <li>
+            <a href="medicationadministration.html">MedicationAdministration</a>
+: Return administrations of this medication code
+          </li>
+
+          <li>
+            <a href="medicationdispense.html">MedicationDispense</a>
+: Returns dispenses of this medicine code
+          </li>
+
+          <li>
+            <a href="medicationrequest.html">MedicationRequest</a>
+: Return prescriptions of this medication code
+          </li>
+
+          <li>
+            <a href="medicationstatement.html">MedicationStatement</a>
+: Return statements of this medication code
+          </li>
+
+          <li>
+            <a href="observation.html">Observation</a>
+: The code of the observation type
+          </li>
+
+          <li>
+            <a href="procedure.html">Procedure</a>
+: A code to identify a  procedure
+          </li>
+
+          <li>
+            <a href="servicerequest.html">ServiceRequest</a>
+: What is being requested/ordered
+          </li>
+
+
+        </ul>
+
+
+      </div>
+    </td>
+    <td>
+      <code>AllergyIntolerance.code | AllergyIntolerance.reaction.substance | Condition.code | (DeviceRequest.code as CodeableConcept) | DiagnosticReport.code | FamilyMemberHistory.condition.code | List.code | Medication.code | (MedicationAdministration.medication as CodeableConcept) | (MedicationDispense.medication as CodeableConcept) | (MedicationRequest.medication as CodeableConcept) | (MedicationStatement.medication as CodeableConcept) | Observation.code | Procedure.code | ServiceRequest.code</code>
+    </td>
+  </tr>
+  <tr>
+    <td>expiration-date</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications in a batch with this expiration date</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.batch.expirationDate</code>
+    </td>
+  </tr>
+  <tr>
+    <td>form</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications for a specific dose form</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.form</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications with this external identifier</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>ingredient</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications for this ingredient reference</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>(Medication.ingredient.item as Reference)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>ingredient-code</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications for this ingredient code</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>(Medication.ingredient.item as CodeableConcept)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>lot-number</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications in a batch with this lot number</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.batch.lotNumber</code>
+    </td>
+  </tr>
+  <tr>
+    <td>manufacturer</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications made or sold for this manufacturer</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.manufacturer</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Returns medications for this status</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Medication.status</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

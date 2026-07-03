@@ -1,0 +1,232 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>beneficiary</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Covered party</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.beneficiary</code>
+    </td>
+  </tr>
+  <tr>
+    <td>class-type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Coverage class (eg. plan, group)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.class.type</code>
+    </td>
+  </tr>
+  <tr>
+    <td>class-value</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>Value of the class (eg. Plan number, group number)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.class.value</code>
+    </td>
+  </tr>
+  <tr>
+    <td>dependent</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>Dependent number</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.dependent</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The primary identifier of the insured and the coverage</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-coverage-patient.html">patient</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Retrieve coverages for a patient</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.beneficiary</code>
+    </td>
+  </tr>
+  <tr>
+    <td>payor</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The identity of the insurer or party paying for services</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.payor</code>
+    </td>
+  </tr>
+  <tr>
+    <td>policy-holder</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Reference to the policyholder</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.policyHolder</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The status of the Coverage</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>subscriber</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Reference to the subscriber</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.subscriber</code>
+    </td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The kind of coverage (health plan, auto, Workers Compensation)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Coverage.type</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

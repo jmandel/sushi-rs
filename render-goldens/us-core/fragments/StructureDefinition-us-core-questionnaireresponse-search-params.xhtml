@@ -1,0 +1,302 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-questionnaireresponse-id.html">_id</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Logical id of this artifact</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Resource.id</code>
+    </td>
+  </tr>
+  <tr>
+    <td>author</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The author of the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.author</code>
+    </td>
+  </tr>
+  <tr>
+    <td>authored</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>When the questionnaire response was last changed</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.authored</code>
+    </td>
+  </tr>
+  <tr>
+    <td>based-on</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Plan/proposal/order fulfilled by this questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.basedOn</code>
+    </td>
+  </tr>
+  <tr>
+    <td>encounter</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Encounter associated with the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.encounter</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The unique identifier for the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>item-subject</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Allows searching for QuestionnaireResponses by item value where the item has isSubject=true</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.item.where(hasExtension('http://hl7.org/fhir/StructureDefinition/questionnaireresponse-isSubject')).answer.value.ofType(Reference)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>part-of</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Procedure or observation this questionnaire response was performed as a part of</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.partOf</code>
+    </td>
+  </tr>
+  <tr>
+    <td>patient</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The patient that is the subject of the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.subject.where(resolve() is Patient)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>questionnaire</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The questionnaire the answers are provided for</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.questionnaire</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="http://hl7.org/fhir/extensions/5.3.0/SearchParameter-workflow-researchStudy.html">researchStudy</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>SearchParameter for Research Study Extension</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>DomainResource.extension('http://hl7.org/fhir/StructureDefinition/workflow-researchStudy').value</code>
+    </td>
+  </tr>
+  <tr>
+    <td>source</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The individual providing the information reflected in the questionnaire respose</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.source</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The status of the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>subject</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The subject of the questionnaire response</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>QuestionnaireResponse.subject</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="http://hl7.org/fhir/extensions/5.3.0/SearchParameter-workflow-EpisodeOfCare.html">workflow-EpisodeOfCare</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>
+SearchParameter for           <a href="StructureDefinition-workflow-episodeOfCare.html">EpisodeOfCare extension</a>
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Resource.extension('http://hl7.org/fhir/StructureDefinition/workflow-episodeOfCare').value</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

@@ -1,0 +1,39 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-4</td>
+    <td>best practice</td>
+    <td>Observation.value[x]</td>
+    <td>SHOULD use SNOMED CT for coded Results</td>
+    <td>
+      <code>ofType(CodeableConcept).coding.system.empty() or (ofType(CodeableConcept).coding.system contains 'http://snomed.info/sct')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-22</td>
+    <td>error</td>
+    <td>Observation.referenceRange</td>
+    <td>The system SHALL be UCUM for coded quantity units.</td>
+    <td>
+      <code>(low.system.empty() or low.system = 'http://unitsofmeasure.org') and (high.system.empty() or high.system = 'http://unitsofmeasure.org')</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

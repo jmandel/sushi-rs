@@ -1,0 +1,43 @@
+{% raw %}<div data-fhir="generated">
+   <!-- <h4>Custom liquid Version</h4> -->
+    <hr/>
+    <p><b>id</b> us-core-condition-lastupdated</p>
+  <!-- <p><b>url</b> : <code><a href="SearchParameter-us-core-condition-lastupdated.html">USCoreConditionLastUpdated</a>}</code></p>>
+    <p><b>name</b> : USCoreConditionLastUpdated</p> -->
+    
+        <p><b>derivedFrom</b> : <code> http://hl7.org/fhir/SearchParameter/Resource-lastUpdated</code></p>   <!-- added leading space to prevent build from trying to create link -->
+    
+    <p><b>status</b> : Active</p>
+    
+    <p><b>date</b> : 2024-11-17</p>
+   <!-- <p><b>publisher</b> : HL7 International / Cross-Group Projects</p>
+    <p><b>contact</b> : http://www.hl7.org/Special/committees/cgp</p>
+    <p><b>jurisdiction</b> : United States of America (the) <span> (Details : {urn:iso:std:iso:3166 code 'US' = 'United States of America', given as 'United
+           States of America (the)'})</span>
+    </p> -->
+    <p><b>code</b> : &quot;_lastUpdated&quot;</p>
+    <p><b>base</b> : Condition </p>
+    <p><b>type</b> : Date/DateTime</p>
+    <p><b>expression</b> : <code>Resource.meta.lastUpdated</code></p>
+    
+    <p><b>multipleOr</b> : true  (Conformance Expectation = MAY)</p>
+    <p><b>multipleAnd</b> : true (Conformance Expectation = SHOULD)</p>
+    
+        <p><b>comparator codes</b> :</p>
+            <ul>
+                <li>&quot;eq&quot; <i>Equals</i> (Conformance Expectation = MAY)</li>
+                <li>&quot;ne&quot; <i>Not Equals</i> (Conformance Expectation = MAY)</li>
+                <li>&quot;gt&quot; <i>Greater Than</i> (Conformance Expectation = SHALL)</li>
+                <li>&quot;ge&quot; <i>Greater or Equals</i> (Conformance Expectation = SHALL)</li>
+                <li>&quot;lt&quot; <i>Less Than</i> (Conformance Expectation = SHALL)</li>
+                <li>&quot;le&quot; <i>Less of Equal</i> (Conformance Expectation = SHALL)</li>
+                <li>&quot;sa&quot; <i>Starts After</i> (Conformance Expectation = MAY)</li>
+                <li>&quot;eb&quot; <i>Ends Before</i> (Conformance Expectation = MAY)</li>
+                <li>&quot;ap&quot; <i>Approximately</i> (Conformance Expectation = MAY)</li>
+            </ul>
+    
+
+    
+
+    
+</div>{% endraw %}

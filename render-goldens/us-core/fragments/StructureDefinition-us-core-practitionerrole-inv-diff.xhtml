@@ -1,0 +1,39 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>pd-1</td>
+    <td>error</td>
+    <td>PractitionerRole</td>
+    <td>SHALL have contact information or a reference to an Endpoint</td>
+    <td>
+      <code>telecom.exists() or endpoint.exists()</code>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-13</td>
+    <td>error</td>
+    <td>PractitionerRole</td>
+    <td>SHALL have a practitioner, an organization, a healthcare service, or a location.</td>
+    <td>
+      <code>practitioner.exists() or organization.exists() or healthcareService.exists() or location.exists()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

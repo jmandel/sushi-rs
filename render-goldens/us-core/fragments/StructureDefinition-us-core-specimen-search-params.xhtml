@@ -1,0 +1,264 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-us-core-specimen-id.html">_id</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>
+          <strong>Logical id of this artifact</strong>
+          <br/>
+
+NOTE: This SearchParameter is defined only to document Server and Client expectations. Its definition is derived from the standard FHIR SearchParameter and it uses the           <a href="http://hl7.org/fhir/StructureDefinition/capabilitystatement-expectation">Conformance expectation extension</a>
+ to define additional expectations for the following SearchParameter elements:
+        </p>
+
+        <ul>
+
+          <li>
+            <code>multipleAnd</code>
+          </li>
+
+          <li>
+            <code>multipleOr</code>
+          </li>
+
+          <li>
+            <code>comparator</code>
+          </li>
+
+          <li>
+            <code>modifier</code>
+          </li>
+
+          <li>
+            <code>chain</code>
+          </li>
+
+
+        </ul>
+
+        <p>
+It           <strong>SHALL NOT</strong>
+ be used as a search parameter for search. Servers and Clients           <strong>SHOULD</strong>
+ use the standard FHIR SearchParameter.
+        </p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Resource.id</code>
+    </td>
+  </tr>
+  <tr>
+    <td>accession</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The accession number associated with the specimen</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.accessionIdentifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>bodysite</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The code for the body site from where the specimen originated</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.collection.bodySite</code>
+    </td>
+  </tr>
+  <tr>
+    <td>collected</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>The date the specimen was collected</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.collection.collected</code>
+    </td>
+  </tr>
+  <tr>
+    <td>collector</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Who collected the specimen</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.collection.collector</code>
+    </td>
+  </tr>
+  <tr>
+    <td>container</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The kind of specimen container</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.container.type</code>
+    </td>
+  </tr>
+  <tr>
+    <td>container-id</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The unique identifier associated with the specimen container</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.container.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The unique identifier associated with the specimen</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>parent</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The parent of the specimen</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.parent</code>
+    </td>
+  </tr>
+  <tr>
+    <td>patient</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The patient the specimen comes from</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.subject.where(resolve() is Patient)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>available | unavailable | unsatisfactory | entered-in-error</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>subject</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The subject of the specimen</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.subject</code>
+    </td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The specimen type</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Specimen.type</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

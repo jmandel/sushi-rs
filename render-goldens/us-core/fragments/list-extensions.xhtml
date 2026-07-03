@@ -1,0 +1,44 @@
+{% raw %} <li><a href="StructureDefinition-us-core-authentication-time.html">US Core Authentication Time Extension</a> <p>This extension indicates when the information in the document was verified.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-birthsex.html">US Core Birth Sex Extension</a> <p>A code classifying the person's sex assigned at birth. This extension aligns with LOINC 76689-9 (Sex assigned at birth).</p>
+</li>
+ <li><a href="StructureDefinition-us-core-direct.html">US Core Direct email Extension</a> <p>This email address is associated with a <a href="https://directtrust.org/what-we-do/direct-secure-messaging">&quot;Direct Secure Messaging&quot;</a> service.  This extension can only be used on contact points where the system = 'email'</p>
+</li>
+ <li><a href="StructureDefinition-us-core-ethnicity.html">US Core Ethnicity Extension</a> <p>Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The ethnicity codes used to represent these concepts are based upon the <a href="https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238">Race &amp; Ethnicity - CDC (CDCREC)</a> code system. Detailed ethnicity concepts are grouped by and pre-mapped to the 2 OMB ethnicity categories:</p>
+<ul>
+<li>Hispanic or Latino</li>
+<li>Not Hispanic or Latino.</li>
+</ul>
+</li>
+ <li><a href="StructureDefinition-us-core-extension-questionnaire-uri.html">US Core Extension Questionnaire URI</a> <p>The location where a non-FHIR questionnaire/survey form can be found. This extension is used when the survey, form, or questionnaire which is being answered is not a FHIR <a href="https://www.hl7.org/fhir/questionnaire.html">Questionnaire</a>, otherwise the <a href="https://www.hl7.org/fhir/references.html#canonical">canonical url</a> for the FHIR Questionnaire is used.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-familymemberhistory-recorder.html">US Core FamilyMemberHistory Recorder Extension</a> <p>Individual who recorded the family member's health history and takes responsibility for its content. Because the recorder takes responsibility for accurately recording information in the record, the recorder is the most recent author. The recorder might or might not be the asserter.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-genderIdentity.html">US Core Gender Identity Extension</a> <p>This extension represents an individual's sense of being a man, woman, boy, girl, nonbinary, or something else, ascertained by asking them what that identity is.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-individual-sex.html">US Core Individual Sex Extension</a> <p>USCDI includes a data element for Sex, intended to support the exchange of a recorded sex value. This extension aligns with the USCDI definition of Sex: &quot;Documentation of a specific instance of sex.&quot; It enables systems to share the sex value as it was documented in a particular context.  Systems choosing to record sources of information should use the <a href="element-level-provenance.html">Provenance resource</a>.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-interpreter-needed.html">US Core Interpreter Needed Extension</a> <p>This extension indicates the individual's need for an interpreter to communicate healthcare information in a language other than the default language of the organization. It has the same meaning as the LOINC <a href="https://loinc.org/54588-9">54588-9</a> (Interpreter needed)</p>
+</li>
+ <li><a href="StructureDefinition-us-core-jurisdiction.html">US Core Jurisdiction Extension</a> <p>An extension to communicate the US state or local jurisdiction for individual and entity identifiers. For example, a practitioner's state or local jurisdiction for a license.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-medication-adherence.html">US Core Medication Adherence Extension</a> <p>The Medication Adherence Extension is used to report whether a medication has been consumed according to instructions as reported by a patient or on behalf of the patient.</p>
+</li>
+ <li><a href="StructureDefinition-us-core-race.html">US Core Race Extension</a> <p>Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The race codes used to represent these concepts are based upon the <a href="https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238">Race &amp; Ethnicity - CDC (CDCREC)</a> code system. Detailed race concepts are grouped by and pre-mapped to the 5 OMB race categories:</p>
+<ul>
+<li>American Indian or Alaska Native</li>
+<li>Asian</li>
+<li>Black or African American</li>
+<li>Native Hawaiian or Other Pacific Islander</li>
+<li>White.</li>
+</ul>
+</li>
+ <li><a href="StructureDefinition-us-core-sex.html">US Core Sex Extension</a> <p>The Sex Extension is used to reflect the documentation of a person's sex. Systems choosing to record sources of information should use the <a href="element-level-provenance.html">Provenance resource</a>.</p>
+<p>USCDI includes a data element for sex, intended to support the exchange of a sex value that is not characterized as sex assigned at birth or birth sex. This Sex extension supports USCDI. Sex assigned at birth or birth sex can be recorded using the more specific <a href="StructureDefinition-us-core-birthsex.html">US Core Birth Sex Extension</a>.
+Future versions of this extension may be informed by the content of the HL7 Cross Paradigm IG: Gender Harmony - Sex and Gender Representation, which may include additional guidance on its relationship to administrative gender (<a href="StructureDefinition-us-core-patient-definitions.html#Patient.gender">Patient.gender</a>).</p>
+</li>
+ <li><a href="StructureDefinition-us-core-tribal-affiliation.html">US Core Tribal Affiliation Extension</a> <p>This Extension profile represents a tribe or band with which a person associates and, optionally, whether they are enrolled.</p>
+</li>
+ <li><a href="StructureDefinition-uscdi-requirement.html">US Core USCDI Requirement Extension</a> <p><strong>This extension is only used in the US Core Implementation Guide's Profile StructureDefinition elements.</strong>  It flags elements that are <em>Additional</em> USCDI Requirements for certified systems. In other words, elements that are not marked as Must Support but are required for Office of the National Coordinator for Health Information Technology (ONC) Health IT certification testing. See the <a href="general-requirements.html">Conformance page</a> for more information.</p>
+</li>
+{% endraw %}

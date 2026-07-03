@@ -1,0 +1,538 @@
+{% raw %}<div data-fhir="generated">
+
+<p>These requirements apply to the actor: <i><strong>US Core Certifying System</strong></i></p>
+
+<p><strong>Legend:</strong></p>
+<ul>
+<li><strong>Key:</strong>  An identifier for the requirement.</li>
+<li><strong>Context:</strong> The name and link to the narrative section that pertains to the requirement. There can be more than one narrative section that references the same requirement.</li>
+<li><strong>Conformance:</strong> The conformance verb of the requirement: <strong>SHALL</strong>, <strong>SHOULD</strong>, <strong>MAY</strong>, <strong>SHALL-NOT</strong>, or <strong>SHOULD-NOT</strong>.</li>
+<li><strong>Requirement:</strong> The actual requirements statement, which is a direct quote from the IG and may include helpful context in square brackets. Note that statements in the narrative section that contain multiple requirements in a single context are split into individual requirement statements.</li>
+</ul>
+
+<table class="grid">
+  <thead>
+    <tr>
+    <th>Key</th>
+    <th>Context</th>
+    <th>Conformance</th>
+    <th>Requirement</th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr id="CONF-0011">
+    <td>CONF-0011</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="general-requirements.html#CONF-0011">general-requirements.html#profile-support--interaction-support</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Certifying Systems **SHALL** implement all components in the USCDI [[USCDI link](https://www.healthit.gov/isp/united-states-core-data-interoperability-uscdi)]</td>
+    </tr>
+    
+    <tr id="CONF-0012">
+    <td>CONF-0012</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="general-requirements.html#CONF-0012">general-requirements.html#profile-support--interaction-support</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Certifying Systems **SHALL** implement all components in the ... the US Core CapabilityStatement [[Definition](https://hl7.org/fhir/us/core/CapabilityStatement-us-core-Server.html)] .</td>
+    </tr>
+    
+    <tr id="CONF-0124">
+    <td>CONF-0124</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="scopes.html#CONF-0124">scopes.html#smart-scopes</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Certifying systems **SHALL** support all US Core’s required scopes.</td>
+    </tr>
+    
+    <tr id="CONF-0392">
+    <td>CONF-0392</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-immunization.html#CONF-0392">StructureDefinition-us-core-immunization.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHOULD</td>
+    <td>[NDC vaccine codes](http://www2a.cdc.gov/vaccines/iis/iisstandards/ndc_crosswalk.asp) **SHOULD** be supported as an additional code [of [CVX Vaccine Codes](https://www2a.cdc.gov/vaccines/iis/iisstandards/ndc_crosswalk.asp)]</td>
+    </tr>
+    
+    <tr id="CONF-0411">
+    <td>CONF-0411</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-medicationrequest.html#CONF-0411">StructureDefinition-us-core-medicationrequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Although both MedicationRequest.reasonCode and MedicationRequest.reasonReference are marked as Additional USCDI Requirements [which are required for organizations participating in the ONC Health IT Certification program]. The certifying Server system is not required to support both, but **SHALL** support at least one of these elements</td>
+    </tr>
+    
+    <tr id="CONF-0414">
+    <td>CONF-0414</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-medicationrequest.html#CONF-0414">StructureDefinition-us-core-medicationrequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program and supporting MedicationRequest.reasonReference,] Servers **SHALL** support at least one target resource in MedicationRequest.reasonReference</td>
+    </tr>
+    
+    <tr id="CONF-0444">
+    <td>CONF-0444</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-simple-observation.html#CONF-0444">StructureDefinition-us-core-simple-observation.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Although none of the Observation.derivedFrom [references are flagged as Must Support](https://hl7.org/fhir/us/core/STU8/must-support.html#must-support---resource-references), the Certifying System *SHALL** support at least one of them</td>
+    </tr>
+    
+    <tr id="CONF-0465">
+    <td>CONF-0465</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-patient.html#CONF-0465">StructureDefinition-us-core-patient.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Although Patient.deceased[x] is marked as additional USCDI, certifying systems are not required to support both [boolean and dateTime data types], but **SHALL** support [at] least Patient.deceasedDateTime</td>
+    </tr>
+    
+    <tr id="CONF-0469">
+    <td>CONF-0469</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-patient.html#CONF-0469">StructureDefinition-us-core-patient.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[Certifying systems](https://www.healthit.gov/topic/certification-ehrs/about-onc-health-it-certification-program) [, those that are participating in the ONC Health IT certification program,] **SHALL**... follow the [Project US@ Technical Specification for Patient Addresses Final Version 1.0](https://asapnet.org/wp-content/uploads/2022/03/Project_US_FINAL_Technical_Specification_Version_1.0.pdf) as the standard style guide for Patient.address.line and Patient.address.city for new and updated records.</td>
+    </tr>
+    
+    <tr id="CONF-0482">
+    <td>CONF-0482</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-procedure.html#CONF-0482">StructureDefinition-us-core-procedure.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program] Servers … **SHALL** support ... US Core Procedure Profile for communicating the reason or justification for a referral as Additional USCDI Requirements</td>
+    </tr>
+    
+    <tr id="CONF-0484">
+    <td>CONF-0484</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-procedure.html#CONF-0484">StructureDefinition-us-core-procedure.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program,] although both Procedure.reasonCode and Procedure.reasonReference are marked as Additional USCDI Requirements, the certifying Server system is not required to support both, but **SHALL** support at least one of these elements.</td>
+    </tr>
+    
+    <tr id="CONF-0516">
+    <td>CONF-0516</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-servicerequest.html#CONF-0516">StructureDefinition-us-core-servicerequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program] Servers … **SHALL** support ... US Core Service Request Profile for communicating the reason or justification for a referral as Additional USCDI Requirements</td>
+    </tr>
+    
+    <tr id="CONF-0518">
+    <td>CONF-0518</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-servicerequest.html#CONF-0518">StructureDefinition-us-core-servicerequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program,] although both ServiceRequest.reasonCode and ServiceRequest.reasonReference are marked as Additional USCDI Requirements, the certifying Server system is not required to support both, but **SHALL** support at least one of these elements.</td>
+    </tr>
+    
+    <tr id="CONF-0520">
+    <td>CONF-0520</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-servicerequest.html#CONF-0520">StructureDefinition-us-core-servicerequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For organizations participating in the ONC Health IT Certification program,] when using ServiceRequest.reasonReference Servers **SHALL** support at least one target resource in ServiceRequest.reasonReference</td>
+    </tr>
+    
+    <tr id="CONF-0522">
+    <td>CONF-0522</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-servicerequest.html#CONF-0522">StructureDefinition-us-core-servicerequest.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHOULD</td>
+    <td>[For organizations participating in the ONC Health IT Certification program,] when using ServiceRequest.reasonReference …The referenced resources **SHOULD** be a US Core Profile as documented in [Referencing US Core Profiles](https://hl7.org/fhir/us/core/STU8/general-guidance.html#referencing-us-core-profiles)</td>
+    </tr>
+    
+    <tr id="CONF-0801">
+    <td>CONF-0801</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0801">must-support.html#defined-pattern-elements</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>If an element is marked as *Additional USCDI* and defined by a pattern [as described by [ElementDefinition.pattern](http://hl7.org/fhir/R4/elementdefinition-definitions.html#ElementDefinition.pattern_x_)], then the pattern defines the elements *and* element values that the Certifying System **SHALL** be capable of providing.</td>
+    </tr>
+    
+    <tr id="CONF-0802">
+    <td>CONF-0802</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0802">must-support.html#must-support---primitive-elements</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>
+
+
+Primitive elements are single elements with a primitive value…. If they are marked as *Additional USCDI*, then the Certifying System **SHALL** be capable of providing the element value to meet the *Additional USCDI* requirement.</td>
+    </tr>
+    
+    <tr id="CONF-0803">
+    <td>CONF-0803</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0803">must-support.html#must-support---complex-elements</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>For any complex element marked as *Additional USCDI*, the Certifying System **SHALL** be capable of providing at least one of the sub-element values. </td>
+    </tr>
+    
+    <tr id="CONF-0805">
+    <td>CONF-0805</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0805">must-support.html#must-support---complex-elements</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[I]f any sub-element is marked as *Additional USCDI* [for a complex element] and the parent element is not… [and] the parent element is present in an instance, Certifying System **SHALL** support the sub-elements labeled as *Additional USCDI*.</td>
+    </tr>
+    
+    <tr id="CONF-0809">
+    <td>CONF-0809</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0809">must-support.html#must-support-targets-for-us-core-profiles</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>When a Reference type element is labeled as Additional USCDI and has a single target profile referenced, the target profile **SHALL** be supported for Certifying Systems.</td>
+    </tr>
+    
+    <tr id="CONF-0811">
+    <td>CONF-0811</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0811">must-support.html#must-support-targets-for-us-core-profiles</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>When a Reference type element labeled as Additional USCDI, has multiple target profiles referenced, and specific targets are labeled as Must Support, the Must Support target profile(s) **SHALL** be supported by Certifying Systems.</td>
+    </tr>
+    
+    <tr id="CONF-0812">
+    <td>CONF-0812</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0812">must-support.html#must-support---slices</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[I]f a slice is labeled as ... Must Support/Additional USCDI and the slicer element is not labeled as ... Additional USCDI, then if the ... certifying system supports the element, it must support the slice's definition. There are no examples of this structure in US Core.</td>
+    </tr>
+    
+    <tr id="CONF-0814">
+    <td>CONF-0814</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0814">must-support.html#must-support---slices</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[I]f a slice is labeled as … Must Support and the slicer element is ... labeled as … Must Support/Additional USCDI, then … certifying system [**SHALL** support] the element[ and] the slice's definition.</td>
+    </tr>
+    
+    <tr id="CONF-0834">
+    <td>CONF-0834</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-condition-problems-health-concerns.html#CONF-0834">StructureDefinition-us-core-condition-problems-health-concerns.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHOULD</td>
+    <td>Certifying Systems ... **SHOULD** support the ... [US Core Simple Observation Category](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-simple-observation-category.html) codes</td>
+    </tr>
+    
+    <tr id="CONF-0846">
+    <td>CONF-0846</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-observation-screening-assessment.html#CONF-0846">StructureDefinition-us-core-observation-screening-assessment.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For the US Core Observation Screening Assessment Profile,] Certifying Systems **SHALL** support, the [US Core Screening Assessment Observation Category](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-screening-assessment-observation-category.html) codes</td>
+    </tr>
+    
+    <tr id="CONF-0847">
+    <td>CONF-0847</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-observation-screening-assessment.html#CONF-0847">StructureDefinition-us-core-observation-screening-assessment.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHOULD</td>
+    <td>[For the US Core Observation Screening Assessment Profile,] Certifying Systems **SHOULD** support, the [US Core Screening Assessment Observation Maximum Category](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-screening-assessment-observation-maximum-category.html) codes</td>
+    </tr>
+    
+    <tr id="CONF-0848">
+    <td>CONF-0848</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-observation-screening-assessment.html#CONF-0848">StructureDefinition-us-core-observation-screening-assessment.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">MAY</td>
+    <td>[For the US Core Observation Screening Assessment Profile,] Certifying Systems **MAY**  support other codes.</td>
+    </tr>
+    
+    <tr id="CONF-0852">
+    <td>CONF-0852</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-patient.html#CONF-0852">StructureDefinition-us-core-patient.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Although the [[US Core Interpreter Needed Extension](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-interpreter-needed.html)] is marked as an Additional USCDI Requirement on both US Core Patient and US Core Encounter Profiles, the certifying Server system is not required to support the extension on both profiles but **SHALL** support the extension on at least one.</td>
+    </tr>
+    
+    <tr id="CONF-0861">
+    <td>CONF-0861</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-simple-observation.html#CONF-0861">StructureDefinition-us-core-simple-observation.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHOULD</td>
+    <td>[For [US Core Simple Observation Profile](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-simple-observation.html), ]Certifying Systems ... **SHOULD** support the other [US Core Simple Observation Category codes](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-simple-observation-category.html) [in addition to  the [US Core Screening Assessment Observation Category codes](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-screening-assessment-observation-category.html)]</td>
+    </tr>
+    
+    <tr id="CONF-0862">
+    <td>CONF-0862</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-simple-observation.html#CONF-0862">StructureDefinition-us-core-simple-observation.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[For [US Core Simple Observation Profile](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-simple-observation.html), ]Certifying Systems **SHALL** support, the [US Core Screening Assessment Observation Category codes](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-screening-assessment-observation-category.html)</td>
+    </tr>
+    
+    <tr id="CONF-0863">
+    <td>CONF-0863</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-simple-observation.html#CONF-0863">StructureDefinition-us-core-simple-observation.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">MAY</td>
+    <td>[For [US Core Simple Observation Profile](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-simple-observation.html), ]Certifying Systems ... **MAY**  support other categories [in addition to  [US Core Screening Assessment Observation Category codes](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-screening-assessment-observation-category.html) and  [US Core Simple Observation Category codes](https://hl7.org/fhir/us/core/STU8/ValueSet-us-core-simple-observation-category.html)].</td>
+    </tr>
+    
+    <tr id="CONF-0872">
+    <td>CONF-0872</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0872">must-support.html#must-support---slices</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>[I]f a slice is labeled as Additional USCDI... and the slicer element is ... labeled as Must Support/Additional USCDI..., then ... the Certifying System... [**SHALL** support] the element[ and] the slice's definition.</td>
+    </tr>
+    
+    <tr id="CONF-0883">
+    <td>CONF-0883</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0883">must-support.html#must-support---resource-references</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>When a Reference element is labeled as *Additional USCDI* has multiple target profiles referenced, but none are labeled as *Must Support*, *at least one* target profile **SHALL** be supported by Certifying Systems.</td>
+    </tr>
+    
+    <tr id="CONF-0884">
+    <td>CONF-0884</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="must-support.html#CONF-0884">must-support.html#must-support---choice-of-data-types</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>If an *Additional USCDI* element has a choice of datatypes for its content, the datatypes the Certifying System **SHALL** support are labeled as *Must Support*.</td>
+    </tr>
+    
+    <tr id="CONF-0902">
+    <td>CONF-0902</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-location.html#CONF-0902">StructureDefinition-us-core-location.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">MAY</td>
+    <td>Healthcare Service Location Codes (HSLOC) and SNOMED-CT Healthcare Facility Type value sets meet the USCDI applicable vocabulary standard for the Encounter Location Data Element. Certifying Systems **MAY**  use a code from either vocabulary.</td>
+    </tr>
+    
+    <tr id="CONF-0910">
+    <td>CONF-0910</td>
+    <td>
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-patient.html#CONF-0910">StructureDefinition-us-core-patient.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+            
+          
+            <span style="color: grey;">•</span><a href="StructureDefinition-us-core-encounter.html#CONF-0910">StructureDefinition-us-core-encounter.html#profile-specific-implementation-guidance</a><br/>
+          
+        
+    </td>
+    <td style="text-align: center;">SHALL</td>
+    <td>Servers **SHALL** use the [US Core Interpreter Needed Extension](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-interpreter-needed.html) on [the [US Core Patient Profile](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-patient.html)] or the [US Core Encounter Profile](https://hl7.org/fhir/us/core/STU8/StructureDefinition-us-core-encounter.html) to communicate whether a patient needs an interpreter.</td>
+    </tr>
+    
+  </tbody>
+</table>
+</div>{% endraw %}

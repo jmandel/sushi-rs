@@ -1,0 +1,30 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-15</td>
+    <td>error</td>
+    <td>Coverage</td>
+    <td>Member Id in Coverage.identifier or Coverage.subscriberId SHALL be present</td>
+    <td>
+      <code>identifier.type.coding.where(system='http://terminology.hl7.org/CodeSystem/v2-0203' and code='MB').exists() or subscriberId.exists()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

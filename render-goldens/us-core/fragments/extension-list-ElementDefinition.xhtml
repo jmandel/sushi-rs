@@ -1,0 +1,65 @@
+{% raw %}<table class="list" data-fhir="generated">
+  <tr>
+    <td>Identity</td>
+    <td>Card.</td>
+    <td>Type</td>
+    <td>Context</td>
+    <td>WG</td>
+    <td>Status</td>
+  </tr>
+  <tr>
+    <td>
+      <input size="15" id="filter-identity" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-card" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="8" id="filter-type" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="20" id="filter-context" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-wg" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="6" id="filter-status" type="text" class="filter-input"/>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="5">
+      <b>Extensions defined for the ElementDefinition data type</b>
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-uscdi-requirement.html" title="**This extension is only used in the US Core Implementation Guide's Profile StructureDefinition elements.**  It flags elements that are *Additional* USCDI Requirements for certified systems. In other words, elements that are not marked as Must Support but are required for Office of the National Coordinator for Health Information Technology (ONC) Health IT certification testing. See the [Conformance page](general-requirements.html) for more information.">uscdi-requirement</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#boolean">boolean</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ElementDefinition">ElementDefinition</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr>
+    <td colspan="6">
+      <br/>
+(See also Extensions defined on       <a href="extensions-types.html#BackboneElement">BackboneElement</a>
+)
+    </td>
+  </tr>
+</table>
+<p>4 Extensions</p>
+<script src="assets/js/table.js"> </script>
+<button onclick="clearAllFilters()" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Clear All Filters</button>
+{% endraw %}

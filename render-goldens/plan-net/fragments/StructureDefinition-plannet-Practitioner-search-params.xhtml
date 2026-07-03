@@ -15,7 +15,7 @@
   </tr>
   <tr>
     <td>
-      <a href="http://hl7.org/fhir/us/core/STU7/SearchParameter-us-core-practitioner-id.html">_id</a>
+      <a href="http://hl7.org/fhir/us/core/STU6.1/SearchParameter-us-core-practitioner-id.html">_id</a>
     </td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
@@ -50,7 +50,7 @@
       </div>
     </td>
     <td>
-      <code>Resource.id</code>
+      <code>Practitioner.id</code>
     </td>
   </tr>
   <tr>
@@ -378,21 +378,34 @@
     </td>
   </tr>
   <tr>
-    <td>
-      <a href="SearchParameter-practitioner-family-name.html">family</a>
-    </td>
+    <td>family</td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
     </td>
     <td>
       <div>
-        <p>Select Practitioners with the specified family name</p>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="patient.html">Patient</a>
+: A portion of the family name of the patient
+          </li>
+
+          <li>
+            <a href="practitioner.html">Practitioner</a>
+: A portion of the family name
+          </li>
+
+
+        </ul>
 
 
       </div>
     </td>
     <td>
-      <code>Practitioner.name.family</code>
+      <code>Patient.name.family | Practitioner.name.family</code>
     </td>
   </tr>
   <tr>
@@ -455,21 +468,34 @@
     </td>
   </tr>
   <tr>
-    <td>
-      <a href="SearchParameter-practitioner-given-name.html">given</a>
-    </td>
+    <td>given</td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
     </td>
     <td>
       <div>
-        <p>Select Practitioners with the specified given name</p>
+        <p>Multiple Resources:</p>
+
+        <ul>
+
+          <li>
+            <a href="patient.html">Patient</a>
+: A portion of the given name of the patient
+          </li>
+
+          <li>
+            <a href="practitioner.html">Practitioner</a>
+: A portion of the given name
+          </li>
+
+
+        </ul>
 
 
       </div>
     </td>
     <td>
-      <code>Practitioner.name.given</code>
+      <code>Patient.name.given | Practitioner.name.given</code>
     </td>
   </tr>
   <tr>
@@ -514,14 +540,36 @@
   </tr>
   <tr>
     <td>
-      <a href="SearchParameter-practitioner-name.html">name</a>
+      <a href="http://hl7.org/fhir/us/core/STU6.1/SearchParameter-us-core-practitioner-name.html">name</a>
     </td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
     </td>
     <td>
       <div>
-        <p>Select Practitioners with the specified name (matches against any of the elements in the HumanName data type)</p>
+        <p>
+          <strong>A server defined search that may match any of the string fields in the HumanName, including family, give, prefix, suffix, suffix, and/or text</strong>
+          <br/>
+
+          <strong>NOTE</strong>
+: This US Core SearchParameter definition extends the usage context of the
+          <a href="http://hl7.org/fhir/R4/extension-capabilitystatement-expectation.html">Conformance expectation extension</a>
+        </p>
+
+        <ul>
+
+          <li>multipleAnd</li>
+
+          <li>multipleOr</li>
+
+          <li>comparator</li>
+
+          <li>modifier</li>
+
+          <li>chain</li>
+
+
+        </ul>
 
 
       </div>

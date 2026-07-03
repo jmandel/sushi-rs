@@ -1,0 +1,619 @@
+{% raw %}<table class="list" data-fhir="generated">
+  <tr>
+    <td>Identity</td>
+    <td>Card.</td>
+    <td>Type</td>
+    <td>Context</td>
+    <td>WG</td>
+    <td>Status</td>
+  </tr>
+  <tr>
+    <td>
+      <input size="15" id="filter-identity" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-card" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="8" id="filter-type" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="20" id="filter-context" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-wg" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="6" id="filter-status" type="text" class="filter-input"/>
+    </td>
+  </tr>
+  <tr style="background-color: #ffeeee" class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-authentication-time.html" title="This extension indicates when the information in the document was verified.">us-core-authentication-time</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#dateTime">dateTime</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/documentreference.html">DocumentReference</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Deprecated" class="deprecated-flag">Deprecated</a>
+: FMM2
+    </td>
+  </tr>
+  <tr style="background-color: #fffff6" class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-birthsex.html" title="A code classifying the person's sex assigned at birth. This extension aligns with LOINC 76689-9 (Sex assigned at birth).">us-core-birthsex</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Informative" class="informative-flag">Informative</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-direct.html" title="This email address is associated with a [&quot;Direct Secure Messaging&quot;](https://directtrust.org/what-we-do/direct-secure-messaging) service.  This extension can only be used on contact points where the system = 'email'">us-core-direct</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#boolean">boolean</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint">ContactPoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM3
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-ethnicity.html" title="Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The ethnicity codes used to represent these concepts are based upon the [Race &amp; Ethnicity - CDC (CDCREC)](https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238) code system. Detailed ethnicity concepts are grouped by and pre-mapped to the 2 OMB ethnicity categories:
+
+   - Hispanic or Latino
+   - Not Hispanic or Latino.">us-core-ethnicity</a>
+    </td>
+    <td>0..1</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-extension-questionnaire-uri.html" title="The location where a non-FHIR questionnaire/survey form can be found. This extension is used when the survey, form, or questionnaire which is being answered is not a FHIR [Questionnaire](https://www.hl7.org/fhir/questionnaire.html), otherwise the [canonical url](https://www.hl7.org/fhir/references.html#canonical) for the FHIR Questionnaire is used.">us-core-extension-questionnaire-uri</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#uri">uri</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/questionnaireresponse.html">QuestionnaireResponse.questionnaire</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM3
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-familymemberhistory-recorder.html" title="Individual who recorded the family member's health history and takes responsibility for its content. Because the recorder takes responsibility for accurately recording information in the record, the recorder is the most recent author. The recorder might or might not be the asserter.">us-core-familymemberhistory-recorder</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM2
+    </td>
+  </tr>
+  <tr style="background-color: #ffeeee" class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-genderIdentity.html" title="This extension represents an individual's sense of being a man, woman, boy, girl, nonbinary, or something else, ascertained by asking them what that identity is.">us-core-genderIdentity</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Deprecated" class="deprecated-flag">Deprecated</a>
+: FMM3
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-individual-sex.html" title="USCDI includes a data element for Sex, intended to support the exchange of a recorded sex value. This extension aligns with the USCDI definition of Sex: &quot;Documentation of a specific instance of sex.&quot; It enables systems to share the sex value as it was documented in a particular context.  Systems choosing to record sources of information should use the [Provenance resource](element-level-provenance.html).">us-core-individual-sex</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#Coding">Coding</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-interpreter-needed.html" title="This extension indicates the individual's need for an interpreter to communicate healthcare information in a language other than the default language of the organization. It has the same meaning as the LOINC [54588-9](https://loinc.org/54588-9) (Interpreter needed)">us-core-interpreter-needed</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#Coding">Coding</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/encounter.html">Encounter</a>
+,       <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM2
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-jurisdiction.html" title="An extension to communicate the US state or local jurisdiction for individual and entity identifiers. For example, a practitioner's state or local jurisdiction for a license.">us-core-jurisdiction</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/patient.html">Patient.contact.organization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/patient.html">Patient.generalPractitioner.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient.managingOrganization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/patient.html">Patient.link.other.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner.qualification.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner.qualification.issuer.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.practitioner.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.organization.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.location.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.healthcareService.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole.endpoint.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson.patient.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person.managingOrganization.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/person.html">Person.link.target.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/group.html">Group.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/group.html">Group.managingEntity.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/group.html">Group.characteristic.value[x]</a>
+,       <a href="http://hl7.org/fhir/R4/group.html">Group.member.entity.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/organization.html">Organization.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/organization.html">Organization.partOf.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/organization.html">Organization.endpoint.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.organization.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.participatingOrganization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.network.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.location.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.healthcareService.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation.endpoint.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService.providedBy.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService.location.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService.coverageArea.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService.endpoint.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/endpoint.html">Endpoint.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/endpoint.html">Endpoint.managingOrganization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/location.html">Location.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/location.html">Location.managingOrganization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/location.html">Location.partOf.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/location.html">Location.endpoint.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/substance.html">Substance.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/substance.html">Substance.instance.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/substance.html">Substance.ingredient.substance[x]</a>
+,       <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.request.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.parent.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.collection.collector.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.collection.source.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/biologicallyderivedproduct.html">BiologicallyDerivedProduct.processing.additive.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/device.html">Device.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/device.html">Device.definition.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/device.html">Device.version.component</a>
+,       <a href="http://hl7.org/fhir/R4/device.html">Device.patient.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/device.html">Device.owner.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/device.html">Device.location.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/device.html">Device.parent.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.accessionIdentifier</a>
+,       <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.subject.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.parent.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.request.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.collection.collector.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.processing.additive.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.container.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/specimen.html">Specimen.container.additive[x]</a>
+,       <a href="http://hl7.org/fhir/R4/bodystructure.html">BodyStructure.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/bodystructure.html">BodyStructure.patient.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.policyHolder.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.subscriber.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.beneficiary.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.payor.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/coverage.html">Coverage.contract.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.patient.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.enterer.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.insurer.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.provider.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.related.claim.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.related.reference</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.prescription.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.originalPrescription.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.payee.party.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.referral.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.facility.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.careTeam.provider.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.supportingInfo.value[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.diagnosis.diagnosis[x]</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.procedure.procedure[x]</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.procedure.udi.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.insurance.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.insurance.coverage.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.insurance.claimResponse.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.accident.location[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.item.location[x]</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.item.udi.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.item.encounter.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/claim.html">Claim.item.detail.udi.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/claim.html">Claim.item.detail.subDetail.udi.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.subject.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.recipient.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.participant.actor.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.issuer.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.account.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/invoice.html">Invoice.lineItem.chargeItem[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.instantiatesCanonical.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.subject.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.authority.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.domain.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.site.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.author.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.topic[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.contentDefinition.publisher.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.topic[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.offer.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.offer.party.reference.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.offer.topic.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.offer.answer.value[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.typeReference.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.context.reference.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.valuedItem.entity[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.valuedItem.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.valuedItem.responsible.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.asset.valuedItem.recipient.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.action.subject.reference.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.action.context.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.action.requester.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.action.performer.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.term.action.reasonReference.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.supportingInfo.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.relevantHistory.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.signer.party.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.friendly.content[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/contract.html">Contract.legal.content[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.rule.content[x]</a>
+,       <a href="http://hl7.org/fhir/R4/contract.html">Contract.legallyBinding[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.patient.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.enterer.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.insurer.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.provider.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.related.claim.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.related.reference</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.prescription.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.originalPrescription.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.payee.party.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.referral.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.facility.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.claim.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.claimResponse.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.careTeam.provider.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.supportingInfo.value[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.diagnosis.diagnosis[x]</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.procedure.procedure[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.procedure.udi.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.insurance.coverage.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.accident.location[x]</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.item.location[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.item.udi.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.item.encounter.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.item.detail.udi.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.item.detail.subDetail.udi.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.addItem.provider.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.addItem.location[x]</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/explanationofbenefit.html">ExplanationOfBenefit.payment.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.ownedBy.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.administeredBy.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.coverageArea.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.endpoint.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.network.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.coverage.network.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.plan.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.plan.coverageArea.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/insuranceplan.html">InsurancePlan.plan.network.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/devicemetric.html">DeviceMetric.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/devicemetric.html">DeviceMetric.source.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/devicemetric.html">DeviceMetric.parent.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/consent.html">Consent.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/consent.html">Consent.patient.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/consent.html">Consent.performer.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/consent.html">Consent.organization.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/consent.html">Consent.source[x]</a>
+,       <a href="http://hl7.org/fhir/R4/consent.html">Consent.verification.verifiedWith.identifier</a>
+,      <br/>
+      <a href="http://hl7.org/fhir/R4/consent.html">Consent.provision.actor.reference.identifier</a>
+,       <a href="http://hl7.org/fhir/R4/consent.html">Consent.provision.data.reference.identifier</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM2
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-medication-adherence.html" title="The Medication Adherence Extension is used to report whether a medication has been consumed according to instructions as reported by a patient or on behalf of the patient.">us-core-medication-adherence</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/medicationrequest.html">MedicationRequest</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM2
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-race.html" title="Concepts classifying the person into a named category of humans sharing common history, traits, geographical origin or nationality.  The race codes used to represent these concepts are based upon the [Race &amp; Ethnicity - CDC (CDCREC)](https://phinvads.cdc.gov/vads/ViewCodeSystem.action?id=2.16.840.1.113883.6.238) code system. Detailed race concepts are grouped by and pre-mapped to the 5 OMB race categories:
+
+ - American Indian or Alaska Native
+ - Asian
+ - Black or African American
+ - Native Hawaiian or Other Pacific Islander
+ - White.">us-core-race</a>
+    </td>
+    <td>0..1</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+  <tr style="background-color: #ffeeee" class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-sex.html" title="The Sex Extension is used to reflect the documentation of a person's sex. Systems choosing to record sources of information should use the [Provenance resource](element-level-provenance.html).
+ 
+USCDI includes a data element for sex, intended to support the exchange of a sex value that is not characterized as sex assigned at birth or birth sex. This Sex extension supports USCDI. Sex assigned at birth or birth sex can be recorded using the more specific [US Core Birth Sex Extension](StructureDefinition-us-core-birthsex.html).
+Future versions of this extension may be informed by the content of the HL7 Cross Paradigm IG: Gender Harmony - Sex and Gender Representation, which may include additional guidance on its relationship to administrative gender ([Patient.gender](StructureDefinition-us-core-patient-definitions.html#Patient.gender)).">us-core-sex</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#code">code</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Deprecated" class="deprecated-flag">Deprecated</a>
+: FMM2
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-us-core-tribal-affiliation.html" title="This Extension profile represents a tribe or band with which a person associates and, optionally, whether they are enrolled.">us-core-tribal-affiliation</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/patient.html">Patient</a>
+,       <a href="http://hl7.org/fhir/R4/relatedperson.html">RelatedPerson</a>
+,       <a href="http://hl7.org/fhir/R4/person.html">Person</a>
+,       <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+,       <a href="http://hl7.org/fhir/R4/familymemberhistory.html">FamilyMemberHistory</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM3
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-uscdi-requirement.html" title="**This extension is only used in the US Core Implementation Guide's Profile StructureDefinition elements.**  It flags elements that are *Additional* USCDI Requirements for certified systems. In other words, elements that are not marked as Must Support but are required for Office of the National Coordinator for Health Information Technology (ONC) Health IT certification testing. See the [Conformance page](general-requirements.html) for more information.">uscdi-requirement</a>
+    </td>
+    <td>0..1</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#boolean">boolean</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ElementDefinition">ElementDefinition</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/cgp">cgp</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+: FMM5
+    </td>
+  </tr>
+</table>
+<p>16 Extensions</p>
+<script src="assets/js/table.js"> </script>
+<button onclick="clearAllFilters()" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Clear All Filters</button>
+{% endraw %}

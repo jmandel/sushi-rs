@@ -31,36 +31,14 @@
   </tr>
   <tr>
     <td>
-      <a href="http://hl7.org/fhir/us/core/STU6.1/SearchParameter-us-core-organization-address.html">address</a>
+      <a href="SearchParameter-organization-address.html">address</a>
     </td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
     </td>
     <td>
       <div>
-        <p>
-          <strong>A server defined search that may match any of the string fields in the Address, including line, city, district, state, country, postalCode, and/or text</strong>
-          <br/>
-
-          <strong>NOTE</strong>
-: This US Core SearchParameter definition extends the usage context of the
-          <a href="http://hl7.org/fhir/R4/extension-capabilitystatement-expectation.html">Conformance expectation extension</a>
-        </p>
-
-        <ul>
-
-          <li>multipleAnd</li>
-
-          <li>multipleOr</li>
-
-          <li>comparator</li>
-
-          <li>modifier</li>
-
-          <li>chain</li>
-
-
-        </ul>
+        <p>Select organizations with the specified address (matches any of the string elements of an address)</p>
 
 
       </div>
@@ -201,29 +179,33 @@
   </tr>
   <tr>
     <td>
-      <a href="http://hl7.org/fhir/us/core/STU3.1.1/SearchParameter-us-core-organization-name.html">name</a>
+      <a href="http://hl7.org/fhir/us/core/STU6.1/SearchParameter-us-core-organization-name.html">name</a>
     </td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
     </td>
     <td>
       <div>
-        <p>A portion of the organization's name or alias&lt;br /&gt;
-&lt;em&gt;NOTE&lt;/em&gt;: This US Core SearchParameter definition extends the usage context of
-&lt;a href="http://hl7.org/fhir/R4/extension-capabilitystatement-expectation.html"&gt;capabilitystatement-expectation&lt;/a&gt;
-extension to formally express implementer conformance expectations for these elements:&lt;br /&gt;</p>
+        <p>
+          <strong>A portion of the organization's name or alias</strong>
+          <br/>
+
+          <strong>NOTE</strong>
+: This US Core SearchParameter definition extends the usage context of the
+          <a href="http://hl7.org/fhir/R4/extension-capabilitystatement-expectation.html">Conformance expectation extension</a>
+        </p>
 
         <ul>
 
-          <li>multipleAnd&lt;br /&gt;</li>
+          <li>multipleAnd</li>
 
-          <li>multipleOr&lt;br /&gt;</li>
+          <li>multipleOr</li>
 
-          <li>comparator&lt;br /&gt;</li>
+          <li>comparator</li>
 
-          <li>modifier&lt;br /&gt;</li>
+          <li>modifier</li>
 
-          <li>chain&lt;br /&gt;</li>
+          <li>chain</li>
 
 
         </ul>
@@ -232,19 +214,17 @@ extension to formally express implementer conformance expectations for these ele
       </div>
     </td>
     <td>
-      <code>Organization.name</code>
+      <code>Organization.name|Organization.alias</code>
     </td>
   </tr>
   <tr>
-    <td>
-      <a href="SearchParameter-organization-partof.html">partof</a>
-    </td>
+    <td>partof</td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
     </td>
     <td>
       <div>
-        <p>Select Organizations that are part of the specified organization</p>
+        <p>An organization of which this organization forms a part</p>
 
 
       </div>
@@ -288,15 +268,13 @@ extension to formally express implementer conformance expectations for these ele
     </td>
   </tr>
   <tr>
-    <td>
-      <a href="SearchParameter-organization-type.html">type</a>
-    </td>
+    <td>type</td>
     <td>
       <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
     </td>
     <td>
       <div>
-        <p>Select Organizations of the specified type</p>
+        <p>A code for the type of organization</p>
 
 
       </div>

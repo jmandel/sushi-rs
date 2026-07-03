@@ -1,0 +1,30 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-5</td>
+    <td>best practice</td>
+    <td>Immunization</td>
+    <td>SHOULD have an additional coding to the NDC value set</td>
+    <td>
+      <code>vaccineCode.coding.where(system='http://hl7.org/fhir/sid/cvx').exists() implies vaccineCode.coding.where(system='http://hl7.org/fhir/sid/ndc').exists()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

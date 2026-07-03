@@ -1,0 +1,172 @@
+{% raw %}<h4>Terminology Bindings</h4>
+<table class="list" data-fhir="generated-heirarchy">
+  <tr>
+    <td>
+      <b>Path</b>
+    </td>
+    <td>
+      <b>Status</b>
+    </td>
+    <td>
+      <b>Usage</b>
+    </td>
+    <td>
+      <b>ValueSet</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    <td>
+      <b>Source</b>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.language</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td title="A human language.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-languages.html">Common Languages</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/languages|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.status</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Indicates whether the location is still in use.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-location-status.html">LocationStatus</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/location-status|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.operationalStatus</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[preferred]">preferred</a>
+    </td>
+    <td title="The operational status if the location (where typically a bed/room).">
+      <a style="opacity: 1.0" href="http://terminology.hl7.org/7.2.0/ValueSet-v2-0116.html">hl7VS-bedStatus</a>
+      <button data-clipboard-text="http://terminology.hl7.org/ValueSet/v2-0116" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 3.0.0, the version found through the package references">&#x1F4E6;3.0.0</td>
+    <td>
+      <a href="http://terminology.hl7.org/7.2.0">THO v7.2</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.mode</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="Indicates whether a resource instance represents a specific location or a class of locations.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-location-mode.html">LocationMode</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/location-mode|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.type</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td>
+      <a style="opacity: 1.0" href="ValueSet-us-core-location-type.html">US Core Location Type Codes</a>
+      <button data-clipboard-text="http://hl7.org/fhir/us/core/ValueSet/us-core-location-type" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to the version provided in this specification">&#x1F4E6;9.0.0</td>
+    <td>This IG</td>
+  </tr>
+  <tr>
+    <td>Location.address.use</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="The use of an address.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-address-use.html">AddressUse</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/address-use|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.address.type</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="The type of an address (physical / postal).">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-address-type.html">AddressType</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/address-type|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.address.state</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[extensible]">extensible</a>
+    </td>
+    <td title="Two letter USPS alphabetic codes.">
+      <a style="opacity: 1.0" href="http://terminology.hl7.org/7.2.0/ValueSet-USPS-State.html">USPS Two Letter Alphabetic Codes</a>
+      <button data-clipboard-text="http://terminology.hl7.org/ValueSet/USPS-State" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is not explicitly stated, which means it is fixed to 2.0.0, the version found through the package references">&#x1F4E6;2.0.0</td>
+    <td>
+      <a href="http://terminology.hl7.org/7.2.0">THO v7.2</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.physicalType</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[example]">example</a>
+    </td>
+    <td title="Physical form of the location.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-location-physical-type.html">Location type</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/location-physical-type|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+  <tr>
+    <td>Location.hoursOfOperation.​daysOfWeek</td>
+    <td>Base</td>
+    <td>
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/terminologies.html#Enumeration[required]">required</a>
+    </td>
+    <td title="The days of the week.">
+      <a style="opacity: 1.0" href="http://hl7.org/fhir/R4/valueset-days-of-week.html">DaysOfWeek</a>
+      <button data-clipboard-text="http://hl7.org/fhir/ValueSet/days-of-week|4.0.1" title="Click to copy URL" class="btn-copy"></button>
+    </td>
+    <td title="Version is explicitly stated to be 4.0.1">&#x1F4CD;4.0.1</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/">FHIR Std.</a>
+    </td>
+  </tr>
+</table>
+{% endraw %}

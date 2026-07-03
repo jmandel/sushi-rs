@@ -1,0 +1,39 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-24</td>
+    <td>error</td>
+    <td>Observation</td>
+    <td>Observation.code 72166-2|Tobacco smoking status or 11367-0|History of Tobacco use SHALL use valueCodeableConcept</td>
+    <td>
+      <code>code.coding.where(code in '72166-2'|'11367-0').exists() implies value.is(CodeableConcept)</code>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-25</td>
+    <td>warning</td>
+    <td>Observation</td>
+    <td>For Observation.code 401201003|Cigarette pack-years or 782516008|Number of calculated smoking pack years SHOULD use valueQuantity</td>
+    <td>
+      <code>code.coding.where(code in '401201003'|'782516008').exists() implies value.is(Quantity)</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

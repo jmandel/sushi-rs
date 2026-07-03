@@ -1,0 +1,30 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>us-core-23</td>
+    <td>error</td>
+    <td>Extension</td>
+    <td>If "ASKU" or "UNK" are present, then no other OMB race categories can be present.</td>
+    <td>
+      <code>extension.where(url = 'ombCategory').value.where(code in 'ASKU'|'UNK').exists() implies extension.where(url = 'ombCategory').count() = 1</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}
