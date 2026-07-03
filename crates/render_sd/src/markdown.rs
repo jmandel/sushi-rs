@@ -1,180 +1,210 @@
-//! `Cell.addMarkdown(md)` (HTG:333) — the commonmark -> pieces path.
+//! `Cell.addMarkdown(md)` (HTG:336-353) and friends — the commonmark -> Pieces
+//! path, ported faithfully.
 //!
-//! Full path: commonmark `Parser` -> `HtmlRenderer.escapeHtml(true)` -> HTML,
-//! then `htmlToParagraphPieces` (HTG:389) re-parses that HTML with XhtmlParser
-//! and turns each top-level node into Pieces, inserting `Piece("br");Piece("br")`
-//! between paragraphs.
+//! Path (HierarchicalTableGenerator.java):
+//!   1. `Parser.builder().build()` + `HtmlRenderer.escapeHtml(true)` render the
+//!      markdown to an HTML string (HTG:343-346). commonmark-java, plain profile
+//!      (NO TablesExtension, NO preProcess). Reproduced by `crate::commonmark`.
+//!   2. `htmlToParagraphPieces(html, style)` (HTG:392-425) re-parses that HTML
+//!      with the XhtmlParser (`<html>`+html+`</html>`) and walks the top-level
+//!      children into Pieces, inserting `Piece("br"); Piece("br")` before every
+//!      child after the first; `<p>` children contribute their inline children
+//!      via `addNode`, text children (if non-whitespace) via `addNode`, and any
+//!      other element (ul/ol/pre/h*/...) becomes a `Piece(tagName)` carrying that
+//!      element's child XhtmlNodes.
+//!   3. `addNode(list, node, style)` (HTG:439-472) maps each inline node to a
+//!      Piece (a->link, b/em/strong->bold, code->code style, i->italic, etc.).
 //!
-//! For the SD description cells the definitions/comments the golden corpus shows
-//! are overwhelmingly plain prose (a single paragraph, no markdown syntax). For
-//! that case the result is exactly ONE text Piece whose text is the definition
-//! verbatim (the commonmark HTML-escape is undone when the HTML is re-parsed by
-//! XhtmlParser, and the final XhtmlComposer re-escapes). We implement that case
-//! faithfully and route anything containing markdown/HTML syntax through a
-//! commonmark-subset renderer (F3 leaf work) — flagged so a non-plain definition
-//! is caught as an explicit gap rather than silently wrong.
+//! The downstream `render_piece` (render_tables) + XhtmlComposer reproduce the
+//! final bytes, including the `\r\n` that `breakBlocksWithLines` inserts before a
+//! block-level Piece (`<ul>`/`<li>`) whose previous sibling is not text.
 
 use render_tables::model::{Cell, Piece};
+use render_xhtml::{NodeType, XhtmlNode, XhtmlParser};
 
-/// True if `md` is a single paragraph whose only inline constructs are ones
-/// `inline_pieces` handles ([links], `code`). Anything else routes to the
-/// verbatim fallback (visible divergence rather than silent wrongness).
-fn is_plain_prose(md: &str) -> bool {
-    if md.contains("\n\n") || md.contains("\r\n\r\n") {
-        return false;
-    }
-    // Tokenize first: specials INSIDE link urls/text or code spans are fine;
-    // only text runs containing unhandled markdown constructs reject.
-    const SPECIAL: &[char] = &['*', '_', '#', '<', '>', '|', '\\', '~'];
-    for run in text_runs(md) {
-        if run.chars().any(|c| SPECIAL.contains(&c)) {
-            return false;
-        }
-    }
-    let t = md.trim_start();
-    if t.starts_with("- ") || t.starts_with("+ ") {
-        return false;
-    }
-    true
-}
+use crate::commonmark;
 
-/// The plain-text runs of `md` after removing [text](url) links and `code`
-/// spans (mirrors inline_pieces' tokenization).
-fn text_runs(md: &str) -> Vec<String> {
-    let chars: Vec<char> = md.chars().collect();
-    let mut runs = Vec::new();
-    let mut buf = String::new();
-    let mut i = 0usize;
-    while i < chars.len() {
-        let ch = chars[i];
-        if ch == '[' {
-            if let Some(close) = find_from(&chars, i + 1, ']') {
-                if close + 1 < chars.len() && chars[close + 1] == '(' {
-                    if let Some(end) = find_from(&chars, close + 2, ')') {
-                        runs.push(std::mem::take(&mut buf));
-                        i = end + 1;
-                        continue;
-                    }
-                }
-            }
-            buf.push(ch);
-            i += 1;
-        } else if ch == '`' {
-            if let Some(end) = find_from(&chars, i + 1, '`') {
-                runs.push(std::mem::take(&mut buf));
-                i = end + 1;
-                continue;
-            }
-            buf.push(ch);
-            i += 1;
-        } else {
-            buf.push(ch);
-            i += 1;
-        }
-    }
-    runs.push(buf);
-    runs
-}
+const CODE_STYLE: &str =
+    "padding: 2px 4px; color: #005c00; background-color: #f9f2f4; white-space: nowrap; border-radius: 4px";
 
-/// Convert one paragraph's inline markdown to pieces: text runs, `[t](url)`
-/// links (HTG addNode "a" branch: Piece(href, text, title=null)) and `code`
-/// spans (HTG addNode "code" branch with its literal style string).
-fn inline_pieces(cell: &mut Cell, md: &str) {
-    let mut buf = String::new();
-    let chars: Vec<char> = md.chars().collect();
-    let mut i = 0usize;
-    let flush = |buf: &mut String, cell: &mut Cell| {
-        if !buf.is_empty() {
-            cell.pieces.push(Piece::ref_text(None, Some(std::mem::take(buf)), None));
-        }
-    };
-    while i < chars.len() {
-        let ch = chars[i];
-        if ch == '[' {
-            // find ](
-            if let Some(close) = find_from(&chars, i + 1, ']') {
-                if close + 1 < chars.len() && chars[close + 1] == '(' {
-                    if let Some(end) = find_from(&chars, close + 2, ')') {
-                        let text: String = chars[i + 1..close].iter().collect();
-                        let url: String = chars[close + 2..end].iter().collect();
-                        flush(&mut buf, cell);
-                        cell.pieces.push(Piece::ref_text(Some(url), Some(text), None));
-                        i = end + 1;
-                        continue;
-                    }
-                }
-            }
-            buf.push(ch);
-            i += 1;
-        } else if ch == '`' {
-            if let Some(end) = find_from(&chars, i + 1, '`') {
-                let text: String = chars[i + 1..end].iter().collect();
-                flush(&mut buf, cell);
-                let mut p = Piece::ref_text(None, Some(text), None);
-                p.set_style("padding: 2px 4px; color: #005c00; background-color: #f9f2f4; white-space: nowrap; border-radius: 4px");
-                cell.pieces.push(p);
-                i = end + 1;
-                continue;
-            }
-            buf.push(ch);
-            i += 1;
-        } else {
-            buf.push(ch);
-            i += 1;
-        }
-    }
-    let mut buf2 = buf;
-    if !buf2.is_empty() {
-        cell.pieces.push(Piece::ref_text(None, Some(std::mem::take(&mut buf2)), None));
-    }
-}
-
-fn find_from(chars: &[char], start: usize, target: char) -> Option<usize> {
-    chars[start..].iter().position(|&c| c == target).map(|p| p + start)
-}
-
-/// `addMarkdownNoPara(role, md, style)` (HTG:369): markdown -> pieces, trailing
-/// `br` pieces trimmed, `role` (class) set on every piece. Used for binding
-/// descriptions in the SUMMARY description cell (SDR:2009).
-pub fn add_markdown_no_para_role(cell: &mut Cell, md: &str, role: &str) {
-    let start = cell.pieces.len();
-    add_markdown(cell, md);
-    // trim trailing br pieces
-    while cell.pieces.len() > start {
-        let last = cell.pieces.last().unwrap();
-        if last.get_tag() == Some("br") {
-            cell.pieces.pop();
-        } else {
-            break;
-        }
-    }
-    for p in &mut cell.pieces[start..] {
-        p.set_class(role);
-    }
-}
-
-/// `addMarkdown(md)` -> append pieces to the cell.
+/// `addMarkdown(md)` (HTG:336) -> append pieces to the cell.
 pub fn add_markdown(cell: &mut Cell, md: &str) {
     if md.is_empty() {
         return;
     }
-    if is_plain_prose(md) {
-        // Single paragraph -> inline pieces, THEN two `Piece("br")`. The
-        // commonmark HtmlRenderer emits "<p>text</p>\n"; when
-        // htmlToParagraphPieces re-parses "<html><p>text</p>\n</html>", the <p>
-        // yields the inline pieces, and the trailing "\n" text child (now the
-        // non-first sibling) triggers the `Piece("br"); Piece("br")` insert
-        // before it, while the whitespace-only text itself is skipped
-        // (HTG:398-403). Net: [pieces..., br, br].
-        let text = md.trim_matches(|c| c == '\n' || c == '\r').to_string();
-        inline_pieces(cell, &text);
-        cell.pieces.push(Piece::tag("br"));
-        cell.pieces.push(Piece::tag("br"));
-    } else {
-        // Rich markdown (lists, emphasis, code, links, multi-paragraph). This is
-        // F3 leaf work; for now emit the raw text so the divergence is visible
-        // and classifiable rather than a panic. Marked as a known gap.
-        cell.pieces
-            .push(Piece::ref_text(None, Some(md.to_string()), None));
+    let html = commonmark::render_html(md);
+    let pieces = html_to_paragraph_pieces(&html);
+    cell.pieces.extend(pieces);
+}
+
+/// `addMarkdownNoPara(role, md, style)` (HTG:372): markdown -> pieces, trailing
+/// `br` pieces trimmed, `role` (class) set on every piece. Used for binding
+/// descriptions in the SUMMARY description cell (SDR:2000).
+pub fn add_markdown_no_para_role(cell: &mut Cell, md: &str, role: &str) {
+    let html = commonmark::render_html(md);
+    let mut pieces = html_to_paragraph_pieces(&html);
+    // Trim unwanted trailing line-breaks (HTG:380-381).
+    while pieces
+        .last()
+        .map(|p| p.get_tag() == Some("br"))
+        .unwrap_or(false)
+    {
+        pieces.pop();
     }
+    for p in &mut pieces {
+        p.set_class(role);
+    }
+    cell.pieces.extend(pieces);
+}
+
+/// Port of `htmlToParagraphPieces(html, style=null)` (HTG:392-425).
+fn html_to_paragraph_pieces(html: &str) -> Vec<Piece> {
+    let mut pieces = Vec::new();
+    let wrapped = format!("<html>{html}</html>");
+    let mut parser = XhtmlParser::new();
+    let node = match parser.parse_fragment(&wrapped) {
+        Ok(n) => n,
+        Err(_) => {
+            // Faithful to Java's try/catch-then-throw is a hard error; but for
+            // robustness we degrade to a single text piece (loud, visible).
+            pieces.push(Piece::ref_text(None, Some(html.to_string()), None));
+            return pieces;
+        }
+    };
+    let mut first = true;
+    for c in node.child_nodes() {
+        if first {
+            first = false;
+        } else {
+            pieces.push(Piece::tag("br"));
+            pieces.push(Piece::tag("br"));
+        }
+        match c.node_type() {
+            NodeType::Text => {
+                if !is_whitespace(c.content().unwrap_or("")) {
+                    add_node(&mut pieces, c);
+                }
+            }
+            NodeType::Element if c.name() == Some("p") => {
+                for g in c.child_nodes() {
+                    add_node(&mut pieces, g);
+                }
+            }
+            NodeType::Element => {
+                // HTG else-branch: Piece(name) carrying the element's children.
+                let mut x = Piece::tag(c.name().unwrap_or(""));
+                for g in c.child_nodes() {
+                    x.add_html(g.clone());
+                }
+                pieces.push(x);
+            }
+            _ => {}
+        }
+    }
+    pieces
+}
+
+/// Port of `addNode(list, c, style=null)` (HTG:439-472).
+fn add_node(list: &mut Vec<Piece>, c: &XhtmlNode) {
+    match c.node_type() {
+        NodeType::Text => {
+            list.push(Piece::ref_text(None, Some(c.content().unwrap_or("").to_string()), None));
+        }
+        NodeType::Element => {
+            let name = c.name().unwrap_or("");
+            match name {
+                "a" => {
+                    let href = attr(c, "href");
+                    let title = attr(c, "title");
+                    list.push(Piece::ref_text(href, Some(all_text(c)), title));
+                }
+                "b" | "em" | "strong" => {
+                    let mut p = Piece::ref_text(None, Some(all_text(c)), None);
+                    p.set_style("font-face: bold");
+                    list.push(p);
+                }
+                "code" => {
+                    let mut p = Piece::ref_text(None, Some(all_text(c)), None);
+                    p.set_style(CODE_STYLE);
+                    list.push(p);
+                }
+                "i" => {
+                    let mut p = Piece::ref_text(None, Some(all_text(c)), None);
+                    p.set_style("font-style: italic");
+                    list.push(p);
+                }
+                "pre" => {
+                    let mut p = Piece::tag("pre");
+                    p.set_style("white-space: pre; font-family: courier");
+                    for g in c.child_nodes() {
+                        p.add_html(g.clone());
+                    }
+                    list.push(p);
+                }
+                "ul" | "ol" => {
+                    let mut p = Piece::tag(name);
+                    for g in c.child_nodes() {
+                        p.add_html(g.clone());
+                    }
+                    list.push(p);
+                }
+                "h1" | "h2" | "h3" | "h4" => {
+                    let mut p = Piece::tag(name);
+                    for g in c.child_nodes() {
+                        p.add_html(g.clone());
+                    }
+                    list.push(p);
+                }
+                "br" => {
+                    list.push(Piece::tag("br"));
+                }
+                other => {
+                    // HTG throws `new Error("Not handled yet: "+name)`. We keep a
+                    // loud, visible marker instead of panicking the render.
+                    list.push(Piece::ref_text(
+                        None,
+                        Some(format!("[unhandled markdown element: {other}]")),
+                        None,
+                    ));
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `XhtmlNode.getAttribute(name)` -> Option (Java returns null when absent, which
+/// `new Piece(href, text, title)` stores as null).
+fn attr(node: &XhtmlNode, name: &str) -> Option<String> {
+    node.attributes().get(name).and_then(|v| v.clone())
+}
+
+/// Port of `XhtmlNode.allText()` (XhtmlNode.java:381): recursive concatenation of
+/// descendant text, `* ` prefix before each `li` child, `img` skipped.
+fn all_text(node: &XhtmlNode) -> String {
+    if !node.has_children() {
+        return node.content().unwrap_or("").to_string();
+    }
+    let mut b = String::new();
+    for n in node.child_nodes() {
+        if n.node_type() == NodeType::Element && n.name() == Some("li") {
+            b.push_str("* ");
+        }
+        if n.node_type() == NodeType::Text {
+            if let Some(c) = n.content() {
+                b.push_str(c);
+            }
+        }
+        if n.node_type() == NodeType::Element {
+            if n.name() != Some("img") {
+                b.push_str(&all_text(n));
+            }
+        }
+    }
+    b
+}
+
+/// Java `StringUtils.isWhitespace`: true for empty or all-whitespace strings.
+fn is_whitespace(s: &str) -> bool {
+    s.chars().all(|c| c.is_whitespace())
 }

@@ -151,9 +151,14 @@ impl<'a> GridCtx<'a> {
         } else {
             row.cells.push(Cell::new());
         }
-        // Description cell (SDR:2634).
+        // Description cell (SDR:2644). `used.used` starts true (SDR:2624) and
+        // genCardinality resets it to `!max.equals("0")` (SDR:1453-1454); the
+        // grid list is the snapshot so max is always present -> used ==
+        // !max_is_zero. generateGridDescription wraps its whole body in
+        // `if (used)` (SDR:3104), so a prohibited (max=0) element renders an
+        // EMPTY description cell.
         row.cells
-            .push(self.generate_grid_description(element, root));
+            .push(self.generate_grid_description(element, root, !max_is_zero));
 
         rows.push(row);
         let idx = rows.len() - 1;
@@ -388,12 +393,21 @@ impl<'a> GridCtx<'a> {
         }
     }
 
-    /// `generateGridDescription` (SDR:3100), used=true always in grid.
-    fn generate_grid_description(&mut self, definition: Ed<'a>, root: bool) -> Cell {
+    /// `generateGridDescription` (SDR:3100). The whole body is gated on
+    /// `used` (SDR:3104) — a prohibited (max=0) element gets an empty cell.
+    fn generate_grid_description(&mut self, definition: Ed<'a>, root: bool, used: bool) -> Cell {
         let _ = root;
         let mut c = Cell::new();
+        if !used {
+            return c;
+        }
 
-        // content reference (SDR:3105-3116)
+        // content reference (SDR:3105-3116). QUIRK (dead i18n arg): the
+        // rendering phrase `STRUC_DEF_SEE = See` has NO {0} placeholder
+        // (rendering-phrases.properties), so the args passed at SDR:3111
+        // (element path) and SDR:3113 (source typeName) are silently DROPPED
+        // by formatPhrase. Same-source: text "See"; other-source: text
+        // "See" + "." + path (e.g. "See.QuestionnaireResponse.item").
         if let Some(cr) = definition.content_reference() {
             let (url, frag) = match cr.split_once('#') {
                 Some((u, f)) => (u, f),
@@ -402,14 +416,13 @@ impl<'a> GridCtx<'a> {
             if url.is_empty() || url == self.sd_url() {
                 c.pieces.push(Piece::ref_text(
                     Some(format!("#{}", frag)),
-                    Some(format!("See {}", frag)),
+                    Some("See".to_string()),
                     None,
                 ));
             } else if let Some(src) = self.ctx.resolve(url) {
-                let type_name = src.name.clone().unwrap_or_else(|| tail(url).to_string());
                 c.pieces.push(Piece::ref_text(
                     Some(format!("{}#{}", src.web_path, frag)),
-                    Some(format!("See {}.{}", type_name, frag)),
+                    Some(format!("See.{}", frag)),
                     None,
                 ));
             }

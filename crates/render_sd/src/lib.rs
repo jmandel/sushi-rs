@@ -11,6 +11,7 @@
 //! Depends on `render_tables` (C2) for the table model + render engine and
 //! `render_xhtml` (C3) for the byte-exact composer.
 
+pub mod commonmark;
 pub mod context;
 pub mod grid;
 pub mod markdown;
