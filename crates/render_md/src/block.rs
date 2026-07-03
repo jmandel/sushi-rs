@@ -1145,6 +1145,13 @@ impl Parser {
                     let content_indent = this_indent + ml;
                     cur_content_indent = content_indent;
                     let mut item_lines: Vec<String> = Vec::new();
+                    // kramdown splits an item's content into SEGMENTS: the
+                    // first fully-indented line that is itself a list start
+                    // opens a new segment (list.rb:89-91 `item.value << ''`),
+                    // and each segment is block-parsed separately, yielding
+                    // ADJACENT sibling lists inside one <li>.
+                    let mut segment_break_at: Option<usize> = None;
+                    let mut nested_list_found = false;
                     // first line content after marker
                     item_lines.push(l[content_indent.min(l.len())..].to_string());
                     self.i += 1;
@@ -1167,6 +1174,7 @@ impl Parser {
                                 // by blank lines BETWEEN sibling items. It does
                                 // give the item multiple blocks.
                                 item_lines.push(String::new());
+                                nested_list_found = true;
                                 self.i = k;
                                 continue;
                             } else {
@@ -1175,7 +1183,12 @@ impl Parser {
                         }
                         let ci = leading_spaces(&cl);
                         if ci >= content_indent {
-                            item_lines.push(cl[content_indent.min(cl.len())..].to_string());
+                            let stripped = cl[content_indent.min(cl.len())..].to_string();
+                            if !nested_list_found && list_marker(&stripped).is_some() {
+                                segment_break_at = Some(item_lines.len());
+                                nested_list_found = true;
+                            }
+                            item_lines.push(stripped);
                             self.i += 1;
                         } else if list_marker(&cl)
                             .map(|(o2, _, _)| o2 == ordered)
@@ -1215,6 +1228,11 @@ impl Parser {
                             break;
                         }
                     }
+                    // Split into segments at the recorded break (see above).
+                    let second_segment: Option<String> = segment_break_at.map(|at| {
+                        let seg2 = item_lines.split_off(at);
+                        seg2.join("\n")
+                    });
                     let mut item_src = item_lines.join("\n");
                     // LIST_ITEM_IAL (list.rb:19-20): an IAL at the very start of
                     // the item content applies to the <li> itself.
@@ -1244,7 +1262,12 @@ impl Parser {
                         task = Some(true);
                         item_src = rest.to_string();
                     }
-                    let blocks = parse_block_nodes_with(&item_src, self.parse_block_html);
+                    let mut blocks = parse_block_nodes_with(&item_src, self.parse_block_html);
+                    if let Some(seg2) = second_segment {
+                        // Each segment is parsed independently; the segments'
+                        // blocks sit ADJACENT (no blank separator) in the item.
+                        blocks.extend(parse_block_nodes_with(&seg2, self.parse_block_html));
+                    }
                     // The item is "followed by blank" if the line that ended it
                     // is a blank line (kramdown then appends a trailing :blank to
                     // the item, forcing a loose <p> rendering).
