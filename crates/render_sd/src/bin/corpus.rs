@@ -262,6 +262,40 @@ fn main() {
     let ig = &args[2];
     let verbose = args.iter().any(|a| a == "--verbose");
 
+    // Resource-level CONSTANT kinds (contained-index, history) are produced for
+    // EVERY resource type (SD/VS/CS/instances), always empty in this corpus.
+    // Check them across ALL golden files of the kind, not just SDs.
+    if kind == "contained-index-all" || kind == "history-all" {
+        let real_kind = kind.trim_end_matches("-all");
+        let dir = format!("{}/render-goldens/{}/fragments", REPO, ig);
+        let expect = wrap_raw(&render_sd::leaf::empty_body());
+        let mut p = 0;
+        let mut t = 0;
+        let mut bad: Vec<String> = Vec::new();
+        let suffix = format!("-{}.xhtml", real_kind);
+        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|n| n.ends_with(&suffix) && !n.ends_with(&format!("-en{}", suffix)))
+            .collect();
+        names.sort();
+        for n in names {
+            let g = std::fs::read_to_string(format!("{}/{}", dir, n)).unwrap();
+            t += 1;
+            if g == expect {
+                p += 1;
+            } else {
+                bad.push(n);
+            }
+        }
+        println!("{} {}: {}/{} byte-identical", kind, ig, p, t);
+        for b in bad.iter().take(10) {
+            println!("    non-empty: {}", b);
+        }
+        return;
+    }
+
     let sd_dir = ig_sd_dir(ig);
     let ctx = build_ctx(ig);
     let run_uuid = harvest_uuid(ig);

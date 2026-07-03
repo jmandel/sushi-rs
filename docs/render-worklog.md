@@ -479,6 +479,49 @@ maps-<CoreType> (one per FHIR core type, IG-invariant).
 | sd-use-context | 7/7 | 22/22 | 67/67 (3 gap) | useContext:2877; 3 us-core gaps = deprecated markdown |
 | summary | 7/7 | 9/9 | 51/55 (15 gap) | summary:154; gaps=Extension-type SDs (markdown); 4 fails=nested-split |
 | summary-all | 7/7 | 9/9 | 51/55 (15 gap) | same as summary, anchor `a-` |
+| contained-index (ALL types) | 17/17 | 166/166 | 443/443 | ✅ empty across SD/VS/CS/instances (626 files/IG) |
+| history (ALL types) | 17/17 | 166/166 | 443/443 | ✅ empty across ALL resource types |
+
+**contained-index + history are byte-identical (empty) for EVERY resource type**
+(SD/VS/CS/ImplementationGuide/Bundle/all instances) corpus-wide — one
+`empty_body()` covers the SD/VS/CS/instance targets for these two kinds at once.
+Harness gained a `contained-index-all`/`history-all` mode that scans every
+`*-{kind}.xhtml` golden (not just SDs).
+
+### F4 sizing verdicts (required findings)
+
+- **Expansion source (VS `expansion`, CS `content`, VS `cld`):** the golden VS
+  expansions say "Expansion from tx.fhir.org based on Loinc v2.82" — sourced
+  from the build's `input-cache/txcache/` (external VS defs `vs-*.json` +
+  cached tx-server `$expand` results, `cs-*.json`/`*.cache`), NOT live tx and
+  NOT local enumeration. 75 vs-*.json in us-core's cache. Rendering these needs
+  reading the cached expansion + the concepts-table renderer (+ code-display
+  terminology). MEDIUM-XL; deferred (terminology category).
+- **Instance `html` (narrative): XL on its own — a full DataRenderer port.**
+  The fragment is the publisher-GENERATED narrative (`text.status:generated`),
+  NOT the authored div: a fresh property-by-property render of each example
+  resource (Profile banner + status/category/code/subject/… with CodeableConcept
+  title tooltips, Reference resolution+links, Quantity/dateTime formatting). This
+  is fhir-core's DataRenderer + ResourceRenderer + every datatype renderer
+  (thousands of LOC) PLUS terminology display lookups + reference resolution —
+  comparable in size to the entire F3 table effort. us-core has 695 instance
+  html fragments (139 distinct Observations + others). **Recommend its own
+  phase, not folded into F4.** history + contained-index for instances ARE done
+  (empty, above).
+
+### F4 remaining (per-kind status)
+- **DONE green:** contained-index, history (all types), pseudo-ttl, pseudo-xml,
+  inv/-key/-diff, sd-use-context (−3 md), summary/-all (−15 md, −4 nested-split).
+- **Blocked on publisher-markdown engine** (preProcessMarkdown + MarkDownProcessor;
+  real corpus hits): summary Extension-type SDs, sd-use-context deprecated, tx
+  binding descriptions, dict, sd-xref present().
+- **Self-contained XL (portable, no md/no whole-IG):** pseudo-json
+  (JsonXhtmlRenderer, ~400 LOC recursive JSON-shape walk). Next-best target.
+- **Whole-IG cross-resource scans:** sd-xref/references, uses, maps, CS/VS xref,
+  + most IG aggregates (dependency-table, list-*, table-*, codesystem/valueset-
+  *-list, summary-observations). Need the full FetchedFile resource set.
+- **Terminology:** VS cld/expansion, CS content (tx-cache source, above).
+- **dict family (240KB):** fhir-core sdr.renderDict + markdown — XL + md-blocked.
 
 summary findings (session 5, checkpoint 3):
 - Non-extension profiles are markdown-FREE (describeProfile/summariseExtension
