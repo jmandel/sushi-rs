@@ -52,6 +52,29 @@ parity**, re-rendering only what the edit dirtied.
    (prebuilt-ESM convention vs esbuild-wasm transpile vs sandbox) — build-time
    integration (Vite alias, the cycle model) is the supported path until a
    concrete second custom generator forces the choice.
+
+   **Adapter API v1 (decided 2026-07-03).** Registry + interface are uniformly
+   TypeScript; there is NO separate Rust adapter API — Rust renderers join via
+   a thin generated shim over wasm exports:
+   ```ts
+   interface SiteGeneratorAdapter {
+     id: string; label: string;
+     init(ctx: { rows: SiteDbRows; fragments: FragmentApi;
+                 assets: AssetStore; template?: TemplateBundle }): Promise<void>;
+     listPages(): PageInfo[];
+     renderPage(slug: string): Promise<{ html: string }>;
+     invalidate?(dirty: NodeKey[]): void;   // ledger hook
+   }
+   interface FragmentApi { fragment(ref, kind, opts?): Promise<string>; }
+   registerSiteGenerator(adapter): void;    // build-time registry in v1
+   ```
+   Because the Rust renderer interprets templates as data, ONE wasm renderer
+   yields MANY registry entries (hl7.fhir.template, fhir.base.template, any
+   user Jekyll-style template package) — a new stock-style template is a
+   TemplateBundle + a registry line, zero code. FragmentApi is engine-backed
+   for every adapter: custom TS chrome embedding publisher-grade fragments is
+   the supported mix-and-match. F6 implements: named interface, cycle
+   refactored onto it, the wasm shim, and the selector reading the registry.
 5. **Perf model for "almost immediately"**: cold page = liquid render + the
    handful of fragments that page includes, generated on miss (ms-scale each
    in Rust); edits invalidate by content hash (Ledger 1) and re-render only
