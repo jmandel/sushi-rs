@@ -69,6 +69,24 @@ fn is_kramdown_ext_line(l: &str) -> bool {
     l.trim_start().starts_with("{::")
 }
 
+/// kramdown LAZY_END_HTML_START/STOP (parser/kramdown/paragraph.rb:21-22):
+/// a lazy continuation (of a paragraph, list item, or indented code block)
+/// stops at a line beginning with an HTML tag whose name is NOT a span
+/// element (e.g. `<figure>`, `</div>`), within OPT_SPACE.
+fn is_lazy_end_html(l: &str) -> bool {
+    if leading_spaces(l) > 3 {
+        return false;
+    }
+    let t = l.trim_start();
+    if !t.starts_with('<') {
+        return false;
+    }
+    match html_tag_name(t) {
+        Some(name) => !is_span_element(&name),
+        None => false,
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // `Blank` is a defensive variant; filtered but not built.
 pub enum Block {
@@ -636,12 +654,14 @@ impl Parser {
                 self.i += 1;
             }
             // 0+ lazy non-blank continuation lines (any indent), stopping at
-            // block IALs / extensions (kramdown's negative lookahead).
+            // block IALs / extensions / block-HTML tag lines (kramdown's
+            // CODEBLOCK_MATCH negative lookaheads, codeblock.rb:20).
             while self.i < self.lines.len() {
                 let l = self.lines[self.i].clone();
                 if l.trim().is_empty()
                     || parse_block_ial_line(&l).is_some()
                     || is_kramdown_ext_line(&l)
+                    || is_lazy_end_html(&l)
                 {
                     break;
                 }
@@ -1160,14 +1180,18 @@ impl Parser {
                             .last()
                             .map(|l| !l.trim().is_empty())
                             .unwrap_or(false)
+                            && !is_lazy_end_html(&cl)
                         {
                             // Lazy paragraph continuation: an under-indented,
                             // non-marker line directly following item text stays
-                            // part of the item's paragraph. kramdown strips the
-                            // LIST-level indent, preserving indentation relative
-                            // to the list start (verified: a 1-space-indented
-                            // lazy line in a col-0 list keeps its single space).
-                            item_lines.push(cl[base_indent.min(ci)..].to_string());
+                            // part of the item's paragraph. kramdown's lazy_re
+                            // does NOT strip its indentation (indent_re only
+                            // strips a FULL content-indent prefix), so the line
+                            // is kept verbatim (verified against oracle). Lazy
+                            // continuation stops at block-HTML tag lines
+                            // (LAZY_END_HTML_START/STOP).
+                            let _ = ci;
+                            item_lines.push(cl.to_string());
                             self.i += 1;
                         } else {
                             break;
