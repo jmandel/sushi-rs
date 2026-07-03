@@ -1139,10 +1139,16 @@ impl Parser {
                         if ci >= content_indent {
                             item_lines.push(cl[content_indent.min(cl.len())..].to_string());
                             self.i += 1;
-                        } else if list_marker(&cl).is_some() {
-                            // A marker before the content column is a SIBLING
-                            // item (possibly of a different-type list): end this
-                            // item and let the outer loop decide.
+                        } else if list_marker(&cl)
+                            .map(|(o2, _, _)| o2 == ordered)
+                            .unwrap_or(false)
+                        {
+                            // A SAME-type marker before the content column is a
+                            // SIBLING item (kramdown list.rb:71 — list_start_re
+                            // is type-specific). A DIFFERENT-type marker falls
+                            // through to the lazy-continuation branch and stays
+                            // in this item (list.rb:87), later re-parsed as a
+                            // nested list.
                             break;
                         } else if parse_block_ial_line(&cl).is_some()
                             || is_kramdown_ext_line(&cl)
