@@ -88,6 +88,17 @@ pub fn collect_footnote_refs(src: &str, order: &mut Vec<String>) {
 /// re-serialization: recognized tags get lowercased names and self-closing void
 /// tags get ` />`. Text, whitespace, comments and line structure are preserved
 /// verbatim (kramdown does NOT reindent raw HTML block content).
+/// Probe for an HTML tag at position `i` (public wrapper used by the block
+/// parser's raw-HTML collection).
+pub fn probe_tag(chars: &[char], i: usize) -> Option<(String, usize)> {
+    try_raw_inline_html(chars, i)
+}
+
+/// Public wrapper around tag inspection: (lowercased name, is_close, is_self).
+pub fn inspect_tag_pub(tag: &str) -> Option<(String, bool, bool)> {
+    inspect_tag(tag)
+}
+
 /// Normalize a lone OPENING tag (e.g. the `<div ...>` of a markdown="1"
 /// element): tag re-serialization only, no auto-closing.
 pub fn normalize_open_tag(raw: &str) -> String {
@@ -199,11 +210,17 @@ pub fn normalize_html_block(raw: &str) -> String {
     }
     // kramdown auto-closes elements left open at the end of the raw HTML
     // block ("Found no end tag ... auto-closing it"), emitting the close tags
-    // compactly at the end.
-    let trimmed_end = out.trim_end_matches([' ', '\t']).len();
-    out.truncate(trimmed_end);
-    while let Some(name) = stack.pop() {
-        out.push_str(&format!("</{name}>"));
+    // compactly at the end. The block's text ends at a line boundary, so the
+    // closes start on a fresh line.
+    if !stack.is_empty() {
+        let trimmed_end = out.trim_end_matches([' ', '\t']).len();
+        out.truncate(trimmed_end);
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        while let Some(name) = stack.pop() {
+            out.push_str(&format!("</{name}>"));
+        }
     }
     out
 }

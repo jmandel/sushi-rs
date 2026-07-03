@@ -983,67 +983,79 @@ impl Parser {
             });
         }
 
-        // Raw HTML block: collect until the matching close tag line, or blank
-        // line at depth 0 (kramdown treats block-level raw HTML until the
-        // corresponding end tag). We collect until we see the close tag.
+        // Raw HTML block: collect until the ROOT element is closed, tracking a
+        // full element stack with kramdown's rule that a close tag matches only
+        // the INNERMOST open element (html.rb parse_raw_html). An element left
+        // open consumes to the end of the document (kramdown auto-closes it in
+        // the converter — handled by normalize_html_block).
         let mut collected: Vec<String> = Vec::new();
-        // reset to block start
-        // We consumed lines in read_open_tag; reconstruct by re-reading from block start.
-        // Simplify: re-scan from the original start index.
-        // (read_open_tag advanced self.i to after the open tag line.)
-        // For raw passthrough we want the whole element verbatim.
         let start = self.block_start;
         self.i = start;
-        let open_pat = format!("<{tagname}");
-        let mut depth = 0i32;
-        while self.i < self.lines.len() {
+        let _ = &close;
+        let mut stack: Vec<String> = Vec::new();
+        let mut done = false;
+        while self.i < self.lines.len() && !done {
             let l = self.lines[self.i].clone();
-            // Scan this line's open/close occurrences of `tagname` in order so
-            // we can find the exact position where depth returns to 0.
+            let lchars: Vec<char> = l.chars().collect();
             let mut pos = 0usize;
             let mut end_at: Option<usize> = None;
-            loop {
-                let next_open = l[pos..].find(&open_pat).map(|p| p + pos);
-                let next_close = l[pos..].find(&close).map(|p| p + pos);
-                match (next_open, next_close) {
-                    (Some(o), Some(c)) if o < c => {
-                        depth += 1;
-                        pos = o + open_pat.len();
-                    }
-                    (_, Some(c)) => {
-                        depth -= 1;
-                        pos = c + close.len();
-                        if depth <= 0 {
-                            end_at = Some(pos);
-                            break;
+            while pos < lchars.len() {
+                if lchars[pos] != '<' {
+                    pos += 1;
+                    continue;
+                }
+                // comments skip
+                if lchars.get(pos + 1) == Some(&'!') {
+                    // skip to --> or >
+                    let seg: String = lchars[pos..].iter().collect();
+                    let adv = if seg.starts_with("<!--") {
+                        seg.find("-->").map(|p| p + 3).unwrap_or(seg.len())
+                    } else {
+                        seg.find('>').map(|p| p + 1).unwrap_or(seg.len())
+                    };
+                    pos += adv;
+                    continue;
+                }
+                if let Some((_norm, ni)) = crate::inline::probe_tag(&lchars, pos) {
+                    let raw_tag: String = lchars[pos..ni].iter().collect();
+                    if let Some((name, is_close, is_self)) =
+                        crate::inline::inspect_tag_pub(&raw_tag)
+                    {
+                        if is_close {
+                            if stack.last().map(|t| t == &name).unwrap_or(false) {
+                                stack.pop();
+                                if stack.is_empty() {
+                                    end_at = Some(ni);
+                                    break;
+                                }
+                            }
+                            // non-matching close: literal text (normalizer
+                            // escapes it); does not affect the stack.
+                        } else if !is_self && !is_void_tag(&name) {
+                            stack.push(name);
                         }
                     }
-                    (Some(o), None) => {
-                        depth += 1;
-                        pos = o + open_pat.len();
-                    }
-                    (None, None) => break,
+                    pos = ni;
+                    continue;
                 }
+                pos += 1;
             }
             if let Some(endp) = end_at {
-                // Block ends at the close tag. Content AFTER it on the same
-                // line becomes the next line to parse (kramdown continues
-                // block parsing right after the end tag — e.g.
-                // `</div> <!-- x -->` yields the div block then a paragraph).
-                let (head, rest) = l.split_at(endp);
+                // Block ends at the close tag; the char index maps to a byte
+                // index for split.
+                let byte_end: usize = lchars[..endp].iter().map(|c| c.len_utf8()).sum();
+                let (head, rest) = l.split_at(byte_end);
                 collected.push(head.to_string());
                 let rest = rest.to_string();
                 self.i += 1;
                 if !is_blank(&rest) {
                     self.lines.insert(self.i, rest);
                 }
+                done = true;
                 break;
             }
             collected.push(l.to_string());
             self.i += 1;
-            if depth <= 0 && is_blank(&l) {
-                break;
-            }
         }
         Some(Block::HtmlBlock {
             raw: collected.join("\n"),
