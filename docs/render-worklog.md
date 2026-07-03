@@ -476,9 +476,9 @@ maps-<CoreType> (one per FHIR core type, IG-invariant).
 | inv | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_SNAP |
 | inv-key | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_KEY (reuses key_elements) |
 | inv-diff | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_DIFF (reuses supplement_missing_diff) |
-| sd-use-context | 7/7 | 22/22 | 67/67 (3 gap) | useContext:2877; 3 us-core gaps = deprecated markdown |
-| summary | 7/7 | 9/9 | 51/55 (15 gap) | summary:154; gaps=Extension-type SDs (markdown); 4 fails=nested-split |
-| summary-all | 7/7 | 9/9 | 51/55 (15 gap) | same as summary, anchor `a-` |
+| sd-use-context | 7/7 | 22/22 | 70/70 | ✅ (session 6) deprecated markdown via publisher_markdown |
+| summary | 7/7 | 22/22 | 69/70 | (session 6) Extension SDs GREEN via extensionSummary+md; 1 fail=practitioner nested-split (cited residual) |
+| summary-all | 7/7 | 22/22 | 69/70 | same as summary, anchor `a-` |
 | contained-index (ALL types) | 17/17 | 166/166 | 443/443 | ✅ empty across SD/VS/CS/instances (626 files/IG) |
 | history (ALL types) | 17/17 | 166/166 | 443/443 | ✅ empty across ALL resource types |
 
@@ -589,6 +589,107 @@ as its own increment before summary/tx/dict can go fully green.
   `diff::supplement_missing_diff_elements`. Both exported as pub wrappers.
 - F3 regression floor RE-CONFIRMED byte-identical (snapshot/diff/grid/by-key/
   bindings/span all match the F3 scoreboard incl. the known cycle † failure).
+
+## Session 6 (2026-07-03): publisher_markdown + summary/sd-use-context GREEN
+
+### MARKDOWN-ENGINE DETERMINATION (required finding — resolves the blocker)
+
+The SDR's `markdownEngine` is **COMMON_MARK** for every corpus IG.
+`PublisherIGLoader.java:908-910`: `version 1.0/1.4/1.6/3.0 → DARING_FIREBALL,
+else → COMMON_MARK`. The corpus is R4/R4B/R5 (4.0/4.3/5.0) → COMMON_MARK.
+`XhtmlFluent.markdown` (fhir-core:305) also hard-codes COMMON_MARK.
+
+COMMON_MARK is `MarkDownProcessor.processCommonMark` (fhir-core
+MarkDownProcessor.java:239-247), which is **NOT** the vanilla `Cell.addMarkdown`
+engine (`render_sd::commonmark`). Deltas:
+  (a) `preProcess(source)` (MDP:222-237) — a regex that backslash-escapes raw
+      HTML tags (`<tag …>`, `</tag>`, `<!`/`<?`) so they render as literal `<`;
+  (b) `TablesExtension` enabled in parser + renderer;
+  (c) `html.replace("<table>", "<table class=\"grid\">")`.
+Same `escapeHtml(true)`.
+
+**Corpus measurement (1229 markdown-bearing strings over all 3 IGs — the actual
+strings that flow through the blocked kinds):** zero `[[[`, zero `||`, zero raw
+HTML tags, zero tables/fences. Live features = links, code spans, `*em*`, tight
+bullet lists, soft/hard breaks — ALL already covered by `commonmark.rs`. So (a)/
+(b)/(c) are inert on the corpus; they are ported faithfully in
+`publisher_markdown` and (a) is regex-exact, (b) fires a LOUD GAP on a GFM table.
+Verified against golden bytes BEFORE building: us-core-birthsex-summary (simple
+ext, plain desc → stripPara) and us-core-ethnicity-summary (complex ext, link +
+`(CDCREC)` nested parens + bullet list → stripAllPara) both match `commonmark.rs`
+output exactly (commonmark emits LF; the publisher StringBuilder scaffolding uses
+CRLF — the golden's mixed `\n`/`\r\n` confirms the split).
+
+`preProcessMarkdown` (BaseRenderer:78): `||`→para, `[[[link]]]` via IgContext,
+`ProfileUtilities.processRelativeUrls`. corePath = `http://hl7.org/fhir/R4/`, so
+`isLikelySourceURLReference` (PU:2320) takes the `baseUrl.startsWith("http://
+hl7.org/fhir/R")` fast path: a relative `](x)` link is corePath-prefixed only if
+basename `x` ∈ `BASE_FILENAMES` (the 208 FHIR core spec pages, ported) or starts
+`extension-`. Corpus-verified: the 8 relative links (all IG-local pages) are left
+unchanged. So preProcessMarkdown is effectively inert on the summary/useContext
+Extension descriptions.
+
+`publisher_markdown.rs` (~530 LOC): pre_process, md_process, pre_process_markdown,
+process_markdown (String path), markdown_children_from_html (XhtmlFluent.markdown:
+parse `<div>`+html+`</div>` and add the parsed `<div>` — the nested-div the
+goldens show, because `XhtmlParser.parse(..)` returns an XhtmlDocument whose
+single child IS that `<div>`), strip_para/strip_all_para. 4 unit pins.
+
+### tx is NOT markdown-blocked (correction to session-5 brief)
+
+`txItem` is called with `hasDesc=false` HARD-CODED (psdr:889 `txItem(txmap, tbl,
+path, sd.getUrl(), false)`), so the `if (hasDesc) td.markdown(...)` block
+(psdr:1042-1044) NEVER fires. The binding description is only a `title=`
+attribute (psdr:933). tx's real dependency is TERMINOLOGY resolution:
+`context.findTxResource(ValueSet)` (tx-cache/package VS), the ValueSet
+title/name/webPath, source-package attribution (`THO v7.2` = getSourcePackageName
++ presentVersion), the copy-button, external.png, `insertBreakingSpaces` on path,
+and `showVersion` → `ResourceRenderer.renderVersionReference` (the `📦2.0.0`
+version cell with the "fixed to …, found through package references" title).
+Composer = `new XhtmlComposer(false, true)` = html_pretty (same as inv). NOT a
+markdown port. Reclassify tx under TERMINOLOGY, not markdown.
+
+### summary Extension SDs (extensionSummary psdr:285)
+
+Simple ext = `<p>` + `SDR_EXTENSION_SUMMARY` = "Simple Extension with the type
+{typeSummary}: {stripPara(processMarkdown(description))}" (+`_MODIFIER` variant).
+Complex ext = `<p>Complex Extension: {stripAllPara(...)}</p>` + a `<ul data-fhir=
+"generated-heirarchy">` of the value-slice sub-elements. EXT_SUMMARY (psdr:157)
+short-circuits the whole method. The Extension branch (psdr:222) REPLACES the
+mandatory/refs/ext/slices block (only the FMM tail also runs). Result: summary/
+-all us-core 51/55+15gap → 69/70 (0 gaps); plan-net 9/9+13gap → 22/22 GREEN.
+
+### summary nested-split — silent approximation ELIMINATED (3 of 4)
+
+`parentChainHasOptional` (psdr:318) now uses the faithful
+SNAPSHOT_DERIVATION_POINTER walk via `diff::reconstruct_diff_pointers` (factored
+out of the diff table path; exact/sliced-choice/unsliced-camelCase id aliases +
+`table::dechoice_candidates_pub`). The old own-id `position` walk returned true on
+any id not literally in the snapshot, which mis-split the choice-renamed value[x]
+mandatories. observation-occupation / -pregnancyintent / -pregnancystatus now
+byte-parity. RESIDUAL: us-core-practitioner's 2/1 sub-split among {identifier.
+system, identifier.value, name.family} is IRRECOVERABLE from finished JSON — those
+are datatype expansions absent from the immediate base (core Practitioner expands
+neither Identifier nor HumanName), so the publisher pointer is a base clone read
+mid-`updateFromDefinition` (PU:2586) whose transient `.min` (datatype default 0)
+is later overwritten to 1 in the same object; base.path/base.min are symmetric
+across all three → no JSON discriminator. Total mandatory count stays correct (5).
+Cited, not a silent shrug (fires no gap; the doc explains the irrecoverability).
+
+### sd-use-context deprecated (psdr:2879) GREEN
+
+Red div + SDR_EXT_DEPR + the nested `structuredefinition-standards-status-reason`
+markdown via `preProcessMarkdown → md_process → XhtmlParser re-parse`. us-core
+67/70+3gap → 70/70 GREEN corpus-wide.
+
+### F4 remaining after session 6
+- **DONE green corpus-wide:** contained-index, history, pseudo-ttl, pseudo-xml,
+  inv/-key/-diff, sd-use-context, summary/-all (−1 practitioner cited residual).
+- **In flight:** pseudo-json (JsonXhtmlRenderer ~520 LOC self-contained; forked).
+- **Terminology (reclassified):** tx/-diff/-key/-ms (VS resolution + version-
+  reference, NOT markdown), VS cld/expansion, CS content.
+- **Whole-IG + markdown:** dict (renderDict + processMarkdown), sd-xref/uses/maps
+  (mappings uses processMarkdown at psdr:1482 — now unblocked), IG aggregates.
 
 ## Remaining
 
