@@ -16,6 +16,7 @@ pub mod context;
 pub mod diff;
 pub mod gentypes;
 pub mod grid;
+pub mod leaf;
 pub mod markdown;
 pub mod sdmodel;
 pub mod span;

@@ -3858,3 +3858,15 @@ fn capitalize(s: &str) -> String {
         None => String::new(),
     }
 }
+
+/// Public wrapper for `key_elements` (getKeyElements) — reused by leaf.rs
+/// (inv-key, tx-key). Same semantics as byKey.
+pub fn key_elements_pub(sd: &Sd, ctx: &IgContext) -> Vec<serde_json::Value> {
+    key_elements(sd, ctx)
+}
+
+/// Public wrapper for `must_support_elements` (getMustSupportElements) — reused
+/// by leaf.rs (dict-ms). NOTE takes no ctx (matches the private fn).
+pub fn must_support_elements_pub(sd: &Sd, _ctx: &IgContext) -> Vec<serde_json::Value> {
+    must_support_elements(sd)
+}

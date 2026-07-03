@@ -129,6 +129,13 @@ fn render(
         "diff-bindings-all" => cfg_render(TableConfig::diff_bindings_all(run_uuid), active_tables, sd, ctx?, &def_file),
         "diff-obligations" => cfg_render(TableConfig::diff_obligations(run_uuid), active_tables, sd, ctx?, &def_file),
         "diff-obligations-all" => cfg_render(TableConfig::diff_obligations_all(run_uuid), active_tables, sd, ctx?, &def_file),
+        // ---- F4 leaf kinds ----
+        "contained-index" | "history" => render_sd::leaf::empty_body(),
+        "pseudo-ttl" => render_sd::leaf::pseudo_ttl(),
+        "pseudo-xml" => render_sd::leaf::pseudo_xml(),
+        "inv" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Snap, true),
+        "inv-key" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Key, true),
+        "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),
         _ => return None,
     };
     Some(wrap_raw(&body))

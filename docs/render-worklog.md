@@ -407,6 +407,91 @@ Findings:
   child profile.getName(). Observation.code key-property fixed summary
   (isKeyProperty, SDR:3669) ported but rarely hit.
 
+# F4 — remaining USED fragment kinds (leaves + VS/CS/instance + IG aggregates)
+
+## F4 architecture finding (session 5, 2026-07-03)
+
+The F3 SD **table** kinds route through fhir-core's
+`org.hl7.fhir.r5.renderers.StructureDefinitionRenderer.generateTable`. The F4
+**leaf** kinds are produced by a DIFFERENT class: the **publisher's**
+`org.hl7.fhir.igtools.renderers.StructureDefinitionRenderer` (3204 LOC, a
+`CanonicalRenderer` subclass) whose methods `summary/invOldMode/tx/txDiff/dict/
+mappings/references/useContext/pseudoJson/uses/contexts` each emit one leaf.
+Citations for F4 = `psdr` = that publisher class (path in
+scratchpad/pg_path.txt / psdr_path.txt / sdr_r5_path.txt). VS/CS leaves come
+from the publisher's `ValueSetRenderer`/`CodeSystemRenderer` in the same dir.
+Producing-call map: PublisherGenerator generateOutputsStructureDefinition
+(fragment calls SD leaves @1831-2074), ...ValueSet (@1533-1580), ...CodeSystem
+(@1483-1503), shared per-resource (contained-index @894, history @1150).
+
+## F4 TARGET LIST (denominators enumerated from goldens — SDs/VSs/CSs producing each kind)
+
+Per-IG counts (cycle / plan-net / us-core). All leaves wrap in `{% raw %}..{% endraw %}` (wrap_raw).
+
+**SD leaves** (all: 7 / 22 / 70 producers):
+dict, dict-diff, dict-key, dict-ms, dict-active, inv, inv-diff, inv-key,
+tx, tx-diff, tx-key, tx-must-support, tx-diff-must-support, maps,
+sd-use-context, sd-xref, summary, summary-all, pseudo-json, pseudo-ttl,
+pseudo-xml, contained-index, history.
+
+**ValueSet leaves** (cld 2/24/21, expansion 2/22/20, xref 2/24/21, history, contained-index).
+**CodeSystem leaves** (content 1/14/4, xref, history, contained-index).
+**Instance** (per example resource): html (narrative), history, contained-index.
+**IG aggregates** (1 each unless noted): dependency-table(-short/-nontech),
+globals-table, ip-statements, expansion-params, cross-version-analysis(-inline),
+deprecated-list, deleted-extensions, new-extensions, canonical-index,
+obligation-summary, summary-observations, summary-extensions,
+related-igs-list/-table, codesystem-list, codesystem-ref-list,
+codesystem-ref-all-list, valueset-list, valueset-ref-list, valueset-ref-all-list,
+list-* (per-type; -json/-xml pseudo-payloads), table-* (per-type; -json/-xml),
+maps-<CoreType> (one per FHIR core type, IG-invariant).
+
+### Classification by cost (from golden byte sizes + producing-method reading)
+- **CONSTANT** (1 distinct value corpus-wide): contained-index (empty),
+  history (empty), pseudo-ttl, pseudo-xml, tx-diff/inv-diff when no diff
+  constraints. Trivial fixed strings via fragmentError/genContainedIndex/
+  HistoryGenerator (all empty in this corpus).
+- **SELF-CONTAINED small engines**: summary/-all (i18n phrase counts),
+  invOldMode (inv/-diff/-key; XhtmlComposer(false,TRUE)=pretty table),
+  tx/txDiff (binding table), useContext (extension context list).
+- **SELF-CONTAINED XL**: pseudo-json (46KB; JsonXhtmlRenderer of the SD JSON),
+  dict (240KB; fhir-core sdr.renderDict — big).
+- **WHOLE-IG cross-resource scans** (need full FetchedFile resource set +
+  examples + capstmts + r5 sdmap.details): references (sd-xref), uses, maps
+  (mappings), and most IG aggregates (dependency-table, list-*, table-*,
+  codesystem/valueset-*-list, summary-observations).
+- **TERMINOLOGY** (need vs-externals.json / tx-cache expansion source, per
+  F4 brief): VS cld/expansion, CS content.
+- **NARRATIVE (instance html)**: DataRenderer family — sizing TBD (flagged XL
+  candidate in brief).
+
+## F4 scoreboard (kind × IG → byte-identical/total; ✅=corpus-wide green)
+
+| kind | cycle | plan-net | us-core | notes |
+|---|---|---|---|---|
+| contained-index | 7/7 | 22/22 | 70/70 | ✅ constant empty (genContainedIndex, no contained) |
+| history | 7/7 | 22/22 | 70/70 | ✅ constant empty (HistoryGenerator, no history) |
+| pseudo-ttl | 7/7 | 22/22 | 70/70 | ✅ constant fragmentError "Turtle template" |
+| pseudo-xml | 7/7 | 22/22 | 70/70 | ✅ constant fragmentError "Xml template" |
+| inv | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_SNAP |
+| inv-key | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_KEY (reuses key_elements) |
+| inv-diff | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_DIFF (reuses supplement_missing_diff) |
+
+`render_sd::leaf` (~470 LOC). Findings this checkpoint (session 5):
+- **inv composer = HTML pretty** (`new XhtmlComposer(false,true)` = xml=false,
+  pretty=true → Config::html_pretty + compose_nodes overload, NO breakBlocks).
+  Table is `class="list presentation" data-fhir="generated-heirarchy"`.
+- **allInvariants defaults true; NO IG in corpus sets `show-inherited-invariants`**
+  (PublisherIGLoader:479). So the invOldMode source filter (psdr:1241) never
+  excludes — threaded as `all_invariants` param, corpus value = true always.
+- **best-practice extension URL is lowercase** `elementdefinition-bestpractice`
+  (ExtensionDefinitions.EXT_BEST_PRACTICE, r5:59) — NOT `-bestPractice`. Grade
+  column shows "best practice" for dom-6. This was the only inv bug.
+- inv-key reuses `table::key_elements_pub` (getKeyElements); inv-diff reuses
+  `diff::supplement_missing_diff_elements`. Both exported as pub wrappers.
+- F3 regression floor RE-CONFIRMED byte-identical (snapshot/diff/grid/by-key/
+  bindings/span all match the F3 scoreboard incl. the known cycle † failure).
+
 ## Remaining
 
 Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all

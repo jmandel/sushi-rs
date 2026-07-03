@@ -286,6 +286,9 @@ impl Sd {
     pub fn id(&self) -> &str {
         self.root.get("id").and_then(|x| x.as_str()).unwrap_or("")
     }
+    pub fn url(&self) -> String {
+        self.root.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string()
+    }
     pub fn kind(&self) -> &str {
         self.root.get("kind").and_then(|x| x.as_str()).unwrap_or("")
     }
