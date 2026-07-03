@@ -31,8 +31,6 @@ use crate::{PackageContext, SnapshotOptions};
 use context::{WalkConfig, WalkContext};
 use frame::{SlicingParams, WalkCursor, WalkFrame};
 
-pub(crate) use context::Message;
-
 /// Enable trace emission to `path` for the duration of the process. Called from
 /// the CLI when `--trace`/`SNAPSHOT_TRACE` is set.
 pub fn enable_trace(path: &str) -> std::io::Result<()> {
@@ -290,11 +288,6 @@ fn generate_snapshot_with_opts(
 
     ctx.gen_stack.pop();
     Ok(derived)
-}
-
-/// Expose collected messages (for the CLI messages sidecar).
-pub fn take_messages(_out: &Value) -> Vec<Message> {
-    Vec::new()
 }
 
 const EXT_FHIR_TYPE: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type";

@@ -63,6 +63,9 @@ pub(crate) struct WalkFrame {
     /// -1 when there is no diff.
     pub diff_limit: isize,
     pub url: String,
+    /// Java's `webUrl` frame state (markdown link base); threaded for parity but
+    /// not consumed on any hot branch yet.
+    #[allow(dead_code)]
     pub web_url: Option<String>,
     pub profile_name: String,
     pub context_path_source: Option<String>,

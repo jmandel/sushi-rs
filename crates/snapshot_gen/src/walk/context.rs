@@ -9,6 +9,14 @@ use crate::PackageContext;
 
 /// A collected message/error (spec §6). We record wording + severity for parity
 /// where gated; most are informational to callers.
+///
+/// This is the walk's message-collection scaffolding (REWORK-PLAN §2:
+/// "Unconsumed differential rows are an error ... collected into messages,
+/// gate-checked"). Messages are constructed throughout the walk via
+/// `add_message`; no consumer surfaces the collected log yet, so the fields read
+/// as dead. Kept as the wired-in home for that infrastructure — not migration
+/// cruft.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct Message {
     pub severity: Severity,
@@ -16,6 +24,7 @@ pub struct Message {
     pub text: String,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
     Error,
@@ -27,6 +36,9 @@ pub enum Severity {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Annotation {
     /// SNAPSHOT_diff_source: the diff index this output row consumed (if any).
+    /// Recorded for the provenance/message infrastructure; not read on any hot
+    /// branch yet.
+    #[allow(dead_code)]
     pub diff_source: Option<usize>,
     /// SNAPSHOT_auto_added_slicing (PU userData): the slicing block on this row
     /// was synthesized by makeExtensionSlicing, so the finalize slice-min pass is
@@ -35,7 +47,10 @@ pub(crate) struct Annotation {
 }
 
 pub(crate) struct WalkConfig {
-    /// forPublication (oracle: true).
+    /// forPublication (oracle: true). Mirrors the Publisher's generateSnapshot
+    /// config flag; the walk fixes it to the oracle value and does not branch on
+    /// it yet.
+    #[allow(dead_code)]
     pub for_publication: bool,
 }
 
@@ -60,6 +75,9 @@ pub(crate) struct WalkContext<'a> {
     /// SNAPSHOT_PREPROCESS_INJECTED per diff index (exempt from PC-1 provenance).
     pub diff_injected: Vec<bool>,
     pub messages: Vec<Message>,
+    /// Fixed to the oracle config (`WalkConfig::default`); held for parity with
+    /// the Publisher's config-threaded generateSnapshot, not branched on yet.
+    #[allow(dead_code)]
     pub cfg: WalkConfig,
     /// Memoized generated snapshots by url (recursive base/type generation).
     pub gen_cache: HashMap<String, Rc<Value>>,

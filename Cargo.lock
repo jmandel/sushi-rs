@@ -727,6 +727,7 @@ dependencies = [
  "anyhow",
  "indexmap",
  "json_emit",
+ "package_store",
  "serde_json",
 ]
 

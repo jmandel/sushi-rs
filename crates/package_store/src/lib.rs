@@ -15,6 +15,8 @@ use serde_json::{Map, Value};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
+pub mod derived_index;
+
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FishType {
@@ -448,299 +450,6 @@ struct PackageResourceListing {
     source_count: usize,
 }
 
-#[derive(Deserialize)]
-struct NameProbe {
-    #[serde(default)]
-    name: Option<String>,
-}
-
-/// Fast extraction of a FHIR resource's top-level `"name"` string, semantically
-/// equivalent to `serde_json::from_slice::<NameProbe>(b).ok().and_then(|p| p.name)`
-/// but stopping as soon as the top-level `name` is located instead of parsing
-/// (and string-skipping) the entire document. The full-parse probe was crd's #1
-/// hotspot (~37%: `skip_to_escape` + `ignore_str` over megabytes of snapshot
-/// JSON it ultimately discarded). `name` in a FHIR conformance resource is always
-/// a simple unescaped identifier near the top of the object.
-///
-/// Returns `Ok(Some(name))` / `Ok(None)` as the definitive result; returns
-/// `Err(NeedFallback)` only for the cases this scanner deliberately does not
-/// decode itself (a `name` key or string value containing a `\` escape, or
-/// malformed input), so the caller defers to the exact serde path. Real FHIR
-/// package files never hit the fallback.
-struct NeedFallback;
-
-#[inline]
-fn skip_ws(b: &[u8], p: &mut usize) {
-    while *p < b.len() && matches!(b[*p], b' ' | b'\t' | b'\n' | b'\r') {
-        *p += 1;
-    }
-}
-
-/// `b[*p]` must be `"`. Advance `*p` past the closing quote. Returns
-/// `Some(had_escape)` or `None` if the string is unterminated (malformed).
-#[inline]
-fn skip_string(b: &[u8], p: &mut usize) -> Option<bool> {
-    *p += 1; // opening quote
-    let mut had_escape = false;
-    while *p < b.len() {
-        match b[*p] {
-            b'"' => {
-                *p += 1;
-                return Some(had_escape);
-            }
-            b'\\' => {
-                had_escape = true;
-                *p += 2; // skip backslash + escaped byte (hex digits of \u are harmless)
-            }
-            _ => *p += 1,
-        }
-    }
-    None
-}
-
-/// Skip one JSON value starting at `*p` (after leading whitespace already
-/// consumed). Returns `None` on malformed input.
-fn skip_value(b: &[u8], p: &mut usize) -> Option<()> {
-    if *p >= b.len() {
-        return None;
-    }
-    match b[*p] {
-        b'"' => skip_string(b, p).map(|_| ()),
-        b'{' | b'[' => {
-            let mut depth: i32 = 0;
-            while *p < b.len() {
-                match b[*p] {
-                    b'"' => {
-                        skip_string(b, p)?;
-                    }
-                    b'{' | b'[' => {
-                        depth += 1;
-                        *p += 1;
-                    }
-                    b'}' | b']' => {
-                        depth -= 1;
-                        *p += 1;
-                        if depth == 0 {
-                            return Some(());
-                        }
-                    }
-                    _ => *p += 1,
-                }
-            }
-            None
-        }
-        _ => {
-            // number / true / false / null — run to the next structural delimiter.
-            while *p < b.len()
-                && !matches!(b[*p], b',' | b'}' | b']' | b' ' | b'\t' | b'\n' | b'\r')
-            {
-                *p += 1;
-            }
-            Some(())
-        }
-    }
-}
-
-fn fast_top_level_name(b: &[u8]) -> Result<Option<String>, NeedFallback> {
-    let n = b.len();
-    let mut p = 0usize;
-    skip_ws(b, &mut p);
-    if p >= n || b[p] != b'{' {
-        return Ok(None); // not a JSON object → no top-level name
-    }
-    p += 1;
-    loop {
-        skip_ws(b, &mut p);
-        if p >= n {
-            return Ok(None);
-        }
-        if b[p] == b'}' {
-            return Ok(None); // end of object, no name
-        }
-        if b[p] != b'"' {
-            return Ok(None); // malformed key position → serde would yield None too
-        }
-        let key_start = p + 1;
-        let had_escape = skip_string(b, &mut p).ok_or(NeedFallback)?;
-        let key_end = p - 1; // index of closing quote
-        let is_name = !had_escape && &b[key_start..key_end] == b"name";
-        skip_ws(b, &mut p);
-        if p >= n || b[p] != b':' {
-            return Ok(None);
-        }
-        p += 1;
-        skip_ws(b, &mut p);
-        if p >= n {
-            return Ok(None);
-        }
-        if is_name {
-            if b[p] != b'"' {
-                // name present but not a string → NameProbe type error → None
-                return Ok(None);
-            }
-            let vstart = p + 1;
-            let v_escape = skip_string(b, &mut p).ok_or(NeedFallback)?;
-            if v_escape {
-                return Err(NeedFallback); // let serde decode the escapes exactly
-            }
-            let vend = p - 1;
-            return match std::str::from_utf8(&b[vstart..vend]) {
-                Ok(s) => Ok(Some(s.to_string())),
-                Err(_) => Err(NeedFallback),
-            };
-        }
-        skip_value(b, &mut p).ok_or(NeedFallback)?;
-        skip_ws(b, &mut p);
-        if p >= n {
-            return Ok(None);
-        }
-        match b[p] {
-            b',' => p += 1,
-            _ => return Ok(None), // '}' or malformed
-        }
-    }
-}
-
-/// Top-level `name`, fast scan with an exact serde fallback for escaped strings.
-fn probe_name(b: &[u8]) -> Option<String> {
-    match fast_top_level_name(b) {
-        Ok(opt) => opt,
-        Err(NeedFallback) => serde_json::from_slice::<NameProbe>(b)
-            .ok()
-            .and_then(|p| p.name),
-    }
-}
-
-/// Outcome of scanning a (possibly truncated) prefix for the top-level `name`.
-enum PrefixScan {
-    /// Definitive: the top-level `name` was found (unescaped string value).
-    Found(String),
-    /// Definitive: the object closed, or the `name` slot held a non-string, so
-    /// `NameProbe` would yield `None` — no need to read further.
-    Absent,
-    /// Inconclusive within this prefix (ran out of bytes mid-structure, or an
-    /// escape we don't decode here): the caller must read the whole file and
-    /// fall back to the exact `probe_name`.
-    NeedMore,
-}
-
-/// Like `fast_top_level_name`, but treats running off the end of the buffer as
-/// `NeedMore` (the buffer is a prefix, not necessarily the whole file) rather than
-/// as a definitive "no name". Only a genuine `}` close or a non-string `name`
-/// value is reported as `Absent`. This lets `for_project` read just a small prefix
-/// of each (often very large, snapshot-bearing) resource file: the top-level
-/// `name` of a FHIR conformance resource sits in its metadata header, within the
-/// first few KB, so the snapshot tail is never touched.
-fn scan_prefix_name(b: &[u8]) -> PrefixScan {
-    let n = b.len();
-    let mut p = 0usize;
-    skip_ws(b, &mut p);
-    if p >= n {
-        return PrefixScan::NeedMore;
-    }
-    if b[p] != b'{' {
-        return PrefixScan::Absent; // not a JSON object → no top-level name
-    }
-    p += 1;
-    loop {
-        skip_ws(b, &mut p);
-        if p >= n {
-            return PrefixScan::NeedMore;
-        }
-        if b[p] == b'}' {
-            return PrefixScan::Absent; // end of object, no name
-        }
-        if b[p] != b'"' {
-            return PrefixScan::Absent; // malformed key position → serde None too
-        }
-        let key_start = p + 1;
-        let had_escape = match skip_string(b, &mut p) {
-            Some(e) => e,
-            None => return PrefixScan::NeedMore, // unterminated within prefix
-        };
-        let key_end = p - 1;
-        let is_name = !had_escape && &b[key_start..key_end] == b"name";
-        skip_ws(b, &mut p);
-        if p >= n {
-            return PrefixScan::NeedMore;
-        }
-        if b[p] != b':' {
-            return PrefixScan::Absent;
-        }
-        p += 1;
-        skip_ws(b, &mut p);
-        if p >= n {
-            return PrefixScan::NeedMore;
-        }
-        if is_name {
-            if b[p] != b'"' {
-                return PrefixScan::Absent; // name present but not a string → None
-            }
-            let vstart = p + 1;
-            match skip_string(b, &mut p) {
-                Some(false) => {
-                    let vend = p - 1;
-                    return match std::str::from_utf8(&b[vstart..vend]) {
-                        Ok(s) => PrefixScan::Found(s.to_string()),
-                        Err(_) => PrefixScan::NeedMore,
-                    };
-                }
-                // escaped value (let serde decode exactly) or unterminated prefix
-                Some(true) | None => return PrefixScan::NeedMore,
-            }
-        }
-        if skip_value(b, &mut p).is_none() {
-            return PrefixScan::NeedMore; // value spilled past the prefix
-        }
-        skip_ws(b, &mut p);
-        if p >= n {
-            return PrefixScan::NeedMore;
-        }
-        match b[p] {
-            b',' => p += 1,
-            _ => return PrefixScan::Absent, // '}' or malformed
-        }
-    }
-}
-
-/// Bytes of each resource file read up front to locate the top-level `name`.
-/// FHIR conformance resources carry `name` in their header (well within a few KB);
-/// the rare file whose header exceeds this triggers a full read + exact reparse.
-const NAME_PREFIX_BYTES: usize = 16 * 1024;
-
-/// Read a resource file's top-level `name` with minimal I/O: pull only a prefix,
-/// scan it, and read the remainder only when the prefix is inconclusive. Exactly
-/// equivalent to `probe_name(&fs::read(path))`, just without dragging each file's
-/// (often large) snapshot through memory when the answer is in the header.
-fn probe_name_from_path(path: &Path) -> Option<String> {
-    use std::io::Read;
-    let mut file = std::fs::File::open(path).ok()?;
-    let mut buf = vec![0u8; NAME_PREFIX_BYTES];
-    let mut filled = 0usize;
-    while filled < buf.len() {
-        match file.read(&mut buf[filled..]) {
-            Ok(0) => break,
-            Ok(k) => filled += k,
-            Err(_) => return None,
-        }
-    }
-    let reached_eof = filled < buf.len();
-    buf.truncate(filled);
-    match scan_prefix_name(&buf) {
-        PrefixScan::Found(s) => Some(s),
-        PrefixScan::Absent => None,
-        PrefixScan::NeedMore => {
-            if !reached_eof {
-                // Pull the rest of the file, then defer to the exact probe.
-                if file.read_to_end(&mut buf).is_err() {
-                    return None;
-                }
-            }
-            probe_name(&buf)
-        }
-    }
-}
-
 fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
     if !pkg_dir.is_dir() {
         return PackageResourceListing {
@@ -752,6 +461,20 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
     let index: Option<IndexFile> = std::fs::read(pkg_dir.join(".index.json"))
         .ok()
         .and_then(|b| serde_json::from_slice::<IndexFile>(&b).ok());
+
+    // Derived-columns index: filename -> `name`, content-derived once (CAS
+    // sidecar or write-once) instead of the eager per-SD `probe_name_from_path`
+    // read this used to do on every run. `name` is the only column the stock
+    // `.index.json` lacks that this listing needs; ordering / source_count stay
+    // driven by the existing index-vs-scan selection so fishing (LIFO seq)
+    // precedence is byte-identical. See docs/package-derived-index.md.
+    let derived_name: std::collections::HashMap<String, Option<String>> = derived_index::load(pkg_dir)
+        .into_iter()
+        .map(|e| (e.filename, e.name))
+        .collect();
+    let name_for = |filename: &str| -> Option<String> {
+        derived_name.get(filename).cloned().flatten()
+    };
 
     // HEURISTIC: "index is valid" == `.index.json` exists with a NON-EMPTY
     // `files` array. When valid we trust it as COMPLETE and index straight from
@@ -775,9 +498,10 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
             .map(|(ordinal, entry)| {
                 let path = pkg_dir.join(&entry.filename);
                 let name = if classify(&entry).is_some() {
-                    // name is not in .index.json — probe it from the file header only
-                    // (prefix read; full read only if the header is inconclusive).
-                    probe_name_from_path(&path)
+                    // name is not in stock `.index.json` — take it from the
+                    // content-derived index (computed once) rather than probing
+                    // the file header on every run.
+                    name_for(&entry.filename)
                 } else {
                     None
                 };
@@ -1446,57 +1170,6 @@ mod tests {
                 ("hl7.fhir.uv.extensions.r4".into(), "latest".into()),
             ]
         );
-    }
-
-    #[test]
-    fn prefix_scan_matches_full_probe() {
-        // For each case, scan_prefix_name on the full bytes must agree with the
-        // exact probe_name, and a write-then-read round trip through
-        // probe_name_from_path (which only reads a prefix) must match too.
-        let cases: &[(&str, Option<&str>)] = &[
-            (
-                r#"{"resourceType":"X","name":"Foo","other":1}"#,
-                Some("Foo"),
-            ),
-            (r#"{"name":"Bar"}"#, Some("Bar")),
-            (r#"{"resourceType":"X","id":"y"}"#, None),
-            (r#"{}"#, None),
-            (r#"[1,2,3]"#, None),
-            (r#"{"name":42}"#, None),
-            (r#"{"a":{"name":"nested"},"name":"Top"}"#, Some("Top")),
-            (r#"{"name":"with \"escape\""}"#, Some(r#"with "escape""#)),
-            (r#"{"a":"x\"y","name":"After"}"#, Some("After")),
-        ];
-        let dir = std::env::temp_dir();
-        for (i, (json, want)) in cases.iter().enumerate() {
-            assert_eq!(
-                probe_name(json.as_bytes()).as_deref(),
-                *want,
-                "probe {json}"
-            );
-            // round-trip through the prefix reader on a real file
-            let p = dir.join(format!("pkgstore_probe_test_{i}.json"));
-            std::fs::write(&p, json).unwrap();
-            assert_eq!(
-                probe_name_from_path(&p).as_deref(),
-                *want,
-                "from_path {json}"
-            );
-            let _ = std::fs::remove_file(&p);
-        }
-    }
-
-    #[test]
-    fn prefix_scan_falls_back_when_name_past_prefix() {
-        // A top-level `name` sitting beyond NAME_PREFIX_BYTES must still be found
-        // via the full-read fallback (exact equivalence to a single full read).
-        let filler = "x".repeat(NAME_PREFIX_BYTES + 5000);
-        let json = format!(r#"{{"pad":"{filler}","name":"DeepName"}}"#);
-        assert_eq!(probe_name(json.as_bytes()).as_deref(), Some("DeepName"));
-        let p = std::env::temp_dir().join("pkgstore_probe_deep.json");
-        std::fs::write(&p, &json).unwrap();
-        assert_eq!(probe_name_from_path(&p).as_deref(), Some("DeepName"));
-        let _ = std::fs::remove_file(&p);
     }
 
     fn empty_store() -> PackageStore {

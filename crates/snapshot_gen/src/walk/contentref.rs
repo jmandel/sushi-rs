@@ -224,12 +224,6 @@ pub(crate) fn walk_into_content_reference(
     Ok(())
 }
 
-fn resolve_by_path(base: &[Value], content_ref: &str) -> Option<usize> {
-    let frag = &content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..];
-    base.iter()
-        .position(|ed| path_of(ed) == frag && !has_slice_name(ed))
-}
-
 /// PU:1867 redirectorStack.
 fn redirector_stack(
     redirector: &[ElementRedirection],

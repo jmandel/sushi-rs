@@ -1,0 +1,127 @@
+# Package derived-columns index (CAS artifact)
+
+> Design note for the CAS derived-index landed in the CLARITY pass (task #12b).
+> Companion to `docs/perf-snapshot-gen.md` "Future levers → 1" (the strategic
+> load-path fix). Parity is sacred: the full snapshot corpus stays byte-identical
+> and the sushi compiler is untouched.
+
+## Problem
+
+Three package-reading layers each re-derived the same per-resource metadata from
+package *content* on every process, purely because two columns are not in the
+stock `.index.json`:
+
+- **`name`** — a FHIR conformance resource's `name` is never written to
+  `.index.json`. `package_store` (eager, every run) and `snapshot_gen`'s
+  `PackageContext` (`probe_name`, every run) each read every SD file to recover
+  it. The perf pass byte-scanned it, but still touches every file every process.
+- **`baseDefinition`** — likewise absent from `.index.json`; `package_store`
+  full-parses the resolved SD to expose `parent` in `fishForMetadata`.
+- **SD-less / empty-index packages** (`us.nlm.vsac`, `phinvads`,
+  `subscriptions-backport.r4`): `PackageContext` falls into
+  `scan_package_structure_definitions`, which directory-scans + byte-checks +
+  parses every top-level JSON just to discover the SDs the `.index.json` omitted.
+
+All of this is derived from immutable package content, so it should be computed
+**once per package content**, not once per process.
+
+## The artifact
+
+A **derived-columns index** is a CAS artifact keyed by
+`(package content sha256 + DERIVED_INDEX_FORMAT_VERSION)`. It is computed **once,
+at ingest** (same trigger/lifecycle as the existing generated `.index.json`
+artifact — never at process start, never per materialize), and stored at:
+
+    <cas>/packages/<sha256>/derived/derived-index-v<FORMAT>.json
+
+The format version is a plain integer constant
+(`package_store::derived_index::DERIVED_INDEX_FORMAT_VERSION`). Bumping it changes
+the artifact filename, so an old artifact is simply never read again — entries are
+never mutated in place; a bump invalidates by key.
+
+### Contents (derived from package CONTENT, not from stock `.index.json`)
+
+One row per resource file in the package (every `^[^.].*\.json$` except
+`package.json`, sorted — the exact FPL `getPotentialResourcePaths` set, so it
+also covers packages whose stock `.index.json` is empty/SD-less):
+
+| column | source |
+|---|---|
+| `filename` | directory entry |
+| `resourceType` | top-level `resourceType` |
+| `id` | top-level `id` |
+| `url` | top-level `url` |
+| `version` | top-level `version` |
+| `kind` | top-level `kind` |
+| `type` | top-level `type` (SD `type`, FPL `sdType`) |
+| `derivation` | top-level `derivation` |
+| `baseDefinition` | top-level `baseDefinition` |
+| `name` | top-level `name` |
+
+`resourceType`/`id`/…/`derivation` match the columns the stock generated
+`.index.json` already carries; `baseDefinition` and `name` are the two new
+columns that eliminate the per-process reads. The file is parsed **once** with a
+single `serde_json::from_slice` and the ten columns are lifted from the root
+object — this is the only full parse of the corpus that survives, and it happens
+once per content hash, ever.
+
+## Lifecycle and placement
+
+The artifact is **computed once at ingest** (`ingest_artifact_bytes`), alongside
+the existing generated `.index.json` derived artifact. **Materialization only
+hardlinks it out** — it is never derived at materialize or process start.
+
+It is installed into the materialized cache as a **sidecar** next to
+`.index.json`:
+
+    <cache>/<name>#<version>/package/.derived-index.json
+
+- **Hardlink-tree materialize** (the isolated test cache, and any cache on a
+  filesystem/CAS layout where the whole package dir is not symlinked): the CAS
+  `derived/derived-index-v<FORMAT>.json` artifact is hardlinked to
+  `package/.derived-index.json`. Zero copy, zero recompute.
+- **Symlink-whole-dir materialize** (when the stock `.index.json` is trustworthy
+  and the platform supports directory symlinks): `package/` is a symlink into the
+  read-only CAS content, so a sidecar cannot be written there. Consumers fall
+  through to the on-first-need path below. (This path is not exercised by the
+  snapshot corpus gate, whose cache is hardlink-materialized.)
+
+### Non-CAS caches (plain extracted dirs, already-materialized test cache)
+
+The isolated snapshot-corpus cache `temp/fhir-home/.fhir/packages` is a plain,
+already-materialized hardlink cache with **no CAS handle reachable from
+`snapshot_gen`** (it receives only a `--cache <dir>` path). For any package dir
+whose `.derived-index.json` sidecar is absent, consumers **write it once, on
+first need**, by deriving from package content with the same shared builder, then
+read it. This is fail-loud-safe: if the sidecar cannot be written (read-only dir,
+e.g. a CAS symlink), the consumer silently falls back to its in-process
+probe/scan path and still produces byte-identical results. The write-once sidecar
+and the CAS-hardlinked sidecar are **byte-identical** — one shared builder
+(`package_store::derived_index::build`) produces both.
+
+## Shared implementation
+
+The format, builder, and reader live in **`package_store::derived_index`** — the
+lowest crate both the write side (`package_acquisition`) and the read sides
+(`package_store`, `snapshot_gen`) can share. `snapshot_gen` gains a
+`package_store` dependency (it is, after all, the FHIR package read layer).
+
+## Consumers
+
+- **`snapshot_gen::PackageContext::load_package`**: reads the derived-index
+  sidecar (or writes-once-then-reads for the isolated cache) instead of parsing
+  `.index.json` + `probe_name` + `scan_package_structure_definitions`. The
+  derived index already folds in the scan-fallback (it lists content, not the
+  possibly-empty stock index), so the empty-`.index.json` full-conversion path is
+  preserved by keying `local` on "package had no SD rows in its stock index" the
+  same way the old `loaded == 0` scan trigger did. Fail-loud fallback: a cache
+  with neither a sidecar nor a writable dir uses the old code path unchanged.
+- **`package_store`**: takes `name` (and, where used, `baseDefinition`) from the
+  derived index instead of the eager `probe_name_from_path` per SD, same fallback
+  rules.
+
+## Parity & gates
+
+See `docs/perf-snapshot-gen.md` "CAS derived-index" section for the before/after
+load-time numbers and the gate results (full corpus at scorecard counts,
+`cargo test --workspace`, sushi IPS byte-parity).

@@ -252,3 +252,88 @@ expected); no investigation needed. Builds exit 0 with full
    pursued — but callers that only read could take the `Rc` directly. Low-risk
    clarity cleanup, not a perf necessity.
 
+## CAS derived-index (task #12b CLARITY — the strategic load-path fix, DONE)
+
+Lever 1 above is now implemented. Design note: `docs/package-derived-index.md`.
+
+**What landed.** A **derived-columns index** is a CAS artifact keyed by
+`(package content sha256 + DERIVED_INDEX_FORMAT_VERSION)`, computed **once at
+ingest** (`package_acquisition::ingest_artifact_bytes`, same lifecycle as the
+existing generated `.index.json` artifact — never at process start, never per
+materialize) and stored at `<cas>/packages/<sha256>/derived/derived-index-v1.json`.
+It lists one content-derived row per resource file (the FPL
+`getPotentialResourcePaths` set, so it also covers empty/SD-less `.index.json`
+packages) with columns filename / resourceType / id / url / version / kind /
+type / derivation / **baseDefinition** / **name** — the last two being exactly
+the columns the stock `.index.json` omits and that all three package-reading
+layers previously re-derived per process.
+
+**Placement.** Materialize **hardlinks** the CAS artifact out to a
+`.derived-index.json` sidecar next to `.index.json` in the package dir. The
+shared format/builder/reader live in `package_store::derived_index`; both the
+CAS write and the non-CAS write-once path produce byte-identical sidecars.
+
+**Non-CAS caches.** The snapshot corpus cache
+(`temp/fhir-home/.fhir/packages`) is a plain, already-materialized hardlink
+cache with no CAS handle reachable from `snapshot_gen`. Consumers therefore
+**write the sidecar once, on first need**, deriving from content with the same
+builder, then read it. Fail-loud-safe: if the sidecar can't be written
+(read-only dir, e.g. a CAS symlink), they still return correct freshly-built
+rows and fall back to the old in-process path — never wrong data, never an error.
+
+**Consumers cut over.** `snapshot_gen::PackageContext::load_package` (dropped its
+`.index.json` parse + `probe_name` + `scan_package_structure_definitions` — the
+`local` full-conversion trigger is preserved by keying on "stock index listed
+zero SDs", identical to the old `loaded == 0`); `package_store` (takes `name`
+from the derived index instead of the eager `probe_name_from_path`; ordering /
+`source_count` / LIFO-seq untouched, so fishing is byte-identical). The
+`probe_name` / byte-scan machinery in both crates (and the perf pass's
+`name_scan_tests`) is deleted — strictly subsumed as lever 1 predicted.
+
+**Load-time effect (davinci-pas full package-deps batch, best-of-5 warm,
+release; residual load-path cost from the perf pass now removed).**
+
+| IG | before (perf-log residual) | after (CAS derived idx) | Δ |
+|---|--:|--:|--:|
+| davinci-pas | 1.77 s | 0.80–0.95 s | ~−48% |
+| us-core | 0.54 s | 0.37 s | −31% |
+| qicore | 0.56 s | 0.31 s | −44% |
+
+The `files.sort()` quicksort + `path::compare_components` (~21%),
+`scan_top_level_string` (~8%), and the scan-fallback full-parses that dominated
+the residual are gone: the derived-index sidecar is one small read per package.
+
+**Parity gates (all green, run personally).** Full snapshot corpus at §9
+scorecard counts, failed=0 across all IGs swept (ips 29, mcode 46, genomics 33,
+crd 22, sdc 73, carinbb 6, dtr 21, ecr 28, ndh 50, pas 73, davinci-pas 80,
+gematik 49, au-core 26, ipa 12, qicore 63, us-core 70, mhd 42, eu-eps 23,
+eu-mpd 4, au-ps 17, pacio-toc 4, dapl 26, cdex 8, plan-net 22, pdex 37,
+drug-formulary 19, subscriptions-backport 9, smart-app-launch 6, twpas 43,
+be-vaccination 7, radiation-dose-summary 4, pddi 1). `cargo test --workspace`
+all suites green (incl. `walk_parity` ladder, `convert_parity`, new
+`derived_index` unit tests). Sushi compiler proven untouched: release
+`rust_sushi build` of IPS is **byte-identical** (118 resources, 32/32
+StructureDefinitions, `diff -rq` clean) before vs after the `package_store`
+change.
+
+**Cleanup landed alongside (one gate cycle):**
+- `PackageContext::fetch` now returns `Rc<Value>` (was a per-hit deep clone);
+  the two callers (`fetch_sd`, `resolve_with_snapshot`) only read the raw
+  resource, so they borrow the `Rc`. Lever 3 done.
+- `by_name` index: **kept.** It is now genuinely free (the derived index already
+  carries `name`, so building the map is one insert per SD with zero extra I/O —
+  the old cost was the `probe_name` read, now gone). The perf pass's "0 by_name
+  hits corpus-wide" measured the *build* cost, which is eliminated; the lookup
+  stays as a defensive last-resort fallback in `resource_path`. Java-semantics
+  check: the oracle resolves bases via `ctx.fetchResource(..., baseDefinition)`
+  (canonical URL), never by human name (SnapOracleR4.java:168/214), so `by_name`
+  matches nothing the oracle needs and removing it would only risk a latent
+  regression for no gain.
+- Post-cutover dead-code sweep in snapshot_gen: removed the dead `take_messages`
+  stub and unused `resolve_by_path`; the remaining message/annotation/config
+  scaffolding (Message/Severity, Annotation.diff_source, WalkConfig, WalkFrame
+  .web_url) is live design infrastructure per REWORK-PLAN §2 and is kept with a
+  documented `#[allow(dead_code)]` (no logic change). Tightened `package.rs`
+  imports (dropped the blanket `#![allow(unused_imports)]`). **snapshot_gen,
+  package_store, and package_acquisition now build with zero warnings.**
+

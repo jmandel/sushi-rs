@@ -236,11 +236,12 @@ pub(crate) fn fix_loaded_resource(sd: &mut Value, package_id: Option<&str>) {
 /// lenient R5 read (see module doc).
 pub(crate) fn fetch_sd(pkg: &PackageContext, query: &str) -> Option<Value> {
     let raw = pkg.fetch(query)?;
+    let raw = raw.as_ref();
     let url = raw.get("url").and_then(Value::as_str).unwrap_or(query);
     let mut out = if pkg.is_local(url) || pkg.is_local(query) {
-        to_r5_internal(&raw).ok()?
+        to_r5_internal(raw).ok()?
     } else {
-        lenient_r5_read_r4(&raw)
+        lenient_r5_read_r4(raw)
     };
     let package_id = pkg.package_id_for(url).or_else(|| pkg.package_id_for(query));
     fix_loaded_resource(&mut out, package_id.as_deref());
@@ -258,6 +259,7 @@ pub(crate) fn resolve_with_snapshot(
     let Some(raw) = ctx.pkg.fetch(query) else {
         return Ok(None);
     };
+    let raw = raw.as_ref();
     let url = raw
         .get("url")
         .and_then(Value::as_str)
@@ -267,9 +269,9 @@ pub(crate) fn resolve_with_snapshot(
         return Ok(Some(hit.clone()));
     }
     let mut sd = if ctx.pkg.is_local(&url) || ctx.pkg.is_local(query) {
-        to_r5_internal(&raw)?
+        to_r5_internal(raw)?
     } else {
-        lenient_r5_read_r4(&raw)
+        lenient_r5_read_r4(raw)
     };
     let package_id = ctx
         .pkg

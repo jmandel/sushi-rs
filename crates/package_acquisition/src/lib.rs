@@ -19,6 +19,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tar::{Archive, Builder, Header};
 use walkdir::WalkDir;
 
+use package_store::derived_index;
+
 const RESOLUTION_CONFIG_JSON: &str = include_str!("../resolution-config.json");
 const DERIVED_DIR: &str = "derived";
 const MATERIALIZED_INDEX_V2: &str = "materialized-index-v2.json";
@@ -609,6 +611,14 @@ impl PackageCas {
                 &staged_root.join("package"),
                 &derived_materialized_index_path(&staged_root),
             )?;
+            // Derived-columns index (adds `name` + `baseDefinition`, folds in the
+            // scan-fallback) — computed ONCE here, keyed by content hash +
+            // format version, hardlinked out at materialize. See
+            // `docs/package-derived-index.md`.
+            write_derived_columns_index(
+                &staged_root.join("package"),
+                &derived_columns_index_path(&staged_root),
+            )?;
             fs::write(
                 staged_root.join("manifest.json"),
                 serde_json::to_vec_pretty(&manifest)?,
@@ -1191,6 +1201,7 @@ fn materialize_package_view(pkg_root: &Path, source: &Path, target: &Path) -> an
     fs::create_dir_all(target).with_context(|| format!("create {}", target.display()))?;
     link_tree(source, target)?;
     install_materialized_index(pkg_root, target)?;
+    install_derived_columns_sidecar(pkg_root, target)?;
     Ok(())
 }
 
@@ -1248,6 +1259,39 @@ fn link_or_copy_file(source: &Path, target: &Path) -> anyhow::Result<()> {
 
 fn derived_materialized_index_path(pkg_root: &Path) -> PathBuf {
     pkg_root.join(DERIVED_DIR).join(MATERIALIZED_INDEX_V2)
+}
+
+/// Path of the derived-columns index CAS artifact (keyed by content hash +
+/// format version via the versioned filename). See `docs/package-derived-index.md`.
+fn derived_columns_index_path(pkg_root: &Path) -> PathBuf {
+    pkg_root
+        .join(DERIVED_DIR)
+        .join(derived_index::cas_artifact_name())
+}
+
+fn write_derived_columns_index(package_dir: &Path, out_path: &Path) -> anyhow::Result<()> {
+    let index = derived_index::build(package_dir);
+    write_bytes_atomically(out_path, &derived_index::to_bytes(&index))
+}
+
+/// Hardlink the CAS derived-columns artifact out to the materialized package
+/// directory as the `.derived-index.json` sidecar (next to `.index.json`).
+/// Consumers read the sidecar; if it is absent (e.g. a symlinked package dir over
+/// read-only CAS content), they fall back to deriving it once themselves.
+fn install_derived_columns_sidecar(
+    pkg_root: &Path,
+    target_package_dir: &Path,
+) -> anyhow::Result<()> {
+    let artifact = derived_columns_index_path(pkg_root);
+    if !artifact.is_file() {
+        return Ok(());
+    }
+    let sidecar = target_package_dir.join(derived_index::SIDECAR_NAME);
+    if sidecar.exists() {
+        fs::remove_file(&sidecar)?;
+    }
+    link_or_copy_file(&artifact, &sidecar)?;
+    Ok(())
 }
 
 fn install_materialized_index(pkg_root: &Path, target_package_dir: &Path) -> anyhow::Result<()> {
@@ -1326,6 +1370,10 @@ fn write_materialized_index(package_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn write_json_atomically(path: &Path, value: &Value) -> anyhow::Result<()> {
+    write_bytes_atomically(path, &serde_json::to_vec(value)?)
+}
+
+fn write_bytes_atomically(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1338,7 +1386,7 @@ fn write_json_atomically(path: &Path, value: &Value) -> anyhow::Result<()> {
     if tmp.exists() {
         fs::remove_file(&tmp)?;
     }
-    fs::write(&tmp, serde_json::to_vec(value)?)?;
+    fs::write(&tmp, bytes)?;
     if path.exists() {
         fs::remove_file(path)?;
     }
@@ -1646,6 +1694,9 @@ mod tests {
         let package_ref = cas.ingest_local_source(&coord, &source).unwrap();
         let pkg_root = cas.package_root(&package_ref.sha256);
         assert!(derived_materialized_index_path(&pkg_root).is_file());
+        // The derived-columns CAS artifact is computed once at ingest, keyed by
+        // content hash + format version.
+        assert!(derived_columns_index_path(&pkg_root).is_file());
 
         let out = temp.path().join("cache");
         cas.materialize_ref(&package_ref, &out).unwrap();
@@ -1656,6 +1707,16 @@ mod tests {
                 .file_type()
                 .is_symlink()
         );
+        // The derived-columns sidecar is hardlinked out next to `.index.json`,
+        // and carries the `name` column the stock index omits.
+        let sidecar =
+            out.join(format!("example.fhir.pkg#1.0.0/package/{}", derived_index::SIDECAR_NAME));
+        let rows = derived_index::parse(&fs::read(&sidecar).unwrap()).expect("current sidecar");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].filename, "ValueSet-Test.json");
+        assert_eq!(rows[0].resource_type.as_deref(), Some("ValueSet"));
+        assert_eq!(rows[0].id.as_deref(), Some("Test"));
+
         let index_path = out.join("example.fhir.pkg#1.0.0/package/.index.json");
         let index: Value = serde_json::from_slice(&fs::read(index_path).unwrap()).unwrap();
         let files = index
