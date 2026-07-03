@@ -44,6 +44,21 @@ pub enum StructureMode {
     Summary,
     Bindings,
     Obligations,
+    /// MAPPINGS (SDR:636): custom table, one column per profile.mapping (via
+    /// scanForMappings). Partitioned by MapStructureMode (IN_LIST/NOT_IN_LIST/
+    /// OTHER); this corpus only exercises OTHER (all mapping URIs resolve to no
+    /// loaded SD -> dest null, hint "??"). Threaded via `MapStructureMode`.
+    Mappings,
+}
+
+/// `MapStructureMode` (SDR:106): which mapping partition a MAPPINGS table shows.
+/// includeSDForMap (SDR:750): IN_LIST = dest is an in-IG SD; NOT_IN_LIST = dest
+/// is a non-IG SD; OTHER = dest null (okForNull). Corpus: only OTHER is non-empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapStructureMode {
+    InList,
+    NotInList,
+    Other,
 }
 
 /// Per-fragment configuration (the publisher wrapper flags).
@@ -66,6 +81,8 @@ pub struct TableConfig {
     /// The IG's `active-tables` parameter (template-injected;
     /// PublisherIGLoader.java:443 sets HTG.ACTIVE_TABLES from it).
     pub active_tables: bool,
+    /// MAPPINGS-mode partition (only meaningful when `mode == Mappings`).
+    pub map_mode: MapStructureMode,
 }
 
 impl TableConfig {
@@ -81,6 +98,7 @@ impl TableConfig {
             id_sfx: "S".into(),
             run_uuid: run_uuid.into(),
             active_tables: false,
+            map_mode: MapStructureMode::Other,
         }
     }
     pub fn snapshot_all(run_uuid: &str) -> TableConfig {
@@ -88,6 +106,26 @@ impl TableConfig {
             prefix: "sa".into(),
             id_sfx: "SA".into(),
             ..TableConfig::snapshot(run_uuid)
+        }
+    }
+    /// `mappings()` (psdr:1334): generateTable with diff=F, snapshot=T,
+    /// allInv=F, mustSupport=F, ANCHOR_PREFIX_MAP="M", idSfx="M", MAPPINGS mode.
+    /// Called 3× (IN_LIST/NOT_IN_LIST/OTHER) — `map_mode` selects the partition.
+    pub fn maps(run_uuid: &str, map_mode: MapStructureMode) -> TableConfig {
+        TableConfig {
+            diff: false,
+            snapshot: true,
+            all_invariants: false,
+            must_support: false,
+            key: false,
+            mode: StructureMode::Mappings,
+            // ANCHOR_PREFIX_MAP = "" (psdr:104): empty HTG anchor/local prefix;
+            // the "M" is the idSfx (table id `{id}M`), NOT the anchor prefix.
+            prefix: "".into(),
+            id_sfx: "M".into(),
+            run_uuid: run_uuid.into(),
+            active_tables: false,
+            map_mode,
         }
     }
     /// `byMustSupport()` (publisher SDR:552): generateTable on the MS-filtered
@@ -105,6 +143,7 @@ impl TableConfig {
             id_sfx: "M".into(),
             run_uuid: run_uuid.into(),
             active_tables: false,
+            map_mode: MapStructureMode::Other,
         }
     }
     pub fn snapshot_by_mustsupport_all(run_uuid: &str) -> TableConfig {
@@ -128,6 +167,7 @@ impl TableConfig {
             id_sfx: "K".into(),
             run_uuid: run_uuid.into(),
             active_tables: false,
+            map_mode: MapStructureMode::Other,
         }
     }
     pub fn snapshot_by_key_all(run_uuid: &str) -> TableConfig {
@@ -152,6 +192,7 @@ impl TableConfig {
             id_sfx: "D".into(),
             run_uuid: run_uuid.into(),
             active_tables: false,
+            map_mode: MapStructureMode::Other,
         }
     }
     pub fn diff_all(run_uuid: &str) -> TableConfig {
@@ -251,7 +292,9 @@ pub fn render_table(
     // confirmed: 0 no-external in -bindings/-obligations, same as grid).
     let mut gen = match cfg.mode {
         StructureMode::Summary => Gen::new_normal(prefix, TableGenerationMode::Xhtml),
-        StructureMode::Bindings | StructureMode::Obligations => Gen::new(prefix),
+        StructureMode::Bindings | StructureMode::Obligations | StructureMode::Mappings => {
+            Gen::new(prefix)
+        }
     };
     gen.run_uuid = cfg.run_uuid.clone();
 
@@ -362,6 +405,7 @@ pub fn render_table(
         StructureMode::Summary => Vec::new(),
         StructureMode::Bindings => scan_bindings(all),
         StructureMode::Obligations => scan_obligations(ctx, all),
+        StructureMode::Mappings => scan_mappings(sd, cfg.map_mode),
     };
     let mut model = match cfg.mode {
         StructureMode::Summary => generate::init_normal_table(
@@ -371,14 +415,16 @@ pub fn render_table(
             Some(format!("{}{}", sd.id(), cfg.id_sfx)),
             true,
         ),
-        StructureMode::Bindings | StructureMode::Obligations => generate::init_custom_table(
-            core_path,
-            false,
-            true,
-            Some(format!("{}{}", sd.id(), cfg.id_sfx)),
-            true,
-            &columns,
-        ),
+        StructureMode::Bindings | StructureMode::Obligations | StructureMode::Mappings => {
+            generate::init_custom_table(
+                core_path,
+                false,
+                true,
+                Some(format!("{}{}", sd.id(), cfg.id_sfx)),
+                true,
+                &columns,
+            )
+        }
     };
     model.active_tables = cfg.active_tables;
 
@@ -402,6 +448,11 @@ pub fn render_table(
         merged_pattern_values: HashMap::new(),
         opaque_ids,
         columns,
+        map_identities: if cfg.mode == StructureMode::Mappings {
+            map_identities_for(sd, cfg.map_mode)
+        } else {
+            Vec::new()
+        },
     };
 
     let mut rows: Vec<Row> = Vec::new();
@@ -413,6 +464,22 @@ pub fn render_table(
     let node = generate::generate(&gen, &mut model, "", 0);
     let mut c = XhtmlComposer::new(Config::html_compact());
     (c.compose_node(&node), t.gaps)
+}
+
+/// One MAPPINGS-mode table (SDR:637): `None` when the scan finds no columns
+/// (`generateTableInner` returns null -> the `mappings()` wrapper emits
+/// "No Mappings Found"), else the composed table body + gaps. `sd` must have a
+/// snapshot (the maps table walks the snapshot element list).
+pub fn render_maps_table(
+    sd: &Sd,
+    ctx: &IgContext,
+    def_file: &str,
+    cfg: &TableConfig,
+) -> Option<(String, Vec<String>)> {
+    if scan_mappings(sd, cfg.map_mode).is_empty() {
+        return None;
+    }
+    Some(render_table(sd, ctx, def_file, cfg))
 }
 
 struct TCtx<'a> {
@@ -439,6 +506,9 @@ struct TCtx<'a> {
     /// for SUMMARY. genElementBindings/genElementObligations add one cell per
     /// column to each row (SDR:1024/1027).
     columns: Vec<render_tables::Column>,
+    /// MAPPINGS: the mapping `identity` per column (parallel to `columns`), used
+    /// by genElementMappings to match `element.mapping[].identity`.
+    map_identities: Vec<String>,
 }
 
 struct UnusedTracker {
@@ -607,6 +677,18 @@ impl<'a> TCtx<'a> {
         } else if types.is_empty() {
             if root && self.is_resource_type(self.sd_type()) {
                 row.set_icon("icon_resource.png", Some("Resource".into()));
+            } else if self.cfg.mode == StructureMode::Mappings {
+                // MAPPINGS render-order artifact: by the time the maps table
+                // renders, the shared SD's empty-type elements (Extension roots,
+                // contentReferences) have had a type resolved (the publisher runs
+                // the snapshot/dict passes first, which mutate the in-memory SD),
+                // so getType().size()>0 and the workingCode is neither
+                // Base/Element/BackboneElement nor a datatype -> the icon falls
+                // through to icon_resource.png (SDR:994). Snapshot renders the SD
+                // first (type still empty) -> icon_element.gif. Reproduced for the
+                // MAPPINGS view only (golden-verified: Extension roots +
+                // Observation.component.referenceRange contentReferences).
+                row.set_icon("icon_resource.png", Some("Resource".into()));
             } else {
                 row.set_icon("icon_element.gif", Some("Element".into()));
             }
@@ -674,6 +756,9 @@ impl<'a> TCtx<'a> {
             }
             StructureMode::Obligations => {
                 self.gen_element_obligations(&mut row, element);
+            }
+            StructureMode::Mappings => {
+                self.gen_element_mappings(&mut row, element);
             }
         }
 
@@ -949,7 +1034,7 @@ impl<'a> TCtx<'a> {
                     None,
                 ));
             }
-            StructureMode::Bindings | StructureMode::Obligations => {
+            StructureMode::Bindings | StructureMode::Obligations | StructureMode::Mappings => {
                 for _ in 0..self.columns.len() {
                     row.cells.push(Cell::new());
                 }
@@ -990,6 +1075,87 @@ impl<'a> TCtx<'a> {
         }
         for _ in 0..self.columns.len() {
             row.cells.push(Cell::new());
+        }
+    }
+
+    /// `genElementMappings` (SDR:1238): one Cell per mapping provider. Each cell
+    /// is `addText("")` + a Piece holding a `<div>` rendered by
+    /// StructureDefinitionMappingProvider.render (SDMP:41). Forward (non-reverse)
+    /// path for dest==null (OTHER mode): find the LAST element.mapping matching
+    /// the column identity, split `map` on `,`; one -> renderMap directly, many
+    /// -> `<div><ul><li>…`. A `comment` appends `<br/>`(if single)+`<i>comment`.
+    fn gen_element_mappings(&mut self, row: &mut Row, element: Ed<'a>) {
+        use render_tables::build::Elem;
+        let identities = self.map_identities.clone();
+        for identity in &identities {
+            let mut gc = Cell::new();
+            let mut div = Elem::new("div");
+            // find LAST matching mapping (Java loop keeps last, no break).
+            let mut found: Option<&serde_json::Value> = None;
+            if let Some(maps) = element.v.get("mapping").and_then(|m| m.as_array()) {
+                for t in maps {
+                    if t.get("identity").and_then(|x| x.as_str()) == Some(identity.as_str()) {
+                        found = Some(t);
+                    }
+                }
+            }
+            if let Some(m) = found {
+                let map_str = m.get("map").and_then(|x| x.as_str()).unwrap_or("");
+                // Java `String.split("\\,")` (SDMP:54): default limit drops
+                // TRAILING empty strings (so a trailing `,` doesn't yield an empty
+                // final `<li>`). Rust's split keeps them — trim the trailing empties.
+                let mut parts: Vec<&str> = map_str.split(',').collect();
+                while parts.len() > 1 && parts.last() == Some(&"") {
+                    parts.pop();
+                }
+                let complex = parts.len() > 1;
+                if !complex {
+                    self.render_map(&mut div, parts[0]);
+                } else {
+                    let mut ul = Elem::new("ul");
+                    for s in &parts {
+                        let mut li = Elem::new("li");
+                        self.render_map(&mut li, s);
+                        ul.push_elem(li);
+                    }
+                    div.push_elem(ul);
+                }
+                if let Some(comment) = m.get("comment").and_then(|x| x.as_str()) {
+                    if !comment.is_empty() {
+                        if !complex {
+                            div.push_elem(Elem::new("br"));
+                        }
+                        let mut it = Elem::new("i");
+                        it.text(comment);
+                        div.push_elem(it);
+                    }
+                }
+            }
+            // genElementMappings: `Piece p = gc.addText(""); p.addHtml(div)` —
+            // ONE piece carrying the empty text AND the div child (not two).
+            let mut piece = Piece::ref_text(None, Some(String::new()), None);
+            piece.add_html(div.build());
+            gc.pieces.push(piece);
+            row.cells.push(gc);
+        }
+    }
+
+    /// `renderMap(x, s)` (SDMP:121) with dest==null (corpus): `n/a` -> text;
+    /// `http(s):` -> resolve+link (GAP: unreachable in corpus); `l:r` -> text `r`
+    /// (dest null so the id-link branch never taken); else fhirpath -> raw text
+    /// (dest.getSnapshot() NPE caught -> x.tx(s)).
+    fn render_map(&mut self, x: &mut render_tables::build::Elem, s: &str) {
+        if s == "n/a" {
+            x.text(s);
+        } else if s.starts_with("http:") || s.starts_with("https:") {
+            self.gap("renderMap: http(s) mapping target link (SDMP:125) not ported");
+            x.text(s);
+        } else if let Some(i) = s.find(':') {
+            // dest == null -> else branch: x.tx(r) (text after the first colon).
+            x.text(&s[i + 1..]);
+        } else {
+            // dest == null -> fhirpath branch NPEs -> caught -> x.tx(s).
+            x.text(s);
         }
     }
 
@@ -2938,6 +3104,53 @@ const EXT_MIN_VALUESET: &str =
 /// `scanBindings(columns, list)` (SDR:762): recurse the element tree collecting
 /// the set of column keys, then emit columns in the FIXED order (SDR:765-797).
 /// Each Column carries (id=code, title, hint) — the phrase strings.
+/// `scanForMappings(profile, list, columns)` (SDR:658) restricted to the corpus:
+/// iterate `profile.mapping[]`; `findProfile(map.uri)` resolves to no loaded SD
+/// (dest null) for every corpus mapping URI (core-model URIs), so `includeSDForMap`
+/// (SDR:750) includes a mapping ONLY in OTHER mode (sd==null && okForNull) and
+/// never in IN_LIST/NOT_IN_LIST. Column: id "m{i}", title map.name, hint "??"
+/// (dest.present() unreachable). The ConceptMap / reverse-mapping scans are
+/// provably empty here (no IG ConceptMaps; no loaded SD maps to a corpus SD url).
+fn scan_mappings(sd: &Sd, map_mode: MapStructureMode) -> Vec<render_tables::Column> {
+    if map_mode != MapStructureMode::Other {
+        // IN_LIST / NOT_IN_LIST require a non-null resolved dest SD; none of the
+        // corpus mapping URIs resolve to a loaded SD -> empty -> null table.
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    for m in sd.mappings() {
+        // map.hasUri() gate (SDR:664). dest = findProfile(uri) == null in
+        // corpus -> OTHER includes it. (A future URI resolving to a loaded SD
+        // would move to IN_LIST/NOT_IN_LIST; loud-gap-free by construction.)
+        if m.get("uri").and_then(|x| x.as_str()).is_some() {
+            i += 1;
+            let name = m.get("name").and_then(|x| x.as_str()).unwrap_or("");
+            out.push(render_tables::Column::new(format!("m{}", i), name, "??"));
+        }
+    }
+    out
+}
+
+/// The mapping `identity` per column (same order/filter as scan_mappings).
+fn map_identities_for(sd: &Sd, map_mode: MapStructureMode) -> Vec<String> {
+    if map_mode != MapStructureMode::Other {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for m in sd.mappings() {
+        if m.get("uri").and_then(|x| x.as_str()).is_some() {
+            out.push(
+                m.get("identity")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+            );
+        }
+    }
+    out
+}
+
 fn scan_bindings(all: &[Ed<'_>]) -> Vec<render_tables::Column> {
     use std::collections::HashSet;
     let mut cols: HashSet<String> = HashSet::new();

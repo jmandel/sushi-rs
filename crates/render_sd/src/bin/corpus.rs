@@ -166,6 +166,7 @@ fn render(
         "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
         "uses" => render_sd::xref::uses(sd, ctx?),
         "sd-xref" => render_sd::xref::references(sd, ctx?),
+        "maps" => render_sd::xref::maps(sd, ctx?, &def_file, run_uuid, active_tables),
         _ => return None,
     };
     Some(wrap_raw(&body))

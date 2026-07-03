@@ -23,6 +23,7 @@ use serde_json::Value;
 use crate::context::{IgContext, OwnResource};
 use crate::leaf::escape_xml;
 use crate::sdmodel::Sd;
+use crate::table::{render_maps_table, MapStructureMode, TableConfig};
 
 const MAX_DEF_SHOW: usize = 5; // psdr:2629
 
@@ -325,6 +326,35 @@ fn scan_cap_stmt(m: &mut RefMap, cs: &Value, web_path: &str, sd_url: &str) {
     if inc && !web_path.is_empty() {
         m.put(web_path.to_string(), present(cs));
     }
+}
+
+/// `mappings(defnFile, tracker)` (psdr:1323) => the `maps` fragment. Three
+/// MAPPINGS-mode generateTable calls (IN_LIST / NOT_IN_LIST / OTHER), each h4-
+/// headed; null table -> "No Mappings Found". All-three-null -> STRUC_DEF_NO_
+/// MAPPINGS (never hit — every corpus SD has forward mappings -> OTHER non-null).
+/// `getMappingTargets` (the in-IG SD set) is implicit: IN_LIST/NOT_IN_LIST are
+/// empty because no corpus mapping URI resolves to a loaded SD (see scan_mappings).
+pub fn maps(sd: &Sd, ctx: &IgContext, def_file: &str, run_uuid: &str, active_tables: bool) -> String {
+    let one = |mode: MapStructureMode| -> Option<String> {
+        let mut cfg = TableConfig::maps(run_uuid, mode);
+        cfg.active_tables = active_tables;
+        render_maps_table(sd, ctx, def_file, &cfg).map(|(b, _gaps)| b)
+    };
+    let int_table = one(MapStructureMode::InList);
+    let ext_table = one(MapStructureMode::NotInList);
+    let other_table = one(MapStructureMode::Other);
+    if int_table.is_none() && ext_table.is_none() && other_table.is_none() {
+        // STRUC_DEF_NO_MAPPINGS (unused in corpus).
+        return "<p>No Mappings</p>".to_string();
+    }
+    let mut b = String::new();
+    b.push_str("<h4>Mappings to Structures in this Implementation Guide</h4>\r\n");
+    b.push_str(&int_table.unwrap_or_else(|| "<p>No Mappings Found</p>\r\n".to_string()));
+    b.push_str("<h4>Mappings to other Structures</h4>\r\n");
+    b.push_str(&ext_table.unwrap_or_else(|| "<p>No Mappings Found</p>\r\n".to_string()));
+    b.push_str("<h4>Other Mappings</h4>\r\n");
+    b.push_str(&other_table.unwrap_or_else(|| "<p>No Mappings Found</p>\r\n".to_string()));
+    b
 }
 
 /// `references(lang, lrc)` (psdr:2254) => sd-xref. Composer: raw StringBuilder.
