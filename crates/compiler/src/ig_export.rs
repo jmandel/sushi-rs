@@ -1235,7 +1235,8 @@ fn build_resources(
 
     // 5. R5/R4 transforms on each resource entry.
     for e in &mut entries {
-        transform_resource_entry(&mut e.pairs, is_r4);
+        let cr = find_config_resource(config_resources, &e.reference_key);
+        transform_resource_entry(&mut e.pairs, is_r4, cr);
     }
 
     let resources: Vec<J> = entries
@@ -2140,13 +2141,63 @@ fn apply_order(entries: &mut [ResEntry], order: Vec<usize>) {
     }
 }
 
-fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool) {
+fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool, cr: Option<&ConfigResource>) {
+    let config_profile: Vec<String> = cr.and_then(|c| c.profile.clone()).unwrap_or_default();
+    let config_is_example = cr.and_then(|c| c.is_example);
     if is_r4 {
-        // translateR5PropertiesToR4: isExample → exampleBoolean handled at config
-        // level; nothing to do for the common path (exampleBoolean/Canonical stay).
+        // translateR5PropertiesToR4 (IGExporter.ts:1663-1686 / dist 1420-1440).
+        let example_canonical = pairs
+            .iter()
+            .find(|(k, _)| k == "exampleCanonical")
+            .and_then(|(_, v)| v.as_str().map(str::to_string));
+        // (1) If exampleCanonical is unset and config `profile` has entries, use the
+        //     first as exampleCanonical (deleting exampleBoolean).
+        if example_canonical.is_none() && !config_profile.is_empty() {
+            pairs.retain(|(k, _)| k != "exampleBoolean");
+            set_or_append(pairs, "exampleCanonical", J::String(config_profile[0].clone()));
+        }
+        // Recompute after the possible assignment above.
+        let example_canonical = pairs
+            .iter()
+            .find(|(k, _)| k == "exampleCanonical")
+            .and_then(|(_, v)| v.as_str().map(str::to_string));
+        // (2) If exampleCanonical is set and config `profile` carries any value that
+        //     differs from it, stash the full config profile list in the R5 extension.
+        if let Some(ec) = &example_canonical {
+            if config_profile.iter().any(|p| p != ec) {
+                let ext_val = J::Object({
+                    let mut m = Map::new();
+                    m.insert(
+                        "url".into(),
+                        J::String(
+                            "http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.definition.resource.profile".into(),
+                        ),
+                    );
+                    m.insert(
+                        "valueCanonical".into(),
+                        J::Array(config_profile.iter().cloned().map(J::String).collect()),
+                    );
+                    m
+                });
+                if let Some((_, v)) = pairs.iter_mut().find(|(k, _)| k == "extension") {
+                    if let J::Array(arr) = v {
+                        arr.push(ext_val);
+                    }
+                } else {
+                    pairs.push(("extension".into(), J::Array(vec![ext_val])));
+                }
+            }
+        }
+        // (3) config `isExample` → exampleBoolean when no exampleCanonical is present.
+        if let Some(ie) = config_is_example {
+            if example_canonical.is_none() {
+                set_or_append(pairs, "exampleBoolean", J::Bool(ie));
+            }
+        }
         return;
     }
-    // updateForR5: exampleBoolean/exampleCanonical → isExample (+profile).
+    // updateForR5 (IGExporter.ts:1567-1592): exampleBoolean/exampleCanonical →
+    // isExample (+profile), then config profile/isExample overrides.
     let example_canonical = pairs
         .iter()
         .find(|(k, _)| k == "exampleCanonical")
@@ -2159,13 +2210,25 @@ fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool) {
     if truthy {
         let canon = example_canonical.clone();
         pairs.retain(|(k, _)| k != "exampleBoolean" && k != "exampleCanonical");
-        pairs.push(("isExample".into(), J::Bool(true)));
+        set_or_append(pairs, "isExample", J::Bool(true));
         if let Some(c) = canon {
-            pairs.push(("profile".into(), J::Array(vec![J::String(c)])));
+            set_or_append(pairs, "profile", J::Array(vec![J::String(c)]));
         }
     } else if example_boolean == Some(false) {
         pairs.retain(|(k, _)| k != "exampleBoolean");
-        pairs.push(("isExample".into(), J::Bool(false)));
+        set_or_append(pairs, "isExample", J::Bool(false));
+    }
+    // Config `profile` override (updateForR5 line 1587-1588).
+    if !config_profile.is_empty() {
+        set_or_append(
+            pairs,
+            "profile",
+            J::Array(config_profile.iter().cloned().map(J::String).collect()),
+        );
+    }
+    // Config `isExample` override (updateForR5 line 1591-1592).
+    if let Some(ie) = config_is_example {
+        set_or_append(pairs, "isExample", J::Bool(ie));
     }
 }
 
