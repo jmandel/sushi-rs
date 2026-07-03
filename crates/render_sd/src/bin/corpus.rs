@@ -155,7 +155,7 @@ fn render(
         "inv" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Snap, true),
         "inv-key" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Key, true),
         "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),
-        "sd-use-context" => render_sd::leaf::use_context(sd, ctx?),
+        "sd-use-context" => render_sd::leaf::use_context(sd, ctx?, &core_path_for(sd)),
         "summary" => render_sd::leaf::summary(sd, ctx?, false, &core_path_for(sd)),
         "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
         _ => return None,

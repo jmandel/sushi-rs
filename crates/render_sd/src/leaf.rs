@@ -101,15 +101,16 @@ fn pluralize_element(n: i64) -> &'static str {
 /// Extension-type SDs) fire a loud gap — those need the publisher markdown
 /// engine. Non-extension profiles are fully markdown-free.
 pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v: &str) -> String {
-    // no differential -> STRUC_DEF_NO_SUMMARY (rare; corpus always has diff)
-    if sd.root.get("differential").is_none() {
-        return "<p>This structure has no summary</p>".to_string();
-    }
-    if sd_has_extension(
+    // EXT_SUMMARY at psdr:157 short-circuits the WHOLE method (before the header).
+    if let Some(md) = read_string_extension(
         sd,
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-summary",
     ) {
-        panic!("LOUD GAP: summary EXT_SUMMARY markdown (psdr:157/218) for {}", sd.id());
+        return crate::publisher_markdown::process_markdown(ctx, &md, core_path_v);
+    }
+    // no differential -> STRUC_DEF_NO_SUMMARY (rare; corpus always has diff)
+    if sd.root.get("differential").is_none() {
+        return "<p>This structure has no summary</p>".to_string();
     }
 
     let diff = sd.differential_elements();
@@ -179,7 +180,11 @@ pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v:
     ));
 
     if sd.type_name() == "Extension" {
-        panic!("LOUD GAP: summary extensionSummary markdown (psdr:223) for {}", sd.id());
+        // psdr:222 — the whole mandatory/refs/ext/slices block is replaced by
+        // extensionSummary(); the FMM block below still runs.
+        res.push_str(&extension_summary(sd, ctx, core_path_v));
+        push_fmm(sd, &mut res);
+        return res;
     }
 
     if supports + required_outrights + required_nesteds + fixeds + prohibits > 0 {
@@ -259,6 +264,13 @@ pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v:
     }
 
     // Maturity (EXT_FMM_LEVEL)
+    push_fmm(sd, &mut res);
+
+    res
+}
+
+/// psdr:264 EXT_FMM_LEVEL maturity block.
+fn push_fmm(sd: &Sd, res: &mut String) {
     if let Some(fmm) = read_string_extension(
         sd,
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
@@ -268,8 +280,100 @@ pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v:
             fmm
         ));
     }
+}
 
-    res
+/// psdr extensionSummary:285. Simple extension: one `<p>` phrase with the value
+/// type + `stripPara(processMarkdown(description))`. Complex extension: a `<p>`
+/// with `stripAllPara(processMarkdown(description))` + a `<ul>` of value slices.
+fn extension_summary(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) -> String {
+    let is_mod = ext_is_modifier(sd);
+    let desc = sd.root.get("description").and_then(|x| x.as_str()).unwrap_or("");
+    let snap = sd.snapshot_elements();
+    // ProfileUtilities.isSimpleExtension: Extension.value[x] present and not
+    // prohibited (max != 0).
+    let value = snap.iter().find(|e| e.path() == "Extension.value" || e.path() == "Extension.value[x]");
+    let is_simple = value.map(|v| v.max() != Some("0")).unwrap_or(false);
+
+    if is_simple {
+        let value = value.unwrap();
+        let type_summary = type_summary(value);
+        let md = crate::publisher_markdown::process_markdown(ctx, desc, core_path_v);
+        let stripped = crate::publisher_markdown::strip_para(&md);
+        // SDR_EXTENSION_SUMMARY = "Simple Extension with the type {0}: {1}"
+        // SDR_EXTENSION_SUMMARY_MODIFIER = "Simple <b>Modifier</b> Extension with the type {0}: {1}"
+        let phrase = if is_mod {
+            format!(
+                "Simple <b>Modifier</b> Extension with the type {}: {}",
+                type_summary, stripped
+            )
+        } else {
+            format!("Simple Extension with the type {}: {}", type_summary, stripped)
+        };
+        format!("<p>{}</p>", phrase)
+    } else {
+        // Complex: subs = the Extension.*.extension.value[x] elements, each paired
+        // with its owning slice (the preceding .extension with a sliceName).
+        let mut subs: Vec<(Option<String>, String, String)> = Vec::new(); // (sliceName, typeSummary, definition)
+        let mut slice_name: Option<String> = None;
+        let mut slice_defn: Option<String> = None;
+        for e in &snap {
+            let p = e.path();
+            if p.ends_with(".extension") && e.has_slice_name() {
+                slice_name = e.slice_name().map(String::from);
+                slice_defn = e.definition().map(String::from);
+            } else if p.ends_with(".extension.value[x]") {
+                if let Some(sn) = slice_name.take() {
+                    subs.push((Some(sn), type_summary(e), slice_defn.take().unwrap_or_default()));
+                } else {
+                    // no owning slice -> psdr skips (defn==null); we drop it.
+                }
+            }
+        }
+        let html = crate::publisher_markdown::strip_all_para(
+            &crate::publisher_markdown::process_markdown(ctx, desc, core_path_v),
+        );
+        let mut b = String::new();
+        // TEXT_ICON_EXTENSION_COMPLEX = "Complex Extension"
+        b.push_str(&format!(
+            "<p>Complex Extension: {}</p><ul data-fhir=\"generated-heirarchy\">",
+            html
+        ));
+        for (sn, ts, defn) in &subs {
+            let sn = sn.clone().unwrap_or_default();
+            let dmd = crate::publisher_markdown::strip_para(
+                &crate::publisher_markdown::process_markdown(ctx, defn, core_path_v),
+            );
+            b.push_str(&format!("<li>{}: {}: {}</li>\r\n", sn, ts, dmd));
+        }
+        b.push_str("</ul>");
+        b
+    }
+}
+
+/// ElementDefinition.typeSummary(): comma-space-joined workingCode() of types.
+fn type_summary(ed: &crate::sdmodel::Ed) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for t in ed.types() {
+        // hasCode(): code present
+        if !t.code().is_empty() {
+            parts.push(t.working_code());
+        }
+    }
+    parts.join(", ")
+}
+
+/// ProfileUtilities.isModifierExtension(sd): the snapshot (else diff) "Extension"
+/// element isModifier.
+fn ext_is_modifier(sd: &Sd) -> bool {
+    let snap = sd.snapshot_elements();
+    if let Some(e) = snap.iter().find(|e| e.path() == "Extension") {
+        return e.is_modifier();
+    }
+    sd.differential_elements()
+        .iter()
+        .find(|e| e.path() == "Extension")
+        .map(|e| e.is_modifier())
+        .unwrap_or(false)
 }
 
 fn try_add(list: &mut Vec<String>, s: Option<String>) {
@@ -462,15 +566,33 @@ fn igp_is_datatype(ctx: &crate::context::IgContext, tail: &str) -> bool {
 /// psdr useContext:2877. Renders the extension usage-context list (or the
 /// "any element" default for non-extension SDs). Markdown-dependent branches
 /// (deprecated standards-status reason) fire a loud gap.
-pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext) -> String {
+pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) -> String {
     let mut div = el("div");
 
-    // deprecated standards-status block (psdr:2879) — needs markdown; loud gap.
+    // deprecated standards-status block (psdr:2879).
     if standards_status(sd).as_deref() == Some("deprecated") {
-        panic!(
-            "LOUD GAP: sd-use-context deprecated standards-status markdown block (psdr:2879) for {}",
-            sd.id()
+        let mut ddiv = el("div");
+        ddiv.set_attribute(
+            "style",
+            "background-color: #ffe6e6; border: 1px solid black; border-radius: 10px; padding: 10px",
         );
+        let mut p = el("p");
+        let mut b = el("b");
+        // SDR_EXT_DEPR
+        tx(&mut b, "This extension is deprecated and should no longer be used");
+        p.add_child_node(b);
+        ddiv.add_child_node(p);
+        // reason = standards-status ext's value's nested standards-status-reason ext.
+        if let Some(reason) = standards_status_reason(sd) {
+            // ddiv.markdown(preProcessMarkdown(reason)): preProcessMarkdown then
+            // MarkDownProcessor.process then XhtmlParser re-parse -> addChildren.
+            let pre = crate::publisher_markdown::pre_process_markdown(ctx, &reason, core_path_v);
+            let html = crate::publisher_markdown::md_process(&pre);
+            for node in crate::publisher_markdown::markdown_children_from_html(&html) {
+                ddiv.add_child_node(node);
+            }
+        }
+        div.add_child_node(ddiv);
     }
     // modifier extension note (psdr:2894)
     if is_modifier_extension(sd) {
@@ -629,6 +751,33 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext) -> String {
 
 fn standards_status(sd: &Sd) -> Option<String> {
     read_string_extension(sd, "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status")
+}
+
+/// psdr:2882-2883: the standards-status extension's VALUE carries a nested
+/// `standards-status-reason` extension. In JSON the primitive `valueCode` sidecar
+/// `_valueCode` holds `.extension[]`; read that reason's markdown value.
+fn standards_status_reason(sd: &Sd) -> Option<String> {
+    let arr = sd.root.get("extension")?.as_array()?;
+    for x in arr {
+        if x.get("url").and_then(|u| u.as_str())
+            == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status")
+        {
+            let side = x.get("_valueCode")?;
+            let exts = side.get("extension")?.as_array()?;
+            for e in exts {
+                if e.get("url").and_then(|u| u.as_str())
+                    == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status-reason")
+                {
+                    return e
+                        .get("valueMarkdown")
+                        .or_else(|| e.get("valueString"))
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// ProfileUtilities.isModifierExtension: type==Extension AND the

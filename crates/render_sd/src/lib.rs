@@ -18,6 +18,7 @@ pub mod gentypes;
 pub mod grid;
 pub mod leaf;
 pub mod markdown;
+pub mod publisher_markdown;
 pub mod sdmodel;
 pub mod span;
 pub mod table;
