@@ -476,8 +476,39 @@ maps-<CoreType> (one per FHIR core type, IG-invariant).
 | inv | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_SNAP |
 | inv-key | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_KEY (reuses key_elements) |
 | inv-diff | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_DIFF (reuses supplement_missing_diff) |
+| sd-use-context | 7/7 | 22/22 | 67/67 (3 gap) | useContext:2877; 3 us-core gaps = deprecated markdown |
 
-`render_sd::leaf` (~470 LOC). Findings this checkpoint (session 5):
+sd-use-context findings (session 5, checkpoint 2):
+- **Composer inline no-pretty fix (load-bearing).** `el()` built nodes via
+  `XhtmlNode::new` which does NOT set `notPretty` for the inline element set
+  (b/code/a/span/…). fhir-core's `div.code()`/`li.b()` go through `makeTag`
+  (XhtmlNode.java:218) which sets notPretty. Symptom: `<code><a>Location</a>`
+  got indented/newlined instead of the golden's inline `<code>\n<a…>x</a>    </code>`.
+  Fixed by adding `render_xhtml::XhtmlNode::new_tag` (makeTag as free ctor) and
+  routing `el()` through it. This also hardened inv (still green).
+- Non-extension SDs + Element-ID / Extension / fhirpath contexts + context
+  invariants ported (composer html_pretty). Element-ID links the core type
+  webPath via `ctx.resolve_type` (R4 core page).
+- **3 us-core gaps = the deprecated standards-status markdown block**
+  (psdr:2879 → `ddiv.markdown`). This needs the PUBLISHER markdown engine
+  (BaseRenderer.processMarkdown = preProcessMarkdown `[[[link]]]`/`||`/relative-
+  url rewrite + fhir-core MarkDownProcessor). That engine is a shared F4/F1b
+  dependency (see the blocker note below). Fired as LOUD GAP; harness now
+  catch_unwinds per-SD and reports `(N gaps)`.
+
+**F4 MARKDOWN BLOCKER (session 5).** Beyond the trivial leaves, most remaining
+kinds route description/definition strings through the publisher's
+`processMarkdown` (BaseRenderer:184): preProcessMarkdown (FHIR `[[[ ]]]` link
+syntax, `||`→para, `processRelativeUrls`, corePath prefixing) THEN
+`markdownEngine.process` (fhir-core MarkDownProcessor, dialect DARING_FIREBALL
+by default / COMMON_MARK per param — the F1b engine). Corpus HITS (not zero):
+summary simple-extension descriptions (11 us-core), useContext deprecated (3),
+tx binding descriptions, dict, sd-xref `present()`. This is a genuine shared
+substrate, larger than any single leaf. Recommend a dedicated
+`publisher_markdown` port (preProcessMarkdown + a MarkDownProcessor subset)
+as its own increment before summary/tx/dict can go fully green.
+
+`render_sd::leaf` (~700 LOC). Findings from checkpoint 1 (session 5):
 - **inv composer = HTML pretty** (`new XhtmlComposer(false,true)` = xml=false,
   pretty=true → Config::html_pretty + compose_nodes overload, NO breakBlocks).
   Table is `class="list presentation" data-fhir="generated-heirarchy"`.

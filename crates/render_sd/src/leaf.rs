@@ -21,9 +21,9 @@ use crate::sdmodel::Sd;
 // ---------------------------------------------------------------------------
 
 fn el(name: &str) -> XhtmlNode {
-    let mut n = XhtmlNode::new(NodeType::Element);
-    n.set_name(name);
-    n
+    // makeTag semantics: sets notPretty for the inline element set (b, code, a,
+    // span, br, ...) so the composer's pretty path matches fhir-core byte-for-byte.
+    XhtmlNode::new_tag(name)
 }
 
 /// `XhtmlNode.tx(text)` — appends a text node child, returns self.
@@ -82,6 +82,219 @@ pub fn escape_xml(s: &str) -> String {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// sd-use-context  (psdr useContext:2877) — HTML-pretty composer
+// ---------------------------------------------------------------------------
+
+/// psdr useContext:2877. Renders the extension usage-context list (or the
+/// "any element" default for non-extension SDs). Markdown-dependent branches
+/// (deprecated standards-status reason) fire a loud gap.
+pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext) -> String {
+    let mut div = el("div");
+
+    // deprecated standards-status block (psdr:2879) — needs markdown; loud gap.
+    if standards_status(sd).as_deref() == Some("deprecated") {
+        panic!(
+            "LOUD GAP: sd-use-context deprecated standards-status markdown block (psdr:2879) for {}",
+            sd.id()
+        );
+    }
+    // modifier extension note (psdr:2894)
+    if is_modifier_extension(sd) {
+        let mut ddiv = el("div");
+        ddiv.set_attribute(
+            "style",
+            "border: 1px solid black; border-radius: 10px; padding: 10px",
+        );
+        let mut p = el("p");
+        let mut b = el("b");
+        tx(&mut b, "This extension is a modifier extension.");
+        p.add_child_node(b);
+        ddiv.add_child_node(p);
+        div.add_child_node(ddiv);
+    }
+
+    let contexts = sd
+        .root
+        .get("context")
+        .and_then(|c| c.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if contexts.is_empty() {
+        let mut p = el("p");
+        tx(
+            &mut p,
+            "This extension does not specify which elements it should be used on",
+        );
+        div.add_child_node(p);
+    } else {
+        let mut p = el("p");
+        tx(
+            &mut p,
+            "This extension may be used on the following element(s)",
+        );
+        div.add_child_node(p);
+        let mut ul = el("ul");
+        for c in &contexts {
+            let ty = c.get("type").and_then(|x| x.as_str()).unwrap_or("");
+            let expr = c.get("expression").and_then(|x| x.as_str()).unwrap_or("");
+            let mut li = el("li");
+            match ty {
+                "element" => {
+                    tx(&mut li, "Element ID");
+                    tx(&mut li, ": ");
+                    // tn = expr up to first '.'
+                    let tn = expr.split('.').next().unwrap_or(expr);
+                    let mut code = el("code");
+                    let webpath = ctx.resolve_type(tn).map(|r| r.web_path);
+                    if let Some(wp) = webpath.filter(|w| !w.is_empty()) {
+                        let mut a = el("a");
+                        a.set_attribute("href", wp);
+                        tx(&mut a, expr);
+                        code.add_child_node(a);
+                    } else {
+                        tx(&mut code, expr);
+                    }
+                    li.add_child_node(code);
+                }
+                "extension" => {
+                    tx(&mut li, "Extension");
+                    tx(&mut li, ": ");
+                    if let Some(r) = ctx.resolve(expr).filter(|r| !r.web_path.is_empty()) {
+                        let mut a = el("a");
+                        a.set_attribute("href", r.web_path.clone());
+                        tx(&mut a, &r.present());
+                        li.add_child_node(a);
+                    } else {
+                        let mut code = el("code");
+                        tx(&mut code, expr);
+                        li.add_child_node(code);
+                    }
+                }
+                "fhirpath" => {
+                    let mut a = el("a");
+                    a.set_attribute("href", "http://hl7.org/fhir/R4/fhirpath.html");
+                    tx(&mut a, "Path");
+                    li.add_child_node(a);
+                    tx(&mut li, expr);
+                }
+                _ => {
+                    tx(&mut li, "?type?: ");
+                    tx(&mut li, expr);
+                }
+            }
+            if c.get("extension")
+                .and_then(|e| e.as_array())
+                .map(|a| {
+                    a.iter().any(|x| {
+                        x.get("url").and_then(|u| u.as_str())
+                            == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-version-specific-use")
+                    })
+                })
+                .unwrap_or(false)
+            {
+                panic!("LOUD GAP: sd-use-context fhir-version-specific-use range (psdr:2942) for {}", sd.id());
+            }
+            ul.add_child_node(li);
+        }
+        div.add_child_node(ul);
+    }
+
+    // context invariants (psdr:2949)
+    if let Some(ci) = sd
+        .root
+        .get("contextInvariant")
+        .and_then(|c| c.as_array())
+        .filter(|a| !a.is_empty())
+    {
+        if ci.len() == 1 {
+            let mut x = el("p");
+            tx(
+                &mut x,
+                "In addition, the extension can only be used when this FHIRPath expression is true",
+            );
+            tx(&mut x, ": ");
+            div.add_child_node(x);
+            let mut p2 = el("p");
+            let mut code = el("code");
+            tx(&mut code, ci[0].as_str().unwrap_or(""));
+            p2.add_child_node(code);
+            div.add_child_node(p2);
+        } else {
+            let mut x = el("p");
+            tx(
+                &mut x,
+                "In addition, the extension can only be used when these FHIRPath expressions are true",
+            );
+            tx(&mut x, ": ");
+            div.add_child_node(x);
+            let mut ul = el("ul");
+            for sv in ci {
+                let mut li = el("li");
+                let mut code = el("code");
+                tx(&mut code, sv.as_str().unwrap_or(""));
+                li.add_child_node(code);
+                ul.add_child_node(li);
+            }
+            div.add_child_node(ul);
+        }
+    }
+
+    if sd_has_extension(
+        sd,
+        "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-version-specific-use",
+    ) {
+        panic!(
+            "LOUD GAP: sd-use-context SD-level fhir-version-specific-use (psdr:2966) for {}",
+            sd.id()
+        );
+    }
+
+    compose_children_html_pretty(&div)
+}
+
+fn standards_status(sd: &Sd) -> Option<String> {
+    read_string_extension(sd, "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status")
+}
+
+/// ProfileUtilities.isModifierExtension: type==Extension AND the
+/// Extension.value / root has modifier semantics. Simplified: SD is an
+/// Extension whose differential marks a modifierExtension. We approximate via
+/// the snapshot Extension root isModifier — corpus has none, so this is safe.
+fn is_modifier_extension(sd: &Sd) -> bool {
+    if sd.type_name() != "Extension" {
+        return false;
+    }
+    // isModifier on the Extension root element
+    sd.snapshot_elements()
+        .iter()
+        .any(|e| e.path() == "Extension" && e.is_modifier())
+}
+
+fn sd_has_extension(sd: &Sd, url: &str) -> bool {
+    sd.root
+        .get("extension")
+        .and_then(|e| e.as_array())
+        .map(|a| a.iter().any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .unwrap_or(false)
+}
+
+fn read_string_extension(sd: &Sd, url: &str) -> Option<String> {
+    let arr = sd.root.get("extension")?.as_array()?;
+    for x in arr {
+        if x.get("url").and_then(|u| u.as_str()) == Some(url) {
+            if let Some(v) = x.get("valueCode").and_then(|v| v.as_str()) {
+                return Some(v.to_string());
+            }
+            if let Some(v) = x.get("valueString").and_then(|v| v.as_str()) {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------

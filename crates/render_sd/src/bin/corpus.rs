@@ -136,6 +136,7 @@ fn render(
         "inv" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Snap, true),
         "inv-key" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Key, true),
         "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),
+        "sd-use-context" => render_sd::leaf::use_context(sd, ctx?),
         _ => return None,
     };
     Some(wrap_raw(&body))
@@ -246,6 +247,7 @@ fn main() {
     let active_tables = ig_active_tables(ig);
     let mut pass = 0;
     let mut total = 0;
+    let mut gaps = 0;
     let mut fails: Vec<(String, usize, usize)> = Vec::new();
     let missing_golden = 0;
 
@@ -286,11 +288,22 @@ fn main() {
             eprintln!("  skip {} ({}): golden is a publisher error artifact", id, kind);
             continue;
         }
-        let ours = match render(kind, &sd, ctx.as_ref(), &run_uuid, active_tables) {
-            Some(o) => o,
-            None => {
+        // Render under catch_unwind so a single SD hitting a documented LOUD
+        // GAP (panic) is reported and skipped rather than aborting the whole
+        // IG run — lets us score the covered branches while surfacing gaps.
+        let render_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            render(kind, &sd, ctx.as_ref(), &run_uuid, active_tables)
+        }));
+        let ours = match render_res {
+            Ok(Some(o)) => o,
+            Ok(None) => {
                 eprintln!("unsupported kind {}", kind);
                 std::process::exit(2);
+            }
+            Err(_) => {
+                eprintln!("  GAP {} ({}): render panicked (loud gap)", id, kind);
+                gaps += 1;
+                continue;
             }
         };
         // Optional: dump ours + golden for one id (debug). `--dump <id>` writes
@@ -318,7 +331,7 @@ fn main() {
         let _ = missing_golden;
     }
 
-    println!("{} {}: {}/{} byte-identical", kind, ig, pass, total);
+    println!("{} {}: {}/{} byte-identical{}", kind, ig, pass, total, if gaps>0 {format!(" ({} gaps)", gaps)} else {String::new()});
     if !fails.is_empty() {
         println!("  {} failures (id, first-divergence-byte, golden-len):", fails.len());
         for (id, d, len) in fails.iter().take(20) {

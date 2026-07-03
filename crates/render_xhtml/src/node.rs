@@ -218,6 +218,20 @@ impl XhtmlNode {
         self.child_nodes.last_mut().unwrap()
     }
 
+    /// Java `makeTag` (XhtmlNode.java:218) as a free constructor: builds a
+    /// detached element node with `notPretty` set for the inline set — the same
+    /// state `add_tag` gives a child. Use this when building a node tree bottom
+    /// up (fragment leaf renderers) rather than via a parent's `add_tag`.
+    pub fn new_tag(name: impl Into<String>) -> XhtmlNode {
+        let name = name.into();
+        let mut node = XhtmlNode::new(NodeType::Element);
+        if is_inline_no_pretty(&name) {
+            node.not_pretty = true;
+        }
+        node.set_name(name);
+        node
+    }
+
     /// Java `addTag` -> `makeTag` (XhtmlNode.java:242, 218). `makeTag` also sets
     /// `notPretty` for the inline element set (XhtmlNode.java:236).
     pub fn add_tag(&mut self, name: impl Into<String>) -> &mut XhtmlNode {
