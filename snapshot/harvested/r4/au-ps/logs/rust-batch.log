@@ -5,13 +5,13 @@ OK rust au-ps-condition
 OK rust au-ps-diagnosticresult-path
 OK rust au-ps-encounter
 OK rust au-ps-immunization
-OK rust au-ps-medication
 OK rust au-ps-medicationrequest
+OK rust au-ps-medication
 OK rust au-ps-medicationstatement
 OK rust au-ps-organization
 OK rust au-ps-patient
-OK rust au-ps-practitioner
 OK rust au-ps-practitionerrole
+OK rust au-ps-practitioner
 OK rust au-ps-procedure
 OK rust au-ps-relatedperson
 OK rust au-ps-smokingstatus

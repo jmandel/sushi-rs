@@ -201,6 +201,12 @@ pub(crate) fn process_simple_path_default(
         }
         ctx.add_to_result(outcome.clone(), None);
         let anchor_idx = ctx.output.len() - 1;
+        // PU userData SNAPSHOT_auto_added_slicing: the anchor got synthetic
+        // extension slicing (makeExtensionSlicing) because diff0 has none. Marks
+        // it for the finalize slice-min overwrite (PU:1012).
+        if !has_slicing(&diff0) {
+            ctx.output_ann[anchor_idx].auto_added_slicing = true;
+        }
         clear_id(&mut ctx.output[anchor_idx]);
 
         if !has_slice_name(&diff0) {

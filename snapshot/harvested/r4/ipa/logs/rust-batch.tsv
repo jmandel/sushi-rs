@@ -2,11 +2,11 @@ snapshot/harvested/r4/ipa/fixtures/ipa-allergyintolerance.json	snapshot/harveste
 snapshot/harvested/r4/ipa/fixtures/ipa-condition.json	snapshot/harvested/r4/ipa/rust/ipa-condition.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-documentreference.json	snapshot/harvested/r4/ipa/rust/ipa-documentreference.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-immunization.json	snapshot/harvested/r4/ipa/rust/ipa-immunization.snapshot.json
-snapshot/harvested/r4/ipa/fixtures/ipa-medication.json	snapshot/harvested/r4/ipa/rust/ipa-medication.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-medicationrequest.json	snapshot/harvested/r4/ipa/rust/ipa-medicationrequest.snapshot.json
+snapshot/harvested/r4/ipa/fixtures/ipa-medication.json	snapshot/harvested/r4/ipa/rust/ipa-medication.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-medicationstatement.json	snapshot/harvested/r4/ipa/rust/ipa-medicationstatement.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-observation.json	snapshot/harvested/r4/ipa/rust/ipa-observation.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-patient.json	snapshot/harvested/r4/ipa/rust/ipa-patient.snapshot.json
-snapshot/harvested/r4/ipa/fixtures/ipa-practitioner.json	snapshot/harvested/r4/ipa/rust/ipa-practitioner.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-practitionerrole.json	snapshot/harvested/r4/ipa/rust/ipa-practitionerrole.snapshot.json
+snapshot/harvested/r4/ipa/fixtures/ipa-practitioner.json	snapshot/harvested/r4/ipa/rust/ipa-practitioner.snapshot.json
 snapshot/harvested/r4/ipa/fixtures/ipa-problem-list-item.json	snapshot/harvested/r4/ipa/rust/ipa-problem-list-item.snapshot.json

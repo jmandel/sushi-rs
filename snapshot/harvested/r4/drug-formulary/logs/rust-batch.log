@@ -2,19 +2,19 @@ OK rust usdf-AdditionalCoverageInformation-extension
 OK rust usdf-AvailabilityPeriod-extension
 OK rust usdf-AvailabilityStatus-extension
 OK rust usdf-DrugTierID-extension
-OK rust usdf-Formulary
 OK rust usdf-FormularyBulkDataGraphDefinition
 OK rust usdf-FormularyDrug
 OK rust usdf-FormularyItem
 OK rust usdf-FormularyReference-extension
+OK rust usdf-Formulary
 OK rust usdf-InsurancePlanLocation
-OK rust usdf-PayerInsurancePlan
 OK rust usdf-PayerInsurancePlanBulkDataGraphDefinition
+OK rust usdf-PayerInsurancePlan
 OK rust usdf-PharmacyBenefitType-extension
 OK rust usdf-PriorAuthorization-extension
 OK rust usdf-PriorAuthorizationNewStartsOnly-extension
-OK rust usdf-QuantityLimit-extension
 OK rust usdf-QuantityLimitDetail-extension
+OK rust usdf-QuantityLimit-extension
 OK rust usdf-StepTherapyLimit-extension
 OK rust usdf-StepTherapyLimitNewStartsOnly-extension
 RUST BATCH: ok=19 failed=0 total=19

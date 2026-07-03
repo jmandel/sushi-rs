@@ -1,4 +1,3 @@
-snapshot/harvested/r4/eu-eps/fixtures/MedicationStatement-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/MedicationStatement-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/allergyintolerance-obl-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/allergyintolerance-obl-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/bundle-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/bundle-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/composition-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/composition-eu-eps.snapshot.json
@@ -11,6 +10,7 @@ snapshot/harvested/r4/eu-eps/fixtures/flag-alert-obl-eu-eps.json	snapshot/harves
 snapshot/harvested/r4/eu-eps/fixtures/immunization-obl-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/immunization-obl-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/medication-obl-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/medication-obl-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/medicationrequest-obl-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/medicationrequest-obl-eu-eps.snapshot.json
+snapshot/harvested/r4/eu-eps/fixtures/MedicationStatement-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/MedicationStatement-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/observation-pregnancy-edd-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/observation-pregnancy-edd-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/observation-pregnancy-gestationalAge-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/observation-pregnancy-gestationalAge-eu-eps.snapshot.json
 snapshot/harvested/r4/eu-eps/fixtures/observation-pregnancy-outcome-eu-eps.json	snapshot/harvested/r4/eu-eps/rust/observation-pregnancy-outcome-eu-eps.snapshot.json

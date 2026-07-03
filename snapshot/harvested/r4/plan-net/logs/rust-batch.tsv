@@ -12,10 +12,10 @@ snapshot/harvested/r4/plan-net/fixtures/plannet-HealthcareService.json	snapshot/
 snapshot/harvested/r4/plan-net/fixtures/plannet-InsurancePlan.json	snapshot/harvested/r4/plan-net/rust/plannet-InsurancePlan.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/plannet-Location.json	snapshot/harvested/r4/plan-net/rust/plannet-Location.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/plannet-Network.json	snapshot/harvested/r4/plan-net/rust/plannet-Network.snapshot.json
-snapshot/harvested/r4/plan-net/fixtures/plannet-Organization.json	snapshot/harvested/r4/plan-net/rust/plannet-Organization.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/plannet-OrganizationAffiliation.json	snapshot/harvested/r4/plan-net/rust/plannet-OrganizationAffiliation.snapshot.json
-snapshot/harvested/r4/plan-net/fixtures/plannet-Practitioner.json	snapshot/harvested/r4/plan-net/rust/plannet-Practitioner.snapshot.json
+snapshot/harvested/r4/plan-net/fixtures/plannet-Organization.json	snapshot/harvested/r4/plan-net/rust/plannet-Organization.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/plannet-PractitionerRole.json	snapshot/harvested/r4/plan-net/rust/plannet-PractitionerRole.snapshot.json
+snapshot/harvested/r4/plan-net/fixtures/plannet-Practitioner.json	snapshot/harvested/r4/plan-net/rust/plannet-Practitioner.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/practitioner-period.json	snapshot/harvested/r4/plan-net/rust/practitioner-period.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/practitioner-qualification.json	snapshot/harvested/r4/plan-net/rust/practitioner-qualification.snapshot.json
 snapshot/harvested/r4/plan-net/fixtures/qualification.json	snapshot/harvested/r4/plan-net/rust/qualification.snapshot.json

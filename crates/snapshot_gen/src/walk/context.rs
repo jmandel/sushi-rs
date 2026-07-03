@@ -28,6 +28,10 @@ pub enum Severity {
 pub(crate) struct Annotation {
     /// SNAPSHOT_diff_source: the diff index this output row consumed (if any).
     pub diff_source: Option<usize>,
+    /// SNAPSHOT_auto_added_slicing (PU userData): the slicing block on this row
+    /// was synthesized by makeExtensionSlicing, so the finalize slice-min pass is
+    /// allowed to overwrite its `min` from the sum of slice mins (PU:1012-1014).
+    pub auto_added_slicing: bool,
 }
 
 pub(crate) struct WalkConfig {
@@ -92,6 +96,9 @@ impl<'a> WalkContext<'a> {
             }
         }
         self.output.push(element);
-        self.output_ann.push(Annotation { diff_source });
+        self.output_ann.push(Annotation {
+            diff_source,
+            auto_added_slicing: false,
+        });
     }
 }

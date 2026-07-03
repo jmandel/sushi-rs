@@ -11,13 +11,13 @@ OK rust au-core-healthcareservice
 OK rust au-core-heartrate
 OK rust au-core-immunization
 OK rust au-core-location
-OK rust au-core-medication
 OK rust au-core-medicationrequest
+OK rust au-core-medication
 OK rust au-core-medicationstatement
 OK rust au-core-organization
 OK rust au-core-patient
-OK rust au-core-practitioner
 OK rust au-core-practitionerrole
+OK rust au-core-practitioner
 OK rust au-core-procedure
 OK rust au-core-relatedperson
 OK rust au-core-resprate

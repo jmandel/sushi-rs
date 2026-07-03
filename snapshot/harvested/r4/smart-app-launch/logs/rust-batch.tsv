@@ -1,6 +1,6 @@
 snapshot/harvested/r4/smart-app-launch/fixtures/smart-app-state-basic.json	snapshot/harvested/r4/smart-app-launch/rust/smart-app-state-basic.snapshot.json
 snapshot/harvested/r4/smart-app-launch/fixtures/task-ehr-launch.json	snapshot/harvested/r4/smart-app-launch/rust/task-ehr-launch.snapshot.json
 snapshot/harvested/r4/smart-app-launch/fixtures/task-standalone-launch.json	snapshot/harvested/r4/smart-app-launch/rust/task-standalone-launch.snapshot.json
-snapshot/harvested/r4/smart-app-launch/fixtures/user-access-brand.json	snapshot/harvested/r4/smart-app-launch/rust/user-access-brand.snapshot.json
 snapshot/harvested/r4/smart-app-launch/fixtures/user-access-brands-bundle.json	snapshot/harvested/r4/smart-app-launch/rust/user-access-brands-bundle.snapshot.json
+snapshot/harvested/r4/smart-app-launch/fixtures/user-access-brand.json	snapshot/harvested/r4/smart-app-launch/rust/user-access-brand.snapshot.json
 snapshot/harvested/r4/smart-app-launch/fixtures/user-access-endpoint.json	snapshot/harvested/r4/smart-app-launch/rust/user-access-endpoint.snapshot.json

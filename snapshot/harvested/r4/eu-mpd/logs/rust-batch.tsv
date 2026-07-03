@@ -1,4 +1,4 @@
 snapshot/harvested/r4/eu-mpd/fixtures/Dosage-eu-mpd.json	snapshot/harvested/r4/eu-mpd/rust/Dosage-eu-mpd.snapshot.json
-snapshot/harvested/r4/eu-mpd/fixtures/Medication-eu-mpd.json	snapshot/harvested/r4/eu-mpd/rust/Medication-eu-mpd.snapshot.json
 snapshot/harvested/r4/eu-mpd/fixtures/MedicationDispense-eu-mpd.json	snapshot/harvested/r4/eu-mpd/rust/MedicationDispense-eu-mpd.snapshot.json
+snapshot/harvested/r4/eu-mpd/fixtures/Medication-eu-mpd.json	snapshot/harvested/r4/eu-mpd/rust/Medication-eu-mpd.snapshot.json
 snapshot/harvested/r4/eu-mpd/fixtures/MedicationRequest-eu-mpd.json	snapshot/harvested/r4/eu-mpd/rust/MedicationRequest-eu-mpd.snapshot.json

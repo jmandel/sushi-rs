@@ -12,10 +12,10 @@ OK rust plannet-HealthcareService
 OK rust plannet-InsurancePlan
 OK rust plannet-Location
 OK rust plannet-Network
-OK rust plannet-Organization
 OK rust plannet-OrganizationAffiliation
-OK rust plannet-Practitioner
+OK rust plannet-Organization
 OK rust plannet-PractitionerRole
+OK rust plannet-Practitioner
 OK rust practitioner-period
 OK rust practitioner-qualification
 OK rust qualification

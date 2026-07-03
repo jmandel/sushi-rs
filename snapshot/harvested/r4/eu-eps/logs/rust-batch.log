@@ -1,4 +1,3 @@
-OK rust MedicationStatement-eu-eps
 OK rust allergyintolerance-obl-eu-eps
 OK rust bundle-eu-eps
 OK rust composition-eu-eps
@@ -11,6 +10,7 @@ OK rust flag-alert-obl-eu-eps
 OK rust immunization-obl-eu-eps
 OK rust medication-obl-eu-eps
 OK rust medicationrequest-obl-eu-eps
+OK rust MedicationStatement-eu-eps
 OK rust observation-pregnancy-edd-eu-eps
 OK rust observation-pregnancy-gestationalAge-eu-eps
 OK rust observation-pregnancy-outcome-eu-eps

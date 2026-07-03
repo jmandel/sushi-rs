@@ -79,17 +79,169 @@ pub(crate) fn lenient_r5_read_r4(sd: &Value) -> Value {
     out
 }
 
+/// Port of `PackageHackerR5.fixLoadedResource` (BaseWorkerContext:417, called
+/// from `registerResourceFromPackage` for every package-loaded resource). These
+/// are load-time content fixups on specific core R4 StructureDefinitions, all
+/// gated by exact url + `fhirVersion == 4.0.1`, so they only ever fire on the
+/// named core resources (never on IG profiles). Idempotent. Only the SD hacks
+/// are ported (the CodeSystem/ValueSet `.hack()` version fixes and the
+/// packageInfo-keyed r2b/extensions.r4 removeIf are not exercised by this
+/// corpus). See PackageHackerR5.java:14-135.
+pub(crate) fn fix_loaded_resource(sd: &mut Value) {
+    let url = sd.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+    let ver = sd.get("fhirVersion").and_then(Value::as_str).unwrap_or("");
+    let rtype = sd.get("type").and_then(Value::as_str).unwrap_or("").to_string();
+    let base_def = sd
+        .get("baseDefinition")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let is_r4 = ver == "4.0.1";
+    if !is_r4 {
+        return;
+    }
+
+    // For each element in snapshot + differential, apply the per-element fixup.
+    let mut apply = |f: &dyn Fn(&mut Value)| {
+        for section in ["snapshot", "differential"] {
+            if let Some(elements) = sd
+                .get_mut(section)
+                .and_then(|s| s.get_mut("element"))
+                .and_then(Value::as_array_mut)
+            {
+                for ed in elements {
+                    f(ed);
+                }
+            }
+        }
+    };
+
+    // iso21090-nullFlavor (PackageHackerR5:45): strip the versioned v3-NullFlavor
+    // valueSet suffix from bindings.
+    if url == "http://hl7.org/fhir/StructureDefinition/iso21090-nullFlavor" {
+        apply(&|ed| {
+            if let Some(b) = ed.get_mut("binding") {
+                if b.get("valueSet").and_then(Value::as_str)
+                    == Some("http://terminology.hl7.org/ValueSet/v3-NullFlavor|4.0.1")
+                {
+                    if let Some(o) = b.as_object_mut() {
+                        o.insert(
+                            "valueSet".to_string(),
+                            Value::String(
+                                "http://terminology.hl7.org/ValueSet/v3-NullFlavor".to_string(),
+                            ),
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    // DeviceUseStatement (PackageHackerR5:58): rewrite the null.html bodySite link
+    // in requirements.
+    if url == "http://hl7.org/fhir/StructureDefinition/DeviceUseStatement" {
+        apply(&|ed| {
+            if let Some(r) = ed.get("requirements").and_then(Value::as_str) {
+                let fixed = r.replace(
+                    "[http://hl7.org/fhir/StructureDefinition/bodySite](null.html)",
+                    "[http://hl7.org/fhir/StructureDefinition/bodySite](http://hl7.org/fhir/extension-bodysite.html)",
+                );
+                if fixed != r {
+                    if let Some(o) = ed.as_object_mut() {
+                        o.insert("requirements".to_string(), Value::String(fixed));
+                    }
+                }
+            }
+        });
+    }
+
+    // ServiceRequest (PackageHackerR5:74): trim the trailing LOINC-Order-codes
+    // sentence from the code binding description.
+    if url == "http://hl7.org/fhir/StructureDefinition/ServiceRequest" {
+        apply(&|ed| {
+            if let Some(b) = ed.get_mut("binding") {
+                if b.get("description").and_then(Value::as_str) == Some(
+                    "Codes for tests or services that can be carried out by a designated individual, organization or healthcare service.  For laboratory, LOINC is  (preferred)[http://build.fhir.org/terminologies.html#preferred] and a valueset using LOINC Order codes is available [here](valueset-diagnostic-requests.html)."
+                ) {
+                    if let Some(o) = b.as_object_mut() {
+                        o.insert("description".to_string(), Value::String(
+                            "Codes for tests or services that can be carried out by a designated individual, organization or healthcare service.  For laboratory, LOINC is  (preferred)[http://build.fhir.org/terminologies.html#preferred].".to_string()
+                        ));
+                    }
+                }
+            }
+        });
+    }
+
+    // extensions.r4 R5-only datatype removal (PackageHackerR5:115): the R4 build
+    // of the extensions pack carries R5-only datatypes in its element `type[]`
+    // lists; the loader strips them. Java scopes this to
+    // `packageInfo.getId() == "hl7.fhir.uv.extensions.r4"`, but these five codes
+    // are genuinely R5-only and cannot validly appear in any R4 resource, so
+    // stripping them from every R4-loaded SD's `type[]` is behaviourally
+    // identical for this corpus while staying inside resolve.rs (no package.rs
+    // per-resource-package plumbing needed). Fixes AU Core
+    // `au-core-rsg-sexassignedab` Extension.value[x] (54→49 types).
+    {
+        const R5_ONLY: [&str; 5] = [
+            "integer64",
+            "CodeableReference",
+            "RatioRange",
+            "Availability",
+            "ExtendedContactDetail",
+        ];
+        apply(&|ed| {
+            if let Some(types) = ed.get_mut("type").and_then(Value::as_array_mut) {
+                types.retain(|t| {
+                    t.get("code")
+                        .and_then(Value::as_str)
+                        .map(|c| !R5_ONLY.contains(&c))
+                        .unwrap_or(true)
+                });
+            }
+        });
+    }
+
+    // vitalsigns binding relaxation (PackageHackerR5:90): any Observation SD that
+    // is `vitalsigns` or derives from it backs the ucum-vitals-common binding on
+    // `Observation.component.value[x]` off to EXTENSIBLE.
+    if url.starts_with("http://hl7.org/fhir/StructureDefinition/")
+        && rtype == "Observation"
+        && (url == "http://hl7.org/fhir/StructureDefinition/vitalsigns"
+            || base_def == "http://hl7.org/fhir/StructureDefinition/vitalsigns")
+    {
+        apply(&|ed| {
+            if ed.get("path").and_then(Value::as_str) == Some("Observation.component.value[x]") {
+                if let Some(b) = ed.get_mut("binding") {
+                    if b.get("valueSet").and_then(Value::as_str)
+                        == Some("http://hl7.org/fhir/ValueSet/ucum-vitals-common|4.0.1")
+                    {
+                        if let Some(o) = b.as_object_mut() {
+                            o.insert(
+                                "strength".to_string(),
+                                Value::String("extensible".to_string()),
+                            );
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
 /// Fetch a StructureDefinition by url/id/name in its R5-internal load form:
 /// local-dir resources get the full conversion; package resources get the
 /// lenient R5 read (see module doc).
 pub(crate) fn fetch_sd(pkg: &PackageContext, query: &str) -> Option<Value> {
     let raw = pkg.fetch(query)?;
     let url = raw.get("url").and_then(Value::as_str).unwrap_or(query);
-    if pkg.is_local(url) || pkg.is_local(query) {
-        to_r5_internal(&raw).ok()
+    let mut out = if pkg.is_local(url) || pkg.is_local(query) {
+        to_r5_internal(&raw).ok()?
     } else {
-        Some(lenient_r5_read_r4(&raw))
-    }
+        lenient_r5_read_r4(&raw)
+    };
+    fix_loaded_resource(&mut out);
+    Some(out)
 }
 
 /// Resolve `query` to an R5-internal SD that HAS a snapshot, generating it
@@ -111,11 +263,12 @@ pub(crate) fn resolve_with_snapshot(
     if let Some(hit) = ctx.gen_cache.get(&url) {
         return Ok(Some(hit.clone()));
     }
-    let sd = if ctx.pkg.is_local(&url) || ctx.pkg.is_local(query) {
+    let mut sd = if ctx.pkg.is_local(&url) || ctx.pkg.is_local(query) {
         to_r5_internal(&raw)?
     } else {
         lenient_r5_read_r4(&raw)
     };
+    fix_loaded_resource(&mut sd);
     if sd
         .get("snapshot")
         .and_then(|s| s.get("element"))

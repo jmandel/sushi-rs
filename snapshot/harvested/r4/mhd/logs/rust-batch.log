@@ -1,3 +1,9 @@
+OK rust ihe-authorOrg
+OK rust ihe-designationType
+OK rust ihe-full-text-search-match-snippet
+OK rust ihe-full-text-search-match-total-hits
+OK rust ihe-HomeCommunityId
+OK rust ihe-intendedRecipient
 OK rust IHE.MHD.Comprehensive.DocumentReference
 OK rust IHE.MHD.Comprehensive.Folder
 OK rust IHE.MHD.Comprehensive.ProvideBundle
@@ -9,8 +15,8 @@ OK rust IHE.MHD.FindDocumentListsResponseMessage
 OK rust IHE.MHD.FindDocumentReferences.Audit.Consumer
 OK rust IHE.MHD.FindDocumentReferences.Audit.Responder
 OK rust IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage
-OK rust IHE.MHD.FindDocumentReferencesResponseMessage
 OK rust IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch
+OK rust IHE.MHD.FindDocumentReferencesResponseMessage
 OK rust IHE.MHD.GenerateMetadata.Audit.Recipient
 OK rust IHE.MHD.GenerateMetadata.Audit.Source
 OK rust IHE.MHD.GenerateMetadata.Parameters.In
@@ -33,11 +39,5 @@ OK rust IHE.MHD.UnContained.Comprehensive.DocumentReference
 OK rust IHE.MHD.UnContained.Comprehensive.ProvideBundle
 OK rust IHE.MHD.UnContained.Comprehensive.SubmissionSet
 OK rust IHE.MHD.UniqueIdIdentifier
-OK rust ihe-HomeCommunityId
-OK rust ihe-authorOrg
-OK rust ihe-designationType
-OK rust ihe-full-text-search-match-snippet
-OK rust ihe-full-text-search-match-total-hits
-OK rust ihe-intendedRecipient
 OK rust ihe-sourceId
 RUST BATCH: ok=42 failed=0 total=42

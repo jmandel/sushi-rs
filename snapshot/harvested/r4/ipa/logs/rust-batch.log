@@ -2,12 +2,12 @@ OK rust ipa-allergyintolerance
 OK rust ipa-condition
 OK rust ipa-documentreference
 OK rust ipa-immunization
-OK rust ipa-medication
 OK rust ipa-medicationrequest
+OK rust ipa-medication
 OK rust ipa-medicationstatement
 OK rust ipa-observation
 OK rust ipa-patient
-OK rust ipa-practitioner
 OK rust ipa-practitionerrole
+OK rust ipa-practitioner
 OK rust ipa-problem-list-item
 RUST BATCH: ok=12 failed=0 total=12

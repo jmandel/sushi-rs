@@ -209,6 +209,11 @@ fn process_path_with_sliced_base_default(
     let diff_matches: Vec<Value> = diff_match_idx.iter().map(|&i| ctx.diff[i].clone()).collect();
     let diff0 = diff_matches[0].clone();
     let diff0_idx = diff_match_idx[0];
+    // Java `currentBase` is the slicing anchor; its base index is where the
+    // cursor points on entry (before the getSiblings pairing loop mutates it).
+    // newSliceAtEnd's child-unfold uses `indexOf(currentBase)+1` (PPP:1568), NOT
+    // the mutated cursor.
+    let anchor_base_idx = cur.base_cursor;
     let mut diffpos = 0usize;
 
     // Emit the anchor.
@@ -241,6 +246,12 @@ fn process_path_with_sliced_base_default(
         cur.result_path_base = Some(path_of(&outcome).to_string());
     }
     ctx.add_to_result(outcome.clone(), Some(diff0_idx));
+    // PPP:1369: diff0 has a sliceName but no slicing → the anchor got
+    // auto-added slicing (mark for the finalize slice-min overwrite, PU:1012).
+    if !(has_slicing(&diff0) || !has_slice_name(&diff0)) {
+        let anchor_idx = ctx.output.len() - 1;
+        ctx.output_ann[anchor_idx].auto_added_slicing = true;
+    }
 
     if !has_slice_name(&diff0) {
         diffpos += 1;
@@ -558,8 +569,10 @@ fn process_path_with_sliced_base_default(
                 cur.diff_cursor += 1;
             }
             if matches!(tcode, "Base" | "Element" | "BackboneElement") {
-                // PPP:1572-1585 — recurse over the base's own children window.
-                let base_start = cur.base_cursor + 1;
+                // PPP:1572-1585 — recurse over the base ANCHOR's own children
+                // window (`indexOf(currentBase)+1`), not the pairing-loop-mutated
+                // cursor.
+                let base_start = anchor_base_idx + 1;
                 let mut base_max = base_start + 1;
                 let cb_dot = format!("{}.", path_of(current_base));
                 while base_max < cur.base.len() && path_of(&cur.base[base_max]).starts_with(&cb_dot) {

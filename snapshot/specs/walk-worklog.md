@@ -463,6 +463,161 @@ Increment 9) — no stubs remain in the sliced-base family. Fresh-oracle
 cross-check: all 28 ecr fixtures fresh-batch-generated and diffed vs Rust →
 28/28 SNAPSHOT PARITY.
 
+## Increment 12: published-package sweep — wave 3 batch 2 (2026-07-02)
+
+Task #8: the published-package corpus on ENGINE=walk. IG order roughly increasing
+risk. Two engine-wide behaviors landed early (both regression-verified against the
+full green set: ips/mcode/sdc/pas/crd/ndh/genomics/dtr/carinbb/ecr + ladder):
+
+**A. Q10 slice-cardinality finalize pass** (PU:996-1050, `finalize.rs
+apply_slice_cardinality`). Walks the snapshot tracking open slice groups
+(ElementDefinitionCounter); on group close (a non-slicing row at same/deeper
+dot-depth), overwrites the anchor `min` with the sum of its slice mins when
+`countMin > anchorMin && repeats(base.max != "1") && auto_added_slicing`.
+Otherwise Java only emits a message (not ported — message-only). Required a new
+`Annotation.auto_added_slicing` sidecar flag set at the two Java set-sites:
+PPP:378 (`processSimplePathDefault` acceptDiffSlicing autoAddedSlicing branch,
+slicing.rs) and PPP:1369 (`processPathWithSlicedBaseDefault` anchor with
+sliceName+no-slicing, sliced.rs). The count runs for every row with a sliceName
++ an open group at its path (PU:1044, outside the if/else). → **pddi 1/1**
+(`Extension.extension.min` 0→4, four min=1 slices under auto-added url slicing).
+
+**B. Java-exact `Utilities.rightTrim` on processRelativeUrls output** (PU:2306,
+text.rs `java_right_trim`). Java's `processRelativeUrls` ALWAYS ends with
+`return Utilities.rightTrim(s)` (after `markdown = markdown+" "`). Both walk
+callers — `updateURLs` (emit.rs, every emitted element's markdown fields) and
+`apply_profile_root_doco` (updatefromdef.rs, PU:2687/2690) — go through it, so
+Java right-trims every markdown field. The Rust port never trimmed. Ported the
+exact Java loop (`i>0` guard; the "trims to index 0 ⇒ returns \"\"" quirk kept
+verbatim, unreachable for real multi-char markdown). → **be-vaccination 7/7**
+(extension-root `definition` overlay with a trailing space on the profile root,
+trimmed on the slice per the AGENTS.md Belgium note).
+
+### Gate lines (verbatim)
+- ipa: `R4 HARVEST CHECK: ok=12 failed=0 total=12` (out of the box)
+- smart-app-launch: `R4 HARVEST CHECK: ok=6 failed=0 total=6` (out of the box)
+- pddi: `R4 HARVEST CHECK: ok=1 failed=0 total=1` (after A)
+- deid: `R4 HARVEST CHECK: ok=1 failed=0 total=1` (out of the box)
+- darts: `R4 HARVEST CHECK: ok=1 failed=0 total=1` (out of the box)
+- radiation-dose-summary: `R4 HARVEST CHECK: ok=4 failed=0 total=4` (out of the box)
+- be-vaccination: `R4 HARVEST CHECK: ok=7 failed=0 total=7` (after B)
+- pacio-toc: `R4 HARVEST CHECK: ok=4 failed=0 total=4` (out of the box)
+
+No convert.rs / resolve.rs / package.rs / legacy changes for A or B.
+
+**C. `PackageHackerR5.fixLoadedResource` port** (resolve.rs `fix_loaded_resource`,
+BaseWorkerContext:417 → PackageHackerR5.java:14-135). Java calls this on every
+package-loaded resource; ported the SD-content hacks (all gated by exact url +
+`fhirVersion==4.0.1`, idempotent), applied in both `fetch_sd` and
+`resolve_with_snapshot`:
+  - **vitalsigns binding relaxation** (PH:90): Observation SD == or derived-from
+    `vitalsigns` → `Observation.component.value[x]` binding (ucum-vitals-common
+    |4.0.1) strength forced to `extensible`. This fires on the R4-core
+    `bodyheight`/`bodyweight`/… bases (baseDefinition == vitalsigns). → the 7 AU
+    Core vital-sign profiles (bloodpressure/bodyheight/bodytemp/bodyweight/
+    heartrate/resprate/waistcircum), each `binding.strength` required→extensible.
+    Traces were already decision-identical (307/307) — pure base-content divergence.
+  - **extensions.r4 R5-only datatype removal** (PH:115): strip
+    integer64/CodeableReference/RatioRange/Availability/ExtendedContactDetail from
+    every element's `type[]`. Java scopes to `packageInfo.id ==
+    "hl7.fhir.uv.extensions.r4"`; these five are genuinely R5-only and can't appear
+    in any valid R4 resource, so the broader "every R4-loaded SD" scope is
+    output-identical for this corpus and stays inside resolve.rs (no package.rs
+    per-resource-package plumbing). → AU Core `au-core-rsg-sexassignedab`
+    Extension.value[x] 54→49 types (Contributor, NOT in the list, correctly kept —
+    matches the AGENTS.md note).
+  - Also ported (not currently exercised but faithful+idempotent): iso21090-
+    nullFlavor valueSet version strip (PH:45), DeviceUseStatement bodySite
+    requirements link (PH:58), ServiceRequest code-binding description trim (PH:74,
+    same text the legacy `publisher_native_text_quirk` handled downstream — now
+    fixed at load, quirk becomes a no-op).
+Verified no regression across the full green set incl. all xver-heavy IGs
+(sdc/crd/dtr/pas/ndh).
+
+**D. Empty-string markdown primitive drop** (text.rs `rewrite_string_field`).
+FHIR JSON serialization omits empty-string primitives. `processRelativeUrls` can
+render an inherited placeholder `comment: "-"` down to `""` (via the Java
+rightTrim quirk — see B), and the serialized snapshot then has no comment at all.
+Rust was emitting the literal `""`. Fix: after the rewrite, if the field is
+empty, remove it. → **cdex 8/8** (`QuestionnaireResponse.subject` inherits
+`comment: "-"` from us-core-questionnaireresponse; Java drops it). Regression-
+verified across ips/sdc/mcode/pas/ndh/au-core + ladder.
+
+### Gate lines (cont'd)
+- mhd: `R4 HARVEST CHECK: ok=42 failed=0 total=42` (out of the box)
+- eu-mpd: `R4 HARVEST CHECK: ok=4 failed=0 total=4` (out of the box)
+- eu-eps: `R4 HARVEST CHECK: ok=23 failed=0 total=23` (out of the box)
+- au-core: `R4 HARVEST CHECK: ok=26 failed=0 total=26` (after C)
+- au-ps: `R4 HARVEST CHECK: ok=17 failed=0 total=17` (out of the box, post-C)
+- dapl: `R4 HARVEST CHECK: ok=26 failed=0 total=26` (out of the box)
+- drug-formulary: `R4 HARVEST CHECK: ok=19 failed=0 total=19` (out of the box)
+- cdex: `R4 HARVEST CHECK: ok=8 failed=0 total=8` (after D)
+- plan-net: `R4 HARVEST CHECK: ok=22 failed=0 total=22` (out of the box)
+- pdex: `R4 HARVEST CHECK: ok=37 failed=0 total=37` (out of the box)
+- subscriptions-backport: `R4 HARVEST CHECK: ok=9 failed=0 total=9` (out of the box)
+- twpas: `R4 HARVEST CHECK: ok=43 failed=0 total=43` (out of the box)
+- davinci-pas: `R4 HARVEST CHECK: ok=80 failed=0 total=80` (after E)
+
+**E. newSliceAtEnd BackboneElement unfold used the wrong base index**
+(sliced.rs). In `processPathWithSlicedBaseDefault`, after the getSiblings
+pairing loop, `cur.base_cursor` has been mutated to the LAST base slice's last
+child. Java's newSliceAtEnd child-unfold (PPP:1568) computes
+`baseStart = cursors.base.indexOf(currentBase) + 1` — the slicing ANCHOR's
+index, NOT the mutated cursor — while its `baseWalksInto` guard (PPP:1562) DOES
+use the mutated `cursors.baseCursor`. Rust conflated both as `cur.base_cursor`,
+so the Base/Element/BackboneElement unfold recursed over an empty window past
+the slice group and emitted the new slice's children not at all. Captured
+`anchor_base_idx = cur.base_cursor` at function entry (before the pairing loop)
+and used it for `base_start`; left `base_walks_into` on the mutated cursor
+(matches Java). → Da Vinci PAS `profile-claim` / `profile-claim-update`: the new
+`Claim.supportingInfo:AdditionalInformation` / `:MessageText` BackboneElement
+slices now materialize their full child sets (id/extension/…/value[x]/reason),
+19 elements each. Regression-verified pas/twpas/mcode/sdc/au-ps + ladder.
+
+**F. processOneMatch.walkIntoChildren choice-`[x]` type narrowing** (PPP:929-943,
+simple.rs `process_simple_path_one_match`). When the diff walks into a
+polymorphic `[x]` element via a CONCRETE choice path (base
+`component.value[x]`, diff `component.valueQuantity`) and the emitted outcome
+still has >1 type, Java narrows the outcome type list to the single concrete
+type before unfolding: `t = tail(diff).substring(tail(base).len()-3)`
+(→ `Quantity`), uncapitalize if primitive, `getByTypeName` filter (else
+synthesize). Rust lacked this block, so `resolve_type_sd` saw the still-11-type
+polymorphic list and unfolded into the `Element` fallback (no Quantity
+value/comparator/unit/system/code children). Ported it; writes the narrowed
+type back to the emitted row. → **us-core 70/70** (`us-core-pulse-oximetry`
+`component:FlowRate.value[x]` / `:Concentration.value[x]` narrow to Quantity +
+materialize 5 children each; trace decision-identical 376/376). Regression-
+verified ips/mcode/au-core/davinci-pas/dapl/eu-eps/pdex/sdc + ladder.
+
+- us-core: `R4 HARVEST CHECK: ok=70 failed=0 total=70` (after F)
+
+**G. Q3 prune prohibited type-slices from the polymorphic anchor** (PU:879-891,
+finalize.rs `prune_prohibited_type_slices`). A post-walk step (before setIds):
+for each element with >1 type, `findTypeSlice` scans forward for a type slice at
+the same path (pathMatches: exact, or `[x]`-base matched by a concrete
+single-segment tail) whose single type code matches; if that slice is
+`prohibited()` (max=0), the type is removed from the anchor. Was listed as
+"live" in the finalize doc but never implemented. → **gematik-epa-medication
+49/49** (`Medication.ingredient.item[x]` anchor: `itemReference` slice is
+`max=0`, so `Reference` is pruned, leaving `[CodeableConcept]`; the walk was
+already decision-identical 1298/1298). Regression-verified across
+ips/mcode/us-core/qicore/davinci-pas/dapl/au-core/eu-eps/sdc + ladder.
+
+### Gate lines (tail)
+- qicore: `R4 HARVEST CHECK: ok=63 failed=0 total=63` (out of the box)
+- gematik-epa-medication: `R4 HARVEST CHECK: ok=49 failed=0 total=49` (after G;
+  correct closure = `de.gematik.epa.medication#1.3.4` per manifest)
+
+### Summary — wave 3 batch 2 COMPLETE (24/24 IGs at legacy parity)
+All published-package IGs green on ENGINE=walk at the legacy ok-counts. Seven
+engine-wide Java-fidelity fixes landed (A slice-min finalize, B rightTrim, C
+PackageHackerR5.fixLoadedResource, D empty-markdown drop, E newSliceAtEnd anchor
+index, F choice-`[x]` type narrowing, G Q3 prohibited-type-slice prune), all
+regression-clean across the entire green corpus. No legacy.rs/quirks.rs/goldens/
+oracle/package.rs/convert.rs changes. resolve.rs: added `fix_loaded_resource`
+(C). Owned files touched: walk/{finalize,slicing,sliced,simple,context}.rs,
+resolve.rs, text.rs.
+
 ## Least-confident areas (updated for the coordinator, post-Increment 11)
 - ~~xver R5-backport base snapshots~~ RESOLVED: was the cross-SD contentReference
   stub + the legacy checkExtensionDoco guard, both fixed in Increment 11 (load

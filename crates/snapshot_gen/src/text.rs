@@ -41,6 +41,13 @@ pub(crate) fn rewrite_string_field(value: &mut Value, key: &str, spec_url: &str,
     if let Some(normalized) = publisher_native_text_quirk(text) {
         *text = normalized.to_string();
     }
+    // FHIR JSON serialization omits empty-string primitives. processRelativeUrls
+    // can render a placeholder like "-" down to "" (Java rightTrim quirk); such a
+    // field is then absent from the serialized snapshot (e.g. CDex
+    // QuestionnaireResponse.subject inherits comment "-" which becomes "").
+    if text.is_empty() {
+        obj.remove(key);
+    }
 }
 
 pub(crate) fn publisher_native_text_quirk(text: &str) -> Option<&'static str> {
@@ -97,7 +104,33 @@ pub(crate) fn process_relative_markdown_urls(
         }
     }
     out.push_str(&input[copied_until..]);
-    out
+    // Java processRelativeUrls returns Utilities.rightTrim(s): strip trailing
+    // whitespace (but keep a single char at index 0 — see Java's `i > 0` guard).
+    java_right_trim(&out)
+}
+
+/// Exact port of `org.hl7.fhir.utilities.Utilities.rightTrim`:
+/// ```java
+/// int i = s.length()-1;
+/// while (i > 0 && isWhitespace(s.charAt(i))) i--;
+/// return i == 0 ? "" : s.substring(0, i+1);
+/// ```
+/// Java operates on UTF-16 code units; markdown here is ASCII/BMP where char
+/// iteration matches. Quirk preserved verbatim: any string that trims down to
+/// index 0 (including single-char strings) returns "".
+fn java_right_trim(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.is_empty() {
+        return String::new();
+    }
+    let mut i = chars.len() - 1;
+    while i > 0 && chars[i].is_whitespace() {
+        i -= 1;
+    }
+    if i == 0 {
+        return String::new();
+    }
+    chars[..=i].iter().collect()
 }
 
 pub(crate) fn is_relative_spec_link(target: &str) -> bool {

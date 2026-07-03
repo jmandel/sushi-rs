@@ -1,3 +1,9 @@
+snapshot/harvested/r4/mhd/fixtures/ihe-authorOrg.json	snapshot/harvested/r4/mhd/rust/ihe-authorOrg.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/ihe-designationType.json	snapshot/harvested/r4/mhd/rust/ihe-designationType.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/ihe-full-text-search-match-snippet.json	snapshot/harvested/r4/mhd/rust/ihe-full-text-search-match-snippet.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/ihe-full-text-search-match-total-hits.json	snapshot/harvested/r4/mhd/rust/ihe-full-text-search-match-total-hits.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/ihe-HomeCommunityId.json	snapshot/harvested/r4/mhd/rust/ihe-HomeCommunityId.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/ihe-intendedRecipient.json	snapshot/harvested/r4/mhd/rust/ihe-intendedRecipient.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.Comprehensive.DocumentReference.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.Comprehensive.DocumentReference.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.Comprehensive.Folder.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.Comprehensive.Folder.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.Comprehensive.ProvideBundle.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.Comprehensive.ProvideBundle.snapshot.json
@@ -9,8 +15,8 @@ snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentListsResponseMessage.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferences.Audit.Consumer.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferences.Audit.Consumer.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferences.Audit.Responder.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferences.Audit.Responder.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferencesComprehensiveResponseMessage.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferencesResponseMessage.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferencesResponseMessage.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferencesResponseMessageFullTextSearch.snapshot.json
+snapshot/harvested/r4/mhd/fixtures/IHE.MHD.FindDocumentReferencesResponseMessage.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.FindDocumentReferencesResponseMessage.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.GenerateMetadata.Audit.Recipient.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.GenerateMetadata.Audit.Recipient.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.GenerateMetadata.Audit.Source.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.GenerateMetadata.Audit.Source.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.GenerateMetadata.Parameters.In.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.GenerateMetadata.Parameters.In.snapshot.json
@@ -33,10 +39,4 @@ snapshot/harvested/r4/mhd/fixtures/IHE.MHD.UnContained.Comprehensive.DocumentRef
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.UnContained.Comprehensive.ProvideBundle.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.UnContained.Comprehensive.ProvideBundle.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.UnContained.Comprehensive.SubmissionSet.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.UnContained.Comprehensive.SubmissionSet.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/IHE.MHD.UniqueIdIdentifier.json	snapshot/harvested/r4/mhd/rust/IHE.MHD.UniqueIdIdentifier.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-HomeCommunityId.json	snapshot/harvested/r4/mhd/rust/ihe-HomeCommunityId.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-authorOrg.json	snapshot/harvested/r4/mhd/rust/ihe-authorOrg.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-designationType.json	snapshot/harvested/r4/mhd/rust/ihe-designationType.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-full-text-search-match-snippet.json	snapshot/harvested/r4/mhd/rust/ihe-full-text-search-match-snippet.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-full-text-search-match-total-hits.json	snapshot/harvested/r4/mhd/rust/ihe-full-text-search-match-total-hits.snapshot.json
-snapshot/harvested/r4/mhd/fixtures/ihe-intendedRecipient.json	snapshot/harvested/r4/mhd/rust/ihe-intendedRecipient.snapshot.json
 snapshot/harvested/r4/mhd/fixtures/ihe-sourceId.json	snapshot/harvested/r4/mhd/rust/ihe-sourceId.snapshot.json

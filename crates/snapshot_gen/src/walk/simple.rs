@@ -411,6 +411,40 @@ pub(crate) fn process_simple_path_one_match(
                 "typeCount": outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0),
             })),
         );
+        // PPP:929-943 — the diff walks into a polymorphic `[x]` via a concrete
+        // choice path (e.g. base `component.value[x]`, diff `component.valueQuantity`):
+        // narrow the outcome type list to that single concrete type before
+        // unfolding, so we recurse into Quantity (not the Element fallback).
+        let type_count = outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+        if type_count > 1 {
+            let out_tail = tail(path_of(&outcome)).to_string();
+            let diff_tail = tail(path_of(&diff0)).to_string();
+            if out_tail.ends_with("[x]") && !diff_tail.ends_with("[x]") && diff_tail.len() >= out_tail.len() - 3 {
+                // t = diff_tail.substring(out_tail.len() - 3)
+                let mut t = diff_tail[(out_tail.len() - 3)..].to_string();
+                if super::types_pred::is_primitive_str(ctx, &uncapitalize_local(&t)) {
+                    t = uncapitalize_local(&t);
+                }
+                // getByTypeName: keep matching type entries; else synthesize.
+                let ntr: Vec<Value> = outcome
+                    .get("type")
+                    .and_then(Value::as_array)
+                    .map(|arr| {
+                        arr.iter()
+                            .filter(|tr| working_code(tr).as_deref() == Some(t.as_str()))
+                            .cloned()
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let ntr = if ntr.is_empty() {
+                    vec![serde_json::json!({ "code": t })]
+                } else {
+                    ntr
+                };
+                set_field(&mut outcome, "type", Value::Array(ntr));
+                ctx.output[out_idx] = outcome.clone();
+            }
+        }
         let start = cur.diff_cursor;
         let dot = format!("{}.", path_of(&diff0));
         while (cur.diff_cursor as isize) <= frame.diff_limit
@@ -562,6 +596,15 @@ pub(crate) fn tail(path: &str) -> &str {
     match path.rfind('.') {
         Some(i) => &path[i + 1..],
         None => path,
+    }
+}
+
+/// Utilities.uncapitalize: lowercase the first char.
+fn uncapitalize_local(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        Some(first) => first.to_lowercase().collect::<String>() + c.as_str(),
+        None => String::new(),
     }
 }
 

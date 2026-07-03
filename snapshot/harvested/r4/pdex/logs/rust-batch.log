@@ -1,12 +1,9 @@
-OK rust DispenseRefill
-OK rust PriorAuthorizationUtilization
-OK rust ProvenanceSourceFrom
 OK rust base-ext-associatedServers
 OK rust base-ext-contactpoint-availabletime
 OK rust base-ext-dynamicRegistration
+OK rust base-ext-endpointAccessControlMechanism
 OK rust base-ext-endpoint-rank
 OK rust base-ext-endpoint-usecase
-OK rust base-ext-endpointAccessControlMechanism
 OK rust base-ext-fhir-ig
 OK rust base-ext-identifier-status
 OK rust base-ext-last-transmission
@@ -18,9 +15,10 @@ OK rust base-ext-secureExchangeArtifacts
 OK rust base-ext-trustFramework
 OK rust base-ext-verification-status
 OK rust base-ext-when-adjudicated
+OK rust DispenseRefill
 OK rust extension-levelOfServiceCode
-OK rust extension-reviewAction
 OK rust extension-reviewActionCode
+OK rust extension-reviewAction
 OK rust mtls-bundle
 OK rust mtls-endpoint
 OK rust mtls-organization
@@ -35,4 +33,6 @@ OK rust pdex-priorauthorization
 OK rust pdex-provenance
 OK rust pdex-provider-consent
 OK rust pdex-provider-group
+OK rust PriorAuthorizationUtilization
+OK rust ProvenanceSourceFrom
 RUST BATCH: ok=37 failed=0 total=37
