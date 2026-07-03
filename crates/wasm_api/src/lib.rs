@@ -92,8 +92,20 @@ fn set_panic_hook() {
 #[derive(Serialize)]
 struct CompileResult {
     resources: Vec<CompiledResourceJs>,
-    diagnostics: Vec<String>,
+    diagnostics: Vec<DiagnosticJs>,
     timings: Timings,
+}
+
+/// A SUSHI-exact diagnostic, shaped for the editor worker → Monaco markers.
+/// `file`/`line` are present when the compiler had a source span in scope.
+#[derive(Serialize)]
+struct DiagnosticJs {
+    severity: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -201,8 +213,9 @@ pub fn compile(files_json: &str, config: &str, predefined_json: &str) -> Result<
     };
 
     let cache = cache_root.to_string_lossy().into_owned();
-    let compiled = compiler::build_project_in_memory(config, &fsh_files, predefined, source, &cache)
-        .map_err(|e| JsError::new(&format!("compile failed: {e:#}")))?;
+    let (compiled, diagnostics) =
+        compiler::build_project_in_memory_with_diagnostics(config, &fsh_files, predefined, source, &cache)
+            .map_err(|e| JsError::new(&format!("compile failed: {e:#}")))?;
 
     // Stash the compiled resources as local resources for snapshot resolution.
     let locals: Vec<(PathBuf, Value)> = compiled
@@ -232,9 +245,19 @@ pub fn compile(files_json: &str, config: &str, predefined_json: &str) -> Result<
         })
         .collect();
 
+    let diagnostics: Vec<DiagnosticJs> = diagnostics
+        .into_iter()
+        .map(|d| DiagnosticJs {
+            severity: d.severity.to_string(),
+            message: d.message,
+            file: d.file,
+            line: d.line,
+        })
+        .collect();
+
     let out = CompileResult {
         resources,
-        diagnostics: Vec::new(),
+        diagnostics,
         timings: Timings::default(),
     };
     serde_json::to_string(&out).map_err(|e| JsError::new(&format!("compile: serialize: {e}")))

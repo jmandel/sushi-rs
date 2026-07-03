@@ -178,7 +178,12 @@ fn json_identifier(name: &str, params: &[String]) -> String {
 
 /// Expand the RuleSet at `loc` in place (idempotent), mirroring the recursive
 /// `applyInsertRules(ruleSet, tank, [...seen, id])` call in `common.ts:1280`.
-fn expand_ruleset(docs: &mut Vec<FshDocument>, loc: RsLoc, seen: &[String], diag: &mut Vec<String>) {
+fn expand_ruleset(
+    docs: &mut Vec<FshDocument>,
+    loc: RsLoc,
+    seen: &[String],
+    diag: &mut Vec<CompileDiagnostic>,
+) {
     // Take the rules out so the borrow of `docs` is free for recursion/fishing.
     let mut rules = std::mem::take(rs_rules_mut(docs, loc));
     expand_rules(docs, &mut rules, DefKind::RuleSet, seen, diag);
@@ -193,7 +198,7 @@ fn expand_rules(
     rules: &mut Vec<Rule>,
     def_kind: DefKind,
     seen: &[String],
-    diag: &mut Vec<String>,
+    diag: &mut Vec<CompileDiagnostic>,
 ) {
     let original = std::mem::take(rules);
     let mut expanded: Vec<Rule> = Vec::new();
@@ -229,18 +234,24 @@ fn expand_rules(
             fish_ruleset(docs, &rule_set_name)
         };
 
+        // SUSHI reports insert-rule diagnostics at the insert-rule's own
+        // location; capture it once for every push in this iteration.
+        let d_file = insert_file.clone();
+        let d_line = insert_loc.as_ref().map(|l| l.start_line);
+        let mk = |msg: String| CompileDiagnostic::error(msg, d_file.clone(), d_line);
+
         let Some(loc) = loc else {
-            diag.push(format!(
+            diag.push(mk(format!(
                 "Unable to find definition for RuleSet {rule_set_name}."
-            ));
+            )));
             continue;
         };
 
         if seen.contains(&identifier) {
             let name = rs_name(docs, loc);
-            diag.push(format!(
+            diag.push(mk(format!(
                 "Inserting {name} will cause a circular dependency, so the rule will be ignored"
-            ));
+            )));
             continue;
         }
 
@@ -288,20 +299,20 @@ fn expand_rules(
                         concepts: vec![fc],
                     };
                 } else if def_kind == DefKind::CodeSystem {
-                    diag.push(
+                    diag.push(mk(
                         "Do not include the system when listing concepts for a code system."
                             .to_string(),
-                    );
+                    ));
                 }
             }
 
             // (c) Allowed-rule check.
             if !is_allowed_rule(def_kind, &effective) {
-                diag.push(format!(
+                diag.push(mk(format!(
                     "Rule of type {} cannot be applied to entity of type {}",
                     effective.constructor_name(),
                     def_kind.name()
-                ));
+                )));
                 continue;
             }
 
@@ -312,10 +323,10 @@ fn expand_rules(
             if !context.is_empty() {
                 let clone_path = clone.path().to_string();
                 let new_path = if clone_path == "." {
-                    diag.push(
+                    diag.push(mk(
                         "The special '.' path is only allowed in top-level rules. The rule will be processed as if it is not indented."
                             .to_string(),
-                    );
+                    ));
                     clone_path
                 } else if !clone_path.is_empty() {
                     format!("{context}.{clone_path}")
@@ -351,9 +362,9 @@ fn expand_rules(
                 && def_kind == DefKind::CodeSystem
                 && !context.is_empty()
             {
-                diag.push(
+                diag.push(mk(
                     "Do not insert a RuleSet at a path when the RuleSet adds a concept.".to_string(),
-                );
+                ));
             }
 
             // (h) Push.
@@ -431,7 +442,7 @@ impl Field {
 /// Run `applyInsertRules` over every entity in `FHIRExporter.export` order
 /// (`FHIRExporter.ts:38-53`): invariants, then SDs (profiles ++ extensions ++
 /// logicals ++ resources), code systems, value sets, instances, mappings.
-fn run_global_expansion(docs: &mut Vec<FshDocument>, diag: &mut Vec<String>) {
+fn run_global_expansion(docs: &mut Vec<FshDocument>, diag: &mut Vec<CompileDiagnostic>) {
     // Build the processing order as (field, doc_idx, vec_idx) up front so we can
     // then mutate one entity at a time. flatMap-over-docs per field mirrors the
     // FSHTank getAll* iteration order.
@@ -472,7 +483,7 @@ pub fn expand_to_json(files: &[(&str, &str)]) -> serde_json::Value {
     let mut imp = parser::Importer::new();
     imp.import(files);
     let mut docs = imp.docs;
-    let mut diag: Vec<String> = Vec::new();
+    let mut diag: Vec<CompileDiagnostic> = Vec::new();
     run_global_expansion(&mut docs, &mut diag);
     dump::dump_docs(&docs)
 }
@@ -590,6 +601,32 @@ fn build_project_inner(
     Ok(())
 }
 
+/// A compile-time diagnostic (SUSHI-exact wording) with the source location it
+/// refers to, when known. This is the structured form of the `diag` strings the
+/// compiler already produces during global insert-rule expansion (and SD export);
+/// the editor's worker maps these 1:1 to Monaco markers (see the wasm_api
+/// `compile()` result's `diagnostics` array). Additive: collecting these does
+/// not change any emitted resource bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileDiagnostic {
+    /// `"error"` | `"warning"` | `"info"` — matches SUSHI's severity words.
+    pub severity: &'static str,
+    /// The SUSHI-exact message text (byte-identical to the string the compiler
+    /// already logged internally).
+    pub message: String,
+    /// The source file the diagnostic points at (as passed to `compile()`),
+    /// when the compiler had a span in scope. `None` when unattributable.
+    pub file: Option<String>,
+    /// 1-based start line, when known.
+    pub line: Option<u32>,
+}
+
+impl CompileDiagnostic {
+    fn error(message: impl Into<String>, file: Option<String>, line: Option<u32>) -> Self {
+        Self { severity: "error", message: message.into(), file, line }
+    }
+}
+
 /// One compiled FHIR resource: the exact output filename SUSHI writes and the
 /// byte-identical serialized JSON body (from `json_emit::to_fhir_json_string`).
 /// The in-memory `compile_conformance` returns these instead of writing them.
@@ -607,6 +644,9 @@ pub struct CompiledResource {
 /// still produce the ImplementationGuide resource).
 pub struct CompiledProject {
     pub resources: Vec<CompiledResource>,
+    /// SUSHI-exact diagnostics gathered during the compile (insert-rule expansion
+    /// + SD export). Additive: independent of `resources`. See `CompileDiagnostic`.
+    pub diagnostics: Vec<CompileDiagnostic>,
     conformance: Vec<ig_export::ConformanceRes>,
     instance_ig: Vec<instance_export::IgInstanceMeta>,
     local_profile_logical: std::collections::HashMap<String, String>,
@@ -635,8 +675,8 @@ pub fn compile_conformance(
     let mut imp = parser::Importer::new();
     imp.import(fsh_refs);
     let mut docs = imp.docs;
-    let mut diag: Vec<String> = Vec::new();
-    run_global_expansion(&mut docs, &mut diag);
+    let mut diagnostics: Vec<CompileDiagnostic> = Vec::new();
+    run_global_expansion(&mut docs, &mut diagnostics);
 
     use ig_export::ConformanceRes;
     let mut vs_conformance: Vec<ConformanceRes> = Vec::new();
@@ -725,6 +765,12 @@ pub fn compile_conformance(
             body: exported.body.clone(),
         });
     }
+    // SD-export diagnostics (mapping-source / caret / obeys resolution). SUSHI
+    // reports these without a precise FSH span through this path, so file/line
+    // are unattributed; the wording is byte-identical to what SUSHI logs.
+    for msg in &ctx.diag {
+        diagnostics.push(CompileDiagnostic::error(msg.clone(), None, None));
+    }
 
     // Instances (Phase 7).
     let instances = instance_export::export_instances(&docs, &cfg, &ctx, &exported_conformance);
@@ -747,6 +793,7 @@ pub fn compile_conformance(
 
     Ok(CompiledProject {
         resources,
+        diagnostics,
         conformance,
         instance_ig,
         local_profile_logical,
@@ -782,6 +829,29 @@ pub fn build_project_in_memory(
         .collect();
     let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
     Ok(compiled.resources)
+}
+
+/// Same as [`build_project_in_memory`] but also returns the SUSHI-exact
+/// diagnostics the compile produced (see [`CompileDiagnostic`]). The wasm editor
+/// worker uses this so a broken FSH file surfaces markers with file/line; the
+/// resources are byte-identical to [`build_project_in_memory`] (diagnostics are
+/// additive — collected, not resource-affecting).
+pub fn build_project_in_memory_with_diagnostics(
+    cfg_text: &str,
+    fsh_files: &[(String, String)],
+    predefined_resources: Vec<(std::path::PathBuf, serde_json::Value)>,
+    source: impl package_store::PackageSource + 'static,
+    cache_dir: &str,
+) -> anyhow::Result<(Vec<CompiledResource>, Vec<CompileDiagnostic>)> {
+    let store =
+        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
+    let refs: Vec<(&str, &str)> = fsh_files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
+    Ok((compiled.resources, compiled.diagnostics))
 }
 
 /// Build a `ConformanceRes` from an exported VS/CS body (`name = title ?? name ?? id`).
