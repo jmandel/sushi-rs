@@ -731,8 +731,14 @@ fn lowercase_attr_names(rest: &str) -> String {
             continue;
         }
         let name: String = chars[start..i].iter().collect();
-        out.push(' ');
-        out.push_str(&name.to_lowercase());
+        let lname = name.to_lowercase();
+        // kramdown consumes the `markdown` processing attribute on ANY tag
+        // (span or block) — it never appears in output (parser/html.rb handles
+        // markdown="0/1/span/block" as a parse directive).
+        let skip = lname == "markdown";
+        let mut attr = String::new();
+        attr.push(' ');
+        attr.push_str(&lname);
         // optional whitespace then '='
         let mut j = i;
         while j < n && chars[j].is_whitespace() {
@@ -743,34 +749,36 @@ fn lowercase_attr_names(rest: &str) -> String {
             while i < n && chars[i].is_whitespace() {
                 i += 1;
             }
-            out.push('=');
+            attr.push('=');
             if i < n && (chars[i] == '"' || chars[i] == '\'') {
                 let q = chars[i];
-                out.push('"');
+                attr.push('"');
                 i += 1;
                 while i < n && chars[i] != q {
                     if chars[i] == '"' {
-                        out.push_str("&quot;");
+                        attr.push_str("&quot;");
                     } else {
-                        out.push(chars[i]);
+                        attr.push(chars[i]);
                     }
                     i += 1;
                 }
                 if i < n {
-                    out.push('"');
+                    attr.push('"');
                     i += 1;
                 }
             } else {
                 // bare (unquoted) value -> quote it
-                out.push('"');
+                attr.push('"');
                 while i < n && !chars[i].is_whitespace() {
-                    out.push(chars[i]);
+                    attr.push(chars[i]);
                     i += 1;
                 }
-                out.push('"');
+                attr.push('"');
             }
         }
-        // else: valueless attribute, already emitted
+        if !skip {
+            out.push_str(&attr);
+        }
     }
     out
 }

@@ -67,7 +67,11 @@ def rust(text: str) -> str:
 # None. Classes are ordered; a page is "explained" if a single class accounts
 # for every differing line.
 
-RE_ROUGE = re.compile(r'highlighter-rouge|class="highlight"|<span class="')
+# Precise Rouge signature: the wrapper markup Rouge/Jekyll emits around a
+# highlighted fence. (The gate oracle runs with KRAMDOWN_NO_ROUGE=1, so this
+# class should be EMPTY in gate runs; it exists for runs against the
+# Jekyll-parity oracle, where language fences produce Rouge token markup.)
+RE_ROUGE = re.compile(r'highlighter-rouge|<div class="highlight">|<pre class="highlight">')
 
 
 def classify(src: str, o: str, r: str):

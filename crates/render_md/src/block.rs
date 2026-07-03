@@ -311,6 +311,22 @@ impl<'a> Parser<'a> {
                 self.i += 1;
                 continue;
             }
+            // Parser order mirrors kramdown's @block_parsers
+            // (kramdown-2.5.0/lib/kramdown/parser/kramdown.rb:75-78):
+            // codeblock, codeblock_fenced, blockquote, atx_header, hr, list,
+            // block_html, setext_header, table, footnote_definition, paragraph.
+            if let Some(b) = self.try_indented_code() {
+                push!(b);
+                continue;
+            }
+            if let Some(b) = self.try_fenced_code() {
+                push!(b);
+                continue;
+            }
+            if let Some(b) = self.try_blockquote() {
+                push!(b);
+                continue;
+            }
             if let Some(b) = self.try_atx_heading() {
                 push!(b);
                 continue;
@@ -319,15 +335,7 @@ impl<'a> Parser<'a> {
                 push!(b);
                 continue;
             }
-            if let Some(b) = self.try_fenced_code() {
-                push!(b);
-                continue;
-            }
-            if let Some(b) = self.try_footnote_def() {
-                push!(b);
-                continue;
-            }
-            if let Some(b) = self.try_table() {
+            if let Some(b) = self.try_list() {
                 push!(b);
                 continue;
             }
@@ -335,11 +343,11 @@ impl<'a> Parser<'a> {
                 push!(b);
                 continue;
             }
-            if let Some(b) = self.try_blockquote() {
+            if let Some(b) = self.try_table() {
                 push!(b);
                 continue;
             }
-            if let Some(b) = self.try_list() {
+            if let Some(b) = self.try_footnote_def() {
                 push!(b);
                 continue;
             }
@@ -396,9 +404,17 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// GFM fenced code block (kramdown-parser-gfm gfm.rb:160-161):
+    ///   `^[ ]{0,3}(([~`]){3,})\s*?(info)?\s*?\n(.*?)^[ ]{0,3}\1\2*\s*?\n`
+    /// The fence may be indented at most 3 spaces; the CONTENT between the
+    /// fences is taken RAW (no dedenting). A 4+-space "fence" is an indented
+    /// code block instead.
     fn try_fenced_code(&mut self) -> Option<Block> {
         let line = self.lines[self.i];
         let indent = leading_spaces(line);
+        if indent > 3 {
+            return None;
+        }
         let t = &line[indent..];
         let fence_char = if t.starts_with("```") {
             '`'
@@ -423,33 +439,129 @@ impl<'a> Parser<'a> {
         if fence_char == '`' && lang.contains('`') {
             return None;
         }
-        self.i += 1;
-        let mut code_lines: Vec<String> = Vec::new();
-        while self.i < self.lines.len() {
-            let l = self.lines[self.i];
-            let lt = &l[leading_spaces(l).min(indent)..];
-            let stripped = lt.trim_end_matches(|_c| false);
-            let s = stripped.trim_start();
-            if s.chars().take_while(|&c| c == fence_char).count() >= fence_len
+        // Find the closing fence first — an unterminated fence is not a code
+        // block in kramdown (the regex requires the closing line).
+        let mut close_idx = None;
+        for k in self.i + 1..self.lines.len() {
+            let l = self.lines[k];
+            let li = leading_spaces(l);
+            if li > 3 {
+                continue;
+            }
+            let s = l.trim();
+            if !s.is_empty()
                 && s.chars().all(|c| c == fence_char)
-                && !s.is_empty()
+                && s.len() >= fence_len
             {
-                self.i += 1;
+                close_idx = Some(k);
                 break;
             }
-            // strip up to `indent` leading spaces
-            let line_content = strip_up_to(l, indent);
-            code_lines.push(line_content.to_string());
-            self.i += 1;
         }
-        let mut code = code_lines.join("\n");
-        if !code.is_empty() {
-            code.push('\n');
-        } else {
+        let close_idx = close_idx?;
+        // Content: RAW lines between the fences (no dedent).
+        let mut code = self.lines[self.i + 1..close_idx].join("\n");
+        code.push('\n');
+        if close_idx == self.i + 1 {
+            code = "\n".to_string();
+        }
+        self.i = close_idx + 1;
+        Some(Block::CodeBlock {
+            lang: lang.split_whitespace().next().unwrap_or("").to_string(),
+            code,
+        })
+    }
+
+    /// kramdown indented code block (codeblock.rb:19-31; INDENT = 4 spaces or
+    /// tab, kramdown.rb:345). The match is
+    ///   `(BLANK_LINE? (INDENT [ \t]*\S.*\n)+ (lazy non-blank line)*)*`
+    /// followed by two normalization quirks (codeblock.rb:26-27):
+    ///   1. `data.gsub!(/\n( {0,3}\S)/, ' \1')` — a LAZY line (0-3 space
+    ///      indent) is JOINED to the previous line with a single space;
+    ///   2. `data.gsub!(INDENT, '')` — the 4-space/tab indent is stripped
+    ///      from every line.
+    fn try_indented_code(&mut self) -> Option<Block> {
+        let line = self.lines[self.i];
+        if !is_indent_line(line) || line.trim().is_empty() {
+            return None;
+        }
+        let mut raw: Vec<String> = Vec::new();
+        loop {
+            // optional run of blank lines, only kept if more indented lines follow
+            let mut j = self.i;
+            let mut blanks = 0;
+            while j < self.lines.len() && self.lines[j].trim().is_empty() {
+                blanks += 1;
+                j += 1;
+            }
+            if j >= self.lines.len()
+                || !is_indent_line(self.lines[j])
+                || self.lines[j].trim().is_empty()
+            {
+                break;
+            }
+            for _ in 0..blanks {
+                raw.push(String::new());
+            }
+            self.i = j;
+            // 1+ indented non-blank lines
+            while self.i < self.lines.len()
+                && is_indent_line(self.lines[self.i])
+                && !self.lines[self.i].trim().is_empty()
+            {
+                raw.push(self.lines[self.i].to_string());
+                self.i += 1;
+            }
+            // 0+ lazy non-blank continuation lines (any indent), stopping at
+            // block IALs / extensions (kramdown's negative lookahead).
+            while self.i < self.lines.len() {
+                let l = self.lines[self.i];
+                if l.trim().is_empty()
+                    || parse_block_ial_line(l).is_some()
+                    || is_kramdown_ext_line(l)
+                {
+                    break;
+                }
+                if is_indent_line(l) {
+                    // still indented — handled by the inner loop next round
+                    raw.push(l.to_string());
+                    self.i += 1;
+                    continue;
+                }
+                raw.push(l.to_string());
+                self.i += 1;
+            }
+        }
+        if raw.is_empty() {
+            return None;
+        }
+        // Quirk 1: join lazy lines (0-3 space indent, non-blank) to the
+        // previous line with a single space.
+        let mut joined: Vec<String> = Vec::new();
+        for l in raw {
+            let li = leading_spaces(&l);
+            let lazy = !l.trim().is_empty() && li <= 3 && !l.starts_with('\t');
+            if lazy && !joined.is_empty() && !joined.last().unwrap().is_empty() {
+                let last = joined.last_mut().unwrap();
+                last.push(' ');
+                last.push_str(&l[li..]);
+            } else {
+                joined.push(l);
+            }
+        }
+        // Quirk 2: strip the INDENT (4 spaces or a tab) from every line.
+        let mut code = String::new();
+        for l in &joined {
+            if let Some(stripped) = l.strip_prefix("    ") {
+                code.push_str(stripped);
+            } else if let Some(stripped) = l.strip_prefix('\t') {
+                code.push_str(stripped);
+            } else {
+                code.push_str(l);
+            }
             code.push('\n');
         }
         Some(Block::CodeBlock {
-            lang: lang.split_whitespace().next().unwrap_or("").to_string(),
+            lang: String::new(),
             code,
         })
     }
@@ -1087,6 +1199,11 @@ fn strip_trailing_hashes(s: &str) -> String {
     } else {
         t.to_string()
     }
+}
+
+/// kramdown INDENT (kramdown.rb:345): `/^(?:\t| {4})/` — a tab or 4 spaces.
+fn is_indent_line(l: &str) -> bool {
+    l.starts_with("    ") || l.starts_with('\t')
 }
 
 fn is_hr(t: &str) -> bool {
