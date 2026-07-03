@@ -58,7 +58,9 @@ pub fn render_with(src: &str, opts: &Options) -> String {
     // Append footnotes section if any were defined and referenced.
     r.render_footnotes(&mut out);
     let footnotes_rendered = out.len() != had_footnotes_before;
-    let trimmed = out.trim_end_matches('\n');
+    // kramdown trims trailing whitespace (spaces/newlines) at the very end of
+    // the document (a raw HTML block's last line loses trailing spaces).
+    let trimmed = out.trim_end_matches(['\n', ' ', '\t']);
     let mut result = trimmed.to_string();
     if result.is_empty() {
         // kramdown emits a single newline for empty / whitespace-only input.
@@ -235,22 +237,43 @@ impl Renderer {
                 inner_trailing_blank,
                 close_tag,
             } => {
-                out.push_str(&pad);
                 // kramdown consumes the `markdown="1"` attribute (it triggers
                 // re-parsing) and does NOT emit it. Also normalize the tag.
                 let cleaned = strip_markdown_attr(open_tag);
-                out.push_str(normalize_html_block(&cleaned).trim_end());
-                out.push('\n');
-                // kramdown renders inner content indented by 2 within the
-                // markdown="1" element (matching blockquote-style nesting).
-                self.render_blocks(inner, out, indent + 2, false);
-                out.push('\n');
-                // A blank line before the close tag in the source is mirrored.
-                if *inner_trailing_blank {
+                let open_norm = normalize_html_block(&cleaned);
+                let open_norm = open_norm.trim_end();
+                // Special case: a `<p markdown="1">` cannot contain a block
+                // `<p>`; when its content is a single paragraph, kramdown
+                // renders it inline on one line with no nested <p>.
+                let single_para = {
+                    let nb: Vec<&BlockNode> = inner
+                        .iter()
+                        .filter(|n| !matches!(n.block, Block::Blank))
+                        .collect();
+                    nb.len() == 1 && matches!(nb[0].block, Block::Paragraph { .. })
+                };
+                if close_tag.eq_ignore_ascii_case("</p>") && single_para {
+                    out.push_str(&pad);
+                    out.push_str(open_norm);
+                    if let Some(n) = inner.iter().find(|n| !matches!(n.block, Block::Blank)) {
+                        if let Block::Paragraph { text, .. } = &n.block {
+                            out.push_str(&render_inline(text));
+                        }
+                    }
+                    out.push_str(close_tag);
+                } else {
+                    out.push_str(&pad);
+                    out.push_str(open_norm);
                     out.push('\n');
+                    // Inner content indented by 2 within the markdown="1" element.
+                    self.render_blocks(inner, out, indent + 2, false);
+                    out.push('\n');
+                    if *inner_trailing_blank {
+                        out.push('\n');
+                    }
+                    out.push_str(&pad);
+                    out.push_str(close_tag);
                 }
-                out.push_str(&pad);
-                out.push_str(close_tag);
             }
             Block::FootnoteDef { .. } | Block::Blank => {}
         }

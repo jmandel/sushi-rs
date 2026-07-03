@@ -616,9 +616,11 @@ impl<'a> Parser<'a> {
         let has_md = open_tag.contains("markdown=\"1\"") || open_tag.contains("markdown='1'");
 
         if is_void_tag(&tagname) {
-            // single self-contained tag line block
+            // Void element block (e.g. `<link .../>`, `<hr>`, `<img …>`).
+            // read_open_tag already advanced past the open tag line, so rewind
+            // to the block start and collect from there until a blank line.
+            self.i = self.block_start;
             let mut collected: Vec<String> = Vec::new();
-            // Consume this line and continue until blank line
             while self.i < self.lines.len() {
                 let l = self.lines[self.i];
                 if l.trim().is_empty() {

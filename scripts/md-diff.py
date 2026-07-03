@@ -82,12 +82,26 @@ def classify(src: str, o: str, r: str):
     diff = list(difflib.unified_diff(o_lines, r_lines, lineterm=""))
     changed = [d for d in diff if d and d[0] in "+-" and not d.startswith(("+++", "---"))]
 
-    # --- OUT OF SCOPE classes -------------------------------------------
-    # Rouge syntax highlighting: oracle (even in NO_ROUGE we disable it, so this
-    # should be rare) — but if the page has language fences and the ONLY diffs
-    # are inside highlighter markup, mark out-of-scope.
+    # --- OUT OF SCOPE classes (documented boundary) ---------------------
+    # (1) Rouge syntax highlighting of language-tagged fences. render_md emits
+    #     kramdown's own bare fence; Rouge token markup is a separate library.
     if any(RE_ROUGE.search(c) for c in changed):
         return ("rouge-highlight", False)
+
+    # (2) Liquid-strip placeholder residue. Liquid evaluation is another crate's
+    #     job (T1+T2); the harness replaces Liquid with inert placeholders
+    #     (LIQVAR). When EVERY differing line involves a placeholder, the
+    #     divergence is attributable to the strip scheme, not markdown semantics.
+    if changed and all(("LIQVAR" in c or c[1:].strip() == "") for c in changed):
+        return ("liquid-strip-placeholder", False)
+
+    # (3) Whole page reduced to blank/whitespace-only diffs where the SOURCE was
+    #     entirely Liquid (stripped to empty/near-empty). The "real" page is
+    #     produced by Liquid; markdown sees nothing meaningful.
+    if changed and all(c[1:].strip() == "" for c in changed):
+        had_liquid = "{%" in src or "{{" in src or src.strip() == ""
+        if had_liquid:
+            return ("liquid-strip-blank", False)
 
     return None
 

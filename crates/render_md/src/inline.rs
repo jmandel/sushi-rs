@@ -99,9 +99,23 @@ pub fn normalize_html_block(raw: &str) -> String {
     while i < n {
         let c = chars[i];
         if c == '<' {
-            // comment?
+            // comment? copy the whole comment (through `-->`) verbatim so its
+            // inner markup (which may contain tags/`>`) is not touched.
+            if chars.get(i + 1) == Some(&'!')
+                && chars.get(i + 2) == Some(&'-')
+                && chars.get(i + 3) == Some(&'-')
+            {
+                let mut j = i + 4;
+                while j + 2 < n && !(chars[j] == '-' && chars[j + 1] == '-' && chars[j + 2] == '>') {
+                    j += 1;
+                }
+                let end = if j + 2 < n { j + 3 } else { n };
+                out.extend(&chars[i..end]);
+                i = end;
+                continue;
+            }
+            // doctype / CDATA / other `<!...>` — copy through `>` verbatim.
             if chars.get(i + 1) == Some(&'!') {
-                // copy through '>' (comments/doctype/CDATA) verbatim
                 let mut j = i;
                 while j < n && chars[j] != '>' {
                     j += 1;
@@ -535,6 +549,13 @@ fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
                     in_str = Some(c);
                 } else if c == '>' {
                     let raw: String = chars[i..k + 1].iter().collect();
+                    // A closing tag for a VOID element (e.g. `</br>`, `</img>`)
+                    // is invalid HTML — kramdown escapes it as literal text.
+                    if let Some((name, is_close, _)) = inspect_tag(&raw) {
+                        if is_close && is_void_html(&name) {
+                            return Some((escape_html_text(&raw), k + 1));
+                        }
+                    }
                     return Some((normalize_inline_tag(&raw), k + 1));
                 } else if c == '<' {
                     return None;
