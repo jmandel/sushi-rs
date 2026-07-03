@@ -189,13 +189,24 @@ impl Renderer {
             Block::CodeBlock { lang, code } => {
                 self.render_code(lang, code, out, indent);
             }
-            Block::BlockQuote { blocks, attrs } => {
+            Block::BlockQuote {
+                blocks,
+                attrs,
+                inner_leading_blank,
+                inner_trailing_blank,
+            } => {
                 out.push_str(&pad);
                 out.push_str("<blockquote");
                 out.push_str(&attr_string(attrs, false));
                 out.push_str(">\n");
+                if *inner_leading_blank {
+                    out.push('\n');
+                }
                 self.render_blocks(blocks, out, indent + 2, false);
                 out.push('\n');
+                if *inner_trailing_blank {
+                    out.push('\n');
+                }
                 out.push_str(&pad);
                 out.push_str("</blockquote>");
             }

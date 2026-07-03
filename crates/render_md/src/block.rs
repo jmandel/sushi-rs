@@ -141,6 +141,10 @@ pub enum Block {
     BlockQuote {
         blocks: Vec<BlockNode>,
         attrs: Attrs,
+        /// Inner content began / ended with blank line(s) (`>` lines with no
+        /// text) — kramdown mirrors them inside the <blockquote>.
+        inner_leading_blank: bool,
+        inner_trailing_blank: bool,
     },
     /// Raw HTML block passed through. If `reparse` is set, inner content between
     /// the outer tags is re-parsed as markdown (markdown="1").
@@ -942,22 +946,37 @@ impl Parser {
         let has_md = model != ContentModel::Raw;
 
         if is_void_tag(&tagname) {
-            // Void element block (e.g. `<link .../>`, `<hr>`, `<img …>`).
-            // read_open_tag already advanced past the open tag line, so rewind
-            // to the block start and collect from there until a blank line.
-            self.i = self.block_start;
-            let mut collected: Vec<String> = Vec::new();
-            while self.i < self.lines.len() {
-                let l = self.lines[self.i].clone();
-                if is_blank(&l) {
-                    break;
-                }
-                collected.push(l.to_string());
-                self.i += 1;
+            // Void element block (e.g. `<link .../>`, `<hr>`, `<img …>`): the
+            // block is JUST the tag. kramdown consumes the tag's trailing
+            // whitespace/newline (html.rb:41 `@src.scan(TRAILING_WHITESPACE)`),
+            // so the NEXT block is always blank-separated even when adjacent in
+            // the source — modeled with a synthetic blank line. Content after
+            // the tag on the same line is spliced for continued parsing.
+            // read_open_tag advanced self.i past the open-tag line and left the
+            // after-tag column in `after_open_col`.
+            let tag_line = self.lines[after_open_line].clone();
+            let byte_col = after_open_col.min(tag_line.len());
+            let (head, rest) = tag_line.split_at(byte_col);
+            let raw: String = if after_open_line == self.block_start {
+                head.to_string()
+            } else {
+                let mut s = self.lines[self.block_start..after_open_line].join("\n");
+                s.push('\n');
+                s.push_str(head);
+                s
+            };
+            self.i = after_open_line + 1;
+            let rest = rest.to_string();
+            if !is_blank(&rest) {
+                // Same-line trailing content: no whitespace for kramdown to
+                // consume — the remainder parses as an ADJACENT block.
+                self.lines.insert(self.i, rest);
+            } else {
+                // kramdown consumed the trailing newline into the element, so
+                // the following block is always blank-separated.
+                self.lines.insert(self.i, String::new());
             }
-            return Some(Block::HtmlBlock {
-                raw: collected.join("\n"),
-            });
+            return Some(Block::HtmlBlock { raw });
         }
 
         let close = format!("</{tagname}>");
@@ -1106,9 +1125,15 @@ impl Parser {
         }
         let inner = inner_lines.join("\n");
         let blocks = parse_block_nodes_with(&inner, self.parse_block_html);
+        let inner_leading_blank = inner_lines.first().map(|l| is_blank(l)).unwrap_or(false)
+            && inner_lines.iter().any(|l| !is_blank(l));
+        let inner_trailing_blank = inner_lines.last().map(|l| is_blank(l)).unwrap_or(false)
+            && inner_lines.iter().any(|l| !is_blank(l));
         Some(Block::BlockQuote {
             blocks,
             attrs: Attrs::default(),
+            inner_leading_blank,
+            inner_trailing_blank,
         })
     }
 
