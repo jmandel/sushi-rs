@@ -1,0 +1,1 @@
+shim version 0.4.2 (npm @bjorn3/browser_wasi_shim)

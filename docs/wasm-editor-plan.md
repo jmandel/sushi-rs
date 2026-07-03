@@ -149,3 +149,84 @@ Hard dependency chain (user-confirmed 2026-07-02, tracked as tasks #11–#13):
 review pass (sushi + snapshot generator) → THEN P0 here.** P1's storage-trait
 refactor must additionally be gated by the post-cutover full-corpus
 scorecard. Do not interleave any of this with wave 3/4.
+
+## 9. P0 status — DONE (2026-07-03)
+
+**Verdict: P0 gate PASS.** Both binaries compile to `wasm32-wasip1` and run in a
+real browser (Chromium 148, headless), compiling the cycle IG and generating
+snapshots whose output is **byte-identical to native**. Spike lives in
+`demo/wasm-p0/` (page + vendored `@bjorn3/browser_wasi_shim` 0.4.2 + a
+`prepare.sh` data script + a `check-native.sh` byte-match gate; heavy data
+gitignored, prepared by script).
+
+**Code changes (the only ones — both native-inert):**
+- `crates/rust_sushi`: **mimalloc cfg-gated to `not(target_family="wasm")`**
+  (Cargo.toml target-dep + `#[global_allocator]`). mimalloc is a C dep with no
+  wasm libc (`wchar.h`); wasm uses the default allocator. Native keeps mimalloc
+  (verified: 343 `mi_*` symbols still in the native binary).
+- `snapshot_gen`: **zero changes.** No clock/`Instant` shim needed — wasip1 has
+  a WASI wall-clock, and the only `std::time` sites are `#[cfg(test)]` or in
+  `package_acquisition` (not linked into the WASI runtime path).
+
+**Native gates re-run green with the change in place:** workspace `cargo test`
+(all suites ok); SUSHI-harvest gate **326/326 cases, 256/256 byte-identical**;
+native `rust_sushi build` of IPS = **118 resources**.
+
+**Binary sizes** (release, no wasm-opt/strip pass yet):
+
+| binary | native | wasm32-wasip1 |
+|---|---|---|
+| rust_sushi | 5.72 MB | 4.36 MB |
+| snapshot_gen | 1.22 MB | 0.86 MB |
+
+**Timings — cycle IG (7 profiles), single-threaded:**
+
+| step | native (per-process) | wasmtime 46 | Chromium 148 (in-tab) |
+|---|---|---|---|
+| full IG build | ~45 ms | ~99 ms | 129 ms |
+| snapshot / profile | ~18 ms | ~32 ms | ~21 ms |
+| **compute total (build + 7 snaps)** | ~0.17 s | ~0.32 s | **0.27 s** |
+
+Browser wasm ≈ 1.5–2× native — matches the plan's estimate. **0.27 s ≪ 3 s
+gate.** (Browser wall-clock adds ~80 ms to fetch the 9 MB virtual FS + ~27 ms to
+compile both modules — one-time, cacheable.)
+
+**Byte-match gate:** browser exports `wasm-hashes.json` (SHA-256 of all 18
+outputs = 11 build resources + 7 snapshots); `check-native.sh` regenerates the
+native manifest and diffs → **18/18 identical, 0 mismatches**. Cross-checked
+under wasmtime 46 and Node `node:wasi` (also byte-identical) so the parity is in
+the code, not one shim.
+
+**Minimal package cache:** the store reads `.index.json`/`.derived-index.json`
+eagerly and resource bodies lazily; `prepare.sh` straces a native run and ships
+only the fished set — **~8 MB** vs the ~230 MB full closure.
+
+**One real gotcha (documented in the demo README):** package dir names contain
+`#` (`hl7.fhir.r4.core#4.0.1`); a raw `#` in a `fetch` URL is a fragment
+delimiter, so the browser 404'd on every package file until `app.js`
+`encodeURIComponent`-ed path segments. Invisible under wasmtime/node (direct
+disk reads).
+
+**Toolchain note (Arch):** the system rustc can't build wasip1 std and Arch's
+target-std is ABI-incompatible with upstream prebuilt std (same commit, patched
+metadata). Use a rustup-managed **upstream** toolchain matching the rustc
+version + `wasm32-wasip1`. See `demo/wasm-p0/README.md`.
+
+**Shortest path for P1/P2 (what this proved is safe to build next):**
+- **P1 — `PackageSource` trait (the blocker):** replace the ~5 `std::fs` sites in
+  `package_store` (`.index.json` read, `derived_index::load`, the two
+  `resolve_latest`/`resolve_minor_wildcard` readdir version-resolvers, the
+  deep-scan `read_dir` fallback) + `snapshot_gen`'s `PackageContext` with a
+  `read(path)/list(dir)/exists` trait. Native impl = today's disk code
+  (re-run full corpus gates over it). Browser impl = OPFS/IndexedDB. Note the
+  lazy-read pattern already makes cold-start cheap; keep it.
+- **P1 — CDN bundle format:** ship `{tarball + .index.json + .derived-index.json}`
+  per package (reuse the CAS index already in `package_acquisition`); pin exact
+  versions in a manifest lockfile. Cold-start = one fetch + inflate.
+- **P2 — `wasm_api` bindgen crate + worker protocol:** move argv/FS marshalling
+  (currently the throwaway `app.js`) into a typed `compile()/generate_snapshot()`
+  surface behind wasm-bindgen; run in a Web Worker. Then port the byte-match gate
+  (this demo's `check-native.sh` diff) into CI against the wasm build.
+- **Deferred, non-blocking:** binary-size pass (`wasm-opt`, strip) — 4.4 MB is
+  already fine for a spike; the WASI shim can be dropped entirely once the
+  `PackageSource` route (b) replaces the WASI route (a).

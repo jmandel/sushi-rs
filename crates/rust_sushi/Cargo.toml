@@ -18,4 +18,8 @@ fsh_model.workspace = true
 diagnostics.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+
+# mimalloc is a C dependency (no wasm libc); native-only. Wasm falls back to the
+# default allocator. See the cfg-gated #[global_allocator] in src/main.rs.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc.workspace = true

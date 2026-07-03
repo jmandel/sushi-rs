@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rust_sushi + snapshot_gen — WASM P0</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; max-width: 860px;
+           margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: .2rem; }
+    p.sub { color: #888; margin-top: 0; }
+    button { font: inherit; padding: .5rem 1.1rem; border-radius: 8px; border: 1px solid #888;
+             cursor: pointer; background: #2563eb; color: #fff; border-color: #2563eb; }
+    button:disabled { opacity: .5; cursor: default; }
+    #summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+               gap: .6rem; margin: 1.2rem 0; }
+    .stat { border: 1px solid #8884; border-radius: 10px; padding: .7rem .9rem; }
+    .stat span { display: block; color: #888; font-size: .8rem; }
+    .stat b { font-size: 1.2rem; }
+    .stat.gate.ok { background: #16a34a22; border-color: #16a34a; }
+    .stat.gate.bad { background: #dc262622; border-color: #dc2626; }
+    pre#log { background: #8881; border-radius: 10px; padding: 1rem; overflow-x: auto;
+              white-space: pre; font: 12.5px/1.45 ui-monospace, monospace; min-height: 4rem; }
+    a#download { display: inline-block; margin-top: .5rem; }
+    code { background: #8882; padding: .1rem .3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>rust_sushi + snapshot_gen, in the browser</h1>
+  <p class="sub">WASM P0 spike — compiles the cycle IG (FSH → FHIR) and generates
+     validation-grade snapshots entirely client-side via WASI, no server compute.</p>
+
+  <button id="run">Run compile + snapshot</button>
+  <div id="summary" hidden></div>
+  <pre id="log">Click “Run” to compile the cycle IG and generate snapshots in this tab.
+Both binaries run against an in-memory virtual filesystem (cycle sources +
+a minimal FHIR package cache subset). Outputs are hashed for the native
+byte-match gate — see the downloadable wasm-hashes.json.</pre>
+  <a id="download" hidden></a>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

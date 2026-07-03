@@ -4,6 +4,10 @@
 use fsh_lexer_parser::{import_to_json, lex_document, Channel};
 use package_acquisition::{default_registries, Coordinate, PackageCas};
 
+// mimalloc is a native-only speedup: it is a C dependency that cannot compile
+// for wasm targets (no libc `wchar.h`). Gate it out for wasm; native behavior is
+// unchanged (same global allocator as before on every non-wasm target).
+#[cfg(not(target_family = "wasm"))]
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
