@@ -26,16 +26,10 @@ fn ig_sd_dir(ig: &str) -> PathBuf {
         // the periodicity-impl checkout. NOTE: these snapshots are SUSHI-made,
         // not publisher-regenerated, so snapshot-source variance is possible for
         // cycle (documented in the worklog). Prefer an F0 build if present.
-        "cycle" => {
-            let f0 = PathBuf::from(format!("{}/cycle/output", F0));
-            if f0.exists() {
-                f0
-            } else {
-                PathBuf::from(
-                    "/home/jmandel/hobby/periodicity-impl/cycle/fsh-generated/resources",
-                )
-            }
-        }
+        // cycle: the committed publisher build's temp/pages holds the
+        // publisher's own post-snapshot SDs (golden-provenance-matched inputs;
+        // eliminates the SUSHI-snapshot variance).
+        "cycle" => PathBuf::from("/home/jmandel/hobby/periodicity-impl/cycle/temp/pages"),
         _ => panic!("unknown ig {}", ig),
     }
 }
@@ -144,10 +138,11 @@ fn build_ctx(ig: &str) -> Option<IgContext> {
             Some(format!("{}/plan-net/input-cache/txcache", F0)),
         ),
         "cycle" => (
-            "/home/jmandel/hobby/periodicity-impl/cycle/fsh-generated/resources".to_string(),
-            // cycle has no isolated F0 home; use the us-core one for core pkgs.
-            format!("{}/us-core/.home/.fhir/packages", F0),
-            None,
+            "/home/jmandel/hobby/periodicity-impl/cycle/temp/pages".to_string(),
+            // cycle's build used the user's global package cache (no isolated
+            // HOME — see render-goldens/cycle/PIN.md).
+            format!("{}/.fhir/packages", std::env::var("HOME").unwrap_or_default()),
+            Some("/home/jmandel/hobby/periodicity-impl/cycle/input-cache/txcache".to_string()),
         ),
         _ => return None,
     };

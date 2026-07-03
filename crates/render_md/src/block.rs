@@ -1107,11 +1107,13 @@ impl Parser {
                     k += 1;
                 }
                 if k < self.lines.len()
-                    && leading_spaces(&self.lines[k]) >= base_indent
-                    && leading_spaces(&self.lines[k]) < cur_content_indent
+                    && (leading_spaces(&self.lines[k]) <= 3
+                        || leading_spaces(&self.lines[k]) < cur_content_indent)
                     && list_marker(&self.lines[k]).map(|(o, _, _)| o == ordered).unwrap_or(false)
                 {
                     // Same-type marker after a blank line: loose separator.
+                    // kramdown accepts each item's marker within OPT_SPACE
+                    // (0-3 spaces) independent of the first item's indent.
                     tight = false;
                     self.i = k;
                     continue;
@@ -1123,10 +1125,14 @@ impl Parser {
                 break;
             }
             let this_indent = leading_spaces(&l);
-            if this_indent < base_indent {
+            let is_sibling_marker = list_marker(&l)
+                .map(|(o, _, _)| o == ordered)
+                .unwrap_or(false)
+                && (this_indent <= 3 || this_indent < cur_content_indent);
+            if this_indent < base_indent && !is_sibling_marker {
                 break;
             }
-            if this_indent >= base_indent && this_indent < cur_content_indent {
+            if is_sibling_marker || (this_indent >= base_indent && this_indent < cur_content_indent) {
                 if let Some((o2, _s2, ml)) = list_marker(&l) {
                     if o2 != ordered {
                         // different list type -> stop

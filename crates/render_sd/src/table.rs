@@ -20,7 +20,7 @@
 
 use std::collections::HashMap;
 
-use render_tables::model::{Cell, Piece, Row, TableGenerationMode, TableModel};
+use render_tables::model::{Cell, Piece, Row, TableGenerationMode};
 use render_tables::{generate, Gen};
 use render_xhtml::{Config, XhtmlComposer};
 
@@ -783,7 +783,14 @@ impl<'a> TCtx<'a> {
                     .and_then(|x| x.as_str())
                     .unwrap_or("");
                 if let Some(bsd) = self.ctx.resolve(base_url) {
-                    let name = bsd.name.clone().unwrap_or_default();
+                    // SDR:2340-2343: "(version)" when the base canonical has
+                    // multiple loaded versions.
+                    let v = if base_url.contains('|') || self.ctx.version_count(base_url) > 1 {
+                        format!("({})", bsd.version)
+                    } else {
+                        String::new()
+                    };
+                    let name = format!("{}{}", bsd.name.clone().unwrap_or_default(), v);
                     let wp = bsd.web_path.clone();
                     // isAbsoluteUrl(webPath) ? webPath : imagePath+webPath;
                     // imagePath="" so relative stays relative.
@@ -1009,7 +1016,7 @@ impl<'a> TCtx<'a> {
         self.gen_types_erased(e2, types)
     }
 
-    fn gen_types_erased(&mut self, e: Ed<'_>, types: &[TypeRef<'_>]) -> Cell {
+    fn gen_types_erased(&mut self, _e: Ed<'_>, types: &[TypeRef<'_>]) -> Cell {
         // A lifetime-erased duplicate of gen_types' body for non-'a elements.
         // To avoid divergence, we only support the common cases the extension
         // value path hits (plain types, references, profiled datatypes).
@@ -1124,6 +1131,18 @@ impl<'a> TCtx<'a> {
                         None,
                     ));
                 }
+                // SDR:3393-3396: type-level S before "(".
+                if type_is_must_support(tr) && element.must_support() {
+                    c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
+                    c.add_styled_text(
+                        Some("This type must be supported".into()),
+                        Some("S".into()),
+                        Some("white"),
+                        Some(RED_BACKGROUND_COLOR),
+                        None,
+                        false,
+                    );
+                }
                 c.pieces.push(Piece::ref_text(None, Some("(".into()), None));
                 let mut first = true;
                 for rt in tr.target_profiles() {
@@ -1131,6 +1150,18 @@ impl<'a> TCtx<'a> {
                         c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
                     self.gen_target_link(&mut c, tr, rt);
+                    // SDR:3405-3408: per-target S.
+                    if canonical_is_must_support(tr, rt) && element.must_support() {
+                        c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
+                        c.add_styled_text(
+                            Some("This target must be supported".into()),
+                            Some("S".into()),
+                            Some("white"),
+                            Some(RED_BACKGROUND_COLOR),
+                            None,
+                            false,
+                        );
+                    }
                     first = false;
                 }
                 if first {
@@ -1328,7 +1359,7 @@ impl<'a> TCtx<'a> {
         let mut c = Cell::new();
         let url: Option<String> = ext_defn.map(|e| e.url.clone());
 
-        // root abstract profile block (SDR:1555-1577)
+        // root abstract profile block (SDR@6.9.11:1558-1580)
         if root
             && self
                 .sd
@@ -1337,7 +1368,49 @@ impl<'a> TCtx<'a> {
                 .and_then(|x| x.as_bool())
                 .unwrap_or(false)
         {
-            self.gap("abstract root description block");
+            if !c.pieces.is_empty() {
+                c.pieces.push(Piece::tag("br"));
+            }
+            let kind_word = if self.sd.derivation() == "constraint" {
+                "profile"
+            } else {
+                "type"
+            };
+            c.pieces.push(Piece::ref_text(
+                None,
+                Some(format!("This is an abstract {}. ", kind_word)),
+                None,
+            ));
+            // children: all SDs in context with baseDefinition == this url.
+            // QUIRK: Java iterates CanonicalResourceManager.getList() — a
+            // HashSet with identity hashCodes — so the publisher's child ORDER
+            // is JVM-run-dependent (non-deterministic). We use the IG's own
+            // resource order (deterministic); a divergence here is classified
+            // as unstable-oracle, not a content bug.
+            let children = self.ctx.own_sds_derived_from(self.sd_url());
+            if !children.is_empty() {
+                c.pieces.push(Piece::ref_text(
+                    None,
+                    Some(format!(
+                        "Child {}: ",
+                        if self.sd.derivation() == "constraint" {
+                            "profiles"
+                        } else {
+                            "types"
+                        }
+                    )),
+                    None,
+                ));
+                let mut first = true;
+                for (wp, name) in children {
+                    if first {
+                        first = false;
+                    } else {
+                        c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
+                    }
+                    c.pieces.push(Piece::ref_text(Some(wp), Some(name), None));
+                }
+            }
         }
 
         // url-fixed short circuit (SDR:1579)
@@ -1470,7 +1543,54 @@ impl<'a> TCtx<'a> {
             if binding.get("valueSet").is_some() {
                 self.render_binding_summary(&mut c, definition, binding);
             } else if binding.as_object().map(|o| !o.is_empty()).unwrap_or(false) {
-                self.gap("binding without valueSet");
+                // no-valueSet branch (SDR@6.9.11:1987-2003)
+                if !c.pieces.is_empty() {
+                    let mut br = Piece::tag("br");
+                    br.set_class("binding");
+                    c.pieces.push(br);
+                }
+                let mut lbl =
+                    Piece::ref_text(None, Some("Binding Description: ".into()), None);
+                lbl.set_class("binding");
+                lbl.add_style("font-weight:bold");
+                c.pieces.push(lbl);
+                if let Some(strength) = binding.get("strength").and_then(|x| x.as_str()) {
+                    let mut p1 = Piece::ref_text(None, Some(" (".into()), None);
+                    p1.set_class("binding");
+                    c.pieces.push(p1);
+                    let mut p2 = Piece::ref_text(
+                        Some(format!("{}terminologies.html#{}", self.core_path, strength)),
+                        Some(strength.to_string()),
+                        Some(strength_definition(strength).to_string()),
+                    );
+                    p2.set_class("binding");
+                    c.pieces.push(p2);
+                    let mut p3 = Piece::ref_text(None, Some(")".into()), None);
+                    p3.set_class("binding");
+                    c.pieces.push(p3);
+                    if matches!(strength, "required" | "extensible") {
+                        let mut sp = Piece::ref_text(None, Some(" ".into()), None);
+                        sp.set_class("binding");
+                        c.pieces.push(sp);
+                        let mut warn = Piece::ref_text(
+                            None,
+                            Some("\u{26A0}".into()),
+                            Some("This binding doesn't define a testable ValueSet".into()),
+                        );
+                        warn.set_class("binding");
+                        warn.add_style("font-weight:bold; color: #c97a18");
+                        c.pieces.push(warn);
+                    }
+                }
+                let mut sep = Piece::ref_text(None, Some(": ".into()), None);
+                sep.set_class("binding");
+                c.pieces.push(sep);
+                let desc = binding
+                    .get("description")
+                    .and_then(|x| x.as_str())
+                    .filter(|d| !d.contains('\n'))
+                    .unwrap_or("No description provided");
+                markdown::add_markdown_no_para_role(&mut c, desc, "binding");
             }
         }
 
@@ -1763,13 +1883,17 @@ impl<'a> TCtx<'a> {
                     flags.pieces.push(Piece::ref_text(None, None, None));
                     row.cells.push(flags);
                     let mut card = Cell::new();
+                    // Java tests Property.getTypeCode() — the full signature —
+                    // so "Reference(X)" is NOT isReference and takes the
+                    // datatype icon (SDR:2803-2812).
+                    let tc = &prop.type_code_full;
                     if !pattern {
                         card.pieces.push(Piece::ref_text(None, Some("0..0".into()), None));
                         row.set_icon("icon_fixed.gif", Some("Fixed Value:".into()));
-                    } else if self.ctx.is_primitive_type(&prop.type_codes.first().cloned().unwrap_or_default()) {
+                    } else if self.ctx.is_primitive_type(tc) {
                         row.set_icon("icon_primitive.png", Some("Primitive Data Type".into()));
                         card.pieces.push(Piece::ref_text(None, Some(format!("0..{}", prop.max)), None));
-                    } else if matches!(prop.type_codes.first().map(String::as_str), Some("Reference") | Some("canonical")) {
+                    } else if tc == "Reference" || tc == "canonical" {
                         row.set_icon("icon_reference.png", Some("Reference to another Resource".into()));
                         card.pieces.push(Piece::ref_text(None, Some(format!("0..{}", prop.max)), None));
                     } else {
@@ -1778,9 +1902,7 @@ impl<'a> TCtx<'a> {
                     }
                     row.cells.push(card);
                     let mut ty = Cell::new();
-                    let tc0 = prop.type_codes.first().cloned().unwrap_or_default();
-                    let tlink = self.ctx.resolve_type(&tc0).map(|r| r.web_path);
-                    ty.pieces.push(Piece::ref_text(tlink, Some(tc0.clone()), None));
+                    self.fixed_value_type_cell(&mut ty, tc);
                     row.cells.push(ty);
                     let mut desc = Cell::new();
                     desc.pieces
@@ -1818,7 +1940,9 @@ impl<'a> TCtx<'a> {
                     ));
                     row.cells.push(card);
                     let mut ty = Cell::new();
-                    // b.fhirType() = the property's concrete type
+                    // b.fhirType(): the value's concrete type — for non-choice
+                    // properties that's the single declared type (no parens
+                    // in fhirType, so no split branch here) (SDR:2858-2872).
                     let tc0 = prop.type_codes.first().cloned().unwrap_or_default();
                     let tlink = self.ctx.resolve_type(&tc0).map(|r| r.web_path);
                     ty.pieces.push(Piece::ref_text(tlink, Some(tc0.clone()), None));
@@ -1863,6 +1987,26 @@ impl<'a> TCtx<'a> {
                     }
                 }
             }
+        }
+    }
+
+    /// genFixedValue type cell (SDR:2815-2829): "Ref(A|B)" splits into linked
+    /// pieces; plain codes link via getLinkFor.
+    fn fixed_value_type_cell(&mut self, ty: &mut Cell, tc: &str) {
+        if let Some(i) = tc.find('(') {
+            let tn = &tc[..i];
+            let inner = &tc[i + 1..tc.rfind(')').unwrap_or(tc.len())];
+            let tn_link = self.ctx.resolve_type(tn).map(|r| r.web_path);
+            ty.pieces.push(Piece::ref_text(tn_link, Some(tn.to_string()), None));
+            ty.pieces.push(Piece::ref_text(None, Some("(".into()), None));
+            for s in inner.split('|') {
+                let link = self.ctx.resolve_type(s).map(|r| r.web_path);
+                ty.pieces.push(Piece::ref_text(link, Some(s.to_string()), None));
+            }
+            ty.pieces.push(Piece::ref_text(None, Some(")".into()), None));
+        } else {
+            let link = self.ctx.resolve_type(tc).map(|r| r.web_path);
+            ty.pieces.push(Piece::ref_text(link, Some(tc.to_string()), None));
         }
     }
 
@@ -1914,7 +2058,7 @@ impl<'a> TCtx<'a> {
     fn render_binding_summary(
         &mut self,
         c: &mut Cell,
-        definition: Ed<'a>,
+        _definition: Ed<'a>,
         binding: &serde_json::Value,
     ) {
         if !c.pieces.is_empty() {
@@ -2053,7 +2197,7 @@ impl<'a> TCtx<'a> {
             let mut td = Elem::new("td");
             td.style("font-size: 11px");
             let cp = self.core_path;
-            let mut link =
+            let link =
                 |href: String, title: &str, text: &str, td: &mut Elem| {
                     let mut a = Elem::new("a");
                     a.set_attr("href", href);
@@ -2323,6 +2467,9 @@ struct ValueDefn {
 pub struct PropDef {
     name: String,
     type_codes: Vec<String>,
+    /// `Property.getTypeCode()`: the spec type signature, e.g.
+    /// "Reference(Organization)" or "dateTime|Period".
+    type_code_full: String,
     max: String,
     short: String,
     path: String,
@@ -2351,9 +2498,23 @@ fn type_properties(type_sd: &serde_json::Value) -> Vec<PropDef> {
         let name = p[prefix.len()..].to_string();
         // Property names for [x] keep the [x] (rare in patterns; JSON lookup
         // by the bare name will miss — flagged by absence).
+        let mut sigs: Vec<String> = Vec::new();
+        for t in ed.types() {
+            let mut sig = t.working_code().to_string();
+            let targets = t.target_profiles();
+            if !targets.is_empty() {
+                let tails: Vec<&str> = targets
+                    .iter()
+                    .map(|u| u.rsplit('/').next().unwrap_or(u))
+                    .collect();
+                sig = format!("{}({})", sig, tails.join("|"));
+            }
+            sigs.push(sig);
+        }
         out.push(PropDef {
             name,
             type_codes: ed.types().iter().map(|t| t.working_code().to_string()).collect(),
+            type_code_full: sigs.join("|"),
             max: ed.max().unwrap_or("1").to_string(),
             short: ed.short().unwrap_or("").to_string(),
             path: p.to_string(),

@@ -7,7 +7,9 @@
 
 use std::process::exit;
 
+use render_sd::context::IgContext;
 use render_sd::grid::render_grid;
+use render_sd::table::{render_table, TableConfig};
 use render_sd::{wrap_raw, Sd};
 
 fn main() {
@@ -28,6 +30,18 @@ fn main() {
 
     let body = match kind.as_str() {
         "grid" => render_grid(&sd, &def_file, &core_path),
+        "snapshot" => {
+            // debug path: us-core context hardwired
+            let f0 = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds";
+            let ctx = IgContext::load_with_txcache(
+                std::path::Path::new(&format!("{}/us-core/output", f0)),
+                std::path::Path::new(&format!("{}/us-core/.home/.fhir/packages", f0)),
+                Some(std::path::Path::new(&format!("{}/us-core/input-cache/txcache", f0))),
+            );
+            let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot(""));
+            for g in gaps { eprintln!("gap: {}", g); }
+            b
+        }
         other => {
             eprintln!("unsupported kind: {}", other);
             exit(2);

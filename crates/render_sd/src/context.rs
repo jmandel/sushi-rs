@@ -61,6 +61,10 @@ impl Resolved {
 struct PkgEntry {
     base_url: String,
     version: String,
+    /// The IG's fhirVersion-matched core package (the "master" package —
+    /// PackageInformation.isMaster; its CodeSystem/ValueSet/base-SD copies own
+    /// `masterDefinitions`, CanonicalResourceManager.java:394-400).
+    is_master: bool,
     /// canonical -> (filename, resourceType, resource version).
     files: HashMap<String, (String, String, String)>,
     dir: PathBuf,
@@ -163,6 +167,19 @@ impl IgContext {
             if seen.iter().any(|(p, v)| *p == pid && *v == ver) {
                 continue;
             }
+            // Examples packages are never resolution sources (SpecMapManager
+            // SpecialPackageType.Examples; TypeManager excludes examples-
+            // sourced definitions).
+            if pid.ends_with(".examples") {
+                continue;
+            }
+            // The us-core "vNNN" facade packages are empty wrappers the
+            // publisher resolves to the REAL us-core package of that version
+            // (SimpleWorkerContext.java:695; SpecMapManager FACADE).
+            if pid.starts_with("hl7.fhir.us.core.v") {
+                to_visit.push(("hl7.fhir.us.core".to_string(), ver.clone()));
+                continue;
+            }
             seen.push((pid.clone(), ver.clone()));
             let pdir = packages_dir.join(format!("{}#{}", pid, ver)).join("package");
             let pj = pdir.join("package.json");
@@ -212,7 +229,8 @@ impl IgContext {
             if !pdir.exists() {
                 continue;
             }
-            let Some(entry) = load_package(&pdir, ver) else { continue };
+            let Some(mut entry) = load_package(&pdir, ver) else { continue };
+            entry.is_master = pid == want_core;
             packages.push(entry);
         }
 
@@ -260,9 +278,80 @@ impl IgContext {
         if let Some(hit) = self.cache.borrow().get(&key) {
             return hit.clone();
         }
+        // masterDefinitions rule (CanonicalResourceManager.java:394-400 +
+        // get():713-719): the MASTER (core) package's CodeSystem/ValueSet/
+        // specializing-SD copy wins outright for urls NOT under
+        // terminology.hl7.org; THO urls are excluded from master, so the THO
+        // package copies win there (golden-verified: core's v2-/v3- valueset
+        // duplicates never shadow hl7.terminology's).
+        let is_tho = url.starts_with("http://terminology.hl7.org");
+        if !is_tho {
+            for pkg in &self.packages {
+                if !pkg.is_master {
+                    continue;
+                }
+                if let Some((fname, rtype, rver)) = pkg.files.get(url) {
+                    if matches!(rtype.as_str(), "CodeSystem" | "ValueSet" | "StructureDefinition") {
+                        if let Some(v) = want_ver {
+                            if rver != v && pkg.version != v {
+                                continue;
+                            }
+                        }
+                        let page = pkg
+                            .spec_paths
+                            .as_ref()
+                            .and_then(|m| m.get(url))
+                            .cloned()
+                            .or_else(|| ig_override_page(url))
+                            .unwrap_or_else(|| {
+                                fname.trim_end_matches(".json").to_string() + ".html"
+                            });
+                        let page = ig_override_page(url).unwrap_or(page);
+                        let web_path = if page.starts_with("http://") || page.starts_with("https://") {
+                            page.clone()
+                        } else {
+                            join_url(&pkg.base_url, &page)
+                        };
+                        let fpath = pkg.dir.join(fname);
+                        let (name, title, kind, derivation) = read_meta(&fpath);
+                        // masterDefinitions applies to SDs only when they
+                        // SPECIALIZE (base types/resources).
+                        if rtype != "StructureDefinition"
+                            || derivation.as_deref() != Some("constraint")
+                        {
+                            let out = Some(Resolved {
+                                web_path,
+                                name,
+                                title,
+                                rtype: rtype.clone(),
+                                version: if rver.is_empty() { pkg.version.clone() } else { rver.clone() },
+                                kind,
+                                derivation,
+                                file: Some(fpath),
+                                external: false,
+                            });
+                            self.cache.borrow_mut().insert(key, out.clone());
+                            return out;
+                        }
+                    }
+                }
+            }
+        }
+
         let mut best: Option<Resolved> = None;
         let mut best_pkg = String::new();
         for pkg in &self.packages {
+            // THO urls: the core package's v2-/v3- duplicates are never
+            // fetchable masters; skip them when any THO package has the url.
+            if is_tho
+                && pkg.is_master
+                && self
+                    .packages
+                    .iter()
+                    .any(|p| !p.is_master && p.files.contains_key(url))
+            {
+                continue;
+            }
             if let Some((fname, rtype, rver)) = pkg.files.get(url) {
                 if let Some(v) = want_ver {
                     // `url|version` pins the RESOURCE version (business
@@ -271,27 +360,27 @@ impl IgContext {
                         continue;
                     }
                 }
-                // page: spec.internals paths override the filename convention.
-                let page = pkg
-                    .spec_paths
-                    .as_ref()
-                    .and_then(|m| m.get(url))
-                    .cloned()
+                let fpath = pkg.dir.join(fname);
+                // page: spec.internals paths, else (for special packages
+                // without spec.internals, e.g. us.cdc.phinvads) the resource's
+                // meta.source (publisher SpecMapManager.getPath: paths ->
+                // special -> def=meta.source), else filename convention.
+                let mut page = pkg.spec_paths.as_ref().and_then(|m| m.get(url)).cloned();
+                if page.is_none() && pkg.spec_paths.is_none() {
+                    page = read_meta_source(&fpath);
+                }
+                let page = page
                     .or_else(|| ig_override_page(url))
-                    .unwrap_or_else(|| {
-                        fname.trim_end_matches(".json").to_string() + ".html"
-                    });
+                    .unwrap_or_else(|| fname.trim_end_matches(".json").to_string() + ".html");
                 // getOverride sits on top of spec paths for the core set.
                 let page = ig_override_page(url).unwrap_or(page);
                 let web_path = if page.starts_with("http://") || page.starts_with("https://") {
-                    // absolute paths (e.g. phinvads ViewValueSet URLs in
-                    // spec.internals) bypass the base (PublisherLoader:119-122).
+                    // absolute paths bypass the base (PublisherLoader:119-122).
                     page.clone()
                 } else {
                     join_url(&pkg.base_url, &page)
                 };
                 // lazy name/title/kind from the resource file.
-                let fpath = pkg.dir.join(fname);
                 let (name, title, kind, derivation) = read_meta(&fpath);
                 let cand = Resolved {
                     web_path,
@@ -430,6 +519,30 @@ impl IgContext {
             .unwrap_or(false)
     }
 
+    /// The IG's own StructureDefinitions whose baseDefinition equals `url`
+    /// (for the abstract-root child list). Deterministic (sorted by web_path);
+    /// the publisher's own order is identity-hash-unstable (see caller).
+    pub fn own_sds_derived_from(&self, url: &str) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for r in self.own.values() {
+            if r.rtype != "StructureDefinition" {
+                continue;
+            }
+            let Some(f) = &r.file else { continue };
+            let Ok(text) = std::fs::read_to_string(f) else { continue };
+            let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+            let base = v
+                .get("baseDefinition")
+                .and_then(|x| x.as_str())
+                .map(|b| b.split('|').next().unwrap_or(b));
+            if base == Some(url) {
+                out.push((r.web_path.clone(), r.name.clone().unwrap_or_default()));
+            }
+        }
+        out.sort();
+        out
+    }
+
     /// Load the full resource JSON for a canonical (for locateExtension etc.).
     /// Cached per canonical.
     pub fn load_resource(&self, canonical: &str) -> Option<std::rc::Rc<Value>> {
@@ -496,10 +609,20 @@ fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
     Some(PkgEntry {
         base_url,
         version: ver.to_string(),
+        is_master: false,
         files,
         dir: pdir.to_path_buf(),
         spec_paths,
     })
+}
+
+fn read_meta_source(path: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    v.get("meta")
+        .and_then(|m| m.get("source"))
+        .and_then(|x| x.as_str())
+        .map(String::from)
 }
 
 fn read_meta(path: &Path) -> (Option<String>, Option<String>, Option<String>, Option<String>) {

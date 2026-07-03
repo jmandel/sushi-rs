@@ -94,6 +94,22 @@ the same `generateTable` call with (a) a pre-filtered element list
 `-grid` and `-span*` are the two that use dedicated entry points
 (`generateGrid`, `generateSpanningTable`) rather than `generateTable`.
 
+## Increment 2 (2026-07-03, cont.): generateTable SUMMARY — snapshot GREEN
+
+**Renderer pin correction**: the golden jar (publisher 2.2.10, built
+2026-06-25) embeds fhir-core **6.9.11** (orgfhir.buildnumber
+6a8b9c0c679411132054d835dbc68d545fa51c8a in the jar's fhir-build.properties),
+NOT 6.9.10. A worktree at tag v6.9.11 is the citation source
+(scratchpad/fhir-core-6911). The only behavioral 6.9.10→6.9.11 delta in the
+table path: element-row anchors use element ID with path fallback (SDR:933) —
+whitespace-insensitive diff of the two SDRs verified everything else is
+comments/suppressions.
+
+**Input provenance fixed for cycle**: renders now read the publisher's own
+post-snapshot SDs from `periodicity-impl/cycle/temp/pages` (same provenance as
+the goldens), packages from the user's global cache (the cycle build ran
+without an isolated HOME — PIN.md). The `.id`-type variance disappeared.
+
 ## Parity (kind × IG → byte-identical / total-with-golden)
 
 Inputs: us-core + plan-net from the F0 build `output/` SDs (publisher's actual
@@ -103,13 +119,44 @@ documented snapshot-source variance for cycle).
 
 | kind | cycle | plan-net | us-core |
 |---|---|---|---|
-| **grid** | 0 / 7 | 7 / 22 | 10 / 70 |
+| **snapshot** | 6 / 7 † | 20 / 20 ‡ | **70 / 70** |
+| **snapshot-all** | 6 / 7 † | 20 / 20 ‡ | **70 / 70** |
+| **grid** | 0 / 7 | 8 / 22 | 11 / 70 |
 
-(Other 14 kinds: engine ready, drivers not yet written — see "remaining".)
+† cycle's one failure (period-tracking-fact) is byte-equal except the
+  abstract-profile child-list ORDER — a genuinely non-deterministic publisher
+  behavior (fetchResourcesByType → CanonicalResourceManager.getList() iterates
+  an identity-hash HashSet; CanonicalResourceManager.java getList/allResources).
+  Classified unstable-oracle; our order is deterministic (sorted).
+‡ plan-net total excludes 2 goldens that are publisher error artifacts
+  (`<span style="color:red">I/O error writing PNG file!</span>` — the
+  publisher itself failed on plannet-Network/plannet-Practitioner snapshots);
+  invalid oracles, skipped with a printed note.
 
-All grid failures are cleanly classified (below); the passers are the
-structurally-complete profiles (single-root extensions with core-type values and
-no external-resolution dependency).
+Grid remains on the older hardcoded link table (links.rs) rather than IgContext
+— its failures are the known binding/profile-resolution cluster; migrating grid
+onto IgContext is follow-up work.
+
+## Resolution engine (IgContext) — the publisher-parity link/binding oracle
+
+`context.rs` reproduces the publisher's canonical→webPath/name resolution from
+the same inputs the publisher had:
+- own IG resources (relative `{Type}-{id}.html` pages),
+- the dependsOn closure of packages (package.json `url` base via
+  PackageHacker.fixPackageUrl; spec.internals `paths`; getOverride table;
+  `.examples` packages excluded; `hl7.fhir.us.core.vNNN` facades mapped to the
+  real us-core packages — SimpleWorkerContext.java:695),
+- fhirVersion-matched core package only (an R4 IG never resolves R5 core),
+- **masterDefinitions rule** (CanonicalResourceManager.java:394-400 + get()):
+  core-package CodeSystem/ValueSet/specializing-SD copies win for non-THO urls;
+  terminology.hl7.org urls are excluded from master so THO packages win,
+- resource-version pins (`url|ver` matches the RESOURCE version from
+  .index.json), highest-(resource-version, package-version) otherwise,
+- meta.source webPath fallback for spec.internals-less special packages
+  (us.cdc.phinvads ViewValueSet URLs — PhinVadsImporter.java:67 +
+  publisher SpecMapManager.getPath def param),
+- the tx cache (`input-cache/txcache/vs-externals.json`) as last resort with
+  `external.png` flagging (BaseWorkerContext.java:3499-3511).
 
 ## Divergences classified (with citations)
 
@@ -137,8 +184,26 @@ not a quirk).
 
 ## Quirk registry
 
-Empty. Faithful ports of Java warts (not quirks, because reproduced exactly):
-- `addStyledText` background-color precedence bug (HTG:521) → `model.rs`.
+1. **Per-run HTG uuid** (HTG:128 `uuid = UUIDUtilities.makeUuidLC()`): a random
+   per-JVM constant emitted in every active-table's filter script. Supplied as
+   run context; the corpus harness harvests each IG's uuid from its goldens.
+2. **Publisher error-artifact goldens**: plannet-Network / plannet-Practitioner
+   `-snapshot` goldens are `I/O error writing PNG file!` spans (publisher-side
+   failure). Invalid oracles; excluded with a note.
+3. **Abstract-profile child order**: non-deterministic in the publisher
+   (identity-hash HashSet iteration, CanonicalResourceManager.getList). Ours is
+   deterministic; one cycle fragment diverges on order only.
+4. **Fixed-value links are dead**: `getLinkForUrl` gates on
+   `hasResource(CanonicalResource.class, url)` which never matches (abstract
+   class fetch) — all 193 fixed values in the us-core goldens are unlinked.
+   Reproduced by never linking.
+5. **`active-tables`** is per-IG template config (PublisherIGLoader.java:443):
+   us-core false, plan-net/cycle true. Read from the template's
+   onGenerate-ig-working.json.
+
+Faithful ports of Java warts (not quirks — reproduced exactly): (previously listed)
+- `addStyledText` background-color precedence bug (HTG:521) → emits the literal
+  `; null` style suffix (`color: black; null`), byte-verified.
 - Grid tables leave `mode` unset (null) so grid `<a>`s never get
   `no-external`/`data-no-external` (guard `mode == XHTML`, HTG:1160) —
   `Gen.mode: Option`, `None` for grid.
@@ -147,11 +212,22 @@ Empty. Faithful ports of Java warts (not quirks, because reproduced exactly):
 
 ## Remaining
 
-- Grid: binding resolution (C4) + profile/reference link resolution (context) to
-  green the remaining ~100 grid fragments; cycle F0 build for clean inputs.
-- The 14 non-grid table kinds: the `generateTable` entry point (`genElement` /
-  `genElementCells` / the Flags column / slicing rows / obligations+bindings
-  columns / by-key + by-mustsupport element filters). The C2 engine +
-  `init_normal_table` + genTypes/genCardinality/description are already in place
-  and shared; the remaining work is `generateTable`'s row walk and the
-  Flags/mode-specific columns. The publisher flags map above is the driver spec.
+- **diff / diff-all**: needs `SnapshotGenerationPreProcessor.
+  supplementMissingDiffElements` (the rendered element list = differential +
+  missing parents) and the dimming machinery (`SNAPSHOT_DERIVATION_EQUALS` →
+  `opacity: 0.5` via checkForNoChange; must be recomputed from base-element
+  comparison since JSON input carries no userdata).
+- **by-key / by-mustsupport (+ -all)**: the publisher-side element filters
+  (`getKeyElements` / `getMustSupportElements`, publisher SDR:562-770) feeding
+  the same generateTable; plus `render_opaque` row dimming for non-MS ancestors.
+- **obligations / bindings modes**: `initCustomTable` + scanBindings /
+  scanObligations columns + genElementBindings/genElementObligations
+  (fhir-core SDR:759-880, 1225-1316); ObligationsRenderer table (C5 spec
+  extracted, in the fork report).
+- **span/spanall**: `generateSpanningTable` (SDR:3713) — separate entry point.
+- **grid onto IgContext**: replace links.rs hardcoded table; expected to move
+  grid to near-green given the snapshot engine's resolution parity.
+- Residual gap markers in table.rs (each fires loudly): choice groups
+  (readChoices/processConstraint), aggregation modes, standards-status flag,
+  cross-structure contained targets, complex merged-pattern partner rows,
+  usage cells in additional bindings, narrative language/source-control exts.
