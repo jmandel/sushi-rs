@@ -1626,23 +1626,6 @@ fn leading_spaces(l: &str) -> usize {
     bytes
 }
 
-fn strip_up_to(l: &str, n: usize) -> &str {
-    let mut removed = 0;
-    let mut idx = 0;
-    for (bi, c) in l.char_indices() {
-        if removed >= n {
-            idx = bi;
-            return &l[idx..];
-        }
-        if c == ' ' || c == '\t' {
-            removed += 1;
-            idx = bi + c.len_utf8();
-        } else {
-            return &l[bi..];
-        }
-    }
-    &l[idx..]
-}
 
 fn count_occurrences(hay: &str, needle: &str) -> usize {
     if needle.is_empty() {
@@ -1689,9 +1672,6 @@ fn is_void_tag(name: &str) -> bool {
     )
 }
 
-fn is_void_like(_l: &str, _tag: &str) -> bool {
-    false
-}
 
 fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
     let indent = leading_spaces(l);
