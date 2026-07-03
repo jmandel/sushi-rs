@@ -16,6 +16,48 @@ fn is_span_element(name: &str) -> bool {
     HTML_SPAN_ELEMENTS.contains(&name)
 }
 
+/// kramdown HTML_CONTENT_MODEL_SPAN (parser/html.rb:42-44): elements whose
+/// `markdown="1"` content is parsed at SPAN level.
+fn is_span_content_model(name: &str) -> bool {
+    matches!(
+        name,
+        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "button" | "cite" | "caption" | "del"
+            | "dfn" | "dt" | "em" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "i" | "ins"
+            | "label" | "legend" | "optgroup" | "p" | "q" | "rb" | "rbc" | "rp" | "rt" | "rtc"
+            | "ruby" | "select" | "small" | "span" | "strong" | "sub" | "sup" | "th" | "tt"
+    )
+}
+
+/// kramdown HTML_CONTENT_MODEL_BLOCK (parser/html.rb:38-41): elements whose
+/// `markdown="1"` content is parsed at BLOCK level. Everything not block/span
+/// (table, ul, ol, tr, tbody, pre, script, …) has RAW content model.
+fn is_block_content_model(name: &str) -> bool {
+    matches!(
+        name,
+        "address" | "applet" | "article" | "aside" | "blockquote" | "body" | "dd" | "details"
+            | "div" | "dl" | "fieldset" | "figure" | "figcaption" | "footer" | "form" | "header"
+            | "hgroup" | "iframe" | "li" | "main" | "map" | "menu" | "nav" | "noscript"
+            | "object" | "section" | "summary" | "td"
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ContentModel {
+    Block,
+    Span,
+    Raw,
+}
+
+fn default_content_model(name: &str) -> ContentModel {
+    if is_block_content_model(name) {
+        ContentModel::Block
+    } else if is_span_content_model(name) {
+        ContentModel::Span
+    } else {
+        ContentModel::Raw
+    }
+}
+
 /// kramdown block-extension line, e.g. `{::options toc_levels="1..4"/}` or
 /// `{::comment}`/`{::nomarkdown}`. Distinguished from a block IAL (`{: ... }`)
 /// by the DOUBLE colon `{::`. These extensions produce no direct HTML output;
@@ -80,6 +122,14 @@ pub enum Block {
         /// Whether the inner content ended with a blank line before the close
         /// tag (kramdown emits a corresponding trailing blank inside).
         inner_trailing_blank: bool,
+        close_tag: String,
+    },
+    /// A `markdown="1"` element whose tag has SPAN content model (p, h1-h6,
+    /// span, th, … — kramdown parser/html.rb:42-44): the inner text is parsed
+    /// at SPAN level only, newlines preserved verbatim.
+    HtmlBlockMdSpan {
+        open_tag: String,
+        inner_text: String,
         close_tag: String,
     },
     HorizontalRule,
@@ -216,6 +266,12 @@ fn parse_link_ref_def(line: &str) -> Option<(String, String, Option<String>)> {
 
 /// Parse a full document. `lines` is the raw source split on '\n'.
 pub fn parse_doc(src: &str) -> Doc {
+    parse_doc_with_opts(src, false)
+}
+
+/// Parse with an initial `parse_block_html` state (inherited by nested
+/// markdown="1"/parse_block_html re-entry).
+fn parse_doc_with_opts(src: &str, parse_block_html: bool) -> Doc {
     let (src_owned, link_refs) = extract_link_refs(src);
     let src = src_owned.as_str();
     let lines: Vec<String> = src.split('\n').map(String::from).collect();
@@ -223,6 +279,7 @@ pub fn parse_doc(src: &str) -> Doc {
         lines,
         i: 0,
         block_start: 0,
+        parse_block_html,
     };
     // Leading blank: any blank line(s) — or consumed kramdown extension lines —
     // before the first real block.
@@ -267,8 +324,8 @@ pub fn parse_blocks(src: &str) -> Vec<Block> {
     parse_doc(src).nodes.into_iter().map(|n| n.block).collect()
 }
 
-fn parse_block_nodes(src: &str) -> Vec<BlockNode> {
-    parse_doc(src).nodes
+fn parse_block_nodes_with(src: &str, parse_block_html: bool) -> Vec<BlockNode> {
+    parse_doc_with_opts(src, parse_block_html).nodes
 }
 
 struct Parser {
@@ -279,6 +336,11 @@ struct Parser {
     i: usize,
     /// Set by read_open_tag to allow raw-HTML re-scan from the element start.
     block_start: usize,
+    /// kramdown's `parse_block_html` option, toggled by
+    /// `{::options parse_block_html="true|false" /}` mid-document. When true,
+    /// block HTML elements' content is parsed per their default content model
+    /// even without a `markdown` attribute (html.rb:32-33).
+    parse_block_html: bool,
 }
 
 impl Parser {
@@ -300,8 +362,20 @@ impl Parser {
                 break;
             }
             // kramdown block extension `{::...}` — consume, no output, treated
-            // as a block boundary (like a blank line).
+            // as a block boundary (like a blank line). `{::options .../}` can
+            // toggle parser options; the corpus uses `parse_block_html`.
             if is_kramdown_ext_line(&line) {
+                if line.contains("{::options") {
+                    if line.contains("parse_block_html=\"true\"")
+                        || line.contains("parse_block_html='true'")
+                    {
+                        self.parse_block_html = true;
+                    } else if line.contains("parse_block_html=\"false\"")
+                        || line.contains("parse_block_html='false'")
+                    {
+                        self.parse_block_html = false;
+                    }
+                }
                 pending_blank = true;
                 self.i += 1;
                 continue;
@@ -612,7 +686,7 @@ impl Parser {
             body.push_str(&cont.join("\n"));
         }
         let _ = &mut first;
-        let blocks = parse_block_nodes(&body);
+        let blocks = parse_block_nodes_with(&body, self.parse_block_html);
         Some(Block::FootnoteDef { label, blocks })
     }
 
@@ -680,6 +754,20 @@ impl Parser {
             }
             pending.push(split_table_row(&l));
             self.i += 1;
+        }
+        // kramdown table.rb:106-109: after the table lines, the parser must be
+        // at a BLOCK BOUNDARY (blank line, EOF, or a block IAL). If the table
+        // ran into a plain text line (e.g. a lazy continuation without a
+        // pipe), the whole table is rejected and re-parsed as a paragraph.
+        if self.i < self.lines.len() {
+            let next = &self.lines[self.i];
+            if !next.trim().is_empty()
+                && parse_block_ial_line(next).is_none()
+                && !is_kramdown_ext_line(next)
+            {
+                self.i = start;
+                return None;
+            }
         }
         // finalize remaining rows
         if !pending.is_empty() {
@@ -753,10 +841,29 @@ impl Parser {
         if is_span_element(&tagname) {
             return None;
         }
-        // Detect markdown="1" on the opening tag (possibly spanning the block).
-        // First, gather the full opening tag (could span lines).
+        // Detect the `markdown` attribute on the opening tag (possibly
+        // spanning lines) and resolve the effective content model
+        // (kramdown parser/kramdown/html.rb:26-43):
+        //   model = markdown-attr override
+        //           OR (parse_block_html ? default_model(tag) : raw)
+        // where markdown="1" selects the tag's DEFAULT model, "0" raw,
+        // "span"/"block" explicit.
         let (open_tag, after_open_line, after_open_col) = self.read_open_tag()?;
-        let has_md = open_tag.contains("markdown=\"1\"") || open_tag.contains("markdown='1'");
+        let model = if open_tag.contains("markdown=\"0\"") || open_tag.contains("markdown='0'") {
+            ContentModel::Raw
+        } else if open_tag.contains("markdown=\"span\"") || open_tag.contains("markdown='span'") {
+            ContentModel::Span
+        } else if open_tag.contains("markdown=\"block\"") || open_tag.contains("markdown='block'")
+        {
+            ContentModel::Block
+        } else if open_tag.contains("markdown=\"1\"") || open_tag.contains("markdown='1'") {
+            default_content_model(&tagname)
+        } else if self.parse_block_html {
+            default_content_model(&tagname)
+        } else {
+            ContentModel::Raw
+        };
+        let has_md = model != ContentModel::Raw;
 
         if is_void_tag(&tagname) {
             // Void element block (e.g. `<link .../>`, `<hr>`, `<img …>`).
@@ -783,7 +890,18 @@ impl Parser {
             // depth counting on this tag name).
             let (inner_text, close_tag) =
                 self.collect_until_close(&tagname, after_open_line, after_open_col);
-            let inner_doc = parse_doc(&inner_text);
+            // Elements with SPAN content model (kramdown parser/html.rb:42-44)
+            // get span-level parsing of the inner text — newlines verbatim.
+            if model == ContentModel::Span {
+                return Some(Block::HtmlBlockMdSpan {
+                    open_tag,
+                    inner_text,
+                    close_tag,
+                });
+            }
+            // Block model: inner parsed as blocks, inheriting the current
+            // parse_block_html state.
+            let inner_doc = parse_doc_with_opts(&inner_text, self.parse_block_html);
             return Some(Block::HtmlBlockMd {
                 open_tag,
                 inner: inner_doc.nodes,
@@ -885,7 +1003,7 @@ impl Parser {
             }
         }
         let inner = inner_lines.join("\n");
-        let blocks = parse_block_nodes(&inner);
+        let blocks = parse_block_nodes_with(&inner, self.parse_block_html);
         Some(Block::BlockQuote {
             blocks,
             attrs: Attrs::default(),
@@ -1020,7 +1138,7 @@ impl Parser {
                             }
                         }
                     }
-                    let blocks = parse_block_nodes(&item_src);
+                    let blocks = parse_block_nodes_with(&item_src, self.parse_block_html);
                     // The item is "followed by blank" if the line that ended it
                     // is a blank line (kramdown then appends a trailing :blank to
                     // the item, forcing a loose <p> rendering).
@@ -1544,6 +1662,8 @@ fn parse_sep_aligns(l: &str) -> Vec<Align> {
         .collect()
 }
 
+/// Split a table row into cells. A `|` inside a backtick code span is NOT a
+/// cell separator (kramdown table.rb:69 splits around `<code>` elements).
 fn split_table_row(l: &str) -> Vec<String> {
     let mut t = l.trim();
     if t.starts_with('|') {
@@ -1552,25 +1672,63 @@ fn split_table_row(l: &str) -> Vec<String> {
     if t.ends_with('|') && !t.ends_with("\\|") {
         t = &t[..t.len() - 1];
     }
+    let chars: Vec<char> = t.chars().collect();
+    let n = chars.len();
     let mut cells = Vec::new();
     let mut cur = String::new();
-    let mut chars = t.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(&next) = chars.peek() {
-                if next == '|' {
-                    cur.push('|');
-                    chars.next();
-                    continue;
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
+        if c == '\\' && i + 1 < n && chars[i + 1] == '|' {
+            cur.push('|');
+            i += 2;
+            continue;
+        }
+        if c == '`' {
+            // opaque code span: copy through the matching backtick run
+            let mut fence = 0;
+            let start = i;
+            while i < n && chars[i] == '`' {
+                fence += 1;
+                i += 1;
+            }
+            let mut closed = false;
+            while i < n {
+                if chars[i] == '`' {
+                    let mut run = 0;
+                    while i < n && chars[i] == '`' {
+                        run += 1;
+                        i += 1;
+                    }
+                    if run == fence {
+                        closed = true;
+                        break;
+                    }
+                } else {
+                    i += 1;
                 }
             }
-            cur.push('\\');
-        } else if c == '|' {
+            if closed {
+                for &ch in &chars[start..i] {
+                    cur.push(ch);
+                }
+            } else {
+                // unmatched backticks: treat literally, reprocess after run
+                for &ch in &chars[start..start + fence] {
+                    cur.push(ch);
+                }
+                i = start + fence;
+            }
+            continue;
+        }
+        if c == '|' {
             cells.push(cur.trim().to_string());
             cur = String::new();
-        } else {
-            cur.push(c);
+            i += 1;
+            continue;
         }
+        cur.push(c);
+        i += 1;
     }
     cells.push(cur.trim().to_string());
     cells

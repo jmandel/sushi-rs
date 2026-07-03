@@ -233,9 +233,13 @@ impl Renderer {
                     let norm = normalize_html_block(raw);
                     // kramdown's block-start regex consumes the opening line's
                     // leading indent, so strip leading whitespace on the first
-                    // line only; interior lines keep their indentation. Trailing
-                    // whitespace on the final line is trimmed.
+                    // line only; interior lines keep their indentation. When the
+                    // block is nested (inside a markdown="1" element), the FIRST
+                    // line is re-indented by the nesting pad; interior lines are
+                    // NOT (verified against oracle). Trailing whitespace on the
+                    // final line is trimmed.
                     let norm = norm.trim_start_matches([' ', '\t']);
+                    out.push_str(&pad);
                     out.push_str(norm.trim_end_matches([' ', '\t']));
                 }
             }
@@ -249,39 +253,32 @@ impl Renderer {
                 // re-parsing) and does NOT emit it. Also normalize the tag.
                 let cleaned = strip_markdown_attr(open_tag);
                 let open_norm = normalize_html_block(&cleaned);
-                let open_norm = open_norm.trim_end();
-                // Special case: a `<p markdown="1">` cannot contain a block
-                // `<p>`; when its content is a single paragraph, kramdown
-                // renders it inline on one line with no nested <p>.
-                let single_para = {
-                    let nb: Vec<&BlockNode> = inner
-                        .iter()
-                        .filter(|n| !matches!(n.block, Block::Blank))
-                        .collect();
-                    nb.len() == 1 && matches!(nb[0].block, Block::Paragraph { .. })
-                };
-                if close_tag.eq_ignore_ascii_case("</p>") && single_para {
-                    out.push_str(&pad);
-                    out.push_str(open_norm);
-                    if let Some(n) = inner.iter().find(|n| !matches!(n.block, Block::Blank)) {
-                        if let Block::Paragraph { text, .. } = &n.block {
-                            out.push_str(&render_inline(text));
-                        }
-                    }
-                    out.push_str(close_tag);
-                } else {
-                    out.push_str(&pad);
-                    out.push_str(open_norm);
+                out.push_str(&pad);
+                out.push_str(open_norm.trim_end());
+                out.push('\n');
+                // Inner content indented by 2 within the markdown="1" element.
+                self.render_blocks(inner, out, indent + 2, false);
+                out.push('\n');
+                if *inner_trailing_blank {
                     out.push('\n');
-                    // Inner content indented by 2 within the markdown="1" element.
-                    self.render_blocks(inner, out, indent + 2, false);
-                    out.push('\n');
-                    if *inner_trailing_blank {
-                        out.push('\n');
-                    }
-                    out.push_str(&pad);
-                    out.push_str(close_tag);
                 }
+                out.push_str(&pad);
+                out.push_str(close_tag);
+            }
+            Block::HtmlBlockMdSpan {
+                open_tag,
+                inner_text,
+                close_tag,
+            } => {
+                // SPAN content model (p, h1-h6, span, …): the inner text is
+                // rendered at span level with newlines preserved verbatim; no
+                // nested block elements, no re-indentation.
+                let cleaned = strip_markdown_attr(open_tag);
+                let open_norm = normalize_html_block(&cleaned);
+                out.push_str(&pad);
+                out.push_str(open_norm.trim_end());
+                out.push_str(&render_inline(inner_text));
+                out.push_str(close_tag);
             }
             Block::FootnoteDef { .. } | Block::Blank => {}
         }
@@ -373,15 +370,20 @@ impl Renderer {
         out.push_str(pad);
         out.push_str("    <tr>\n");
         for i in 0..ncols {
+            let missing = i >= row.len();
             let cell = row.get(i).map(|s| s.as_str()).unwrap_or("");
             let a = aligns.get(i).copied().unwrap_or(Align::None);
             out.push_str(pad);
             out.push_str(&format!("      <{cell_tag}"));
             out.push_str(&align_style(a));
             out.push('>');
-            // kramdown renders an empty table cell as a single non-breaking
-            // space (U+00A0), not an empty element.
-            if cell.trim().is_empty() {
+            // kramdown cell filling: a cell PRESENT in the source but empty
+            // renders as a non-breaking space; a MISSING cell (row shorter
+            // than the table) is padded with a regular space (verified
+            // against oracle).
+            if missing {
+                out.push(' ');
+            } else if cell.trim().is_empty() {
                 out.push('\u{a0}');
             } else {
                 out.push_str(&render_inline(cell));
