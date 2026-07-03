@@ -745,6 +745,58 @@ name/canonical/title; resolve behavior untouched — full floor re-verified).
   unblocked), sd-xref/uses/maps (mappings md at psdr:1482 — unblocked), VS/CS
   xref, IG aggregates (need full FetchedFile resource set from F0 outputs).
 
+## Session 7 (2026-07-03): uses / sd-xref / maps GREEN — whole-IG scan group
+
+The three whole-IG cross-resource SD scans, all GREEN corpus-wide (cycle/plan-net/
+us-core). New module `xref.rs` (uses + references + maps wrapper); table.rs gains
+the MAPPINGS StructureMode; context.rs gains the whole-IG denominator.
+
+### The whole-IG FetchedFile denominator (required finding)
+The publisher's `files` (FetchedResources) / `scanAllResources` set = the IG's
+own resources = `ImplementationGuide.definition.resource` (442 for us-core: 70 SD,
+139 Observation, 2 CapabilityStatement, 21 VS, …), each `output/{Type}-{id}.json`.
+IgContext now loads `own_files` (EVERY own output/*.json incl. url-less example
+instances — the old `own` map keyed by url dropped them) + `own_resources()`
+enumerator + `own_package_id`. `scanAllResources(SD)` collapses to own SDs here
+(deps never reference the IG; `refersToThisSD` == url modulo `|version`).
+
+### uses (psdr:1529) GREEN — findDerived + findUses over own SDs.
+
+### sd-xref / references (psdr:2254) GREEN — findings:
+- Examples use FetchedResource.getTitle() = the resource's OWN `name` element
+  (PublisherIGLoader:3031), else `Type/id` — NOT present()/title. An SD in an
+  examples list shows its NAME (USCoreAllergyIntolerance); an instance `Type/id`.
+- EXAMPLE_UPPER_LIMIT = 50 (psdr:85) — examples cap at 50 (PRAPARE/TAPS overflow
+  dropped); ordering coincides sorted==IG-declaration-order for this corpus.
+- FetchedResource id falls back to the `{Type}-{id}.json` filename when the body
+  omits `id` (us-core DocumentReference-discharge-summary stub).
+- refList "Show N more" collapse past 5 (psdr:2630); "not used" gate EXCLUDES
+  capStmts (a capStmt-only usage shows both lines). Zero-hit branches omitted with
+  citation: Original Source, Draw in/Impose/Comply, SearchParameters, R5 sdmap.
+
+### maps (psdr:1323) GREEN — MAPPINGS-mode generateTable ×3 (bounded table.rs ext)
+- `StructureMode::Mappings` + `MapStructureMode`; scan_mappings (columns =
+  profile.mapping order, hint "??"); genElementMappings (identity match keeps
+  LAST, comma-split → plain-text). render_maps_table returns None on no columns.
+- ANCHOR_PREFIX_MAP="" (empty anchor prefix); "M"=idSfx. OTHER holds everything
+  (all mapping URIs → dest null → IN_LIST/NOT_IN_LIST empty → "No Mappings Found").
+- genElementMappings cell = ONE Piece (`p=addText(""); p.addHtml(div)`).
+- Java `map.split("\\,")` drops trailing empty strings (trailing `,` → no empty <li>).
+- **QUIRK: MAPPINGS render-order icon** — empty-type elements (Extension roots +
+  contentReferences) render `icon_resource.png` in maps but `icon_element.gif` in
+  snapshot: the publisher's earlier snapshot/dict passes mutate the shared SD's
+  types before maps runs (SDR:994 fallthrough). Reproduced for the MAPPINGS view.
+
+### F4 scoreboard delta (session 7)
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| uses | 7/7 ✅ | 22/22 ✅ | 70/70 ✅ |
+| sd-xref | 7/7 ✅ | 22/22 ✅ | 70/70 ✅ |
+| maps | 7/7 ✅ | 22/22 ✅ | 70/70 ✅ |
+
+Full F3 (15 kinds) + F4 floor re-verified byte-identical after the table.rs
+MAPPINGS extension (only the known cycle † and practitioner-summary residuals).
+
 ## Remaining
 
 Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
