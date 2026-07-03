@@ -1084,12 +1084,10 @@ impl Parser {
                     self.i = k;
                     continue;
                 }
-                if k < self.lines.len() && leading_spaces(&self.lines[k]) > base_indent {
-                    // continuation of current item after blank -> loose
-                    tight = false;
-                    self.i = k;
-                    // fallthrough to collect continuation into last item
-                }
+                // Otherwise the list ends here. Do NOT consume the blank
+                // line(s): the block loop must see them so the following
+                // block records blank_before (separator parity).
+                let _ = &mut tight;
                 break;
             }
             let this_indent = leading_spaces(&l);
