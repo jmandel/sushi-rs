@@ -199,13 +199,10 @@ impl XhtmlComposer {
                 self.dst.push(';');
                 i += 1;
             } else {
-                if cfg.auto_links
-                    && c == 'h'
-                    && {
-                        let rest: String = chars[i..].iter().collect();
-                        rest.starts_with("http://") || rest.starts_with("https://")
-                    }
-                {
+                if cfg.auto_links && c == 'h' && {
+                    let rest: String = chars[i..].iter().collect();
+                    rest.starts_with("http://") || rest.starts_with("https://")
+                } {
                     let j = i;
                     while i < chars.len() && is_valid_url_char(chars[i]) {
                         i += 1;
@@ -216,8 +213,7 @@ impl XhtmlComposer {
                         url.pop();
                     }
                     let url = escape_xml(&url);
-                    self.dst
-                        .push_str(&format!("<a href=\"{0}\">{0}</a>", url));
+                    self.dst.push_str(&format!("<a href=\"{0}\">{0}</a>", url));
                 } else {
                     i += 1;
                     match c {
@@ -362,8 +358,9 @@ impl XhtmlComposer {
             // head/meta special case (XhtmlComposer.java:337).
             if name == "head" && node.get_element("meta").is_none() {
                 self.dst.push_str(indent);
-                self.dst
-                    .push_str("  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>");
+                self.dst.push_str(
+                    "  <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>",
+                );
                 if cfg.pretty && !no_pretty_override {
                     self.dst.push_str("\r\n");
                 }
@@ -545,8 +542,8 @@ fn break_blocks_with_lines_list(list: &mut Vec<XhtmlNode>) {
     // Java: for (i = size-1; i > 0; i--)
     while i > 1 {
         i -= 1;
-        let is_block = list[i].node_type() == NodeType::Element
-            && is_block_name(list[i].name().unwrap_or(""));
+        let is_block =
+            list[i].node_type() == NodeType::Element && is_block_name(list[i].name().unwrap_or(""));
         if is_block {
             let prev = &list[i - 1];
             let prev_ends_nl = prev.node_type() == NodeType::Text

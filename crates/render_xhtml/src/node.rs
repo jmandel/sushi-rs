@@ -123,7 +123,11 @@ impl XhtmlNode {
         !self.attributes.is_empty()
     }
 
-    pub fn set_attribute(&mut self, name: impl Into<String>, value: impl Into<String>) -> &mut Self {
+    pub fn set_attribute(
+        &mut self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+    ) -> &mut Self {
         self.attributes.put(name.into(), Some(value.into()));
         self
     }

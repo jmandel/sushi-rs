@@ -344,9 +344,7 @@ impl XhtmlParser {
         while is_java_whitespace(self.peek_char()) {
             self.read_char();
         }
-        while self.peek_char() != '>'
-            && self.peek_char() != '/'
-            && self.peek_char() != END_OF_CHARS
+        while self.peek_char() != '>' && self.peek_char() != '/' && self.peek_char() != END_OF_CHARS
         {
             let name = self.read_name();
             if name.is_empty() {
@@ -450,7 +448,9 @@ impl XhtmlParser {
             self.read_char();
             self.skip_white_space();
         } else if self.must_be_well_formed {
-            return Err(ParseError("Unexpected termination of html source".to_string()));
+            return Err(ParseError(
+                "Unexpected termination of html source".to_string(),
+            ));
         }
         Ok(s)
     }
@@ -501,7 +501,9 @@ impl XhtmlParser {
             } else if c != END_OF_CHARS {
                 s.push(self.read_char());
             } else if self.must_be_well_formed {
-                return Err(ParseError("Unexpected termination of html source".to_string()));
+                return Err(ParseError(
+                    "Unexpected termination of html source".to_string(),
+                ));
             } else {
                 // Java loop would spin; break to avoid infinite loop at EOF.
                 break;
@@ -630,9 +632,7 @@ impl XhtmlParser {
         } else if let Some(v) = self.declared_entities.get(&c).cloned() {
             s.push_str(&v);
         } else {
-            if self.xml_mode
-                && !matches!(c.as_str(), "quot" | "amp" | "apos" | "lt" | "gt")
-            {
+            if self.xml_mode && !matches!(c.as_str(), "quot" | "amp" | "apos" | "lt" | "gt") {
                 // Java records a validation issue; we ignore (Accept policy).
             }
             let token = format!("&{};", c);

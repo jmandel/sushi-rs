@@ -44,7 +44,9 @@ pub fn roundtrip_fragment(source: &str) -> Result<String, ParseError> {
 ///      keeps `&copy;`, does not escape `"`, keeps empty `<td></td>`/`<a></a>`)
 ///   3. HTML pretty  — `XhtmlComposer(false, true)`
 /// If none reproduces the input, returns the XML-compact output for diffing.
-pub fn roundtrip_fragment_multi(source: &str) -> Result<(String, Option<&'static str>), ParseError> {
+pub fn roundtrip_fragment_multi(
+    source: &str,
+) -> Result<(String, Option<&'static str>), ParseError> {
     let configs: [(Config, &'static str); 3] = [
         (Config::xml_compact(), "xml-compact"),
         (Config::html_compact(), "html-compact"),

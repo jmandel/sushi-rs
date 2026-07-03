@@ -46,9 +46,7 @@ fn resolve_corpus() -> Option<PathBuf> {
         }
     }
     // cycle corpus dev path
-    let cycle = PathBuf::from(
-        "/home/jmandel/hobby/periodicity-impl/cycle/temp/pages/_includes",
-    );
+    let cycle = PathBuf::from("/home/jmandel/hobby/periodicity-impl/cycle/temp/pages/_includes");
     if cycle.is_dir() {
         return Some(cycle);
     }

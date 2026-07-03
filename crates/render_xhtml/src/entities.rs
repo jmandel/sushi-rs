@@ -17,10 +17,7 @@ pub fn defined_entity(token: &str) -> Option<&'static str> {
     // Linear/binary search over a sorted-by-first-appearance array. The table
     // is small enough and lookups are rare (only on `&name;` in text); a simple
     // scan is fine and avoids external deps (crate is dependency-free).
-    ENTITIES
-        .iter()
-        .find(|(k, _)| *k == token)
-        .map(|(_, v)| *v)
+    ENTITIES.iter().find(|(k, _)| *k == token).map(|(_, v)| *v)
 }
 
 /// The 2116 entities from `initEntities` (XhtmlParser.java:1398).
@@ -2140,4 +2137,5 @@ pub static ENTITIES: &[(&str, &str)] = &[
     ("&zopf;", "\u{1D56B}"),
     ("&zscr;", "\u{1D4CF}"),
     ("&zwj;", "\u{200D}"),
-    ("&zwnj;", "\u{200C}"),];
+    ("&zwnj;", "\u{200C}"),
+];
