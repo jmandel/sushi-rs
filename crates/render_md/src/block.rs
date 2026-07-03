@@ -150,6 +150,9 @@ pub enum Block {
     HtmlBlockMd {
         open_tag: String,
         inner: Vec<BlockNode>,
+        /// Whether the inner content began with a blank line after the open
+        /// tag (kramdown mirrors it).
+        inner_leading_blank: bool,
         /// Whether the inner content ended with a blank line before the close
         /// tag (kramdown emits a corresponding trailing blank inside).
         inner_trailing_blank: bool,
@@ -978,6 +981,18 @@ impl Parser {
             return Some(Block::HtmlBlockMd {
                 open_tag,
                 inner: inner_doc.nodes,
+                // The first inner "line" is the remainder of the open-tag line
+                // (normally empty — an artifact of the line split, NOT a blank
+                // line). A real leading blank means the NEXT line is blank too.
+                inner_leading_blank: {
+                    let mut it = inner_text.split('\n');
+                    match it.next() {
+                        Some(first) if is_blank(first) => {
+                            it.next().map(is_blank).unwrap_or(false)
+                        }
+                        _ => false,
+                    }
+                },
                 inner_trailing_blank: inner_doc.trailing_blank,
                 close_tag,
             });

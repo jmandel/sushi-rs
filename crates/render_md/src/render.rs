@@ -250,6 +250,7 @@ impl Renderer {
             Block::HtmlBlockMd {
                 open_tag,
                 inner,
+                inner_leading_blank,
                 inner_trailing_blank,
                 close_tag,
             } => {
@@ -260,6 +261,10 @@ impl Renderer {
                 out.push_str(&pad);
                 out.push_str(open_norm.trim_end());
                 out.push('\n');
+                // A blank line after the open tag in the source is mirrored.
+                if *inner_leading_blank {
+                    out.push('\n');
+                }
                 // Inner content indented by 2 within the markdown="1" element.
                 self.render_blocks(inner, out, indent + 2, false);
                 out.push('\n');
