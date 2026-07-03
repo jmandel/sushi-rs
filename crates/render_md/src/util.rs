@@ -19,19 +19,58 @@ pub fn escape_html_text(s: &str) -> String {
 }
 
 /// Escape text for an HTML **attribute value** (double-quoted). kramdown
-/// escapes `&`, `<`, `>` and `"` in attribute values.
+/// escapes `&`, `<`, `>` and `"` in attribute values, but is SMART about `&`:
+/// an ampersand that already starts a character entity (`&amp;`, `&#123;`) is
+/// left as-is (no double-escaping; verified against oracle for URLs that
+/// contain `&amp;` in the source).
 pub fn escape_html_attr(s: &str) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    let n = chars.len();
     let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
+    let mut i = 0;
+    while i < n {
+        let c = chars[i];
         match c {
-            '&' => out.push_str("&amp;"),
+            '&' => {
+                if entity_starts_at(&chars, i) {
+                    out.push('&');
+                } else {
+                    out.push_str("&amp;");
+                }
+            }
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
             _ => out.push(c),
         }
+        i += 1;
     }
     out
+}
+
+/// True if a character entity (`&name;` / `&#n;` / `&#xN;`) starts at `i`.
+fn entity_starts_at(chars: &[char], i: usize) -> bool {
+    let n = chars.len();
+    if chars.get(i) != Some(&'&') {
+        return false;
+    }
+    let mut j = i + 1;
+    if chars.get(j) == Some(&'#') {
+        j += 1;
+        if matches!(chars.get(j), Some('x') | Some('X')) {
+            j += 1;
+        }
+        let start = j;
+        while j < n && chars[j].is_ascii_hexdigit() {
+            j += 1;
+        }
+        return j > start && chars.get(j) == Some(&';');
+    }
+    let start = j;
+    while j < n && chars[j].is_ascii_alphanumeric() {
+        j += 1;
+    }
+    j > start && chars.get(j) == Some(&';')
 }
 
 /// Is `c` a Unicode "word" character per Ruby's `\p{Word}` (used by kramdown's

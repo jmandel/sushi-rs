@@ -228,7 +228,10 @@ impl Renderer {
                 // on the block's final (closing) line is trimmed. Comments pass
                 // through verbatim.
                 if raw.trim_start().starts_with("<!--") {
-                    out.push_str(raw);
+                    // Comment blocks pass through verbatim, re-indented by the
+                    // nesting pad (like other raw HTML first lines).
+                    out.push_str(&pad);
+                    out.push_str(raw.trim_start_matches([' ', '\t']));
                 } else {
                     let norm = normalize_html_block(raw);
                     // kramdown's block-start regex consumes the opening line's

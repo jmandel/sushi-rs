@@ -261,6 +261,12 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
     while i < n {
         let c = chars[i];
         match c {
+            '\\' if i + 1 < n && chars[i + 1] == '\n' => {
+                // kramdown GFM hard break: backslash before newline
+                // (`(  |\\\\)\n`) becomes <br />.
+                out.push_str("<br />\n");
+                i += 2;
+            }
             '\\' if i + 1 < n && is_escapable(chars[i + 1]) => {
                 out.push_str(&escape_char_text(chars[i + 1]));
                 i += 2;
@@ -912,14 +918,14 @@ fn lowercase_attr_names(rest: &str) -> String {
                 let q = chars[i];
                 attr.push('"');
                 i += 1;
+                let vstart = i;
                 while i < n && chars[i] != q {
-                    if chars[i] == '"' {
-                        attr.push_str("&quot;");
-                    } else {
-                        attr.push(chars[i]);
-                    }
                     i += 1;
                 }
+                let value: String = chars[vstart..i].iter().collect();
+                // kramdown re-escapes attribute values: bare `&` becomes
+                // `&amp;` (existing entities are NOT double-escaped).
+                attr.push_str(&escape_html_attr(&value));
                 if i < n {
                     attr.push('"');
                     i += 1;
@@ -927,10 +933,12 @@ fn lowercase_attr_names(rest: &str) -> String {
             } else {
                 // bare (unquoted) value -> quote it
                 attr.push('"');
+                let vstart = i;
                 while i < n && !chars[i].is_whitespace() {
-                    attr.push(chars[i]);
                     i += 1;
                 }
+                let value: String = chars[vstart..i].iter().collect();
+                attr.push_str(&escape_html_attr(&value));
                 attr.push('"');
             }
         }
