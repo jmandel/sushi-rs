@@ -6,12 +6,12 @@ snapshot/harvested/r4/ndh/fixtures/base-ext-cms-ial2-verified.json	snapshot/harv
 snapshot/harvested/r4/ndh/fixtures/base-ext-communication-proficiency.json	snapshot/harvested/r4/ndh/rust/base-ext-communication-proficiency.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-delivery-method.json	snapshot/harvested/r4/ndh/rust/base-ext-delivery-method.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-dynamicRegistration.json	snapshot/harvested/r4/ndh/rust/base-ext-dynamicRegistration.snapshot.json
+snapshot/harvested/r4/ndh/fixtures/base-ext-endpointAccessControlMechanism.json	snapshot/harvested/r4/ndh/rust/base-ext-endpointAccessControlMechanism.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-endpoint-environment-type.json	snapshot/harvested/r4/ndh/rust/base-ext-endpoint-environment-type.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-endpoint-ihe-specific-connection-type.json	snapshot/harvested/r4/ndh/rust/base-ext-endpoint-ihe-specific-connection-type.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-endpoint-rank.json	snapshot/harvested/r4/ndh/rust/base-ext-endpoint-rank.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-endpoint-reference.json	snapshot/harvested/r4/ndh/rust/base-ext-endpoint-reference.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-endpoint-testing-certification.json	snapshot/harvested/r4/ndh/rust/base-ext-endpoint-testing-certification.snapshot.json
-snapshot/harvested/r4/ndh/fixtures/base-ext-endpointAccessControlMechanism.json	snapshot/harvested/r4/ndh/rust/base-ext-endpointAccessControlMechanism.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-fundingSource.json	snapshot/harvested/r4/ndh/rust/base-ext-fundingSource.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-identifier-status.json	snapshot/harvested/r4/ndh/rust/base-ext-identifier-status.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/base-ext-implementation-guide.json	snapshot/harvested/r4/ndh/rust/base-ext-implementation-guide.snapshot.json
@@ -43,8 +43,8 @@ snapshot/harvested/r4/ndh/fixtures/ndh-HealthcareService.json	snapshot/harvested
 snapshot/harvested/r4/ndh/fixtures/ndh-InsurancePlan.json	snapshot/harvested/r4/ndh/rust/ndh-InsurancePlan.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/ndh-Location.json	snapshot/harvested/r4/ndh/rust/ndh-Location.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/ndh-Network.json	snapshot/harvested/r4/ndh/rust/ndh-Network.snapshot.json
-snapshot/harvested/r4/ndh/fixtures/ndh-Organization.json	snapshot/harvested/r4/ndh/rust/ndh-Organization.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/ndh-OrganizationAffiliation.json	snapshot/harvested/r4/ndh/rust/ndh-OrganizationAffiliation.snapshot.json
-snapshot/harvested/r4/ndh/fixtures/ndh-Practitioner.json	snapshot/harvested/r4/ndh/rust/ndh-Practitioner.snapshot.json
+snapshot/harvested/r4/ndh/fixtures/ndh-Organization.json	snapshot/harvested/r4/ndh/rust/ndh-Organization.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/ndh-PractitionerRole.json	snapshot/harvested/r4/ndh/rust/ndh-PractitionerRole.snapshot.json
+snapshot/harvested/r4/ndh/fixtures/ndh-Practitioner.json	snapshot/harvested/r4/ndh/rust/ndh-Practitioner.snapshot.json
 snapshot/harvested/r4/ndh/fixtures/ndh-Verification.json	snapshot/harvested/r4/ndh/rust/ndh-Verification.snapshot.json

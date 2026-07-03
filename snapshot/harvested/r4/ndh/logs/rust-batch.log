@@ -6,12 +6,12 @@ OK rust base-ext-cms-ial2-verified
 OK rust base-ext-communication-proficiency
 OK rust base-ext-delivery-method
 OK rust base-ext-dynamicRegistration
+OK rust base-ext-endpointAccessControlMechanism
 OK rust base-ext-endpoint-environment-type
 OK rust base-ext-endpoint-ihe-specific-connection-type
 OK rust base-ext-endpoint-rank
 OK rust base-ext-endpoint-reference
 OK rust base-ext-endpoint-testing-certification
-OK rust base-ext-endpointAccessControlMechanism
 OK rust base-ext-fundingSource
 OK rust base-ext-identifier-status
 OK rust base-ext-implementation-guide
@@ -43,9 +43,9 @@ OK rust ndh-HealthcareService
 OK rust ndh-InsurancePlan
 OK rust ndh-Location
 OK rust ndh-Network
-OK rust ndh-Organization
 OK rust ndh-OrganizationAffiliation
-OK rust ndh-Practitioner
+OK rust ndh-Organization
 OK rust ndh-PractitionerRole
+OK rust ndh-Practitioner
 OK rust ndh-Verification
 RUST BATCH: ok=50 failed=0 total=50

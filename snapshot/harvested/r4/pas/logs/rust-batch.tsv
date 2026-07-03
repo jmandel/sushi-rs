@@ -1,4 +1,3 @@
-snapshot/harvested/r4/pas/fixtures/extension-TransmissionIdentifiers.json	snapshot/harvested/r4/pas/rust/extension-TransmissionIdentifiers.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-administrationReferenceNumber.json	snapshot/harvested/r4/pas/rust/extension-administrationReferenceNumber.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-admissionDates.json	snapshot/harvested/r4/pas/rust/extension-admissionDates.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-authorizationNumber.json	snapshot/harvested/r4/pas/rust/extension-authorizationNumber.snapshot.json
@@ -39,12 +38,13 @@ snapshot/harvested/r4/pas/fixtures/extension-productOrServiceCodeEnd.json	snapsh
 snapshot/harvested/r4/pas/fixtures/extension-requestedService.json	snapshot/harvested/r4/pas/rust/extension-requestedService.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-revenueCode.json	snapshot/harvested/r4/pas/rust/extension-revenueCode.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-revenueUnitRateLimit.json	snapshot/harvested/r4/pas/rust/extension-revenueUnitRateLimit.snapshot.json
-snapshot/harvested/r4/pas/fixtures/extension-reviewAction.json	snapshot/harvested/r4/pas/rust/extension-reviewAction.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-reviewActionCode.json	snapshot/harvested/r4/pas/rust/extension-reviewActionCode.snapshot.json
+snapshot/harvested/r4/pas/fixtures/extension-reviewAction.json	snapshot/harvested/r4/pas/rust/extension-reviewAction.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-serviceItemRequestType.json	snapshot/harvested/r4/pas/rust/extension-serviceItemRequestType.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-serviceLineNumber.json	snapshot/harvested/r4/pas/rust/extension-serviceLineNumber.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-timingcalendarpattern.json	snapshot/harvested/r4/pas/rust/extension-timingcalendarpattern.snapshot.json
 snapshot/harvested/r4/pas/fixtures/extension-timingdeliverypattern.json	snapshot/harvested/r4/pas/rust/extension-timingdeliverypattern.snapshot.json
+snapshot/harvested/r4/pas/fixtures/extension-TransmissionIdentifiers.json	snapshot/harvested/r4/pas/rust/extension-TransmissionIdentifiers.snapshot.json
 snapshot/harvested/r4/pas/fixtures/modifierextension-infoCancelled.json	snapshot/harvested/r4/pas/rust/modifierextension-infoCancelled.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-beneficiary.json	snapshot/harvested/r4/pas/rust/profile-beneficiary.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-claim-base.json	snapshot/harvested/r4/pas/rust/profile-claim-base.snapshot.json
@@ -64,8 +64,8 @@ snapshot/harvested/r4/pas/fixtures/profile-pas-inquiry-request-bundle.json	snaps
 snapshot/harvested/r4/pas/fixtures/profile-pas-inquiry-response-bundle.json	snapshot/harvested/r4/pas/rust/profile-pas-inquiry-response-bundle.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-pas-request-bundle.json	snapshot/harvested/r4/pas/rust/profile-pas-request-bundle.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-pas-response-bundle.json	snapshot/harvested/r4/pas/rust/profile-pas-response-bundle.snapshot.json
-snapshot/harvested/r4/pas/fixtures/profile-practitioner.json	snapshot/harvested/r4/pas/rust/profile-practitioner.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-practitionerrole.json	snapshot/harvested/r4/pas/rust/profile-practitionerrole.snapshot.json
+snapshot/harvested/r4/pas/fixtures/profile-practitioner.json	snapshot/harvested/r4/pas/rust/profile-practitioner.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-quantity.json	snapshot/harvested/r4/pas/rust/profile-quantity.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-servicerequest.json	snapshot/harvested/r4/pas/rust/profile-servicerequest.snapshot.json
 snapshot/harvested/r4/pas/fixtures/profile-subscriber.json	snapshot/harvested/r4/pas/rust/profile-subscriber.snapshot.json

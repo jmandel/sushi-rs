@@ -17,7 +17,42 @@ use super::consts::{
 use super::context::{Severity, WalkContext};
 use super::trace;
 use crate::merge::*;
-use crate::{append_derived_text_to_base, check_extension_doco, merge_string};
+use crate::{append_derived_text_to_base, merge_string};
+
+/// PU:1963 checkExtensionDoco — Java-exact walk port. NOTE: the legacy engine's
+/// shared `crate::check_extension_doco` adds a `has_profiled_extension_type`
+/// guard that Java does NOT have (a legacy corpus heuristic); Java normalizes
+/// the doco for ANY `.extension`/`.modifierExtension` path (except II.extension
+/// bases) even when the element carries a profiled Extension type
+/// (eCR `PlanDefinition.action.trigger.extension:namedEventType`).
+pub(crate) fn check_extension_doco(element: &mut Value) -> bool {
+    let path = element
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let base_path = element
+        .get("base")
+        .and_then(|b| b.get("path"))
+        .and_then(Value::as_str);
+    let is_extension = (path == "Extension"
+        || path.ends_with(".extension")
+        || path.ends_with(".modifierExtension"))
+        && base_path != Some("II.extension");
+    if is_extension {
+        set_field(
+            element,
+            "definition",
+            Value::String("An Extension".to_string()),
+        );
+        set_field(element, "short", Value::String("Extension".to_string()));
+        remove_field(element, "comment");
+        remove_field(element, "requirements");
+        remove_field(element, "alias");
+        remove_field(element, "mapping");
+    }
+    is_extension
+}
 
 fn has(ed: &Value, key: &str) -> bool {
     ed.get(key).map(|v| !v.is_null()).unwrap_or(false)

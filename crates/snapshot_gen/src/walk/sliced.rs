@@ -248,7 +248,65 @@ fn process_path_with_sliced_base_default(
 
     // Anchor children / BackboneElement copy.
     if has_inner_diff_matches(&ctx.diff, current_base_path, cur.diff_cursor, frame.diff_limit, false) {
-        anyhow::bail!("sliced-base default anchor-children unfold not implemented");
+        // PPP:1380-1415 — the diff walks into the sliced anchor itself.
+        let new_base_limit = find_end_of_element(&cur.base, cur.base_cursor);
+        let ndx = diff0_idx;
+        let new_diff_cursor = ndx + if has_slicing(&diff0) { 1 } else { 0 };
+        let new_diff_limit = find_end_of_element(&ctx.diff, ndx);
+        if new_base_limit == cur.base_cursor {
+            // Base has no children: unfold the anchor's single type (PPP:1386-1404).
+            let type_count = current_base
+                .get("type")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if type_count != 1 {
+                anyhow::bail!(
+                    "DIFFERENTIAL_WALKS_INTO____BUT_THE_BASE_DOES_NOT_AND_THERE_IS_NOT_A_SINGLE_FIXED_TYPE at {current_base_path}"
+                );
+            }
+            let (dt, dt_url) = super::simple::resolve_type_sd(ctx, current_base)?;
+            cur.context_name = dt_url.clone();
+            let cb_dot = format!("{current_base_path}.");
+            while cur.diff_cursor < ctx.diff.len()
+                && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &cb_dot)
+            {
+                cur.diff_cursor += 1;
+            }
+            let dt_elements = super::simple::snapshot_elements(&dt);
+            let mut nc = WalkCursor {
+                base_source_url: dt_url.clone(),
+                base: Rc::new(dt_elements.clone()),
+                base_cursor: 1,
+                diff_cursor: new_diff_cursor,
+                context_name: cur.context_name.clone(),
+                result_path_base: cur.result_path_base.clone(),
+            };
+            let mut nframe = frame.clone();
+            nframe.base_limit = dt_elements.len().saturating_sub(1);
+            nframe.diff_limit = new_diff_limit as isize;
+            nframe.context_path_source = Some(current_base_path.to_string());
+            nframe.context_path_target = Some(path_of(&outcome).to_string());
+            nframe.slicing = SlicingParams::default();
+            super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
+        } else {
+            // Base has children: recurse over the base child window (PPP:1405-1415).
+            let mut nc = WalkCursor {
+                base_source_url: cur.base_source_url.clone(),
+                base: cur.base.clone(),
+                base_cursor: cur.base_cursor + 1,
+                diff_cursor: new_diff_cursor,
+                context_name: cur.context_name.clone(),
+                result_path_base: cur.result_path_base.clone(),
+            };
+            let mut nframe = frame.clone();
+            nframe.base_limit = new_base_limit;
+            nframe.diff_limit = new_diff_limit as isize;
+            nframe.profile_name = format!("{}{}", frame.profile_name, path_tail(&diff0));
+            nframe.redirector = Vec::new();
+            nframe.slicing = SlicingParams::default();
+            super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
+        }
     } else if current_base
         .get("type")
         .and_then(Value::as_array)

@@ -190,10 +190,17 @@ fn generate_snapshot_with_opts(
     // P18 trace: generateSnapshot.begin fires AFTER the diff clone but BEFORE
     // the preprocessor (PU:826-830) — diffElements counts pre-preprocess rows.
     if trace::active() {
+        // Java passes the RESOLVED base SD (base.getUrl()), not the (possibly
+        // versioned) baseDefinition query string.
+        let resolved_base_url = base
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or(&base_url)
+            .to_string();
         trace::rec(
             "generateSnapshot",
             "generateSnapshot.begin",
-            Some(&base_url),
+            Some(&resolved_base_url),
             Some(&url),
             Some(serde_json::json!({
                 "baseElements": base_elements.len(),

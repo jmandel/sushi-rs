@@ -326,7 +326,7 @@ pub(crate) fn process_simple_path_default(
                 None,
             );
             let mut anchor = ctx.output[anchor_idx].clone();
-            crate::check_extension_doco(&mut anchor);
+            super::updatefromdef::check_extension_doco(&mut anchor);
             ctx.output[anchor_idx] = anchor;
         }
         slicer_element = ctx.output[anchor_idx].clone();

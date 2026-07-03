@@ -351,26 +351,152 @@ No convert.rs / resolve.rs changes.
 No-regression after ecr/start-1: ladder + units green; IPS 29/29, mcode 46/46,
 carinbb 6/6, crd 22/22, dtr 21/21, genomics 33/33, sdc 71/73; IPS legacy 29/29.
 
-## Least-confident areas (updated for the coordinator)
-- **xver R5-backport base snapshots** (sdc-codesystem/sdc-valueset): the stored
-  xver `profile-ValueSet`/`profile-CodeSystem` base snapshots Rust loads are
-  structurally different (element indices, pre-applied slices) from the base list
-  Java walks — an upstream stage-1/2 load/convert issue, not a walk decision.
-  This is the only remaining SDC gap and likely resurfaces on any IG that profiles
-  over the xver R5-backport resource bases.
+## Increment 9: ndh — ENGINE=walk ok=50/50 (2026-07-02, wave 3 batch 1)
+
+Gate (AGENTS.md list incl. subscriptions-backport.r4#1.1.0) →
+**R4 HARVEST CHECK: ok=50 failed=0 total=50**. Started 47/50; all 3 failures
+(ndh-Network, ndh-Organization, ndh-Practitioner) hit the LAST §3.6.3 stub:
+
+1. **`processPathWithSlicedBaseDefault` anchor-children unfold** (PPP:1380-1415)
+   — the `hasInnerDiffMatches(…, false)` true branch, previously a loud bail.
+   Two sub-branches ported: (a) base has NO children (`newBaseLimit == baseCursor`):
+   require a single type, resolve via getProfileForDataType (`resolve_type_sd`),
+   advance the OUTER diffCursor past the anchor's children, recurse into the dt
+   snapshot at index 1 with `newDiffCursor = ndx + (diff0.hasSlicing ? 1 : 0)`,
+   diffLimit = findEndOfElement(ndx), contextPathSource=currentBasePath,
+   contextPathTarget=outcome.path; (b) base HAS children: recurse over the base
+   child window (baseCursor+1..newBaseLimit) with the same diff window,
+   profileName += pathTail(diff0), redirector cleared. Control then falls through
+   to the existing base-slice pairing loop (getSiblings), matching Java.
+2. **Trace-label fix**: `generateSnapshot.begin` now records the RESOLVED base
+   SD url (Java `base.getUrl()`), not the possibly-versioned baseDefinition query
+   (`…us-core-practitioner|6.1.0` → `…us-core-practitioner`). Cosmetic only.
+
+Trace-parity spot check: ndh-Practitioner **decision-identical 845/845 records**.
+
+No resolve.rs / convert.rs / package.rs changes (now owned by another agent).
+
+No-regression after ndh: ladder + units green; IPS 29/29, mcode 46/46,
+carinbb 6/6, crd 22/22, dtr 21/21, genomics 33/33, sdc 71/73, ecr 27/28;
+IPS legacy (default engine) 29/29.
+
+## Increment 10: pas — ENGINE=walk ok=73/73 (2026-07-02, wave 3 batch 1)
+
+Gate (AGENTS.md list — NOTE: `hl7.fhir.uv.subscriptions-backport#0.1.0`, not
+.r4#1.1.0, per the goldens caveat) → **R4 HARVEST CHECK: ok=73 failed=0
+total=73** out of the box; no changes needed (the §3.6.x + updateURLs +
+example/mapping/fillOutFromBase work from increments 3-9 covered it).
+Trace-parity spot check: profile-pas-inquiry-request-bundle
+**decision-identical 2645/2645 records** (Bundle resource slots over local
+Claim/ClaimResponse bases, nested generations).
+
+## Increment 11: cross-SD contentReference + Java-exact checkExtensionDoco —
+## sdc 73/73, ersd = fresh-oracle parity (2026-07-02, wave 3 batch 1)
+
+Two engine-wide changes closed the remaining sdc gap AND resolved the whole ersd
+divergence stack:
+
+1. **Java-exact `checkExtensionDoco`** (new `walk::updatefromdef::check_extension_doco`,
+   PU:1963; the walk no longer uses the legacy-shared `crate::check_extension_doco`).
+   The legacy version adds a `has_profiled_extension_type` guard Java does NOT
+   have; Java normalizes doco for ANY `.extension`/`.modifierExtension` path
+   (except II.extension bases) even when the element carries a profiled Extension
+   type. This is the mechanism behind the coordinator-identified sdc-codesystem
+   items (a) version-pinned unresolvable `artifact-versionAlgorithm|5.2.0` slice
+   and (b) missing-profile `rendering-criticalExtension` fallback — both get
+   generic extension doco because checkExtensionDoco fires unconditionally on the
+   slice, regardless of whether the profile later resolves. legacy.rs untouched
+   (walk-local copy). Also fixed ersd's seq-670 divergence
+   (`PlanDefinition.action.trigger.extension:namedEventType`).
+
+2. **Cross-SD contentReference frame** (the last big stub, contentref.rs).
+   Ported PU:3553 `getElementById` — `url#frag` whose url differs from the
+   frame's sourceStructureDefinition resolves THAT SD (with snapshot) and matches
+   by element **id** — plus both call sites:
+   - one-match walk-into (PPP:958-996): cross-SD swaps the nested base list to
+     the target SD's snapshot, sets `nc.baseSource` AND the frame's
+     `sourceStructureDefinition` to the target SD (PPP:970/977), nested
+     diffCursor `start-1`, contextPathTarget = diffMatches[0].path.
+   - empty-diff walk-into (PPP:1228-1266): cross-SD **mutates `cursors.base`**
+     (persists for the caller, PPP:1234), keeps `cursors.baseSource`, nested
+     diffCursor `start-1` (same-SD keeps `start`). NOTE Java's cross-SD branch
+     here dereferences `diffMatches.get(0)` on an empty list → would throw, so
+     it is effectively dead in that function; the port uses outcome.path.
+   Same-SD matching switched from backwards path-scan to Java's forward id-scan.
+   Effects:
+   - **sdc-valueset**: `ValueSet.expansion.contains.designation`'s canonicalized
+     contentReference (`…StructureDefinition/ValueSet#ValueSet.compose.include.concept.designation`)
+     now resolves into CORE R4 ValueSet (unsliced window 44-49) instead of the
+     local xver base's sliced window → no phantom `additionalUse` slice.
+     SNAPSHOT PARITY + decision-identical 659/659.
+   - **ersd-plandefinition**: the recursive `PlanDefinition.action.action`
+     contentReference (canonicalized to core `…/PlanDefinition#PlanDefinition.action`)
+     now walks CORE PlanDefinition.action children (51) instead of the us-ph
+     base's expanded subtree (110) — this was THE mechanism behind the legacy
+     engine's faked eCR recursive-action behaviors. Rust: 1494/1494 elements,
+     **trace decision-identical 4911/4911**.
+
+Gate: **sdc ok=73 failed=0 total=73**.
+
+### ecr ersd-plandefinition: GOLDEN IS STALE (fresh pinned oracle ≠ committed golden)
+The gate still reports ecr 27/28, but the walk output is **byte-identical
+(SNAPSHOT PARITY) to the FRESH pinned oracle**, verified in BOTH single AND
+batch oracle modes, and decision-identical (4911/4911). The committed golden
+differs from the fresh oracle in exactly 25 elements, all in two §8 quirk
+families: (1) `PlanDefinition.extension:variable` comment carries the SDC
+2025Jan sentence (from the uv.extensions copy of the `variable` extension — NOT
+resolvable in the eCR package closure; fresh oracle emits the r4.core comment),
+and (2) all 8 `…input.extension:fhirquerypattern(.url|.value[x])` groups carry
+the rich uv-extensions cqf-fhirQueryPattern doco (fresh oracle emits generic
+"Extension"/"An Extension" because the canonical is unresolvable). Oracle
+experiments (min fixtures over r4.core / full closure / us-ph base / local-dir)
+all reproduce the fresh (generic) form. The golden predates the current pin or
+was generated with an extensions-augmented cache; the LEGACY engine matches the
+stale golden via its hardcoded NATIVE_R5_VARIABLE_COMMENT / fhirquerypattern
+stamps — precisely the corpus-fitted fakes this rework eliminates. Per hard
+rules the golden was NOT touched; regenerating ecr goldens with the pinned
+oracle (batch outputs already verified equal to Rust for all 28) will turn ecr
+28/28. Same stale-golden class as r4-patient-card-ms.
+
+Also this increment: **§3.6.3 anchor-children unfold** landed for ndh (see
+Increment 9) — no stubs remain in the sliced-base family. Fresh-oracle
+cross-check: all 28 ecr fixtures fresh-batch-generated and diffed vs Rust →
+28/28 SNAPSHOT PARITY.
+
+## Least-confident areas (updated for the coordinator, post-Increment 11)
+- ~~xver R5-backport base snapshots~~ RESOLVED: was the cross-SD contentReference
+  stub + the legacy checkExtensionDoco guard, both fixed in Increment 11 (load
+  path proven correct by the parallel resolve.rs investigation).
+- ~~§3.6.3 anchor-children unfold~~ RESOLVED (Increment 9, ndh). No stubs remain
+  in the sliced-base family; the only remaining documented dead-path is the
+  preprocessor additional-base branch (SGPP:137-152, DEAD under oracle).
+- **Stale goldens vs pinned oracle**: ecr/ersd-plandefinition (25 elements, two
+  uv-extensions doco families) and r4-patient-card-ms — both walk outputs match
+  the FRESH pinned oracle byte-identically; needs a coordinator golden-regen
+  decision, not code.
 - **`merge_mappings` renames** — the cross-version identity `renames` map and the
   R5 APPEND/DUPLICATE/IGNORE/OVERWRITE `mappingMergeMode` are unimplemented (R4
   corpus only exercises the simple diff-first-dedup path). Watch on any R5-target
   or cross-version-mapped profile.
-- **`fill_out_from_base` allow-list** — now matches Java's field list, but the
+- **`fill_out_from_base` allow-list** — matches Java's field list, but the
   polymorphic (fixed[x]/pattern[x]/minValue[x]/maxValue[x]) and additive-array
   (code/alias/constraint/extension) branches are newly exercised; watch for
   over/under-copy on profiles with rich type templates.
 - **§3.6.2 fake-diff replay** — the `ctx.diff` swap/restore is exercised by
   mcode-genomic-variant (one CodeableConcept base slice); multi-slice or nested
   fake-diff cases are untested.
-- **§3.6.3 `processPathWithSlicedBaseDefault` anchor-children unfold**
-  (`has_inner_diff_matches` true branch) still bails — not yet hit by any green IG.
+- **Cross-SD contentReference** — newly exercised by sdc-valueset (core R4
+  ValueSet) and ersd (core PlanDefinition, recursively). The empty-diff cross-SD
+  sub-branch mutates `cur.base` per Java (PPP:1234) but is near-dead in Java
+  (`diffMatches.get(0)` on an empty list); watch any profile that actually
+  reaches it. Same-SD matching switched to Java's forward id-scan — verified on
+  the ladder + IPS + all 10 IGs, but any profile relying on duplicate element
+  ids would now pick the FIRST occurrence (as Java does).
+- **Java-exact checkExtensionDoco (no profiled-type guard)** — engine-wide
+  behavior change verified against all gates; watch published-package sweeps for
+  extension slices whose RESOLVABLE profile doco Java restores later via
+  apply_profile_root_doco (the pairing is what keeps rich doco when it should
+  stay).
 
 ### IPS (ENGINE=walk) — DECISION-IDENTICAL, output blocked by R4 projection (SUPERSEDED — see Increment 2 above)
 - Patient-uv-ips: trace decision-identical 212/212 records, 56/56 elements.

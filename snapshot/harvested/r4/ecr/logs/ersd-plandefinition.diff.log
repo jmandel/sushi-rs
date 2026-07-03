@@ -1,1 +1,1 @@
-$.length expected 1494 actual 1855
+$[18].comment expected "Ordering of variable extension declarations is significant as variables declared in one repetition of this extension might be used in subsequent extension repetitions\n\nFor questionnaires, see additional guidance and examples in the [SDC implementation guide](http://hl7.org/fhir/uv/sdc/2025Jan/behavior.html#variable)." actual "Ordering of variable extension declarations is significant as variables declared in one repetition of this extension might be used in subsequent extension repetitions."

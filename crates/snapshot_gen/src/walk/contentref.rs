@@ -58,8 +58,49 @@ pub(crate) fn replace_from_content_reference(outcome: &mut Value, tgt: &Value) {
     }
 }
 
-/// From the one-match walk-into branch: resolve the contentReference and recurse
-/// into the target's children (same-SD case; cross-SD swaps the base list).
+/// PU:3553 getElementById — resolve a contentReference to
+/// `(elements, index, swapped_source_url)`. An absolute `url#frag` whose url
+/// differs from the frame's sourceStructureDefinition fetches THAT SD (with
+/// snapshot) and searches its snapshot instead (the cross-SD case). Match is by
+/// element **id** (`"#"+ed.getId() == contentReference`), not path.
+fn get_element_by_id(
+    ctx: &mut WalkContext,
+    base: &Rc<Vec<Value>>,
+    source_sd_url: &str,
+    content_ref: &str,
+) -> anyhow::Result<Option<(Rc<Vec<Value>>, usize, Option<String>)>> {
+    let mut frag = content_ref.to_string();
+    let mut elements: Rc<Vec<Value>> = base.clone();
+    let mut swapped: Option<String> = None;
+    if !content_ref.starts_with('#') && content_ref.contains('#') {
+        let hash = content_ref.find('#').unwrap();
+        let url = &content_ref[..hash];
+        frag = content_ref[hash..].to_string();
+        if url != source_sd_url {
+            let Some(sd) = super::resolve::resolve_with_snapshot(ctx, url)? else {
+                return Ok(None);
+            };
+            let resolved = sd
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or(url)
+                .to_string();
+            elements = Rc::new(super::simple::snapshot_elements(&sd));
+            swapped = Some(resolved);
+        }
+    }
+    let id = frag.trim_start_matches('#');
+    for (i, ed) in elements.iter().enumerate() {
+        if ed.get("id").and_then(Value::as_str) == Some(id) {
+            return Ok(Some((elements.clone(), i, swapped)));
+        }
+    }
+    Ok(None)
+}
+
+/// From the one-match walk-into branch (PPP:958-996): resolve the
+/// contentReference via getElementById; cross-SD swaps the base list to the
+/// target SD's snapshot AND the frame's sourceStructureDefinition (PPP:963-978).
 pub(crate) fn walk_into_content_reference_onematch(
     ctx: &mut WalkContext,
     cur: &mut WalkCursor,
@@ -74,12 +115,12 @@ pub(crate) fn walk_into_content_reference_onematch(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let Some(tgt_idx) = resolve_content_reference(&cur.base, cur.base_cursor.saturating_sub(1) + 1, &content_ref)
-        .or_else(|| resolve_by_path(&cur.base, &content_ref))
+    let Some((tgt_list, tgt_idx, swapped)) =
+        get_element_by_id(ctx, &cur.base, &frame.source_sd_url, &content_ref)?
     else {
         anyhow::bail!("UNABLE_TO_RESOLVE_REFERENCE_TO_ {content_ref}");
     };
-    let tgt = cur.base[tgt_idx].clone();
+    let tgt = tgt_list[tgt_idx].clone();
     replace_from_content_reference(outcome, &tgt);
     // Re-write the emitted outcome (its type/contentReference changed).
     let out_idx = ctx.output.len() - 1;
@@ -89,12 +130,14 @@ pub(crate) fn walk_into_content_reference_onematch(
     let new_base_cursor = tgt_idx + 1;
     let mut new_base_limit = new_base_cursor;
     let dot = format!("{tgt_path}.");
-    while new_base_limit < cur.base.len() && path_of(&cur.base[new_base_limit]).starts_with(&dot) {
+    while new_base_limit < tgt_list.len() && path_of(&tgt_list[new_base_limit]).starts_with(&dot) {
         new_base_limit += 1;
     }
     let mut ncur = WalkCursor {
-        base_source_url: cur.base_source_url.clone(),
-        base: cur.base.clone(),
+        base_source_url: swapped
+            .clone()
+            .unwrap_or_else(|| cur.base_source_url.clone()),
+        base: tgt_list,
         base_cursor: new_base_cursor,
         diff_cursor: start.saturating_sub(1),
         context_name: cur.context_name.clone(),
@@ -106,12 +149,22 @@ pub(crate) fn walk_into_content_reference_onematch(
     nframe.context_path_source = Some(tgt_path.clone());
     nframe.context_path_target = Some(path_of(diff0).to_string());
     nframe.redirector = redirector_stack(&frame.redirector, outcome, current_base_path);
+    if let Some(src) = &swapped {
+        // PPP:977 withSourceStructureDefinition(target.getSource()).
+        nframe.source_sd_url = src.clone();
+    }
     nframe.slicing = SlicingParams::default();
     super::loop_::process_paths(ctx, &mut ncur, &nframe, None)?;
     Ok(())
 }
 
-/// From the empty-diff branch.
+/// From the empty-diff branch (PPP:1228-1266). Cross-SD (PPP:1233-1250):
+/// resolve via getElementById; NOTE Java MUTATES `cursors.base` to the target
+/// SD's snapshot (the caller's base list stays swapped afterwards), keeps
+/// `cursors.baseSource` unchanged, uses nested diffCursor `start - 1` and
+/// contextPathTarget = diffMatches[0].path, and sets the frame's
+/// sourceStructureDefinition to the target SD. Same-SD (PPP:1251-1266): nested
+/// diffCursor `start`, contextPathTarget = outcome.path.
 pub(crate) fn walk_into_content_reference(
     ctx: &mut WalkContext,
     cur: &mut WalkCursor,
@@ -126,10 +179,12 @@ pub(crate) fn walk_into_content_reference(
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let Some(tgt_idx) = resolve_by_path(&cur.base, &content_ref) else {
+    let Some((tgt_list, tgt_idx, swapped)) =
+        get_element_by_id(ctx, &cur.base, &frame.source_sd_url, &content_ref)?
+    else {
         anyhow::bail!("UNABLE_TO_RESOLVE_REFERENCE_TO_ {content_ref}");
     };
-    let tgt = cur.base[tgt_idx].clone();
+    let tgt = tgt_list[tgt_idx].clone();
     replace_from_content_reference(outcome, &tgt);
     let out_idx = ctx.output.len() - 1;
     ctx.output[out_idx] = outcome.clone();
@@ -138,17 +193,19 @@ pub(crate) fn walk_into_content_reference(
     let new_base_cursor = tgt_idx + 1;
     let mut new_base_limit = new_base_cursor;
     let dot = format!("{tgt_path}.");
-    while new_base_limit < cur.base.len() && path_of(&cur.base[new_base_limit]).starts_with(&dot) {
+    while new_base_limit < tgt_list.len() && path_of(&tgt_list[new_base_limit]).starts_with(&dot) {
         new_base_limit += 1;
     }
-    // PPP:1256-1264 same-SD branch: contextPathTarget = outcome.getPath(),
-    // diffCursor = start (the cross-SD branch uses start-1; we only support same-SD).
     let outcome_path = path_of(outcome).to_string();
+    if swapped.is_some() {
+        // PPP:1234 cursors.base = tgt.getSource().getSnapshot() — persists.
+        cur.base = tgt_list.clone();
+    }
     let mut ncur = WalkCursor {
         base_source_url: cur.base_source_url.clone(),
-        base: cur.base.clone(),
+        base: tgt_list,
         base_cursor: new_base_cursor,
-        diff_cursor: start,
+        diff_cursor: if swapped.is_some() { start.saturating_sub(1) } else { start },
         context_name: cur.context_name.clone(),
         result_path_base: cur.result_path_base.clone(),
     };
@@ -158,6 +215,9 @@ pub(crate) fn walk_into_content_reference(
     nframe.context_path_source = Some(tgt_path.clone());
     nframe.context_path_target = Some(outcome_path);
     nframe.redirector = redirector_stack(&frame.redirector, outcome, current_base_path);
+    if let Some(src) = &swapped {
+        nframe.source_sd_url = src.clone();
+    }
     nframe.slicing = SlicingParams::default();
     let _ = update_from_base; // kept for parity with Java re-home path
     super::loop_::process_paths(ctx, &mut ncur, &nframe, None)?;
