@@ -119,3 +119,10 @@ behavior cited (fhir-core/publisher file:line at pinned versions), quirk
 registry for case law, no hardcoded IG-specific behavior, isolated caches,
 coordinator verifies + commits. Native gates (existing 955/955 corpus, sushi
 harvest, wasm parity) must stay green through every phase.
+
+**Simplification is a first-class deliverable** (Josh, 2026-07-03): agents
+flag collapse/condense candidates in every report; the coordinator maintains
+docs/simplification-ledger.md and runs consolidation passes at phase
+boundaries with the same gate discipline as perf work. Complexity that can
+be deleted while outputs stay byte-identical outranks new features in the
+queue.
