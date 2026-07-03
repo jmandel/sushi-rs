@@ -41,8 +41,17 @@ pub fn add_markdown(cell: &mut Cell, md: &str) {
 /// `br` pieces trimmed, `role` (class) set on every piece. Used for binding
 /// descriptions in the SUMMARY description cell (SDR:2000).
 pub fn add_markdown_no_para_role(cell: &mut Cell, md: &str, role: &str) {
+    add_markdown_no_para_role_styled(cell, md, role, None)
+}
+
+/// As above with the Java `style` argument non-null (SDR:2000/2015 pass
+/// `checkForNoChange(descriptionElement)` = the opacity string when the
+/// description is base-derived in the diff view). Java applies the style via
+/// `styleIt` to every addNode piece and block-element piece (HTG:414/441-466);
+/// the `br;br` separators stay unstyled (HTG:401-402).
+pub fn add_markdown_no_para_role_styled(cell: &mut Cell, md: &str, role: &str, style: Option<&str>) {
     let html = commonmark::render_html(md);
-    let mut pieces = html_to_paragraph_pieces(&html);
+    let mut pieces = html_to_paragraph_pieces_styled(&html, style);
     // Trim unwanted trailing line-breaks (HTG:380-381).
     while pieces
         .last()
@@ -59,6 +68,11 @@ pub fn add_markdown_no_para_role(cell: &mut Cell, md: &str, role: &str) {
 
 /// Port of `htmlToParagraphPieces(html, style=null)` (HTG:392-425).
 fn html_to_paragraph_pieces(html: &str) -> Vec<Piece> {
+    html_to_paragraph_pieces_styled(html, None)
+}
+
+/// `htmlToParagraphPieces(html, style)` (HTG:392-425).
+fn html_to_paragraph_pieces_styled(html: &str, style: Option<&str>) -> Vec<Piece> {
     let mut pieces = Vec::new();
     let wrapped = format!("<html>{html}</html>");
     let mut parser = XhtmlParser::new();
@@ -82,19 +96,23 @@ fn html_to_paragraph_pieces(html: &str) -> Vec<Piece> {
         match c.node_type() {
             NodeType::Text => {
                 if !is_whitespace(c.content().unwrap_or("")) {
-                    add_node(&mut pieces, c);
+                    add_node_styled(&mut pieces, c, style);
                 }
             }
             NodeType::Element if c.name() == Some("p") => {
                 for g in c.child_nodes() {
-                    add_node(&mut pieces, g);
+                    add_node_styled(&mut pieces, g, style);
                 }
             }
             NodeType::Element => {
-                // HTG else-branch: Piece(name) carrying the element's children.
+                // HTG else-branch: Piece(name) carrying the element's children;
+                // style applied via addStyle (HTG:414-415).
                 let mut x = Piece::tag(c.name().unwrap_or(""));
                 for g in c.child_nodes() {
                     x.add_html(g.clone());
+                }
+                if let Some(st) = style {
+                    x.add_style(st);
                 }
                 pieces.push(x);
             }
@@ -104,8 +122,19 @@ fn html_to_paragraph_pieces(html: &str) -> Vec<Piece> {
     pieces
 }
 
-/// Port of `addNode(list, c, style=null)` (HTG:439-472).
-fn add_node(list: &mut Vec<Piece>, c: &XhtmlNode) {
+/// `addNode(list, c, style)` (HTG:439-472): every produced piece runs through
+/// `styleIt` (HTG:475-480) = addStyle(style) when style is non-null.
+fn add_node_styled(list: &mut Vec<Piece>, c: &XhtmlNode, style: Option<&str>) {
+    let start = list.len();
+    add_node_inner(list, c);
+    if let Some(st) = style {
+        for p in &mut list[start..] {
+            p.add_style(st);
+        }
+    }
+}
+
+fn add_node_inner(list: &mut Vec<Piece>, c: &XhtmlNode) {
     match c.node_type() {
         NodeType::Text => {
             list.push(Piece::ref_text(None, Some(c.content().unwrap_or("").to_string()), None));

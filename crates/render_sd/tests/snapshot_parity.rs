@@ -169,3 +169,60 @@ fn by_key_plan_net_organization() {
         TableConfig::snapshot_by_key,
     );
 }
+
+#[test]
+fn diff_us_core_patient() {
+    check_kind(
+        "us-core",
+        "us-core-patient",
+        false,
+        "diff",
+        TableConfig::diff_view,
+    );
+}
+
+#[test]
+fn diff_us_core_blood_pressure() {
+    // exercises the choice-rename pointer fallback (component:systolic.valueQuantity)
+    check_kind(
+        "us-core",
+        "us-core-blood-pressure",
+        false,
+        "diff",
+        TableConfig::diff_view,
+    );
+}
+
+#[test]
+fn diff_us_core_provenance() {
+    // exercises the dimmed genTargetLink pieces (Reference(Resource) from pointer)
+    check_kind(
+        "us-core",
+        "us-core-provenance",
+        false,
+        "diff",
+        TableConfig::diff_view,
+    );
+}
+
+#[test]
+fn diff_all_us_core_patient() {
+    check_kind(
+        "us-core",
+        "us-core-patient",
+        false,
+        "diff-all",
+        TableConfig::diff_all,
+    );
+}
+
+#[test]
+fn diff_plan_net_organization() {
+    check_kind(
+        "plan-net",
+        "plannet-Organization",
+        true,
+        "diff",
+        TableConfig::diff_view,
+    );
+}

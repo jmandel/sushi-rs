@@ -294,6 +294,19 @@ impl Sd {
     pub fn fhir_version(&self) -> &str {
         self.root.get("fhirVersion").and_then(|x| x.as_str()).unwrap_or("")
     }
+    /// `profile.getTypeName()` — the SD's `type` (the base resource/type name).
+    pub fn type_name(&self) -> &str {
+        self.root.get("type").and_then(|x| x.as_str()).unwrap_or("")
+    }
+    /// The raw differential element array (empty if absent).
+    pub fn differential_elements(&self) -> Vec<Ed<'_>> {
+        self.root
+            .get("differential")
+            .and_then(|s| s.get("element"))
+            .and_then(|e| e.as_array())
+            .map(|a| a.iter().map(Ed::new).collect())
+            .unwrap_or_default()
+    }
     pub fn snapshot_elements(&self) -> Vec<Ed<'_>> {
         self.root
             .get("snapshot")

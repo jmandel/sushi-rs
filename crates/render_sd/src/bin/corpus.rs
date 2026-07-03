@@ -87,6 +87,18 @@ fn render(
             let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
             b
         }
+        "diff" => {
+            let mut cfg = TableConfig::diff_view(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
+        "diff-all" => {
+            let mut cfg = TableConfig::diff_all(run_uuid);
+            cfg.active_tables = active_tables;
+            let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
+            b
+        }
         _ => return None,
     };
     Some(wrap_raw(&body))

@@ -29,6 +29,7 @@ use crate::markdown;
 use crate::sdmodel::{Ed, Sd, TypeRef};
 
 pub const RED_BACKGROUND_COLOR: &str = "#D50000"; // SDR:104
+pub const OPACITY: &str = "opacity: 0.5"; // RenderingContext.getOpacity() (RenderingContext.java:76, wcagConformant=false)
 pub const CONSTRAINT_CHAR: &str = "C"; // SDR:392
 pub const CONSTRAINT_STYLE: &str = "padding-left: 3px; padding-right: 3px; border: 1px maroon solid; font-weight: bold; color: #301212; background-color: #fdf4f4;"; // SDR:393
 
@@ -118,6 +119,29 @@ impl TableConfig {
             ..TableConfig::snapshot_by_key(run_uuid)
         }
     }
+    /// `diff()` (publisher SDR:487): generateTable(diff=T, snapshot=F,
+    /// allInv=F, ms=F, prefix "", idSfx D). Element list =
+    /// supplementMissingDiffElements (SDR:617).
+    pub fn diff_view(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            diff: true,
+            snapshot: false,
+            all_invariants: false,
+            must_support: false,
+            key: false,
+            prefix: "".into(),
+            id_sfx: "D".into(),
+            run_uuid: run_uuid.into(),
+            active_tables: false,
+        }
+    }
+    pub fn diff_all(run_uuid: &str) -> TableConfig {
+        TableConfig {
+            prefix: "a".into(),
+            id_sfx: "DA".into(),
+            ..TableConfig::diff_view(run_uuid)
+        }
+    }
 }
 
 /// Render one SD table fragment body (unwrapped).
@@ -156,10 +180,14 @@ pub fn render_table(
     // snapshot is `getMustSupportElements()` (MS elements + ancestors, with
     // example cleared and non-MS elements dimmed via render_opaque + binding/
     // constraints cleared). We build owned modified element JSON for that case.
-    let use_owned = cfg.must_support || cfg.key;
+    let use_owned = cfg.must_support || cfg.key || cfg.diff;
     let owned: Vec<serde_json::Value>;
     let all: Vec<Ed> = if use_owned {
-        owned = if cfg.must_support {
+        owned = if cfg.diff {
+            // diff view: differential + synthetic root/sparse fill
+            // (supplementMissingDiffElements, SGPP:1102; SDR:617).
+            crate::diff::supplement_missing_diff_elements(sd)
+        } else if cfg.must_support {
             must_support_elements(sd)
         } else {
             key_elements(sd, ctx)
@@ -180,12 +208,76 @@ pub fn render_table(
     } else {
         std::collections::HashSet::new()
     };
+    // diff-mode pointer reconstruction. The publisher's diff render reads
+    // `SNAPSHOT_DERIVATION_POINTER` userData off each differential element —
+    // stamped during snapshot generation (PU:2591: derived.setUserData(POINTER,
+    // base), base = the base clone that BECOMES the output snapshot element).
+    // Our JSON input carries no userData, so we reconstruct: pointer(diffElem)
+    // = the element in the profile's OWN snapshot with the same id. For any
+    // property the diff did not restate, snapshot[id].prop == base[id].prop,
+    // so the own-snapshot element reproduces the base value byte-for-byte.
+    // Synthetic elements (supplementMissingDiffElements roots/sparse fill)
+    // never went through updateFromDefinition => no pointer.
+    let pointers: HashMap<String, Ed> = if cfg.diff {
+        let snap = sd.snapshot_elements();
+        let mut exact: HashMap<&str, Ed> = HashMap::new();
+        let mut alias: HashMap<String, Ed> = HashMap::new();
+        for e in &snap {
+            exact.insert(e.id(), *e);
+            // Choice-rename alias: the differential may write the RENAMED
+            // choice id (`Observation.valueQuantity.code`) where the generated
+            // snapshot holds the sliced form (`Observation.value[x]:valueQuantity.code`).
+            // The walk matched them during generation (PPP:887-909), so the
+            // stamped pointer crosses this rename; reproduce by aliasing every
+            // `base[x]:baseType` segment to `baseType`.
+            let mut changed = false;
+            let alias_id: Vec<String> = e
+                .id()
+                .split('.')
+                .map(|seg| {
+                    if let Some((l, r)) = seg.split_once("[x]:") {
+                        if r.starts_with(l) {
+                            changed = true;
+                            return r.to_string();
+                        }
+                    }
+                    seg.to_string()
+                })
+                .collect();
+            if changed {
+                alias.insert(alias_id.join("."), *e);
+            }
+        }
+        let mut map: HashMap<String, Ed> = HashMap::new();
+        for d in sd.differential_elements() {
+            let id = d.id();
+            if let Some(e) = exact.get(id).or_else(|| alias.get(id)) {
+                map.insert(id.to_string(), *e);
+                continue;
+            }
+            // Unsliced choice rename: diff `…component:systolic.valueQuantity.value`
+            // vs snapshot `…component:systolic.value[x].value` (the walk's
+            // isSameBase match, PU:2507 — `p` ends [x] and the renamed segment
+            // starts with its stem). Try rewriting each camelCase segment back
+            // to its `stem[x]` form.
+            'outer: for cand in dechoice_candidates(id) {
+                if let Some(e) = exact.get(cand.as_str()) {
+                    map.insert(id.to_string(), *e);
+                    break 'outer;
+                }
+            }
+        }
+        map
+    } else {
+        HashMap::new()
+    };
     let mut t = TCtx {
         ctx,
         sd,
         all,
         cfg,
         gen: &gen,
+        pointers,
         anchors: HashMap::new(),
         def_path: if def_file.is_empty() {
             None
@@ -217,6 +309,9 @@ struct TCtx<'a> {
     all: &'a [Ed<'a>],
     cfg: &'a TableConfig,
     gen: &'a Gen,
+    /// diff mode: reconstructed SNAPSHOT_DERIVATION_POINTER (diff element id ->
+    /// own-snapshot element). Empty for non-diff kinds.
+    pointers: HashMap<String, Ed<'a>>,
     anchors: HashMap<String, i32>,
     def_path: Option<String>,
     core_path: &'static str,
@@ -237,6 +332,82 @@ struct UnusedTracker {
 impl<'a> TCtx<'a> {
     fn gap(&mut self, what: &str) {
         self.gaps.push(what.to_string());
+    }
+
+    /// diff mode: `element.getUserData(SNAPSHOT_DERIVATION_POINTER)`
+    /// (reconstructed as the own-snapshot id match; see render_table).
+    fn pointer(&self, e: Ed<'_>) -> Option<Ed<'a>> {
+        if self.cfg.diff {
+            self.pointers.get(e.id()).copied()
+        } else {
+            None
+        }
+    }
+
+    /// `genCardinality` (SDR:1431-1475). In diff mode, a missing min/max is
+    /// filled from the DERIVATION_POINTER's element and DIMMED (SDR:1434-1447:
+    /// `min.setUserData(SNAPSHOT_DERIVATION_EQUALS, true)` -> checkForNoChange
+    /// adds `context.getOpacity()` = "opacity: 0.5", RenderingContext.java:76),
+    /// then from the extension fallback element WITHOUT dimming (SDR:1448-1451).
+    /// The ".." piece dims only when BOTH min and max carry EQUALS (the two-arg
+    /// checkForNoChange, SDR:3509-3514).
+    fn gen_cardinality(&self, e: Ed<'_>, tracker: &mut UnusedTracker, fb: Option<&ExtDefn>) -> Cell {
+        let mut min = e.min();
+        let mut max: Option<String> = e.max().map(String::from);
+        let mut min_eq = false;
+        let mut max_eq = false;
+        if min.is_none() {
+            if let Some(p) = self.pointer(e) {
+                if let Some(m) = p.min() {
+                    min = Some(m);
+                    min_eq = true;
+                }
+            }
+        }
+        if max.is_none() {
+            if let Some(p) = self.pointer(e) {
+                if let Some(m) = p.max() {
+                    max = Some(m.to_string());
+                    max_eq = true;
+                }
+            }
+        }
+        if min.is_none() {
+            if let Some(f) = fb {
+                min = f.element.get("min").and_then(|x| x.as_i64());
+            }
+        }
+        if max.is_none() {
+            if let Some(f) = fb {
+                max = f.element.get("max").and_then(|x| x.as_str()).map(String::from);
+            }
+        }
+        if let Some(m) = &max {
+            tracker.used = m != "0";
+        }
+        let mut cell = Cell::with(None, None, None, None, None);
+        if min.is_some() || max.is_some() {
+            let mut p1 = Piece::ref_text(
+                None,
+                Some(min.map(|m| m.to_string()).unwrap_or_default()),
+                None,
+            );
+            if min_eq {
+                p1.add_style(OPACITY);
+            }
+            cell.pieces.push(p1);
+            let mut p2 = Piece::ref_text(None, Some("..".into()), None);
+            if min_eq && max_eq {
+                p2.add_style(OPACITY);
+            }
+            cell.pieces.push(p2);
+            let mut p3 = Piece::ref_text(None, Some(max.unwrap_or_default()), None);
+            if max_eq {
+                p3.add_style(OPACITY);
+            }
+            cell.pieces.push(p3);
+        }
+        cell
     }
 
     /// `makeAnchorUnique` (SDR:1201).
@@ -747,7 +918,7 @@ impl<'a> TCtx<'a> {
                 let eurl = types[0].profiles()[0].to_string();
                 match self.locate_extension(&eurl) {
                     None => {
-                        row.cells.push(gen_cardinality(element, used));
+                        row.cells.push(self.gen_cardinality(element, used, None));
                         row.cells.push(Cell::with(
                             None,
                             None,
@@ -764,7 +935,7 @@ impl<'a> TCtx<'a> {
                         row.cells[name_cell_idx].pieces[0]
                             .set_hint(format!("Extension URL = {}", ext_defn.url));
                         row.cells
-                            .push(gen_cardinality_fb(element, used, Some(&ext_defn)));
+                            .push(self.gen_cardinality(element, used, Some(&ext_defn)));
                         let value_defn = if walks_into_this {
                             None
                         } else {
@@ -797,11 +968,11 @@ impl<'a> TCtx<'a> {
                     }
                 }
             } else {
-                row.cells.push(gen_cardinality(element, used));
+                row.cells.push(self.gen_cardinality(element, used, None));
                 if element.max() == Some("0") {
                     row.cells.push(Cell::new());
                 } else {
-                    let c = self.gen_types(element, types, root);
+                    let c = self.gen_types(element, types, root, false);
                     row.cells.push(c);
                 }
                 let (c, prs) = self.generate_description(element, root, None, None, walks_into_this);
@@ -809,9 +980,9 @@ impl<'a> TCtx<'a> {
                 row.sub_rows.extend(prs);
             }
         } else {
-            row.cells.push(gen_cardinality(element, used));
+            row.cells.push(self.gen_cardinality(element, used, None));
             if element.max() != Some("0") && !types_row {
-                let c = self.gen_types(element, types, root);
+                let c = self.gen_types(element, types, root, false);
                 row.cells.push(c);
             } else {
                 row.cells.push(Cell::new());
@@ -823,7 +994,17 @@ impl<'a> TCtx<'a> {
     }
 
     /// `genTypes` (SDR:2317), SUMMARY/mustSupportMode=false.
-    fn gen_types(&mut self, e: Ed<'a>, types: &[TypeRef<'a>], root: bool) -> Cell {
+    ///
+    /// `dim` = the types came from the DERIVATION_POINTER in diff mode
+    /// (SDR:2357-2364 stamps each copied TypeRefComponent with
+    /// SNAPSHOT_DERIVATION_EQUALS) — the checkForNoChange-WRAPPED pieces render
+    /// with `opacity: 0.5`. NOT every piece is wrapped in the Java: the
+    /// Reference-with-target branch's pieces (SDR:2383-2430 — the reference
+    /// link, "(", " | ", target links, ")", aggregation) are unwrapped and stay
+    /// bright; wrapped are the top-level ", " separators (SDR:2379), the
+    /// profiled-type pieces (SDR:2439-2459) and the plain-code pieces
+    /// (SDR:2472-2500).
+    fn gen_types(&mut self, e: Ed<'a>, types: &[TypeRef<'a>], root: bool, dim: bool) -> Cell {
         let mut c = Cell::new();
         if let Some(cr) = e.content_reference() {
             // (SDR:2320-2334 + getElementByName): the snapshot generator writes
@@ -879,6 +1060,16 @@ impl<'a> TCtx<'a> {
                     // imagePath="" so relative stays relative.
                     c.pieces.push(Piece::ref_text(Some(wp), Some(name), None));
                 }
+                return c;
+            }
+            // diff mode, non-root, no restated types: take the pointer's types,
+            // each marked SNAPSHOT_DERIVATION_EQUALS (SDR:2357-2364) so the
+            // checkForNoChange-wrapped pieces render dimmed.
+            if let Some(p) = self.pointer(e) {
+                let pt = p.types();
+                if !pt.is_empty() {
+                    return self.gen_types(e, &pt, root, true);
+                }
             }
             return c;
         }
@@ -895,7 +1086,8 @@ impl<'a> TCtx<'a> {
             if first {
                 first = false;
             } else {
-                c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
+                c.pieces
+                    .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
             }
             if t.has_target() {
                 // Reference/canonical (SDR:2379-2427)
@@ -952,7 +1144,7 @@ impl<'a> TCtx<'a> {
                     } else {
                         c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
-                    self.gen_target_link(&mut c, t, u);
+                    self.gen_target_link(&mut c, t, u, dim);
                     if !ms_mode && canonical_is_must_support(t, u) && e.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
                         // SDR:2414: targetProfile S also uses STRUC_DEF_TYPE_SUPP.
@@ -985,7 +1177,8 @@ impl<'a> TCtx<'a> {
                     if pfirst {
                         pfirst = false;
                     } else {
-                        c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
+                        c.pieces
+                            .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
                     }
                     // getLinkForProfile -> webPath|name, name gains
                     // "(version)" when multiple versions of the canonical are
@@ -996,17 +1189,17 @@ impl<'a> TCtx<'a> {
                         } else {
                             psd.name.clone()
                         };
-                        c.pieces.push(Piece::ref_text(
+                        c.pieces.push(dim_piece(Piece::ref_text(
                             Some(psd.web_path.clone()),
                             name,
                             Some(t.working_code().to_string()),
-                        ));
+                        ), dim));
                     } else {
-                        c.pieces.push(Piece::ref_text(
+                        c.pieces.push(dim_piece(Piece::ref_text(
                             None,
                             Some(t.working_code().to_string()),
                             None,
-                        ));
+                        ), dim));
                     }
                     if !ms_mode && canonical_is_must_support(t, p) && e.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
@@ -1027,22 +1220,27 @@ impl<'a> TCtx<'a> {
                     if let Some(sd) = self.ctx.resolve_type(tc) {
                         // getLinkFor(corePath, tc) -> webPath; text = typeName
                         let tn = type_name_of(&sd, tc);
-                        c.pieces.push(Piece::ref_text(Some(sd.web_path.clone()), Some(tn), None));
+                        c.pieces.push(dim_piece(
+                            Piece::ref_text(Some(sd.web_path.clone()), Some(tn), None),
+                            dim,
+                        ));
                     } else {
-                        c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
+                        c.pieces
+                            .push(dim_piece(Piece::ref_text(None, Some(tc.to_string()), None), dim));
                     }
                 } else if self.ctx.has_link_for(tc) {
                     // pkp.hasLinkFor gate (IGKP:568): derivation must be
                     // specialization — base abstract types (Resource, Element)
                     // render as plain text.
                     let sd = self.ctx.resolve_type(tc).unwrap();
-                    c.pieces.push(Piece::ref_text(
+                    c.pieces.push(dim_piece(Piece::ref_text(
                         Some(sd.web_path.clone()),
                         Some(tc.to_string()),
                         None,
-                    ));
+                    ), dim));
                 } else {
-                    c.pieces.push(Piece::ref_text(None, Some(tc.to_string()), None));
+                    c.pieces
+                        .push(dim_piece(Piece::ref_text(None, Some(tc.to_string()), None), dim));
                 }
                 if !ms_mode && type_is_must_support(t) && e.must_support() {
                     c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
@@ -1060,17 +1258,24 @@ impl<'a> TCtx<'a> {
         c
     }
 
-    /// `genTargetLink` (SDR:2529).
-    fn gen_target_link(&mut self, c: &mut Cell, _t: &TypeRef<'a>, u: &str) {
+    /// `genTargetLink` (SDR:2534-2565). EVERY piece it adds is wrapped in
+    /// `checkForNoChange(t, ...)` (SDR:2539/2542/2560/2562/2564) — so pointer-
+    /// derived (EQUALS) types dim their target links while the enclosing
+    /// "Reference"/"("/" | "/")" pieces (added by genTypes, unwrapped) stay
+    /// bright.
+    fn gen_target_link(&mut self, c: &mut Cell, _t: &TypeRef<'a>, u: &str, dim: bool) {
         if u.starts_with("http://hl7.org/fhir/StructureDefinition/") {
             if let Some(sd) = self.ctx.resolve(u) {
                 let disp = sd.title.clone().or(sd.name.clone()).unwrap_or_default();
-                c.pieces
-                    .push(Piece::ref_text(Some(sd.web_path.clone()), Some(disp), None));
+                c.pieces.push(dim_piece(
+                    Piece::ref_text(Some(sd.web_path.clone()), Some(disp), None),
+                    dim,
+                ));
             } else {
                 let rn = &u[40..];
                 let link = self.ctx.resolve_type(rn).map(|r| r.web_path);
-                c.pieces.push(Piece::ref_text(link, Some(rn.to_string()), None));
+                c.pieces
+                    .push(dim_piece(Piece::ref_text(link, Some(rn.to_string()), None), dim));
             }
         } else if u.starts_with("http://") || u.starts_with("https://") {
             if let Some(sd) = self.ctx.resolve(u) {
@@ -1080,9 +1285,11 @@ impl<'a> TCtx<'a> {
                 if let Some(i) = href.find('|') {
                     href.truncate(i);
                 }
-                c.pieces.push(Piece::ref_text(Some(href), Some(disp), None));
+                c.pieces
+                    .push(dim_piece(Piece::ref_text(Some(href), Some(disp), None), dim));
             } else {
-                c.pieces.push(Piece::ref_text(None, Some(u.to_string()), None));
+                c.pieces
+                    .push(dim_piece(Piece::ref_text(None, Some(u.to_string()), None), dim));
             }
         } else if u.starts_with('#') {
             self.gap("contained target profile link");
@@ -1260,7 +1467,9 @@ impl<'a> TCtx<'a> {
                     if !first {
                         c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
-                    self.gen_target_link(&mut c, tr, rt);
+                    // makeChoiceRows renders the element's OWN (restated)
+                    // types — never pointer-derived, so no EQUALS dim.
+                    self.gen_target_link(&mut c, tr, rt, false);
                     // SDR:3405-3408: per-target S.
                     if !ms_mode && canonical_is_must_support(tr, rt) && element.must_support() {
                         c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
@@ -1534,13 +1743,43 @@ impl<'a> TCtx<'a> {
             return (c, partner_rows);
         }
 
-        // short (SDR:1582)
+        // short (SDR:1585-1603). In diff mode, an element that does not restate
+        // `short` shows the FALLBACK's short dimmed (SDR:1594-1602: fallback =
+        // the DERIVATION_POINTER at the plain call sites 1396/1417/1426, or the
+        // located extension's element at 1409; the piece gets
+        // addStyle(getOpacity()) unconditionally). Both branches set
+        // `underived` when the short lacks SNAPSHOT_DERIVATION_EQUALS — always
+        // true in our reconstruction — which flips the unused-row strike-through
+        // to italic (SDR:1054-1062).
         if let Some(short) = definition.short() {
             if !short.is_empty() {
                 if !c.pieces.is_empty() {
                     c.pieces.push(Piece::tag("br"));
                 }
-                c.pieces.push(Piece::ref_text(None, Some(short.to_string()), None));
+                let mut p = Piece::ref_text(None, Some(short.to_string()), None);
+                p.underived = true;
+                c.pieces.push(p);
+            }
+        } else {
+            let fb_short: Option<String> = match ext_defn {
+                Some(ed) => ed
+                    .element
+                    .get("short")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                None => self
+                    .pointer(definition)
+                    .and_then(|p| p.short())
+                    .map(String::from),
+            };
+            if let Some(short) = fb_short {
+                if !c.pieces.is_empty() {
+                    c.pieces.push(Piece::tag("br"));
+                }
+                let mut p = Piece::ref_text(None, Some(short), None);
+                p.add_style(OPACITY);
+                p.underived = true;
+                c.pieces.push(p);
             }
         }
         // URL line for extensions (SDR:1601-1639)
@@ -1639,20 +1878,66 @@ impl<'a> TCtx<'a> {
 
         // binding (SDR@6.9.11:1975-2027): the VALUE DEFN's binding wins for
         // simple extensions (SDR:1980-1983).
+        let binding_from_defn: bool;
         let binding_owner: Option<&serde_json::Value> = match _value_defn {
             Some(vd) => {
                 let b = vd.json.get("binding");
                 if b.map(|x| x.as_object().map(|o| !o.is_empty()).unwrap_or(false)).unwrap_or(false) {
+                    binding_from_defn = false;
                     b
                 } else {
+                    binding_from_defn = true;
                     definition.binding()
                 }
             }
-            None => definition.binding(),
+            None => {
+                binding_from_defn = true;
+                definition.binding()
+            }
         };
+        // makeUnifiedBinding (SDR:2726-2758): in diff mode the element's
+        // binding is merged with its DERIVATION_POINTER's — parts pulled from
+        // the base are stamped SNAPSHOT_DERIVATION_EQUALS and render dimmed.
+        // A valueDefn never has a pointer (SDR:2727-2729 no-op).
+        let mut vs_eq = false;
+        let mut str_eq = false;
+        let mut desc_eq = false;
+        let unified_storage: Option<serde_json::Value> = match binding_owner {
+            Some(b) if binding_from_defn => self.pointer(definition).and_then(|p| {
+                p.binding().map(|ob| {
+                    let mut nb = serde_json::Map::new();
+                    if let Some(vs) = b.get("valueSet") {
+                        nb.insert("valueSet".into(), vs.clone());
+                    } else if let Some(vs) = ob.get("valueSet") {
+                        nb.insert("valueSet".into(), vs.clone());
+                        vs_eq = true;
+                    }
+                    if let Some(st) = b.get("strength") {
+                        nb.insert("strength".into(), st.clone());
+                    } else if let Some(st) = ob.get("strength") {
+                        nb.insert("strength".into(), st.clone());
+                        str_eq = true;
+                    }
+                    if let Some(d) = b.get("description") {
+                        nb.insert("description".into(), d.clone());
+                    } else if let Some(d) = ob.get("description") {
+                        nb.insert("description".into(), d.clone());
+                        desc_eq = true;
+                    }
+                    // b.getExtension().addAll(binding.getExtension()) (SDR:2756)
+                    if let Some(ext) = b.get("extension") {
+                        nb.insert("extension".into(), ext.clone());
+                    }
+                    serde_json::Value::Object(nb)
+                })
+            }),
+            _ => None,
+        };
+        let binding_owner: Option<&serde_json::Value> =
+            unified_storage.as_ref().or(binding_owner);
         if let Some(binding) = binding_owner {
             if binding.get("valueSet").is_some() {
-                self.render_binding_summary(&mut c, definition, binding);
+                self.render_binding_summary(&mut c, definition, binding, vs_eq, str_eq, desc_eq);
             } else if binding.as_object().map(|o| !o.is_empty()).unwrap_or(false) {
                 // no-valueSet branch (SDR@6.9.11:1987-2003)
                 if !c.pieces.is_empty() {
@@ -1668,6 +1953,9 @@ impl<'a> TCtx<'a> {
                 if let Some(strength) = binding.get("strength").and_then(|x| x.as_str()) {
                     let mut p1 = Piece::ref_text(None, Some(" (".into()), None);
                     p1.set_class("binding");
+                    if str_eq {
+                        p1.add_style(OPACITY);
+                    }
                     c.pieces.push(p1);
                     let mut p2 = Piece::ref_text(
                         Some(format!("{}terminologies.html#{}", self.core_path, strength)),
@@ -1675,9 +1963,15 @@ impl<'a> TCtx<'a> {
                         Some(strength_definition(strength).to_string()),
                     );
                     p2.set_class("binding");
+                    if str_eq {
+                        p2.add_style(OPACITY);
+                    }
                     c.pieces.push(p2);
                     let mut p3 = Piece::ref_text(None, Some(")".into()), None);
                     p3.set_class("binding");
+                    if str_eq {
+                        p3.add_style(OPACITY);
+                    }
                     c.pieces.push(p3);
                     if matches!(strength, "required" | "extensible") {
                         let mut sp = Piece::ref_text(None, Some(" ".into()), None);
@@ -1699,9 +1993,22 @@ impl<'a> TCtx<'a> {
                 let desc = binding
                     .get("description")
                     .and_then(|x| x.as_str())
-                    .filter(|d| !d.contains('\n'))
-                    .unwrap_or("No description provided");
-                markdown::add_markdown_no_para_role(&mut c, desc, "binding");
+                    .filter(|d| !d.contains('\n'));
+                match desc {
+                    // SDR:2000: style = checkForNoChange(descriptionElement).
+                    Some(d) => markdown::add_markdown_no_para_role_styled(
+                        &mut c,
+                        d,
+                        "binding",
+                        if desc_eq { Some(OPACITY) } else { None },
+                    ),
+                    // SDR:2002: no-description phrase, no style.
+                    None => markdown::add_markdown_no_para_role(
+                        &mut c,
+                        "No description provided",
+                        "binding",
+                    ),
+                }
             }
         }
 
@@ -1977,9 +2284,11 @@ impl<'a> TCtx<'a> {
                     continue;
                 }
             }
-            // snapshot=true in our path, so empty properties render too.
+            // SDR:2786 `if (t.getValues().size() > 0 || snapshot)`: empty
+            // properties render only in the SNAPSHOT views; the diff view
+            // (snapshot=false) skips them regardless of skipnoValue.
             if values.is_empty() {
-                if !skip_no_value {
+                if self.cfg.snapshot && !skip_no_value {
                     let mut row = Row::new();
                     row.set_id(prop.path.clone());
                     let mut name_cell = Cell::new();
@@ -2167,12 +2476,19 @@ impl<'a> TCtx<'a> {
         }
     }
 
-    /// The SUMMARY binding block (SDR:2001-2027, fork spec §7).
+    /// The SUMMARY binding block (SDR:2001-2027, fork spec §7). The `*_eq`
+    /// flags are the reconstructed SNAPSHOT_DERIVATION_EQUALS marks from
+    /// makeUnifiedBinding (SDR:2741/2747/2753) — checkForNoChange dims the
+    /// valueSet piece (SDR:2007), the strength pieces (SDR:2009-2011) and
+    /// styles the description markdown (SDR:2015).
     fn render_binding_summary(
         &mut self,
         c: &mut Cell,
         _definition: Ed<'a>,
         binding: &serde_json::Value,
+        vs_eq: bool,
+        str_eq: bool,
+        desc_eq: bool,
     ) {
         if !c.pieces.is_empty() {
             let mut br = Piece::tag("br");
@@ -2188,6 +2504,9 @@ impl<'a> TCtx<'a> {
         let br = self.resolve_binding(vs_ref);
         let mut p = Piece::ref_text(br.url.clone(), Some(br.display.clone()), br.uri.clone());
         p.set_class("binding");
+        if vs_eq {
+            p.add_style(OPACITY);
+        }
         if br.external {
             p.set_tag_img("external.png");
         }
@@ -2196,6 +2515,9 @@ impl<'a> TCtx<'a> {
         if let Some(strength) = binding.get("strength").and_then(|x| x.as_str()) {
             let mut p1 = Piece::ref_text(None, Some(" (".into()), None);
             p1.set_class("binding");
+            if str_eq {
+                p1.add_style(OPACITY);
+            }
             c.pieces.push(p1);
             let mut p2 = Piece::ref_text(
                 Some(format!("{}terminologies.html#{}", self.core_path, strength)),
@@ -2203,9 +2525,15 @@ impl<'a> TCtx<'a> {
                 Some(strength_definition(strength).to_string()),
             );
             p2.set_class("binding");
+            if str_eq {
+                p2.add_style(OPACITY);
+            }
             c.pieces.push(p2);
             let mut p3 = Piece::ref_text(None, Some(")".into()), None);
             p3.set_class("binding");
+            if str_eq {
+                p3.add_style(OPACITY);
+            }
             c.pieces.push(p3);
         }
         if let Some(desc) = binding.get("description").and_then(|x| x.as_str()) {
@@ -2213,7 +2541,12 @@ impl<'a> TCtx<'a> {
                 let mut p = Piece::ref_text(None, Some(": ".into()), None);
                 p.set_class("binding");
                 c.pieces.push(p);
-                markdown::add_markdown_no_para_role(c, desc, "binding");
+                markdown::add_markdown_no_para_role_styled(
+                    c,
+                    desc,
+                    "binding",
+                    if desc_eq { Some(OPACITY) } else { None },
+                );
             }
         }
         // additional bindings (SDR:2015-2026 + AdditionalBindingsRenderer):
@@ -2832,54 +3165,35 @@ fn list_constraints_and_conditions(e: Ed<'_>) -> String {
     ids.join(", ")
 }
 
-/// `genCardinality` (SDR:1428) without fallback.
-fn gen_cardinality(e: Ed<'_>, tracker: &mut UnusedTracker) -> Cell {
-    gen_cardinality_impl(e.min(), e.max(), tracker)
+/// Candidate un-renamings of a diff element id whose choice segments were
+/// concretized (`valueQuantity` -> `value[x]`): for every camelCase boundary in
+/// every segment, propose the `stem[x]` rewrite (checked against the snapshot
+/// id set by the caller). Segments with a slice marker keep their slice.
+fn dechoice_candidates(id: &str) -> Vec<String> {
+    let segs: Vec<&str> = id.split('.').collect();
+    let mut out = Vec::new();
+    for (i, seg) in segs.iter().enumerate() {
+        if seg.contains(':') || seg.contains("[x]") {
+            continue;
+        }
+        for (j, ch) in seg.char_indices().skip(1) {
+            if ch.is_ascii_uppercase() {
+                let mut v: Vec<String> = segs.iter().map(|s| s.to_string()).collect();
+                v[i] = format!("{}[x]", &seg[..j]);
+                out.push(v.join("."));
+            }
+        }
+    }
+    out
 }
 
-/// with extension fallback element (SDR:1399).
-fn gen_cardinality_fb(e: Ed<'_>, tracker: &mut UnusedTracker, fb: Option<&ExtDefn>) -> Cell {
-    let mut min = e.min();
-    let mut max = e.max();
-    if let Some(fb) = fb {
-        if min.is_none() {
-            min = fb.element.get("min").and_then(|x| x.as_i64());
-        }
-        if max.is_none() {
-            // borrow issue: read into owned below
-        }
+/// checkForNoChange (SDR:2305-2310): add `opacity: 0.5` when the source
+/// carries SNAPSHOT_DERIVATION_EQUALS (reconstructed as a bool here).
+fn dim_piece(mut p: Piece, dim: bool) -> Piece {
+    if dim {
+        p.add_style(OPACITY);
     }
-    let max_owned: Option<String>;
-    if max.is_none() {
-        max_owned = fb
-            .and_then(|f| f.element.get("max").and_then(|x| x.as_str()))
-            .map(String::from);
-        max = max_owned.as_deref();
-        gen_cardinality_impl(min, max, tracker)
-    } else {
-        gen_cardinality_impl(min, max, tracker)
-    }
-}
-
-fn gen_cardinality_impl(min: Option<i64>, max: Option<&str>, tracker: &mut UnusedTracker) -> Cell {
-    if let Some(m) = max {
-        tracker.used = m != "0";
-    }
-    let mut cell = Cell::with(None, None, None, None, None);
-    if min.is_some() || max.is_some() {
-        cell.pieces.push(Piece::ref_text(
-            None,
-            Some(min.map(|m| m.to_string()).unwrap_or_default()),
-            None,
-        ));
-        cell.pieces.push(Piece::ref_text(None, Some("..".into()), None));
-        cell.pieces.push(Piece::ref_text(
-            None,
-            Some(max.map(String::from).unwrap_or_default()),
-            None,
-        ));
-    }
-    cell
+    p
 }
 
 pub fn is_profiled_type(profiles: &[&str]) -> bool {
