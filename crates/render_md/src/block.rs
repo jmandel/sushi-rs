@@ -107,6 +107,10 @@ pub struct ListItem {
     /// level, but kept per-item for flexibility.
     #[allow(dead_code)]
     pub tight: bool,
+    /// True if a blank line separated this item from the next item (or the end
+    /// of the list). kramdown appends a trailing `:blank` to such an item,
+    /// which forces its first paragraph to render as a real `<p>` (loose).
+    pub followed_by_blank: bool,
 }
 
 /// A block plus whether it was preceded by a blank line in the source. The
@@ -822,9 +826,15 @@ impl<'a> Parser<'a> {
                     }
                     let item_src = item_lines.join("\n");
                     let blocks = parse_block_nodes(&item_src);
+                    // The item is "followed by blank" if the line that ended it
+                    // is a blank line (kramdown then appends a trailing :blank to
+                    // the item, forcing a loose <p> rendering).
+                    let followed_by_blank = self.i < self.lines.len()
+                        && self.lines[self.i].trim().is_empty();
                     items.push(ListItem {
                         blocks,
                         tight: true,
+                        followed_by_blank,
                     });
                     continue;
                 }

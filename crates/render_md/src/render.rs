@@ -307,21 +307,19 @@ impl Renderer {
         indent: usize,
     ) {
         let pad = " ".repeat(indent);
-        // Column count: kramdown uses the number of alignment columns, falling
-        // back to the widest row.
-        let ncols = if !aligns.is_empty() {
-            aligns.len()
-        } else {
-            let hcols = header.as_ref().map(|h| h.len()).unwrap_or(0);
-            let bcols = body
-                .iter()
-                .flatten()
-                .chain(footer.iter().flatten())
-                .map(|r| r.len())
-                .max()
-                .unwrap_or(0);
-            hcols.max(bcols)
-        };
+        // Column count = the MAX column count across the alignment row, the
+        // header, and every body/footer row (kramdown does not clip rows to the
+        // separator's column count — a header/row with more cells widens the
+        // table).
+        let hcols = header.as_ref().map(|h| h.len()).unwrap_or(0);
+        let bcols = body
+            .iter()
+            .flatten()
+            .chain(footer.iter().flatten())
+            .map(|r| r.len())
+            .max()
+            .unwrap_or(0);
+        let ncols = aligns.len().max(hcols).max(bcols);
         out.push_str(&pad);
         out.push_str("<table");
         out.push_str(&attr_string(attrs, false));
@@ -415,10 +413,14 @@ impl Renderer {
         // transparent only if some EARLIER item is itself non-transparent-first
         // (i.e. the list is not uniformly tight-simple). See below.
         let n = items.len();
-        // base condition per item: first is paragraph AND second not blank-sep.
+        // base condition per item: first is a paragraph, AND it is not directly
+        // followed by a blank line — either an internal blank before its 2nd
+        // block, or (for a non-last item) a blank separating it from the next
+        // sibling (kramdown appends a trailing `:blank`, forcing a real <p>).
         let base: Vec<bool> = items
             .iter()
-            .map(|it| {
+            .enumerate()
+            .map(|(idx, it)| {
                 let nodes: Vec<&BlockNode> = it
                     .blocks
                     .iter()
@@ -429,7 +431,8 @@ impl Renderer {
                     .map(|nd| matches!(nd.block, Block::Paragraph { .. }))
                     .unwrap_or(false);
                 let second_blank = nodes.get(1).map(|nd| nd.blank_before).unwrap_or(false);
-                first_is_para && !second_blank
+                let sibling_blank = it.followed_by_blank && idx + 1 < n;
+                first_is_para && !second_blank && !sibling_blank
             })
             .collect();
         let mut transparent = base.clone();
