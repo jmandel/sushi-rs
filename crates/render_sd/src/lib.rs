@@ -24,6 +24,7 @@ pub mod sdmodel;
 pub mod span;
 pub mod table;
 pub mod tx;
+pub mod xref;
 
 pub use sdmodel::Sd;
 

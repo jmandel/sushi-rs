@@ -164,6 +164,8 @@ fn render(
         "tx-diff-must-support" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_diff_must_support()),
         "summary" => render_sd::leaf::summary(sd, ctx?, false, &core_path_for(sd)),
         "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
+        "uses" => render_sd::xref::uses(sd, ctx?),
+        "sd-xref" => render_sd::xref::references(sd, ctx?),
         _ => return None,
     };
     Some(wrap_raw(&body))

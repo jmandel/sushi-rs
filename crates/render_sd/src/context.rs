@@ -120,6 +120,26 @@ pub struct IgContext {
     /// url minus its `/ImplementationGuide/<id>` tail. Used as span's
     /// `constraintPrefix` (only in-IG constraint profiles are spanned).
     own_canonical: Option<String>,
+    /// The IG's package id (ImplementationGuide.packageId) — `xigReference`'s
+    /// `{0}` (SD_XIG_LINK, psdr:2561). E.g. `hl7.fhir.us.core`.
+    own_package_id: Option<String>,
+    /// Every own resource file (rtype, id, path), incl. url-less examples.
+    own_files: Vec<(String, String, PathBuf)>,
+}
+
+/// A single own-IG resource, as enumerated for the whole-IG scans (uses /
+/// references / aggregates). The publisher's `files`/FetchedResource set — here
+/// the IG's own `output/*.json` (the ImplementationGuide.definition.resource
+/// denominator; equivalent set since we load exactly the IG's own resources).
+pub struct OwnResource {
+    pub rtype: String,
+    pub id: String,
+    /// `igp.getLinkFor(r, true)` = `{Type}-{id}.html`.
+    pub web_path: String,
+    /// `r.getTitle()` (present(): title || name).
+    pub title: String,
+    /// full resource JSON.
+    pub json: std::rc::Rc<Value>,
 }
 
 impl IgContext {
@@ -139,9 +159,13 @@ impl IgContext {
         txcache_dir: Option<&Path>,
     ) -> IgContext {
         let mut own = HashMap::new();
+        // Every resource-shaped own file (incl. url-less example instances), for
+        // the whole-IG scans (uses/references/aggregates). (rtype, id, path).
+        let mut own_files: Vec<(String, String, PathBuf)> = Vec::new();
         let mut deps: Vec<(String, String)> = Vec::new(); // (pkgId, version)
         let mut ig_fhir_version: Option<String> = None;
         let mut own_canonical: Option<String> = None;
+        let mut own_package_id: Option<String> = None;
         if let Ok(rd) = std::fs::read_dir(own_dir) {
             for e in rd.flatten() {
                 let p = e.path();
@@ -156,7 +180,26 @@ impl IgContext {
                 if rtype.is_empty() {
                     continue;
                 }
-                let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
+                // FetchedResource id: the resource's own `id`, else the id from
+                // the `{Type}-{id}.json` filename (the publisher keys the
+                // FetchedResource off the IG reference, not the body — a rare
+                // stub example may omit `id`, e.g. us-core DocumentReference-
+                // discharge-summary).
+                let id_owned: String = match v.get("id").and_then(|x| x.as_str()) {
+                    Some(i) if !i.is_empty() => i.to_string(),
+                    _ => fname
+                        .strip_suffix(".json")
+                        .and_then(|s| s.strip_prefix(&format!("{}-", rtype)))
+                        .unwrap_or("")
+                        .to_string(),
+                };
+                let id: &str = &id_owned;
+                // Record every own resource file (incl. url-less examples). The
+                // ImplementationGuide itself is excluded (skipped by callers, but
+                // faithful: references() skips r.fhirType()==ImplementationGuide).
+                if rtype != "ImplementationGuide" && !id.is_empty() {
+                    own_files.push((rtype.to_string(), id.to_string(), p.clone()));
+                }
                 if rtype == "ImplementationGuide" {
                     if let Some(fv) = v
                         .get("fhirVersion")
@@ -172,6 +215,9 @@ impl IgContext {
                             Some(i) => u[..i].to_string(),
                             None => u.to_string(),
                         });
+                    }
+                    if let Some(pid) = v.get("packageId").and_then(|x| x.as_str()) {
+                        own_package_id = Some(pid.to_string());
                     }
                     for d in v
                         .get("dependsOn")
@@ -309,7 +355,57 @@ impl IgContext {
             res_cache: RefCell::new(HashMap::new()),
             tx_externals,
             own_canonical,
+            own_package_id,
+            own_files,
         }
+    }
+
+    /// The IG's package id (ImplementationGuide.packageId), `xigReference`'s arg.
+    pub fn own_package_id(&self) -> Option<&str> {
+        self.own_package_id.as_deref()
+    }
+
+    /// Enumerate the IG's OWN resources (all `output/*.json` we loaded), the
+    /// whole-IG scan denominator (uses/references/aggregates). Sorted by
+    /// `{Type}-{id}` for determinism. The full JSON is loaded lazily and cached
+    /// via `res_cache` under a synthetic key.
+    pub fn own_resources(&self) -> Vec<OwnResource> {
+        let mut out: Vec<OwnResource> = Vec::new();
+        for (rtype, id, f) in &self.own_files {
+            let key = format!("__own__{}", f.display());
+            let cached = self.res_cache.borrow().get(&key).cloned();
+            let json = match cached {
+                Some(hit) => hit,
+                None => {
+                    let loaded = std::fs::read_to_string(f)
+                        .ok()
+                        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                        .map(std::rc::Rc::new);
+                    self.res_cache.borrow_mut().insert(key, loaded.clone());
+                    loaded
+                }
+            };
+            let Some(json) = json else { continue };
+            // present(): title || name || "".  igp.getLinkFor(r, true) =
+            // `{Type}-{id}.html` for own IG resources.
+            let title = json
+                .get("title")
+                .and_then(|x| x.as_str())
+                .or_else(|| json.get("name").and_then(|x| x.as_str()))
+                .unwrap_or("")
+                .to_string();
+            out.push(OwnResource {
+                rtype: rtype.clone(),
+                id: id.clone(),
+                web_path: format!("{}-{}.html", rtype, id),
+                title,
+                json,
+            });
+        }
+        out.sort_by(|a, b| {
+            format!("{}-{}", a.rtype, a.id).cmp(&format!("{}-{}", b.rtype, b.id))
+        });
+        out
     }
 
     /// The IG canonical base (`igpkp.getCanonical()`), span's constraintPrefix.
