@@ -1274,8 +1274,9 @@ impl Parser {
         let start_idx = self.i;
         while self.i < self.lines.len() {
             let l = self.lines[self.i].clone();
-            let t = l.trim();
-            if t.is_empty() {
+            let t = ascii_trim(&l).to_string();
+            let t = t.as_str();
+            if is_blank(&l) {
                 break;
             }
             if parse_block_ial_line(&l).is_some() {
