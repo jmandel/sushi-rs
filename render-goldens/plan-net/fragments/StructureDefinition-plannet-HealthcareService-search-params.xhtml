@@ -1,0 +1,233 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>active</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The Healthcare Service is currently marked as active</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.active</code>
+    </td>
+  </tr>
+  <tr>
+    <td>characteristic</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>One of the HealthcareService's characteristics</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.characteristic</code>
+    </td>
+  </tr>
+  <tr>
+    <td>coverage-area</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Location(s) service is intended for/available to</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.coverageArea</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-healthcareservice-delivery-method.html">delivery-method</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Select HealthcareServices based on the delivery method type</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.extension.where(url='http://hl7.org/fhir/us/davinci-pdex-plan-net/StructureDefinition/delivery-method').extension.where(url='type')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-healthcareservice-endpoint.html">endpoint</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select HealthcareServices with the specified endpoint</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.endpoint</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>External identifiers for this item</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>location</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The location of the Healthcare Service</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.location</code>
+    </td>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A portion of the Healthcare service name</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.name</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-healthcareservice-organization.html">organization</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select HealthcareServices provided by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.providedBy</code>
+    </td>
+  </tr>
+  <tr>
+    <td>program</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>One of the Programs supported by this HealthcareService</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.program</code>
+    </td>
+  </tr>
+  <tr>
+    <td>service-category</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Service Category of the Healthcare Service</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.category</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-healthcareservice-service-type.html">service-type</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Select HealthcareServices of the specified type</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.type</code>
+    </td>
+  </tr>
+  <tr>
+    <td>specialty</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The specialty of the service provided by this healthcare service</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>HealthcareService.specialty</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

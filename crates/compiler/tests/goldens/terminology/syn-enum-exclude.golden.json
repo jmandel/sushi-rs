@@ -1,0 +1,36 @@
+{
+  "resourceType": "ValueSet",
+  "url": "https://ex.org/vs/syn-enum-exclude",
+  "status": "active",
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:53.446Z",
+    "identifier": "urn:uuid:b410fe2f-9d48-4bff-86f8-d74ffc45ec9d",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://ex.org/zoo|1.0.0"
+      }
+    ],
+    "total": 2,
+    "contains": [
+      {
+        "system": "https://ex.org/zoo",
+        "code": "bear",
+        "display": "Bear"
+      },
+      {
+        "system": "https://ex.org/zoo",
+        "code": "grizzly",
+        "display": "Grizzly"
+      }
+    ]
+  }
+}

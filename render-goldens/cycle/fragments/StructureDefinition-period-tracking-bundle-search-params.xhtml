@@ -1,0 +1,97 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>composition</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The first resource in the bundle, if the bundle type is "document" - this is a composition, and this parameter provides access to search its contents</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Bundle.entry[0].resource</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Persistent identifier for the bundle</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Bundle.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>message</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The first resource in the bundle, if the bundle type is "message" - this is a message header, and this parameter provides access to search its contents</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Bundle.entry[0].resource</code>
+    </td>
+  </tr>
+  <tr>
+    <td>timestamp</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>When the bundle was assembled</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Bundle.timestamp</code>
+    </td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>document | message | transaction | transaction-response | batch | batch-response | history | searchset | collection</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Bundle.type</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

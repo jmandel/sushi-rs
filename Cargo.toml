@@ -32,6 +32,7 @@ compiler = { path = "crates/compiler" }
 diagnostics = { path = "crates/diagnostics" }
 json_emit = { path = "crates/json_emit" }
 snapshot_gen = { path = "crates/snapshot_gen" }
+site_db = { path = "crates/site_db", default-features = false }
 
 # External
 serde = { version = "1", features = ["derive"] }

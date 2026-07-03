@@ -44,6 +44,13 @@ pub struct IgInputs<'a> {
     pub ig_dir: String,
     /// Stock `sushi-local#LOCAL` predefined resources, in FIFO load order.
     pub predefined: &'a crate::predefined::PredefinedPackage,
+    /// OPTIONAL in-memory page-folder listing (folder name -> filenames), for the
+    /// wasm/editor path where there is no filesystem to scan. `None` (the disk
+    /// path) scans `input/{pagecontent,pages,resource-docs}` via `std::fs`, so the
+    /// disk output stays byte-identical. `Some` supplies the same filenames from
+    /// the in-memory VFS (only the config-has-no-`pages:` disk-scan branch reads
+    /// it; a config `pages:` block is filesystem-independent already).
+    pub page_dir_listing: Option<HashMap<String, Vec<String>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -934,7 +941,7 @@ fn build_definition(
     def.insert("resource".into(), J::Array(resources));
 
     // page
-    let page = build_page(cfg_yaml, is_r4, &inputs.ig_dir);
+    let page = build_page(cfg_yaml, is_r4, &inputs.ig_dir, inputs.page_dir_listing.as_ref());
     def.insert("page".into(), page);
 
     // parameter
@@ -2234,7 +2241,12 @@ fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool, cr: Optio
 
 // ---- page -----------------------------------------------------------------
 
-fn build_page(cfg_yaml: &Y, is_r4: bool, ig_dir: &str) -> J {
+fn build_page(
+    cfg_yaml: &Y,
+    is_r4: bool,
+    ig_dir: &str,
+    page_dir_listing: Option<&HashMap<String, Vec<String>>>,
+) -> J {
     // root toc page
     let mut children: Vec<J> = Vec::new();
     let has_config_pages = matches!(yget(cfg_yaml, "pages"), Some(Y::Mapping(m)) if !m.is_empty());
@@ -2247,8 +2259,8 @@ fn build_page(cfg_yaml: &Y, is_r4: bool, ig_dir: &str) -> J {
             }
         }
     } else {
-        // addIndex + addOtherPageContent (disk scan).
-        children.extend(build_disk_pages(ig_dir, is_r4));
+        // addIndex + addOtherPageContent (disk scan, or the in-memory listing).
+        children.extend(build_disk_pages(ig_dir, is_r4, page_dir_listing));
     }
 
     if is_r4 {
@@ -2398,22 +2410,48 @@ struct DiskPage {
     file_type: String,
 }
 
-fn build_disk_pages(ig_dir: &str, is_r4: bool) -> Vec<J> {
+/// Enumerate the filenames in a page folder — from the in-memory listing when
+/// present (wasm/editor path), else from disk (`std::fs`, byte-identical). Sorted.
+fn page_folder_files(
+    ig_dir: &str,
+    folder: &str,
+    listing: Option<&HashMap<String, Vec<String>>>,
+) -> Vec<String> {
+    let mut names: Vec<String> = if let Some(l) = listing {
+        l.get(folder).cloned().unwrap_or_default()
+    } else {
+        let dir = Path::new(ig_dir).join("input").join(folder);
+        match std::fs::read_dir(&dir) {
+            Ok(rd) => rd
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect(),
+            Err(_) => Vec::new(),
+        }
+    };
+    names.sort();
+    names
+}
+
+fn build_disk_pages(
+    ig_dir: &str,
+    is_r4: bool,
+    listing: Option<&HashMap<String, Vec<String>>>,
+) -> Vec<J> {
     let mut out: Vec<J> = Vec::new();
 
     // addIndex: only if an index.md/.xml exists in pagecontent or pages.
-    let input = Path::new(ig_dir).join("input");
-    let idx_md_pc = input.join("pagecontent").join("index.md");
-    let idx_xml_pc = input.join("pagecontent").join("index.xml");
-    let idx_md_pg = input.join("pages").join("index.md");
-    let idx_xml_pg = input.join("pages").join("index.xml");
-    let has_index = idx_md_pc.exists() || idx_xml_pc.exists() || idx_md_pg.exists() || idx_xml_pg.exists();
+    let pc_files = page_folder_files(ig_dir, "pagecontent", listing);
+    let pg_files = page_folder_files(ig_dir, "pages", listing);
+    let has = |files: &[String], name: &str| files.iter().any(|f| f == name);
+    let idx_md_pc = has(&pc_files, "index.md");
+    let idx_xml_pc = has(&pc_files, "index.xml");
+    let idx_md_pg = has(&pg_files, "index.md");
+    let idx_xml_pg = has(&pg_files, "index.xml");
+    let has_index = idx_md_pc || idx_xml_pc || idx_md_pg || idx_xml_pg;
     if has_index {
         // generation: markdown unless only an xml index exists.
-        let generation = if !idx_md_pg.exists()
-            && !idx_md_pc.exists()
-            && (idx_xml_pg.exists() || idx_xml_pc.exists())
-        {
+        let generation = if !idx_md_pg && !idx_md_pc && (idx_xml_pg || idx_xml_pc) {
             "html"
         } else {
             "markdown"
@@ -2423,15 +2461,10 @@ fn build_disk_pages(ig_dir: &str, is_r4: bool) -> Vec<J> {
 
     // addOtherPageContent: pagecontent, pages, resource-docs.
     for folder in ["pagecontent", "pages", "resource-docs"] {
-        let dir = input.join(folder);
-        let Ok(rd) = std::fs::read_dir(&dir) else {
+        let names = page_folder_files(ig_dir, folder, listing);
+        if names.is_empty() {
             continue;
-        };
-        let mut names: Vec<String> = rd
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        names.sort(); // stable base; compareIgFilenames is the real order
+        }
         let organized = organize_page_content(&names);
         for p in organized {
             let supported = p.file_type == "md" || p.file_type == "xml";

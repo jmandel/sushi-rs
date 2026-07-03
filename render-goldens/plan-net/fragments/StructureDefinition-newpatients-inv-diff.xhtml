@@ -1,0 +1,30 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>new-patients-characteristics</td>
+    <td>error</td>
+    <td>Extension</td>
+    <td>If no new patients are accepted, no characteristics are allowed</td>
+    <td>
+      <code>extension.where(url='acceptingPatients').value.ofType(CodeableConcept).coding.where(code = 'no') implies extension.where(url='characteristics').empty()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

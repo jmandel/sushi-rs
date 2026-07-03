@@ -1,0 +1,77 @@
+{% raw %}<pre class="json" data-fhir="generated" style="white-space: pre; text-wrap: nowrap; width: auto;"><code class="language-json" style="white-space: pre; text-wrap: nowrap;">{
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter">resourceType</a>" : "SearchParameter",
+  "<a href="http://hl7.org/fhir/R4/resource.html#SearchParameter.id">id</a>" : "healthcareservice-organization",
+  "<a href="http://hl7.org/fhir/R4/domainresource.html#SearchParameter.text">text</a>" : {
+    "<a href="http://hl7.org/fhir/R4/datatypes.html#Narrative#Narrative.status">status</a>" : "generated",
+    "<a href="http://hl7.org/fhir/R4/datatypes.html#Narrative#Narrative.div">div</a>" : "&lt;div xmlns=\&quot;http://www.w3.org/1999/xhtml\&quot;&gt;&lt;p class=\&quot;res-header-id\&quot;&gt;&lt;b&gt;Generated Narrative: SearchParameter healthcareservice-organization&lt;/b&gt;&lt;/p&gt;&lt;a name=\&quot;healthcareservice-organization\&quot;&gt; &lt;/a&gt;&lt;a name=\&quot;hchealthcareservice-organization\&quot;&gt; &lt;/a&gt;&lt;h2&gt;Plannet_sp_healthcareservice_organization&lt;/h2&gt;&lt;p&gt;Parameter &lt;code&gt;organization&lt;/code&gt;:&lt;code&gt;reference&lt;/code&gt;&lt;/p&gt;&lt;div&gt;&lt;p&gt;Select HealthcareServices provided by the specified organization&lt;/p&gt;\n&lt;/div&gt;&lt;table class=\&quot;grid\&quot;&gt;&lt;tr&gt;&lt;td&gt;Resource&lt;/td&gt;&lt;td&gt;&lt;a href=\&quot;http://hl7.org/fhir/R4/healthcareservice.html\&quot;&gt;HealthcareService&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Expression&lt;/td&gt;&lt;td&gt;&lt;code&gt;HealthcareService.providedBy&lt;/code&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Target Resources&lt;/td&gt;&lt;td&gt;&lt;a href=\&quot;http://hl7.org/fhir/R4/organization.html\&quot;&gt;Organization&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Multiples&lt;/td&gt;&lt;td&gt;&lt;ul&gt;&lt;li&gt;multipleAnd: The parameter may repeat in order to specify multiple values that must all be true&lt;/li&gt;&lt;li&gt;multipleOr: The parameter may have multiple values (separated by comma) where at least one must be true&lt;/li&gt;&lt;/ul&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Chains&lt;/td&gt;&lt;td&gt;Allowed: name, address, partof, type&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;&lt;/div&gt;"
+  },
+  "<a href="http://hl7.org/fhir/R4/domainresource.html#SearchParameter.extension">extension</a>" : [
+    {
+      "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.url">url</a>" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-wg",
+      "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.value_x_">valueCode</a>" : "fm"
+    },
+    {
+      "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.url">url</a>" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+      "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.value_x_">valueCode</a>" : "trial-use",
+      "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.value_x_">_valueCode</a>" : {
+        "<a href="http://hl7.org/fhir/R4/datatypes.html#Element#code.extension">extension</a>" : [
+          {
+            "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.url">url</a>" : "http://hl7.org/fhir/StructureDefinition/structuredefinition-conformance-derivedFrom",
+            "<a href="http://hl7.org/fhir/R4/extensibility.html#Extension#Extension.value_x_">valueCanonical</a>" : "http://hl7.org/fhir/us/davinci-pdex-plan-net/ImplementationGuide/hl7.fhir.us.davinci-pdex-plan-net"
+          }
+        ]
+      }
+    }
+  ],
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.url">url</a>" : "http://hl7.org/fhir/us/davinci-pdex-plan-net/SearchParameter/healthcareservice-organization",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.version">version</a>" : "1.2.0",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.name">name</a>" : "Plannet_sp_healthcareservice_organization",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.derivedFrom">derivedFrom</a>" : "http://hl7.org/fhir/SearchParameter/HealthcareService-organization",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.status">status</a>" : "active",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.date">date</a>" : "2018-05-23T00:00:00+00:00",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.publisher">publisher</a>" : "HL7 International / Financial Management",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.contact">contact</a>" : [
+    {
+      "<a href="http://hl7.org/fhir/R4/metadatatypes.html#ContactDetail#ContactDetail.name">name</a>" : "HL7 International / Financial Management",
+      "<a href="http://hl7.org/fhir/R4/metadatatypes.html#ContactDetail#ContactDetail.telecom">telecom</a>" : [
+        {
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint#ContactPoint.system">system</a>" : "url",
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint#ContactPoint.value">value</a>" : "http://www.hl7.org/Special/committees/fm"
+        },
+        {
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint#ContactPoint.system">system</a>" : "email",
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint#ContactPoint.value">value</a>" : "fm@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.description">description</a>" : "Select HealthcareServices provided by the specified organization",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.jurisdiction">jurisdiction</a>" : [
+    {
+      "<a href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept#CodeableConcept.coding">coding</a>" : [
+        {
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#Coding#Coding.system">system</a>" : "urn:iso:std:iso:3166",
+          "<a href="http://hl7.org/fhir/R4/datatypes.html#Coding#Coding.code">code</a>" : "US"
+        }
+      ]
+    }
+  ],
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.code">code</a>" : "organization",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.base">base</a>" : [
+    "HealthcareService"
+  ],
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.type">type</a>" : "reference",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.expression">expression</a>" : "HealthcareService.providedBy",
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.target">target</a>" : [
+    "Organization"
+  ],
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.multipleOr">multipleOr</a>" : true,
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.multipleAnd">multipleAnd</a>" : true,
+  "<a href="http://hl7.org/fhir/R4/searchparameter.html#SearchParameter.chain">chain</a>" : [
+    "name",
+    "address",
+    "partof",
+    "type"
+  ]
+}</code></pre>
+{% endraw %}

@@ -1,0 +1,3 @@
+{ "resourceType": "ValueSet", "url": "https://ex.org/vs/syn-isa-bear", "status": "active",
+  "compose": { "include": [ { "system": "https://ex.org/zoo",
+    "filter": [ { "property": "concept", "op": "is-a", "value": "bear" } ] } ] } }

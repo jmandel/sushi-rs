@@ -1,0 +1,34 @@
+{
+  "resourceType": "ValueSet",
+  "status": "draft",
+  "name": "MenstrualFlowValueSet",
+  "id": "menstrual-flow",
+  "title": "Menstrual Flow",
+  "description": "Uncalibrated, patient-reported ordinal flow categories used by period-tracking applications.",
+  "url": "https://cycle.fhir.me/ValueSet/menstrual-flow",
+  "experimental": true,
+  "compose": {
+    "include": [
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "concept": [
+          {
+            "code": "flow-none"
+          },
+          {
+            "code": "flow-spotting"
+          },
+          {
+            "code": "flow-light"
+          },
+          {
+            "code": "flow-moderate"
+          },
+          {
+            "code": "flow-heavy"
+          }
+        ]
+      }
+    ]
+  }
+}

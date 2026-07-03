@@ -17,19 +17,27 @@ pub mod model;
 pub mod pipeline;
 pub mod rows;
 pub mod timefmt;
+// The SQLite sink (S7) is native-only; the wasm build (default-features = false)
+// gets the row model + in-memory pipeline without it (§5).
+#[cfg(feature = "sqlite")]
 pub mod writer;
 
 pub use ledger::{BuildLedger, LedgerReport};
 pub use model::SiteDb;
-pub use pipeline::{build, BuildConfig, BuildOutcome};
+pub use pipeline::{
+    assemble_rows, build, build_from_inputs, AssembleInputs, BuildConfig, BuildOutcome,
+    InMemoryInputs,
+};
 
+#[cfg(feature = "sqlite")]
 use anyhow::Result;
 use std::path::Path;
 
 /// One-shot: run the pipeline and write site.db + the ledger sidecar. Returns the
 /// ledger report (for the no-op gate). If a prior ledger sidecar exists next to
 /// `out_db`, it is used to classify dirtiness and, on a proven no-op, the site.db
-/// write is skipped.
+/// write is skipped. Native-only (writes SQLite).
+#[cfg(feature = "sqlite")]
 pub fn build_and_write(config: &BuildConfig) -> Result<LedgerReport> {
     let ledger_path = ledger_sidecar_path(&config.out_db);
     let prior = BuildLedger::load(&ledger_path);

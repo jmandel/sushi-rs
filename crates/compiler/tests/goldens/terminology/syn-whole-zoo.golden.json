@@ -1,0 +1,62 @@
+{
+  "resourceType": "ValueSet",
+  "url": "https://ex.org/vs/syn-whole-zoo",
+  "status": "active",
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:53.244Z",
+    "identifier": "urn:uuid:e316808c-5f73-4c05-aa29-2087d27d42ee",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://ex.org/zoo|1.0.0"
+      }
+    ],
+    "total": 6,
+    "contains": [
+      {
+        "system": "https://ex.org/zoo",
+        "code": "animal",
+        "display": "Animal",
+        "contains": [
+          {
+            "system": "https://ex.org/zoo",
+            "code": "bear",
+            "display": "Bear",
+            "contains": [
+              {
+                "system": "https://ex.org/zoo",
+                "code": "grizzly",
+                "display": "Grizzly"
+              },
+              {
+                "system": "https://ex.org/zoo",
+                "code": "polar",
+                "display": "Polar bear"
+              }
+            ]
+          },
+          {
+            "system": "https://ex.org/zoo",
+            "code": "cat",
+            "display": "Cat",
+            "contains": [
+              {
+                "system": "https://ex.org/zoo",
+                "code": "lion",
+                "display": "Lion"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

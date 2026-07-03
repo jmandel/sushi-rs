@@ -1,0 +1,267 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>active</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Whether this organization affiliation record is in active use</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.active</code>
+    </td>
+  </tr>
+  <tr>
+    <td>date</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>The period during which the participatingOrganization is affiliated with the primary organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.period</code>
+    </td>
+  </tr>
+  <tr>
+    <td>email</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>A value in an email contact</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.telecom.where(system='email')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-organizationaffiliation-endpoint.html">endpoint</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select OrganizationAffiliations with the specified endpoint</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.endpoint</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>An organization affiliation's Identifier</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>location</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>The location(s) at which the role occurs</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.location</code>
+    </td>
+  </tr>
+  <tr>
+    <td>network</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Health insurance provider network in which the participatingOrganization provides the role's services (if defined) at the indicated locations (if defined)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.network</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-organizationaffiliation-participating-organization.html">participating-organization</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select roles filled by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.participatingOrganization</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-organizationaffiliation-period.html">period</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#date">date</a>
+    </td>
+    <td>
+      <div>
+        <p>Select Organization Affiliations available in the specified period</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.period</code>
+    </td>
+  </tr>
+  <tr>
+    <td>phone</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>A value in a phone contact</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.telecom.where(system='phone')</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-organizationaffiliation-primary-organization.html">primary-organization</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select roles offered by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.organization</code>
+    </td>
+  </tr>
+  <tr>
+    <td>role</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Definition of the role the participatingOrganization plays</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.code</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-organizationaffiliation-service.html">service</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select OrganizationAffiliations providing the specified service</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.healthcareService</code>
+    </td>
+  </tr>
+  <tr>
+    <td>specialty</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Specific specialty of the participatingOrganization in the context of the role</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.specialty</code>
+    </td>
+  </tr>
+  <tr>
+    <td>telecom</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The value in any kind of contact</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>OrganizationAffiliation.telecom</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

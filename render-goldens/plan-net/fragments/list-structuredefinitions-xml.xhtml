@@ -1,0 +1,51 @@
+{% raw %} <li><a href="StructureDefinition-accessibility.xml.html">Accessibility</a> <p>An extension to describe accessibility options offered by a practitioner or at a location.</p>
+</li>
+ <li><a href="StructureDefinition-communication-proficiency.xml.html">Communication Proficiency</a> <p>An extension to express a practitioner’s spoken proficiency with the language indicated in practitioner.communication.</p>
+</li>
+ <li><a href="StructureDefinition-contactpoint-availabletime.xml.html">Contactpoint Availabletime</a> <p>An extension representing the days and times a contact point is available</p>
+</li>
+ <li><a href="StructureDefinition-delivery-method.xml.html">Delivery Method</a> <p>An extension describing the service delivery method.   If service delivery is virtual, one or more delivery modalities should be specified.</p>
+</li>
+ <li><a href="StructureDefinition-endpoint-usecase.xml.html">Endpoint Usecase</a> <p>EndpointUseCase is an enumeration of the specific use cases (service descriptions) supported by the endpoint</p>
+</li>
+ <li><a href="StructureDefinition-location-reference.xml.html">Location Reference</a> <p>A reference to a Location resource (plannet-Location) defining the coverage area of a health insurance provider network</p>
+</li>
+ <li><a href="StructureDefinition-network-reference.xml.html">Network Reference</a> <p>A reference to the healthcare provider insurance networks (plannet-Network) the practitioner participates in through their role</p>
+</li>
+ <li><a href="StructureDefinition-newpatients.xml.html">New Patients</a> <p>New Patients indicates whether new patients are being accepted in general, or from a specific network.<br />
+This extension is included in the PractitionerRole, HealthcareService, and Location profiles.<br />
+This provides needed flexibility for specifying whether a provider accepts new patients by location and network. While the role is constrained to participation in a single network where it describes the single role this practitioner is playing (e.g., internal medicine physician) this does not in any way prohibit the practitioner from seeing patients from any  other network, they will however be 'out of network' for those patients.</p>
+</li>
+ <li><a href="StructureDefinition-org-description.xml.html">Org Description</a> <p>An extension to provide a human-readable description of an organization.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-Endpoint.xml.html">Plan-Net Endpoint</a> <p>The technical details of an endpoint that can be used for electronic services, such as a portal or FHIR REST services, messaging or operations, or DIRECT messaging.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-HealthcareService.xml.html">Plan-Net HealthcareService</a> <p>The HealthCareService resource typically describes services offered by an organization/practitioner at a location. The resource may be used to encompass a variety of services covering the entire healthcare spectrum, including promotion, prevention, diagnostics, pharmacy, hospital and ambulatory care, home care, long-term care, and other health-related and community services.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-InsurancePlan.xml.html">Plan-Net InsurancePlan</a> <p>An InsurancePlan is a discrete package of health insurance coverage benefits that are offered under a particular network type. A given payer’s products typically differ by network type and/or covered benefits. A plan pairs a product’s covered benefits with the particular cost sharing structure offered to a consumer. A given product may comprise multiple plans (i.e. each plan offers different cost sharing requirements for the same set of covered benefits).</p>
+<p>InsurancePlan describes a health insurance offering comprised of a list of covered benefits (i.e. the product), costs associated with those benefits (i.e. the plan), and additional information about the offering, such as who it is owned and administered by, a coverage area, contact information, etc.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-Location.xml.html">Plan-Net Location</a> <p>A Location is the physical place where healthcare services are provided, practitioners are employed,
+organizations are based, etc. Locations can range in scope from a room in a building to a geographic region/area.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-Network.xml.html">Plan-Net Network</a> <p>A Network refers to a healthcare provider insurance network. A healthcare provider insurance network is an aggregation of organizations and individuals that deliver a set of services across a geography through health insurance products/plans. A network is typically owned by a payer.</p>
+<p>In the PlanNet IG, individuals and organizations are represented as participants in a PLan-Net Network through the practitionerRole and Plan-Net-organizationAffiliation resources, respectively.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-Organization.xml.html">Plan-Net Organization</a> <p>An organization is a formal or informal grouping of people or organizations with a common purpose, such as a company, institution, corporation, community group, or healthcare practice.
+Guidance:   When the contact is a department name, rather than a human (e.g., patient help line), include a blank family and given name, and provide the department name in contact.name.text</p>
+</li>
+ <li><a href="StructureDefinition-plannet-OrganizationAffiliation.xml.html">Plan-Net OrganizationAffiliation</a> <p>The OrganizationAffiliation resource describes relationships between two or more organizations, including the services one organization provides another, the location(s) where they provide services, the availability of those services, electronic endpoints, and other relevant information.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-Practitioner.xml.html">Plan-Net Practitioner</a> <p>Practitioner is a person who is directly or indirectly involved in the provisioning of healthcare.</p>
+</li>
+ <li><a href="StructureDefinition-plannet-PractitionerRole.xml.html">Plan-Net PractitionerRole</a> <p>PractitionerRole typically describes details about a provider. When the provider is a practitioner, there may be a relationship to an organization. A provider renders services to patients at a location. Practitioner participation in healthcare provider insurance networks may be direct or through their role at an organization. PractitionerRole involves either the actual or potential (hence the optionality on Practitioner) of an individual to play this role on behalf of or under the auspices of an organization. The absence of a Practitioner resource does not imply that the Organization itself is playing the role of a Practitioner, instead it implies that that role has been established by the Organization and MAY apply that to a specific Practitioner.</p>
+</li>
+ <li><a href="StructureDefinition-practitioner-period.xml.html">Practitioner Description</a> <p>Indicates when a Practitioner entry is or was active</p>
+</li>
+ <li><a href="StructureDefinition-practitioner-qualification.xml.html">Practitioner Qualification</a> <p>An extension to add status and whereValid elements to a practitioner’s qualifications.</p>
+</li>
+ <li><a href="StructureDefinition-qualification.xml.html">Qualification</a> <p>An extension to add qualifications for an organization (e.g. accreditation) or practitionerRole (e.g. registered to prescribe controlled substances).</p>
+</li>
+ <li><a href="StructureDefinition-via-intermediary.xml.html">Via Intermediary</a> <p>A reference to an alternative point of contact (plannet-PractitionerRole, plannet-Organization, plannet-OrganizationAffiliation, or plannet-Location) for this organization</p>
+</li>
+{% endraw %}

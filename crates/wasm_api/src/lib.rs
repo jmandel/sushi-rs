@@ -335,6 +335,196 @@ pub fn generate_snapshot(input: &str) -> Result<String, JsError> {
 }
 
 // ---------------------------------------------------------------------------
+// build_site_db — the M2 site-preview producer (docs/fhir-ig-editor-spec.md §7)
+// ---------------------------------------------------------------------------
+
+/// The JS input for [`build_site_db`]: the whole IG working set, in memory.
+#[derive(Deserialize)]
+struct SiteDbInput {
+    /// sushi-config.yaml text.
+    config: String,
+    /// FSH sources: project path -> text.
+    fsh: std::collections::BTreeMap<String, String>,
+    /// Predefined resources: `input/resources/**` path -> JSON body. May be empty.
+    #[serde(default)]
+    predefined: std::collections::BTreeMap<String, Value>,
+    /// Site-content files (pagecontent/images/includes) the S6 augmentation reads:
+    /// project-relative path (e.g. `input/pagecontent/index.md`, `input/images/x.png`)
+    /// -> base64 bytes. Text files may be base64'd UTF-8; images are raw bytes.
+    #[serde(default)]
+    site_files: std::collections::BTreeMap<String, String>,
+    /// Injected build timestamp (seconds since epoch) — genDate/genDay/date come
+    /// from this, never a wall clock (determinism, §2c).
+    build_epoch_secs: i64,
+    /// project.liquidAssetDirs, relative to the IG root (cycle default:
+    /// ["input/includes"]). May be omitted (defaults to that).
+    #[serde(default)]
+    liquid_asset_dirs: Vec<String>,
+    #[serde(default)]
+    branch: Option<String>,
+    #[serde(default)]
+    revision: Option<String>,
+}
+
+/// Build the site.db ROW MODEL from fully in-memory IG inputs and return it as a
+/// JSON string the editor's JS row store consumes directly (M2 site preview).
+///
+/// Pipeline (all in the Worker, no filesystem, no C-sqlite):
+///   S1/S2  compiler::build_project_in_memory_with_ig  -> conformance + the IG
+///   S3     snapshot_gen::generate_snapshot (per SD)    -> snapshot-complete SDs
+///   S5/S6  site_db::build_from_inputs                  -> the SiteDb row model
+///
+/// The returned JSON is `{ metadata, resources, concepts, valueSetCodes, pages,
+/// menu, siteConfig, assets }` with SQLite/`core/db.ts` column casing (assets'
+/// `Content` is base64). Byte/JSON-identical to the native disk site.db rows for
+/// the same IG (minus BuildState timestamps) — asserted by the native
+/// `inmem_vs_disk` parity test.
+#[wasm_bindgen]
+pub fn build_site_db(input_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    let input: SiteDbInput = serde_json::from_str(input_json)
+        .map_err(|e| JsError::new(&format!("build_site_db: bad input JSON: {e}")))?;
+
+    let (source, cache_root, _packages) = engine_source()?;
+    let cache = cache_root.to_string_lossy().into_owned();
+
+    // ---- S1/S2 (+ IG export): compile in memory, producing the IG resource. ----
+    let fsh_files: Vec<(String, String)> = input.fsh.into_iter().collect();
+    let predefined: Vec<(PathBuf, Value)> = input
+        .predefined
+        .into_iter()
+        .map(|(p, v)| (PathBuf::from(p), v))
+        .collect();
+    // The page-folder listing ig_export needs (folder -> filenames) is derived from
+    // the site_files map: the disk path would scan input/{pagecontent,pages,
+    // resource-docs}; we hand it the same names from the VFS.
+    let mut page_dir_listing: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for path in input.site_files.keys() {
+        for folder in ["pagecontent", "pages", "resource-docs"] {
+            let prefix = format!("input/{folder}/");
+            if let Some(rest) = path.strip_prefix(&prefix) {
+                // Only direct children participate in the page scan (not nested).
+                if !rest.is_empty() && !rest.contains('/') {
+                    page_dir_listing
+                        .entry(folder.to_string())
+                        .or_default()
+                        .push(rest.to_string());
+                }
+            }
+        }
+    }
+
+    let (conformance, ig_resource, _diagnostics) =
+        compiler::build_project_in_memory_with_ig(
+            &input.config,
+            &fsh_files,
+            predefined,
+            source,
+            &cache,
+            page_dir_listing,
+        )
+        .map_err(|e| JsError::new(&format!("build_site_db: compile failed: {e:#}")))?;
+
+    // ---- S3: snapshot-complete each StructureDefinition against the compile. ----
+    // Build the snapshot context EXACTLY as the native `site_db` pipeline does:
+    // a `PackageContext` over ONLY the FHIR CORE package (r4/r5 core), plus the
+    // just-compiled conformance SDs as locals so cross-profile bases resolve
+    // (fact <- bleeding <- flow). Loading the whole mounted closure (uv.tools /
+    // uv.extensions / terminology) here would pull extra type/extension profiles
+    // into base resolution and inflate the snapshot vs the native oracle — the
+    // native pipeline pins snapshotting to the single core package
+    // (pipeline.rs `PackageContext::new(cache, [core_package])`), so we match it.
+    let (source, cache_root, packages) = engine_source()?;
+    let core_package = pick_core_package(&packages).ok_or_else(|| {
+        JsError::new("build_site_db: no FHIR core package (hl7.fhir.r{4,5}.core) mounted")
+    })?;
+    let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
+        .map_err(|e| JsError::new(&format!("build_site_db: package context: {e:#}")))?;
+    let locals: Vec<(PathBuf, Value)> = conformance
+        .iter()
+        .map(|r| (PathBuf::from(format!("/__compiled__/{}", r.filename)), r.body.clone()))
+        .collect();
+    ctx.load_local_resources(locals);
+
+    let mut generated: Vec<Value> = Vec::new();
+    for r in &conformance {
+        if r.body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
+            let snap = snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default())
+                .map_err(|e| {
+                    JsError::new(&format!("build_site_db: snapshot {}: {e:#}", r.filename))
+                })?;
+            generated.push(snap);
+        } else {
+            generated.push(r.body.clone());
+        }
+    }
+    if let Some(ig) = &ig_resource {
+        generated.push(ig.body.clone());
+    } else {
+        return Err(JsError::new(
+            "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)",
+        ));
+    }
+
+    // Predefined `input/resources/**` bodies are the examples (S5 loadResources).
+    // The compile already consumed them for the IG; re-collect them here as the
+    // example resource set the row derivation orders after the conformance ones.
+    let examples: Vec<Value> = collect_example_resources(&input.site_files);
+
+    // ---- Site-content VFS for S6 (pagecontent/images/includes), keyed under /ig. ----
+    let ig_root = PathBuf::from("/ig");
+    let mut vfs: std::collections::BTreeMap<PathBuf, Vec<u8>> = std::collections::BTreeMap::new();
+    for (path, b64) in &input.site_files {
+        let bytes = base64_decode(b64)
+            .map_err(|e| JsError::new(&format!("build_site_db: bad base64 for {path}: {e}")))?;
+        vfs.insert(ig_root.join(path), bytes);
+    }
+
+    let liquid_asset_dirs = if input.liquid_asset_dirs.is_empty() {
+        vec!["input/includes".to_string()]
+    } else {
+        input.liquid_asset_dirs
+    };
+
+    // ---- S5/S6: assemble the row model. ----
+    let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
+        generated: &generated,
+        examples: &examples,
+        sushi_config_yaml: &input.config,
+        build_epoch_secs: input.build_epoch_secs,
+        branch: input.branch,
+        revision: input.revision,
+        vfs,
+        ig_root,
+        liquid_asset_rel_dirs: liquid_asset_dirs,
+    })
+    .map_err(|e| JsError::new(&format!("build_site_db: assemble rows: {e:#}")))?;
+
+    serde_json::to_string(&outcome.db)
+        .map_err(|e| JsError::new(&format!("build_site_db: serialize rows: {e}")))
+}
+
+/// Parse `input/resources/**` JSON files out of the site_files map (base64 text)
+/// into resource `Value`s — the example set the site.db orders after conformance.
+fn collect_example_resources(
+    site_files: &std::collections::BTreeMap<String, String>,
+) -> Vec<Value> {
+    let mut out = Vec::new();
+    for (path, b64) in site_files {
+        if !(path.starts_with("input/resources/") && path.ends_with(".json")) {
+            continue;
+        }
+        let Ok(bytes) = base64_decode(b64) else { continue };
+        let Ok(text) = String::from_utf8(bytes) else { continue };
+        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            out.push(v);
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
 // version
 // ---------------------------------------------------------------------------
 
@@ -352,6 +542,19 @@ pub fn version() -> String {
 // ---------------------------------------------------------------------------
 // internals
 // ---------------------------------------------------------------------------
+
+/// Pick the FHIR core package label (`hl7.fhir.r4.core#…` or `hl7.fhir.r5.core#…`)
+/// from the mounted set — the single package the site.db snapshot context loads,
+/// matching the native pipeline. Prefers R4 (the current corpus is R4) when both
+/// are present; falls back to any `*.core` label.
+fn pick_core_package(packages: &[String]) -> Option<String> {
+    packages
+        .iter()
+        .find(|p| p.starts_with("hl7.fhir.r4.core#"))
+        .or_else(|| packages.iter().find(|p| p.starts_with("hl7.fhir.r5.core#")))
+        .or_else(|| packages.iter().find(|p| p.contains(".core#")))
+        .cloned()
+}
 
 fn engine_source() -> Result<(SharedBundle, PathBuf, Vec<String>), JsError> {
     ENGINE.with(|e| {

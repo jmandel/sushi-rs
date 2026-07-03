@@ -1,0 +1,115 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>connection-type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Protocol/Profile/Standard to be used with this endpoint connection</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.connectionType</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Identifies this endpoint across multiple systems</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A name that this endpoint can be identified by</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.name</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-endpoint-organization.html">organization</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select Endpoints managed by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.managingOrganization</code>
+    </td>
+  </tr>
+  <tr>
+    <td>payload-type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The type of content that may be used at this endpoint (e.g. XDS Discharge summaries)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.payloadType</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>The current status of the Endpoint (usually expected to be active)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>Endpoint.status</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

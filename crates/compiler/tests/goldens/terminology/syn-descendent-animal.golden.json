@@ -1,0 +1,55 @@
+{
+  "resourceType": "ValueSet",
+  "url": "https://ex.org/vs/syn-descendent-animal",
+  "status": "active",
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:53.141Z",
+    "identifier": "urn:uuid:00b3875a-30ba-49f9-8498-cbac7cd9b8f2",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://ex.org/zoo|1.0.0"
+      }
+    ],
+    "total": 5,
+    "contains": [
+      {
+        "system": "https://ex.org/zoo",
+        "code": "bear",
+        "display": "Bear",
+        "contains": [
+          {
+            "system": "https://ex.org/zoo",
+            "code": "grizzly",
+            "display": "Grizzly"
+          },
+          {
+            "system": "https://ex.org/zoo",
+            "code": "polar",
+            "display": "Polar bear"
+          }
+        ]
+      },
+      {
+        "system": "https://ex.org/zoo",
+        "code": "cat",
+        "display": "Cat",
+        "contains": [
+          {
+            "system": "https://ex.org/zoo",
+            "code": "lion",
+            "display": "Lion"
+          }
+        ]
+      }
+    ]
+  }
+}

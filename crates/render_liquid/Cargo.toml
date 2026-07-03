@@ -1,0 +1,25 @@
+# render_liquid — a standalone Liquid (T1+T2) engine matching Jekyll's
+# Shopify-Liquid-4.0.4 behavior, for the stock-template renderer (plan F1c).
+#
+# NOTE: this crate carries its OWN [workspace] table so it is built/tested in
+# isolation and does NOT perturb the root workspace (per F1c instructions —
+# do not touch the root Cargo.toml). Once F5 wires it in, a member line can be
+# added to the root workspace and this [workspace] table dropped.
+[workspace]
+
+[package]
+name = "render_liquid"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+rust-version = "1.90"
+description = "Just-enough Jekyll/Liquid (T1+T2) engine at Publisher parity"
+
+[dependencies]
+serde_json = "1"
+
+[dev-dependencies]
+serde_json = "1"
+
+[features]
+default = []

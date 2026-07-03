@@ -1,0 +1,43 @@
+{
+  "resourceType": "ValueSet",
+  "url": "https://ex.org/vs/syn-prop-carnivore",
+  "status": "active",
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:53.343Z",
+    "identifier": "urn:uuid:5035875c-c831-4f0c-a876-a0166d4fecd8",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://ex.org/zoo|1.0.0"
+      }
+    ],
+    "total": 3,
+    "contains": [
+      {
+        "system": "https://ex.org/zoo",
+        "code": "polar",
+        "display": "Polar bear"
+      },
+      {
+        "system": "https://ex.org/zoo",
+        "code": "cat",
+        "display": "Cat",
+        "contains": [
+          {
+            "system": "https://ex.org/zoo",
+            "code": "lion",
+            "display": "Lion"
+          }
+        ]
+      }
+    ]
+  }
+}

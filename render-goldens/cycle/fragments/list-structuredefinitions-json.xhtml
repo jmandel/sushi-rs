@@ -1,0 +1,15 @@
+{% raw %} <li><a href="StructureDefinition-basal-body-temperature.json.html">Basal Body Temperature</a> <p>Layer 1 optional basal body temperature fact for a source temperature measurement identified by the producer as basal.</p>
+</li>
+ <li><a href="StructureDefinition-menstrual-bleeding.json.html">Menstrual Bleeding</a> <p>Layer 0 required core fact: whether the source reports menstrual bleeding for the stated date or timestamp. Both true and false are meaningful only when explicitly recorded or reliably represented by the source.</p>
+</li>
+ <li><a href="StructureDefinition-menstrual-flow.json.html">Menstrual Flow</a> <p>Layer 1 optional intensity fact for an app's uncalibrated menstrual-flow category. This fact does not replace the Layer 0 menstrual bleeding boolean core fact.</p>
+</li>
+ <li><a href="StructureDefinition-numeric-pain-severity.json.html">Numeric Pain Severity</a> <p>Layer 1 optional numeric pain fact for a source 0-10 patient-reported pain score. Use this profile only when the source stores a numeric 0-10 rating.</p>
+</li>
+ <li><a href="StructureDefinition-period-tracking-bundle.json.html">Period Tracking Bundle</a> <p>A self-contained FHIR R4 collection Bundle for transporting granular patient-generated period-tracking facts scoped to one person. It contains at least one Layer 0 menstrual bleeding fact. Patient and Device resources are optional.</p>
+</li>
+ <li><a href="StructureDefinition-period-tracking-fact.json.html">Period Tracking Fact</a> <p>Abstract base profile for one independently meaningful fact entered, selected, verified, or measured in a period-tracking application. Concrete facts may be day-scoped or timestamp-scoped at producer discretion; clients can group facts by local date for display.</p>
+</li>
+ <li><a href="StructureDefinition-symptom.json.html">Symptom</a> <p>Layer 1 optional symptom fact. The Observation code identifies the fact as a symptom report; the value identifies the specific symptom using an exact standard concept when available.</p>
+</li>
+{% endraw %}

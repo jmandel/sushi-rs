@@ -1,0 +1,21 @@
+# Standalone crate — has its OWN [workspace] table so it does NOT join the root
+# workspace (another agent churns the root Cargo.toml; integration happens later).
+[workspace]
+
+[package]
+name = "render_xhtml"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Byte-exact port of fhir-core's XhtmlComposer + XhtmlParser (org.hl7.fhir.utilities.xhtml)"
+
+[lib]
+name = "render_xhtml"
+
+[[bin]]
+name = "roundtrip"
+path = "src/bin/roundtrip.rs"
+
+[dependencies]
+
+[dev-dependencies]

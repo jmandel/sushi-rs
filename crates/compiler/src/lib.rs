@@ -14,6 +14,7 @@ pub mod instance_export;
 pub mod paths;
 pub mod predefined;
 pub mod sd_export;
+pub mod terminology;
 pub mod type_resolver;
 
 /// Entity-type discriminant (mirrors TS `constructorName`) used for the
@@ -592,6 +593,7 @@ fn build_project_inner(
             cache_dir: cache_dir.clone(),
             ig_dir: ig_dir.to_string(),
             predefined: &predefined,
+            page_dir_listing: None, // disk path: scan input/** via std::fs (byte-identical).
         };
         if let Some(ig) = ig_export::export_ig(&cfg_yaml, &cfg, &inputs) {
             let text = json_emit::to_fhir_json_string(&ig.body);
@@ -852,6 +854,68 @@ pub fn build_project_in_memory_with_diagnostics(
         .collect();
     let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
     Ok((compiled.resources, compiled.diagnostics))
+}
+
+/// In-memory build that ALSO produces the ImplementationGuide resource — the
+/// piece the plain [`build_project_in_memory`] omits because `ig_export` used to
+/// require filesystem scans (see `build_project_inner`). This additive entry
+/// point feeds `ig_export::export_ig` the same data from in-memory inputs:
+///  - conformance/instance metadata + predefined come from the compile itself;
+///  - the page-folder file NAMES (`input/{pagecontent,pages,resource-docs}`) come
+///    from `page_dir_listing` (folder -> filenames) instead of a `std::fs` scan;
+///  - dependency resolution (`dependsOn` version pinning) still reads `cache_dir`
+///    via the underlying `PackageStore`'s source when the config declares
+///    `dependencies:` — pass a real cache root for IGs that have them.
+///
+/// Returns `(conformance_resources, Option<ImplementationGuide>, diagnostics)`.
+/// The conformance resources are byte-identical to
+/// [`build_project_in_memory_with_diagnostics`]; the IG resource is byte-identical
+/// to the disk path's `ImplementationGuide-<id>.json` for the same inputs (proven
+/// by the site_db in-memory-vs-disk parity test). `None` IG when config is
+/// FSH-only or lacks an `id`.
+pub fn build_project_in_memory_with_ig(
+    cfg_text: &str,
+    fsh_files: &[(String, String)],
+    predefined_resources: Vec<(std::path::PathBuf, serde_json::Value)>,
+    source: impl package_store::PackageSource + 'static,
+    cache_dir: &str,
+    page_dir_listing: std::collections::HashMap<String, Vec<String>>,
+) -> anyhow::Result<(Vec<CompiledResource>, Option<CompiledResource>, Vec<CompileDiagnostic>)> {
+    let store =
+        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
+    let refs: Vec<(&str, &str)> = fsh_files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
+
+    let cfg = config::Config::from_yaml(cfg_text)?;
+    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(cfg_text)?;
+    let ig_resource = if cfg.fsh_only {
+        None
+    } else {
+        use ig_export::IgInputs;
+        let inputs = IgInputs {
+            conformance: compiled.conformance,
+            instances: compiled.instance_ig.iter().collect(),
+            local_profile_logical: compiled.local_profile_logical,
+            has_custom_resources: compiled.has_custom_resources,
+            cache_dir: cache_dir.to_string(),
+            ig_dir: String::new(), // unused: page_dir_listing supplies the file names.
+            predefined: &predefined,
+            page_dir_listing: Some(page_dir_listing),
+        };
+        ig_export::export_ig(&cfg_yaml, &cfg, &inputs).map(|exported| {
+            let text = json_emit::to_fhir_json_string(&exported.body);
+            CompiledResource {
+                filename: exported.filename,
+                text,
+                body: exported.body,
+            }
+        })
+    };
+    Ok((compiled.resources, ig_resource, compiled.diagnostics))
 }
 
 /// Build a `ConformanceRes` from an exported VS/CS body (`name = title ?? name ?? id`).

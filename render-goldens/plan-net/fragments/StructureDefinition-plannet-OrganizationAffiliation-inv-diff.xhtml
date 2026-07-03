@@ -1,0 +1,30 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>organization-or-participatingOrganization</td>
+    <td>error</td>
+    <td>OrganizationAffiliation</td>
+    <td>PlannetOrganizationAffiliation.organization or  PlannetOrganizationAffiliation.participatingOrganization</td>
+    <td>
+      <code>organization.exists() or participatingOrganization.exists()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

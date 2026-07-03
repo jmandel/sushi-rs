@@ -1,0 +1,9 @@
+{
+  "page": {"path": "index.html", "title": "Mock Page", "name": "index"},
+  "site": {
+    "data": {
+      "fhir": {"path": "http://hl7.org/fhir/R4/", "ver": {"r4": "4.0.1", "us_core": "current"}},
+      "ig": {"definition": {"resource": []}}
+    }
+  }
+}

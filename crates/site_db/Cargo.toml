@@ -8,6 +8,7 @@ rust-version.workspace = true
 [[bin]]
 name = "site_db"
 path = "src/main.rs"
+required-features = ["sqlite"]
 
 [lib]
 name = "site_db"
@@ -26,11 +27,18 @@ serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
-walkdir = { workspace = true }
 
 # SQLite sink (native only; the row model is sqlite-free so a wasm build can
 # emit rows as JSON for a JS-side writer — see writer.rs / §5 of the plan).
-rusqlite = { workspace = true }
+# Gated behind the default `sqlite` feature so wasm_api can depend on this crate
+# with `default-features = false` and get the row model + in-memory pipeline with
+# NO C-sqlite in the wasm build (§5).
+rusqlite = { workspace = true, optional = true }
+
+[features]
+default = ["sqlite"]
+# The native SQLite writer (S7) + the disk `main` CLI. Off for the wasm build.
+sqlite = ["dep:rusqlite"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

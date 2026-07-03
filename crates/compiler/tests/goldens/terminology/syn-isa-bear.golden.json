@@ -1,0 +1,43 @@
+{
+  "resourceType": "ValueSet",
+  "url": "https://ex.org/vs/syn-isa-bear",
+  "status": "active",
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:53.040Z",
+    "identifier": "urn:uuid:fc3e6560-ceb1-410c-afee-031661ec57f1",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://ex.org/zoo|1.0.0"
+      }
+    ],
+    "total": 3,
+    "contains": [
+      {
+        "system": "https://ex.org/zoo",
+        "code": "bear",
+        "display": "Bear",
+        "contains": [
+          {
+            "system": "https://ex.org/zoo",
+            "code": "grizzly",
+            "display": "Grizzly"
+          },
+          {
+            "system": "https://ex.org/zoo",
+            "code": "polar",
+            "display": "Polar bear"
+          }
+        ]
+      }
+    ]
+  }
+}

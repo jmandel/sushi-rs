@@ -170,13 +170,74 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
     let examples_dir = config.ig_dir.join("input").join("resources");
     let generated = read_json_files(&resources_dir)?; // re-read: SDs now snapshot-complete
     let examples = read_json_files(&examples_dir)?;
+    let generated: Vec<Value> = generated.into_iter().map(|(_, v)| v).collect();
+    let examples: Vec<Value> = examples.into_iter().map(|(_, v)| v).collect();
 
-    let ig = generated
+    // ---- Config (parsed sushi-config.yaml, for row derivation only). ----
+    let sushi_config_path = config.ig_dir.join("sushi-config.yaml");
+    let sushi_config_yaml = std::fs::read_to_string(&sushi_config_path)
+        .with_context(|| format!("read {}", sushi_config_path.display()))?;
+
+    // ---- S5 + S6 assembly (shared with the in-memory path). ----
+    let db = assemble_rows(
+        &AssembleInputs {
+            generated: &generated,
+            examples: &examples,
+            sushi_config_yaml: &sushi_config_yaml,
+            build_epoch_secs: config.build_epoch_secs,
+            branch: config.branch.clone(),
+            revision: config.revision.clone(),
+            pagecontent_dir: config.ig_dir.join("input").join("pagecontent"),
+            image_dir: config.ig_dir.join("input").join("images"),
+            liquid_asset_dirs: liquid_asset_dirs(&config.ig_dir),
+            files: &crate::augment::DiskFiles,
+        },
+        &mut ledger,
+    )?;
+
+    let report = ledger.finish(prior_ledger);
+    Ok(BuildOutcome {
+        db,
+        ledger: report,
+        resources_dir,
+    })
+}
+
+/// Inputs to the shared S5+S6 assembly (used by both the disk `build()` and the
+/// in-memory `build_from_inputs()`). Every value is already in memory — no file
+/// reads happen here except through `files` (S6's `FileSource`).
+pub struct AssembleInputs<'a> {
+    /// The generated/conformance resources, snapshot-complete, INCLUDING the IG.
+    pub generated: &'a [Value],
+    /// Example resources (input/resources/**), if any.
+    pub examples: &'a [Value],
+    /// Raw sushi-config.yaml text (consumed twice: row derivation + verbatim S6).
+    pub sushi_config_yaml: &'a str,
+    pub build_epoch_secs: i64,
+    pub branch: Option<String>,
+    pub revision: Option<String>,
+    /// input/pagecontent dir (a base path `files` joins slugs under).
+    pub pagecontent_dir: PathBuf,
+    /// input/images dir.
+    pub image_dir: PathBuf,
+    /// project.liquidAssetDirs (include search roots).
+    pub liquid_asset_dirs: Vec<PathBuf>,
+    /// The S6 read source (disk or in-memory VFS).
+    pub files: &'a dyn crate::augment::FileSource,
+}
+
+/// S5 (row derivation) + S6 (augmentation) over an in-memory resource set. This is
+/// the byte-for-byte body the disk `build()` used to run inline; extracting it lets
+/// the wasm/editor path produce identical rows without touching the filesystem for
+/// the resource load or config read (only S6 reads, through `input.files`). The
+/// `ledger` is populated with resource/page/config/asset nodes as before.
+pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result<SiteDb> {
+    let ig = input
+        .generated
         .iter()
-        .map(|(_, v)| v)
         .find(|r| resource_type(r) == "ImplementationGuide")
         .cloned()
-        .ok_or_else(|| anyhow::anyhow!("no ImplementationGuide in {}", resources_dir.display()))?;
+        .ok_or_else(|| anyhow::anyhow!("no ImplementationGuide in the resource set"))?;
 
     // build.ts:167 igResourceMetadata: reference -> IG definition.resource entry.
     let mut resource_meta: HashMap<String, Value> = HashMap::new();
@@ -188,17 +249,13 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         }
     }
 
-    // ---- Config (parsed sushi-config.yaml, for row derivation only). ----
-    let sushi_config_path = config.ig_dir.join("sushi-config.yaml");
-    let sushi_config_yaml = std::fs::read_to_string(&sushi_config_path)
-        .with_context(|| format!("read {}", sushi_config_path.display()))?;
-    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(&sushi_config_yaml)?;
+    let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(input.sushi_config_yaml)?;
     let cfg: Value = serde_yaml::from_value(cfg_yaml)?;
 
     // ---- Ordering + apply-global-metadata (build.ts loadResources). ----
-    let now_fhir = crate::timefmt::fhir_datetime(config.build_epoch_secs);
+    let now_fhir = crate::timefmt::fhir_datetime(input.build_epoch_secs);
     let mut by_ref: indexmap_pairs::OrderPairs = indexmap_pairs::OrderPairs::new();
-    for (_, r) in generated.iter().chain(examples.iter()) {
+    for r in input.generated.iter().chain(input.examples.iter()) {
         if resource_type(r).is_empty() || r.get("id").and_then(Value::as_str).is_none() {
             continue;
         }
@@ -267,15 +324,15 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         );
     }
 
-    let gen_date = crate::timefmt::gen_date(config.build_epoch_secs);
-    let gen_day = crate::timefmt::gen_day(config.build_epoch_secs);
+    let gen_date = crate::timefmt::gen_date(input.build_epoch_secs);
+    let gen_day = crate::timefmt::gen_day(input.build_epoch_secs);
     let metadata_rows = derive_metadata_rows(&MetadataInputs {
         cfg: &cfg,
         ig: &ig,
         gen_date,
         gen_day,
-        branch: config.branch.clone(),
-        revision: config.revision.clone(),
+        branch: input.branch.clone(),
+        revision: input.revision.clone(),
     });
     let (resource_rows, key_by_ref) =
         derive_resource_rows(&resources, &resource_meta, &cfg, &json_by_index);
@@ -289,10 +346,11 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         &mut db,
         &AugmentInputs {
             ig: &ig,
-            sushi_config_yaml: &sushi_config_yaml,
-            pagecontent_dir: config.ig_dir.join("input").join("pagecontent"),
-            image_dir: config.ig_dir.join("input").join("images"),
-            liquid_asset_dirs: liquid_asset_dirs(&config.ig_dir),
+            sushi_config_yaml: input.sushi_config_yaml,
+            pagecontent_dir: input.pagecontent_dir.clone(),
+            image_dir: input.image_dir.clone(),
+            liquid_asset_dirs: input.liquid_asset_dirs.clone(),
+            files: input.files,
         },
     )
     .context("S6 augmentation")?;
@@ -300,30 +358,76 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
     // ---- Ledger nodes for S6 inputs (pages/menu/config/assets). ----
     for p in &db.pages {
         let body = p.body.clone().unwrap_or_default();
-        ledger.record(
-            &format!("page:{}", p.slug),
-            "",
-            &BuildLedger::hash(body.as_bytes()),
-        );
+        ledger.record(&format!("page:{}", p.slug), "", &BuildLedger::hash(body.as_bytes()));
     }
     ledger.record(
         "config:sushi-config",
         "",
-        &BuildLedger::hash(sushi_config_yaml.as_bytes()),
+        &BuildLedger::hash(input.sushi_config_yaml.as_bytes()),
     );
     for a in &db.assets {
-        ledger.record(
-            &format!("asset:{}", a.name),
-            "",
-            &BuildLedger::hash(&a.content),
-        );
+        ledger.record(&format!("asset:{}", a.name), "", &BuildLedger::hash(&a.content));
     }
 
-    let report = ledger.finish(prior_ledger);
+    Ok(db)
+}
+
+/// Inputs to the in-memory site.db producer (the wasm/editor path). The caller
+/// (wasm_api) has already run S1/S2 (compile) + S3 (snapshot) in memory and holds
+/// the snapshot-complete resources + the IG resource. This runs S5+S6 and returns
+/// the row model + ledger — no filesystem access except through `vfs`.
+pub struct InMemoryInputs<'a> {
+    /// Snapshot-complete generated/conformance resources INCLUDING the IG.
+    pub generated: &'a [Value],
+    /// Example resources (input/resources/**), if any.
+    pub examples: &'a [Value],
+    /// Raw sushi-config.yaml text.
+    pub sushi_config_yaml: &'a str,
+    pub build_epoch_secs: i64,
+    pub branch: Option<String>,
+    pub revision: Option<String>,
+    /// The editor VFS as an absolute `path -> bytes` map, keyed under `ig_root`
+    /// (so `<ig_root>/input/pagecontent/index.md` resolves). Holds pagecontent,
+    /// images, and any liquid includes.
+    pub vfs: std::collections::BTreeMap<PathBuf, Vec<u8>>,
+    /// The synthetic IG root the VFS paths are joined under (e.g. `/ig`).
+    pub ig_root: PathBuf,
+    /// project.liquidAssetDirs, relative to `ig_root` (e.g. `input/includes`).
+    pub liquid_asset_rel_dirs: Vec<String>,
+}
+
+/// Produce the site.db row model from fully in-memory inputs (S5+S6). Returns the
+/// rows + a fresh ledger report (no prior ledger — the editor rebuilds per edit;
+/// incremental replay is future work). Byte/JSON-identical to the disk `build()`
+/// row set for the same IG (minus BuildState timestamps), which the native
+/// `inmem_vs_disk` parity test asserts.
+pub fn build_from_inputs(input: &InMemoryInputs) -> Result<BuildOutcome> {
+    let mut ledger = BuildLedger::new();
+    let files = crate::augment::MemFiles::new(input.vfs.clone());
+    let db = assemble_rows(
+        &AssembleInputs {
+            generated: input.generated,
+            examples: input.examples,
+            sushi_config_yaml: input.sushi_config_yaml,
+            build_epoch_secs: input.build_epoch_secs,
+            branch: input.branch.clone(),
+            revision: input.revision.clone(),
+            pagecontent_dir: input.ig_root.join("input").join("pagecontent"),
+            image_dir: input.ig_root.join("input").join("images"),
+            liquid_asset_dirs: input
+                .liquid_asset_rel_dirs
+                .iter()
+                .map(|d| input.ig_root.join(d))
+                .collect(),
+            files: &files,
+        },
+        &mut ledger,
+    )?;
+    let report = ledger.finish(None);
     Ok(BuildOutcome {
         db,
         ledger: report,
-        resources_dir,
+        resources_dir: PathBuf::new(),
     })
 }
 

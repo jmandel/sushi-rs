@@ -1,0 +1,1 @@
+{% for x in list %}{% if x == 3 %}{% break %}{% endif %}{{ x }}{% endfor %}|{% for x in list %}{% if x == 2 %}{% continue %}{% endif %}{{ x }}{% endfor %}

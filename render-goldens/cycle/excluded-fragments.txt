@@ -1,0 +1,3 @@
+Bundle-period-tracking-longitudinal-example-json-html.xhtml	1659088
+Bundle-period-tracking-longitudinal-example-xml-html.xhtml	2767840
+Bundle-period-tracking-longitudinal-example-ttl-html.xhtml	2720184

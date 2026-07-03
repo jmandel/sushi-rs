@@ -1,0 +1,275 @@
+{% raw %}<table class="list" data-fhir="generated">
+  <tr>
+    <td>Identity</td>
+    <td>Card.</td>
+    <td>Type</td>
+    <td>Context</td>
+    <td>WG</td>
+    <td>Status</td>
+  </tr>
+  <tr>
+    <td>
+      <input size="15" id="filter-identity" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-card" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="8" id="filter-type" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="20" id="filter-context" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="3" id="filter-wg" type="text" class="filter-input"/>
+    </td>
+    <td>
+      <input size="6" id="filter-status" type="text" class="filter-input"/>
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-accessibility.html" title="An extension to describe accessibility options offered by a practitioner or at a location.">accessibility</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/location.html">Location</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-communication-proficiency.html" title="An extension to express a practitioner’s spoken proficiency with the language indicated in practitioner.communication.">communication-proficiency</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#CodeableConcept">CodeableConcept</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner.communication</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-contactpoint-availabletime.html" title="An extension representing the days and times a contact point is available">contactpoint-availabletime</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint">ContactPoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-delivery-method.html" title="An extension describing the service delivery method.   If service delivery is virtual, one or more delivery modalities should be specified.">delivery-method</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-endpoint-usecase.html" title="EndpointUseCase is an enumeration of the specific use cases (service descriptions) supported by the endpoint">endpoint-usecase</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/endpoint.html">Endpoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-location-reference.html" title="A reference to a Location resource (plannet-Location) defining the coverage area of a health insurance provider network">location-reference</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/organization.html">Organization</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-network-reference.html" title="A reference to the healthcare provider insurance networks (plannet-Network) the practitioner participates in through their role">network-reference</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-newpatients.html" title="New Patients indicates whether new patients are being accepted in general, or from a specific network.   
+              This extension is included in the PractitionerRole, HealthcareService, and Location profiles.  
+              This provides needed flexibility for specifying whether a provider accepts new patients by location and network. While the role is constrained to participation in a single network where it describes the single role this practitioner is playing (e.g., internal medicine physician) this does not in any way prohibit the practitioner from seeing patients from any  other network, they will however be 'out of network' for those patients.">newpatients</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/healthcareservice.html">HealthcareService</a>
+,       <a href="http://hl7.org/fhir/R4/location.html">Location</a>
+,       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-org-description.html" title="An extension to provide a human-readable description of an organization.">org-description</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#string">string</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/organization.html">Organization</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-practitioner-period.html" title="Indicates when a Practitioner entry is or was active">practitioner-period</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#Period">Period</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-practitioner-qualification.html" title="An extension to add status and whereValid elements to a practitioner’s qualifications.">practitioner-qualification</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/practitioner.html">Practitioner.qualification</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-qualification.html" title="An extension to add qualifications for an organization (e.g. accreditation) or practitionerRole (e.g. registered to prescribe controlled substances).">qualification</a>
+    </td>
+    <td>0..*</td>
+    <td>(complex)</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/organization.html">Organization</a>
+,       <a href="http://hl7.org/fhir/R4/organizationaffiliation.html">OrganizationAffiliation</a>
+,       <a href="http://hl7.org/fhir/R4/practitionerrole.html">PractitionerRole</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+  <tr class="data-row" data-change="false">
+    <td>
+      <a href="StructureDefinition-via-intermediary.html" title="A reference to an alternative point of contact (plannet-PractitionerRole, plannet-Organization, plannet-OrganizationAffiliation, or plannet-Location) for this organization">via-intermediary</a>
+    </td>
+    <td>0..*</td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/references.html#Reference">Reference</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/datatypes.html#ContactPoint">ContactPoint</a>
+    </td>
+    <td>
+      <a href="http://www.hl7.org/Special/committees/fm">fm</a>
+    </td>
+    <td>
+      <a href="http://hl7.org/fhir/R4/versions.html#std-process" title="Trial-Use" class="trial-use-flag">Trial-Use</a>
+
+    </td>
+  </tr>
+</table>
+<p>14 Extensions</p>
+<script src="assets/js/table.js"> </script>
+<button onclick="clearAllFilters()" style="padding: 8px 16px; background-color: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">Clear All Filters</button>
+{% endraw %}

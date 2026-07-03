@@ -1,0 +1,39 @@
+{% raw %}<h4>Constraints</h4>
+<table class="list presentation" data-fhir="generated-heirarchy">
+  <tr>
+    <td width="60">
+      <b>Id</b>
+    </td>
+    <td>
+      <b>Grade</b>
+    </td>
+    <td>
+      <b>Path(s)</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>network-or-plan-Network</td>
+    <td>error</td>
+    <td>InsurancePlan</td>
+    <td>If an insuranceplan does not define a network, then each plan must define one</td>
+    <td>
+      <code>network.exists() or plan.network.exists()</code>
+    </td>
+  </tr>
+  <tr>
+    <td>plan-type-is-distinct</td>
+    <td>error</td>
+    <td>InsurancePlan</td>
+    <td>Each InsurancePlan.plan should have a distinct plan.type.</td>
+    <td>
+      <code>plan.type.coding.code.isDistinct()</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

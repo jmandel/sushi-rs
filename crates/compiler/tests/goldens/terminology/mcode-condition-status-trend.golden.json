@@ -1,0 +1,83 @@
+{
+  "resourceType": "ValueSet",
+  "url": "http://hl7.org/fhir/us/mcode/ValueSet/mcode-condition-status-trend-vs",
+  "identifier": [
+    {
+      "system": "urn:ietf:rfc:3986",
+      "value": "urn:oid:2.16.840.1.113883.4.642.40.15.48.26"
+    }
+  ],
+  "version": "4.0.0",
+  "name": "ConditionStatusTrendVS",
+  "title": "Condition Status Trend Value Set",
+  "status": "active",
+  "experimental": false,
+  "date": "2026-06-28T14:26:45-05:00",
+  "contact": [
+    {
+      "name": "HL7 International / Clinical Interoperability Council",
+      "telecom": [
+        {
+          "system": "url",
+          "value": "http://www.hl7.org/Special/committees/cic"
+        },
+        {
+          "system": "email",
+          "value": "ciclist@lists.HL7.org"
+        }
+      ]
+    }
+  ],
+  "jurisdiction": [
+    {
+      "coding": [
+        {
+          "system": "urn:iso:std:iso:3166",
+          "code": "US",
+          "display": "United States of America"
+        }
+      ]
+    }
+  ],
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:52.937Z",
+    "identifier": "urn:uuid:6bc21842-28c9-4bfb-b250-df191e92c7f8",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "http://snomed.info/sct|http://snomed.info/sct/900000000000207008/version/20250201"
+      }
+    ],
+    "total": 4,
+    "contains": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "268910001",
+        "display": "Patient's condition improved"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "359746009",
+        "display": "Patient status stable"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "271299001",
+        "display": "Patient's condition worsened"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "709137006",
+        "display": "Patient condition undetermined"
+      }
+    ]
+  }
+}

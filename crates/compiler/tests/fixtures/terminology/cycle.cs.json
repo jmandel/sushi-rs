@@ -1,0 +1,55 @@
+{
+  "resourceType": "CodeSystem",
+  "status": "draft",
+  "content": "complete",
+  "name": "PeriodTrackingMvpCodeSystem",
+  "id": "cycle",
+  "title": "Period Tracking Codes",
+  "description": "The eight provisional concepts required by this guide. These cover the Layer 0 bleeding core fact, the Layer 1 source-style ordinal menstrual-flow scale, and the generic Layer 1 symptom fact code.",
+  "url": "https://cycle.fhir.me/CodeSystem/cycle",
+  "concept": [
+    {
+      "code": "menstrual-bleeding",
+      "display": "Menstrual bleeding",
+      "definition": "Whether the source reports menstrual bleeding at the associated date or timestamp. This is the Layer 0 universal bleeding core fact; true and false are both meaningful only when explicitly recorded or reliably represented by the source."
+    },
+    {
+      "code": "menstrual-flow",
+      "display": "Patient-reported menstrual flow category",
+      "definition": "An uncalibrated ordinal menstrual-flow category selected in a tracking application."
+    },
+    {
+      "code": "symptom",
+      "display": "Symptom",
+      "definition": "A symptom reported, selected, or otherwise represented by a tracking application. The specific symptom is carried in Observation.valueCodeableConcept."
+    },
+    {
+      "code": "flow-none",
+      "display": "None",
+      "definition": "The user explicitly selected no menstrual flow."
+    },
+    {
+      "code": "flow-spotting",
+      "display": "Spotting",
+      "definition": "The user selected the application's spotting flow category."
+    },
+    {
+      "code": "flow-light",
+      "display": "Light",
+      "definition": "The user selected the application's light flow category."
+    },
+    {
+      "code": "flow-moderate",
+      "display": "Moderate",
+      "definition": "The user selected the application's middle or moderate flow category."
+    },
+    {
+      "code": "flow-heavy",
+      "display": "Heavy",
+      "definition": "The user selected the application's highest or heavy flow category. This does not assert measured blood loss or clinical hemorrhage."
+    }
+  ],
+  "caseSensitive": true,
+  "experimental": true,
+  "count": 8
+}

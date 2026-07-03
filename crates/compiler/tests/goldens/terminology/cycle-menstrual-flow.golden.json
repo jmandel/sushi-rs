@@ -1,0 +1,62 @@
+{
+  "resourceType": "ValueSet",
+  "status": "draft",
+  "name": "MenstrualFlowValueSet",
+  "title": "Menstrual Flow",
+  "url": "https://cycle.fhir.me/ValueSet/menstrual-flow",
+  "experimental": true,
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:52.618Z",
+    "identifier": "urn:uuid:9af5f33a-cd59-48e3-a5ae-f0e9fbba6ed0",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "warning-experimental",
+        "valueUri": "https://cycle.fhir.me/ValueSet/menstrual-flow"
+      },
+      {
+        "name": "warning-experimental",
+        "valueUri": "https://cycle.fhir.me/CodeSystem/cycle"
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "https://cycle.fhir.me/CodeSystem/cycle"
+      }
+    ],
+    "total": 5,
+    "contains": [
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "code": "flow-none",
+        "display": "None"
+      },
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "code": "flow-spotting",
+        "display": "Spotting"
+      },
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "code": "flow-light",
+        "display": "Light"
+      },
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "code": "flow-moderate",
+        "display": "Moderate"
+      },
+      {
+        "system": "https://cycle.fhir.me/CodeSystem/cycle",
+        "code": "flow-heavy",
+        "display": "Heavy"
+      }
+    ]
+  }
+}

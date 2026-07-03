@@ -1,0 +1,75 @@
+{
+  "resourceType": "ValueSet",
+  "status": "draft",
+  "name": "CommonTrackerSymptomsVS",
+  "id": "common-tracker-symptoms",
+  "title": "Common Period-Tracking Symptoms",
+  "description": "A small, non-normative starter set of period-tracking symptoms that applications commonly record, offered so implementers can bootstrap a consistent symptom vocabulary. It includes SNOMED CT concepts where the fit is exact enough. It is NOT a closed or required binding: a fact's symptom value MAY use another SNOMED CT concept when the meaning is exact.",
+  "url": "https://cycle.fhir.me/ValueSet/common-tracker-symptoms",
+  "experimental": true,
+  "compose": {
+    "include": [
+      {
+        "system": "http://snomed.info/sct",
+        "concept": [
+          {
+            "code": "431416001",
+            "display": "Menstrual cramp"
+          },
+          {
+            "code": "161891005",
+            "display": "Backache"
+          },
+          {
+            "code": "25064002",
+            "display": "Headache"
+          },
+          {
+            "code": "37796009",
+            "display": "Migraine"
+          },
+          {
+            "code": "271681002",
+            "display": "Stomach ache"
+          },
+          {
+            "code": "422587007",
+            "display": "Nausea"
+          },
+          {
+            "code": "55222007",
+            "display": "Breast tenderness"
+          },
+          {
+            "code": "43548008",
+            "display": "Ovulation pain"
+          },
+          {
+            "code": "84229001",
+            "display": "Fatigue"
+          },
+          {
+            "code": "116289008",
+            "display": "Abdominal bloating"
+          },
+          {
+            "code": "366979004",
+            "display": "Depressed mood"
+          },
+          {
+            "code": "55929007",
+            "display": "Feeling irritable"
+          },
+          {
+            "code": "73595000",
+            "display": "Stress"
+          },
+          {
+            "code": "71315007",
+            "display": "Dyspareunia"
+          }
+        ]
+      }
+    ]
+  }
+}

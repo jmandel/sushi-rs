@@ -1,0 +1,103 @@
+{
+  "resourceType": "ValueSet",
+  "status": "draft",
+  "name": "CommonTrackerSymptomsVS",
+  "title": "Common Period-Tracking Symptoms",
+  "url": "https://cycle.fhir.me/ValueSet/common-tracker-symptoms",
+  "experimental": true,
+  "expansion": {
+    "timestamp": "2026-07-03T14:42:52.719Z",
+    "identifier": "urn:uuid:0956f31a-17ac-4fc5-8034-e941cedfa7d0",
+    "parameter": [
+      {
+        "name": "activeOnly",
+        "valueBoolean": false
+      },
+      {
+        "name": "includeDefinition",
+        "valueBoolean": false
+      },
+      {
+        "name": "warning-experimental",
+        "valueUri": "https://cycle.fhir.me/ValueSet/common-tracker-symptoms"
+      },
+      {
+        "name": "used-codesystem",
+        "valueUri": "http://snomed.info/sct|http://snomed.info/sct/900000000000207008/version/20250201"
+      }
+    ],
+    "total": 14,
+    "contains": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "431416001",
+        "display": "Menstrual cramp"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "161891005",
+        "display": "Backache"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "25064002",
+        "display": "Headache"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "37796009",
+        "display": "Migraine"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "271681002",
+        "display": "Stomach ache"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "422587007",
+        "display": "Nausea"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "55222007",
+        "display": "Breast tenderness"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "43548008",
+        "display": "Mittelschmerz"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "84229001",
+        "display": "Fatigue"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "116289008",
+        "display": "Abdominal bloating"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "366979004",
+        "display": "Depressed mood"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "55929007",
+        "display": "Irritability"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "73595000",
+        "display": "Stress"
+      },
+      {
+        "system": "http://snomed.info/sct",
+        "code": "71315007",
+        "display": "Dyspareunia"
+      }
+    ]
+  }
+}

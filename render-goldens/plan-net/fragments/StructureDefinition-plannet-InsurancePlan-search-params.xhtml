@@ -1,0 +1,301 @@
+{% raw %}<table class="list">
+  <tr>
+    <td>
+      <b>Name</b>
+    </td>
+    <td>
+      <b>Type</b>
+    </td>
+    <td>
+      <b>Description</b>
+    </td>
+    <td>
+      <b>Expression</b>
+    </td>
+  </tr>
+  <tr>
+    <td>address</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A server defined search that may match any of the string fields in the Address, including line, city, district, state, country, postalCode, and/or text</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address</code>
+    </td>
+  </tr>
+  <tr>
+    <td>address-city</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A city specified in an address</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address.city</code>
+    </td>
+  </tr>
+  <tr>
+    <td>address-country</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A country specified in an address</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address.country</code>
+    </td>
+  </tr>
+  <tr>
+    <td>address-postalcode</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A postal code specified in an address</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address.postalCode</code>
+    </td>
+  </tr>
+  <tr>
+    <td>address-state</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A state specified in an address</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address.state</code>
+    </td>
+  </tr>
+  <tr>
+    <td>address-use</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>A use code specified in an address</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.contact.address.use</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-administered-by.html">administered-by</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select products that are administered by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.administeredBy</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-coverage-area.html">coverage-area</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select products that are offered in the specified location</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.coverageArea</code>
+    </td>
+  </tr>
+  <tr>
+    <td>endpoint</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Technical endpoint</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.endpoint</code>
+    </td>
+  </tr>
+  <tr>
+    <td>identifier</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Any identifier for the organization (not the accreditation issuer's identifier)</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.identifier</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-name.html">name</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>Select products with the specified name</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>name | alias</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-network.html">network</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select Organization entries in a given InsurancePlan's network</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.network</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-owned-by.html">owned-by</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#reference">reference</a>
+    </td>
+    <td>
+      <div>
+        <p>Select products that are owned by the specified organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.ownedBy</code>
+    </td>
+  </tr>
+  <tr>
+    <td>phonetic</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#string">string</a>
+    </td>
+    <td>
+      <div>
+        <p>A portion of the organization's name using some kind of phonetic matching algorithm</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.name</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="SearchParameter-insuranceplan-plan-type.html">plan-type</a>
+    </td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Select plans of the specified type</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.plan.type</code>
+    </td>
+  </tr>
+  <tr>
+    <td>status</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>Is the Organization record active</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.status</code>
+    </td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>
+      <a href="https://hl7.org/fhir/R4/search.html#token">token</a>
+    </td>
+    <td>
+      <div>
+        <p>A code for the type of organization</p>
+
+
+      </div>
+    </td>
+    <td>
+      <code>InsurancePlan.type</code>
+    </td>
+  </tr>
+</table>
+{% endraw %}

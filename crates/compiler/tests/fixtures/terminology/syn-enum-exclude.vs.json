@@ -1,0 +1,4 @@
+{ "resourceType": "ValueSet", "url": "https://ex.org/vs/syn-enum-exclude", "status": "active",
+  "compose": {
+    "include": [ { "system": "https://ex.org/zoo", "filter": [ { "property": "concept", "op": "is-a", "value": "bear" } ] } ],
+    "exclude": [ { "system": "https://ex.org/zoo", "concept": [ { "code": "polar" } ] } ] } }

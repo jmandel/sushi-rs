@@ -1,0 +1,34 @@
+{
+  "resourceType": "CodeSystem",
+  "url": "https://ex.org/zoo",
+  "version": "1.0.0",
+  "name": "ZooCS",
+  "status": "active",
+  "content": "complete",
+  "caseSensitive": true,
+  "hierarchyMeaning": "is-a",
+  "copyright": "(c) Example Zoo",
+  "property": [
+    { "code": "diet", "type": "code" }
+  ],
+  "concept": [
+    { "code": "animal", "display": "Animal", "concept": [
+      { "code": "bear", "display": "Bear",
+        "property": [{ "code": "diet", "valueCode": "omnivore" }],
+        "concept": [
+          { "code": "grizzly", "display": "Grizzly",
+            "property": [{ "code": "diet", "valueCode": "omnivore" }] },
+          { "code": "polar", "display": "Polar bear",
+            "property": [{ "code": "diet", "valueCode": "carnivore" }] }
+        ]
+      },
+      { "code": "cat", "display": "Cat",
+        "property": [{ "code": "diet", "valueCode": "carnivore" }],
+        "concept": [
+          { "code": "lion", "display": "Lion",
+            "property": [{ "code": "diet", "valueCode": "carnivore" }] }
+        ]
+      }
+    ]}
+  ]
+}

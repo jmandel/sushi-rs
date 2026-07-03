@@ -821,7 +821,6 @@ dependencies = [
  "sha2",
  "snapshot_gen",
  "tempfile",
- "walkdir",
 ]
 
 [[package]]
@@ -1056,6 +1055,7 @@ dependencies = [
  "package_store",
  "serde",
  "serde_json",
+ "site_db",
  "snapshot_gen",
  "wasm-bindgen",
 ]

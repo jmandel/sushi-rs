@@ -1,0 +1,1 @@
+{% assign a = "x,y,z" | split: "," %}{% if a.size > 2 %}big{% elsif a.size == 2 %}two{% else %}small{% endif %}

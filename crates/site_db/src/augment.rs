@@ -12,6 +12,96 @@ use serde_json::Value;
 
 use crate::model::{AssetRow, MenuRow, PageRow, SiteConfigRow, SiteDb};
 
+/// A read source for S6 inputs. The disk path (`DiskFiles`) reads the IG project
+/// tree via `std::fs`; the wasm/editor path (`MemFiles`) serves the same content
+/// from an in-memory `path -> bytes` map (the editor VFS). Keeping S6 behind this
+/// trait is what makes the pipeline wasm-runnable (§2b: "S7 is a thin sink,
+/// swappable"; the same applies to S6's reads).
+pub trait FileSource {
+    /// Read a file's bytes at a project-relative-or-absolute path (as joined by
+    /// the caller). Returns `None` when the file does not exist.
+    fn read(&self, path: &Path) -> Option<Vec<u8>>;
+    /// Whether `path` names an existing file.
+    fn is_file(&self, path: &Path) -> bool {
+        self.read(path).is_some()
+    }
+    /// Recursively list files under `dir`, returning each file's path relative to
+    /// `dir` (POSIX separators), sorted. Directories that do not exist yield `[]`.
+    fn list_recursive(&self, dir: &Path) -> Vec<String>;
+}
+
+/// Disk-backed `FileSource` (the native producer). Byte-identical to the prior
+/// direct `std::fs` calls.
+pub struct DiskFiles;
+
+impl FileSource for DiskFiles {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        std::fs::read(path).ok()
+    }
+    fn is_file(&self, path: &Path) -> bool {
+        path.is_file()
+    }
+    fn list_recursive(&self, dir: &Path) -> Vec<String> {
+        fn walk(root: &Path, cur: &Path, out: &mut Vec<String>) {
+            let Ok(rd) = std::fs::read_dir(cur) else {
+                return;
+            };
+            let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+            entries.sort_by_key(|e| e.file_name());
+            for e in entries {
+                let p = e.path();
+                let Ok(ty) = e.file_type() else { continue };
+                if ty.is_dir() {
+                    walk(root, &p, out);
+                } else if ty.is_file() {
+                    if let Ok(rel) = p.strip_prefix(root) {
+                        out.push(rel.to_string_lossy().replace('\\', "/"));
+                    }
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(dir, dir, &mut out);
+        out.sort();
+        out
+    }
+}
+
+/// In-memory `FileSource` over a `path -> bytes` map (the editor VFS). Keys are
+/// the absolute paths the caller joins (`ig_dir` + relative), matching how the
+/// disk path addresses files, so `AugmentInputs` dir paths work unchanged.
+pub struct MemFiles {
+    files: std::collections::BTreeMap<PathBuf, Vec<u8>>,
+}
+
+impl MemFiles {
+    pub fn new(files: std::collections::BTreeMap<PathBuf, Vec<u8>>) -> Self {
+        Self { files }
+    }
+}
+
+impl FileSource for MemFiles {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        self.files.get(path).cloned()
+    }
+    fn is_file(&self, path: &Path) -> bool {
+        self.files.contains_key(path)
+    }
+    fn list_recursive(&self, dir: &Path) -> Vec<String> {
+        let mut out = Vec::new();
+        for key in self.files.keys() {
+            if let Ok(rel) = key.strip_prefix(dir) {
+                let s = rel.to_string_lossy().replace('\\', "/");
+                if !s.is_empty() {
+                    out.push(s);
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+}
+
 /// Inputs for S6 that live in the IG repo (declared input set, §2b).
 pub struct AugmentInputs<'a> {
     /// The parsed ImplementationGuide resource (source of definition.page).
@@ -24,6 +114,8 @@ pub struct AugmentInputs<'a> {
     pub image_dir: PathBuf,
     /// Directories searched for referenced liquid includes (project.liquidAssetDirs).
     pub liquid_asset_dirs: Vec<PathBuf>,
+    /// The file source S6 reads through (disk or in-memory VFS).
+    pub files: &'a dyn FileSource,
 }
 
 /// ingest.ts:71 — liquidAssetNames: `{% include X %}` / `{% lang-fragment X %}`.
@@ -143,6 +235,7 @@ fn walk_pages(
     depth: i64,
     ord: &mut i64,
     pagecontent_dir: &Path,
+    files: &dyn FileSource,
     page_include_names: &mut BTreeSet<String>,
     pages: &mut Vec<PageRow>,
 ) -> Result<()> {
@@ -162,10 +255,16 @@ fn walk_pages(
         if !slug.is_empty() && slug != "toc" {
             let md_path = pagecontent_dir.join(format!("{slug}.md"));
             let xml_path = pagecontent_dir.join(format!("{slug}.xml"));
-            let body: Option<String> = if md_path.exists() {
-                Some(std::fs::read_to_string(&md_path)?)
-            } else if xml_path.exists() {
-                Some(std::fs::read_to_string(&xml_path)?)
+            let read_text = |p: &Path| -> Result<Option<String>> {
+                match files.read(p) {
+                    Some(bytes) => Ok(Some(String::from_utf8(bytes)?)),
+                    None => Ok(None),
+                }
+            };
+            let body: Option<String> = if let Some(t) = read_text(&md_path)? {
+                Some(t)
+            } else if let Some(t) = read_text(&xml_path)? {
+                Some(t)
             } else {
                 // fail loud on missing page file (§2b).
                 bail!(
@@ -206,6 +305,7 @@ fn walk_pages(
                 depth + 1,
                 ord,
                 pagecontent_dir,
+                files,
                 page_include_names,
                 pages,
             )?;
@@ -263,37 +363,26 @@ fn add_menu_items(
     }
 }
 
-/// Recursively ingest images (ingest.ts:153 ingestImageDir).
-fn ingest_image_dir(root: &Path, rel: &str, assets: &mut Vec<AssetRow>) -> Result<usize> {
-    if !root.exists() {
-        return Ok(0);
-    }
-    let dir = if rel.is_empty() {
-        root.to_path_buf()
-    } else {
-        root.join(rel)
-    };
+/// Recursively ingest images (ingest.ts:153 ingestImageDir). Sourced through the
+/// `FileSource` (disk or in-memory); `list_recursive` yields sorted relative
+/// paths, matching the prior sorted `read_dir` walk order.
+fn ingest_image_dir(
+    root: &Path,
+    files: &dyn FileSource,
+    assets: &mut Vec<AssetRow>,
+) -> Result<usize> {
     let mut count = 0;
-    let mut entries: Vec<_> = std::fs::read_dir(&dir)?.collect::<Result<Vec<_>, _>>()?;
-    entries.sort_by_key(|e| e.file_name());
-    for e in entries {
-        let name = e.file_name().to_string_lossy().to_string();
-        let next = if rel.is_empty() {
-            name.clone()
-        } else {
-            format!("{rel}/{name}")
+    for rel in files.list_recursive(root) {
+        let p = safe_path_under(root, &rel)?;
+        let Some(content) = files.read(&p) else {
+            continue;
         };
-        let p = safe_path_under(root, &next)?;
-        if e.file_type()?.is_dir() {
-            count += ingest_image_dir(root, &next, assets)?;
-        } else if e.file_type()?.is_file() {
-            assets.push(AssetRow {
-                name: safe_asset_name(&next)?,
-                mime: mime_of(&next).to_string(),
-                content: std::fs::read(&p)?,
-            });
-            count += 1;
-        }
+        assets.push(AssetRow {
+            name: safe_asset_name(&rel)?,
+            mime: mime_of(&rel).to_string(),
+            content,
+        });
+        count += 1;
     }
     Ok(count)
 }
@@ -310,6 +399,7 @@ pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
             0,
             &mut ord,
             &input.pagecontent_dir,
+            input.files,
             &mut page_include_names,
             &mut pages,
         )?;
@@ -343,9 +433,8 @@ pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
         let mut found = false;
         for dir in &input.liquid_asset_dirs {
             let p = safe_path_under(dir, &safe_name)?;
-            if p.is_file() {
+            if let Some(content) = input.files.read(&p) {
                 let mime = mime_of(&safe_name);
-                let content = std::fs::read(&p)?;
                 if text_like_mime(mime) {
                     if let Ok(text) = std::str::from_utf8(&content) {
                         for nested in liquid_asset_names(text) {
@@ -381,7 +470,7 @@ pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
             // loud (walk_pages); only missing non-SVG *includes* are tolerated.
         }
     }
-    ingest_image_dir(&input.image_dir, "", &mut assets)?;
+    ingest_image_dir(&input.image_dir, input.files, &mut assets)?;
 
     // De-dup by name keeping last-writer (INSERT OR REPLACE semantics), stable.
     let mut by_name: indexmap_lite::OrderMap = indexmap_lite::OrderMap::new();

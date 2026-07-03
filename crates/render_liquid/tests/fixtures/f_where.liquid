@@ -1,0 +1,1 @@
+{% assign r = rows | where: "b", "x" | first %}{{ r.a }}|{% assign m = rows | map: "a" | join: "," %}{{ m }}|{{ rows | where: "b","x" | size }}

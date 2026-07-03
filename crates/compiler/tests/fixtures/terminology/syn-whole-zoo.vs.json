@@ -1,0 +1,2 @@
+{ "resourceType": "ValueSet", "url": "https://ex.org/vs/syn-whole-zoo", "status": "active",
+  "compose": { "include": [ { "system": "https://ex.org/zoo" } ] } }
