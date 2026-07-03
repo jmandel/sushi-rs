@@ -264,6 +264,34 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&package_ref)?);
             }
         }
+        Some("bundle") => {
+            // rust_sushi bundle --cache <cache-dir> --out <bundle-dir> <id#ver> [<id#ver> ...]
+            // Emits one <id#ver>.tgz browser-mountable bundle per package plus a
+            // bundle-manifest.json lockfile. See docs/package-derived-index.md.
+            let cache = option_value(&args, "--cache").ok_or_else(|| {
+                anyhow::anyhow!(
+                    "usage: rust_sushi bundle --cache <cache-dir> --out <bundle-dir> <id#ver>..."
+                )
+            })?;
+            let out = option_value(&args, "--out")
+                .or_else(|| option_value(&args, "-o"))
+                .ok_or_else(|| anyhow::anyhow!("bundle needs --out <bundle-dir>"))?;
+            let labels: Vec<String> = args
+                .iter()
+                .skip(2)
+                .filter(|a| !a.starts_with('-') && a.contains('#'))
+                .cloned()
+                .collect();
+            if labels.is_empty() {
+                return Err(anyhow::anyhow!("bundle needs at least one <id#version>"));
+            }
+            let manifest = package_acquisition::build_bundle_set(
+                std::path::Path::new(cache),
+                &labels,
+                std::path::Path::new(out),
+            )?;
+            println!("{}", String::from_utf8_lossy(&manifest.to_bytes()));
+        }
         Some("pkg-fish") => {
             // rust_sushi pkg-fish <ig-dir> <cache-dir> <query...>  -> package-oracle JSON shape
             let ig = args

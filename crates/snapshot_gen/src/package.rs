@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use package_store::derived_index;
+use package_store::{derived_index, DiskSource, PackageSource};
 
 /// True iff the package's stock `.index.json` lists at least one
 /// StructureDefinition. This is the exact trigger the old loader used
@@ -19,8 +19,8 @@ use package_store::derived_index;
 /// (`local:true`), which several packages (e.g. subscriptions-backport.r4)
 /// depend on for oracle parity. Reads only the small stock index, never the
 /// resource files.
-fn stock_index_lists_structure_definition(package_dir: &Path) -> bool {
-    let Ok(bytes) = std::fs::read(package_dir.join(".index.json")) else {
+fn stock_index_lists_structure_definition(source: &dyn PackageSource, package_dir: &Path) -> bool {
+    let Ok(bytes) = source.read(&package_dir.join(".index.json")) else {
         return false;
     };
     let Ok(index) = serde_json::from_slice::<Value>(&bytes) else {
@@ -47,6 +47,11 @@ pub struct PackageContext {
     // run, so caching parsed values cannot change output — only avoid repeated
     // disk reads and JSON parses.
     fetch_cache: RefCell<HashMap<String, Option<Rc<Value>>>>,
+    // The storage backing package reads, held for the lazy per-resource `fetch`.
+    // Native callers get a `DiskSource` (unchanged behavior); a browser/test caller
+    // supplies a read-only in-memory source. Local-dir resources are always read
+    // via `std::fs` (they are the native IG project, not the mounted cache).
+    source: Box<dyn PackageSource>,
 }
 
 #[derive(Clone, Debug)]
@@ -63,9 +68,22 @@ pub(crate) struct ResourceIndexEntry {
 }
 
 impl PackageContext {
+    /// Load packages from a disk cache (native behavior; unchanged).
     pub fn new(cache_dir: impl AsRef<Path>, packages: &[String]) -> anyhow::Result<Self> {
+        Self::new_with(DiskSource, cache_dir, packages)
+    }
+
+    /// Same as [`PackageContext::new`] but reading every package file through an
+    /// explicit [`PackageSource`] (browser bundle, test in-memory source). Local-dir
+    /// resources loaded later via [`PackageContext::load_local_dir`] are still read
+    /// from disk (they are the native IG project, not the mounted cache).
+    pub fn new_with(
+        source: impl PackageSource + 'static,
+        cache_dir: impl AsRef<Path>,
+        packages: &[String],
+    ) -> anyhow::Result<Self> {
         let cache_dir = cache_dir.as_ref();
-        if !cache_dir.is_dir() {
+        if !source.is_dir(cache_dir) {
             bail!(
                 "FHIR package cache is not a directory: {}",
                 cache_dir.display()
@@ -76,6 +94,7 @@ impl PackageContext {
             by_id: HashMap::new(),
             by_name: HashMap::new(),
             fetch_cache: RefCell::new(HashMap::new()),
+            source: Box::new(source),
         };
         for package in packages {
             ctx.load_package(cache_dir, package)?;
@@ -88,7 +107,7 @@ impl PackageContext {
         // part of `<id>#<version>` before the `#`.
         let package_id = package.split('#').next().unwrap_or(package).to_string();
         let package_dir = cache_dir.join(package).join("package");
-        if !package_dir.is_dir() {
+        if !self.source.is_dir(&package_dir) {
             bail!("package directory does not exist: {}", package_dir.display());
         }
 
@@ -100,7 +119,7 @@ impl PackageContext {
         // `probe_name` + the `scan_package_structure_definitions` directory scan;
         // all three derived the same columns from immutable content every run.
         // See docs/package-derived-index.md.
-        let rows = derived_index::load(&package_dir);
+        let rows = derived_index::load(self.source.as_ref(), &package_dir);
 
         // Preserve the exact legacy `local` semantics. Old behavior: SD rows that
         // the STOCK `.index.json` listed were loaded `local:false` (lenient R5
@@ -109,7 +128,8 @@ impl PackageContext {
         // its SDs `local:true` (full R4->R5 conversion — subscriptions-backport.r4
         // etc. depend on this). The trigger is "did the stock index list any SD?"
         // — derived once here from the stock index, not the derived rows.
-        let stock_index_has_sd = stock_index_lists_structure_definition(&package_dir);
+        let stock_index_has_sd =
+            stock_index_lists_structure_definition(self.source.as_ref(), &package_dir);
         let local = !stock_index_has_sd;
 
         for row in &rows {
@@ -286,7 +306,7 @@ impl PackageContext {
         }
         let parsed = self
             .resource_path(query)
-            .and_then(|path| std::fs::read(path).ok())
+            .and_then(|path| self.source.read(path).ok())
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
             .map(Rc::new);
         self.fetch_cache

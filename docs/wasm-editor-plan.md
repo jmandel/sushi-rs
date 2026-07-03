@@ -230,3 +230,78 @@ version + `wasm32-wasip1`. See `demo/wasm-p0/README.md`.
 - **Deferred, non-blocking:** binary-size pass (`wasm-opt`, strip) — 4.4 MB is
   already fine for a spike; the WASI shim can be dropped entirely once the
   `PackageSource` route (b) replaces the WASI route (a).
+
+## 9b. P1 status — storage trait + bundles DONE (2026-07-03)
+
+**Verdict: P1 gate PASS.** The WASI-shim route (P0's route (a)) is replaced by the
+production storage shape (route (b)): a `PackageSource` trait threaded through the
+entire package read path, with a `DiskSource` (native, byte-for-byte unchanged)
+and a read-only in-memory `BundleSource` (the browser's mount). No browser wiring
+built — that's P2.
+
+**Trait surface** (`crates/package_store/src/source.rs`, the lowest shared crate):
+`PackageSource: Debug` with `read(&Path)->io::Result<Vec<u8>>`,
+`read_dir(&Path)->io::Result<Vec<DirEntry{file_name,is_file}>>`, `exists`,
+`is_dir`, and `write_new(&Path,&[u8])` (write-once; default = read-only Err, so
+read-only sources fail-soft to an in-memory derive per the derived-index design).
+`DiskSource` is the only `std::fs` site; it reproduces the old atomic write-once
+sidecar semantics exactly.
+
+**Call-site inventory (before → after):**
+- `package_store::lib.rs`: `.index.json` read, deep-scan `read_dir`+`fs::read`
+  fallback, the two version-resolvers (`resolve_latest`,
+  `resolve_minor_wildcard`), the cache `is_dir` guard, and the lazy `read_value`
+  resource read — all `std::fs::*` → `source.*`. `PackageStore` now holds a
+  `Box<dyn PackageSource>` for the lazy read.
+- `package_store::derived_index.rs`: `resource_filenames` readdir, `build`
+  per-file reads, `load` sidecar read + write-once — all → the source; `build`/
+  `load` now take `&dyn PackageSource`.
+- `snapshot_gen::package.rs` (`PackageContext`): the `.index.json` SD-probe, the
+  derived-index `load`, the package-dir `is_dir` guard, and the lazy `fetch`
+  read — all → `self.source`. (`load_local_dir` stays `std::fs`: it reads the
+  native IG project, not the mounted cache.)
+- `package_acquisition`: `derived_index::build(dir)` → `build(&DiskSource, dir)`.
+- **Native constructors unchanged:** `PackageStore::for_project(ig, cache)` and
+  `PackageContext::new(cache, pkgs)` keep their signatures and construct a
+  `DiskSource` internally (zero behavior change). New source-taking variants:
+  `for_project_with`, `new_with`, `package_resource_entries_with`.
+  Residual non-source `std::fs` in the read path: only `parse_config`'s read of
+  the IG `sushi-config.yaml` (native project file, not the package cache — the
+  browser feeds config JS-side per §4.3). → P2.
+
+**Bundle format + builder** (doc: `docs/package-derived-index.md` §"PackageSource
+trait + browser bundles"): per-package gzipped-tar of the `package/` top-level
+files (resource JSONs + `.index.json` + guaranteed `.derived-index.json`
+sidecar), plus a `bundle-manifest.json` lockfile
+(`package_store::BundleManifest`). Builder = `package_acquisition::build_bundle` /
+`read_bundle` / `build_bundle_set` + `rust_sushi bundle --cache … --out … <id#ver>…`.
+`package_store::BundleSource` is the read-only in-memory `PackageSource` that
+mounts them (synthetic cache root; `flate2`/`tar` are wasm-clean).
+
+**Gate results (verbatim):**
+- **Full snapshot corpus over the trait path — 955/955, all 34 IGs at §9
+  scorecard counts, failed=0:** ips 29/29, mcode 46/46, genomics 33/33, crd
+  22/22, sdc 73/73, carinbb 6/6, dtr 21/21, ecr 28/28, ndh 50/50, pas 73/73, mhd
+  42/42, eu-eps 23/23, eu-mpd 4/4, au-ps 17/17, pacio-toc 4/4, dapl 26/26,
+  us-core 70/70, ipa 12/12, qicore 63/63, pddi 1/1, deid 1/1, darts 1/1,
+  radiation-dose-summary 4/4, be-vaccination 7/7, smart-app-launch 6/6, cdex 8/8,
+  plan-net 22/22, pdex 37/37, drug-formulary 19/19, subscriptions-backport 9/9,
+  twpas 43/43, davinci-pas 80/80, gematik-epa-medication 49/49, au-core 26/26.
+- **`cargo test --workspace` — 68 passed, 0 failed** (excludes the pre-existing,
+  unrelated `site_db` WIP crate, which has no `lib.rs`/`main.rs` and cannot
+  compile independent of this work).
+- **Sushi native IPS build — 118 resources, byte-identical before/after** the
+  trait refactor (aggregate SHA-256 `8c4de17a…` unchanged; the compiler links
+  `package_store`).
+- **BundleSource fixture ladder — green** (`snapshot_gen/tests/bundle_ladder.rs`):
+  builds r4/r5 core bundles from the isolated cache, round-trips
+  `build_bundle`→`read_bundle`→`mount_package`, runs all 17 ladder rungs through a
+  `BundleSource`-backed `PackageContext` to the same goldens as disk.
+
+**Open items for P2:** `wasm_api` bindgen crate (`init(source)` /
+`compile` / `generate_snapshot`) owning the JS surface; a wasm `PackageSource`
+impl over OPFS/IndexedDB (the `BundleSource` map can back it directly); moving
+`sushi-config.yaml` parsing JS-side (or feeding config bytes) so the last
+read-path `std::fs` leaves the wasm build; the Web Worker protocol; and porting
+the byte-match parity gate (P0's `check-native.sh`) into a CI harness that runs
+the fixture ladder + a few corpus IGs against the wasm binary.

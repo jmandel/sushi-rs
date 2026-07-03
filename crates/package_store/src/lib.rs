@@ -15,7 +15,12 @@ use serde_json::{Map, Value};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
+pub mod bundle;
 pub mod derived_index;
+pub mod source;
+
+pub use bundle::{BundleManifest, BundleManifestEntry, BundleSource, BUNDLE_FORMAT_VERSION};
+pub use source::{DirEntry, DiskSource, PackageSource};
 
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +112,10 @@ pub struct PackageStore {
     /// FHIRDefinitions holds all defs in memory; we lazily memoize. Single-threaded
     /// build, so RefCell is fine. (Avoids re-parsing core SDs hundreds of times.)
     cache: std::cell::RefCell<FxHashMap<usize, std::rc::Rc<Value>>>,
+    /// The storage backing this store, held for the lazy per-resource `read_value`.
+    /// Native callers get a `DiskSource` (unchanged behavior); a browser/test caller
+    /// can supply a read-only in-memory source.
+    source: Box<dyn PackageSource>,
 }
 
 // ---------------------------------------------------------------------------
@@ -355,13 +364,12 @@ fn version_cmp(a: &str, b: &str) -> Ordering {
 }
 
 /// Resolve `latest` for a package id = the highest-version cached dir.
-fn resolve_latest(cache_dir: &Path, package_id: &str) -> Option<String> {
+fn resolve_latest(source: &dyn PackageSource, cache_dir: &Path, package_id: &str) -> Option<String> {
     let prefix = format!("{package_id}#");
     let mut best: Option<String> = None;
-    let rd = std::fs::read_dir(cache_dir).ok()?;
-    for ent in rd.flatten() {
-        let name = ent.file_name();
-        let name = name.to_string_lossy();
+    let rd = source.read_dir(cache_dir).ok()?;
+    for ent in rd {
+        let name = ent.file_name;
         if let Some(ver) = name.strip_prefix(&prefix) {
             // Exclude nested `#` (none expected) and ensure it's a real package dir.
             match &best {
@@ -374,17 +382,21 @@ fn resolve_latest(cache_dir: &Path, package_id: &str) -> Option<String> {
 }
 
 /// Resolve a SUSHI/FPL `M.N.x` dependency against the explicit cache.
-fn resolve_minor_wildcard(cache_dir: &Path, package_id: &str, requested: &str) -> Option<String> {
+fn resolve_minor_wildcard(
+    source: &dyn PackageSource,
+    cache_dir: &Path,
+    package_id: &str,
+    requested: &str,
+) -> Option<String> {
     let minor = requested.strip_suffix(".x")?;
     if minor.matches('.').count() != 1 {
         return None;
     }
     let dir_prefix = format!("{package_id}#{minor}.");
     let mut best: Option<String> = None;
-    let rd = std::fs::read_dir(cache_dir).ok()?;
-    for ent in rd.flatten() {
-        let name = ent.file_name();
-        let name = name.to_string_lossy();
+    let rd = source.read_dir(cache_dir).ok()?;
+    for ent in rd {
+        let name = ent.file_name;
         if let Some(patch) = name.strip_prefix(&dir_prefix) {
             let ver = format!("{minor}.{patch}");
             match &best {
@@ -397,14 +409,16 @@ fn resolve_minor_wildcard(cache_dir: &Path, package_id: &str, requested: &str) -
 }
 
 fn resolve_cached_version(
+    source: &dyn PackageSource,
     cache_dir: &Path,
     package_id: &str,
     requested: Option<&str>,
 ) -> Option<String> {
     match requested {
-        None | Some("latest") | Some("current") => resolve_latest(cache_dir, package_id),
+        None | Some("latest") | Some("current") => resolve_latest(source, cache_dir, package_id),
         Some(v) if v.ends_with(".x") => Some(
-            resolve_minor_wildcard(cache_dir, package_id, v).unwrap_or_else(|| v.to_string()),
+            resolve_minor_wildcard(source, cache_dir, package_id, v)
+                .unwrap_or_else(|| v.to_string()),
         ),
         Some(v) => Some(v.to_string()),
     }
@@ -450,15 +464,19 @@ struct PackageResourceListing {
     source_count: usize,
 }
 
-fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
-    if !pkg_dir.is_dir() {
+fn package_resource_listing(
+    source: &dyn PackageSource,
+    pkg_dir: &Path,
+) -> PackageResourceListing {
+    if !source.is_dir(pkg_dir) {
         return PackageResourceListing {
             records: Vec::new(),
             source_count: 0,
         };
     }
 
-    let index: Option<IndexFile> = std::fs::read(pkg_dir.join(".index.json"))
+    let index: Option<IndexFile> = source
+        .read(&pkg_dir.join(".index.json"))
         .ok()
         .and_then(|b| serde_json::from_slice::<IndexFile>(&b).ok());
 
@@ -468,7 +486,7 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
     // `.index.json` lacks that this listing needs; ordering / source_count stay
     // driven by the existing index-vs-scan selection so fishing (LIFO seq)
     // precedence is byte-identical. See docs/package-derived-index.md.
-    let derived_name: std::collections::HashMap<String, Option<String>> = derived_index::load(pkg_dir)
+    let derived_name: std::collections::HashMap<String, Option<String>> = derived_index::load(source, pkg_dir)
         .into_iter()
         .map(|e| (e.filename, e.name))
         .collect();
@@ -523,18 +541,18 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
     // Mirror FPL's `getPotentialResourcePaths`: every `^[^.].*\.json$` file
     // (except package.json), SORTED, read from disk and indexed. Recovers
     // resources from packages whose index is broken/empty.
-    let Ok(rd) = std::fs::read_dir(pkg_dir) else {
+    let Ok(rd) = source.read_dir(pkg_dir) else {
         return PackageResourceListing {
             records: Vec::new(),
             source_count: 0,
         };
     };
     let mut files: Vec<String> = Vec::new();
-    for ent in rd.flatten() {
-        if !ent.file_type().map(|t| t.is_file()).unwrap_or(false) {
+    for ent in rd {
+        if !ent.is_file {
             continue;
         }
-        let fname = ent.file_name().to_string_lossy().into_owned();
+        let fname = ent.file_name;
         if fname.starts_with('.') || !fname.to_ascii_lowercase().ends_with(".json") {
             continue; // dotfiles (incl. .index.json) and non-json excluded.
         }
@@ -549,7 +567,8 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
     let mut records = Vec::new();
     for (ordinal, fname) in files.into_iter().enumerate() {
         let path = pkg_dir.join(&fname);
-        let Some(json) = std::fs::read(&path)
+        let Some(json) = source
+            .read(&path)
             .ok()
             .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
         else {
@@ -578,7 +597,17 @@ fn package_resource_listing(pkg_dir: &Path) -> PackageResourceListing {
 /// `PackageStore`: trust a non-empty materialized `.index.json`, otherwise scan
 /// top-level package JSON resources in FPL order.
 pub fn package_resource_entries(pkg_dir: &Path) -> Vec<PackageResourceRecord> {
-    package_resource_listing(pkg_dir).records
+    package_resource_listing(&DiskSource, pkg_dir).records
+}
+
+/// Same as [`package_resource_entries`] but reading through an explicit
+/// [`PackageSource`] (browser bundle, test in-memory source). Native callers use
+/// the disk-backed [`package_resource_entries`].
+pub fn package_resource_entries_with(
+    source: &dyn PackageSource,
+    pkg_dir: &Path,
+) -> Vec<PackageResourceRecord> {
+    package_resource_listing(source, pkg_dir).records
 }
 
 /// Build an `IndexEntry` from a parsed resource JSON, extracting exactly the
@@ -637,17 +666,31 @@ fn classify(e: &IndexEntry) -> Option<FishType> {
 }
 
 impl PackageStore {
-    /// Resolve the project's dependency graph and index every resolved package.
+    /// Resolve the project's dependency graph and index every resolved package,
+    /// reading from disk (native behavior; unchanged).
     /// `cache_dir` MUST be explicit (the `<cache>/<name>#<version>/package` root).
     pub fn for_project(ig_dir: &str, cache_dir: &str) -> anyhow::Result<Self> {
+        Self::for_project_with(DiskSource, ig_dir, cache_dir)
+    }
+
+    /// Same as [`PackageStore::for_project`] but reading every package file through
+    /// an explicit [`PackageSource`] (browser bundle, test in-memory source). The
+    /// `ig_dir` config is still read via `std::fs` here (the project is native even
+    /// when packages are mounted from a bundle); only the package cache flows
+    /// through `source`.
+    pub fn for_project_with(
+        source: impl PackageSource + 'static,
+        ig_dir: &str,
+        cache_dir: &str,
+    ) -> anyhow::Result<Self> {
         let cache = Path::new(cache_dir);
-        if !cache.is_dir() {
+        if !source.is_dir(cache) {
             anyhow::bail!(
                 "package_store: cache dir does not exist or is not a directory: {cache_dir}"
             );
         }
         let cfg = parse_config(ig_dir)?;
-        let load_list = resolve_load_order(&cfg, cache);
+        let load_list = resolve_load_order(&source, &cfg, cache);
 
         let mut store = PackageStore {
             entries: Vec::new(),
@@ -655,6 +698,7 @@ impl PackageStore {
             by_url: FxHashMap::default(),
             by_name: FxHashMap::default(),
             cache: std::cell::RefCell::new(FxHashMap::default()),
+            source: Box::new(source),
         };
         let mut seq = 0usize;
 
@@ -689,6 +733,11 @@ impl PackageStore {
         Ok(store)
     }
 
+    /// The storage backing this store (used for the lazy per-resource read).
+    fn source(&self) -> &dyn PackageSource {
+        self.source.as_ref()
+    }
+
     /// Index a single resolved package directory, mirroring FPL's
     /// `loadResourcesFromCache` / `getPotentialResourcePaths`.
     ///
@@ -706,7 +755,9 @@ impl PackageStore {
     /// fallback once we control indexing ourselves. Both paths process files in
     /// sorted order, so load/seq order (LIFO fishing precedence) matches stock.
     fn index_package(&mut self, pkg_dir: &Path, seq: &mut usize) {
-        let listing = package_resource_listing(pkg_dir);
+        // Compute the listing through the store's own source, then release that
+        // borrow before mutating the lookup tables below.
+        let listing = package_resource_listing(self.source.as_ref(), pkg_dir);
         for record in listing.records {
             if classify(&record.entry).is_some() {
                 self.add_entry(
@@ -815,7 +866,7 @@ impl PackageStore {
         let v = if let Some(content) = entry.embedded {
             std::rc::Rc::new(serde_json::from_str::<Value>(content).ok()?)
         } else {
-            let bytes = std::fs::read(&entry.path).ok()?;
+            let bytes = self.source().read(&entry.path).ok()?;
             std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?)
         };
         self.cache.borrow_mut().insert(idx, v.clone());
@@ -992,8 +1043,12 @@ fn sd_characteristics(sd: Option<&Value>) -> Vec<String> {
 /// NOTE: the bundled R5-in-R4 virtual package (`sushi-r5forR4#1.0.0`, the lowest
 /// priority loaded first for R4/R4B) is NOT included — its 7 defs are bundled
 /// inside SUSHI, not in the cache. See report / KNOWN GAP.
-fn resolve_load_order(cfg: &ProjectConfig, cache: &Path) -> Vec<(String, String)> {
-    resolve_load_order_with(cfg, &|id, ver| resolve_cached_version(cache, id, ver))
+fn resolve_load_order(
+    source: &dyn PackageSource,
+    cfg: &ProjectConfig,
+    cache: &Path,
+) -> Vec<(String, String)> {
+    resolve_load_order_with(cfg, &|id, ver| resolve_cached_version(source, cache, id, ver))
 }
 
 /// Build the ordered package load list using the supplied version resolver.
@@ -1133,11 +1188,11 @@ mod tests {
         }
 
         assert_eq!(
-            resolve_cached_version(&dir, "ihe.iti.mcsd", Some("4.0.x")).as_deref(),
+            resolve_cached_version(&DiskSource, &dir, "ihe.iti.mcsd", Some("4.0.x")).as_deref(),
             Some("4.0.10")
         );
         assert_eq!(
-            resolve_cached_version(&dir, "ihe.iti.mcsd", Some("4.2.x")).as_deref(),
+            resolve_cached_version(&DiskSource, &dir, "ihe.iti.mcsd", Some("4.2.x")).as_deref(),
             Some("4.2.x")
         );
 
@@ -1179,6 +1234,7 @@ mod tests {
             by_url: FxHashMap::default(),
             by_name: FxHashMap::default(),
             cache: std::cell::RefCell::new(FxHashMap::default()),
+            source: Box::new(DiskSource),
         }
     }
 

@@ -1270,7 +1270,7 @@ fn derived_columns_index_path(pkg_root: &Path) -> PathBuf {
 }
 
 fn write_derived_columns_index(package_dir: &Path, out_path: &Path) -> anyhow::Result<()> {
-    let index = derived_index::build(package_dir);
+    let index = derived_index::build(&package_store::DiskSource, package_dir);
     write_bytes_atomically(out_path, &derived_index::to_bytes(&index))
 }
 
@@ -1505,6 +1505,133 @@ fn now_unix() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+// ---------------------------------------------------------------------------
+// Editor package bundles (P1) — the browser-mountable delivery shape.
+// ---------------------------------------------------------------------------
+//
+// A *bundle* is one blob per package: the gzipped tar of the materialized
+// `package/` directory's top-level files (resource JSONs + `.index.json` +
+// `.derived-index.json`), tar entries named by the package-relative filename. A
+// set of bundles is pinned by a `BundleManifest` lockfile. The browser fetches
+// one blob per package, inflates it (via [`read_bundle`]), and mounts it into a
+// `package_store::BundleSource`. See `docs/package-derived-index.md` (Bundle
+// format section) and `package_store::bundle`.
+
+use package_store::{BundleManifest, BundleManifestEntry};
+
+/// Build one package bundle: the gzipped tar of every top-level file in a
+/// materialized `package/` directory, tar entries named by the file's name (no
+/// `package/` prefix). The `.derived-index.json` sidecar is guaranteed present —
+/// if the materialized dir lacks it, it is derived from content (the same shared
+/// builder the CAS/write-once paths use) and included, so a `BundleSource` reader
+/// is fully read-only (never needs to write a sidecar).
+///
+/// Nested subdirectories are ignored: FHIR packages keep conformance resources at
+/// the `package/` top level (FPL `getPotentialResourcePaths`), which is all the
+/// read path and `BundleSource` consult.
+pub fn build_bundle(package_dir: &Path) -> anyhow::Result<Vec<u8>> {
+    if !package_dir.is_dir() {
+        bail!("bundle: package dir does not exist: {}", package_dir.display());
+    }
+
+    // Collect top-level files (name -> bytes), sorted for determinism.
+    let mut entries: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for ent in fs::read_dir(package_dir)? {
+        let ent = ent?;
+        if !ent.file_type()?.is_file() {
+            continue;
+        }
+        let name = ent.file_name().to_string_lossy().into_owned();
+        entries.insert(name, fs::read(ent.path())?);
+    }
+
+    // Guarantee the derived-index sidecar is in the bundle (derive if absent).
+    if !entries.contains_key(derived_index::SIDECAR_NAME) {
+        let index = derived_index::build(&package_store::DiskSource, package_dir);
+        entries.insert(
+            derived_index::SIDECAR_NAME.to_string(),
+            derived_index::to_bytes(&index),
+        );
+    }
+
+    let mut out = Vec::new();
+    {
+        let gz = GzBuilder::new()
+            .mtime(0)
+            .write(&mut out, Compression::default());
+        let mut builder = Builder::new(gz);
+        for (name, bytes) in &entries {
+            let mut header = Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_mtime(0);
+            header.set_cksum();
+            builder.append_data(&mut header, name, Cursor::new(bytes.clone()))?;
+        }
+        builder.finish()?;
+        let gz = builder.into_inner()?;
+        gz.finish()?;
+    }
+    Ok(out)
+}
+
+/// Inflate a bundle blob back into its `filename -> bytes` entries, ready for
+/// `package_store::BundleSource::mount_package`. Native readers use this; the
+/// browser does the same inflation JS-side or via this on a wasm build (flate2 +
+/// tar are wasm-clean).
+pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
+    let gz = GzDecoder::new(Cursor::new(bytes));
+    let mut archive = Archive::new(gz);
+    let mut out = Vec::new();
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let name = entry
+            .path()?
+            .to_string_lossy()
+            .trim_start_matches("./")
+            .to_string();
+        if name.is_empty() {
+            continue;
+        }
+        let mut data = Vec::new();
+        entry.read_to_end(&mut data)?;
+        out.push((name, data));
+    }
+    Ok(out)
+}
+
+/// Build a set of package bundles from an explicit cache, writing each package's
+/// `<id>#<ver>.tgz` blob into `out_dir` and returning the pinned
+/// [`BundleManifest`] (the editor's lockfile). `labels` are `<id>#<ver>` cache
+/// directory names.
+pub fn build_bundle_set(
+    cache_dir: &Path,
+    labels: &[String],
+    out_dir: &Path,
+) -> anyhow::Result<BundleManifest> {
+    fs::create_dir_all(out_dir)?;
+    let mut manifest = BundleManifest::new();
+    for label in labels {
+        let (id, version) = label
+            .split_once('#')
+            .ok_or_else(|| anyhow::anyhow!("bundle label must be <id>#<version>: {label}"))?;
+        let package_dir = cache_dir.join(label).join("package");
+        let blob = build_bundle(&package_dir)
+            .with_context(|| format!("building bundle for {label}"))?;
+        let bundle_name = format!("{label}.tgz");
+        write_bytes_atomically(&out_dir.join(&bundle_name), &blob)?;
+        manifest.packages.push(BundleManifestEntry {
+            id: id.to_string(),
+            version: version.to_string(),
+            bundle: bundle_name,
+            sha256: Some(sha256_hex(&blob)),
+        });
+    }
+    let manifest_bytes = manifest.to_bytes();
+    write_bytes_atomically(&out_dir.join("bundle-manifest.json"), &manifest_bytes)?;
+    Ok(manifest)
 }
 
 #[cfg(test)]

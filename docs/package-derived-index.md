@@ -125,3 +125,53 @@ lowest crate both the write side (`package_acquisition`) and the read sides
 See `docs/perf-snapshot-gen.md` "CAS derived-index" section for the before/after
 load-time numbers and the gate results (full corpus at scorecard counts,
 `cargo test --workspace`, sushi IPS byte-parity).
+
+## `PackageSource` trait + browser bundles (WASM P1)
+
+The read path no longer calls `std::fs` directly: every access goes through the
+`package_store::source::PackageSource` trait
+(`read`/`read_dir`/`exists`/`is_dir`/`write_new`). The native impl `DiskSource`
+forwards each call to `std::fs`, so behavior is byte-for-byte unchanged (the full
+34-IG corpus + `cargo test --workspace` + sushi IPS byte-parity gate this). This
+is what keeps `std::fs` out of the read path so a wasm build stays plausible.
+
+Native callers are unchanged: `PackageStore::for_project(ig, cache)` and
+`PackageContext::new(cache, packages)` keep their old signatures and construct a
+`DiskSource` internally. Explicit-source variants (`for_project_with`,
+`new_with`, `package_resource_entries_with`, and `derived_index::{build,load}`,
+which now take a `&dyn PackageSource`) let a browser/test caller mount a different
+backing store.
+
+### Bundle format (v1)
+
+The browser mounts a **`BundleSource`** (`package_store::bundle`) — a read-only,
+in-memory `PackageSource`. It is fed **package bundles** produced by the builder
+in `package_acquisition`:
+
+- **One bundle per package**: `package_acquisition::build_bundle(package_dir)`
+  emits a **gzipped tar** of the materialized `package/` directory's top-level
+  files (every resource JSON + the stock `.index.json` + the
+  `.derived-index.json` sidecar). Tar entries are named by the package-relative
+  filename (no `package/` prefix). The sidecar is **guaranteed present** — if the
+  materialized dir lacks it, `build_bundle` derives it from content with the same
+  shared `derived_index::build`, so the bundle is fully self-describing and the
+  `BundleSource` never needs to write (write-once fails soft on read-only
+  sources). Determinism: files sorted, gzip `mtime=0`, tar `mode=0644`/`mtime=0`.
+- **Manifest lockfile**: `build_bundle_set(cache, labels, out_dir)` writes one
+  `<id>#<ver>.tgz` per package plus a `bundle-manifest.json`
+  (`package_store::BundleManifest`: `{bundle-format-version, packages:[{id,
+  version, bundle, sha256}]}`) — the editor's pin of the exact package set.
+- **Mounting**: `read_bundle(blob)` inflates a bundle to its `filename -> bytes`
+  entries; `BundleSource::mount_package(label, entries)` places them under a
+  synthetic cache root at `<root>/<id>#<ver>/package/...`. Pass
+  `source.cache_root()` as the `cache_dir` to `new_with`/`for_project_with`. Cold
+  start = one fetch + one inflate + map lookups thereafter; no `std::fs`
+  (flate2/tar are wasm-clean).
+- **CLI**: `rust_sushi bundle --cache <cache> --out <dir> <id#ver> [<id#ver>...]`
+  drives `build_bundle_set` and prints the manifest.
+
+**Gate**: `crates/snapshot_gen/tests/bundle_ladder.rs` builds the r4/r5 core
+bundles from the isolated cache, round-trips them through
+`build_bundle`→`read_bundle`→`mount_package`, and runs the full fixture ladder
+through a `BundleSource`-backed `PackageContext` — proving the bundle path
+end-to-end, natively, to the same goldens as the disk cache.

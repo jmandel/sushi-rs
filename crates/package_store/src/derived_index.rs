@@ -11,6 +11,7 @@
 //! See `docs/package-derived-index.md` for the full design (CAS artifact
 //! lifecycle, sidecar placement, non-CAS write-once fallback).
 
+use crate::source::PackageSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
@@ -68,16 +69,16 @@ pub struct DerivedIndex {
 /// order: every top-level `^[^.].*\.json$` except `package.json`, sorted. This is
 /// content-derived, so it also covers packages whose stock `.index.json` is
 /// empty or SD-less.
-fn resource_filenames(package_dir: &Path) -> Vec<String> {
-    let Ok(rd) = std::fs::read_dir(package_dir) else {
+fn resource_filenames(source: &dyn PackageSource, package_dir: &Path) -> Vec<String> {
+    let Ok(rd) = source.read_dir(package_dir) else {
         return Vec::new();
     };
     let mut files: Vec<String> = Vec::new();
-    for ent in rd.flatten() {
-        if !ent.file_type().map(|t| t.is_file()).unwrap_or(false) {
+    for ent in rd {
+        if !ent.is_file {
             continue;
         }
-        let name = ent.file_name().to_string_lossy().into_owned();
+        let name = ent.file_name;
         if name.starts_with('.') || !name.to_ascii_lowercase().ends_with(".json") {
             continue;
         }
@@ -110,11 +111,12 @@ fn entry_from_json(json: &Value, filename: String) -> DerivedEntry {
 /// resource file once and lifting the derived columns from its root object. This
 /// is the single builder that both the CAS ingest write and the non-CAS
 /// write-once fallback use, so their outputs are byte-identical.
-pub fn build(package_dir: &Path) -> DerivedIndex {
+pub fn build(source: &dyn PackageSource, package_dir: &Path) -> DerivedIndex {
     let mut files = Vec::new();
-    for filename in resource_filenames(package_dir) {
+    for filename in resource_filenames(source, package_dir) {
         let path = package_dir.join(&filename);
-        let Some(json) = std::fs::read(&path)
+        let Some(json) = source
+            .read(&path)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
         else {
@@ -157,38 +159,26 @@ pub fn parse(bytes: &[u8]) -> Option<Vec<DerivedEntry>> {
 ///    read-only CAS content), still return the freshly-built rows — the caller
 ///    gets correct data and simply pays the one-process build cost. Fail-loud
 ///    safe: never returns wrong data, never errors.
-pub fn load(package_dir: &Path) -> Vec<DerivedEntry> {
+pub fn load(source: &dyn PackageSource, package_dir: &Path) -> Vec<DerivedEntry> {
     let sidecar = package_dir.join(SIDECAR_NAME);
-    if let Ok(bytes) = std::fs::read(&sidecar) {
+    if let Ok(bytes) = source.read(&sidecar) {
         if let Some(rows) = parse(&bytes) {
             return rows;
         }
     }
-    let index = build(package_dir);
+    let index = build(source, package_dir);
     let bytes = to_bytes(&index);
-    write_once(&sidecar, &bytes);
+    // Write-once via the source. Writable (disk) sources create the sidecar
+    // atomically; read-only sources (bundle, CAS symlink) return Err and we
+    // fail-soft — the freshly built rows are already correct in memory.
+    let _ = source.write_new(&sidecar, &bytes);
     index.files
-}
-
-/// Write bytes to `path` exactly once, atomically, ignoring failures (read-only
-/// target). A concurrent writer that already produced the file is fine — the
-/// content is a pure function of immutable package content.
-fn write_once(path: &Path, bytes: &[u8]) {
-    if path.exists() {
-        return;
-    }
-    let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
-    if std::fs::write(&tmp, bytes).is_err() {
-        return;
-    }
-    if std::fs::rename(&tmp, path).is_err() {
-        let _ = std::fs::remove_file(&tmp);
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::source::DiskSource;
 
     #[test]
     fn build_covers_content_including_name_and_base() {
@@ -203,7 +193,7 @@ mod tests {
         std::fs::write(pkg.join("package.json"), r#"{"name":"p"}"#).unwrap();
         std::fs::write(pkg.join(".index.json"), r#"{"files":[]}"#).unwrap();
 
-        let idx = build(&pkg);
+        let idx = build(&DiskSource, &pkg);
         assert_eq!(idx.version, DERIVED_INDEX_FORMAT_VERSION);
         assert_eq!(idx.files.len(), 1, "package.json and dotfiles excluded");
         let e = &idx.files[0];
@@ -217,11 +207,11 @@ mod tests {
         assert_eq!(e.derivation.as_deref(), Some("constraint"));
 
         // load() writes the sidecar once, then reads it back identically.
-        let via_load = load(&pkg);
+        let via_load = load(&DiskSource, &pkg);
         assert_eq!(via_load, idx.files);
         assert!(pkg.join(SIDECAR_NAME).is_file());
         // second load reads the sidecar (same rows).
-        assert_eq!(load(&pkg), idx.files);
+        assert_eq!(load(&DiskSource, &pkg), idx.files);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
