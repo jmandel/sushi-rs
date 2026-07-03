@@ -165,6 +165,8 @@ pub struct ListItem {
     /// item's content (`- {:#id}text`), applied to the `<li>`
     /// (kramdown parser/kramdown/list.rb:19-20, 76-80).
     pub attrs: Attrs,
+    /// GFM task-list item: `- [ ] x` (Some(false)) / `- [x] x` (Some(true)).
+    pub task: Option<bool>,
 }
 
 /// A block plus whether it was preceded by a blank line in the source. The
@@ -1190,6 +1192,18 @@ impl Parser {
                             }
                         }
                     }
+                    // GFM task-list item: `[ ] ` / `[x] ` at content start.
+                    let mut task = None;
+                    if let Some(rest) = item_src.strip_prefix("[ ] ") {
+                        task = Some(false);
+                        item_src = rest.to_string();
+                    } else if let Some(rest) = item_src
+                        .strip_prefix("[x] ")
+                        .or_else(|| item_src.strip_prefix("[X] "))
+                    {
+                        task = Some(true);
+                        item_src = rest.to_string();
+                    }
                     let blocks = parse_block_nodes_with(&item_src, self.parse_block_html);
                     // The item is "followed by blank" if the line that ended it
                     // is a blank line (kramdown then appends a trailing :blank to
@@ -1201,6 +1215,7 @@ impl Parser {
                         tight: true,
                         followed_by_blank,
                         attrs: item_attrs,
+                        task,
                     });
                     continue;
                 }
@@ -1583,12 +1598,13 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
         }
         return Some((false, None, w));
     }
-    // ordered: digits then '.' or ')'
+    // ordered: digits then '.' — kramdown LIST_START_OL is `\d+\.` ONLY
+    // (list.rb:49); `1)` is NOT a list marker in kramdown.
     let mut i = 0;
     while i < bytes.len() && bytes[i].is_ascii_digit() {
         i += 1;
     }
-    if i > 0 && i <= 9 && (bytes.get(i) == Some(&b'.') || bytes.get(i) == Some(&b')')) {
+    if i > 0 && i <= 9 && bytes.get(i) == Some(&b'.') {
         let has_space = bytes.get(i + 1).map(|&c| c == b' ' || c == b'\t').unwrap_or(rest.len() == i + 1);
         if has_space {
             let num: u64 = rest[..i].parse().unwrap_or(1);

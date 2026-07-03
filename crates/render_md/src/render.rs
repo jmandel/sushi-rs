@@ -414,6 +414,12 @@ impl Renderer {
         // HTML output. (Verified against oracle: `7.`-started list -> `<ol>`.)
         let _ = (start, tight);
         out.push_str(&format!("<{tag}"));
+        // GFM task list: the list element gets class="task-list" when any item
+        // is a task item.
+        let is_task_list = items.iter().any(|it| it.task.is_some());
+        if is_task_list {
+            out.push_str(" class=\"task-list\"");
+        }
         out.push_str(&attr_string(attrs, false));
         out.push_str(">\n");
 
@@ -482,8 +488,18 @@ impl Renderer {
         let pad = " ".repeat(indent);
         out.push_str(&pad);
         out.push_str("<li");
+        if item.task.is_some() {
+            out.push_str(" class=\"task-list-item\"");
+        }
         out.push_str(&attr_string(&item.attrs, false));
         out.push('>');
+        if let Some(checked) = item.task {
+            out.push_str("<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled=\"disabled\"");
+            if checked {
+                out.push_str(" checked=\"checked\"");
+            }
+            out.push_str(" />");
+        }
         let nodes: Vec<&BlockNode> = item
             .blocks
             .iter()
