@@ -157,6 +157,20 @@ Rejected: porting expansion into Rust (a whole subsystem; terminus exists;
 needs are small). The Phase-1 spike sidesteps the question entirely by
 reusing cycle's TS terminology step — that's part of what makes it a spike.
 
+**Tx surface beyond $expand (decided):** `$expand` is the ONLY terminology
+operation the current contract needs — member displays come back in the
+expansion; profile-referenced code displays render from authored JSON; local
+CS concepts need no tx; `$validate-code`/display-checking is QA scope
+(dropped). BUT the tx client interface is **operation-generic from day one**
+(`expand` | `lookup` | `validate-code`, one content-hash cache discipline) so
+publisher-grade display resolution or validation later is a new cache entry,
+not a redesign. Reproducibility: cache each `$expand` WITH the response's
+`expansion.parameter` (the code-system versions the server actually used) —
+the tx-side equivalent of our oracle pin; a changed server-side CS version is
+a visible cache-key event, not silent drift. Precondition to state: filter/
+`is-a` composes require terminus to have the referenced external code systems
+loaded — fail loud when it doesn't, never emit a partial expansion.
+
 ## 4. Plan
 
 **Phase 1 — spike (days):** run cycle's existing experimental TS producer
