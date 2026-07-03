@@ -41,6 +41,25 @@ fn golden_path(ig: &str, id: &str, suffix: &str) -> PathBuf {
     ))
 }
 
+/// corePath for the CanonicalRenderer leaf methods = checkAppendSlash(specPath)
+/// = VersionUtilities.getSpecUrl(igVersion)+"/". The IG version is the SD's
+/// fhirVersion in this corpus (all R4 -> http://hl7.org/fhir/R4/).
+fn core_path_for(sd: &Sd) -> String {
+    let v = sd.fhir_version();
+    let base = if v.starts_with("4.0") {
+        "http://hl7.org/fhir/R4"
+    } else if v.starts_with("4.3") {
+        "http://hl7.org/fhir/R4B"
+    } else if v.starts_with("5.0") {
+        "http://hl7.org/fhir/R5"
+    } else if v.starts_with("3.0") {
+        "http://hl7.org/fhir/STU3"
+    } else {
+        "http://hl7.org/fhir"
+    };
+    format!("{}/", base)
+}
+
 fn cfg_render(
     mut cfg: TableConfig,
     active_tables: bool,
@@ -137,6 +156,8 @@ fn render(
         "inv-key" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Key, true),
         "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),
         "sd-use-context" => render_sd::leaf::use_context(sd, ctx?),
+        "summary" => render_sd::leaf::summary(sd, ctx?, false, &core_path_for(sd)),
+        "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
         _ => return None,
     };
     Some(wrap_raw(&body))

@@ -477,6 +477,30 @@ maps-<CoreType> (one per FHIR core type, IG-invariant).
 | inv-key | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_KEY (reuses key_elements) |
 | inv-diff | 7/7 | 22/22 | 70/70 | ✅ invOldMode GEN_MODE_DIFF (reuses supplement_missing_diff) |
 | sd-use-context | 7/7 | 22/22 | 67/67 (3 gap) | useContext:2877; 3 us-core gaps = deprecated markdown |
+| summary | 7/7 | 9/9 | 51/55 (15 gap) | summary:154; gaps=Extension-type SDs (markdown); 4 fails=nested-split |
+| summary-all | 7/7 | 9/9 | 51/55 (15 gap) | same as summary, anchor `a-` |
+
+summary findings (session 5, checkpoint 3):
+- Non-extension profiles are markdown-FREE (describeProfile/summariseExtension
+  use present()+webPath, no markdown). Extension-type SDs route the description
+  through extensionSummary→processMarkdown → LOUD GAP (15 us-core, 13 plan-net).
+- **corePath = getSpecUrl(igVersion)+"/"** (checkAppendSlash(specPath)) — R4 =
+  `http://hl7.org/fhir/R4/`. Threaded as `core_path_v` (the slices link).
+  Differs from the F3 table path's corePath="".
+- **igp.isDatatype(name) resolves the CORE type by NAME and requires
+  derivation==specialization** (IGKnowledgeProvider:551). An extension whose URL
+  matches the core SD prefix is kind=complex-type but derivation=constraint →
+  isDatatype false → it DOES appear in the Extensions section. Using a
+  resolve-the-profile is_data_type (kind only) wrongly suppressed it. Fixed with
+  igp_is_datatype (kind primitive/complex AND derivation==specialization).
+- FMM maturity ext value is `valueInteger` (readStringExtension reads any
+  primitive).
+- **RESIDUAL (4 us-core, documented):** parentChainHasOptional outright-vs-nested
+  SPLIT. The exact predicate walks the SNAPSHOT_DERIVATION_POINTER (intermediate
+  base-profile min), not own-snapshot min nor base.min. Total mandatory count is
+  always correct; only the "(N nested)" sub-split diverges on practitioner +
+  3 observation profiles. Needs the reconstructed-pointer chain (diff.rs
+  machinery). Low value vs the markdown blocker; left as a silent approximation.
 
 sd-use-context findings (session 5, checkpoint 2):
 - **Composer inline no-pretty fix (load-bearing).** `el()` built nodes via

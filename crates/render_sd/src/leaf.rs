@@ -85,6 +85,377 @@ pub fn escape_xml(s: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// summary / summary-all  (psdr summary:154) — raw StringBuilder (NOT composer)
+// ---------------------------------------------------------------------------
+
+fn pluralize_element(n: i64) -> &'static str {
+    if n > 1 {
+        "elements"
+    } else {
+        "element"
+    }
+}
+
+/// psdr summary:154. `all` toggles the anchor name (a-summary vs s-summary).
+/// Markdown-dependent branches (EXT_SUMMARY extension; extensionSummary for
+/// Extension-type SDs) fire a loud gap — those need the publisher markdown
+/// engine. Non-extension profiles are fully markdown-free.
+pub fn summary(sd: &Sd, ctx: &crate::context::IgContext, all: bool, core_path_v: &str) -> String {
+    // no differential -> STRUC_DEF_NO_SUMMARY (rare; corpus always has diff)
+    if sd.root.get("differential").is_none() {
+        return "<p>This structure has no summary</p>".to_string();
+    }
+    if sd_has_extension(
+        sd,
+        "http://hl7.org/fhir/StructureDefinition/structuredefinition-summary",
+    ) {
+        panic!("LOUD GAP: summary EXT_SUMMARY markdown (psdr:157/218) for {}", sd.id());
+    }
+
+    let diff = sd.differential_elements();
+
+    let mut refs: Vec<String> = Vec::new();
+    let mut ext: Vec<String> = Vec::new();
+    let mut slices: Vec<String> = Vec::new();
+    let mut supports = 0i64;
+    let mut required_outrights = 0i64;
+    let mut required_nesteds = 0i64;
+    let mut fixeds = 0i64;
+    let mut prohibits = 0i64;
+
+    for ed in &diff {
+        if !ed.path().contains('.') {
+            continue;
+        }
+        if ed.min() == Some(1) {
+            if parent_chain_has_optional(sd, ed) {
+                required_nesteds += 1;
+            } else {
+                required_outrights += 1;
+            }
+        }
+        if ed.max() == Some("0") {
+            prohibits += 1;
+        }
+        if ed.must_support() {
+            supports += 1;
+        }
+        if ed.fixed().is_some() {
+            fixeds += 1;
+        }
+        for t in ed.types() {
+            for p in t.profiles() {
+                if p.len() > 40 && !igp_is_datatype(ctx, &p[40..]) {
+                    if ed.path().ends_with(".extension") {
+                        try_add(&mut ext, summarise_extension(ctx, p, false));
+                    } else if ed.path().ends_with(".modifierExtension") {
+                        try_add(&mut ext, summarise_extension(ctx, p, true));
+                    } else {
+                        try_add(&mut refs, describe_profile(ctx, p));
+                    }
+                }
+            }
+            for tp in t.target_profiles() {
+                try_add(&mut refs, describe_profile(ctx, tp));
+            }
+        }
+        if ed.has_slicing()
+            && !ed.path().ends_with(".extension")
+            && !ed.path().ends_with(".modifierExtension")
+        {
+            if let Some(s) = describe_slice(ed.path(), ed.slicing().unwrap()) {
+                if !slices.contains(&s) {
+                    slices.push(s);
+                }
+            }
+        }
+    }
+
+    let anchor = if all { "a" } else { "s" };
+    let mut res = String::new();
+    res.push_str(&format!(
+        "<a name=\"{}-summary\"> </a>\r\n<p><b>\r\nSummary\r\n</b></p>\r\n",
+        anchor
+    ));
+
+    if sd.type_name() == "Extension" {
+        panic!("LOUD GAP: summary extensionSummary markdown (psdr:223) for {}", sd.id());
+    }
+
+    if supports + required_outrights + required_nesteds + fixeds + prohibits > 0 {
+        let mut started = false;
+        res.push_str("<p>");
+        if required_outrights > 0 || required_nesteds > 0 {
+            started = true;
+            res.push_str(&format!(
+                "Mandatory: {} {}",
+                required_outrights,
+                pluralize_element(required_outrights)
+            ));
+            if required_nesteds > 0 {
+                res.push_str(&format!(
+                    "({} nested mandatory {})",
+                    required_nesteds,
+                    pluralize_element(required_nesteds)
+                ));
+            }
+        }
+        if supports > 0 {
+            if started {
+                res.push_str("<br/> ");
+            }
+            started = true;
+            res.push_str(&format!(
+                "Must-Support: {} {}",
+                supports,
+                pluralize_element(supports)
+            ));
+        }
+        if fixeds > 0 {
+            if started {
+                res.push_str("<br/> ");
+            }
+            started = true;
+            res.push_str(&format!("Fixed: {} {}", fixeds, pluralize_element(fixeds)));
+        }
+        if prohibits > 0 {
+            if started {
+                res.push_str("<br/> ");
+            }
+            let _ = started;
+            res.push_str(&format!(
+                "Prohibited: {} {}",
+                prohibits,
+                pluralize_element(prohibits)
+            ));
+        }
+        res.push_str("</p>");
+    }
+
+    if !refs.is_empty() {
+        res.push_str("<p><b>Structures</b></p>\r\n<p>This structure refers to these other structures:</p>\r\n<ul>\r\n");
+        for s in &refs {
+            res.push_str(s);
+        }
+        res.push_str("\r\n</ul>\r\n\r\n");
+    }
+    if !ext.is_empty() {
+        res.push_str("<p><b>Extensions</b></p>\r\n<p>This structure refers to these extensions:</p>\r\n<ul>\r\n");
+        for s in &ext {
+            res.push_str(s);
+        }
+        res.push_str("\r\n</ul>\r\n\r\n");
+    }
+    if !slices.is_empty() {
+        // SD_SUMMARY_SLICES = This structure defines the following {0}Slices{1}
+        res.push_str(&format!(
+            "<p><b>Slices</b></p>\r\n<p>This structure defines the following <a href=\"{}profiling.html#slices\">Slices</a>:</p>\r\n<ul>\r\n",
+            core_path_v
+        ));
+        for s in &slices {
+            res.push_str(s);
+        }
+        res.push_str("\r\n</ul>\r\n\r\n");
+    }
+
+    // Maturity (EXT_FMM_LEVEL)
+    if let Some(fmm) = read_string_extension(
+        sd,
+        "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm",
+    ) {
+        res.push_str(&format!(
+            "<p><b><a class=\"fmm\" href=\"http://hl7.org/fhir/versions.html#maturity\" title=\"Maturity Level\">Maturity</a></b>: {}</p>\r\n",
+            fmm
+        ));
+    }
+
+    res
+}
+
+fn try_add(list: &mut Vec<String>, s: Option<String>) {
+    if let Some(s) = s {
+        if !s.is_empty() && !list.contains(&s) {
+            list.push(s);
+        }
+    }
+}
+
+/// psdr describeProfile:385. Datatype/resource core types return None.
+fn describe_profile(ctx: &crate::context::IgContext, url: &str) -> Option<String> {
+    if url.starts_with("http://hl7.org/fhir/StructureDefinition/") {
+        let tail = &url[40..];
+        if igp_is_datatype(ctx, tail) || is_core_resource(ctx, tail) || tail == "Resource" {
+            return None;
+        }
+    }
+    match ctx.resolve(url) {
+        None => Some(format!(
+            "<li>Unable to summarise profile {} (no profile found)</li>",
+            url
+        )),
+        Some(r) => Some(format!(
+            "<li><a href=\"{}\">{} <span style=\"font-size: 8px\">({})</span></a></li>\r\n",
+            escape_xml(&r.web_path),
+            r.present(),
+            url
+        )),
+    }
+}
+
+/// psdr summariseExtension:372.
+fn summarise_extension(
+    ctx: &crate::context::IgContext,
+    url: &str,
+    modifier: bool,
+) -> Option<String> {
+    let modif = if modifier {
+        " (<b>Modifier</b>) "
+    } else {
+        ""
+    };
+    match ctx.resolve(url) {
+        None => Some(format!(
+            "<li>Unable to summarise extension {} (no extension found)</li>",
+            url
+        )),
+        Some(r) if r.web_path.is_empty() => Some(format!(
+            "<li><a href=\"extension-{}.html\">{}</a>{}</li>\r\n",
+            // ed.getId().toLowerCase() — id = last URL segment for own extensions
+            url.rsplit('/').next().unwrap_or(url).to_lowercase(),
+            url,
+            modif
+        )),
+        Some(r) => Some(format!(
+            "<li><a href=\"{}\">{}</a>{}</li>\r\n",
+            escape_xml(&r.web_path),
+            url,
+            modif
+        )),
+    }
+}
+
+/// psdr describeSlice:351.
+fn describe_slice(path: &str, slicing: &serde_json::Value) -> Option<String> {
+    let discriminators = slicing.get("discriminator").and_then(|d| d.as_array());
+    if discriminators.map(|d| d.is_empty()).unwrap_or(true) {
+        return Some(format!(
+            "<li>There is a slice with no discriminator at {}</li>\r\n",
+            path
+        ));
+    }
+    let discs = discriminators.unwrap();
+    let mut s = String::new();
+    if slicing.get("ordered").and_then(|o| o.as_bool()) == Some(true) {
+        s = "ordered".to_string();
+    }
+    let rules = slicing.get("rules").and_then(|r| r.as_str()).unwrap_or("");
+    if rules != "open" {
+        let disp = rules_display(rules);
+        s = if s.is_empty() {
+            disp.to_string()
+        } else {
+            format!("{}, {}", s, disp)
+        };
+    }
+    if !s.is_empty() {
+        s = format!(" ({})", s);
+    }
+    let count = discs.len();
+    // SD_SUMMARY_SLICE_{one,other}: {0}=count, {1}=path (discriminators arg dropped)
+    let phrase = if count == 1 {
+        format!("The element {} is sliced based on the value of {}", count, path)
+    } else {
+        format!("The element {} is sliced based on the values of {}", count, path)
+    };
+    Some(format!("<li>{}{}</li>\r\n", phrase, s))
+}
+
+fn rules_display(code: &str) -> &'static str {
+    match code {
+        "closed" => "Closed",
+        "open" => "Open",
+        "openAtEnd" => "Open At End",
+        _ => "",
+    }
+}
+
+/// psdr parentChainHasOptional:318. Pointer(diffElem) = the profile's own
+/// SNAPSHOT element with the same id; walk snapshot parents, true if any has
+/// min==0. If no pointer match, returns true (psdr:323 "common in existing").
+///
+/// RESIDUAL: the true predicate walks the SNAPSHOT_DERIVATION_POINTER (the
+/// intermediate BASE-profile element set during snapshot gen, PU:2591), whose
+/// min can differ from both the own snapshot min and element.base.min. Using
+/// the own-snapshot min undercounts nested; using base.min overcounts. Exact
+/// parity needs the reconstructed pointer chain (same machinery diff.rs uses).
+/// This mismatches the outright/nested SPLIT only (the total mandatory count is
+/// always correct) on 4 us-core SDs (practitioner, observation-occupation/
+/// -pregnancyintent/-pregnancystatus). Documented; low value vs the markdown
+/// blocker. Fires no gap (silent approximation — total is right).
+fn parent_chain_has_optional(sd: &Sd, ed: &crate::sdmodel::Ed) -> bool {
+    if !ed.path().contains('.') {
+        return false;
+    }
+    let snap = sd.snapshot_elements();
+    let id = ed.id();
+    // find snapshot elem with same id
+    let Some(mut idx) = snap.iter().position(|e| e.id() == id) else {
+        return true;
+    };
+    loop {
+        let e = &snap[idx];
+        if !e.path().contains('.') {
+            return false;
+        }
+        if e.min() == Some(0) {
+            return true;
+        }
+        // parent = the preceding snapshot element whose path is this path minus last segment
+        let ppath = match e.path().rfind('.') {
+            Some(p) => &e.path()[..p],
+            None => return false,
+        };
+        let mut found = None;
+        let mut i = idx as i64 - 1;
+        while i >= 0 {
+            if snap[i as usize].path() == ppath {
+                found = Some(i as usize);
+                break;
+            }
+            i -= 1;
+        }
+        match found {
+            Some(f) => idx = f,
+            None => return true,
+        }
+    }
+}
+
+fn is_core_resource(ctx: &crate::context::IgContext, tail: &str) -> bool {
+    // igp.isResource(name): fetchTypeDefinition(name) is kind==resource AND
+    // derivation==specialization (IGKnowledgeProvider:557).
+    ctx.resolve_type(tail)
+        .map(|r| {
+            r.kind.as_deref() == Some("resource")
+                && r.derivation.as_deref() == Some("specialization")
+        })
+        .unwrap_or(false)
+}
+
+/// igp.isDatatype(name) (IGKnowledgeProvider:551): fetchTypeDefinition(name) is
+/// kind primitive/complex AND derivation==specialization. Crucially resolves
+/// the CORE type by name — an extension whose URL matches the core prefix is
+/// kind=complex-type but derivation=constraint, so this returns false.
+fn igp_is_datatype(ctx: &crate::context::IgContext, tail: &str) -> bool {
+    ctx.resolve_type(tail)
+        .map(|r| {
+            matches!(r.kind.as_deref(), Some("primitive-type") | Some("complex-type"))
+                && r.derivation.as_deref() == Some("specialization")
+        })
+        .unwrap_or(false)
+}
+
+// ---------------------------------------------------------------------------
 // sd-use-context  (psdr useContext:2877) — HTML-pretty composer
 // ---------------------------------------------------------------------------
 
@@ -283,6 +654,8 @@ fn sd_has_extension(sd: &Sd, url: &str) -> bool {
 }
 
 fn read_string_extension(sd: &Sd, url: &str) -> Option<String> {
+    // ExtensionUtilities.readStringExtension: reads whatever primitive value is
+    // present (FMM = valueInteger, standards-status = valueCode, etc.).
     let arr = sd.root.get("extension")?.as_array()?;
     for x in arr {
         if x.get("url").and_then(|u| u.as_str()) == Some(url) {
@@ -290,6 +663,9 @@ fn read_string_extension(sd: &Sd, url: &str) -> Option<String> {
                 return Some(v.to_string());
             }
             if let Some(v) = x.get("valueString").and_then(|v| v.as_str()) {
+                return Some(v.to_string());
+            }
+            if let Some(v) = x.get("valueInteger") {
                 return Some(v.to_string());
             }
         }
