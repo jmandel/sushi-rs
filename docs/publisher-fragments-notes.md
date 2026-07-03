@@ -225,3 +225,134 @@ outside a single-package DB and is reasonable to keep stubbed.
 - Templates CONSUME publisher fragments: `ig-template-base/layouts/layout-profile-history.html:17`
 - Our on-demand renderers: `cycle/site-gen/fhir/ProfilePage.tsx:131`, `cycle/site-gen/fhir/fragments.ts`,
   `cycle/site-gen/project/includes.ts:76`
+
+---
+
+## Part 2 — follow-up (Josh's challenges)
+
+Same pins as Part 1 (publisher `2.2.10`; `ig-template-base`=`fhir.base.template`,
+`ig-template-fhir`=`hl7.fhir.template`). New evidence: 15 real IG repos read passively from
+`scratchpad/ig-survey/`; `davinci-pdex-plan-net` + `US-Core` cloned fresh to `scratchpad/ig-survey-mine/`.
+
+### Q1 — Representative waste for stock-template IGs
+
+**(a) Cycle's template is atypical only in NAME, not in behaviour.** Cycle declares
+`template = fhir2.base.template` (`cycle/ig-gh-actions.ini:3`), NOT stock `hl7.fhir.template`. But the
+materialized `cycle/template/` layer is a near-clone of stock `fhir.base.template`: `diff` of
+`cycle/template/layouts` vs `ig-template-base/layouts` = exactly ONE addition (`layout-questionnaire.html`)
+plus two extra includes (`fragment-feedback_form.html`, `fragment-language.html`). It **restricts
+nothing** and its config.json `defaults` block is the same page-layout map. So cycle's per-SD numbers are
+effectively the pure-stock numbers.
+
+**(b) Reference set from the PURE stock chain.** Generated N = distinct base `.xhtml` (excluding `-en`
+dupes) actually produced in `cycle/temp/pages/_includes` (SD `menstrual-flow` = 79, ground-truthed).
+M = suffixes the stock `ig-template-base` layouts actually `{% include %}` (union over the layouts each
+type uses per `config.json` `defaults`). The generated menu per type was enumerated from the
+`wantGen(r,"code")` guards in `PublisherGenerator` (CodeSystem `:1478`, ValueSet `:1528`,
+StructureDefinition `:1808`, plus the shared per-resource path `:950-1347` that adds
+`html/json-html/xml-html/ttl-html/status/maturity/validate/validation/ip-statements/history`).
+
+| Type | N (produced) | M (ref by stock) | Dead K | Dead % |
+|---|---|---|---|---|
+| StructureDefinition | 79 | 25 | 54 | 68% |
+| ValueSet | 18 | 5 | 13 | 72% |
+| CodeSystem | 17 | 4 | 13 | 76% |
+| Example instance | 10 | 3 | 7 | 70% |
+| ImplementationGuide | 11 | 0 | 11 | 100% |
+
+SD M(25) = contained-index, dict, dict-diff, dict-key, diff, diff-all, history, inv, inv-diff, inv-key,
+maps, pseudo-json/ttl/xml, sd-use-context, sd-xref, snapshot, snapshot-all, snapshot-by-key,
+snapshot-by-key-all, summary, summary-all, tx, tx-diff, tx-key
+(`ig-template-base/layouts/layout-profile.html`, `layout-ext.html`, `layout-profile-definitions.html`,
+`layout-profile-mappings.html`, `layout-profile-history.html`).
+SD dead(54) = every `*-obligations`, `*-bindings`, `*-by-mustsupport*`, `adl/adl-all`, `class-table`,
+`crumbs`, `ctxts`, `dict-active`, `dict-ms`, `eview/eview-all`, `expansion`, `experimental-warning`,
+`grid`, `header`, `html`, `json-schema`, `maturity`, `other-versions`, `sd-changes`, `search-params`,
+`shex`, `span/spanall`, `status`, `summary-table`, `tx-must-support`, `tx-diff-must-support`, `typename`,
+`uses`, `validate/validation`, `xml-html/json-html/ttl-html`, `ip-statements`. (Cycle's own tabbed layer
+consumes 27 vs the pure-stock 25 — the extra 2 are `snapshot`/tab permutations; the correction
+27→25 is the "cycle's own template layer" contamination Josh flagged.)
+
+This corrects Part 1's "27/79". The pure-stock number is **25/79 referenced, 54 dead (68%)**.
+
+**(c) Sanity-check + the authored-pagecontent channel.** Ground-truthed against the real cycle run
+(`cycle/temp/pages/_includes`, 5,462 base `.xhtml`). Authored `pagecontent` CAN `{% include X.xhtml %}`,
+but across **15 real IGs** (`scratchpad/ig-survey/*`), authored pagecontent contains **ZERO** per-resource
+`Type-id-suffix.xhtml` includes. It only pulls IG-level aggregates — union across all 15:
+`ip-statements`, `dependency-table(-short)`, `globals-table`, `cross-version-analysis`, `expansion-params`,
+`table-{profiles,valuesets,codesystems,extensions,conceptmaps,capabilitystatements,searchparameters,
+operationdefinitions}`, `list-{simple-operationdefinitions,requirements,capabilitystatements}`,
+`summary-observations` (~20 kinds). **How much does this move M for per-resource types? Zero.** The authored
+channel is a separate, small, bounded IG-level set; it does not touch the per-SD/VS/CS menu. (Whole-IG the
+biggest categories are `list-*` = 2730 files and `table-*` = 1400 files — all IG-level aggregates, not
+per-resource, confirming the authored channel is aggregate-only.)
+
+### Q2 — Rapido's regex brittleness
+
+`TemplateFragmentTypeLoader` (`:16` INCLUDE_PATTERN, `:97` processIncludes). Two stages:
+`INCLUDE_PATTERN` captures the first whitespace-free token after `include`;
+`processIncludes` keeps only tokens containing literal `{{[id]}}` matching
+`^(.+?)-\{\{\[id\]\}\}-(.+?)(\{\{\[langsuffix\]\}\})?\.xhtml$`, then splits prefix/suffix (expanding
+`{{format}}`→json/xml/ttl). Resolution at `Template.java:624 wantGenerateFragment`: check
+`usedFragmentTypes.get(type)` then fall back to `usedFragmentTypes.get("{{[type]}}")` (`:637`) then a
+hardcoded always-on list (`:643`).
+
+**Tested against the real stock chain: 55 unique include tokens → 35 parse, both the literal-prefix
+(`StructureDefinition-{{[id]}}-snapshot.xhtml`) and generic (`{{[type]}}-{{[id]}}-history.xhtml`, caught by
+the `{{[type]}}` fallback) forms.** It IGNORES control flow — includes wrapped in `{% if %}`/tab blocks
+(`layout-profile.html:84-274`) are treated as unconditionally referenced. That is the SAFE direction:
+superset → over-generate, never under-generate. **Only genuine miss:** `{{[type]}}-{{[name]}}.xhtml`
+(`layout-instance-format.html:30`, uses `{{[name]}}` not `{{[id]}}` → silently skipped), and even that is
+backstopped by the always-on `xml-html/json-html/ttl-html` list. It would break on `assign`/`capture`-built
+names, includes-from-data, or `{% include {{var}} %}` — legal Liquid, absent from the stock chain, so
+fragment need is undecidable statically in the general case.
+
+**Verdict:** sound-but-underengineered (safe, because it errs toward over-generation), not fundamentally
+wrong for stock templates — but fragile for arbitrary templates. **Recommended robust mechanism for the
+Rust reimpl: don't statically scan. Resolve includes at render time and generate-on-first-include-miss**
+(lazy materialization keyed by the include actually requested). Nothing in the stock model breaks this:
+no template probes a fragment's *existence* (no `{% if fragmentexists %}`); every include is an
+unconditional consume. First-miss generation is therefore complete AND eliminates both the dead-weight
+(§Q1) and the scanner.
+
+### Q3 — Can templates define/shape fragments?
+
+The fragment-KIND universe IS closed in Java (`wantGen`-gated `fragment()` calls, write at
+`PublisherGenerator.java:2473`), but "hardcoded Java menu, template composes only" undersells three real
+template-side channels:
+
+1. **`liquid/` dir = a template-defined PER-RESOURCE rendering channel.**
+   `IGPublisherLiquidTemplateServices.load()` (`:41-53`) keys `<ResourceType>.liquid` by
+   `fhirType().toLowerCase()` and serves it via `findTemplate(ctx, resource)` (`:57-61`). Stock base ships
+   `Measure/Library/ActivityDefinition/PlanDefinition.liquid`. These SHAPE the narrative/`-html` CONTENT the
+   publisher emits for those types (they don't add fragment kinds).
+2. **ant `onGenerate.processIncludes` writes into the consumed `_includes` namespace.**
+   `ig-template-base/scripts/ant.xml:120-135` `<copy>`s `template/includes/*` into `${temp}/_includes` and
+   generates `artifacts.xml` (XSLT `createArtifactSummary.xslt`) + plantUML SVGs there, via the
+   `onGenerate.extend` extension-point (`:139`). A template-injected include channel distinct from Java.
+3. **`extraTemplates` (config.json) registers new page LAYOUTS/tabs** (mappings, testing, examples, format,
+   profile-history), iterated in `PublisherGenerator.java:1019,1039`
+   (`for (templateName : extraTemplates.keySet())`). New pages/tabs; fragment kinds inside still Java.
+
+Plus **parameterization that reshapes fragment content:** `tabbed-snapshots` (`PublisherIGLoader.java:652`
+→ `tabbedSnapshots` threaded into every `sdr.snapshot/diff/byKey/tx` call), and `no-narrative`/`generate`
+params (`PublisherIGLoader.java:336,342`).
+
+**Verdict:** the kind-set is closed (Java), but CONTENT and PAGE-composition are template-open. A Rust
+reimpl's compatibility surface must reproduce four things, not one: (a) the closed Java kind menu,
+(b) the per-type `liquid` narrative renderer channel, (c) the template-injected `_includes` aggregate files
+(ant), (d) the `tabbed-snapshots`/`no-narrative`/`generate` shaping. Only (a) is fixed; (b)-(d) are the
+template-defined surface.
+
+### Source map (Part 2)
+- Cycle template decl: `cycle/ig-gh-actions.ini:3`; near-identical to stock (diff = +`layout-questionnaire`)
+- Stock layout→fragment map: `ig-template-base/config.json:85-` (`defaults`), `layouts/layout-profile.html`,
+  `layout-ext.html`, `layout-profile-definitions.html`, `layout-valueset.html`, `layout-codesystem.html`,
+  `layout-instance-base.html`
+- Generated menu enumerated via `wantGen` guards: `PublisherGenerator.java:1478,1528,1808,950-1347`
+- Authored pagecontent survey: `scratchpad/ig-survey/*/input/pagecontent` (15 IGs, 0 per-resource includes)
+- Rapido loader: `TemplateFragmentTypeLoader.java:16,97`; resolution `Template.java:624,637,643`
+- Liquid per-resource channel: `IGPublisherLiquidTemplateServices.java:41-61`; `ig-template-base/liquid/*.liquid`
+- ant include injection: `ig-template-base/scripts/ant.xml:120-139`
+- extraTemplates iteration: `PublisherGenerator.java:1019,1039`; `Template.java:524-535`
+- Params: `PublisherIGLoader.java:336,342,652`
