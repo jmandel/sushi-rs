@@ -1366,8 +1366,14 @@ impl Parser {
                 if depth <= 0 {
                     inner.push(before.to_string());
                     self.i = line_idx + 1;
-                    // Note: content after close tag on same line is dropped
-                    // (rare in corpus; blockquote close is on its own line).
+                    // Content AFTER the close tag on the same line becomes the
+                    // next line to parse (kramdown continues block parsing
+                    // right after the end tag).
+                    let rest = &slice[pos + close_pat.len()..];
+                    if !rest.trim().is_empty() {
+                        let rest = rest.to_string();
+                        self.lines.insert(self.i, rest);
+                    }
                     return (inner.join("\n"), close_pat);
                 } else {
                     inner.push(slice.to_string());
