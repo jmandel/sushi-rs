@@ -705,16 +705,45 @@ with the R4 base); `suffix(link,code)` keeps an existing `#anchor` else appends
 7. Complex-extension no-value → `SDR_NOT_HANDLED_EXT` double-nested
    "Not handled yet: complex extension {url}" string.
 
+### tx family GREEN corpus-wide (session 6, forked port — commit 4acae6d9)
+
+All 5 kinds (tx, tx-must-support, tx-key, tx-diff, tx-diff-must-support):
+us-core **70/70**, plan-net **22/22**, cycle **7/7** each (empty-binding SDs
+render "" faithfully). `tx.rs` (~450 LOC); `context.rs` Resolved gains
+`pkg: Option<PkgMeta>` + `tx_server` (PkgEntry reads package.json
+name/canonical/title; resolve behavior untouched — full floor re-verified).
+
+- **renderVersionReference branches hit** (RR:1597): STATED 📍 (1320 — core VS
+  `|4.0.1` pins; astral glyph NCR-escaped), BY_PACKAGE 📦+actual (280 — THO/
+  US Core/phinvads), THIS_PACKAGE 📦 (260 — own-IG VS, keyed off relative
+  webPath), FOUND ⏿ + `td opacity: 0.5` (242 — tx-cache externals, no
+  sourcePackage), NOTHING → the literally-truncated `Not State` phrase
+  (VS_VERSION_NOTHING_TEXT, 7 rows with no valueSet). LATEST/WILDCARD/NONE:
+  zero corpus hits, loud gaps.
+- **Source cell**: getSourcePackageName = canonical switch (THO/US Core/VSAC/
+  DICOM) else package.json `title` (phinvads has none → falls to id
+  `us.cdc.phinvads`), + " v" + majMin; link = package.json `url`. Core package →
+  "FHIR Std." linked to https spec base. Own IG → "This IG" unlinked. External →
+  URL host linked to server.
+- **Quirks**: Usage anchor = Java Enumeration-toString leak
+  (`terminologies.html#Enumeration[extensible]`); Status column hardcoded
+  "Base"; txItemHeadings hasFixed param dead (always false — ValueSet/Code
+  heading + render_tx_value unreachable); insertBreakingSpaces = ZWSP after '.'
+  at ≥20 chars.
+- **Dimming rule**: SNAPSHOT_DERIVATION_POINTER exists only on DIFFERENTIAL
+  elements → snapshot walks (tx/-key/-ms) never dim; diff walks dim the VS link
+  for every pointer-bearing element, the strength link only when the diff does
+  not restate strength.
+
 ### F4 remaining after session 6
 - **DONE green corpus-wide:** contained-index, history, pseudo-ttl, pseudo-xml,
-  inv/-key/-diff, sd-use-context, pseudo-json, summary/-all (−1 practitioner
-  cited residual).
-- **Terminology (reclassified):** tx/-diff/-key/-ms (VS resolution + version-
-  reference renderVersionReference 8-branch + source-package attribution, NOT
-  markdown — non-empty denominators 65/17/7), VS cld/expansion, CS content.
-  Needs IgContext to expose source-package (id/version/web) for resolved VS.
-- **Whole-IG + markdown:** dict (renderDict + processMarkdown), sd-xref/uses/maps
-  (mappings uses processMarkdown at psdr:1482 — now unblocked), IG aggregates.
+  inv/-key/-diff, sd-use-context, pseudo-json, tx/-must-support/-key/-diff/
+  -diff-must-support, summary/-all (−1 practitioner cited residual).
+- **Terminology:** VS cld/expansion, CS content (tx-cache expansion source;
+  TxCacheSource abstraction still to design).
+- **Whole-IG + markdown:** dict (renderDict + processMarkdown — md now
+  unblocked), sd-xref/uses/maps (mappings md at psdr:1482 — unblocked), VS/CS
+  xref, IG aggregates (need full FetchedFile resource set from F0 outputs).
 
 ## Remaining
 
