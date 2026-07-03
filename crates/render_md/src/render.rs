@@ -377,13 +377,14 @@ impl Renderer {
             out.push_str(&format!("      <{cell_tag}"));
             out.push_str(&align_style(a));
             out.push('>');
-            // kramdown cell filling: a cell PRESENT in the source but empty
-            // renders as a non-breaking space; a MISSING cell (row shorter
-            // than the table) is padded with a regular space (verified
-            // against oracle).
-            if missing {
+            // kramdown cell filling (verified against oracle): an empty or
+            // missing cell within the ALIGNMENT range renders as a
+            // non-breaking space (the parser pads rows to the separator's
+            // column count with empty cells); a column that exists only
+            // beyond the alignment range is padded with a regular space.
+            if missing && i >= aligns.len() {
                 out.push(' ');
-            } else if cell.trim().is_empty() {
+            } else if missing || cell.trim().is_empty() {
                 out.push('\u{a0}');
             } else {
                 out.push_str(&render_inline(cell));
