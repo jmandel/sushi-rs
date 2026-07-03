@@ -81,7 +81,10 @@ parity**, re-rendering only what the edit dirtied.
    read-set-dirty pages (Ledger 2). US Core's 70 profiles never render
    eagerly — only visited pages materialize.
 6. **Oracle & goldens**: per-fragment goldens = the `_includes/*.xhtml` dump
-   of real Publisher runs (pinned 2.2.10). Golden corpora: cycle (have),
+   of real Publisher runs (pinned 2.2.10; PIN CORRECTION 2026-07-03: the
+   2.2.10 jar EMBEDS fhir-core **6.9.11** build 6a8b9c0c679, not 6.9.10 —
+   renderer citations use the 6.9.11 worktree; only table-path delta vs
+   6.9.10 is element-ID anchors, SDR:933). Golden corpora: cycle (have),
    **US Core**, + 2 mid-size IGs (sdc, plan-net) — one-time Publisher runs,
    isolated HOME, committed like all goldens. Page-level goldens = the same
    runs' final HTML. Never normalize beyond the explicit documented set.
