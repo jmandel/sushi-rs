@@ -17,6 +17,7 @@ mod resolve;
 mod simple;
 mod slicing;
 mod sliced;
+mod sort;
 mod trace;
 mod types;
 mod types_pred;
@@ -63,7 +64,7 @@ pub fn generate_snapshot(
     };
     // Convert R4 input to R5-internal.
     let derived = resolve::to_r5_internal(&derived)?;
-    let out = generate_snapshot_with_opts(&mut ctx, derived, options.sort_differential)?;
+    let out = generate_snapshot_with_opts(&mut ctx, derived, options.sort_differential, true)?;
     Ok(out)
 }
 
@@ -87,7 +88,9 @@ pub(crate) fn generate_snapshot_inner(
         gen_stack: parent.gen_stack.clone(),
         derived_url: String::new(),
     };
-    let result = generate_snapshot_with_opts(&mut ctx, sd, true);
+    // Nested generation (PPP:810 / PU:762): plain generateSnapshot — the
+    // driver-level sortDifferential and bare-root prepend do NOT apply.
+    let result = generate_snapshot_with_opts(&mut ctx, sd, false, false);
     parent.gen_cache = std::mem::take(&mut ctx.gen_cache);
     parent.messages.extend(ctx.messages.drain(..));
     result
@@ -97,6 +100,7 @@ fn generate_snapshot_with_opts(
     ctx: &mut WalkContext,
     mut derived: Value,
     sort: bool,
+    top_level: bool,
 ) -> anyhow::Result<Value> {
     let url = derived
         .get("url")
@@ -126,12 +130,6 @@ fn generate_snapshot_with_opts(
     // didn't apply it (convert.rs owns this).
 
     // Preprocess (sortDifferential + slice-group push-down).
-    let base_elements_for_sort: Vec<Value> = base
-        .get("snapshot")
-        .and_then(|s| s.get("element"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
     let mut diff_elements: Vec<Value> = derived
         .get("differential")
         .and_then(|d| d.get("element"))
@@ -139,14 +137,21 @@ fn generate_snapshot_with_opts(
         .cloned()
         .unwrap_or_default();
     if sort {
-        preprocess::sort_differential(&mut diff_elements, &base_elements_for_sort);
+        let profile_name = format!("profile {url}");
+        let base_for_sort = (*base).clone();
+        let sort_errors =
+            sort::sort_differential(ctx, &base_for_sort, &mut diff_elements, &profile_name)?;
+        for e in sort_errors {
+            ctx.add_message(context::Severity::Error, &profile_name, e);
+        }
     }
 
     // Oracle driver root-prepend (SnapOracleR4:179-184): for the R4 path, if the
     // first diff element's path is absent or dotted (not the bare resource root),
     // prepend a bare root element `ElementDefinition().setPath(type or root)`.
     // The R5 oracle (SnapOracle) does not do this; gate on R4 input.
-    let is_r4_input = derived
+    let is_r4_input = top_level
+        && derived
         .get("fhirVersion")
         .and_then(Value::as_str)
         .map(|v| v.starts_with('4'))
@@ -173,14 +178,34 @@ fn generate_snapshot_with_opts(
         }
     }
 
-    preprocess::process(&mut diff_elements);
-
     let mut base_elements: Vec<Value> = base
         .get("snapshot")
         .and_then(|s| s.get("element"))
         .and_then(Value::as_array)
         .cloned()
         .context("base StructureDefinition has no snapshot.element")?;
+
+    // P18 trace: generateSnapshot.begin fires AFTER the diff clone but BEFORE
+    // the preprocessor (PU:826-830) — diffElements counts pre-preprocess rows.
+    if trace::active() {
+        trace::rec(
+            "generateSnapshot",
+            "generateSnapshot.begin",
+            Some(&base_url),
+            Some(&url),
+            Some(serde_json::json!({
+                "baseElements": base_elements.len(),
+                "diffElements": diff_elements.len(),
+                "derivation": derived.get("derivation").and_then(Value::as_str).unwrap_or(""),
+            })),
+        );
+    }
+
+    let derived_versioned_url = match derived.get("version").and_then(Value::as_str) {
+        Some(v) if !v.is_empty() => format!("{url}|{v}"),
+        _ => url.clone(),
+    };
+    let injected = preprocess::process(ctx, &mut diff_elements, &derived_versioned_url)?;
 
     // P6 fixTypeOfResourceId (PU:1305): for R4+ resource bases, rewrite every
     // element whose base.path == "Resource.id" to System.String with a fhir-type
@@ -196,24 +221,10 @@ fn generate_snapshot_with_opts(
     }
 
     ctx.diff_consumed = vec![false; diff_elements.len()];
-    ctx.diff_injected = vec![false; diff_elements.len()];
+    ctx.diff_injected = injected;
     ctx.diff = Rc::new(diff_elements);
     ctx.output = Vec::new();
     ctx.output_ann = Vec::new();
-
-    if trace::active() {
-        trace::rec(
-            "generateSnapshot",
-            "generateSnapshot.begin",
-            Some(&base_url),
-            Some(&url),
-            Some(serde_json::json!({
-                "baseElements": base_elements.len(),
-                "diffElements": ctx.diff.len(),
-                "derivation": derived.get("derivation").and_then(Value::as_str).unwrap_or(""),
-            })),
-        );
-    }
 
     // The walk.
     let base_source_url = base.get("url").and_then(Value::as_str).unwrap_or(&base_url).to_string();
@@ -311,11 +322,14 @@ fn fix_type_of_resource_id(elements: &mut [Value]) {
     }
 }
 
-/// context.getSpecUrl() equivalent: R5 core -> R5 spec, R4 -> base spec.
+/// context.getSpecUrl() equivalent (SimpleWorkerContext:964 →
+/// VersionUtilities.getSpecUrl + "/"): 4.0→R4, 4.3→R4B, 5.0→R5.
 fn spec_url_for(base: &Value) -> String {
     match base.get("fhirVersion").and_then(Value::as_str) {
+        Some(v) if v.starts_with("4.0") => "http://hl7.org/fhir/R4/".to_string(),
+        Some(v) if v.starts_with("4.3") => "http://hl7.org/fhir/R4B/".to_string(),
+        Some(v) if v.starts_with("3.0") => "http://hl7.org/fhir/STU3/".to_string(),
         Some(v) if v.starts_with('5') => "http://hl7.org/fhir/R5/".to_string(),
-        Some(v) if v.starts_with('4') => "http://hl7.org/fhir/".to_string(),
         _ => "http://hl7.org/fhir/R5/".to_string(),
     }
 }

@@ -41,13 +41,12 @@ fn snapshot_elements(v: &Value) -> Value {
 
 /// The ladder in rung order.
 ///
-/// `r4-patient-card-ms` is intentionally NOT gated here: the walk builds a
-/// decision-correct R5-internal snapshot (same 45 elements, correct semantics),
-/// but the R4->native-R5 OUTPUT projection (keep constraint.xpath as a field for
-/// R4-base-inherited constraints; preserve `elementdefinition-isCommonBinding`
-/// on R4 bases) is not yet wired into finalize. See walk-worklog.md "R4 output
-/// projection". The R5 rungs below fully gate the walk decision engine.
+/// `r4-patient-card-ms` was re-pinned 2026-07-02: the old golden was in the
+/// pre-native-R5 transitional shape (constraint.xpath as a plain field); the
+/// coordinator regenerated it with the pinned oracle (`gen-snapshot.sh --r4
+/// --sort`) and it now gates the walk engine's R4 load path here.
 const LADDER: &[&str] = &[
+    "r4-patient-card-ms",
     "r5-patient-min",
     "r5-patient-card-ms",
     "r5-patient-card-ms-unsorted",

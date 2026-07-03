@@ -58,8 +58,13 @@ fn fixtures_match_oracle_snapshot_elements() -> anyhow::Result<()> {
     let r4_ctx = snapshot_gen::PackageContext::new(&cache, &r4_packages)?;
     let r5_ctx = snapshot_gen::PackageContext::new(&cache, &r5_packages)?;
 
+    // `r4-patient-card-ms` was removed from this LEGACY gate 2026-07-02: its
+    // golden was regenerated to the current pinned oracle's native-R5 shape
+    // (transitional R4-shaped output retired; see REWORK-PLAN.md). The legacy
+    // engine intentionally still produces the old shape and is scheduled for
+    // deletion at walk cutover; the walk engine gates this fixture instead
+    // (tests/walk_parity.rs).
     for name in [
-        "r4-patient-card-ms",
         "r5-extension-simple",
         "r5-observation-reference-profile",
         "r5-patient-binding-overlay",

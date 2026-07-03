@@ -359,7 +359,22 @@ pub(crate) fn process_simple_path_one_match(
         from_slicer,
     );
 
-    // Slicer max clamp is dead (APPLY_PROPERTIES_FROM_SLICER=false handled in template).
+    // PPP:911 slicer max clamp (LIVE: APPLY_PROPERTIES_FROM_SLICER=false makes
+    // the !APPLY guard true): if outcome.max > slicer.max, take the slicer's max.
+    if let Some(slicer) = slicer {
+        let max_as_int = |ed: &Value| -> i64 {
+            match ed.get("max").and_then(Value::as_str) {
+                Some("*") => i64::MAX,
+                Some(n) => n.parse::<i64>().unwrap_or(0),
+                None => 0,
+            }
+        };
+        if max_as_int(&outcome) > max_as_int(slicer) {
+            if let Some(m) = slicer.get("max") {
+                set_field(&mut outcome, "max", m.clone());
+            }
+        }
+    }
     // setSlicing(null): merge case never carries slicing.
     if let Some(obj) = outcome.as_object_mut() {
         obj.remove("slicing");
@@ -493,6 +508,12 @@ fn try_profile_template(
     if base_profile == Some(profile_url) {
         return Ok(None);
     }
+    // PPP:778-811: resolve the profile SD FIRST — generating its snapshot on
+    // demand if absent (a visible nested generateSnapshot in the trace) — and
+    // only THEN gate template use on the base type summary (PPP:843).
+    let Some(sd) = resolve_with_snapshot(ctx, profile_url)? else {
+        return Ok(None);
+    };
     let base_type_summary = type_codes(current_base)
         .first()
         .cloned()
@@ -500,19 +521,19 @@ fn try_profile_template(
     if base_type_summary != "Extension" && base_type_summary != "Resource" {
         return Ok(None);
     }
-    let Some(sd) = resolve_with_snapshot(ctx, profile_url)? else {
-        return Ok(None);
-    };
     let kind = sd.get("kind").and_then(Value::as_str).unwrap_or("");
-    let sd_type = sd.get("type").and_then(Value::as_str).unwrap_or("");
-    if kind != "resource" && sd_type != "Extension" {
-        return Ok(None);
-    }
     let root = snapshot_elements(&sd)
         .first()
         .cloned()
         .unwrap_or_else(empty_object);
     let mut template = root;
+    // PPP:836-840: for a resource-kind profile root, the constraints can't be
+    // migrated (the sense of %resource changes) — clear them.
+    if !path_of(&template).contains('.') && kind == "resource" {
+        if let Some(obj) = template.as_object_mut() {
+            obj.remove("constraint");
+        }
+    }
     set_field(&mut template, "path", Value::String(path_of(current_base).to_string()));
     if let Some(obj) = template.as_object_mut() {
         obj.remove("sliceName");

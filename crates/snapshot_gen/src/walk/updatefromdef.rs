@@ -11,7 +11,9 @@
 
 use serde_json::Value;
 
-use super::consts::{DEFAULT_INHERITED_ED_URLS, NON_INHERITED_ED_URLS, NON_OVERRIDING_ED_URLS};
+use super::consts::{
+    DEFAULT_INHERITED_ED_URLS, NON_INHERITED_ED_URLS, NON_OVERRIDING_ED_URLS, OVERRIDING_ED_URLS,
+};
 use super::context::{Severity, WalkContext};
 use super::trace;
 use crate::merge::*;
@@ -84,6 +86,12 @@ pub(crate) fn update_from_definition(
     drop_second_translatable(dest);
     // updateExtensionsFromDefinition(dest, source) — element-level extensions.
     update_extensions_from_definition(dest, source);
+
+    // PU:2648-2717 profile-on-type root override: when the (base slice's or the
+    // diff's) single type profile resolves to an Extension / resource SD, the
+    // profile snapshot root's doco overwrites the base clone's doco (restoring
+    // it after checkExtensionDoco normalized it away).
+    apply_profile_root_doco(ctx, dest, source);
 
     let path = dest.get("path").and_then(Value::as_str).unwrap_or("").to_string();
     let derived_path = source.get("path").and_then(Value::as_str).unwrap_or("").to_string();
@@ -343,11 +351,122 @@ fn update_extensions_from_definition(dest: &mut Value, source: &Value) {
         if !dest_has {
             ensure_array_field(dest, "extension").push(ext.clone());
         } else if NON_OVERRIDING_ED_URLS.contains(&url) {
-            // do nothing (keep dest's)
+            // do nothing (keep dest's) — PU:3234-3238.
+        } else if OVERRIDING_ED_URLS.contains(&url) {
+            // PU:3239-3241: set value on the first existing extension with this url.
+            if let Some(arr) = dest.get_mut("extension").and_then(Value::as_array_mut) {
+                if let Some(existing) = arr
+                    .iter_mut()
+                    .find(|e| e.get("url").and_then(Value::as_str) == Some(url))
+                {
+                    if let Some(obj) = existing.as_object_mut() {
+                        let value_keys: Vec<String> = obj
+                            .keys()
+                            .filter(|k| k.starts_with("value"))
+                            .cloned()
+                            .collect();
+                        for k in value_keys {
+                            obj.remove(&k);
+                        }
+                        if let Some(src_obj) = ext.as_object() {
+                            for (k, v) in src_obj {
+                                if k.starts_with("value") {
+                                    obj.insert(k.clone(), v.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         } else if let Some(arr) = dest.get_mut("extension").and_then(Value::as_array_mut) {
-            // OVERRIDING or default: default appends a duplicate (Java `else` branch).
+            // Default: append a duplicate (Java `else`, PU:3242-3244).
             arr.push(ext.clone());
         }
+    }
+}
+
+/// PU:2648-2717. `dest` = base clone being built; `source` = diff element.
+fn apply_profile_root_doco(ctx: &mut WalkContext, dest: &mut Value, source: &Value) {
+    fn single_type_profile(ed: &Value) -> Option<String> {
+        let types = ed.get("type").and_then(Value::as_array)?;
+        let first = types.first()?;
+        first
+            .get("profile")
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    }
+
+    let mut profile: Option<std::rc::Rc<Value>> = None;
+    // Branch 1 (PU:2650-2652): dest is a named slice with exactly one profiled type.
+    if has(dest, "sliceName") {
+        let dest_type_count = dest
+            .get("type")
+            .and_then(Value::as_array)
+            .map(|a| a.len())
+            .unwrap_or(0);
+        if dest_type_count == 1 {
+            if let Some(purl) = single_type_profile(dest) {
+                profile = super::resolve::resolve_with_snapshot(ctx, &purl).ok().flatten();
+            }
+        }
+    }
+    // Branch 2 (PU:2653-2678): the diff's first type profile.
+    if profile.is_none() {
+        if let Some(purl) = single_type_profile(source) {
+            if let Ok(Some(p)) = super::resolve::resolve_with_snapshot(ctx, &purl) {
+                let ptype = p.get("type").and_then(Value::as_str).unwrap_or("");
+                let kind = p.get("kind").and_then(Value::as_str).unwrap_or("");
+                if ptype == "Extension" || kind == "resource" || kind == "logical" {
+                    profile = Some(p);
+                }
+                // else: deliberately do NOT override (PU:2672-2677).
+            }
+        }
+    }
+    let Some(profile) = profile else { return };
+    let ptype = profile.get("type").and_then(Value::as_str).unwrap_or("");
+    let kind = profile.get("kind").and_then(Value::as_str).unwrap_or("");
+    if kind != "resource" && ptype != "Extension" {
+        return;
+    }
+    let Some(root) = profile
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+    else {
+        return;
+    };
+    if let Some(d) = root.get("definition") {
+        set_field(dest, "definition", d.clone());
+    }
+    if let Some(bd) = root.get("binding").and_then(|b| b.get("description")) {
+        if let Some(binding) = dest.get_mut("binding") {
+            set_field(binding, "description", bd.clone());
+        }
+    }
+    // base.setShort(e.getShort()) — unconditional in Java; extension roots always
+    // carry a short in practice, so copy-if-present (else clear).
+    match root.get("short") {
+        Some(s) => set_field(dest, "short", s.clone()),
+        None => remove_field(dest, "short"),
+    }
+    if let Some(c) = root.get("comment") {
+        set_field(dest, "comment", c.clone());
+    }
+    if let Some(r) = root.get("requirements") {
+        set_field(dest, "requirements", r.clone());
+    }
+    // alias / mapping: clear + addAll (replace wholesale).
+    match root.get("alias") {
+        Some(a) => set_field(dest, "alias", a.clone()),
+        None => remove_field(dest, "alias"),
+    }
+    match root.get("mapping") {
+        Some(m) => set_field(dest, "mapping", m.clone()),
+        None => remove_field(dest, "mapping"),
     }
 }
 

@@ -16,6 +16,40 @@ pub(crate) fn finalize(
     derived: &mut Value,
     base_version: Option<&str>,
 ) -> anyhow::Result<()> {
+    // Q8 (PU:964-983): trim mapping.map whitespace; absolutize relative
+    // constraint.source references.
+    for ed in ctx.output.iter_mut() {
+        if let Some(mappings) = ed.get_mut("mapping").and_then(Value::as_array_mut) {
+            for mm in mappings {
+                if let Some(m) = mm.get("map").and_then(Value::as_str) {
+                    let trimmed = m.trim();
+                    if trimmed.len() != m.len() {
+                        let trimmed = trimmed.to_string();
+                        if let Some(obj) = mm.as_object_mut() {
+                            obj.insert("map".to_string(), Value::String(trimmed));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(constraints) = ed.get_mut("constraint").and_then(Value::as_array_mut) {
+            for c in constraints {
+                let Some(src) = c.get("source").and_then(Value::as_str) else { continue };
+                let is_absolute = src.contains("://") || src.starts_with("urn:");
+                if !is_absolute {
+                    let new_src = if let Some(dot) = src.find('.') {
+                        format!("http://hl7.org/fhir/StructureDefinition/{}#{src}", &src[..dot])
+                    } else {
+                        format!("http://hl7.org/fhir/StructureDefinition/{src}")
+                    };
+                    if let Some(obj) = c.as_object_mut() {
+                        obj.insert("source".to_string(), Value::String(new_src));
+                    }
+                }
+            }
+        }
+    }
+
     // Q6 setIds on the snapshot.
     let type_name = derived.get("type").and_then(Value::as_str).map(str::to_string);
     generate_ids_with_type(&mut ctx.output, type_name.as_deref());
