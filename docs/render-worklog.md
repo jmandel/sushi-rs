@@ -125,7 +125,9 @@ documented snapshot-source variance for cycle).
 | **snapshot-by-mustsupport-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
 | **snapshot-by-key** | 6 / 7 † | **22 / 22** | **70 / 70** |
 | **snapshot-by-key-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
-| **grid** | 6 / 7 §  | 14 / 22 § | 28 / 70 § |
+| **grid** | **7 / 7** | **22 / 22** | **70 / 70** |
+| **diff** | 6 / 7 † | **22 / 22** | **70 / 70** |
+| **diff-all** | 6 / 7 † | **22 / 22** | **70 / 70** |
 
 † cycle's one failure (period-tracking-fact) is byte-equal except the
   abstract-profile child-list ORDER — a genuinely non-deterministic publisher
@@ -136,13 +138,68 @@ documented snapshot-source variance for cycle).
   `I/O error writing PNG file!` spans, quirk #2). The by-key/by-mustsupport
   totals are 22/22 because those goldens are NOT error artifacts (the failure was
   snapshot-specific), so all 22 count.
-§ grid: every residual grid failure is the shared `Cell.addMarkdown` full-
-  markdown engine (Definition:/Comments: multi-paragraph text + `**bold**` +
-  `[link](url)` in multi-para prose) — a documented F3/F4 leaf, NOT a grid
-  renderer bug (classified per-fragment: all us-core/plan-net/cycle grid
-  divergences land inside a Definition/Comments markdown region). The grid
-  renderer itself is complete: types/target-links/bindings resolve through the
-  same IgContext oracle the snapshot path uses.
+§ (resolved 2026-07-03) grid went GREEN corpus-wide once (a) the commonmark
+  cell engine landed (below) and (b) two cited grid fixes: the STRUC_DEF_SEE
+  dead-i18n-arg contentReference text (quirk #8) and the
+  `generateGridDescription` used-gate (SDR:3104 — empty description cell for
+  prohibited max=0 elements, plannet-Network).
+
+## The markdown cell engine (2026-07-03) — commonmark, NOT kramdown
+
+**MarkDownProcessor finding**: the SD table description cells do NOT go
+through Jekyll/kramdown OR even fhir-core's `MarkDownProcessor` COMMON_MARK
+path. `Cell.addMarkdown` (HTG:340-353) runs **vanilla commonmark-java**
+(`Parser.builder().build()` — no TablesExtension, no `preProcess` raw-html
+escaping) with `HtmlRenderer.escapeHtml(true)`, then re-parses the HTML string
+via XhtmlParser into Pieces (`htmlToParagraphPieces`, HTG:392-425 — two
+`Piece("br")` before every non-first top-level child; `<p>` inlined via
+`addNode` HTG:439-472; other elements become tag-Pieces carrying XhtmlNode
+children). render_md (kramdown, F1b) is the WRONG engine for these cells and
+was not wired in. Instead `render_sd::commonmark` (~530 LOC) implements the
+commonmark-java subset the corpus exercises (measured over all 7,410
+definition/comment strings): paragraphs, tight ul/ol, hard/soft breaks, code
+spans, links, delimiter-stack emphasis with flanking + intraword-`_` +
+rule-of-3. 11 unit tests pin exact HTML shapes; out-of-scope constructs fail
+loud. `markdown.rs` is the faithful htmlToParagraphPieces/addNode port over
+`render_xhtml`'s parser (+ a styled variant for the diff view's dimmed
+binding descriptions, HTG:372/414/441-466).
+
+## diff / diff-all (2026-07-03) — pointer RECONSTRUCTION, snapshot_gen untouched
+
+The prior analysis ("needs the 23 ProfileUtilities DERIVATION_EQUALS set-sites
+ported into snapshot generation") was WRONG in a useful way. Key discovery:
+most diff-view dimming is derived at RENDER time from
+`SNAPSHOT_DERIVATION_POINTER` (the diff element -> base element link), not from
+the snapshot-gen property stamps:
+- genCardinality (SDR:1431-1447) copies missing min/max from the POINTER and
+  stamps EQUALS itself; genTypes (SDR:2357-2364) likewise for types;
+  generateDescription's short-fallback (SDR:1594-1602) dims the pointer's
+  short unconditionally; makeUnifiedBinding (SDR:2726-2758) merges the
+  pointer's binding parts in with EQUALS stamps.
+- The pointer itself is reconstructable from JSON: pointer(diffElem) = the
+  profile's OWN snapshot element with the same id (PU:2591 sets it to the base
+  clone that becomes that snapshot element; for properties the diff didn't
+  restate, snapshot value == base value byte-for-byte). Choice renames need two
+  id fallbacks: sliced (`value[x]:valueQuantity` -> `valueQuantity`) and
+  unsliced (`valueQuantity` -> `value[x]`, camelCase rewrite) — the walk's
+  isSameBase matches (PU:2507 / PPP:887-909).
+- Element list = `supplementMissingDiffElements` (SGPP:1102-1181; pure function
+  of the differential — sets NO userData; ported as `render_sd::diff`).
+  Synthetic (sparse-fill/root) elements get NO pointer, faithfully.
+- genFixedValue: empty pattern/fixed properties render only when
+  `values.size() > 0 || snapshot` (SDR:2786) — the diff view skips them.
+- checkForNoChange piece map: genTypes wraps separators/profiled/plain/
+  genTargetLink pieces (SDR:2379-2500, 2534-2565) but NOT the
+  Reference-link/parens/aggregation pieces; `getOpacity()` = `opacity: 0.5`
+  (RenderingContext.java:76); reference pieces double the style
+  (`opacity: 0.5; opacity: 0.5`) via the HTG:1171 double-addStyle Java wart
+  already ported in render_tables.
+- The snapshot-gen-only property EQUALS (a diff RESTATING a value equal to
+  base — e.g. short/definition/fixed identical to base) is NOT modeled; corpus
+  evidence: zero fragments need it (all restated corpus values differ from
+  base). If a future IG hits it, the fix is a base-profile compare at render
+  time, still not a snapshot_gen change. **snapshot_gen was not touched** —
+  snapshot output byte-neutrality holds by construction (no gate run needed).
 
 ### by-mustsupport / by-key (2026-07-03) — the filtered-view kinds
 
@@ -237,6 +294,14 @@ not a quirk).
    is compared to `getAdditional(binding.getAdditional())` — the SAME value on
    both sides (a copy-paste bug; the base binding is never consulted). So the
    additional-bindings signal never flips `bindingChanged`. Reproduced by omission.
+8. **STRUC_DEF_SEE dead i18n args** (grid contentReference,
+   fhir-core SDR:3111/3113): the rendering phrase `STRUC_DEF_SEE = See`
+   (rendering-phrases.properties) has NO `{0}` placeholder, so the element-path
+   / typeName arguments passed to formatPhrase are silently dropped. Golden
+   text is `See` (same-source) / `See.` + path (other-source, e.g.
+   `See.QuestionnaireResponse.item` in us-core-questionnaireresponse-grid).
+   NOTE the SUMMARY-table genTypes contentReference (SDR:2329-2333) is a
+   DIFFERENT code path that appends " " and real link text — not affected.
 
 Faithful ports of Java warts (not quirks — reproduced exactly): (previously listed)
 - `addStyledText` background-color precedence bug (HTG:521) → emits the literal
@@ -252,40 +317,34 @@ Faithful ports of Java warts (not quirks — reproduced exactly): (previously li
 
 ## Remaining
 
-DONE this cycle: grid→IgContext migration (renderer-complete; residual is the
-markdown engine), by-mustsupport, by-mustsupport-all, by-key, by-key-all (all
-GREEN corpus-wide). 8 SD table kinds now GREEN (snapshot/-all, by-mustsupport
-/-all, by-key/-all) + grid renderer-complete.
+DONE this cycle (2026-07-03, session 3): **grid** GREEN corpus-wide (commonmark
+cell engine + quirk #8 + used-gate), **diff**, **diff-all** GREEN corpus-wide
+(pointer reconstruction — no snapshot_gen change). **11 SD table kinds now
+GREEN** (snapshot/-all, by-mustsupport/-all, by-key/-all, grid, diff/-all).
+Prior cycle: grid→IgContext migration, by-mustsupport/-all, by-key/-all.
 
-- **diff / diff-all** (MOST demo-visible, but LARGE): the element list is
-  `supplementMissingDiffElements` (differential + synthetic root + sparse-parent
-  fill — `insertMissingSparseElements`, SnapshotGenerationPreProcessor.java:1102;
-  small, ~60 LOC, straightforward). BLOCKER: the `opacity: 0.5` dimming is driven
-  by `SNAPSHOT_DERIVATION_EQUALS` userdata SET DURING SNAPSHOT GENERATION (23 set
-  sites in ProfileUtilities). The diff render reads that userdata off the
-  differential-derived elements; our JSON input carries none. Verified real
-  (64 opacity spans in us-core-patient-diff; even `min` changed-from-base shows
-  dimmed `..`/`max`). Reproducing it faithfully = porting the snapshot
-  generator's diff-equals annotation — C4-scale, NOT a quick win. The element
-  list alone (no dimming) will diverge on every changed element. Recommend
-  pairing with the snapshot-generator port, not attempting standalone.
-- **obligations / bindings modes**: `initCustomTable` + scanBindings /
-  scanObligations columns + genElementBindings/genElementObligations
-  (fhir-core SDR:759-880, 1225-1316); ObligationsRenderer table (C5 spec
-  extracted, in the fork report). NOTE: these set `context.setStructureMode`
-  (BINDINGS/OBLIGATIONS) which changes generateTableInner's `initCustomTable`
-  branch — a different column model than SUMMARY, so more than a flag toggle.
+- **obligations / bindings modes** (4 kinds: snapshot-bindings/-all,
+  snapshot-obligations/-all + diff-bindings/diff-obligations): `initCustomTable`
+  + scanBindings / scanObligations columns + genElementBindings /
+  genElementObligations (fhir-core SDR:759-880, 1225-1316); ObligationsRenderer
+  table (C5 spec extracted, in the fork report). NOTE: these set
+  `context.setStructureMode` (BINDINGS/OBLIGATIONS) which switches
+  generateTableInner to `initCustomTable` (SDR:627-641) — a different column
+  model than SUMMARY, and mode-branches inside genElement (SDR:1022/1074/1103/
+  1139/1173), so more than a flag toggle. The diff-mode pointer machinery from
+  this cycle carries over (diff-bindings/diff-obligations reuse it).
 - **span/spanall**: `generateSpanningTable` (SDR:3713) — separate entry point.
-- **grid markdown**: every residual grid failure is `Cell.addMarkdown` full-
-  markdown (Definition:/Comments:). Shared with the SD leaf work; owned by the
-  markdown engine (render_md is a separate agent). When that lands, grid should
-  jump to near-green with no grid.rs change.
-- **Simplification candidate (logged)**: grid.rs `gen_types`/`gen_target_link`
-  are branch-for-branch duplicates of table.rs's (both port the SAME Java
-  `genTypes`/`genTargetLink`). A shared free-function `render_types(ctx,
-  core_path, sd_url, e, types, root, ms_mode)` would unify them; deferred to a
-  consolidation pass (would touch the green table path, so gate carefully).
+- **Simplification candidates (logged)**: (a) grid.rs `gen_types`/
+  `gen_target_link` are branch-for-branch duplicates of table.rs's (both port
+  the SAME Java `genTypes`/`genTargetLink`); table.rs's now additionally
+  carries the `dim` param — unifying would let grid drop its copy (grid never
+  dims: non-diff). Deferred to a consolidation pass (touches two green paths,
+  gate carefully). (b) table.rs `gen_types_erased` (the lifetime-erased
+  ext-value duplicate) could fold into gen_types with a lifetime refactor.
 - Residual gap markers in table.rs (each fires loudly): choice groups
   (readChoices/processConstraint), aggregation modes, standards-status flag,
   cross-structure contained targets, complex merged-pattern partner rows,
   usage cells in additional bindings, narrative language/source-control exts.
+- Diff residual risk (documented, zero corpus hits): a diff RESTATING a
+  property byte-equal to base would dim in the publisher (snapshot-gen EQUALS)
+  but render bright here; fix would be a render-time base-profile compare.
