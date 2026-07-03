@@ -17,9 +17,14 @@ use std::path::{Path, PathBuf};
 
 pub mod bundle;
 pub mod derived_index;
+pub mod resolve;
 pub mod source;
 
 pub use bundle::{BundleManifest, BundleManifestEntry, BundleSource, BUNDLE_FORMAT_VERSION};
+pub use resolve::{
+    context_closure_for_root, resolve_project, version_index_from_cache, MissingPackage,
+    MissingReason, RequestedSet, ResolutionStep, VersionIndex,
+};
 pub use source::{DirEntry, DiskSource, PackageSource};
 
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
@@ -134,15 +139,61 @@ struct DepEntry {
 /// preserves stock SUSHI's load order, but leaves mutable coordinates such as
 /// `latest`, `current`, and `dev` unresolved so the acquisition layer can resolve
 /// them against registries/CAS and record a lock.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PackageRequest {
     pub package_id: String,
     pub version: String,
 }
 
-struct ProjectConfig {
+pub(crate) struct ProjectConfig {
     fhir_version: String,
     dependencies: Vec<DepEntry>,
+}
+
+impl ProjectConfig {
+    /// The declared FHIR version string (e.g. `4.0.1`).
+    pub(crate) fn fhir_version(&self) -> &str {
+        &self.fhir_version
+    }
+
+    /// The configured dependencies (post `@npm:` + legacy-xver rewrite), in
+    /// insertion order.
+    pub(crate) fn dependencies(&self) -> &[DepEntry] {
+        &self.dependencies
+    }
+
+    /// The automatic-dependency coordinates (id, requested-version) this config's
+    /// FHIR version implies AND that are not overridden by a matching configured
+    /// dep — i.e. the auto-deps the compile load would request as `latest`. Used by
+    /// the resolver to report unresolvable auto-deps when no version index is given.
+    pub(crate) fn auto_dep_coordinates(&self) -> Vec<(String, String)> {
+        let (_core, fhir_name) = fhir_version_info(&self.fhir_version);
+        let mut out = Vec::new();
+        for ad in AUTOMATIC_DEPENDENCIES {
+            if !ad.fhir_versions.contains(&fhir_name) {
+                continue;
+            }
+            // Skip if a configured dep matches this auto dep (it supplies the version).
+            if self
+                .dependencies
+                .iter()
+                .any(|cd| config_matches_auto(&cd.package_id, ad.package_id))
+            {
+                continue;
+            }
+            out.push((ad.package_id.to_string(), "latest".to_string()));
+        }
+        out
+    }
+}
+
+impl DepEntry {
+    pub(crate) fn package_id(&self) -> &str {
+        &self.package_id
+    }
+    pub(crate) fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
 }
 
 /// If `package_id` is a legacy cross-version extensions package
@@ -203,7 +254,7 @@ fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
 /// docs/wasm-editor-plan.md §4.3): the browser passes the config text through the
 /// API. Native callers keep `parse_config` (identical behavior; it just reads
 /// then delegates here).
-fn parse_config_text(text: &str) -> anyhow::Result<ProjectConfig> {
+pub(crate) fn parse_config_text(text: &str) -> anyhow::Result<ProjectConfig> {
     let root: Value = serde_yaml::from_str(text)?;
 
     // fhirVersion: string or sequence; take the first.
@@ -1087,7 +1138,7 @@ fn resolve_load_order(
 ///
 /// The resolver receives `(package_id, requested_version)` and returns the label
 /// that should participate in duplicate suppression and loading.
-fn resolve_load_order_with(
+pub(crate) fn resolve_load_order_with(
     cfg: &ProjectConfig,
     resolve_ver: &dyn Fn(&str, Option<&str>) -> Option<String>,
 ) -> Vec<(String, String)> {

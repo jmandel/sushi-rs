@@ -372,8 +372,27 @@ Phases from the plan (0–9). Current state:
   - **SURPRISE vs the task brief**: SUSHI's `defs.loadPackage(id,ver)` does **NOT**
     walk transitive `package.json` deps — the oracle loads exactly the 6 packages
     above; ipa's own deps (THO 6.2.0, ext 5.2.0, smart-app-launch 2.0.0) are NOT
-    pulled in (smart-app-launch isn't even in cache). So no transitive walk is
-    implemented (it would diverge from stock).
+    pulled in (smart-app-launch isn't even in cache). So the COMPILE load
+    (`resolve_load_order_with`) is non-transitive by design (a transitive walk would
+    diverge from stock).
+  - **TASK #32 — resolver consolidation (2026-07-03):** the SNAPSHOT/RENDER context
+    (not the compile) DOES need the transitive `package.json` closure with R4-compat
+    filtering. That walk used to live in `snapshot/package-deps.cjs` (a Node
+    reimplementation). It is now consolidated into ONE Rust home:
+    `package_store::resolve` — `resolve_project(config, mounted, cache, index) ->
+    ResolutionStep {compile_set, context_closure, missing, satisfied}` (compile_set
+    REUSES `resolve_load_order_with`, never forks it; context_closure ports the
+    `.cjs` rules line-for-line) + `context_closure_for_root` (the `.cjs`-exact single
+    published-root walk). CLI: `rust_sushi resolve --cache <c> {--root <id#ver> |
+    --project <ig>}`. wasm: `wasm_api::resolve_project`. `package-deps.cjs` is now a
+    thin shim over `rust_sushi resolve --root` (Node algorithm kept only as an
+    offline fallback). Gates: `snapshot/package-deps-gate.sh` (8 IGs Rust ↔ .cjs
+    byte-identical incl. pacio-toc 48 / dtr 31), `package_store` resolve tests (7),
+    `package_acquisition` raw-tgz mount parity, `wasm_api` wasm↔native resolver
+    equality, `snapshot/arbitrary-ig-e2e.sh` (fhir-ips resolve→fetch→mount→compile→
+    snapshot). Iterative host loop: resolve → fetch `missing` → mount → resolve to a
+    fixpoint (`satisfied`). `latest`/`x` uses an optional host `VersionIndex` (data
+    in, decisions in Rust); absent index → precise `UnresolvedVersion`, never a guess.
   - **KNOWN GAPS** (deferred, don't affect the gate): (a) bundled R5-in-R4 virtual
     package (`sushi-r5forR4#1.0.0`, 7 R5 type defs) not loaded — JSONs live in
     `sushi-ts/src/fhirdefs/R5DefsForR4/`, not the cache; queries for

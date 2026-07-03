@@ -703,6 +703,43 @@ fn collect_example_resources(
 }
 
 // ---------------------------------------------------------------------------
+// resolve_project — the ONE resolution API, over the currently mounted bundles
+// ---------------------------------------------------------------------------
+
+/// Resolve a project's two package sets against the CURRENTLY MOUNTED bundles.
+///
+/// `config` is the `sushi-config.yaml` text. `version_index_json` (may be `""`) is
+/// an optional host-supplied `{ "versions": { "<id>": ["<ver>", ...] } }` map used
+/// to resolve `latest`/`current`/`M.N.x` requests (data in, decisions in Rust);
+/// absent it, a `latest` request lands in `missing` with a precise
+/// `UnresolvedVersion` reason rather than a guess.
+///
+/// Returns the [`package_store::ResolutionStep`] as a JSON string:
+/// `{ compile_set, context_closure, missing, satisfied }`. The host loop is
+/// `resolve_project -> fetch each missing -> mount_bundles -> resolve_project`
+/// until `satisfied` (editor spec §1 lazy loading, task #32). This is the SAME
+/// Rust resolver the native CLI (`rust_sushi resolve`) and the snapshot `.cjs`
+/// shim drive — no resolution logic outside Rust.
+#[wasm_bindgen]
+pub fn resolve_project(config: &str, version_index_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    let (source, cache_root, _packages) = engine_source()?;
+
+    let index: Option<package_store::VersionIndex> = if version_index_json.trim().is_empty() {
+        None
+    } else {
+        Some(
+            serde_json::from_str(version_index_json)
+                .map_err(|e| JsError::new(&format!("resolve_project: bad version index JSON: {e}")))?,
+        )
+    };
+
+    let step = package_store::resolve_project(config, &source, &cache_root, index.as_ref())
+        .map_err(|e| JsError::new(&format!("resolve_project: {e:#}")))?;
+    Ok(step.to_json())
+}
+
+// ---------------------------------------------------------------------------
 // version
 // ---------------------------------------------------------------------------
 

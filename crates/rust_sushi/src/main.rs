@@ -292,6 +292,50 @@ fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", String::from_utf8_lossy(&manifest.to_bytes()));
         }
+        Some("resolve") => {
+            // rust_sushi resolve --cache <cache-dir> --root <id#ver>
+            //   -> the transitive R4 context closure (snapshot/package-deps.cjs
+            //      equivalent), one <id>#<ver> per line. THIS is the DRY home the
+            //      .cjs shims to; version resolution uses the cache dirs as the
+            //      candidate index (matching the .cjs readdirSync).
+            //
+            // rust_sushi resolve --cache <cache-dir> --project <ig-dir> [--json]
+            //   -> the full ResolutionStep {compile_set, context_closure, missing,
+            //      satisfied} as JSON, over the packages currently in the cache.
+            let cache = option_value(&args, "--cache")
+                .ok_or_else(|| anyhow::anyhow!("resolve needs --cache <cache-dir>"))?;
+            let cache_path = std::path::Path::new(cache);
+            let source = package_store::DiskSource;
+            let index = package_store::version_index_from_cache(&source, cache_path);
+            if let Some(root) = option_value(&args, "--root") {
+                let closure = package_store::context_closure_for_root(
+                    &source,
+                    cache_path,
+                    root,
+                    Some(&index),
+                )?;
+                let mut out = String::new();
+                for req in &closure {
+                    out.push_str(&format!("{}#{}\n", req.package_id, req.version));
+                }
+                print!("{out}");
+            } else if let Some(ig) = option_value(&args, "--project") {
+                let cfg_text = std::fs::read_to_string(
+                    std::path::Path::new(ig).join("sushi-config.yaml"),
+                )?;
+                let step = package_store::resolve_project(
+                    &cfg_text,
+                    &source,
+                    cache_path,
+                    Some(&index),
+                )?;
+                println!("{}", serde_json::to_string_pretty(&step)?);
+            } else {
+                return Err(anyhow::anyhow!(
+                    "resolve needs --root <id#ver> or --project <ig-dir>"
+                ));
+            }
+        }
         Some("pkg-fish") => {
             // rust_sushi pkg-fish <ig-dir> <cache-dir> <query...>  -> package-oracle JSON shape
             let ig = args

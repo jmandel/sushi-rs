@@ -1587,10 +1587,22 @@ pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
     let mut out = Vec::new();
     for entry in archive.entries()? {
         let mut entry = entry?;
+        // Skip directory members (raw registry tarballs carry a `package/` dir
+        // entry); only real files mount.
+        if entry.header().entry_type().is_dir() {
+            continue;
+        }
+        // Normalize the member name to the package-relative filename the
+        // BundleSource mounts: strip a leading `./`, then a leading `package/`.
+        // Our repacked bundles store bare filenames (no `package/`); RAW REGISTRY
+        // npm tarballs root every file under `package/`. Stripping it here makes
+        // `read_bundle` mount a raw tgz identically to a repacked bundle — matching
+        // the browser inflate (`app/src/worker/inflate.ts` strips the same prefixes).
         let name = entry
             .path()?
             .to_string_lossy()
             .trim_start_matches("./")
+            .trim_start_matches("package/")
             .to_string();
         if name.is_empty() {
             continue;
@@ -2038,6 +2050,90 @@ mod tests {
         header.set_mode(0o644);
         header.set_cksum();
         builder.append_data(&mut header, path, data).unwrap();
+    }
+
+    /// Raw-tgz mount parity (task #32 gate iii): a RAW REGISTRY npm tarball
+    /// (files under `package/`, NO `.derived-index.json`) mounts into the engine
+    /// IDENTICALLY to a repacked bundle (bare filenames + a `.derived-index.json`
+    /// sidecar). "Identically" means: same package_store fishing results AND the
+    /// same derived index (derived in-memory when the sidecar is absent).
+    #[test]
+    fn raw_registry_tgz_mounts_identically_to_repacked_bundle() {
+        use package_store::{
+            derived_index, BundleSource, DiskSource, FishType, PackageStore,
+        };
+
+        let label = "example.pkg#1.0.0";
+        let sd = br#"{"resourceType":"StructureDefinition","id":"Foo","url":"http://ex/Foo","name":"Foo","kind":"resource","type":"Patient","derivation":"constraint","baseDefinition":"http://hl7.org/fhir/StructureDefinition/Patient"}"#;
+
+        // (A) RAW registry tarball: files under `package/`, no derived index.
+        let raw = package_tgz_with_files(
+            "example.pkg",
+            "1.0.0",
+            &[("package/StructureDefinition-Foo.json", sd)],
+        );
+        let raw_entries = read_bundle(&raw).unwrap();
+        // read_bundle stripped `package/` — the mounted names are bare.
+        assert!(raw_entries.iter().any(|(n, _)| n == "StructureDefinition-Foo.json"));
+        assert!(!raw_entries.iter().any(|(n, _)| n.contains("package/")));
+
+        // (B) REPACKED bundle: materialize the raw tgz to a real package dir, then
+        // build_bundle (which injects `.derived-index.json`).
+        let tmp = std::env::temp_dir().join(format!("rawparity_{}", std::process::id()));
+        let pkg_dir = tmp.join(label).join("package");
+        std::fs::create_dir_all(&pkg_dir).unwrap();
+        for (name, bytes) in read_bundle(&raw).unwrap() {
+            std::fs::write(pkg_dir.join(&name), &bytes).unwrap();
+        }
+        let repacked = build_bundle(&pkg_dir).unwrap();
+        let repacked_entries = read_bundle(&repacked).unwrap();
+        assert!(
+            repacked_entries
+                .iter()
+                .any(|(n, _)| n == derived_index::SIDECAR_NAME),
+            "repacked bundle carries the derived-index sidecar"
+        );
+
+        // Mount both into separate BundleSources.
+        let mut src_a = BundleSource::new();
+        src_a.mount_package(label, raw_entries);
+        let mut src_b = BundleSource::new();
+        src_b.mount_package(label, repacked_entries);
+
+        // Derived index parity: A derives it in-memory (no sidecar); B reads the
+        // shipped sidecar. The rows must be identical.
+        let dir_a = src_a.cache_root().join(label).join("package");
+        let dir_b = src_b.cache_root().join(label).join("package");
+        let rows_a = derived_index::load(&src_a, &dir_a);
+        let rows_b = derived_index::load(&src_b, &dir_b);
+        assert_eq!(rows_a, rows_b, "derived index rows differ raw vs repacked");
+        assert_eq!(rows_a.len(), 1);
+        assert_eq!(rows_a[0].name.as_deref(), Some("Foo"));
+
+        // Engine-read parity: a PackageStore over each mounted source fishes the SD
+        // identically by id / name / url.
+        // Declare example.pkg as a configured dep so the store indexes it (the
+        // auto-deps/core aren't mounted — index_package skips missing dirs).
+        let cfg = "fhirVersion: 4.0.1\ndependencies:\n  example.pkg: 1.0.0\n";
+        // Use for_project_with_config over the mounted source.
+        let store_a =
+            PackageStore::for_project_with_config(src_a.clone(), cfg, &src_a.cache_root().to_string_lossy())
+                .unwrap();
+        let store_b =
+            PackageStore::for_project_with_config(src_b.clone(), cfg, &src_b.cache_root().to_string_lossy())
+                .unwrap();
+        for q in ["Foo", "http://ex/Foo"] {
+            let a = store_a.fish_for_fhir(q, &[FishType::Profile]);
+            let b = store_b.fish_for_fhir(q, &[FishType::Profile]);
+            assert_eq!(
+                a.as_deref(),
+                b.as_deref(),
+                "raw vs repacked fish mismatch for {q}"
+            );
+            assert!(a.is_some(), "should fish {q} from the raw-tgz mount");
+        }
+        let _ = DiskSource; // keep the import meaningful across refactors
+        std::fs::remove_dir_all(&tmp).ok();
     }
 
     fn manifest_json(base: &str, name: &str, version: &str, shasum: &str) -> Vec<u8> {

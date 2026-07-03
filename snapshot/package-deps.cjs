@@ -1,6 +1,24 @@
 #!/usr/bin/env node
+// snapshot/package-deps.cjs — transitive R4 context closure for a published IG
+// package (the MOUNT set snapshot generation needs).
+//
+// DRY (task #32): the resolution logic now lives in ONE place — Rust
+// (`package_store::resolve::context_closure_for_root`, exposed as
+// `rust_sushi resolve --cache <dir> --root <id#ver>`). This script is a THIN
+// SHIM that shells out to that native resolver so there is no second
+// implementation to drift. The former Node reimplementation is retained ONLY as
+// an offline fallback (when the release binary is not built), and the two are
+// gated byte-for-byte equal on 8 published IGs by `snapshot/package-deps-gate.sh`.
+//
+//   node snapshot/package-deps.cjs [--cache <packages-dir>] <pkg#ver>
+//
+// Env:
+//   RUST_SUSHI_BIN         override the binary path (default: <repo>/target/release/rust_sushi)
+//   PACKAGE_DEPS_NATIVE=1  REQUIRE the native resolver (fail instead of falling back)
+
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 function usage() {
   console.error('usage: node snapshot/package-deps.cjs [--cache <packages-dir>] <pkg#ver>');
@@ -26,6 +44,40 @@ while (args.length) {
 }
 if (root == null) usage();
 cache = path.resolve(cache);
+
+// ---- Preferred path: the native Rust resolver (single source of truth). ----
+function tryNative() {
+  const bin = process.env.RUST_SUSHI_BIN || path.join(repo, 'target/release/rust_sushi');
+  if (!fs.existsSync(bin)) return null;
+  const res = spawnSync(bin, ['resolve', '--cache', cache, '--root', root], {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (res.status !== 0) {
+    if (process.env.PACKAGE_DEPS_NATIVE === '1') {
+      process.stderr.write(res.stderr || `rust_sushi resolve failed (${res.status})\n`);
+      process.exit(res.status || 1);
+    }
+    return null;
+  }
+  return res.stdout;
+}
+
+const native = tryNative();
+if (native != null) {
+  process.stdout.write(native);
+  process.exit(0);
+}
+if (process.env.PACKAGE_DEPS_NATIVE === '1') {
+  console.error(
+    'FATAL: PACKAGE_DEPS_NATIVE=1 but rust_sushi binary not found; build it: cargo build --release -p rust_sushi',
+  );
+  process.exit(2);
+}
+
+// ---- Offline fallback: the ORIGINAL Node algorithm (kept byte-parity-gated). ----
+// This must stay identical in behavior to context_closure_for_root; the gate
+// (snapshot/package-deps-gate.sh) fails CI if they ever diverge.
 
 function parseSpec(spec) {
   const hash = spec.lastIndexOf('#');

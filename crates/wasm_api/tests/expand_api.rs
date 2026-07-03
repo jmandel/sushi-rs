@@ -145,6 +145,89 @@ fn mount_bundles_is_additive_and_idempotent() {
 // clone and only commits on success) is verified by inspection of `mount_bundles`
 // + covered end-to-end by the editor's error-path handling.
 
+/// Gate ii (task #32): the wasm `resolve_project` export and the native
+/// `package_store::resolve_project` produce IDENTICAL JSON for the same config +
+/// mounted state. This proves there is exactly one resolver: the wasm surface is a
+/// thin marshalling shell over the same Rust function the CLI + `.cjs` shim drive.
+#[test]
+fn wasm_resolver_equals_native_resolver() {
+    use wasm_api::resolve_project as wasm_resolve;
+
+    // Build two synthetic R4 packages with a transitive dep, plus the core, as
+    // bundle inputs. `dep` depends on `t`; both R4.
+    let pkgjson = |id: &str, deps: &[(&str, &str)]| {
+        let d: serde_json::Map<String, Value> = deps
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), Value::String((*v).to_string())))
+            .collect();
+        json!({ "name": id, "version": "1.0.0", "fhirVersions": ["4.0.1"], "dependencies": d })
+            .to_string()
+    };
+    let bundle = |label: &str, pkg: &str| {
+        json!({
+            "label": label,
+            "files": { "package.json": base64(pkg.as_bytes()) }
+        })
+    };
+    let core_pkg = json!({
+        "name": "hl7.fhir.r4.core", "version": "4.0.1", "fhirVersions": ["4.0.1"]
+    })
+    .to_string();
+
+    let bundles = json!([
+        bundle("hl7.fhir.r4.core#4.0.1", &core_pkg),
+        bundle("dep#1.0.0", &pkgjson("dep", &[("t", "1.0.0")])),
+        bundle("t#1.0.0", &pkgjson("t", &[])),
+    ]);
+    assert_eq!(unwrap_u32(init(&bundles.to_string())), 3);
+
+    let config = "fhirVersion: 4.0.1\ndependencies:\n  dep: 1.0.0\n";
+    // A version index covering the mounted set (so latest/auto-deps resolve the
+    // same way both sides).
+    let index = json!({
+        "versions": {
+            "hl7.fhir.r4.core": ["4.0.1"],
+            "dep": ["1.0.0"],
+            "t": ["1.0.0"]
+        }
+    })
+    .to_string();
+
+    // wasm surface (reads the just-init'd engine).
+    let wasm_json = wasm_resolve(config, &index).expect("wasm resolve ok");
+
+    // native: build the identical BundleSource + call package_store directly.
+    let mut src = package_store::BundleSource::new();
+    for (label, pkg) in [
+        ("hl7.fhir.r4.core#4.0.1", core_pkg.clone()),
+        ("dep#1.0.0", pkgjson("dep", &[("t", "1.0.0")])),
+        ("t#1.0.0", pkgjson("t", &[])),
+    ] {
+        src.mount_package(label, vec![("package.json".to_string(), pkg.into_bytes())]);
+    }
+    let vindex: package_store::VersionIndex = serde_json::from_str(&index).unwrap();
+    let native_step = package_store::resolve_project(
+        config,
+        &src,
+        src.cache_root(),
+        Some(&vindex),
+    )
+    .expect("native resolve ok");
+    let native_json = native_step.to_json();
+
+    // Compare as parsed JSON (field-for-field identical).
+    let a: Value = serde_json::from_str(&wasm_json).unwrap();
+    let b: Value = serde_json::from_str(&native_json).unwrap();
+    assert_eq!(a, b, "wasm resolver JSON must equal native resolver JSON");
+    // Sanity: the context closure walked transitively (core, dep, t).
+    let ctx = a["context_closure"].as_array().unwrap();
+    let ids: Vec<&str> = ctx
+        .iter()
+        .map(|r| r["package_id"].as_str().unwrap())
+        .collect();
+    assert!(ids.contains(&"dep") && ids.contains(&"t") && ids.contains(&"hl7.fhir.r4.core"));
+}
+
 fn unwrap_u32(r: Result<u32, wasm_bindgen::JsError>) -> u32 {
     r.unwrap_or_else(|_| panic!("wasm-api call returned Err(JsError)"))
 }
