@@ -618,6 +618,16 @@ fn try_code_span(chars: &[char], i: usize) -> Option<(String, usize)> {
         fence += 1;
         j += 1;
     }
+    // kramdown codespan.rb:22-24: a SINGLE backtick that is preceded by
+    // whitespace (or start) AND followed by whitespace is NOT a codespan
+    // delimiter — it stays a literal backtick.
+    if fence == 1 {
+        let before_ws = i == 0 || chars[i - 1].is_whitespace();
+        let after_ws = j >= n || chars[j].is_whitespace();
+        if before_ws && after_ws {
+            return None;
+        }
+    }
     let content_start = j;
     // Find closing run of exactly `fence` backticks.
     let mut k = content_start;
@@ -631,7 +641,7 @@ fn try_code_span(chars: &[char], i: usize) -> Option<(String, usize)> {
             }
             if run == fence {
                 let content: String = chars[content_start..k].iter().collect();
-                let trimmed = trim_code_span(&content);
+                let trimmed = trim_code_span(&content, fence);
                 let escaped = escape_html_text(&trimmed);
                 return Some((format!("<code>{escaped}</code>"), m));
             }
@@ -643,19 +653,21 @@ fn try_code_span(chars: &[char], i: usize) -> Option<(String, usize)> {
     None
 }
 
-fn trim_code_span(s: &str) -> String {
-    // CommonMark/kramdown: if content begins and ends with a space (and is not
-    // all spaces), strip one leading and trailing space.
-    let trimmed = s.replace('\n', " ");
-    if trimmed.len() >= 2
-        && trimmed.starts_with(' ')
-        && trimmed.ends_with(' ')
-        && trimmed.trim().len() != 0
-    {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else {
-        trimmed
+/// kramdown codespan content handling (codespan.rb:38-40): for MULTI-backtick
+/// delimiters, ONE leading space and ONE trailing space are stripped
+/// independently; for a single backtick the content is kept verbatim
+/// (`` `trail ` `` keeps its trailing space).
+fn trim_code_span(s: &str, fence: usize) -> String {
+    let mut t = s.replace('\n', " ");
+    if fence > 1 {
+        if t.starts_with(' ') {
+            t.remove(0);
+        }
+        if t.ends_with(' ') {
+            t.pop();
+        }
     }
+    t
 }
 
 fn try_autolink(chars: &[char], i: usize) -> Option<(String, usize)> {
@@ -1285,8 +1297,28 @@ fn try_emphasis(chars: &[char], i: usize) -> Option<(String, usize)> {
         run += 1;
         j += 1;
     }
-    // A run of 3+ markers = strong+em (`***x***` -> <strong><em>x</em></strong>).
+    // A run of 3+ markers = strong+em (`***x***`). When no matching 3-run
+    // closer exists, kramdown still nests: `***x** y*` opens em with the
+    // remaining `**` as inner strong — cascade 3 -> 1 -> 2.
+    if run >= 3 {
+        for w in [3usize, 1, 2] {
+            if let Some(res) = try_emphasis_want(chars, i, marker, w) {
+                return Some(res);
+            }
+        }
+        return None;
+    }
     let want = run.min(3);
+    try_emphasis_want(chars, i, marker, want)
+}
+
+fn try_emphasis_want(
+    chars: &[char],
+    i: usize,
+    marker: char,
+    want: usize,
+) -> Option<(String, usize)> {
+    let n = chars.len();
     let content_start = i + want;
     // For `_`, kramdown (GFM) requires it not be intra-word; keep simple:
     // require the char before opening not be alnum for `_`.

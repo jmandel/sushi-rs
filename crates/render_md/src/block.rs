@@ -440,8 +440,7 @@ impl Parser {
                 }
                 continue;
             }
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
+            if is_blank(&line) {
                 pending_blank = true;
                 self.i += 1;
                 continue;
