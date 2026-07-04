@@ -223,7 +223,18 @@ impl FragmentEngine {
     /// (`StructureDefinition-us-core-patient`) or `""` for IG singletons.
     pub fn render_fragment(&self, ref_: &str, kind: &str) -> Result<String, FragError> {
         if SINGLETON_KINDS.contains(&kind) {
-            return self.render_singleton(kind);
+            // Same panic barrier as the per-resource path: a LOUD-GAP panic
+            // (e.g. dependency-table's unported PNG oracle) becomes a
+            // structured Gap error, so an engine-first include lookup can fall
+            // back to a staged disk copy instead of killing the whole page.
+            return std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.render_singleton(kind)
+            }))
+            .map_err(|e| FragError::Gap {
+                kind: kind.to_string(),
+                refname: String::new(),
+                msg: panic_msg(e),
+            })?;
         }
         if !PER_RESOURCE_KINDS.contains(&kind) {
             return Err(FragError::UnknownKind(kind.to_string()));

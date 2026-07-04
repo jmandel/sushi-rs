@@ -214,11 +214,17 @@ pub fn build_render_state(
 
 impl RenderState {
     fn provider(&self) -> PageProvider<'_> {
+        // engine_first: LIVE fragments (from the current compile generation)
+        // shadow any staged copies in the mounted tree — the stale-fragment
+        // hazard when a harvested site tree carries publisher `_includes`
+        // dumps. Unregistered/authored content includes still come from the
+        // tree.
         PageProvider::new(
             &self.site,
             &Path::new(SITE_DIR).join("_includes"),
             Some(&self.engine),
         )
+        .with_engine_first(true)
         .with_tree(self.tree.clone())
         .with_shared_cache(self.frag_cache.clone())
     }
@@ -329,7 +335,8 @@ mod tests {
         };
         let engine = FragmentEngine::new(ctx, uuid.clone(), true, facts);
         let site = SiteData::load(&b.join("temp/pages/_data"));
-        let provider = PageProvider::new(&site, &b.join("temp/pages/_includes"), Some(&engine));
+        let provider = PageProvider::new(&site, &b.join("temp/pages/_includes"), Some(&engine))
+            .with_engine_first(true);
 
         // ---- session side: virtual layout from the same bytes.
         // packages -> BundleSource
@@ -412,6 +419,12 @@ mod tests {
             let ours = rs.render_page_by_name(&key).expect("session render");
             pages += 1;
             if direct != ours {
+                let dump = std::env::temp_dir().join(format!(
+                    "equiv-{}",
+                    key.replace('/', "_")
+                ));
+                let _ = std::fs::write(dump.with_extension("direct.html"), &direct);
+                let _ = std::fs::write(dump.with_extension("session.html"), &ours);
                 mismatches.push(key);
             }
         }

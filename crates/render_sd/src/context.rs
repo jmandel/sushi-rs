@@ -345,7 +345,10 @@ impl IgContext {
         let mut packages = Vec::new();
         for (pid, ver) in &seen {
             let pdir = packages_dir.join(format!("{}#{}", pid, ver)).join("package");
-            if !pdir.exists() {
+            // Existence via the TREE, not std::fs — bundle-served packages have
+            // no filesystem presence (the session-equivalence test caught the
+            // original `pdir.exists()` skipping every dependency in wasm).
+            if tree.read_dir(&pdir).is_none() {
                 continue;
             }
             let Some(mut entry) = load_package(&*tree, &pdir, ver) else { continue };
