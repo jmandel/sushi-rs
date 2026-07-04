@@ -196,9 +196,14 @@ pub fn render_page(src: &str, page_path: &str, provider: &PageProvider) -> Strin
     }
     let body = strip_front_matter(src);
     // `page` global: the FHIR template reads `page.path` (and derives localPage,
-    // path from it). Provide the Jekyll-relative path.
+    // path from it). Provide the Jekyll-relative path plus `page.name`, the
+    // source filename (basename) — Jekyll's `page.name`. Several data-driven
+    // include scripts key on it (e.g. `provenance-author-bullet-generator.md`
+    // filters the provenance CSV by `item.Path == page.name`).
     let mut page = render_liquid::OrderedMap::new();
     page.insert("path", Value::str(page_path));
+    let name = page_path.rsplit('/').next().unwrap_or(page_path);
+    page.insert("name", Value::str(name));
     let globals = [("page", Value::Hash(std::rc::Rc::new(page)))];
     let opts = Options { publisher_raw_quirk: false, markdownify: Some(markdownify) };
     render_liquid::render_with(body, provider, &globals, opts)

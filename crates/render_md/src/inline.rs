@@ -323,6 +323,7 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
             }
             '`' => {
                 if let Some((html, ni)) = try_code_span(chars, i) {
+                    let (html, ni) = apply_span_ial(chars, ni, html);
                     out.push_str(&html);
                     i = ni;
                 } else {
@@ -495,6 +496,7 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
             }
             '*' | '_' => {
                 if let Some((html, ni)) = try_emphasis(chars, i) {
+                    let (html, ni) = apply_span_ial(chars, ni, html);
                     out.push_str(&html);
                     i = ni;
                 } else {
