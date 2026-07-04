@@ -8,6 +8,8 @@ wins and the older carries an inline SUPERSEDED marker.
 
 | Doc | Kind | State | What it governs |
 |---|---|---|---|
+| `hosting.md` | **GUIDE** | **ACTIVE** | How to host the engine: browser worker, Bun/Node custom generators, non-JS shell-to-fig, the envelope schema, the adapter contract, template-as-data. Every example is CI-executed (`scripts/examples-gate.sh` over `examples/`). |
+| `unified-cli-plan.md` | **PLAN** | **SHIPPED** | The `fig` unified CLI (Consolidation Pass 2): one binary, subcommands = the Session op surface, `--json` = the shared envelope, render/watch/runner. Folds in snapshot_gen/site_db binaries. |
 | `stock-template-renderer-plan.md` | **COMMITTED PLAN** | **ACTIVE** | The F0–F6 plan: in-browser Publisher-parity page rendering (xhtml/tables/sd/md/liquid/page substrates → editor integration at F6). The current center of gravity. |
 | `fhir-ig-editor-spec.md` | SPEC | ACTIVE | The editor demo repo (`jmandel/fhir-ig-editor`) — M1/M2 milestones, worker protocol, UI scope. |
 | `simplification-ledger.md` | LEDGER | ACTIVE | Complexity-by-accretion candidates + consolidation-pass results. Runs at phase boundaries with gate discipline. |

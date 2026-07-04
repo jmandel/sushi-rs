@@ -1,10 +1,90 @@
 # sushi-rs
 
-Rust port of SUSHI, the FHIR Shorthand compiler. This repository is a
-compatibility compiler: when stock SUSHI and the FSH spec disagree, stock SUSHI is
-the oracle unless an intentional compatibility break is recorded.
+**One engine for the whole FHIR IG toolchain — no Java, no Jekyll.** This repo
+started as a Rust port of SUSHI (the FHIR Shorthand compiler) and grew into a
+full IG Publisher-parity pipeline: FSH → resources → snapshots → site.db →
+publisher-parity fragments → whole HTML pages. It is a **compatibility** stack:
+when stock SUSHI / the Java IG Publisher and the spec disagree, the tool is the
+oracle unless an intentional break is recorded.
+
+## One engine, three skins
+
+The engine is the `render_*` + `compiler` + `snapshot_gen` + `site_db` crates.
+Three thin skins over it, sharing ONE apiVersion result/error envelope
+(`crates/api_envelope`, verified schema-identical across skins):
+
+| Skin | What | Where |
+|---|---|---|
+| **CLI** (`fig`) | native, filesystem — `fig render` = "IG Publisher output in seconds" | `crates/fig` |
+| **Session** (wasm) | in-browser / Bun / Node — the live editor's engine | `crates/wasm_api` |
+| **library** | in-process Rust APIs | the crates directly |
+
+The live browser editor built on the Session is at
+**<https://joshuamandel.com/fhir-ig-editor/>** — open US Core, pick the stock
+FHIR template, edit FSH or pagecontent, and pages re-render at Publisher parity
+with **warm edits under a second** (609 ms measured).
+
+## Parity (the regression floor)
+
+| Layer | Result |
+|---|---|
+| Snapshots (walk engine) | **955/955** byte-identical vs the Java oracle |
+| SUSHI harvest | 326/326 (256/256 byte-identical) + harvested spot checks |
+| Page corpora (whole HTML) | plan-net **678/678**, us-core **1332/1334** (+2 classified), cycle **72/72** |
+| Fragments | full used-fragment set byte-parity across cycle/plan-net/us-core |
+| Package resolver | 8/8 IG-closure gate |
+
+`fig render` reproduces those page numbers byte-for-byte — it composes the same
+F5/F6 machinery the page corpora gate (`crates/render_page/src/bin/pagecorpus.rs`).
+
+## Quickstart — `fig render`
+
+Render a completed build tree to a static site at Publisher parity:
+
+```sh
+cargo build --release -p fig
+target/release/fig render <build-dir> -o site/
+#   build-dir = a staged build (temp/pages + output/ + .home/.fhir/packages +
+#   input-cache/txcache), e.g. an F0 build. Byte-identical to the Java Publisher's
+#   Jekyll output; 678 plan-net pages render in ~0.6s.
+```
+
+Other subcommands (add `--json` to any for the shared envelope):
+
+```sh
+fig build <ig-dir> -o fsh-generated       # FSH -> resources (SUSHI)
+fig snapshot <sd.json> --package p#v       # walk-engine snapshot
+fig resolve --cache <dir> --project <ig>   # dependency closure
+fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
+fig expand <valueset.json>                 # tier-1 enumerable expansion
+fig sitedb <ig> --sushi-out <d> --cache <d> -o site.db   # S1-S7 producer
+fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment
+fig fragments <build-dir> -o _includes/    # materialize fragment files (escape hatch)
+fig watch <build-dir> --serve :8080        # incremental dev loop + live-reload
+fig render <build-dir> -o site/ --generator ts:<adapter.mjs>   # custom TS generator
+```
+
+`fig watch --serve` is the native twin of the browser editor: an mtime poll →
+dirty cone (via the fragment read-set boundary) → re-render only dirtied pages →
+serve with live-reload. Warm page edits re-render in ~270 ms on us-core.
+
+## Where to look (doc map)
+
+| For… | Read |
+|---|---|
+| Hosting the engine (browser/Bun/non-JS/custom generators) | [`docs/hosting.md`](docs/hosting.md) — every example runs in CI |
+| The unified CLI spec + status | [`docs/unified-cli-plan.md`](docs/unified-cli-plan.md) |
+| The render port derivation log (byte-parity, quirks) | [`docs/render-worklog.md`](docs/render-worklog.md) |
+| The stock-template renderer + editor plan (F0–F6) | [`docs/stock-template-renderer-plan.md`](docs/stock-template-renderer-plan.md) |
+| The full doc index (active vs historical) | [`docs/README.md`](docs/README.md) |
+| Runnable examples (CI-executed) | [`examples/`](examples/) + `scripts/examples-gate.sh` |
 
 ## Package Acquisition Tutorial
+
+The lower-level acquisition CLI (CAS ingest/acquire, lock, materialize) lives in
+`rust_sushi` (its dev/acquisition subcommands stay for one release; the
+user-facing `build`/`resolve`/`bundle` are now `fig build`/`fig resolve`/
+`fig packages bundle`).
 
 `rust_sushi` separates package acquisition into three layers:
 

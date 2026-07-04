@@ -1743,3 +1743,67 @@ E2E GATE: PASS — cycle editToPreviewMs 933, stockIndexLen 4032,
 stockEditResult ok, **stockWarmEditMs 609 (<1000 gate)**. The committed
 vision — US Core, stock FHIR template, live browser editing at Publisher
 parity, warm edits under a second — is live in production.
+
+---
+
+# fig — the unified CLI (Consolidation Pass 2, 2026-07-04) SHIPPED
+
+New crate `crates/fig` (root workspace member) + `crates/api_envelope` (the
+shared envelope). ONE binary whose subcommands map onto the SAME engine core the
+wasm Session exposes (docs/unified-cli-plan.md). Iron rule held: subcommands are
+arg-parse → engine-core call → output; the render/watch/runner COMPOSITIONS live
+in `fig::engine`/`fig::watch`/`fig::runner` (native engine modules the Session
+can grow later), composing the F5/F6 machinery unchanged (`render_sd::engine::
+FragmentEngine` + `render_page::render_page`, exactly as pagecorpus + the
+wasm render_surface do).
+
+## Subcommand table + gate evidence
+
+| Subcommand | Composes | Gate evidence |
+|---|---|---|
+| `build` | `compiler::build_project[_with_cache]` | delegates to the SUSHI build (harvest 326/326 floor unchanged) |
+| `snapshot` | `snapshot_gen::generate_snapshot` | folds in the snapshot_gen bin; batch runner reused (`snapshot_gen::main_cli`); harvested-r4 us-core batch 66/70 (baseline) through the fig alias |
+| `resolve` | `package_store::{context_closure_for_root,resolve_project}` | `fig resolve` == `rust_sushi resolve` byte-identical; **package-deps gate 8/8** through fig |
+| `packages fetch\|bundle` | `package_acquisition::{acquire_remote,build_bundle_set}` | bundle manifest = rust_sushi bundle output |
+| `expand` | `compiler::terminology::expand_enumerable` | tier-1 enumerable expansion (Session parity) |
+| `sitedb` | `site_db::build_and_write` (+ `run_cli` shared with the alias) | folds in the site_db bin; S1-S7 ledger report |
+| `fragment` | `fig::engine::render_one_fragment` → FragmentEngine | first-include-miss face; byte-identical modulo the run-uuid quirk |
+| `fragments -o` | `fig::engine::emit_fragment_files` | **snapshot us-core 70/70 byte-identical to render-goldens** (harvested run-uuid) |
+| `render` | `fig::engine::render_site` + `write_site` + `copy_assets` | **plan-net 678/678, us-core 1332/1334 (+2 classified xml-static-reser)** byte-identical to the page-corpus goldens; ReleaseHeader post-pass included |
+| `render --generator ts:*` | `fig::runner` (bun + adapter-runner.mjs over the wasm Session) | adapter-via-runner == direct Session byte-identical; the SiteGeneratorAdapter contract drives init→listPages→renderPage |
+| `watch [--serve]` | `fig::watch` (mtime poll → dirty cone → re-render → tiny_http live-reload) | **warm page edit re-renders 1 page in ~271 ms on us-core** (<1s gate; beats the editor's 609 ms through wasm) |
+| `version` | `fig::version_payload` | engine + pins, mirrors Session.version fields |
+
+`--json` on every subcommand emits the shared `api_envelope` envelope,
+schema-identical to the Session's (one implementation; `crates/fig/tests/
+json_envelope.rs` pins both, 3/3 green).
+
+## Deletion tally + migration
+
+- snapshot_gen `main.rs` (3-line wrapper) + site_db `main.rs` (149 lines,
+  promoted verbatim to `site_db::run_cli`) DELETED; the `snapshot_gen`/`site_db`
+  binary names now come only from fig (deprecated alias shims, stderr migration
+  note, one release). `rust_sushi` kept one release (dev-oracle subcommands).
+- wasm_api's 42-line private envelope DELETED → shared `api_envelope`.
+- Harness migration: package-deps.cjs + gate, arbitrary-ig-e2e, check-harvested-r4
+  → `fig`/aliases. session_equiv permanent gate green; workspace tests 0 failures.
+
+## Watch dirty-cone (design note)
+
+The dirty cone uses the read-set boundary: each page's captured fragment set
+(the first-include-miss store) + `FragmentEngine::is_whole_ig_kind` (whole-IG
+kinds depend on all resources) + page-source and `_data`/`_includes` change
+classification. On the F0 tree (includes pre-generated on disk) the always-exact
+signal is the page-source edit; own-resource fragment tracking needs engine-first
+includes, which need full IgFacts for the whole-IG aggregate kinds (the
+dependency-table loud gap otherwise fires) — same limitation the render surface
+documents. The warm-edit gate is met via the page-source path.
+
+## Docs (Part B)
+
+- README rewritten: one engine / three skins, parity table, `fig render`
+  quickstart, doc map. `docs/hosting.md` added (browser worker; Bun/Node ~30-line
+  generator; non-JS shell-to-fig; envelope schema; adapter walkthrough;
+  template-as-data). `examples/` (5 examples) executed by `scripts/examples-gate.sh`
+  — **5 pass / 0 fail** (cli-quickstart byte-checks the plan-net golden). Aligned:
+  unified-cli-plan.md → SHIPPED; docs/README.md map; simplification-ledger tally.

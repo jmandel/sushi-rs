@@ -15,6 +15,28 @@
 
 ## Done
 
+- (2026-07-04, Consolidation Pass 2 — the `fig` unified CLI) **Three user
+  binaries → one, and ONE envelope for two skins.**
+  - **Envelope dedup**: the apiVersion result/error envelope (`envelope` /
+    `envelope_ser` / `API_VERSION`) is now the single `api_envelope` crate;
+    `wasm_api` deleted its 42-line private copy and imports it, and `fig --json`
+    uses the same. One implementation for the Session AND the CLI (schema pinned
+    by `crates/fig/tests/json_envelope.rs`). Gate: session_equiv permanent gate
+    green (envelopes byte-identical), workspace tests 0 failures.
+  - **snapshot_gen + site_db binaries folded into fig**: both original `main.rs`
+    bins deleted (snapshot_gen 3-line wrapper; site_db's 149-line CLI promoted
+    verbatim into `site_db::run_cli`, so the bin AND `fig sitedb` compose ONE
+    implementation). `fig` provides deprecated alias shims (migration note to
+    stderr) for one release. `rust_sushi` kept one release (dev-oracle
+    subcommands = gate infra, plan §2); its user build/resolve/bundle are
+    `fig build`/`fig resolve`/`fig packages bundle` (byte-identical resolve
+    proven; package-deps gate 8/8 through `fig resolve`).
+  - **Harness migration**: package-deps.cjs + gate, arbitrary-ig-e2e,
+    check-harvested-r4 now drive `fig`/the aliases. No gate regressed.
+  - Net: 2 fewer user binaries, one canonical envelope, one canonical site_db
+    CLI. The new `fig` crate (~1580 lines incl. the runner .mjs) is composition
+    over the existing engine — no engine logic duplicated (iron rule).
+
 - (2026-07-04, coordinator adjudication) **markdown-it stays in cycle's
   generator as PRESENTATION** — the ContentApi sunset targets duplicate
   PUBLISHER semantics (liquid/kramdown/publisher-markdown), not a

@@ -1,8 +1,33 @@
 # Unified CLI — Plan
 
-> Status: PLANNED (Josh, 2026-07-04). Timing: after F6 lands (the Session API
-> + fragment surface it mirrors must be frozen first). This is Consolidation
-> Pass 2 material — it DELETES binaries, not just adds one.
+> Status: **SHIPPED** (2026-07-04, Consolidation Pass 2). The `fig` crate
+> (`crates/fig`) lands the full §2 surface; `crates/api_envelope` is the shared
+> envelope. Original intent below preserved; deltas from as-built noted inline
+> as **[SHIPPED: …]**.
+>
+> **Name recommendation:** keep `fig` (built as `fig` everywhere). It is short,
+> unclaimed in this space, and reads well as `fig render`/`fig watch`. Renaming
+> is a one-line-per-binary change if Josh prefers `igc`.
+>
+> **As-built deltas:**
+> - `fig render <build-dir>` operates on a completed build tree (temp/pages +
+>   output/ + packages + txcache — the F0/pagecorpus shape), so it gates
+>   byte-for-byte against the page corpora. Composing build→snapshot→sitedb→pages
+>   from a *raw* IG dir in one shot is a thin follow-up (the pieces are all
+>   subcommands); the headline render + the parity gate are shipped.
+> - The render/watch/runner **compositions** live in `fig::engine`/`fig::watch`/
+>   `fig::runner` (native engine modules) — the Session can grow the same methods;
+>   the F5/F6 machinery they compose (FragmentEngine + render_page) is unchanged.
+> - Deletions: `snapshot_gen` + `site_db` binaries folded into `fig` (CLI logic
+>   promoted to `snapshot_gen::main_cli` / `site_db::run_cli`; `fig` ships
+>   deprecated alias shims for one release). `rust_sushi` kept one release for its
+>   dev-oracle subcommands (lex/ast/expand/cas/deps/pkg-fish are gate infra, plan
+>   §2); its user-facing build/resolve/bundle are the `fig` equivalents.
+> - `fig watch` uses a dependency-free mtime poll (no notify crate) + `tiny_http`
+>   for live-reload — matches the workspace's sync/blocking style.
+> - Gate evidence, per subcommand, is in the render-worklog "fig" section.
+
+This is Consolidation Pass 2 material — it DELETES binaries, not just adds one.
 
 ## 1. The idea
 
