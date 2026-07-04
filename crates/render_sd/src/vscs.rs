@@ -1572,6 +1572,12 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
         Some(total) => {
             tx(&mut pc, &format!("This value set contains {} concepts", total));
         }
+        None if count == 1000 => {
+            // vsr:277-281: exactly 1000 (the default $expand count) means the
+            // server truncated → the maroon "selected subset" box (VALUE_SET_SEL).
+            pc.set_attribute("style", "border: maroon 1px solid; background-color: #FFCCCC; font-weight: bold; padding: 8px");
+            tx(&mut pc, "This value set has >1000 codes in it. In order to keep the publication size manageable, only a selection (1000 codes) of the whole set of codes is shown");
+        }
         None => {
             tx(&mut pc, &format!("This value set expansion contains {} concepts.", count));
         }
@@ -1781,9 +1787,17 @@ fn add_expansion_row(
             if let Some(concepts) = j.get("concept") {
                 if let Some(defn) = find_concept(concepts, code).and_then(|c| get_str(c, "definition")) {
                     // vsr:1039-1043: markdown-in-definitions → addMarkdown (a
-                    // <div><p>..); else plain text.
+                    // <div><p>..); else plain text. addMarkdown pre-processes so
+                    // core links resolve against the CS's corePath (R4 core CS
+                    // → http://hl7.org/fhir/R4/).
                     if has_markdown_in_definitions(&j) {
-                        let html = crate::publisher_markdown::md_process(defn);
+                        // addMarkdown(td, defn, cs.getWebPath()) → DataRenderer
+                        // .processRelativeUrls: prefix EVERY relative ](url) with
+                        // the CS webPath's directory (unconditional, DataRenderer
+                        // :83), then md_process.
+                        let base = cs_web_dir(ctx, system);
+                        let pre = data_process_relative_urls(defn, &base);
+                        let html = crate::publisher_markdown::md_process(&pre);
                         let mut d = el("div");
                         for node in crate::publisher_markdown::markdown_children_from_html(&html) {
                             for inner in node.child_nodes() {
@@ -2064,6 +2078,12 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
         } else {
             tx(x, &format!("{} version {}", display_system(u), v));
         }
+    } else if u == "http://loinc.org" {
+        // vsr:667-673: VALUE_SET_LOINCV = "Loinc v" + version [+ " (date)"].
+        match describe_loinc_ver(v) {
+            Some(vd) => tx(x, &format!("Loinc v{} ({})", v, vd)),
+            None => tx(x, &format!("Loinc v{}", v)),
+        }
     } else {
         // resolve the CS by canonical.
         let canonical = if v.is_empty() { u.to_string() } else { format!("{}|{}", u, v) };
@@ -2095,6 +2115,72 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
     tx(&mut btn, " ");
     span.add_child_node(btn);
     x.add_child_node(span);
+}
+
+/// vsr:704-755 describeLoincVer — the LOINC release date for a version (None
+/// when unknown, e.g. 2.82 which post-dates the table → "Loinc v2.82").
+fn describe_loinc_ver(v: &str) -> Option<&'static str> {
+    Some(match v {
+        "2.67" => "Dec 2019",
+        "2.66" => "Jun 2019",
+        "2.65" => "Dec 2018",
+        "2.64" => "Jun 2018",
+        _ => return None,
+    })
+}
+
+/// The CS webPath's directory (basePath for DataRenderer.processRelativeUrls) —
+/// e.g. observation-status → http://hl7.org/fhir/R4/.
+fn cs_web_dir(ctx: &IgContext, system: &str) -> String {
+    let web = ctx.resolve(system).map(|r| r.web_path).unwrap_or_default();
+    if let Some(idx) = web.rfind('/') {
+        web[..idx + 1].to_string()
+    } else {
+        format!("{}/", web)
+    }
+}
+
+/// DataRenderer.processRelativeUrls (DataRenderer.java:83): if `path` is an
+/// absolute URL, prefix EVERY relative (non-absolute, non-`..`) `](url)` link
+/// with `path`'s directory. Unconditional (no BASE_FILENAMES gate).
+fn data_process_relative_urls(markdown: &str, path: &str) -> String {
+    if !(path.starts_with("http://") || path.starts_with("https://")) {
+        return markdown.to_string();
+    }
+    let base_path = if path.contains('/') {
+        &path[..path.rfind('/').unwrap() + 1]
+    } else {
+        return format!("{}/", path);
+    };
+    let bytes: Vec<char> = markdown.chars().collect();
+    let mut out = String::with_capacity(markdown.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if i + 3 < bytes.len() && bytes[i] == ']' && bytes[i + 1] == '(' {
+            // find closing ')'
+            let mut j = i + 2;
+            while j < bytes.len() && bytes[j] != ')' {
+                j += 1;
+            }
+            if j < bytes.len() {
+                let url: String = bytes[i + 2..j].iter().collect();
+                let absolute = url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:");
+                out.push_str("](");
+                if !absolute && !url.starts_with("..") {
+                    out.push_str(base_path);
+                }
+                // Java advances i by 1 then the loop increments again → it emits
+                // only "](" here and continues char-by-char over the url.
+                i += 1;
+            } else {
+                out.push(bytes[i]);
+            }
+        } else {
+            out.push(bytes[i]);
+        }
+        i += 1;
+    }
+    out
 }
 
 /// DataRenderer.displaySystem — human name for a system URL (fallback: the url).
