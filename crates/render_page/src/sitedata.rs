@@ -33,12 +33,18 @@ impl SiteData {
     /// bulk of the us-core page residuals (they are the ONLY `site.data` source
     /// for those Liquid loops — no publisher-side injection is involved).
     pub fn load(data_dir: &Path) -> SiteData {
+        Self::load_with_tree(&render_sd::tree::FsTree, data_dir)
+    }
+
+    /// Tree-parameterized load (MemTree in the wasm session).
+    pub fn load_with_tree(tree: &dyn render_sd::tree::TreeSource, data_dir: &Path) -> SiteData {
         let mut root = OrderedMap::new();
-        let mut names: Vec<String> = std::fs::read_dir(data_dir)
+        let mut names: Vec<String> = tree
+            .read_dir(data_dir)
             .into_iter()
             .flatten()
-            .flatten()
-            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|(_, is_file)| *is_file)
+            .map(|(n, _)| n)
             .filter(|n| {
                 n.ends_with(".json")
                     || n.ends_with(".yml")
@@ -49,7 +55,7 @@ impl SiteData {
         names.sort();
         for n in names {
             let path = data_dir.join(&n);
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            let Some(text) = tree.read(&path) else { continue };
             let (key, parsed) = if n.ends_with(".json") {
                 (
                     n.trim_end_matches(".json").to_string(),

@@ -47,6 +47,8 @@ fn markdownify(src: &str) -> String {
 pub struct PageProvider<'a> {
     site: &'a SiteData,
     includes_dir: PathBuf,
+    /// Read seam for `_includes/` lookups (FsTree natively; MemTree in wasm).
+    tree: std::rc::Rc<dyn render_sd::tree::TreeSource>,
     engine: Option<&'a FragmentEngine>,
     /// When true, a registered fragment kind is produced by the FragmentEngine
     /// FIRST (before consulting `_includes/`) — the true first-include-miss path
@@ -54,8 +56,10 @@ pub struct PageProvider<'a> {
     /// (unregistered/authored `.xml`/`.md` content includes still come from
     /// `_includes/`).
     engine_first: bool,
-    /// Materialized-on-miss fragment cache (first-include-miss store).
-    frag_cache: RefCell<HashMap<String, Option<String>>>,
+    /// Materialized-on-miss fragment cache (first-include-miss store). An Rc so
+    /// the session can share ONE map between the page include loop and the
+    /// external `render_fragment` surface.
+    frag_cache: std::rc::Rc<RefCell<HashMap<String, Option<String>>>>,
     /// Count of includes served from the engine (fragment materializations).
     pub miss_count: RefCell<usize>,
 }
@@ -65,9 +69,10 @@ impl<'a> PageProvider<'a> {
         PageProvider {
             site,
             includes_dir: includes_dir.to_path_buf(),
+            tree: render_sd::tree::fs_tree(),
             engine,
             engine_first: false,
-            frag_cache: RefCell::new(HashMap::new()),
+            frag_cache: std::rc::Rc::new(RefCell::new(HashMap::new())),
             miss_count: RefCell::new(0),
         }
     }
@@ -75,6 +80,23 @@ impl<'a> PageProvider<'a> {
     /// Enable the engine-first (true first-include-miss) mode.
     pub fn with_engine_first(mut self, on: bool) -> Self {
         self.engine_first = on;
+        self
+    }
+
+    /// Use a non-fs read seam (the wasm session's MemTree).
+    pub fn with_tree(mut self, tree: std::rc::Rc<dyn render_sd::tree::TreeSource>) -> Self {
+        self.tree = tree;
+        self
+    }
+
+    /// Share (or pre-seed) the materialized-fragment cache across renders —
+    /// the session-level first-include-miss store: the internal include loop
+    /// and external `render_fragment` hit the SAME map.
+    pub fn with_shared_cache(
+        mut self,
+        cache: std::rc::Rc<RefCell<HashMap<String, Option<String>>>>,
+    ) -> Self {
+        self.frag_cache = cache;
         self
     }
 
@@ -106,7 +128,7 @@ impl<'a> PageProvider<'a> {
         }
         // 1. pre-generated file in _includes/ (possibly under en/).
         let p = self.includes_dir.join(name);
-        if let Ok(s) = std::fs::read_to_string(&p) {
+        if let Some(s) = self.tree.read(&p) {
             return Some(s);
         }
         // 2. FragmentEngine (first-include-miss materialization).

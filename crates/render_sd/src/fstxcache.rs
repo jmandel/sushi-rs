@@ -35,9 +35,12 @@ impl<'a> FsTxCache<'a> {
     pub fn new(dir: Option<&Path>, ctx: &'a IgContext) -> FsTxCache<'a> {
         let mut cache_files = Vec::new();
         if let Some(d) = dir {
-            if let Ok(rd) = std::fs::read_dir(d) {
-                for e in rd.flatten() {
-                    let p = e.path();
+            if let Some(rd) = ctx.tree().read_dir(d) {
+                for (name, is_file) in rd {
+                    if !is_file {
+                        continue;
+                    }
+                    let p = d.join(&name);
                     if p.extension().and_then(|x| x.to_str()) == Some("cache") {
                         cache_files.push(p);
                     }
@@ -183,7 +186,7 @@ impl<'a> FsTxCache<'a> {
         let want_fp = compose_fingerprint(want_includes);
 
         for cf in &self.cache_files {
-            let Ok(text) = std::fs::read_to_string(cf) else { continue };
+            let Some(text) = self.ctx.tree().read(cf) else { continue };
             for (req, tag, resp) in parse_cache_blocks(&text) {
                 if tag != "e" {
                     continue;
@@ -231,7 +234,7 @@ impl<'a> FsTxCache<'a> {
     /// CodeSystems. Builds a per-call scan (small corpus).
     fn cache_lookup_display(&self, system: &str, code: &str) -> Option<String> {
         for cf in &self.cache_files {
-            let Ok(text) = std::fs::read_to_string(cf) else { continue };
+            let Some(text) = self.ctx.tree().read(cf) else { continue };
             for (req, tag, resp) in parse_cache_blocks(&text) {
                 if tag != "v" {
                     continue;

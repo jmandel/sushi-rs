@@ -140,6 +140,9 @@ pub struct IgContext {
     own_package_id: Option<String>,
     /// Every own resource file (rtype, id, path), incl. url-less examples.
     own_files: Vec<(String, String, PathBuf)>,
+    /// The read seam (FsTree natively; MemTree in the wasm session). All lazy
+    /// resource/package/txcache reads go through this.
+    tree: crate::tree::Tree,
 }
 
 /// A single own-IG resource, as enumerated for the whole-IG scans (uses /
@@ -165,10 +168,20 @@ impl IgContext {
         Self::load_with_txcache(own_dir, packages_dir, None)
     }
 
+    /// Native wrapper: FsTree (byte-identical to the pre-seam behavior).
+    pub fn load_with_txcache(
+        own_dir: &Path,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+    ) -> IgContext {
+        Self::load_with_tree(crate::tree::fs_tree(), own_dir, packages_dir, txcache_dir)
+    }
+
     /// `txcache_dir` = the build's `input-cache/txcache` (holds
     /// vs-externals.json + the tx-fetched VS bodies) — the same cache the
     /// publisher's BaseWorkerContext used (BaseWorkerContext.java:3499-3511).
-    pub fn load_with_txcache(
+    pub fn load_with_tree(
+        tree: crate::tree::Tree,
         own_dir: &Path,
         packages_dir: &Path,
         txcache_dir: Option<&Path>,
@@ -181,15 +194,14 @@ impl IgContext {
         let mut ig_fhir_version: Option<String> = None;
         let mut own_canonical: Option<String> = None;
         let mut own_package_id: Option<String> = None;
-        if let Ok(rd) = std::fs::read_dir(own_dir) {
-            for e in rd.flatten() {
-                let p = e.path();
-                let fname = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if let Some(rd) = tree.read_dir(own_dir) {
+            for (fname, _is_file) in rd {
+                let p = own_dir.join(&fname);
                 if !fname.ends_with(".json") {
                     continue;
                 }
                 // Only resource-shaped files: Type-id.json
-                let Ok(text) = std::fs::read_to_string(&p) else { continue };
+                let Some(text) = tree.read(&p) else { continue };
                 let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
                 let rtype = v.get("resourceType").and_then(|x| x.as_str()).unwrap_or("");
                 if rtype.is_empty() {
@@ -291,7 +303,7 @@ impl IgContext {
             seen.push((pid.clone(), ver.clone()));
             let pdir = packages_dir.join(format!("{}#{}", pid, ver)).join("package");
             let pj = pdir.join("package.json");
-            if let Ok(text) = std::fs::read_to_string(&pj) {
+            if let Some(text) = tree.read(&pj) {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     if let Some(d) = v.get("dependencies").and_then(|x| x.as_object()) {
                         for (dp, dv) in d {
@@ -306,9 +318,8 @@ impl IgContext {
         // The core package is always loaded (hl7.fhir.r4.core etc. comes in via
         // the dependency closure of every IG package; if absent, scan for it).
         if !seen.iter().any(|(p, _)| p.contains(".core")) {
-            if let Ok(rd) = std::fs::read_dir(packages_dir) {
-                for e in rd.flatten() {
-                    let n = e.file_name().to_string_lossy().to_string();
+            if let Some(rd) = tree.read_dir(packages_dir) {
+                for (n, _isf) in rd {
                     if n.starts_with("hl7.fhir.r4.core#") || n.starts_with("hl7.fhir.r4b.core#") || n.starts_with("hl7.fhir.r5.core#") {
                         let parts: Vec<&str> = n.splitn(2, '#').collect();
                         seen.push((parts[0].to_string(), parts[1].to_string()));
@@ -337,14 +348,14 @@ impl IgContext {
             if !pdir.exists() {
                 continue;
             }
-            let Some(mut entry) = load_package(&pdir, ver) else { continue };
+            let Some(mut entry) = load_package(&*tree, &pdir, ver) else { continue };
             entry.is_master = pid == want_core;
             packages.push(entry);
         }
 
         let mut tx_externals = HashMap::new();
         if let Some(txd) = txcache_dir {
-            if let Ok(text) = std::fs::read_to_string(txd.join("vs-externals.json")) {
+            if let Some(text) = tree.read(&txd.join("vs-externals.json")) {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     if let Some(obj) = v.as_object() {
                         for (canonical, entry) in obj {
@@ -365,7 +376,7 @@ impl IgContext {
 
         let mut cs_externals = HashMap::new();
         if let Some(txd) = txcache_dir {
-            if let Ok(text) = std::fs::read_to_string(txd.join("cs-externals.json")) {
+            if let Some(text) = tree.read(&txd.join("cs-externals.json")) {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     if let Some(obj) = v.as_object() {
                         for (canonical, entry) in obj {
@@ -385,6 +396,7 @@ impl IgContext {
         }
 
         IgContext {
+            tree,
             own,
             packages,
             cache: RefCell::new(HashMap::new()),
@@ -408,12 +420,18 @@ impl IgContext {
         if let Some(hit) = self.res_cache.borrow().get(&key) {
             return hit.clone().map(|j| (server.clone(), j));
         }
-        let loaded = std::fs::read_to_string(file)
-            .ok()
+        let loaded = self
+            .tree
+            .read(file)
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
             .map(std::rc::Rc::new);
         self.res_cache.borrow_mut().insert(key, loaded.clone());
         loaded.map(|j| (server.clone(), j))
+    }
+
+    /// The read seam (for helpers that take raw paths, e.g. deptable's npm walk).
+    pub fn tree(&self) -> &dyn crate::tree::TreeSource {
+        &*self.tree
     }
 
     /// The IG's package id (ImplementationGuide.packageId), `xigReference`'s arg.
@@ -428,7 +446,7 @@ impl IgContext {
     pub fn load_own_file(&self, refname: &str) -> Option<String> {
         for (rtype, id, path) in &self.own_files {
             if format!("{}-{}", rtype, id) == refname {
-                return std::fs::read_to_string(path).ok();
+                return self.tree.read(path);
             }
         }
         None
@@ -446,8 +464,9 @@ impl IgContext {
             let json = match cached {
                 Some(hit) => hit,
                 None => {
-                    let loaded = std::fs::read_to_string(f)
-                        .ok()
+                    let loaded = self
+                        .tree
+                        .read(f)
                         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
                         .map(std::rc::Rc::new);
                     self.res_cache.borrow_mut().insert(key, loaded.clone());
@@ -531,7 +550,7 @@ impl IgContext {
                             join_url(&pkg.base_url, &page)
                         };
                         let fpath = pkg.dir.join(fname);
-                        let (name, title, kind, derivation) = read_meta(&fpath);
+                        let (name, title, kind, derivation) = read_meta(&*self.tree, &fpath);
                         // masterDefinitions applies to SDs only when they
                         // SPECIALIZE (base types/resources).
                         if rtype != "StructureDefinition"
@@ -587,7 +606,7 @@ impl IgContext {
                 // special -> def=meta.source), else filename convention.
                 let mut page = pkg.spec_paths.as_ref().and_then(|m| m.get(url)).cloned();
                 if page.is_none() && pkg.spec_paths.is_none() {
-                    page = read_meta_source(&fpath);
+                    page = read_meta_source(&*self.tree, &fpath);
                 }
                 let page = page
                     .or_else(|| ig_override_page(url))
@@ -601,7 +620,7 @@ impl IgContext {
                     join_url(&pkg.base_url, &page)
                 };
                 // lazy name/title/kind from the resource file.
-                let (name, title, kind, derivation) = read_meta(&fpath);
+                let (name, title, kind, derivation) = read_meta(&*self.tree, &fpath);
                 let cand = Resolved {
                     web_path,
                     name,
@@ -647,7 +666,7 @@ impl IgContext {
         // webPath = pathURL(server, "ValueSet", vs.getIdBase()); external flag.
         if best.is_none() {
             if let Some((server, file)) = self.tx_externals.get(url) {
-                if let Ok(text) = std::fs::read_to_string(file) {
+                if let Some(text) = self.tree.read(file) {
                     if let Ok(v) = serde_json::from_str::<Value>(&text) {
                         let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
                         best = Some(Resolved {
@@ -753,7 +772,7 @@ impl IgContext {
                 continue;
             }
             let Some(f) = &r.file else { continue };
-            let Ok(text) = std::fs::read_to_string(f) else { continue };
+            let Some(text) = self.tree.read(f) else { continue };
             let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
             let base = v
                 .get("baseDefinition")
@@ -775,7 +794,7 @@ impl IgContext {
         }
         let out = self.resolve(canonical).and_then(|r| {
             let f = r.file?;
-            let text = std::fs::read_to_string(f).ok()?;
+            let text = self.tree.read(&f)?;
             serde_json::from_str::<Value>(&text).ok().map(std::rc::Rc::new)
         });
         self.res_cache
@@ -902,15 +921,14 @@ pub fn strip_version(url: &str) -> String {
     }
 }
 
-fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
-    let pj: Value =
-        serde_json::from_str(&std::fs::read_to_string(pdir.join("package.json")).ok()?).ok()?;
+fn load_package(tree: &dyn crate::tree::TreeSource, pdir: &Path, ver: &str) -> Option<PkgEntry> {
+    let pj: Value = serde_json::from_str(&tree.read(&pdir.join("package.json"))?).ok()?;
     let base_url = fix_package_url(pj.get("url").and_then(|x| x.as_str())?);
     let pkg_id = pj.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
     let pkg_canonical = pj.get("canonical").and_then(|x| x.as_str()).map(String::from);
     let pkg_title = pj.get("title").and_then(|x| x.as_str()).map(String::from);
     let mut files = HashMap::new();
-    if let Ok(text) = std::fs::read_to_string(pdir.join(".index.json")) {
+    if let Some(text) = tree.read(&pdir.join(".index.json")) {
         if let Ok(idx) = serde_json::from_str::<Value>(&text) {
             for f in idx
                 .get("files")
@@ -950,7 +968,7 @@ fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
     // spec.internals (core spec only) — has a UTF-8 BOM.
     let mut spec_paths = None;
     let si_path = pdir.join("other").join("spec.internals");
-    if let Ok(bytes) = std::fs::read(&si_path) {
+    if let Some(bytes) = tree.read_bytes(&si_path) {
         let text = String::from_utf8_lossy(&bytes);
         let text = text.trim_start_matches('\u{feff}');
         if let Ok(si) = serde_json::from_str::<Value>(text) {
@@ -989,8 +1007,8 @@ fn pkg_meta(pkg: &PkgEntry) -> PkgMeta {
     }
 }
 
-fn read_meta_source(path: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(path).ok()?;
+fn read_meta_source(tree: &dyn crate::tree::TreeSource, path: &Path) -> Option<String> {
+    let text = tree.read(path)?;
     let v: Value = serde_json::from_str(&text).ok()?;
     v.get("meta")
         .and_then(|m| m.get("source"))
@@ -998,8 +1016,11 @@ fn read_meta_source(path: &Path) -> Option<String> {
         .map(String::from)
 }
 
-fn read_meta(path: &Path) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
-    let Ok(text) = std::fs::read_to_string(path) else {
+fn read_meta(
+    tree: &dyn crate::tree::TreeSource,
+    path: &Path,
+) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
+    let Some(text) = tree.read(path) else {
         return (None, None, None, None);
     };
     let Ok(v) = serde_json::from_str::<Value>(&text) else {

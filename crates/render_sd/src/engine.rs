@@ -441,7 +441,7 @@ impl FragmentEngine {
             ),
             "dependency-table-nontech" => format!(
                 "{}<!--$$3$$-->",
-                crate::deptable::dependency_table_nontech(&f.cache_dir, &f.ig_json, &f.loaded_set)
+                crate::deptable::dependency_table_nontech(self.ctx.tree(), &f.cache_dir, &f.ig_json, &f.loaded_set)
             ),
             "valueset-ref-list" => agg::valueset_ref_list(ctx, &f.ig_version, false),
             "valueset-ref-all-list" => agg::valueset_ref_list(ctx, &f.ig_version, true),

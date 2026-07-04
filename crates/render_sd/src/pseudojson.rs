@@ -643,7 +643,7 @@ impl<'a> Ctx<'a> {
 
     fn load_ext_sd(&self, r: &crate::context::Resolved) -> Option<Sd> {
         let f = r.file.clone()?;
-        let text = std::fs::read_to_string(f).ok()?;
+        let text = self.ctx.tree().read(&f)?;
         Sd::from_json(&text).ok()
     }
 

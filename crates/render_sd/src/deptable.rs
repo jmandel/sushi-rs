@@ -81,9 +81,9 @@ fn fix_package_url(webref: &str) -> String {
 }
 
 /// Load a package.json from the cache dir (`<cache>/<id>#<version>/package/package.json`).
-pub fn load_npm(cache: &Path, id: &str, version: &str) -> Option<Npm> {
+pub fn load_npm(tree: &dyn crate::tree::TreeSource, cache: &Path, id: &str, version: &str) -> Option<Npm> {
     let pj = cache.join(format!("{}#{}", id, version)).join("package").join("package.json");
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(&pj).ok()?).ok()?;
+    let v: Value = serde_json::from_str(&tree.read(&pj)?).ok()?;
     let deps = v
         .get("dependencies")
         .and_then(|d| d.as_object())
@@ -156,7 +156,8 @@ fn nontech_title(npm: &Npm) -> String {
 /// `addPackage` (depr:260-296): register the package by title, recurse into its
 /// loaded dependencies as indirect.
 fn nontech_add_package(
-    packages: &mut BTreeMap<String, PackageInfo>,
+    tree: &dyn crate::tree::TreeSource,
+packages: &mut BTreeMap<String, PackageInfo>,
     order: &mut Vec<String>,
     cache: &Path,
     loaded: &HashSet<String>,
@@ -198,8 +199,8 @@ fn nontech_add_package(
     for (id, version) in &npm.deps {
         let d = format!("{}#{}", id, version);
         if loaded.contains(&d) {
-            if let Some(dp) = load_npm(cache, id, version) {
-                nontech_add_package(packages, order, cache, loaded, &dp, None, false, Some(title.clone()));
+            if let Some(dp) = load_npm(tree, cache, id, version) {
+                nontech_add_package(tree, packages, order, cache, loaded, &dp, None, false, Some(title.clone()));
             }
         }
     }
@@ -223,6 +224,7 @@ fn version_reason(v: &PackageVersionInfo) -> Option<String> {
 /// the own ImplementationGuide JSON; `loaded` = the build's loaded `name#version`
 /// set (isLoaded). All supplied by the harness (build facts / paths).
 pub fn dependency_table_nontech(
+    tree: &dyn crate::tree::TreeSource,
     cache: &Path,
     ig: &Value,
     loaded: &HashSet<String>,
@@ -232,10 +234,10 @@ pub fn dependency_table_nontech(
 
     for d in ig_depends_on(ig) {
         // resolve(d) then isLoaded(p) (depr:212-216).
-        if let Some(npm) = resolve_dep(cache, &d) {
+        if let Some(npm) = resolve_dep(tree, cache, &d) {
             if loaded.contains(&npm.vid()) {
                 let reason = dep_reason(&d);
-                nontech_add_package(&mut packages, &mut order, cache, loaded, &npm, reason, true, None);
+                nontech_add_package(tree, &mut packages, &mut order, cache, loaded, &npm, reason, true, None);
             }
         }
     }
@@ -407,12 +409,12 @@ fn dep_reason(d: &DependsOn) -> Option<String> {
 
 /// `resolve(d)` (depr:617-627): resolve a dependsOn to an NpmPackage via its
 /// packageId (or the canonical→packageId lookup) + version.
-fn resolve_dep(cache: &Path, d: &DependsOn) -> Option<Npm> {
+fn resolve_dep(tree: &dyn crate::tree::TreeSource, cache: &Path, d: &DependsOn) -> Option<Npm> {
     let id = d.package_id.clone().or_else(|| {
         // pcm.getPackageId(uri): not needed for the corpus (all dependsOn carry
         // packageId). Fire a loud gap if a uri-only dep ever appears.
         d.uri.as_ref().map(|_| panic!("LOUD GAP: dependency uri->packageId lookup (depr:621) not ported"))
     })?;
-    load_npm(cache, &id, &d.version)
+    load_npm(tree, cache, &id, &d.version)
 }
 

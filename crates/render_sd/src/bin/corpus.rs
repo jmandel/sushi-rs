@@ -589,7 +589,7 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
             render_sd::deptable::dependency_table(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig), &dep_dst_folder(ig), false, harvest_uuid(ig).as_str())
         ),
         "dependency-table-nontech" => {
-            format!("{}<!--$$3$$-->", render_sd::deptable::dependency_table_nontech(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig)))
+            format!("{}<!--$$3$$-->", render_sd::deptable::dependency_table_nontech(&render_sd::tree::FsTree, &dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig)))
         }
         // *-ref(-all)-list: renderVSList/renderCSList(used=true), pg:2789-2809.
         // The CS ref Version flag is needVersionReferences over the used-VS list
