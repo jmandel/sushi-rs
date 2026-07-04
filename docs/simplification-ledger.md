@@ -15,6 +15,15 @@
 
 ## Done
 
+- (2026-07-04, coordinator adjudication) **markdown-it stays in cycle's
+  generator as PRESENTATION** — the ContentApi sunset targets duplicate
+  PUBLISHER semantics (liquid/kramdown/publisher-markdown), not a
+  generator's own design-layer markdown (table-scroll wrappers, heading
+  permalinks, task checkboxes, custom slugify are cycle chrome by design).
+  The byte-identity gate correctly protected against the over-broad
+  directive; principle recorded: one implementation of publisher semantics;
+  hosts own their own presentation.
+
 - (2026-07-04, F6 scope 2) **#2 Editor worker protocol — DONE** (editor
   `2d1c654`): ONE typed op table (`EngineOps`) types every operation's args +
   result; worker = a handler per op, client = `call(op, ...args)`; Session
