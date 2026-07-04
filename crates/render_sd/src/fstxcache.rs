@@ -84,7 +84,15 @@ impl<'a> FsTxCache<'a> {
                 Some(v) if !v.is_empty() => format!("{}|{}", system, v),
                 _ => system.to_string(),
             };
-            let cs_json = self.ctx.load_resource(&canonical).or_else(|| self.ctx.load_resource(system))?;
+            // A tx-fetched external CS (cs-externals.json) is the publisher's
+            // findTxResource copy and wins over any package placeholder (which is
+            // typically content=not-present and would abort the enumeration).
+            let cs_json = self
+                .ctx
+                .resolve_cs_external(system)
+                .map(|(_, j)| j)
+                .or_else(|| self.ctx.load_resource(&canonical))
+                .or_else(|| self.ctx.load_resource(system))?;
             let content = cs_json.get("content").and_then(|x| x.as_str());
             if !matches!(content, Some("complete") | Some("fragment")) {
                 return None;

@@ -1091,8 +1091,6 @@ struct CsRes {
     web_path: Option<String>,
     /// resource business version.
     version: Option<String>,
-    /// present() (title || name).
-    present: Option<String>,
     /// `!isAbsoluteUrlLinkable(webPath)` — a relative page = own IG package.
     from_this_package: bool,
     /// resolved from a loaded dependency package (has source package).
@@ -1121,7 +1119,6 @@ fn resolve_cs(ctx: &IgContext, system: &str, ver: Option<&str>) -> Option<CsRes>
             id: cs_id.clone(),
             web_path: Some(format!("{}/ValueSet/{}", server_base, cs_id)),
             version,
-            present: get_str(&json, "title").or_else(|| get_str(&json, "name")).map(String::from),
             from_this_package: false,
             from_packages: false,
             content,
@@ -1150,7 +1147,6 @@ fn resolve_cs(ctx: &IgContext, system: &str, ver: Option<&str>) -> Option<CsRes>
         id: cs_id,
         web_path: Some(web),
         version,
-        present: Some(r.present()),
         from_this_package,
         from_packages: r.pkg.is_some(),
         content,
@@ -1688,11 +1684,17 @@ fn param_value(params: &[Value], name: &str) -> Option<String> {
     None
 }
 
+fn fetched_cs<'a>(ctx: &IgContext, system: &str) -> Option<std::rc::Rc<Value>> {
+    ctx.resolve_cs_external(system)
+        .map(|(_, j)| j)
+        .or_else(|| ctx.load_resource(system))
+}
+
 fn expansion_has_definition(contains: &[Value], ctx: &IgContext) -> bool {
     for c in contains {
         let system = get_str(c, "system").unwrap_or("");
         let code = get_str(c, "code").unwrap_or("");
-        if let Some(j) = ctx.load_resource(system) {
+        if let Some(j) = fetched_cs(ctx, system) {
             if get_str(&j, "content") == Some("complete") || get_str(&j, "content") == Some("fragment") {
                 if let Some(concepts) = j.get("concept") {
                     if find_concept(concepts, code).and_then(|c| get_str(c, "definition")).is_some() {
@@ -1783,7 +1785,7 @@ fn add_expansion_row(
     }
     if do_definition {
         let mut td = el("td");
-        if let Some(j) = ctx.load_resource(system) {
+        if let Some(j) = fetched_cs(ctx, system) {
             if let Some(concepts) = j.get("concept") {
                 if let Some(defn) = find_concept(concepts, code).and_then(|c| get_str(c, "definition")) {
                     // vsr:1039-1043: markdown-in-definitions → addMarkdown (a
@@ -1890,6 +1892,20 @@ fn make_anchor(system: &str) -> String {
 }
 
 fn add_expansion_code_link(td: &mut XhtmlNode, system: &str, code: &str, ctx: &IgContext) {
+    // A tx-fetched external CS (complete) → its webPath = {server}/ValueSet/{id}.
+    if let Some((server, json)) = ctx.resolve_cs_external(system) {
+        let content = get_str(&json, "content");
+        if matches!(content, Some("complete") | Some("fragment")) {
+            let cs_id = get_str(&json, "id").unwrap_or("");
+            let web = format!("{}/ValueSet/{}", server.trim_end_matches('/'), cs_id);
+            let anchor = format!("{}#{}-{}", web, cs_id, nmtokenize(code));
+            let mut a = el("a");
+            a.set_attribute("href", anchor);
+            tx(&mut a, code);
+            td.add_child_node(a);
+            return;
+        }
+    }
     // fetched CS content complete/fragment → local link; else snomed/loinc/plain.
     let cs_json = ctx.load_resource(system);
     let content = cs_json.as_ref().and_then(|j| get_str(j, "content").map(String::from));
@@ -2084,6 +2100,20 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
             Some(vd) => tx(x, &format!("Loinc v{} ({})", v, vd)),
             None => tx(x, &format!("Loinc v{}", v)),
         }
+    } else if let Some((server, json)) = ctx.resolve_cs_external(u) {
+        // tx-fetched external CS: webPath = {server}/ValueSet/{id}; present() =
+        // title||name; fhirType = CodeSystem.
+        let id = get_str(&json, "id").unwrap_or("");
+        let present = get_str(&json, "title").or_else(|| get_str(&json, "name")).unwrap_or("");
+        let web = format!("{}/ValueSet/{}", server.trim_end_matches('/'), id);
+        let mut a = el("a");
+        a.set_attribute("href", web);
+        if v.is_empty() {
+            tx(&mut a, &format!("{} {} (no version) (CodeSystem)", t, present));
+        } else {
+            tx(&mut a, &format!("{} {} v{} (CodeSystem)", t, present, v));
+        }
+        x.add_child_node(a);
     } else {
         // resolve the CS by canonical.
         let canonical = if v.is_empty() { u.to_string() } else { format!("{}|{}", u, v) };
