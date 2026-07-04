@@ -14,18 +14,33 @@ thread_local! {
     /// Empty when the document has no footnotes.
     static FOOTNOTE_NUMBERS: RefCell<HashMap<String, usize>> = RefCell::new(HashMap::new());
 
-    /// Link reference definitions: normalized label -> (destination, title).
-    static LINK_REFS: RefCell<HashMap<String, (String, Option<String>)>> =
+    /// Link reference definitions: normalized label -> (destination, title,
+    /// attr_prefix). `attr_prefix` is a pre-rendered attribute string (e.g.
+    /// ` id="CONF-0461"`) from a kramdown IAL that immediately followed the
+    /// definition (`{: #id}`); it is emitted on the generated `<a>` BEFORE the
+    /// `href`, matching kramdown's attribute order.
+    static LINK_REFS: RefCell<HashMap<String, LinkRef>> =
         RefCell::new(HashMap::new());
+}
+
+/// A link reference definition: destination, optional title, and an optional
+/// IAL-derived attribute prefix (emitted on the `<a>` before `href`).
+#[derive(Clone, Default, Debug)]
+pub struct LinkRef {
+    pub dest: String,
+    pub title: Option<String>,
+    /// Pre-rendered attributes from a `{: ... }` IAL line following the def,
+    /// e.g. ` id="CONF-0461"`. Emitted verbatim right after `<a`.
+    pub attr_prefix: String,
 }
 
 /// Install link reference definitions (normalized labels) for subsequent
 /// render_inline calls.
-pub fn set_link_refs(map: HashMap<String, (String, Option<String>)>) {
+pub fn set_link_refs(map: HashMap<String, LinkRef>) {
     LINK_REFS.with(|m| *m.borrow_mut() = map);
 }
 
-fn lookup_link_ref(label: &str) -> Option<(String, Option<String>)> {
+fn lookup_link_ref(label: &str) -> Option<LinkRef> {
     let key = normalize_ref_label(label);
     LINK_REFS.with(|m| m.borrow().get(&key).cloned())
 }
@@ -1196,25 +1211,35 @@ fn try_link(chars: &[char], i: usize) -> Option<(String, usize)> {
             } else {
                 reflabel
             };
-            if let Some((url, title)) = lookup_link_ref(&label) {
-                return Some((build_link(&text, &url, title.as_deref()), k + 1));
+            if let Some(lr) = lookup_link_ref(&label) {
+                return Some((build_ref_link(&text, &lr), k + 1));
             }
             return None;
         }
     }
     // Shortcut reference: [text] where text itself is a defined label.
     let label: String = chars[text_start..after_text].iter().collect();
-    if let Some((url, title)) = lookup_link_ref(&label) {
-        return Some((build_link(&text, &url, title.as_deref()), after_text + 1));
+    if let Some(lr) = lookup_link_ref(&label) {
+        return Some((build_ref_link(&text, &lr), after_text + 1));
     }
     None
 }
 
+/// Build an `<a>` from a resolved reference definition, applying its IAL-derived
+/// `attr_prefix` (e.g. ` id="CONF-0461"`) right after `<a`, before `href`.
+fn build_ref_link(text: &[char], lr: &LinkRef) -> String {
+    build_link_attrs(text, &lr.dest, lr.title.as_deref(), &lr.attr_prefix)
+}
+
 fn build_link(text: &[char], url: &str, title: Option<&str>) -> String {
+    build_link_attrs(text, url, title, "")
+}
+
+fn build_link_attrs(text: &[char], url: &str, title: Option<&str>, attr_prefix: &str) -> String {
     let mut inner = String::new();
     render_inline_chars(text, &mut inner);
     let url_esc = escape_attr_inline(url);
-    let mut tag = format!("<a href=\"{url_esc}\"");
+    let mut tag = format!("<a{attr_prefix} href=\"{url_esc}\"");
     if let Some(t) = title {
         tag.push_str(&format!(" title=\"{}\"", escape_attr_inline(t)));
     }

@@ -40,6 +40,14 @@ fn ial() {
 }
 
 #[test]
+fn link_ref_ial() {
+    // Last-definition-wins for link references, plus a `{: #id}` IAL following a
+    // link definition attaching to the generated `<a>` (the US-Core CONF-NNNN
+    // reference mechanism). Golden from the kramdown oracle.
+    check("link_ref_ial");
+}
+
+#[test]
 fn tables() {
     check("tables");
 }

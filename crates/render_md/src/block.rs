@@ -226,32 +226,68 @@ pub struct Doc {
     pub leading_blank: bool,
     pub trailing_blank: bool,
     /// Link reference definitions found in this document: normalized label ->
-    /// (destination, optional title).
-    pub link_refs: std::collections::HashMap<String, (String, Option<String>)>,
+    /// [`crate::inline::LinkRef`] (destination, optional title, IAL attr prefix).
+    pub link_refs: std::collections::HashMap<String, crate::inline::LinkRef>,
 }
 
 /// Extract link reference definitions (`[label]: dest "title"`) from `src`,
 /// returning the source with those lines removed and the collected map. Only
 /// definition lines at a block boundary (not indented as code) are taken; a
 /// `[//]: # (...)` "markdown comment" is also a link definition and is removed.
+///
+/// LAST definition wins (kramdown/GFM semantics — a later `[label]:` overrides
+/// an earlier one; the US-Core template relies on this, e.g. `link-list.md`'s
+/// `[US Core Roadmap]: …#us-core-roadmap` overriding an earlier anchor-less def).
+///
+/// A `{: #id …}` IAL line immediately following a definition attaches to it:
+/// the generated `<a>` carries those attributes before `href` (kramdown behavior,
+/// used by `requirements-link-list.md` to stamp `id="CONF-NNNN"` on each ref).
 fn extract_link_refs(
     src: &str,
-) -> (
-    String,
-    std::collections::HashMap<String, (String, Option<String>)>,
-) {
+) -> (String, std::collections::HashMap<String, crate::inline::LinkRef>) {
     let mut map = std::collections::HashMap::new();
     let mut kept: Vec<&str> = Vec::new();
-    for line in src.split('\n') {
+    let lines: Vec<&str> = src.split('\n').collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
         if let Some((label, dest, title)) = parse_link_ref_def(line) {
-            map.entry(crate::inline::normalize_ref_label(&label))
-                .or_insert((dest, title));
-            // drop the line
+            // A following IAL line attaches its attributes to this definition.
+            let mut attr_prefix = String::new();
+            if let Some(next) = lines.get(i + 1) {
+                if let Some(ap) = parse_link_def_ial(next) {
+                    attr_prefix = ap;
+                    i += 1; // consume the IAL line too
+                }
+            }
+            map.insert(
+                crate::inline::normalize_ref_label(&label),
+                crate::inline::LinkRef { dest, title, attr_prefix },
+            );
+            i += 1;
             continue;
         }
         kept.push(line);
+        i += 1;
     }
     (kept.join("\n"), map)
+}
+
+/// Parse a `{: … }` IAL line that follows a link reference definition into an
+/// HTML attribute prefix string (leading space per attr, kramdown insertion
+/// order), e.g. `{: #CONF-0461}` -> ` id="CONF-0461"`. Bare refs (`{:toc}`) and
+/// unknown keys carry no HTML attribute and are ignored. Returns None if the
+/// line is not an IAL or contributes no HTML attributes.
+fn parse_link_def_ial(line: &str) -> Option<String> {
+    let attrs = crate::ial::parse_block_ial_line(line)?;
+    if attrs.ordered.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for (k, v) in &attrs.ordered {
+        out.push_str(&format!(" {}=\"{}\"", k, crate::util::escape_html_attr(v)));
+    }
+    Some(out)
 }
 
 /// Parse a single line as a link reference definition. Returns
