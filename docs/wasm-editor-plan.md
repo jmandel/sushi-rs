@@ -4,6 +4,20 @@
 > rework (snapshot/REWORK-PLAN.md) is in wave 3. Nothing here starts before that
 > rework's wave-4 cutover completes — the walk engine is the snapshot generator
 > this plan ships.
+>
+> **⚠️ PARTIALLY SUPERSEDED (2026-07-03, Consolidation Pass 1).** This plan's
+> compute-and-plumbing phases **P0/P1/P2 are DELIVERED** (see the DONE status
+> blocks in §9/§9b/§9c below). Its editor-product phases **P3/P4 are superseded**
+> by two newer, more specific docs — read those for current-state work:
+> - **`docs/stock-template-renderer-plan.md`** — the committed F0–F6 plan for
+>   in-browser Publisher-parity page rendering (F6 = editor integration: template
+>   selector, wasm exports, per-page preview). The F-phases are where "the editor
+>   shell" actually lands now.
+> - **`docs/fhir-ig-editor-spec.md`** — the editor demo repo spec (M1/M2
+>   milestones) that P3 pointed at.
+>
+> Keep this doc for the P0–P2 rationale + the DONE evidence; do NOT plan new work
+> against §5's P3/P4 rows — they are marked SUPERSEDED inline.
 
 ## 1. Goal
 
@@ -118,13 +132,18 @@ The browser build must pass the same gates as native:
 
 ## 5. Phases
 
+> **Status roll-up (2026-07-03):** P0/P1/P2 **DONE** (evidence in §9/§9b/§9c).
+> P3/P4 **SUPERSEDED** — the editor shell is now carried by
+> `docs/stock-template-renderer-plan.md` (F5/F6) + `docs/fhir-ig-editor-spec.md`
+> (M1/M2). Do not schedule against the P3/P4 rows.
+
 | Phase | Deliverable | Exit gate | Rough effort |
 |---|---|---|---|
-| P0 | WASI prototype: compile IPS + generate one snapshot in a browser page | IPS build < 3s in-browser; output byte-matches native | days |
-| P1 | `PackageSource` trait + OPFS impl + CDN bundle format | full native corpus gates green over the trait; browser cold-start < 5s for IPS closure | ~1 wk |
-| P2 | `wasm_api` crate + worker protocol + wasm parity harness in CI | ladder + 3-IG gates green on wasm build | ~1 wk |
-| P3 | Editor shell v1 — now specced as its own repo `jmandel/fhir-ig-editor` (see docs/fhir-ig-editor-spec.md; default IG = cycle, submodule-pinned engine, GitHub Pages) | that spec's M1 gate | 1–2 wk |
-| P4 | Polish: bundle size, more packages on CDN, error UX, share links | public demo | open-ended |
+| P0 ✅ DONE | WASI prototype: compile IPS + generate one snapshot in a browser page | IPS build < 3s in-browser; output byte-matches native | days |
+| P1 ✅ DONE | `PackageSource` trait + OPFS impl + CDN bundle format | full native corpus gates green over the trait; browser cold-start < 5s for IPS closure | ~1 wk |
+| P2 ✅ DONE | `wasm_api` crate + worker protocol + wasm parity harness in CI | ladder + 3-IG gates green on wasm build | ~1 wk |
+| P3 → SUPERSEDED | Editor shell v1 — **now carried by `docs/fhir-ig-editor-spec.md` (M1/M2) + `stock-template-renderer-plan.md` F5/F6**, not this row | see those docs | — |
+| P4 → SUPERSEDED | Polish (bundle size, CDN packages, error UX, share links) — folded into the editor spec + renderer F6 | public demo | — |
 
 ## 6. Risks / open questions
 

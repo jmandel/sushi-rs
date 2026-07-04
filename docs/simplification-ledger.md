@@ -9,35 +9,84 @@
 
 ## Open candidates (spotted → collapse when owning agents quiesce)
 
-1. **wasm_api surface accretion** — init / compile / set_local_resources /
-   generate_snapshot / build_site_db / expand_enumerable / mount_bundles,
-   with resolve_project + render_fragment/render_page incoming. Collapse into
-   a coherent session-object API (one Engine handle, grouped methods, one
-   error/JSON envelope) BEFORE F6 freezes the editor against it.
 2. **Editor worker protocol** — grew organically across M1/M2/#22/#32.
    Unify message envelope + progress reporting; one place for engine-call
-   marshalling.
-3. **Standalone-crate workspaces** — render_xhtml/render_liquid/render_md/
-   render_tables/render_sd each carry their own [workspace] (deliberate, for
-   parallel-agent isolation). Once churn quiets: fold into the root workspace
-   in ONE commit (single lock, shared target/, workspace-wide test sweep).
-4. **package-deps.cjs** — retire fully once #32's Rust-vs-cjs parity gate has
-   soaked; harness scripts point at the native resolver bin.
-5. **Two file-abstraction traits** — PackageSource (package_store) and
-   site_db's augment FileSource. Unify or document why two.
-6. **scripts/ sprawl** — harvest/gate/oracle scripts across snapshot/,
-   scripts/, demo/*: one README index, kill dead ones (post-F5).
-7. **Docs overlap** — wasm-editor-plan P-phases vs stock-template-renderer
-   F-phases now partially supersede each other; PUBLISH.md accretes per-task
-   sequences. One pass to mark superseded sections + a current-state map.
+   marshalling. (Editor-repo owned; not in Consolidation Pass 1 scope.)
 8. **Editor M2 shim layering** — vite resolveId dbShim + @cycle aliases +
    process.env stubs; revisit when the adapter contract (F6) lands — the
-   contract should DELETE shims, not wrap them.
+   contract should DELETE shims, not wrap them. (Editor-repo owned.)
 9. **cycle rust-feed-spike branch** — carries spike wiring + fixture regen;
    fold what's permanent into a clean PR to cycle main, drop the rest.
+   (cycle-repo owned.)
 
 ## Done
 
+- (2026-07-03, Consolidation Pass 1 — item #3) **Standalone-crate workspaces
+  folded into root**: render_{xhtml,liquid,md,tables,sd,page} each carried their
+  own `[workspace]` (parallel-agent isolation). Folded ALL six into the root
+  workspace in one commit (`7c6d3cda`): root `members` + `workspace.dependencies`
+  path entries; per-crate tables dropped; version/edition/license/rust-version
+  inherited from `workspace.package`; serde_json (preserve_order)/serde_yaml
+  unified via `workspace = true`; the 6 per-crate `Cargo.lock`s deleted (ONE root
+  lock) and stray `target/` dirs removed. Gate: `cargo test --workspace` 176
+  passed / 0 failed (now includes the render crates); fragment spot snapshot
+  us-core 70/70, dict cycle 7/7, cld plan-net 24/24 byte-identical; pagecorpus
+  plan-net 678/678; sushi harvest 326/326 (256/256 byte-identical). Cargo-only
+  change — snapshot_gen bytes untouched, so the harvested-r4 spot floors are
+  unchanged.
+- (2026-07-03, Consolidation Pass 1 — item #1) **wasm_api collapsed into a
+  `Session` surface** (`bc211a85`): the 8 accreted flat exports become one
+  wasm-bindgen `Session` handle with grouped methods over the SINGLE process
+  engine, ONE apiVersion-stamped result envelope + ONE error envelope (domain
+  errors are `ok:false`, never thrown). All operation logic moved into inherent
+  `Engine` methods returning `Result<_, String>`; the two facades only marshal.
+  The old flat exports REMAIN as `#[deprecated]` thin wrappers preserving their
+  exact historical output bytes (M2 editor + wasm-parity-driver depend on them;
+  F6 migrates then deletes). New `tests/session_api.rs` proves envelope shape +
+  that `result` == the legacy raw payload (migration is pure re-wrapping). Gate:
+  `cargo test -p wasm_api` (expand_api 5/5, session_api 5/5, site_db_snapshot
+  1/1); compiler compile_equiv 1/1; site_db inmem_vs_disk 1/1; workspace green.
+  DEFERRED: `scripts/wasm-parity.sh` — the wasm32 toolchain + wasm-bindgen are
+  NOT installed in this env (no scratch rustup set); native gates cover the
+  shared Engine logic and the wasm path is a mechanical bindgen wrapper. Re-run
+  wasm-parity on a box with the toolchain (recipe in demo/wasm-p0/README.md)
+  before F6 freezes the editor against `Session`.
+- (2026-07-03, Consolidation Pass 1 — item #4) **package-deps.cjs Node fallback
+  retired** (`8d95509a`): the #32 Rust-vs-Node resolver parity gate soaked green
+  for the full 8-IG set, so the ~112-line retained Node reimplementation is
+  deleted. `snapshot/package-deps.cjs` is now a pure shim over
+  `rust_sushi resolve` (missing binary = clean FATAL, no fallback). The 8-IG
+  `package-deps-gate.sh` is repurposed from "Node algo == Rust" to "shim stdout
+  == direct `rust_sushi resolve` stdout" (shim-wiring regression). Gate: 8/8
+  pass; harvest-r4-package.sh's shim call still emits the correct closure.
+- (2026-07-03, Consolidation Pass 1 — item #5, CLOSED as documented) **Two
+  file-abstraction traits — KEEP BOTH, justified.** `package_store::PackageSource`
+  and `site_db::augment::FileSource` are NOT unified. They serve different layers
+  with genuinely different surfaces: (a) error model — PackageSource returns
+  `io::Result` (distinguishes IO errors on the package-cache read path);
+  FileSource returns `Option` (missing == None, errors swallowed, right for
+  best-effort site-content reads). (b) directory listing — PackageSource's
+  `read_dir` is SINGLE-LEVEL with per-entry `is_file` (the version-resolvers +
+  deep-scan need entry types); FileSource's `list_recursive` is RECURSIVE and
+  returns flattened sorted POSIX rel-path strings (the S6 include-tree walk).
+  (c) PackageSource additionally carries `write_new` (write-once derived-index
+  sidecar) and a `Debug` supertrait (to live in `#[derive(Debug)]`
+  PackageContext) — neither of which FileSource wants. Decisively: **site_db does
+  not depend on package_store at all**; unifying would force a new cross-crate
+  dependency edge purely to share a trait, then either widen one trait with
+  methods the other's impls must stub or interpose an adapter — net MORE
+  complexity for byte-identical behavior. Two small, purpose-fit traits at
+  different layers is the simpler state. Item closed, no code change.
+- (2026-07-03, Consolidation Pass 1 — item #6/#7 combined) **scripts/ index +
+  docs current-state map** (`a8e39756` + this pass): `scripts/README.md`
+  inventories every non-vendor script (snapshot/, scripts/, harness/, demo/*)
+  with a one-liner + owner phase (verified complete); `harness/t1-dashboard.sh`
+  deleted (private-dir 4-IG dashboard superseded by gate1.sh + full-dashboard.sh,
+  referenced nowhere, stale hardcoded path, last touched 2026-06-30);
+  md-diff-cluster.py KEPT (active F1b diagnostic touched today). `docs/README.md`
+  maps every plan/spec/findings doc to its state; `wasm-editor-plan.md` gets a
+  SUPERSEDED banner + inline P3/P4 markers pointing at stock-template-renderer-
+  plan.md (F5/F6) + fhir-ig-editor-spec.md (P0/P1/P2 kept as DONE evidence).
 - (2026-07-03, F3 close) **render_sd genTypes dedup**: grid.rs's
   `gen_types`/`gen_target_link` (branch-for-branch duplicates of table.rs's) and
   table.rs's `gen_types_erased`/`gen_types_inner_for_ext` (the lifetime-erased
