@@ -858,6 +858,32 @@ impl Session {
         )
     }
 
+    /// ContentApi: render a Liquid source against the session provider
+    /// (engine-first includes + mounted `_includes`/`_data`), with caller
+    /// globals from `data_json` (a JSON object). Envelope result: `{ "html" }`.
+    #[wasm_bindgen(js_name = renderLiquid)]
+    pub fn render_liquid(&self, source: &str, data_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "renderLiquid",
+            with_engine(|e| e.render_liquid_src(source, data_json))
+                .map(|h| serde_json::json!({ "html": h })),
+        )
+    }
+
+    /// ContentApi: kramdown markdown, Jekyll `markdownify` semantics.
+    /// `opts_json`: `{ "rougeWrappers": bool }` or "". Envelope result:
+    /// `{ "html" }`.
+    #[wasm_bindgen(js_name = renderMarkdown)]
+    pub fn render_markdown(&self, md: &str, opts_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "renderMarkdown",
+            with_engine(|e| e.render_markdown(md, opts_json))
+                .map(|h| serde_json::json!({ "html": h })),
+        )
+    }
+
     /// Engine version + build commit, as a JSON string `{ version, commit, engine }`
     /// (NOT enveloped — a static build-info accessor).
     pub fn version() -> String {
@@ -1125,6 +1151,32 @@ impl Engine {
         )?);
         self.render_state = Some(rs.clone());
         Ok(rs)
+    }
+
+    /// ContentApi: Liquid over the session provider (+ caller globals).
+    fn render_liquid_src(&mut self, source: &str, data_json: &str) -> Result<String, String> {
+        let rs = self.render_state()?;
+        rs.render_liquid_src(source, data_json)
+    }
+
+    /// ContentApi: kramdown markdown (Jekyll semantics). `opts_json`:
+    /// `{ "rougeWrappers": bool }` ("" = Jekyll markdownify defaults, wrappers ON —
+    /// matching the page pass and the Liquid `markdownify` filter).
+    fn render_markdown(&mut self, md: &str, opts_json: &str) -> Result<String, String> {
+        let rouge = if opts_json.trim().is_empty() {
+            true
+        } else {
+            let v: serde_json::Value = serde_json::from_str(opts_json)
+                .map_err(|e| format!("renderMarkdown: bad options JSON: {e}"))?;
+            v.get("rougeWrappers").and_then(|x| x.as_bool()).unwrap_or(true)
+        };
+        Ok(render_md::render_with(
+            md,
+            &render_md::Options {
+                rouge_wrappers: rouge,
+                ..Default::default()
+            },
+        ))
     }
 
     fn render_fragment(&mut self, ref_: &str, kind: &str) -> Result<String, String> {

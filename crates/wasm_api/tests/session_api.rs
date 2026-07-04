@@ -155,3 +155,51 @@ fn session_version_is_stamped() {
     assert!(v["version"].is_string());
     assert!(v["engine"].as_str().unwrap().contains("rust_sushi"));
 }
+
+/// ContentApi: mountSite + renderLiquid (include from tree + data global +
+/// markdownify filter) + renderMarkdown + renderPage/listPages over a tiny
+/// mounted site. All through the Session envelopes — the same wire the editor
+/// worker drives.
+#[test]
+fn session_content_api() {
+    let s = Session::new();
+    let site = serde_json::json!({
+        "en/index.html": "---\n---\n<h1>{{ site.data.info.title }}</h1>{% include hello.xhtml %}",
+        "_includes/hello.xhtml": "<p>hi {{ include.who }}{{ who }}</p>",
+        "_data/info.json": "{\"title\":\"Smoke IG\"}",
+    })
+    .to_string();
+    let env = parse(s.mount_site(&site, ""));
+    assert_eq!(env["ok"], true, "{env}");
+    assert_eq!(env["result"]["mounted"], 3);
+
+    // listPages + renderPage (rel-path keys; front-matter gate inside render_page).
+    let env = parse(s.list_pages());
+    assert_eq!(env["result"]["pages"], serde_json::json!(["en/index.html"]));
+    let env = parse(s.render_page("en/index.html"));
+    assert_eq!(env["result"]["html"], "<h1>Smoke IG</h1><p>hi </p>");
+
+    // renderLiquid: caller globals + tree include + markdownify filter.
+    let env = parse(s.render_liquid(
+        "{% include hello.xhtml %} — {{ note | markdownify }}",
+        r#"{"who":"you","note":"*em*"}"#,
+    ));
+    assert_eq!(env["ok"], true, "{env}");
+    assert_eq!(
+        env["result"]["html"],
+        "<p>hi you</p> — <p><em>em</em></p>\n"
+    );
+
+    // renderMarkdown: kramdown semantics; rouge wrappers default ON.
+    let env = parse(s.render_markdown("a `b` c", ""));
+    assert_eq!(
+        env["result"]["html"],
+        "<p>a <code class=\"language-plaintext highlighter-rouge\">b</code> c</p>\n"
+    );
+    let env = parse(s.render_markdown("a `b` c", r#"{"rougeWrappers":false}"#));
+    assert_eq!(env["result"]["html"], "<p>a <code>b</code> c</p>\n");
+
+    // renderFragment on an unknown kind: typed domain error, not a throw.
+    let env = parse(s.render_fragment("X-y", "nope"));
+    assert_eq!(env["ok"], false);
+}

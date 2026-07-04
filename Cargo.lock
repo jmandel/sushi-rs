@@ -1096,6 +1096,8 @@ dependencies = [
  "compiler",
  "console_error_panic_hook",
  "package_store",
+ "render_liquid",
+ "render_md",
  "render_page",
  "render_sd",
  "serde",

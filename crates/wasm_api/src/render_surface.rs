@@ -229,6 +229,37 @@ impl RenderState {
         .with_shared_cache(self.frag_cache.clone())
     }
 
+    /// ContentApi: render a Liquid source against the session provider —
+    /// includes resolve engine-first then from the mounted `/site/_includes`,
+    /// `site.data` from the mounted `_data`, plus caller globals from
+    /// `data_json` (a JSON object of top-level variables). markdownify is the
+    /// kramdown hook (Jekyll semantics), same as the page pass.
+    pub fn render_liquid_src(&self, source: &str, data_json: &str) -> Result<String, String> {
+        let mut globals: Vec<(String, render_liquid::Value)> = Vec::new();
+        if !data_json.trim().is_empty() {
+            let v: Value = serde_json::from_str(data_json)
+                .map_err(|e| format!("renderLiquid: bad data JSON: {e}"))?;
+            let obj = v
+                .as_object()
+                .ok_or_else(|| "renderLiquid: data must be a JSON object".to_string())?;
+            for (k, val) in obj {
+                globals.push((k.clone(), render_page::sitedata::json_to_value(val)));
+            }
+        }
+        let provider = self.provider();
+        let refs: Vec<(&str, render_liquid::Value)> =
+            globals.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        Ok(render_liquid::render_with(
+            source,
+            &provider,
+            &refs,
+            render_liquid::Options {
+                publisher_raw_quirk: false,
+                markdownify: Some(render_page::markdownify),
+            },
+        ))
+    }
+
     /// Render one fragment through the SHARED first-include-miss store: cache
     /// key = the include name `{ref}-{kind}.xhtml`, the same key the page
     /// include loop uses.

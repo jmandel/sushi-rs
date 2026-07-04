@@ -33,7 +33,7 @@ pub use sitedata::SiteData;
 /// (`syntax_highlighter: rouge`): inline code spans get
 /// `class="language-plaintext highlighter-rouge"`, plaintext fenced blocks the
 /// rouge div wrappers (real-lexer languages are a separate, deferred port).
-fn markdownify(src: &str) -> String {
+pub fn markdownify(src: &str) -> String {
     render_md::render_with(
         src,
         &render_md::Options { rouge_wrappers: true, ..Default::default() },
