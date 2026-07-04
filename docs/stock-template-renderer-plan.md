@@ -68,6 +68,16 @@ parity**, re-rendering only what the edit dirtied.
    interface FragmentApi { fragment(ref, kind, opts?): Promise<string>; }
    registerSiteGenerator(adapter): void;    // build-time registry in v1
    ```
+   **ContentApi (Josh, 2026-07-04): host-side Liquid/markdown is SUNSET.**
+   The adapter ctx also carries `content: { renderLiquid(source, dataJson),
+   renderMarkdown(md, opts), renderPageBody(path) }` — engine-side full
+   T1+T2 Liquid + kramdown + rouge, publisher-exact order, via Session.
+   TS generators delete their own engines (cycle: core/liquid.ts +
+   markdown-it for page bodies; {% fragment %}/{% sql %} become engine-
+   native); hosts keep presentation only. Host reality: JS hosts load the
+   wasm-bindgen module directly (browser/Bun/Node); non-JS hosts use the
+   WASI build or shell to the unified CLI (docs/unified-cli-plan.md §3b).
+
    Because the Rust renderer interprets templates as data, ONE wasm renderer
    yields MANY registry entries (hl7.fhir.template, fhir.base.template, any
    user Jekyll-style template package) — a new stock-style template is a
