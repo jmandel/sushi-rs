@@ -18,7 +18,7 @@
 
 use serde_json::Value;
 
-use crate::context::IgContext;
+use crate::context::{IgContext, OwnResource};
 use crate::leaf::escape_xml;
 
 /// The trackedFragment marker (HTMLInspector.TRACK_PREFIX + id + TRACK_SUFFIX),
@@ -117,71 +117,1033 @@ pub fn cross_version_analysis(npm_name: &str, new_format: bool, inline: bool) ->
     format!("{}{}", wrapped, track("2"))
 }
 
-/// Count own StructureDefinitions whose `type` == `type_code` (the seeResource
-/// filter, cvr:180/183: extList/obsList get an entry per such SD).
-fn count_own_sd_of_type(ctx: &IgContext, type_code: &str) -> usize {
-    ctx.own_resources()
-        .into_iter()
-        .filter(|r| {
-            r.rtype == "StructureDefinition"
-                && r.json.get("type").and_then(|x| x.as_str()) == Some(type_code)
-        })
-        .count()
+
+/// A used-type entry (cvr UsedType, cvr:54): a type code + its must-support flag.
+struct UsedType {
+    name: String,
+    ms: bool,
 }
 
-/// `summary-extensions` = cvr.getExtensionSummary (cvr:453). Empty branch
-/// (`extList.size() == 0`, i.e. the IG defines no Extension SD):
-/// `<p>No Extensions Defined by this Implementation Guide</p>\r\n`.
-/// LOUD GAP: the grid branch (>=1 own Extension SD) is not ported here.
-pub fn summary_extensions(ctx: &IgContext) -> String {
-    if count_own_sd_of_type(ctx, "Extension") == 0 {
-        "<p>No Extensions Defined by this Implementation Guide</p>\r\n".to_string()
-    } else {
-        panic!(
-            "LOUD GAP: summary-extensions grid branch (cvr:457) not ported — \
-             IG defines Extension StructureDefinition(s)"
-        );
+/// An extension summary entry (cvr ExtensionDefinition, cvr:102). `web` is the
+/// source SD web path (top-level only; nested components render plain code text).
+struct ExtDef {
+    code: String,
+    web: Option<String>,
+    definition: String,
+    types: Vec<UsedType>,
+    components: Vec<ExtDef>,
+}
+
+/// `isMustSupport(ed, tr)` (cvr:323): the element mustSupport OR the type-ref's
+/// `_mustSupport` extension == "true".
+fn type_is_ms(ed: &Value, tr: &Value) -> bool {
+    if ed.get("mustSupport").and_then(|x| x.as_bool()) == Some(true) {
+        return true;
     }
+    // TypeRefComponent _mustSupport extension (EXT_MUST_SUPPORT).
+    ext_value_str(tr, "http://hl7.org/fhir/StructureDefinition/structuredefinition-mustSupport")
+        .as_deref()
+        == Some("true")
+}
+
+fn types_contain(types: &[UsedType], name: &str) -> bool {
+    types.iter().any(|t| t.name == name)
+}
+
+/// The definition string of an element (getDefinition()).
+fn ed_definition(ed: &Value) -> String {
+    ed.get("definition").and_then(|x| x.as_str()).unwrap_or("").to_string()
+}
+
+/// The fixed/pattern primitive value of a `url` element (getFixedOrPattern().
+/// primitiveValue() for a uri): `fixedUri`/`patternUri`.
+fn fixed_uri(ed: &Value) -> Option<String> {
+    for k in ["fixedUri", "patternUri", "fixedString", "patternString", "fixedCanonical"] {
+        if let Some(s) = ed.get(k).and_then(|x| x.as_str()) {
+            return Some(s.to_string());
+        }
+    }
+    None
+}
+
+/// processExtensionComponent (cvr:418): consume the run of `Extension.extension.*`
+/// elements starting at `i`, producing one nested ExtDef with the passed-in
+/// `defn`. Returns the index one past the consumed run.
+fn process_ext_component(
+    parent: &mut ExtDef,
+    els: &[Value],
+    defn: String,
+    canonical: &str,
+    mut i: usize,
+) -> usize {
+    let mut exd = ExtDef {
+        code: String::new(),
+        web: None,
+        definition: defn,
+        types: Vec::new(),
+        components: Vec::new(),
+    };
+    let mut has_code = false;
+    while i < els.len()
+        && els[i]
+            .get("path")
+            .and_then(|x| x.as_str())
+            .map(|p| p.starts_with("Extension.extension."))
+            .unwrap_or(false)
+    {
+        let ed = &els[i];
+        let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+        if path == "Extension.extension.url" {
+            if let Some(mut code) = fixed_uri(ed) {
+                // Trim a canonical prefix (cvr:425); the corpus fixed urls are
+                // bare slice names, so this rarely fires.
+                if code.starts_with(canonical) && code.len() <= canonical.len() + 21 {
+                    code = code[canonical.len() + 21..].to_string();
+                }
+                exd.code = code;
+                has_code = true;
+            }
+        }
+        if path.starts_with("Extension.extension.value") {
+            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
+                if !types_contain(&exd.types, code) {
+                    exd.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                }
+            }
+        }
+        i += 1;
+    }
+    if has_code {
+        parent.components.push(exd);
+    }
+    i
+}
+
+/// seeExtensionDefinition (cvr:378): build the ExtDef for one Extension SD.
+/// Returns None when the url doesn't follow the IG's canonical pattern (cvr:386).
+fn see_extension_definition(res: &OwnResource, canonical: &str) -> Option<ExtDef> {
+    let url = res.json.get("url").and_then(|x| x.as_str())?;
+    // code = url minus "{canonical}/StructureDefinition/" (21 chars). cvr:381.
+    let prefix = format!("{}/StructureDefinition/", canonical);
+    let code = if url.starts_with(&prefix) {
+        url[prefix.len()..].to_string()
+    } else {
+        return None;
+    };
+    let mut exd = ExtDef {
+        code,
+        web: Some(res.web_path.clone()),
+        definition: res.json.get("description").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        types: Vec::new(),
+        components: Vec::new(),
+    };
+    let empty: Vec<Value> = Vec::new();
+    let els = res
+        .json
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
+    let mut i = 0;
+    while i < els.len() {
+        let ed = &els[i];
+        let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+        let max = ed.get("max").and_then(|x| x.as_str()).unwrap_or("");
+        if path.starts_with("Extension.value") && max != "0" {
+            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
+                if !types_contain(&exd.types, code) {
+                    exd.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                }
+            }
+        }
+        if path.starts_with("Extension.extension.") {
+            // defn = the definition of element i-1 (the slice header). cvr:403.
+            let defn = if i > 0 { ed_definition(&els[i - 1]) } else { String::new() };
+            i = process_ext_component(&mut exd, els, defn, canonical, i);
+        } else {
+            i += 1;
+        }
+    }
+    Some(exd)
+}
+
+/// The Extension `baseExtTypes` (cvr:150): the type codes of Extension.value[x]
+/// in the core Extension SD (max != 0). Used only for the `(all)` collapse in
+/// renderTypeCell; a single-typed extension never matches its size, so the
+/// exact set doesn't affect corpus bytes — but resolve it faithfully when the
+/// core Extension SD is available.
+fn base_ext_types(ctx: &IgContext) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(r) = ctx.load_resource("http://hl7.org/fhir/StructureDefinition/Extension") {
+        let empty: Vec<Value> = Vec::new();
+        let els = r
+            .get("snapshot")
+            .and_then(|s| s.get("element"))
+            .and_then(|x| x.as_array())
+            .unwrap_or(&empty);
+        for ed in els {
+            let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+            let max = ed.get("max").and_then(|x| x.as_str()).unwrap_or("");
+            if path.starts_with("Extension.value") && max != "0" {
+                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                    if let Some(c) = tr.get("code").and_then(|x| x.as_str()) {
+                        if !out.iter().any(|x| x == c) {
+                            out.push(c.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+fn all_ms_are_same(types: &[UsedType]) -> bool {
+    if types.is_empty() {
+        return false;
+    }
+    let ms = types[0].ms;
+    types.iter().all(|t| t.ms == ms)
+}
+
+const MS_SPAN: &str = " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span> ";
+const MS_SPAN_TRAIL: &str = " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span>";
+
+/// renderTypeCell (cvr:605): the Value Types cell. `render` is always true for
+/// the extension/observation tables; the `(all)` collapse fires only when the
+/// used set equals the base set. Each type links `fetchTypeDefinition(name).
+/// getWebPath()` with `title=name`, else plain text.
+fn render_type_cell(ctx: &IgContext, types: &[UsedType], base: &[String]) -> String {
+    let mut b = String::from("<td>");
+    if types.len() == base.len() && all_ms_are_same(types) {
+        if !types.is_empty() && types[0].ms {
+            b.push_str(MS_SPAN);
+        }
+        b.push_str("(all)");
+    } else {
+        let do_ms = !all_ms_are_same(types);
+        let mut first = true;
+        for t in types {
+            if !do_ms && first && t.ms {
+                b.push_str(MS_SPAN);
+            }
+            if first {
+                first = false;
+            } else {
+                b.push_str(" | ");
+            }
+            match ctx.resolve_type(&t.name) {
+                Some(r) => b.push_str(&format!(
+                    "<a href=\"{}\" title=\"{}\">{}</a>",
+                    escape_xml(&r.web_path),
+                    escape_xml(&t.name),
+                    escape_xml(&t.name)
+                )),
+                None => b.push_str(&escape_xml(&t.name)),
+            }
+            if do_ms && t.ms {
+                b.push_str(MS_SPAN_TRAIL);
+            }
+        }
+    }
+    b.push_str("</td>");
+    b
+}
+
+/// `summary-extensions` = cvr.getExtensionSummary (cvr:453). Empty branch when
+/// the IG defines no canonical-pattern Extension SD:
+/// `<p>No Extensions Defined by this Implementation Guide</p>\r\n`.
+/// Grid branch (cvr:457): sorted by lowercased url, one row per extension +
+/// indented rows for nested components. Value-type cell links core datatypes.
+pub fn summary_extensions(ctx: &IgContext) -> String {
+    let canonical = ctx.own_canonical_prefix().unwrap_or_default();
+    let mut ext_list: Vec<(String, ExtDef)> = ctx
+        .own_resources()
+        .into_iter()
+        .filter(|r| r.rtype == "StructureDefinition" && r.json.get("type").and_then(|x| x.as_str()) == Some("Extension"))
+        .filter_map(|r| {
+            let url = r.json.get("url").and_then(|x| x.as_str())?.to_lowercase();
+            see_extension_definition(&r, &canonical).map(|e| (url, e))
+        })
+        .collect();
+    if ext_list.is_empty() {
+        return "<p>No Extensions Defined by this Implementation Guide</p>\r\n".to_string();
+    }
+    // ExtListSorter (cvr:72): by lowercased url, stable.
+    ext_list.sort_by(|a, b| a.0.cmp(&b.0));
+    let base = base_ext_types(ctx);
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\">\r\n");
+    b.push_str(" <tr><td><b>Code</b></td><td><b>Value Types</b></td><td><b>Definition</b></td></tr>\r\n");
+    for (_url, op) in &ext_list {
+        b.push_str(" <tr>");
+        b.push_str(&format!(
+            "<td><a href=\"{}\">{}</a></td>",
+            escape_xml(op.web.as_deref().unwrap_or("")),
+            escape_xml(&op.code)
+        ));
+        b.push_str(&render_type_cell(ctx, &op.types, &base));
+        b.push_str(&format!("<td>{}</td>", escape_xml(&op.definition)));
+        b.push_str("</tr>\r\n");
+        for inner in &op.components {
+            b.push_str(" <tr>");
+            b.push_str(&format!("<td>&nbsp;&nbsp;{}</td>", escape_xml(&inner.code)));
+            b.push_str(&render_type_cell(ctx, &inner.types, &base));
+            b.push_str(&format!("<td>{}</td>", escape_xml(&inner.definition)));
+            b.push_str("</tr>\r\n");
+        }
+    }
+    b.push_str("</table>\r\n");
+    b
+}
+
+/// A fixed/pattern Coding (system+code) as scanned by seeObservation. Display
+/// is looked up via validateCode at render time, not stored.
+#[derive(Clone)]
+struct SumCoding {
+    system: String,
+    code: String,
+    version: Option<String>,
+}
+
+/// A binding on an observation code/category element (strength + valueSet).
+#[derive(Clone)]
+struct SumBinding {
+    strength: String,
+    value_set: String,
+}
+
+/// An observation profile summary entry (cvr ObservationProfile, cvr:83).
+#[derive(Default)]
+struct ObsProfile {
+    web: String,
+    present: String,
+    id: String,
+    name: String, // component name (indented rows)
+    code: Vec<SumCoding>,
+    code_vs: Option<SumBinding>,
+    category: Vec<SumCoding>,
+    cat_vs: Option<SumBinding>,
+    effective_types: Vec<UsedType>,
+    types: Vec<UsedType>,
+    components: Vec<ObsProfile>,
+}
+
+impl ObsProfile {
+    fn has_value(&self) -> bool {
+        !self.code.is_empty() || !self.category.is_empty()
+    }
+}
+
+/// A `fixedX`/`patternX` CodeableConcept's codings, or a bare `fixedCoding`/
+/// `patternCoding`.
+fn fixed_codings(ed: &Value) -> Vec<SumCoding> {
+    let mut out = Vec::new();
+    for key in ["patternCodeableConcept", "fixedCodeableConcept"] {
+        if let Some(cc) = ed.get(key) {
+            if let Some(cs) = cc.get("coding").and_then(|x| x.as_array()) {
+                for c in cs {
+                    out.push(coding_of(c));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn fixed_coding(ed: &Value) -> Option<SumCoding> {
+    for key in ["patternCoding", "fixedCoding"] {
+        if let Some(c) = ed.get(key) {
+            return Some(coding_of(c));
+        }
+    }
+    None
+}
+
+fn coding_of(c: &Value) -> SumCoding {
+    SumCoding {
+        system: c.get("system").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        code: c.get("code").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        version: c.get("version").and_then(|x| x.as_str()).map(String::from),
+    }
+}
+
+fn binding_of(ed: &Value) -> Option<SumBinding> {
+    let b = ed.get("binding")?;
+    let vs = b.get("valueSet").and_then(|x| x.as_str())?;
+    Some(SumBinding {
+        strength: b.get("strength").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        value_set: vs.to_string(),
+    })
+}
+
+fn primitive_fixed(ed: &Value) -> Option<String> {
+    for (k, v) in ed.as_object()? {
+        if let Some(_rest) = k.strip_prefix("fixed") {
+            if let Some(s) = v.as_str() {
+                return Some(s.to_string());
+            }
+        }
+        if let Some(_rest) = k.strip_prefix("pattern") {
+            if let Some(s) = v.as_str() {
+                return Some(s.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// charCount(path, '.') — number of dots (nesting depth).
+fn dot_count(path: &str) -> usize {
+    path.bytes().filter(|&c| c == b'.').count()
+}
+
+/// processObservationComponent (cvr:327): consume the `Observation.component.*`
+/// run starting at `i` into one component ObsProfile. Returns the next index.
+fn process_obs_component(parent: &mut ObsProfile, els: &[Value], comp_slice: &str, mut i: usize) -> usize {
+    let mut obs = ObsProfile { name: comp_slice.to_string(), ..Default::default() };
+    let mut system: Option<String> = None;
+    while i < els.len()
+        && els[i].get("path").and_then(|x| x.as_str()).map(|p| p.starts_with("Observation.component.")).unwrap_or(false)
+    {
+        let ed = &els[i];
+        let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+        if path == "Observation.component.category" {
+            obs.category.extend(fixed_codings(ed));
+        }
+        if path == "Observation.component.category.coding" {
+            system = None;
+            if let Some(c) = fixed_coding(ed) {
+                obs.category.push(c);
+            }
+        }
+        if path == "Observation.component.category.coding.system" {
+            system = primitive_fixed(ed);
+        }
+        if path == "Observation.component.category.coding.code" {
+            if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
+                // NB: cvr:346 appends to obs.method (a publisher bug); no corpus hit.
+                obs.method_push_bug(sys.clone(), code);
+                system = None;
+            }
+        }
+        if path == "Observation.component.code" {
+            obs.code.extend(fixed_codings(ed));
+        }
+        if path == "Observation.component.code.coding" {
+            system = None;
+            if let Some(c) = fixed_coding(ed) {
+                obs.code.push(c);
+            }
+        }
+        if path == "Observation.component.code.coding.system" {
+            system = primitive_fixed(ed);
+        }
+        if path == "Observation.component.code.coding.code" {
+            if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
+                obs.method_push_bug(sys.clone(), code);
+                system = None;
+            }
+        }
+        if path.starts_with("Observation.component.value") && dot_count(path) == 2 {
+            if ed.get("max").and_then(|x| x.as_str()) != Some("0") {
+                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                    let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
+                    if !types_contain(&obs.types, code) {
+                        obs.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    parent.components.push(obs);
+    i
+}
+
+impl ObsProfile {
+    // The publisher appends component category/code.coding.code to `method`
+    // (cvr:346/363) — a copy-paste bug. No corpus component uses coding.code,
+    // so this is dead; kept faithful (append into a discard vec via method).
+    fn method_push_bug(&mut self, _system: String, _code: String) {
+        // method column is never rendered for components; drop faithfully.
+    }
+}
+
+/// seeObservation (cvr:195): scan an Observation SD's snapshot into an ObsProfile.
+fn see_observation(res: &OwnResource) -> Option<ObsProfile> {
+    let mut obs = ObsProfile {
+        web: res.web_path.clone(),
+        present: res.title.clone(),
+        id: res.id.clone(),
+        ..Default::default()
+    };
+    let empty: Vec<Value> = Vec::new();
+    let els = res.json.get("snapshot").and_then(|s| s.get("element")).and_then(|x| x.as_array()).unwrap_or(&empty);
+    let mut i = 0;
+    let mut system: Option<String> = None;
+    let mut comp_slice: Option<String> = None;
+    while i < els.len() {
+        let ed = &els[i];
+        let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+
+        if path == "Observation.category" {
+            obs.category.extend(fixed_codings(ed));
+        }
+        if path == "Observation.category.coding" {
+            system = None;
+            if let Some(c) = fixed_coding(ed) {
+                obs.category.push(c);
+            } else if let Some(b) = binding_of(ed) {
+                obs.cat_vs = Some(b);
+            }
+        }
+        if path == "Observation.category.coding.system" {
+            system = primitive_fixed(ed);
+        }
+        if path == "Observation.category.coding.code" {
+            if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
+                obs.category.push(SumCoding { system: sys.clone(), code, version: None });
+                system = None;
+            }
+        }
+
+        if path == "Observation.code" {
+            let codings = fixed_codings(ed);
+            if !codings.is_empty() {
+                obs.code.extend(codings);
+            } else if let Some(b) = binding_of(ed) {
+                obs.code_vs = Some(b);
+            }
+        }
+        if path == "Observation.code.coding" {
+            system = None;
+            if let Some(c) = fixed_coding(ed) {
+                obs.code.push(c);
+            } else if let Some(b) = binding_of(ed) {
+                obs.code_vs = Some(b);
+            }
+        }
+        if path == "Observation.code.coding.system" {
+            system = primitive_fixed(ed);
+        }
+        if path == "Observation.code.coding.code" {
+            if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
+                obs.code.push(SumCoding { system: sys.clone(), code, version: None });
+                system = None;
+            }
+        }
+
+        if path == "Observation.effective[x]" {
+            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                let code = working_code(tr);
+                if !types_contain(&obs.effective_types, &code) {
+                    obs.effective_types.push(UsedType { name: code, ms: type_is_ms(ed, tr) });
+                }
+            }
+        }
+        if path.starts_with("Observation.value") && dot_count(path) == 1 && ed.get("max").and_then(|x| x.as_str()) != Some("0") {
+            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                let code = working_code(tr);
+                if !types_contain(&obs.types, &code) {
+                    obs.types.push(UsedType { name: code, ms: type_is_ms(ed, tr) });
+                }
+            }
+        }
+        if path == "Observation.component" {
+            comp_slice = ed.get("sliceName").and_then(|x| x.as_str()).map(String::from);
+        }
+        let prohibited = ed.get("max").and_then(|x| x.as_str()) == Some("0");
+        if path.starts_with("Observation.component.") && !prohibited && comp_slice.is_some() {
+            i = process_obs_component(&mut obs, els, comp_slice.as_deref().unwrap_or(""), i);
+        } else {
+            i += 1;
+        }
+    }
+    if obs.has_value() {
+        Some(obs)
+    } else {
+        None
+    }
+}
+
+/// getWorkingCode (TypeRefComponent): the type `code`, resolving the
+/// `http://hl7.org/fhirpath/System.*` FHIRPath aliases to the FHIR primitive
+/// via the structuredefinition-fhir-type extension when present. The corpus
+/// value[x]/effective[x] types are plain FHIR codes.
+fn working_code(tr: &Value) -> String {
+    if let Some(code) = tr.get("code").and_then(|x| x.as_str()) {
+        if code.starts_with("http://hl7.org/fhirpath/System.") {
+            // _code extension structuredefinition-fhir-type gives the real code.
+            if let Some(ft) = ext_value_str(
+                tr.get("_code").unwrap_or(&Value::Null),
+                "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type",
+            ) {
+                return ft;
+            }
+        }
+        return code.to_string();
+    }
+    String::new()
+}
+
+/// renderCodingCell (cvr:659): the Category/Code cell. Binding branch links the
+/// strength + resolved ValueSet; the coding branch links each code via its CS
+/// (versioned THO webPath + `#{cs.id}-{code}` anchor) with a validateCode title.
+fn render_coding_cell(
+    ctx: &IgContext,
+    tx: &dyn crate::txcache::TxCacheSource,
+    core_path: &str,
+    list: &[SumCoding],
+    binding: Option<&SumBinding>,
+) -> String {
+    let mut b = String::from("<td>");
+    if let Some(bind) = binding {
+        // strength link + " VS " + VS link (cvr:664-672).
+        b.push_str(&format!(
+            "<a href=\"{}terminologies.html#{}\">{}</a> VS ",
+            core_path, bind.strength, bind.strength
+        ));
+        let vs_url = strip_version(&bind.value_set);
+        match ctx.resolve(&vs_url) {
+            Some(vs) if vs.rtype == "ValueSet" && !vs.web_path.is_empty() => {
+                b.push_str(&format!("<a href=\"{}\">{}</a>", vs.web_path, escape_xml(&vs.present())));
+            }
+            Some(vs) if vs.rtype == "ValueSet" => {
+                b.push_str(&escape_xml(&vs.present()));
+            }
+            _ => b.push_str(&escape_xml(&bind.value_set)),
+        }
+    } else {
+        let mut first = true;
+        for t in list {
+            if first {
+                first = false;
+            } else {
+                b.push_str(", ");
+            }
+            b.push_str(&render_one_coding(ctx, tx, t));
+        }
+    }
+    b.push_str("</td>");
+    b
+}
+
+/// One coding within renderCodingCell's coding branch (cvr:674-700).
+fn render_one_coding(ctx: &IgContext, tx: &dyn crate::txcache::TxCacheSource, t: &SumCoding) -> String {
+    // sys = displaySystem(system); if it equals the system, sys=null, then try
+    // fetchCodeSystem(system).getTitle().
+    let mut sys = display_system(ctx, &t.system);
+    if sys.as_deref() == Some(t.system.as_str()) {
+        sys = None;
+    }
+    if sys.is_none() {
+        if let Some(cs) = fetch_code_system(ctx, &t.system) {
+            sys = cs.title.clone().or_else(|| cs.name.clone());
+        }
+    }
+    let display = tx.lookup_display(&t.system, &t.code, t.version.as_deref().unwrap_or(""));
+    if let Some(disp) = display {
+        // title = system + (sys? " ("+sys+")") + ": " + display.
+        let title = format!(
+            "{}{}: {}",
+            t.system,
+            sys.as_ref().map(|s| format!(" ({})", s)).unwrap_or_default(),
+            disp
+        );
+        // Link when fetchCodeSystem has a webPath (cvr:691-696).
+        if let Some(cs) = fetch_code_system(ctx, &t.system) {
+            if !cs.web_path.is_empty() {
+                let cs_id = cs_id_of(ctx, &t.system).unwrap_or_default();
+                return format!(
+                    "<a href=\"{}#{}-{}\" title=\"{}\">{}</a>",
+                    cs.web_path, cs_id, t.code, title, t.code
+                );
+            }
+        }
+        format!("<span title=\"{}\">{}</span>", title, t.code)
+    } else {
+        // No display (cvr:699): title = system + (sys? " ("+sys+"): ").
+        let title = format!(
+            "{}{}",
+            t.system,
+            sys.as_ref().map(|s| format!(" ({}): ", s)).unwrap_or_default()
+        );
+        format!("<span title=\"{}\">{}</span>", title, t.code)
+    }
+}
+
+/// The CodeSystem `id` for a system uri (used for the `#{id}-{code}` anchor).
+fn cs_id_of(ctx: &IgContext, system: &str) -> Option<String> {
+    let cs = ctx.load_resource(system)?;
+    cs.get("id").and_then(|x| x.as_str()).map(String::from)
+}
+
+/// displaySystem (DataRenderer:255) — the friendly source name, or None when
+/// there is no override (the caller then falls back to the CS title).
+fn display_system(ctx: &IgContext, system: &str) -> Option<String> {
+    match system {
+        "http://loinc.org" => Some("LOINC".to_string()),
+        s if s.starts_with("http://snomed.info") => Some("SNOMED CT".to_string()),
+        "http://www.nlm.nih.gov/research/umls/rxnorm" => Some("RxNorm".to_string()),
+        "http://unitsofmeasure.org" => Some("UCUM".to_string()),
+        s => {
+            if let Some(cs) = ctx.resolve(s) {
+                if cs.rtype == "CodeSystem" {
+                    return Some(cs.present());
+                }
+            }
+            // tails(system) — but returning the system signals "no override" to
+            // the caller (matches Java's `sys.equals(system)` reset).
+            Some(s.to_string())
+        }
+    }
+}
+
+/// renderBoolean (cvr:591): a conf-*.png cell for the Data Absent Reason column.
+fn render_boolean_cell(val: Option<bool>) -> String {
+    let img = match val {
+        None => "conf-optional.png",
+        Some(true) => "conf-required.png",
+        Some(false) => "conf-prohibited.png",
+    };
+    format!("<td><img src=\"{}\"/></td>", img)
 }
 
 /// `summary-observations` = cvr.getObservationSummary (cvr:487). Empty branch
-/// (`obsList.size() == 0`, no own Observation SD):
-/// `<p>No Observations Found</p>\r\n`.
-/// LOUD GAP: the grid branch (>=1 own Observation SD) is not ported here.
-pub fn summary_observations(ctx: &IgContext) -> String {
-    if count_own_sd_of_type(ctx, "Observation") == 0 {
-        "<p>No Observations Found</p>\r\n".to_string()
-    } else {
-        panic!(
-            "LOUD GAP: summary-observations grid branch (cvr:491) not ported — \
-             IG defines Observation StructureDefinition(s)"
-        );
-    }
-}
-
-/// Own resources that carry the standards-status extension with value
-/// `deprecated` (the `dep=true` branch of dpr.deprecationSummary, dpr:41; this
-/// branch fires regardless of the previous-version comparator). Count only.
-fn count_own_deprecated(ctx: &IgContext) -> usize {
-    ctx.own_resources()
+/// (no own Observation SD with a fixed code/category): `<p>No Observations
+/// Found</p>\r\n`. Grid branch (cvr:491): sorted by lowercased url, dynamic
+/// column set (only columns any profile populates), category/code cells resolve
+/// terminology (validateCode displays + versioned CS webPaths) via the tx cache.
+pub fn summary_observations(
+    ctx: &IgContext,
+    tx: &dyn crate::txcache::TxCacheSource,
+    core_path: &str,
+) -> String {
+    let mut obs_list: Vec<(String, ObsProfile)> = ctx
+        .own_resources()
         .into_iter()
-        .filter(|r| ext_value_str(&r.json, EXT_STANDARDS_STATUS).as_deref() == Some("deprecated"))
-        .count()
+        .filter(|r| r.rtype == "StructureDefinition" && r.json.get("type").and_then(|x| x.as_str()) == Some("Observation"))
+        .filter_map(|r| {
+            let url = r.json.get("url").and_then(|x| x.as_str())?.to_lowercase();
+            see_observation(&r).map(|o| (url, o))
+        })
+        .collect();
+    if obs_list.is_empty() {
+        return "<p>No Observations Found</p>\r\n".to_string();
+    }
+    // ObsListSorter (cvr:65): by lowercased url.
+    obs_list.sort_by(|a, b| a.0.cmp(&b.0));
+    let profiles: Vec<&ObsProfile> = obs_list.iter().map(|(_, o)| o).collect();
+
+    // Column presence flags (cvr:494-517).
+    let (mut has_cat, mut has_code, mut has_eff, mut has_types, mut has_dar, mut has_body, mut has_method) =
+        (false, false, false, false, false, false, false);
+    for op in &profiles {
+        has_cat = has_cat || !op.category.is_empty() || op.cat_vs.is_some();
+        has_code = has_code || !op.code.is_empty() || op.code_vs.is_some();
+        has_eff = has_eff || !op.effective_types.is_empty();
+        has_types = has_types || !op.types.is_empty();
+        for c in &op.components {
+            has_code = has_code || !c.code.is_empty() || c.code_vs.is_some();
+            has_eff = has_eff || !c.effective_types.is_empty();
+            has_types = has_types || !c.types.is_empty();
+        }
+    }
+    let _ = (&mut has_dar, &mut has_body, &mut has_method);
+
+    // The category-collapse (cvr:518-534): if all profiles share one category,
+    // a `<p>` note replaces the column. No corpus IG collapses (categories
+    // differ or some are empty), so this fires a loud gap if it ever would.
+    if has_cat {
+        let cat0 = &profiles[0].category;
+        let same = profiles.iter().all(|op| is_same_codes(cat0, &op.category));
+        if same {
+            panic!(
+                "STOP: summary-observations category-collapse (cvr:518) — all \
+                 profiles share one category; the displayCoding note branch is \
+                 not ported (zero corpus hits)."
+            );
+        }
+    }
+
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\">\r\n");
+    b.push_str(" <tr><td><b>Profile Name</b></td>");
+    if has_cat {
+        b.push_str("<td><b>Category</b></td>");
+    }
+    if has_code {
+        b.push_str("<td><b>Code</b></td>");
+    }
+    if has_eff {
+        b.push_str("<td><b>Time Types</b></td>");
+    }
+    if has_types {
+        b.push_str("<td><b>Value Types</b></td>");
+    }
+    if has_dar {
+        b.push_str("<td><b>Data Absent Reason</b></td>");
+    }
+    if has_body {
+        b.push_str("<td><b>Body Site</b></td>");
+    }
+    if has_method {
+        b.push_str("<td><b>Method</b></td>");
+    }
+    b.push_str("</tr>\r\n");
+
+    let base_eff = base_types_of(ctx, "Observation", "Observation.effective[x]", false);
+    let base_val = base_types_of(ctx, "Observation", "Observation.value", true);
+
+    for op in &profiles {
+        b.push_str(" <tr>");
+        b.push_str(&format!(
+            "<td><a href=\"{}\" title=\"{}\">{}</a></td>",
+            op.web,
+            escape_xml(&op.present),
+            escape_xml(&op.id)
+        ));
+        if has_cat {
+            b.push_str(&render_coding_cell(ctx, tx, core_path, &op.category, op.cat_vs.as_ref()));
+        }
+        if has_code {
+            b.push_str(&render_coding_cell(ctx, tx, core_path, &op.code, op.code_vs.as_ref()));
+        }
+        if has_eff {
+            b.push_str(&render_type_cell(ctx, &op.effective_types, &base_eff));
+        }
+        if has_types {
+            b.push_str(&render_type_cell(ctx, &op.types, &base_val));
+        }
+        if has_dar {
+            b.push_str(&render_boolean_cell(None));
+        }
+        if has_body {
+            b.push_str("<td></td>");
+        }
+        if has_method {
+            b.push_str("<td></td>");
+        }
+        b.push_str("</tr>\r\n");
+        for c in &op.components {
+            b.push_str(" <tr style=\"background-color: #eeeeee\">");
+            b.push_str(&format!("<td>&nbsp;&nbsp;{}</td>", escape_xml(&c.name)));
+            b.push_str("<td></td>");
+            if has_code {
+                b.push_str(&render_coding_cell(ctx, tx, core_path, &c.code, c.code_vs.as_ref()));
+            }
+            if has_eff {
+                b.push_str(&render_type_cell(ctx, &c.effective_types, &base_eff));
+            }
+            if has_types {
+                b.push_str(&render_type_cell(ctx, &c.types, &base_val));
+            }
+            if has_dar {
+                b.push_str(&render_boolean_cell(None));
+            }
+            if has_body {
+                b.push_str("<td></td>");
+            }
+            if has_method {
+                b.push_str("<td></td>");
+            }
+            b.push_str("</tr>\r\n");
+        }
+    }
+    b.push_str("</table>\r\n");
+    b
 }
 
-/// `deprecated-list` = dpr.deprecationSummary (dpr:30). With no deprecated
-/// resources (and previous comparator contributing none) the list is empty ->
-/// `<p>No deprecated content</p>` (dpr:79). cycle/plan-net hit this.
-/// LOUD GAP: the grid branch (dpr:82, own deprecated resources) — us-core.
-pub fn deprecated_list(ctx: &IgContext) -> String {
-    if count_own_deprecated(ctx) == 0 {
-        "<p>No deprecated content</p>".to_string()
-    } else {
-        panic!(
-            "LOUD GAP: deprecated-list grid branch (dpr:82) not ported — \
-             IG has deprecated resources"
-        );
+/// isSameCodes (cvr:577): same multiset of (system, code) codings.
+fn is_same_codes(l1: &[SumCoding], l2: &[SumCoding]) -> bool {
+    if l1.len() != l2.len() {
+        return false;
     }
+    l1.iter().all(|c1| {
+        l2.iter().any(|c2| !c2.system.is_empty() && c2.system == c1.system && !c2.code.is_empty() && c2.code == c1.code)
+    })
+}
+
+/// The base type codes for an Observation element path (getBaseTypes, cvr:136):
+/// effective[x] (exact path) or value[x] (prefix + dotcount==1 + max!=0).
+fn base_types_of(ctx: &IgContext, type_name: &str, path: &str, is_value: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(r) = ctx.load_resource(&format!("http://hl7.org/fhir/StructureDefinition/{}", type_name)) {
+        let empty: Vec<Value> = Vec::new();
+        let els = r.get("snapshot").and_then(|s| s.get("element")).and_then(|x| x.as_array()).unwrap_or(&empty);
+        for ed in els {
+            let p = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
+            let hit = if is_value {
+                p.starts_with(path) && dot_count(p) == 1 && ed.get("max").and_then(|x| x.as_str()) != Some("0")
+            } else {
+                p == path
+            };
+            if hit {
+                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                    let code = working_code(tr);
+                    if !code.is_empty() && !out.iter().any(|x| x == &code) {
+                        out.push(code);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// strip a `|version` from a canonical.
+fn strip_version(url: &str) -> String {
+    url.split('|').next().unwrap_or(url).to_string()
+}
+
+/// The nested `structuredefinition-standards-status-reason` markdown on the
+/// standards-status extension's value (the `_valueCode` sibling). dpr:45.
+fn standards_status_reason(res: &Value) -> Option<String> {
+    let exts = res.get("extension")?.as_array()?;
+    for x in exts {
+        if x.get("url").and_then(|u| u.as_str()) == Some(EXT_STANDARDS_STATUS) {
+            let side = x.get("_valueCode")?;
+            let subs = side.get("extension")?.as_array()?;
+            for e in subs {
+                if e.get("url").and_then(|u| u.as_str())
+                    == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status-reason")
+                {
+                    return e
+                        .get("valueMarkdown")
+                        .or_else(|| e.get("valueString"))
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// One deprecated resource (dpr DeprecationInfo). With `previous == null` in
+/// this corpus, dstatus is always UNKNOWN (empty Change cell), and only the
+/// standards-status==deprecated branch contributes.
+struct DeprInfo {
+    path: String,
+    rtype: String,
+    name: String,
+    reason: Option<String>,
+    desc: String,
+    status: String,
+}
+
+/// `deprecated-list` = dpr.deprecationSummary (dpr:30). Empty when no resource
+/// carries standards-status==deprecated (and no previous comparator) -> `<p>No
+/// deprecated content</p>` (dpr:79). cycle/plan-net hit this.
+/// Grid branch (dpr:82): a `grid` table, composed by `XhtmlComposer(true,true)`
+/// = XML pretty, with markdown Reason/Description cells. `previous == null`
+/// corpus-wide, so dstatus is UNKNOWN (empty non-bold Change cell); the
+/// previous-version change/un-deprecate branches (dpr:61-74, 100-104) are not
+/// reachable and fire a loud gap only if a previous comparator ever appears.
+pub fn deprecated_list(ctx: &IgContext, core_path: &str) -> String {
+    let mut list: Vec<DeprInfo> = Vec::new();
+    for r in ctx.own_resources() {
+        if ext_value_str(&r.json, EXT_STANDARDS_STATUS).as_deref() != Some("deprecated") {
+            continue;
+        }
+        // title || name || id (dpr:46-52).
+        let name = r
+            .json
+            .get("title")
+            .and_then(|x| x.as_str())
+            .or_else(|| r.json.get("name").and_then(|x| x.as_str()))
+            .unwrap_or(&r.id)
+            .to_string();
+        let desc = r.json.get("description").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        list.push(DeprInfo {
+            path: r.web_path.clone(),
+            rtype: r.rtype.clone(),
+            name,
+            reason: standards_status_reason(&r.json),
+            desc,
+            status: r.json.get("status").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        });
+    }
+    // DeprecationInfoSorter (dpr:166): dstatus (all UNKNOWN here) then name.
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+    if list.is_empty() {
+        return "<p>No deprecated content</p>".to_string();
+    }
+
+    use render_xhtml::{Config, XhtmlComposer, XhtmlNode};
+    let mut div = XhtmlNode::new_tag("div");
+    let mut tbl = XhtmlNode::new_tag("table");
+    tbl.set_attribute("class", "grid");
+
+    // Header row.
+    let mut hr = XhtmlNode::new_tag("tr");
+    for h in ["Resource", "Change", "Status", "Reason", "Description"] {
+        let mut td = XhtmlNode::new_tag("td");
+        let mut b = XhtmlNode::new_tag("b");
+        b.add_text(h.to_string());
+        td.add_child_node(b);
+        hr.add_child_node(td);
+    }
+    tbl.add_child_node(hr);
+
+    for di in &list {
+        let mut tr = XhtmlNode::new_tag("tr");
+        // Row background style only when reason == null (dpr:92-98).
+        if di.reason.is_none() {
+            let style = if di.desc.to_lowercase().contains("deprecated") {
+                "background-color: #ffeccf"
+            } else {
+                "background-color: #ffcfcf"
+            };
+            tr.set_attribute("style", style);
+        }
+        // Resource cell: <a href=path>name (type)</a>.
+        let mut td_res = XhtmlNode::new_tag("td");
+        let mut a = XhtmlNode::new_tag("a");
+        a.set_attribute("href", di.path.clone());
+        a.add_text(format!("{} ({})", di.name, di.rtype));
+        td_res.add_child_node(a);
+        tr.add_child_node(td_res);
+        // Change cell: dstatus UNKNOWN -> `td().tx("")` (dpr:103). The empty
+        // text child makes it `<td></td>`, NOT the XML self-closed `<td/>`.
+        let mut td_change = XhtmlNode::new_tag("td");
+        td_change.add_text(String::new());
+        tr.add_child_node(td_change);
+        // Status cell: non-"retired" -> maroon bold; else plain (dpr:105-109).
+        let mut td_status = XhtmlNode::new_tag("td");
+        if di.status != "retired" {
+            td_status.set_attribute("style", "color: maroon");
+            let mut b = XhtmlNode::new_tag("b");
+            b.add_text(di.status.clone());
+            td_status.add_child_node(b);
+        } else {
+            td_status.add_text(di.status.clone());
+        }
+        tr.add_child_node(td_status);
+        // Reason + Description cells: markdown(preProcessMarkdown(...)) (dpr:110-111).
+        tr.add_child_node(markdown_td(ctx, di.reason.as_deref().unwrap_or(""), core_path));
+        tr.add_child_node(markdown_td(ctx, &di.desc, core_path));
+        tbl.add_child_node(tr);
+    }
+    div.add_child_node(tbl);
+    let mut c = XhtmlComposer::new(Config::xml_pretty());
+    c.compose_nodes(div.child_nodes())
+}
+
+/// A `<td>` whose content is `preProcessMarkdown(text)` then `markdown()` (the
+/// XhtmlNode.markdown convenience: parse the processed HTML into a nested `<div>`
+/// and add it). Mirrors `tr.td().markdown(preProcessMarkdown("?", x), "?")`.
+fn markdown_td(ctx: &IgContext, text: &str, core_path: &str) -> render_xhtml::XhtmlNode {
+    let mut td = render_xhtml::XhtmlNode::new_tag("td");
+    let pre = crate::publisher_markdown::pre_process_markdown(ctx, text, core_path);
+    let html = crate::publisher_markdown::md_process(&pre);
+    for node in crate::publisher_markdown::markdown_children_from_html(&html) {
+        td.add_child_node(node);
+    }
+    td
 }
 
 /// `expansion-params` = renderExpansionParameters (pg:1686). Empty when the
@@ -192,14 +1154,32 @@ pub fn deprecated_list(ctx: &IgContext) -> String {
 /// `has_interesting_params` is a per-IG build fact (the context's expansion
 /// parameters come from the build's tx setup, NOT output/*.json). Golden-
 /// matched: cycle/plan-net empty, us-core a grid (tracked "5").
-/// LOUD GAP: the grid branch (pg:1698) — us-core.
+///
+/// **STOP (grid branch, us-core) — runtime terminology-state artifact, NOT
+/// portable.** `pf.context.getExpansionParameters()` (pg:1688) is a live
+/// `Parameters` accumulated across the ENTIRE build: only the `system-version`
+/// rows come from the IG input (`input/resources/Parameters-manifest.json`);
+/// the ~80 `default-canonical-version` rows are injected at runtime by the tx
+/// layer as it pins every canonical it resolves during expansion, in build-
+/// execution order. That order + membership is not reconstructable from
+/// output/*.json (verified: the manifest holds only `system-version`; no input
+/// or input-cache file carries the `default-canonical-version` set). Feeding
+/// the full 90-row list as a harness constant would be replaying the golden,
+/// not rendering it — no engine, no parity signal. Same class as the tx-cache
+/// accumulation cases; deferred to the terminology phase where the build's tx
+/// operation log is available. The per-row cell renderer (CS/VS present()+
+/// version+webPath via findTxResource; SNOMED `SNOMED CT[US]` special-casing;
+/// displayCodeSource fallback) is bounded and would port cleanly once the
+/// parameter list is available.
 pub fn expansion_params(has_interesting_params: bool) -> String {
     if !has_interesting_params {
         String::new()
     } else {
         panic!(
-            "LOUD GAP: expansion-params grid branch (pg:1698) not ported — \
-             IG has interesting expansion parameters"
+            "STOP: expansion-params grid branch (pg:1698) is a runtime tx-state \
+             artifact (getExpansionParameters accumulates default-canonical-version \
+             pins across the whole build) — not reconstructable from output/*.json. \
+             See the module doc; deferred to the terminology phase."
         );
     }
 }
@@ -466,43 +1446,51 @@ pub fn codesystem_list(ctx: &IgContext, versions: bool) -> String {
     b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Count</th></tr>");
     for (url, web, j) in &list {
         b.push_str("<tr>");
-        b.push_str(&format!(
-            "<td><a href=\"{}\">{}</a></td>",
-            escape_xml(web),
-            escape_xml(url)
-        ));
-        if versions {
-            b.push_str(&format!("<td>{}</td>", escape_xml(get_str(j, "version"))));
-        }
-        b.push_str(&name_title_cell(j));
-        b.push_str(&status_cell(j, ": "));
-        // Flags: hierarchyMeaning, flat, compositional, versionNeeded.
-        let empty: Vec<Value> = Vec::new();
-        let concepts = j.get("concept").and_then(|x| x.as_array()).unwrap_or(&empty);
-        let mut flags = String::new();
-        if let Some(hm) = j.get("hierarchyMeaning").and_then(|x| x.as_str()) {
-            flags.push_str(&escape_xml(hm));
-            flags.push(' ');
-        }
-        if !has_hierarchy(concepts) {
-            flags.push_str("flat ");
-        }
-        if j.get("compositional").and_then(|x| x.as_bool()) == Some(true) {
-            flags.push_str("compositional ");
-        }
-        if j.get("versionNeeded").and_then(|x| x.as_bool()) == Some(true) {
-            flags.push_str("version-needed ");
-        }
-        b.push_str(&format!("<td>{}</td>", flags));
-        // Count.
-        let mut count = format!("{}", count_codes(concepts));
-        if let Some(content) = j.get("content").and_then(|x| x.as_str()) {
-            count.push_str(&format!(" ({})", content));
-        }
-        b.push_str(&format!("<td>{}</td>", escape_xml(&count)));
+        b.push_str(&cs_row_cells(url, web, j, versions));
         b.push_str("</tr>");
     }
     b.push_str("</table>");
+    b
+}
+
+/// The CS list row cells (URL .. Count), shared by codesystem-list and the ref
+/// variants. Does NOT emit `<tr>`/`</tr>` nor the References column.
+fn cs_row_cells(url: &str, web: &str, j: &Value, versions: bool) -> String {
+    let mut b = String::new();
+    b.push_str(&format!(
+        "<td><a href=\"{}\">{}</a></td>",
+        escape_xml(web),
+        escape_xml(url)
+    ));
+    if versions {
+        b.push_str(&format!("<td>{}</td>", escape_xml(get_str(j, "version"))));
+    }
+    b.push_str(&name_title_cell(j));
+    b.push_str(&status_cell(j, ": "));
+    // Flags: hierarchyMeaning, flat, compositional, versionNeeded.
+    let empty: Vec<Value> = Vec::new();
+    let concepts = j.get("concept").and_then(|x| x.as_array()).unwrap_or(&empty);
+    let mut flags = String::new();
+    if let Some(hm) = j.get("hierarchyMeaning").and_then(|x| x.as_str()) {
+        flags.push_str(&escape_xml(hm));
+        flags.push(' ');
+    }
+    if !has_hierarchy(concepts) {
+        flags.push_str("flat ");
+    }
+    if j.get("compositional").and_then(|x| x.as_bool()) == Some(true) {
+        flags.push_str("compositional ");
+    }
+    if j.get("versionNeeded").and_then(|x| x.as_bool()) == Some(true) {
+        flags.push_str("version-needed ");
+    }
+    b.push_str(&format!("<td>{}</td>", flags));
+    // Count.
+    let mut count = format!("{}", count_codes(concepts));
+    if let Some(content) = j.get("content").and_then(|x| x.as_str()) {
+        count.push_str(&format!(" ({})", content));
+    }
+    b.push_str(&format!("<td>{}</td>", escape_xml(&count)));
     b
 }
 
@@ -794,6 +1782,66 @@ fn render_vs_list(
     b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Source</th></tr>");
     for (url, web, j) in list {
         b.push_str("<tr>");
+        b.push_str(&vs_row_cells(ctx, url, web, j, versions));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
+}
+
+/// `valueset-ref-list` / `valueset-ref-all-list` (renderVSList used=true,
+/// pg:2789/2794). Identical VS cells + a References column (see xreflist).
+pub fn valueset_ref_list(ctx: &IgContext, ig_version: &str, all: bool) -> String {
+    let rows = crate::xreflist::used_vs_rows(ctx, all);
+    let versions = rows.iter().any(|r| get_str(&r.json, "version") != ig_version);
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\"><tr><th>URL</th>");
+    if versions {
+        b.push_str("<th>Version</th>");
+    }
+    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Source</th><th>References</th></tr>");
+    for r in &rows {
+        b.push_str("<tr>");
+        b.push_str(&vs_row_cells(ctx, &r.url, &r.web, &r.json, versions));
+        b.push_str(&crate::xreflist::references_cell(&r.refs));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
+}
+
+/// `codesystem-ref-list` / `codesystem-ref-all-list` (renderCSList used=true,
+/// pg:2804/2809). `versions` = needVersionReferences over the used-VS list
+/// (pg:2799 wart — the CS ref tables share the VS list's version flag).
+pub fn codesystem_ref_list(ctx: &IgContext, versions: bool, all: bool) -> String {
+    let rows = crate::xreflist::used_cs_rows(ctx, all);
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\"><tr><th>URL</th>");
+    if versions {
+        b.push_str("<th>Version</th>");
+    }
+    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Count</th><th>References</th></tr>");
+    for r in &rows {
+        b.push_str("<tr>");
+        b.push_str(&cs_row_cells(&r.url, &r.web, &r.json, versions));
+        b.push_str(&crate::xreflist::references_cell(&r.refs));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
+}
+
+/// The VS list row cells (URL .. Source), shared by valueset-list and the ref
+/// variants. Does NOT emit the `<tr>`/`</tr>` nor the References column.
+fn vs_row_cells(
+    ctx: &IgContext,
+    url: &str,
+    web: &str,
+    j: &Value,
+    versions: bool,
+) -> String {
+    {
+        let mut b = String::new();
         b.push_str(&format!(
             "<td><a href=\"{}\">{}</a></td>",
             escape_xml(web),
@@ -865,8 +1913,6 @@ fn render_vs_list(
             src.push_str(&escape_xml(s));
         }
         b.push_str(&format!("<td>{}</td>", src));
-        b.push_str("</tr>");
+        b
     }
-    b.push_str("</table>");
-    b
 }

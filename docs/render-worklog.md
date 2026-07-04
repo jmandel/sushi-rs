@@ -319,6 +319,19 @@ not a quirk).
    `See.QuestionnaireResponse.item` in us-core-questionnaireresponse-grid).
    NOTE the SUMMARY-table genTypes contentReference (SDR:2329-2333) is a
    DIFFERENT code path that appends " " and real link text — not affected.
+9. **`*-ref(-all)-list` References-column order is unstable** (CrossViewRenderer
+   renderVSList:1494-1505 / renderCSList:1759-1770): the References cell iterates
+   `Set<Resource> rl = (HashSet) vs.getUserData(pub_xref_used)` in Java
+   identity-hash order (nondeterministic per JVM run) when `rl.size() < 10`;
+   `>= 10` collapses to the deterministic `"{N} references"`. Same unstable-oracle
+   class as #1 (HTG uuid) and #3 (abstract-profile child order). We emit a
+   DETERMINISTIC order (first-seen over the sorted own-resource scan). RIGOROUSLY
+   CONFIRMED a valid member of the oracle order-set: `corpus classify-reflist <ig>`
+   parses ours+golden per row and proves the (title,link) reference MULTISET is
+   identical per cell (no duplicate pairs corpus-wide → multiset==set); the only
+   byte difference is intra-cell order. 87 order-only cells across the corpus
+   (cycle 9, plan-net 24, us-core 54). These fragments therefore CANNOT be
+   byte-green by construction; they are correct-modulo-quirk.
 
 Faithful ports of Java warts (not quirks — reproduced exactly): (previously listed)
 - `addStyledText` background-color precedence bug (HTG:521) → emits the literal
@@ -1024,3 +1037,156 @@ markers fire loudly, deferred. New seam: `txcache.rs::TxCacheSource` trait +
 for the editor's OPFS tx cache to back the same trait (editor spec §6).
 Floor spots re-confirmed post-merge: snapshot us-core 70/70, dict cycle 7/7,
 uses plan-net 22/22.
+
+# Session 8 (2026-07-03) — F4 CLOSEOUT (the STOPPED list)
+
+Coordinator + 2 forks. Every commit re-ran the FULL floor (F3 15 kinds + all F4
+greens incl. cs-content/cld/vs-expansion); only the known cited residuals persist
+(cycle † 6/7; us-core dict 69/70 & dict-key 67/70; summary 69/70; cld 20/21;
+vs-expansion gaps). **Zero regressions** from any session-8 change.
+
+## Target 2 — valueset-list plan-net residual: GREEN (context.rs, careful)
+Root cause CITED: `CanonicalResourceManager.see()` exit-condition 1
+(CRM:349-353) drops any resource from an `hl7.terminology*` package whose url is
+in `INVALID_TERMINOLOGY_URLS` (CRM:24-28 = {snomed sct, dicom DCM, nucc
+provider-taxonomy}) — "erroneous code systems found in THO". Active THO 7.2.0
+omits nucc; the transitively-loaded THO 5.5.0/6.1.0 copies carry it but are
+rejected → `fetchCodeSystem(nucc)` = null → `describeSource` → "Other". FIX:
+`load_package` drops those urls from the file index when the package id starts
+`hl7.terminology` (faithful see() port). Core-package DCM/SCT copies survive
+(match publisher: THO copies dropped, core kept). **valueset-list now 1/1 all 3
+IGs.** Floor-neutral (cld/cs-content/codesystem-list/tx/snapshot-bindings all
+re-verified byte-identical).
+
+## Target 3 — 4 deferred grid branches (fork B): 3 GREEN, 1 reclassified STOP
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| summary-extensions | 1/1 ✅ | 1/1 ✅ **grid** | 1/1 ✅ **grid** |
+| summary-observations | 1/1 ✅ **grid** | 1/1 ✅ | 1/1 ✅ **grid** |
+| deprecated-list | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ **grid** |
+| expansion-params | 1/1 ✅ | 1/1 ✅ | **STOP** (cited) |
+
+Findings (cited in aggregates.rs): summary-extensions value-type cells link
+`fetchTypeDefinition(name).getWebPath()`; definitions render escapeXml with NO
+markdown (cvr:470); nested component `defn`=slice-header's definition (els[i-1],
+cvr:403), `code`=fixed url (cvr:423). summary-observations = dynamic column set
+(cvr:494-517), renderCodingCell links via `fetchCodeSystem(system).getWebPath()#`
++ validateCode display (through the existing `TxCacheSource::lookup_display`);
+QUIRK (faithful): processObservationComponent appends component code into
+`obs.method` (cvr:346/363, dead copy-paste bug); STOP sub-branch = category-
+collapse (cvr:518, zero corpus hits, loud panic). deprecated-list composer =
+`XhtmlComposer(true,true)`=XML-pretty (new `Config::xml_pretty()`); empty Change
+cell = `td().tx("")` → `<td></td>` (not self-closed); reason/description via the
+ported publisher_markdown. **expansion-params us-core reclassified STOP**:
+`getExpansionParameters()` (pg:1688) is a runtime tx-state artifact — the ~80
+`default-canonical-version` rows are injected in build-execution order as the tx
+layer pins each resolved canonical; NOT in any input/input-cache file (verified;
+manifest holds only `system-version`). Feeding the full list = replaying the
+golden, not rendering it. Deferred to the terminology phase. Loud panic with the
+precise message. (The empty branches remain GREEN — not regressed.)
+
+## Target 1 — dependency-table family + ip-statements (fork A)
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| dependency-table-nontech | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ |
+| ip-statements | 1/1 ✅ | 1/1 ✅ | 0/1 (1-cell residual) |
+| dependency-table | GAP | GAP | GAP |
+| dependency-table-short | GAP | GAP | GAP |
+
+New `ipstmt.rs` (~290) + `deptable.rs` (~330) + `md_fragment_strip_paras_autolinks`
+in publisher_markdown. Findings (cited): the IG resource is itself a FetchedResource
+(getPath=index.html); the denominator is `definition.resource` (not every output/
+*.json — excludes expansions.json); R5-in-R4 `Basic` projections need
+`extension-{Type}.{field}` markers; `fetchCodeSystem` consults tx-cache externals
+(nucc/AMA copyright); nontech title-normalization collapses the us.core facades
+into one rowspan; `PackageHacker.fixPackageUrl` applied on-load; the loaded-package
+set is a per-IG build fact (harvested from the tech golden's simplifier links).
+- **ip-statements us-core residual (byte 31859) = ONE cell**: `v3-ucum`
+  (`http://unitsofmeasure.org`) resolves to THO 6.5.0 in ours vs
+  `hl7.fhir.uv.xver-r5.r4` 0.1.0 in the golden (both v3.0.1; webPath only). SAME
+  cross-package precedence family as the ref-list residuals below (see Target 4).
+- **dependency-table/-short GAP (cited)**: `DeprecationRenderer.render()` (depr:298)
+  uses the HTG `inlineGraphics=true` path; the `render_tables` port is
+  `inlineGraphics=false` only. Needs a captured PNG tree-line oracle (Java ImageIO
+  `genImage` is not byte-reproducible in Rust) + row-tree + version-comment column.
+  Loud panic (deptable.rs:311). dependency-table-nontech (no inline graphics) is GREEN.
+
+## Target 4 — *-ref(-all)-list (coordinator): ported + rigorously classified
+New `xreflist.rs` (~360) — the whole-IG reference SCAN (buildUsed{VS,CS}List,
+CVR:1239/1568); the table reuses `aggregates::{render_vs_list,render_cs_list}`
+via extracted `{vs,cs}_row_cells` + a `used` References column. All 12 kind×IG
+render (no crashes). Scan bugs found & fixed during classification:
+- `findValueSets(vs)` (CVR:1291) `list.add(vs)` adds the VS as a row with NO
+  self-reference; only its IMPORTS record a ref whose SOURCE is the VS (CVR:1297),
+  not the outer SD. (Fixed a spurious self-reference.)
+- `findCodeSystems(vs)` (CVR:1650) `resolveCS(system, **vs**)`: a CS reference's
+  SOURCE is the resolved VALUESET, not the SD that bound it. (Fixed.)
+- `ed.getBinding().getAdditional()` reads the R4-output `additional-binding`
+  tools-extension's nested `valueSet` (valueCanonical), not just R5 `binding.additional`
+  (us-core DocumentReference.type → clinical-note-type). (Fixed — cleared the
+  Category-A empty-ref cells.)
+- `resolveCS`/`fetchResource(CodeSystem)` also finds tx-cache externals
+  (cs-externals.json) that CanonicalResourceManager.get() misses (nucc/formatcode,
+  dropped from THO by INVALID_TERMINOLOGY_URLS yet present as tx externals);
+  webPath = `{server}/ValueSet/{cs.id}`. (Fixed — cleared the missing-row cells.)
+  Distinct from `fetchCodeSystem` (describeSource, target 2) which does NOT — hence
+  nucc is "Other" in valueset-list yet a real row here.
+
+**Classification (corpus `classify-reflist <ig>` — the in-repo PROOF):**
+- **87 order-only cells** (cycle 9, plan-net 24, us-core 54): References-cell
+  (title,link) multiset identical, only intra-cell order differs → unstable-oracle
+  QUIRK #9 (registered above), our deterministic order a valid member. Proven by
+  set-equality per cell; no duplicate pairs corpus-wide.
+- **14 resolution residuals** (cycle 1, plan-net 1, us-core 12) on ~6 canonicals
+  (languages, ucum, ietf3066/bcp:47, PHOccupationalDataForHealthODH, cpt,
+  THO/Languages): OUR `resolve()` picks a THO copy; the golden picks
+  `hl7.fhir.uv.xver-r5.r4` (or a different THO version) — a cross-package
+  version/webPath PRECEDENCE tiebreak (`MetadataResourceVersionComparator` +
+  `compareByLoadCount`, CRM:483, resolved by package LOAD ORDER). Same family as
+  ip-statements us-core. NOT the ordering quirk; a deterministic resolution-oracle
+  gap. **Deliberately NOT fixed**: the fix is a `resolve()` load-order tiebreak
+  touching every resolved canonical — high floor risk for cells that are
+  byte-unstable anyway (quirk #9). Cited residual; shared with Target 1.
+
+Because of quirk #9, the ref-list kinds are byte-unstable BY CONSTRUCTION: 4/12
+fragments are pure-unstable (would be green but for HashSet order); the other 8
+add the resolution residual. Row sets + reference multisets are otherwise correct.
+
+## Target 5 — vs-expansion multi-include gaps: CHARACTERIZED, deferred (not cheap)
+The 9 loud-gapped vs-expansion cases (plan-net 2, us-core 7) are MULTI-INCLUDE VSs.
+FINDING (cache-file structure): the publisher issues a SEPARATE single-include
+`$expand` per include, each cached in its PER-SYSTEM `.cache` file (icd-10-cm.cache,
+snomed.cache, …) keyed by that ONE include's compose + `hierarchical` param
+(url=None); the golden expansion STITCHES them in include-order with a merged
+multi-source header. `all-systems.cache` holds ONLY `v:` (validate) blocks — no
+multi-include `e:` block exists. Our `FsTxCache.cache_expand` fingerprints the WHOLE
+multi-include compose → never matches. Fix = per-include expand + assemble (bounded
+but NON-trivial: ~1000-row tables, merged source header, count=1000 truncation box).
+Stays loud-gapped with this precise spec.
+
+## F4-CLOSE scoreboard delta (session 8)
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| valueset-list | 1/1 ✅ | 1/1 ✅ (was ❌) | 1/1 ✅ |
+| summary-extensions | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ |
+| summary-observations | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ |
+| deprecated-list | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ |
+| expansion-params | 1/1 ✅ | 1/1 ✅ | STOP (tx-state) |
+| dependency-table-nontech | 1/1 ✅ | 1/1 ✅ | 1/1 ✅ |
+| ip-statements | 1/1 ✅ | 1/1 ✅ | 0/1 (xver-precedence) |
+| dependency-table / -short | GAP (inline-graphics PNG oracle) | | |
+| valueset-ref-list / -all | unstable-oracle (#9) + resolution residual | | |
+| codesystem-ref-list / -all | unstable-oracle (#9) + resolution residual | | |
+
+## F5 handoff delta (session 8)
+The fragment-kind registry now additionally covers: valueset-list (all 3 green),
+the 3 grid-branch aggregates, dependency-table-nontech, ip-statements (−1 cell),
+and the 4 *-ref(-all)-list kinds (correct-modulo-quirk-#9). New modules:
+`xreflist`, `deptable`, `ipstmt`. New context seam: INVALID_TERMINOLOGY_URLS
+(load-time THO filter) + `resolve_cs_external` reused for ref-list CS rows.
+`corpus classify-reflist <ig>` is the reusable unstable-oracle proof harness.
+STILL DOCUMENTED-DEFERRED for F5: dependency-table/-short (inline-graphics PNG
+oracle), expansion-params us-core (tx op-log), vs-expansion multi-include
+(per-include cache assembly), the xver-r5.r4-vs-THO resolve() load-order tiebreak
+(affects ip-statements us-core + 14 ref-list resolution cells), instance `html`
+narrative (F4b), and the phase-2 SD leaves enumerated in session 7.

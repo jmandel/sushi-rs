@@ -24,6 +24,16 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+/// CanonicalResourceManager.INVALID_TERMINOLOGY_URLS (CRM:24-28): CodeSystem
+/// urls that are dropped when they arrive from an `hl7.terminology*` package
+/// (the see() exit-condition, CRM:349-353). These "erroneous code systems found
+/// in THO" are never indexed, so fetchCodeSystem(url) returns null.
+const INVALID_TERMINOLOGY_URLS: &[&str] = &[
+    "http://snomed.info/sct",
+    "http://dicom.nema.org/resources/ontology/DCM",
+    "http://nucc.org/provider-taxonomy",
+];
+
 /// A resolved canonical.
 #[derive(Debug, Clone)]
 pub struct Resolved {
@@ -900,6 +910,21 @@ fn load_package(pdir: &Path, ver: &str) -> Option<PkgEntry> {
                     f.get("filename").and_then(|x| x.as_str()),
                     f.get("resourceType").and_then(|x| x.as_str()),
                 ) {
+                    // CanonicalResourceManager.see() exit-condition 1
+                    // (CanonicalResourceManager.java:349-353): a resource from an
+                    // `hl7.terminology*` package whose url is in
+                    // INVALID_TERMINOLOGY_URLS (CRM:24-28) is REJECTED — never
+                    // seen by the manager, so fetchCodeSystem(url) returns null.
+                    // The publisher's active THO (7.2.0) omits these anyway; the
+                    // older transitively-loaded THO 5.5.0/6.1.0 copies that DO
+                    // carry them must not shadow the "not found" answer. Drop
+                    // them here so resolve() matches the publisher (nucc
+                    // provider-taxonomy Source cell → "Other", valueset-list).
+                    if pkg_id.starts_with("hl7.terminology")
+                        && INVALID_TERMINOLOGY_URLS.contains(&url)
+                    {
+                        continue;
+                    }
                     let rv = f.get("version").and_then(|x| x.as_str()).unwrap_or("");
                     files.insert(
                         url.to_string(),

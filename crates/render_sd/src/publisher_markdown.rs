@@ -623,6 +623,32 @@ pub fn markdown_children_from_html(html: &str) -> Vec<render_xhtml::node::XhtmlN
     }
 }
 
+/// `parseMDFragmentStripParas(html)` (XhtmlParser:1351) then
+/// `new XhtmlComposer(false, true).setAutoLinks(true).compose(list)` — the
+/// IPStatementsRenderer copyright path (ipr:230-234). Parse `<div>`+html+`</div>`,
+/// flatten each top-level child's children (dropping the `<p>` wrappers AND the
+/// inter-paragraph whitespace, which lives at div-level), then compose the inline
+/// node list with the html-pretty composer + autoLinks.
+pub fn md_fragment_strip_paras_autolinks(html: &str) -> String {
+    use render_xhtml::composer::{Config, XhtmlComposer};
+    let wrapped = format!("<div>{}</div>", html);
+    let mut parser = render_xhtml::XhtmlParser::new();
+    let Ok(div) = parser.parse_fragment(&wrapped) else {
+        return String::new();
+    };
+    // for (x : div.children) res.addAll(x.children) — flatten one level.
+    let mut nodes: Vec<render_xhtml::node::XhtmlNode> = Vec::new();
+    for child in div.child_nodes() {
+        for gc in child.child_nodes() {
+            nodes.push(gc.clone());
+        }
+    }
+    let mut cfg = Config::html_pretty();
+    cfg.auto_links = true;
+    let mut composer = XhtmlComposer::new(cfg);
+    composer.compose_nodes(&nodes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

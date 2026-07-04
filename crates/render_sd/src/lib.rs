@@ -15,12 +15,14 @@ pub mod aggregates;
 pub mod commonmark;
 pub mod context;
 pub mod dict;
+pub mod deptable;
 pub mod diff;
 pub mod fstxcache;
 pub mod txcache;
 pub mod vscs;
 pub mod gentypes;
 pub mod grid;
+pub mod ipstmt;
 pub mod leaf;
 pub mod markdown;
 pub mod pseudojson;
@@ -30,6 +32,7 @@ pub mod span;
 pub mod table;
 pub mod tx;
 pub mod xref;
+pub mod xreflist;
 
 pub use sdmodel::Sd;
 

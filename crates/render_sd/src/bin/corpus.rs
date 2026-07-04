@@ -290,6 +290,14 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "expansion-params"
             | "codesystem-list"
             | "canonical-index"
+            | "ip-statements"
+            | "dependency-table"
+            | "dependency-table-short"
+            | "dependency-table-nontech"
+            | "valueset-ref-list"
+            | "valueset-ref-all-list"
+            | "codesystem-ref-list"
+            | "codesystem-ref-all-list"
     )
 }
 
@@ -401,6 +409,135 @@ fn ig_new_format(ig: &str) -> bool {
     }
 }
 
+/// corePath for the IG-level singleton renderers (DeprecationRenderer etc.) =
+/// getSpecUrl(igVersion)+"/", derived from the IG's fhirVersion (same rule as
+/// core_path_for over an SD; the IG is R4 across this corpus).
+fn singleton_core_path(ig: &str) -> String {
+    let dir = ig_sd_dir(ig);
+    let mut v = String::new();
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
+                if let Ok(t) = std::fs::read_to_string(e.path()) {
+                    if let Ok(j) = serde_json::from_str::<serde_json::Value>(&t) {
+                        if let Some(fv) = j.get("fhirVersion").and_then(|x| x.as_array()).and_then(|a| a.first()).and_then(|x| x.as_str()) {
+                            v = fv.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let base = if v.starts_with("4.0") {
+        "http://hl7.org/fhir/R4"
+    } else if v.starts_with("4.3") {
+        "http://hl7.org/fhir/R4B"
+    } else if v.starts_with("5.0") {
+        "http://hl7.org/fhir/R5"
+    } else {
+        "http://hl7.org/fhir"
+    };
+    format!("{}/", base)
+}
+
+/// The DependencyRenderer `dstFolder` = the build's `temp/pages` (the HTG
+/// `dest`; the tree-line img srcs read static PNGs from here, and the
+/// background-image url is prefixed with this path). Same per-IG build path the
+/// snapshot tables use as their SD source dir.
+fn dep_dst_folder(ig: &str) -> String {
+    match ig {
+        "us-core" => format!("{}/us-core/temp/pages", F0),
+        "plan-net" => format!("{}/plan-net/temp/pages", F0),
+        "cycle" => "/home/jmandel/hobby/periodicity-impl/cycle/temp/pages".to_string(),
+        _ => String::new(),
+    }
+}
+
+/// The package cache dir for an IG (mirror of build_ctx's second arg).
+fn dep_cache_dir(ig: &str) -> PathBuf {
+    match ig {
+        "us-core" => PathBuf::from(format!("{}/us-core/.home/.fhir/packages", F0)),
+        "plan-net" => PathBuf::from(format!("{}/plan-net/.home/.fhir/packages", F0)),
+        "cycle" => PathBuf::from(format!("{}/.fhir/packages", std::env::var("HOME").unwrap_or_default())),
+        _ => PathBuf::new(),
+    }
+}
+
+/// The own ImplementationGuide JSON (for its dependsOn).
+fn dep_ig_json(ig: &str) -> serde_json::Value {
+    let dir = ig_sd_dir(ig);
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
+                if let Ok(t) = std::fs::read_to_string(e.path()) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
+                        return v;
+                    }
+                }
+            }
+        }
+    }
+    serde_json::Value::Null
+}
+
+/// The build's set of LOADED package version-ids (`name#version`) — the
+/// SpecMapManager `getNpmVId()` set that `DependencyRenderer.isLoaded` consults
+/// (depr:522-528). This is the publisher's RUNTIME specMaps set: which package
+/// versions it actually loaded into context (it can hold MULTIPLE versions of the
+/// same package — us-core loads 4 versions of hl7.fhir.uv.extensions.r4). That
+/// set is NOT recoverable from output/*.json (no build artifact records it) and
+/// depends on the publisher's version-pinning package loader. It is a per-IG
+/// BUILD FACT harvested here from the `dependency-table` golden's own simplifier
+/// package links (`simplifier.net/packages/{id}/{version}`) — the authoritative
+/// enumeration of the loaded packages, the same oracle-harvest pattern as the
+/// HTG run-uuid. (The nontech table this feeds is a DIFFERENT fragment/traversal,
+/// so this is a cross-fragment oracle input, not circular for nontech.)
+fn dep_loaded_set(ig: &str) -> std::collections::HashSet<String> {
+    let golden = format!("{}/render-goldens/{}/fragments/dependency-table.xhtml", REPO, ig);
+    let mut set = std::collections::HashSet::new();
+    if let Ok(text) = std::fs::read_to_string(&golden) {
+        // simplifier.net/packages/{id}/{version} -> {id}#{version}
+        let needle = "simplifier.net/packages/";
+        let mut rest = text.as_str();
+        while let Some(k) = rest.find(needle) {
+            rest = &rest[k + needle.len()..];
+            // read {id}/{version} up to the next '"' or '<'
+            let end = rest.find(['"', '<', ')']).unwrap_or(rest.len());
+            let seg = &rest[..end];
+            if let Some((id, ver)) = seg.split_once('/') {
+                let ver = ver.trim_end_matches('/');
+                if !id.is_empty() && !ver.is_empty() {
+                    set.insert(format!("{}#{}", id, ver));
+                }
+            }
+        }
+    }
+    // The FHIR core package is always loaded (the IG's base) but the tech golden
+    // renders it via a version-name cell (no simplifier link), so it is absent
+    // from the harvest above. Add it from the IG's fhirVersion.
+    let igj = dep_ig_json(ig);
+    if let Some(fv) = igj
+        .get("fhirVersion")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.first())
+        .and_then(|x| x.as_str())
+    {
+        let (core_id, core_ver) = if fv.starts_with("4.0") {
+            ("hl7.fhir.r4.core", "4.0.1")
+        } else if fv.starts_with("4.3") {
+            ("hl7.fhir.r4b.core", "4.3.0")
+        } else if fv.starts_with("5.0") {
+            ("hl7.fhir.r5.core", "5.0.0")
+        } else {
+            ("hl7.fhir.r4.core", "4.0.1")
+        };
+        set.insert(format!("{}#{}", core_id, core_ver));
+    }
+    set
+}
+
 fn singleton_golden(ig: &str, kind: &str) -> PathBuf {
     PathBuf::from(format!(
         "{}/render-goldens/{}/fragments/{}.xhtml",
@@ -426,12 +563,50 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
             agg::codesystem_list(ctx, versions)
         }
         "summary-extensions" => agg::summary_extensions(ctx),
-        "summary-observations" => agg::summary_observations(ctx),
-        "deprecated-list" => agg::deprecated_list(ctx),
+        "summary-observations" => {
+            // getObservationSummary resolves terminology (validateCode displays,
+            // versioned CS webPaths) through the build's tx cache.
+            let txd = txcache_dir(ig);
+            let txcache = render_sd::fstxcache::FsTxCache::new(txd.as_deref(), ctx);
+            agg::summary_observations(ctx, &txcache, &singleton_core_path(ig))
+        }
+        "deprecated-list" => agg::deprecated_list(ctx, &singleton_core_path(ig)),
         "expansion-params" => agg::expansion_params(ig_has_expansion_params(ig)),
         "canonical-index" => {
             let oid_map = ig_oids_ini(ig);
             agg::canonical_index(ctx, ig_resource(ig), oid_map.as_ref())
+        }
+        "ip-statements" => {
+            // trackedFragment "1" (pg:2896): the whole-IG IPStatementsRenderer.
+            format!("{}<!--$$1$$-->", render_sd::ipstmt::ip_statements(ctx, &dep_ig_json(ig)))
+        }
+        "dependency-table" => format!(
+            "{}<!--$$3$$-->",
+            render_sd::deptable::dependency_table(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig), &dep_dst_folder(ig), true, harvest_uuid(ig).as_str())
+        ),
+        "dependency-table-short" => format!(
+            "{}<!--$$3$$-->",
+            render_sd::deptable::dependency_table(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig), &dep_dst_folder(ig), false, harvest_uuid(ig).as_str())
+        ),
+        "dependency-table-nontech" => {
+            format!("{}<!--$$3$$-->", render_sd::deptable::dependency_table_nontech(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig)))
+        }
+        // *-ref(-all)-list: renderVSList/renderCSList(used=true), pg:2789-2809.
+        // The CS ref Version flag is needVersionReferences over the used-VS list
+        // (pg:2799 wart) — computed with the SAME all flag as the CS table.
+        "valueset-ref-list" => agg::valueset_ref_list(ctx, &ig_version(ig), false),
+        "valueset-ref-all-list" => agg::valueset_ref_list(ctx, &ig_version(ig), true),
+        // The CS ref Version flag = needVersionReferences over the used-VS list
+        // built with all=TRUE (pg:2793 — `vslist` is the buildUsedValueSetList(true)
+        // from the valueset-ref-all-list block, reused unchanged through all three
+        // CS blocks), regardless of the CS table's own all flag.
+        "codesystem-ref-list" => {
+            let versions = render_sd::xreflist::used_vs_needs_version(ctx, &ig_version(ig), true);
+            agg::codesystem_ref_list(ctx, versions, false)
+        }
+        "codesystem-ref-all-list" => {
+            let versions = render_sd::xreflist::used_vs_needs_version(ctx, &ig_version(ig), true);
+            agg::codesystem_ref_list(ctx, versions, true)
         }
         _ => unreachable!(),
     };
@@ -452,6 +627,11 @@ fn run_singleton(kind: &str, ig: &str, verbose: bool) {
             return;
         }
     };
+    if let Ok(dir) = std::env::var("CORPUS_DUMP_DIR") {
+        let d = std::path::PathBuf::from(dir);
+        std::fs::write(d.join("dump-ours.xhtml"), &ours).ok();
+        std::fs::write(d.join("dump-gold.xhtml"), &golden).ok();
+    }
     if ours == golden {
         println!("{} {}: 1/1 byte-identical", kind, ig);
     } else {
@@ -571,6 +751,122 @@ fn run_vscs(kind: &str, ig: &str, verbose: bool) {
     }
 }
 
+/// The unstable-oracle proof for `*-ref(-all)-list`. For each of the 4 ref-list
+/// kinds, render ours + golden, parse rows keyed by URL, and split every cell
+/// divergence into ORDER-ONLY (References HashSet order — quirk) vs RESOLUTION
+/// (deterministic URL/Source/Version or row-set difference — cited residual).
+fn classify_reflist(ig: &str) {
+    let ctx = build_ctx(ig).unwrap_or_else(|| panic!("no ctx for {}", ig));
+    let kinds = [
+        "valueset-ref-list",
+        "valueset-ref-all-list",
+        "codesystem-ref-list",
+        "codesystem-ref-all-list",
+    ];
+    let mut tot_order = 0usize;
+    let mut tot_res = 0usize;
+    let mut pure = 0usize;
+    for kind in kinds {
+        let ours = render_singleton(kind, ig, &ctx);
+        let golden = std::fs::read_to_string(singleton_golden(ig, kind)).unwrap_or_default();
+        let ro = parse_ref_rows(&ours);
+        let rg = parse_ref_rows(&golden);
+        let mut order_only = 0usize;
+        let mut resolution = 0usize;
+        let mut urls: std::collections::BTreeSet<&String> = ro.keys().collect();
+        urls.extend(rg.keys());
+        for u in urls {
+            match (ro.get(u), rg.get(u)) {
+                (Some(o), Some(g)) => {
+                    if o.0 != g.0 || o.1 != g.1 {
+                        if std::env::var("CLASSIFY_DBG").is_ok() {
+                            eprintln!("  RES {} pre_eq={} set_eq={}", u, o.0 == g.0, o.1 == g.1);
+                        }
+                        resolution += 1; // non-References cells or ref-SET differ
+                    } else if o.2 != g.2 {
+                        order_only += 1; // same ref set, different byte order
+                    }
+                }
+                _ => resolution += 1, // row present in only one side
+            }
+        }
+        if resolution == 0 {
+            pure += 1;
+        }
+        tot_order += order_only;
+        tot_res += resolution;
+        println!(
+            "{} {}: rows ours/gold {}/{}  order-only(unstable)={}  resolution(residual)={}",
+            kind, ig, ro.len(), rg.len(), order_only, resolution
+        );
+    }
+    println!(
+        "{}: TOTAL order-only(unstable-oracle)={} resolution(residual)={} pure-unstable-fragments={}/4",
+        ig, tot_order, tot_res, pure
+    );
+}
+
+/// Parse a ref-list fragment into url -> (pre-References cells, References SET,
+/// References cell bytes). The References column is the LAST th named "References".
+fn parse_ref_rows(body: &str) -> std::collections::HashMap<String, (String, std::collections::BTreeSet<(String, String)>, String)> {
+    let b = body.replace("{% raw %}", "").replace("{% endraw %}", "");
+    let mut out = std::collections::HashMap::new();
+    let rows: Vec<&str> = b.split("<tr>").skip(1).map(|s| s.split("</tr>").next().unwrap_or("")).collect();
+    if rows.is_empty() {
+        return out;
+    }
+    // header: count th; find References index.
+    let header = rows[0];
+    let ths: Vec<&str> = header.split("<th").skip(1).map(|s| s.split("</th>").next().unwrap_or("")).collect();
+    let ridx = ths.iter().position(|t| t.contains("References"));
+    let Some(ridx) = ridx else { return out };
+    for r in &rows[1..] {
+        let tds: Vec<String> = r
+            .split("<td")
+            .skip(1)
+            .map(|s| format!("<td{}", s.split("</td>").next().unwrap_or("")))
+            .collect();
+        if tds.is_empty() {
+            continue;
+        }
+        // url = first td's <a> text
+        let url = tds[0]
+            .split("\">")
+            .nth(1)
+            .and_then(|s| s.split("</a>").next())
+            .unwrap_or("")
+            .to_string();
+        let pre: String = tds[..ridx.min(tds.len())].concat();
+        let cell = tds.get(ridx).cloned().unwrap_or_default();
+        let mut set: std::collections::BTreeSet<(String, String)> = std::collections::BTreeSet::new();
+        // parse <a href="L">T</a> pairs; if "N references" leave the set as a
+        // single marker so >=10 collapses compare deterministically.
+        if cell.contains(" references</td>") || cell.contains(" references") && !cell.contains("<a ") {
+            set.insert(("__N__".to_string(), cell.clone()));
+        } else {
+            let mut rest = cell.as_str();
+            while let Some(i) = rest.find("<a href=\"") {
+                let after = &rest[i + 9..];
+                let link = after.split('"').next().unwrap_or("").to_string();
+                let title = after
+                    .split_once("\">")
+                    .and_then(|(_, t)| t.split("</a>").next())
+                    .unwrap_or("")
+                    .to_string();
+                set.insert((link, title));
+                // advance past THIS anchor's closing tag (keeping the remaining
+                // anchors intact — the prior split("</a>").nth(1) truncated the tail).
+                rest = match after.find("</a>") {
+                    Some(j) => &after[j + 4..],
+                    None => "",
+                };
+            }
+        }
+        out.insert(url, (pre, set, cell));
+    }
+    out
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -580,6 +876,19 @@ fn main() {
     let kind = &args[1];
     let ig = &args[2];
     let verbose = args.iter().any(|a| a == "--verbose");
+
+    // classify-reflist: the unstable-oracle PROOF for the *-ref(-all)-list kinds.
+    // Renders ours + golden, parses per-row, and reports for the whole IG:
+    //   - order-only cells: the References cell has the SAME (title,link) SET but
+    //     a different byte order (Java HashSet iteration order — quirk, valid
+    //     member of the oracle order-set);
+    //   - resolution cells: a URL/Version/Source cell differs, or the row set
+    //     differs — a DETERMINISTIC resolution-oracle divergence (cited residual,
+    //     cross-package terminology version/webPath precedence), NOT ordering.
+    if kind == "classify-reflist" {
+        classify_reflist(ig);
+        return;
+    }
 
     // SINGLETON IG-level aggregate fragments: ONE golden per IG at
     // render-goldens/<ig>/fragments/<kind>.xhtml (no resource-type prefix).

@@ -68,6 +68,16 @@ impl Config {
         }
     }
 
+    /// `new XhtmlComposer(true, true)`: XML, pretty (DeprecationRenderer:113).
+    pub fn xml_pretty() -> Config {
+        Config {
+            xml: true,
+            pretty: true,
+            auto_links: false,
+            canonical: false,
+        }
+    }
+
     /// `new XhtmlComposer(false)`: HTML, not pretty.
     pub fn html_compact() -> Config {
         Config {
