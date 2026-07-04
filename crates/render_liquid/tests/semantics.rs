@@ -346,3 +346,20 @@ fn nested_braces_in_tag() {
         "http://a/y"
     );
 }
+
+#[test]
+fn parenthesized_boolean_grouping() {
+    // Ruby Liquid 4.x groups parenthesized boolean expressions:
+    // `a and (b or c)` == a && (b || c), NOT (a && b) || c. Verified via the
+    // liquid oracle. This drives the US-Core search-requirement handler
+    // (`multipleAnd_conf and (shall_comparator or should_comparator)`), where an
+    // empty (nil) comparator must not collapse the whole conjunction.
+    let t = "{% if a and (b or c) %}Y{% else %}N{% endif %}";
+    let tv = Value::str("x");
+    // a truthy, b truthy, c nil -> (b or c) true -> Y
+    assert_eq!(r(t, &[("a", tv.clone()), ("b", tv.clone()), ("c", Value::Nil)]), "Y");
+    // a truthy, b nil, c nil -> (b or c) false -> N
+    assert_eq!(r(t, &[("a", tv.clone()), ("b", Value::Nil), ("c", Value::Nil)]), "N");
+    // a nil -> false regardless -> N
+    assert_eq!(r(t, &[("a", Value::Nil), ("b", tv.clone()), ("c", tv)]), "N");
+}

@@ -121,7 +121,18 @@ fn csv_to_json(text: &str) -> serde_json::Value {
         let mut obj = serde_json::Map::new();
         for (i, key) in header.iter().enumerate() {
             if let Some(cell) = rec.get(i) {
-                obj.insert(key.clone(), serde_json::Value::String(cell.clone()));
+                // Ruby `CSV.read(headers: true)` yields nil (NOT "") for an empty
+                // cell. This is load-bearing: in Liquid `nil` is falsy but `""`
+                // is TRUTHY, so `{% if row.col %}` skips empty cells only if they
+                // are nil. (US-Core's search-requirement handler relies on this —
+                // empty multipleAnd_conf/comparator cells must suppress their
+                // `- Including …` bullets, which also keeps the list loose.)
+                let v = if cell.is_empty() {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::Value::String(cell.clone())
+                };
+                obj.insert(key.clone(), v);
             }
         }
         rows.push(serde_json::Value::Object(obj));
@@ -249,13 +260,14 @@ mod tests {
     #[test]
     fn csv_empty_and_padding_headers() {
         // uscdi-table.csv style: trailing empty-name header columns are kept as
-        // empty-string keys; a data row can be shorter than the header list.
-        let text = "a,b,\r\n1,2,\r\n";
+        // empty-string keys; a data row can be shorter than the header list. An
+        // empty cell becomes JSON null (Ruby CSV nil), NOT "".
+        let text = "a,b,\r\n1,,\r\n";
         let v = csv_to_json(text);
         let arr = v.as_array().unwrap();
         assert_eq!(arr.len(), 1);
         assert_eq!(arr[0]["a"], serde_json::json!("1"));
-        assert_eq!(arr[0]["b"], serde_json::json!("2"));
-        assert_eq!(arr[0][""], serde_json::json!(""));
+        assert_eq!(arr[0]["b"], serde_json::Value::Null); // empty cell -> nil
+        assert_eq!(arr[0][""], serde_json::Value::Null); // padding column -> nil
     }
 }
