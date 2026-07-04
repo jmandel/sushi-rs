@@ -88,10 +88,21 @@ pub struct SiteOptions {
     /// value so re-renders are stable and the ledgers can hash outputs.
     #[serde(default)]
     pub run_uuid: Option<String>,
+    /// Include resolution order. TRUE (default; the stock-template path): LIVE
+    /// engine fragments shadow staged tree copies. FALSE (custom generators,
+    /// e.g. cycle): the mounted `_includes` — the generator's own include
+    /// design — win; the engine only serves tree misses.
+    #[serde(default = "default_true")]
+    pub engine_first_includes: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// The per-generation render state.
 pub struct RenderState {
+    engine_first_includes: bool,
     pub engine: FragmentEngine,
     pub site: SiteData,
     pub tree: Rc<dyn TreeSource>,
@@ -209,6 +220,7 @@ pub fn build_render_state(
         tree,
         frag_cache: Rc::new(RefCell::new(HashMap::new())),
         pages,
+        engine_first_includes: options.engine_first_includes,
     })
 }
 
@@ -224,7 +236,7 @@ impl RenderState {
             &Path::new(SITE_DIR).join("_includes"),
             Some(&self.engine),
         )
-        .with_engine_first(true)
+        .with_engine_first(self.engine_first_includes)
         .with_tree(self.tree.clone())
         .with_shared_cache(self.frag_cache.clone())
     }
@@ -425,6 +437,7 @@ mod tests {
         let opts = SiteOptions {
             active_tables: true,
             run_uuid: Some(uuid),
+            engine_first_includes: true,
         };
         let rs = build_render_state(&compiled, Some(Rc::new(bundle)), &site_files, &opts)
             .expect("render state");
