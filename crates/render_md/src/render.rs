@@ -738,6 +738,34 @@ impl Renderer {
 /// until an entry at `<= parent_lvl` is reached. Matches kramdown's exact
 /// layout: a child `<ul>` opens on the SAME line as the parent link (preceded
 /// by 4 spaces), and each link gets `id="markdown-toc-<heading-id>"`.
+/// Remove `<a …>` / `</a>` tags from a TOC entry's inner HTML, keeping the link
+/// text (kramdown drops :a elements from toc entries). Other inline tags
+/// (`<code>`, `<strong>`, …) are preserved. Naive but sufficient: TOC entry
+/// HTML has no `>` inside attribute values here (kramdown-escaped).
+fn strip_toc_anchors(inner: &str) -> String {
+    let bytes = inner.as_bytes();
+    let mut out = String::with_capacity(inner.len());
+    let mut i = 0;
+    while i < inner.len() {
+        let rest = &inner[i..];
+        if rest.starts_with("<a ") || rest == "<a>" || rest.starts_with("<a>") {
+            if let Some(gt) = rest.find('>') {
+                i += gt + 1;
+                continue;
+            }
+        }
+        if rest.starts_with("</a>") {
+            i += 4;
+            continue;
+        }
+        let ch_len = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        out.push_str(&inner[i..i + ch_len]);
+        i += ch_len;
+    }
+    let _ = bytes;
+    out
+}
+
 fn render_toc_level(
     entries: &[(u8, String, String)],
     pos: &mut usize,
@@ -755,6 +783,11 @@ fn render_toc_level(
             return;
         }
         *pos += 1;
+        // kramdown strips nested `<a>` elements from the TOC entry text (it would
+        // otherwise nest an anchor inside the toc anchor). The link's TEXT content
+        // is kept; the `<a …>`/`</a>` tags are removed. (Converter::Toc walks the
+        // heading's element tree and drops :a elements, keeping their children.)
+        let inner = strip_toc_anchors(&inner);
         out.push_str(&pad);
         out.push_str(&format!(
             "<li><a href=\"#{id}\" id=\"markdown-toc-{id}\">{inner}</a>"
