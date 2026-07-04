@@ -708,7 +708,10 @@ fn parse_var_path(s: &str) -> Result<VarPath, ParseError> {
 pub fn parse_condition(src: &str) -> Result<Condition, ParseError> {
     let s = src.trim();
     // find the FIRST top-level `and`/`or` (Liquid evaluates right-assoc: the
-    // parse is right-recursive, so we split on the first connective).
+    // parse is right-recursive, so we split on the first connective). Splitting
+    // is PAREN-AWARE: a connective inside a `( … )` group is not a top-level
+    // split point — Ruby Liquid 4.x groups parenthesized boolean expressions
+    // (verified: `a and (b or c)` is `a && (b || c)`, not `(a && b) || c`).
     if let Some((left, connective, right)) = split_first_connective(s) {
         let l = parse_single_condition(left.trim())?;
         let r = parse_condition(right.trim())?;
@@ -723,6 +726,7 @@ pub fn parse_condition(src: &str) -> Result<Condition, ParseError> {
 fn split_first_connective(s: &str) -> Option<(&str, &str, &str)> {
     let bytes = s.as_bytes();
     let mut in_str: Option<u8> = None;
+    let mut depth = 0i32;
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
@@ -738,13 +742,25 @@ fn split_first_connective(s: &str) -> Option<(&str, &str, &str)> {
             i += 1;
             continue;
         }
-        for (w, wl) in [("and", 3usize), ("or", 2usize)] {
-            if i + wl <= bytes.len()
-                && &s[i..i + wl] == w
-                && (i == 0 || bytes[i - 1].is_ascii_whitespace())
-                && (i + wl >= bytes.len() || bytes[i + wl].is_ascii_whitespace())
-            {
-                return Some((&s[..i], w, &s[i + wl..]));
+        if c == b'(' {
+            depth += 1;
+            i += 1;
+            continue;
+        }
+        if c == b')' {
+            depth -= 1;
+            i += 1;
+            continue;
+        }
+        if depth == 0 {
+            for (w, wl) in [("and", 3usize), ("or", 2usize)] {
+                if i + wl <= bytes.len()
+                    && &s[i..i + wl] == w
+                    && (i == 0 || bytes[i - 1].is_ascii_whitespace())
+                    && (i + wl >= bytes.len() || bytes[i + wl].is_ascii_whitespace())
+                {
+                    return Some((&s[..i], w, &s[i + wl..]));
+                }
             }
         }
         i += 1;
@@ -752,7 +768,44 @@ fn split_first_connective(s: &str) -> Option<(&str, &str, &str)> {
     None
 }
 
+/// If `s` is a single fully-parenthesized group `( … )` (the outer parens match
+/// each other), return the inner text; else None. `((a) or (b))` → `(a) or (b)`.
+fn strip_grouping_parens(s: &str) -> Option<&str> {
+    let s = s.trim();
+    let bytes = s.as_bytes();
+    if bytes.first() != Some(&b'(') || bytes.last() != Some(&b')') {
+        return None;
+    }
+    let mut depth = 0i32;
+    let mut in_str: Option<u8> = None;
+    for (i, &c) in bytes.iter().enumerate() {
+        if let Some(q) = in_str {
+            if c == q {
+                in_str = None;
+            }
+            continue;
+        }
+        match c {
+            b'"' | b'\'' => in_str = Some(c),
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                // The opening paren closes before the end → not a single group.
+                if depth == 0 && i != bytes.len() - 1 {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+    }
+    Some(&s[1..s.len() - 1])
+}
+
 fn parse_single_condition(s: &str) -> Result<Condition, ParseError> {
+    // A fully-parenthesized group is a grouped boolean sub-condition.
+    if let Some(inner) = strip_grouping_parens(s) {
+        return parse_condition(inner);
+    }
     // comparison operators
     for (op_str, op) in [
         ("==", CompareOp::Eq),

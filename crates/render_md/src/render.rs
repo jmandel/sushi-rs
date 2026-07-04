@@ -385,6 +385,20 @@ impl Renderer {
             out.push_str("</code></pre></div></div>");
             return;
         }
+        // Real-lexer languages (json/js): a rouge tokenizer produces the inner
+        // token spans; the wrapper is identical to the tokenless one.
+        if self.opts.rouge_wrappers {
+            if let Some(inner) = crate::rouge::highlight(lang, code) {
+                out.push_str(&pad);
+                out.push_str(&format!(
+                    "<div class=\"language-{} highlighter-rouge\"><div class=\"highlight\"><pre class=\"highlight\"><code>",
+                    escape_html_attr(lang)
+                ));
+                out.push_str(&inner);
+                out.push_str("</code></pre></div></div>");
+                return;
+            }
+        }
         out.push_str(&pad);
         if lang.is_empty() {
             out.push_str("<pre><code>");

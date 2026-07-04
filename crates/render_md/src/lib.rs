@@ -46,6 +46,7 @@ mod block;
 mod ial;
 mod inline;
 mod render;
+mod rouge;
 mod util;
 
 pub use render::{render, render_with, Options};
