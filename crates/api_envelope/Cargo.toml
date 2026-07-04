@@ -1,0 +1,14 @@
+[package]
+name = "api_envelope"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# The ONE apiVersion result/error envelope, shared by wasm_api (Session) and the
+# `fig` CLI (`--json`). One implementation, one schema — the shared-schema test
+# lives in `fig` (tests/json_envelope.rs) and pins both against this crate.
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

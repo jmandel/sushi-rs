@@ -20,8 +20,10 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 [ -d "$CACHE" ] || { echo "FATAL: cache not found: $CACHE"; exit 2; }
+# rust_sushi still carries build/resolve/bundle for one release (dev-oracle
+# surface). snapshot_gen is now the `fig` alias shim → build fig for it.
 [ -x "$BIN" ]  || ( cd "$REPO" && cargo build --release -p rust_sushi >/dev/null )
-[ -x "$SNAP" ] || ( cd "$REPO" && cargo build --release -p snapshot_gen >/dev/null )
+[ -x "$SNAP" ] || ( cd "$REPO" && cargo build --release -p fig >/dev/null )
 
 echo "== 1. RESOLVE the project closure (Rust resolver) =="
 "$BIN" resolve --cache "$CACHE" --project "$IG_DIR" > "$WORK/step.json"

@@ -61,3 +61,105 @@ pub fn ledger_sidecar_path(out_db: &Path) -> std::path::PathBuf {
     s.push(".buildstate.json");
     std::path::PathBuf::from(s)
 }
+
+/// The `site_db` CLI (S1-S7 build). Extracted from the old binary's `main` so
+/// BOTH the standalone `site_db` binary AND `fig sitedb` compose the exact same
+/// code — byte-identical output. `args` is the full process argv.
+#[cfg(feature = "sqlite")]
+pub fn run_cli(args: &[String]) -> Result<()> {
+    use anyhow::{bail, Context};
+    match args.get(1).map(String::as_str) {
+        Some("build") => run_build(args),
+        Some("--version") | Some("version") => {
+            println!("site_db {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
+        _ => {
+            eprintln!(
+                "usage: site_db build <cycle-repo> --sushi-out <dir> --cache <pkgcache> --out <site.db>\n\
+                 \x20            [--build-date <epoch|RFC3339>] [--core <pkg#ver>] [--no-sushi]\n\
+                 \x20            [--branch <b>] [--revision <r>]\n\
+                 \x20            [--layer-b | --layer-b-pin | --layer-b-project]  (task #17, default OFF)"
+            );
+            bail!("unknown or missing subcommand");
+        }
+    }
+}
+
+#[cfg(feature = "sqlite")]
+fn run_build(args: &[String]) -> Result<()> {
+    use anyhow::Context;
+    let opt = |name: &str| -> Option<&str> {
+        args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
+    };
+    let has_flag = |name: &str| args.iter().any(|a| a == name);
+
+    let ig_dir = args
+        .get(2)
+        .filter(|s| !s.starts_with('-'))
+        .map(std::path::PathBuf::from)
+        .context("build needs a <cycle-repo> positional arg")?;
+    let sushi_out = opt("--sushi-out").map(std::path::PathBuf::from).context("--sushi-out <dir> is required")?;
+    let cache_dir = opt("--cache").map(std::path::PathBuf::from).context("--cache <pkgcache> is required")?;
+    let out_db = opt("--out").map(std::path::PathBuf::from).context("--out <site.db> is required")?;
+    let core_package = opt("--core").unwrap_or("hl7.fhir.r4.core#4.0.1").to_string();
+    let run_sushi = !has_flag("--no-sushi");
+    let branch = opt("--branch").map(str::to_string);
+    let revision = opt("--revision").map(str::to_string);
+    let build_epoch_secs = resolve_build_epoch(opt("--build-date"))?;
+
+    let all = has_flag("--layer-b");
+    let layer_b = snapshot_gen::LayerBOptions {
+        pin: all || has_flag("--layer-b-pin"),
+        project_r4: all || has_flag("--layer-b-project"),
+    };
+
+    let config = BuildConfig {
+        ig_dir, sushi_out, cache_dir, out_db: out_db.clone(),
+        build_epoch_secs, branch, revision, run_sushi, core_package, layer_b,
+    };
+
+    let report = build_and_write(&config)?;
+    let db_written = !(report.no_op && out_db.exists());
+    eprintln!(
+        "site_db: {} nodes ({} clean, {} dirty){}",
+        report.ledger.nodes.len(), report.clean.len(), report.dirty.len(),
+        if report.no_op { " — NO-OP (nothing written)" } else { "" },
+    );
+    let _ = db_written;
+    println!("{}", out_db.display());
+    Ok(())
+}
+
+#[cfg(feature = "sqlite")]
+fn resolve_build_epoch(arg: Option<&str>) -> Result<i64> {
+    use anyhow::{bail, Context};
+    let raw = match arg {
+        Some(v) => v.to_string(),
+        None => std::env::var("SOURCE_DATE_EPOCH").context(
+            "no build timestamp: pass --build-date <epoch|RFC3339> or set SOURCE_DATE_EPOCH \
+             (wall clock is forbidden for determinism, §2c)",
+        )?,
+    };
+    let raw = raw.trim();
+    if let Ok(secs) = raw.parse::<i64>() {
+        return Ok(secs);
+    }
+    let bytes = raw.as_bytes();
+    if bytes.len() >= 19 && bytes[4] == b'-' && bytes[10] == b'T' {
+        let y: i64 = raw[0..4].parse()?;
+        let mo: i64 = raw[5..7].parse()?;
+        let d: i64 = raw[8..10].parse()?;
+        let h: i64 = raw[11..13].parse()?;
+        let mi: i64 = raw[14..16].parse()?;
+        let s: i64 = raw[17..19].parse()?;
+        let yy = if mo <= 2 { y - 1 } else { y };
+        let era = if yy >= 0 { yy } else { yy - 399 } / 400;
+        let yoe = yy - era * 400;
+        let doy = (153 * (if mo > 2 { mo - 3 } else { mo + 9 }) + 2) / 5 + d - 1;
+        let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        let days = era * 146_097 + doe - 719_468;
+        return Ok(days * 86_400 + h * 3600 + mi * 60 + s);
+    }
+    bail!("unrecognized --build-date '{raw}': want a unix epoch or YYYY-MM-DDThh:mm:ssZ")
+}

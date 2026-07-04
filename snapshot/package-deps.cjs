@@ -47,12 +47,17 @@ while (args.length) {
 if (root == null) usage();
 cache = path.resolve(cache);
 
-// The native Rust resolver is the single source of truth for the context closure.
-const bin = process.env.RUST_SUSHI_BIN || path.join(repo, 'target/release/rust_sushi');
+// The native Rust resolver is the single source of truth for the context
+// closure. Consolidation Pass 2: this now execs `fig resolve` (the unified CLI);
+// the legacy `rust_sushi resolve` remains a fallback for one release. Both emit
+// byte-identical closures (verified). Override with FIG_BIN / RUST_SUSHI_BIN.
+const figBin = process.env.FIG_BIN || path.join(repo, 'target/release/fig');
+const legacyBin = process.env.RUST_SUSHI_BIN || path.join(repo, 'target/release/rust_sushi');
+const bin = fs.existsSync(figBin) ? figBin : legacyBin;
 if (!fs.existsSync(bin)) {
   console.error(
-    `FATAL: rust_sushi binary not found at ${bin}; build it: cargo build --release -p rust_sushi ` +
-      `(or set RUST_SUSHI_BIN). This shim has no Node fallback — Rust is the only resolver.`,
+    `FATAL: no resolver binary found (${figBin} or ${legacyBin}); build it: ` +
+      `cargo build --release -p fig (or set FIG_BIN). This shim has no Node fallback.`,
   );
   process.exit(2);
 }

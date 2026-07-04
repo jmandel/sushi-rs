@@ -13,13 +13,15 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CACHE="${FHIR_CACHE:-$REPO/temp/fhir-home/.fhir/packages}"
-BIN="${RUST_SUSHI_BIN:-$REPO/target/release/rust_sushi}"
+# Consolidation Pass 2: the resolver is now `fig resolve` (the unified CLI);
+# `rust_sushi resolve` remains valid for one release. Prefer fig.
+BIN="${FIG_BIN:-$REPO/target/release/fig}"
 CJS="$REPO/snapshot/package-deps.cjs"
 
 [ -d "$CACHE" ] || { echo "FATAL: cache not found: $CACHE (set FHIR_CACHE)"; exit 2; }
 if [ ! -x "$BIN" ]; then
-  echo "[package-deps-gate] building rust_sushi --release"
-  ( cd "$REPO" && cargo build --release -p rust_sushi >/dev/null )
+  echo "[package-deps-gate] building fig --release"
+  ( cd "$REPO" && cargo build --release -p fig >/dev/null )
 fi
 
 # Published IGs present in the isolated cache with non-trivial closures.
@@ -37,9 +39,9 @@ IGS=(
 pass=0; fail=0
 for root in "${IGS[@]}"; do
   # Direct native resolver (the source of truth).
-  rust_out="$(RUST_SUSHI_BIN="$BIN" "$BIN" resolve --cache "$CACHE" --root "$root")"
+  rust_out="$("$BIN" resolve --cache "$CACHE" --root "$root")"
   # The shim path: node package-deps.cjs (which shells out to the same binary).
-  shim_out="$(RUST_SUSHI_BIN="$BIN" node "$CJS" --cache "$CACHE" "$root")"
+  shim_out="$(FIG_BIN="$BIN" node "$CJS" --cache "$CACHE" "$root")"
   if [ "$rust_out" = "$shim_out" ]; then
     n="$(printf '%s\n' "$rust_out" | grep -c .)"
     echo "PASS $root ($n pkgs)"; pass=$((pass+1))

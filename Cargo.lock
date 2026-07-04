@@ -27,6 +27,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
+name = "api_envelope"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ascii"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d92bec98840b8f03a5ff5413de5293bfcd8bf96467cf5452609f939ec6f5de16"
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -68,6 +82,12 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "chunked_transfer"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
 name = "compiler"
@@ -201,6 +221,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "fig"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "api_envelope",
+ "compiler",
+ "json_emit",
+ "mimalloc",
+ "package_acquisition",
+ "package_store",
+ "render_liquid",
+ "render_md",
+ "render_page",
+ "render_sd",
+ "serde",
+ "serde_json",
+ "site_db",
+ "snapshot_gen",
+ "tiny_http",
+ "wasm_api",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -316,6 +359,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "icu_collections"
@@ -946,6 +995,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiny_http"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "389915df6413a2e74fb181895f933386023c71110878cd0825588928e64cdc82"
+dependencies = [
+ "ascii",
+ "chunked_transfer",
+ "httpdate",
+ "log",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1093,6 +1154,7 @@ name = "wasm_api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "api_envelope",
  "compiler",
  "console_error_panic_hook",
  "package_store",

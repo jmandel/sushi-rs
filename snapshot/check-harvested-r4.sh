@@ -34,7 +34,10 @@ if [[ -f "$HARVEST_DIR/manifest.json" ]]; then
   fi
 fi
 
-cargo build -p snapshot_gen >/dev/null
+# Consolidation Pass 2: the `snapshot_gen` binary is now the `fig` alias shim
+# (delegates to the same snapshot_gen::main_cli batch runner; migration note on
+# stderr only, so stdout bytes are unchanged). Build fig to get it.
+cargo build -p fig >/dev/null
 
 PACKAGE_ARGS=()
 for pkg in "${PACKAGES[@]}"; do

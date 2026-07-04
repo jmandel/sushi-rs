@@ -5,11 +5,10 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
-[[bin]]
-name = "site_db"
-path = "src/main.rs"
-required-features = ["sqlite"]
-
+# The `site_db` binary folded into `fig sitedb` (Consolidation Pass 2); the CLI
+# entry point lives in the lib as `site_db::run_cli`, and the `site_db` alias
+# binary is now provided by the `fig` crate (a deprecated shim over the same
+# `run_cli`). This crate is lib-only.
 [lib]
 name = "site_db"
 path = "src/lib.rs"

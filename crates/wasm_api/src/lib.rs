@@ -57,9 +57,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
 
-/// The result/error envelope version. Bump on any breaking change to the
-/// envelope SHAPE (not payload contents).
-const API_VERSION: u32 = 1;
+/// The result/error envelope + apiVersion are the SHARED implementation
+/// (`api_envelope`) — one schema for the Session and the `fig` CLI's `--json`.
+use api_envelope::{envelope, envelope_ser, API_VERSION};
 
 // ---------------------------------------------------------------------------
 // A shareable package source. Store/context take `impl PackageSource + 'static`
@@ -658,44 +658,8 @@ struct SiteDbInput {
     revision: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// Envelope helpers (the ONE result shape + the ONE error shape for Session).
-// ---------------------------------------------------------------------------
-
-/// Serialize a session-method result into the uniform envelope string. Any
-/// serialization failure degrades to a hand-built error envelope (never panics,
-/// never throws).
-fn envelope(op: &str, result: Result<Value, String>) -> String {
-    let v = match result {
-        Ok(payload) => serde_json::json!({
-            "apiVersion": API_VERSION,
-            "ok": true,
-            "op": op,
-            "result": payload,
-        }),
-        Err(message) => serde_json::json!({
-            "apiVersion": API_VERSION,
-            "ok": false,
-            "op": op,
-            "error": { "message": message },
-        }),
-    };
-    // A serde_json::Value always serializes; the fallback is defensive only.
-    serde_json::to_string(&v).unwrap_or_else(|_| {
-        format!(
-            "{{\"apiVersion\":{API_VERSION},\"ok\":false,\"op\":\"{op}\",\
-             \"error\":{{\"message\":\"envelope serialize failed\"}}}}"
-        )
-    })
-}
-
-/// Serialize a `T: Serialize` result into the envelope (for typed payloads).
-fn envelope_ser<T: Serialize>(op: &str, result: Result<T, String>) -> String {
-    let as_value = result.and_then(|payload| {
-        serde_json::to_value(&payload).map_err(|e| format!("{op}: serialize: {e}"))
-    });
-    envelope(op, as_value)
-}
+// The result/error envelope helpers now live in the shared `api_envelope` crate
+// (imported above) — one implementation for the Session and the `fig` CLI.
 
 // ===========================================================================
 // Session — the preferred handle. One door onto the process-global engine, with
