@@ -333,6 +333,129 @@ fn need_version_references(list: &[(String, String, std::rc::Rc<Value>)], ig_ver
     list.iter().any(|(_u, _w, j)| get_str(j, "version") != ig_version)
 }
 
+/// A resolved ValueSet in a used-VS list: (url, version). Identity is by
+/// object in Java (`list.contains(vs)`); here we dedup by (url, version) which
+/// is behavior-equivalent for the version-flag boolean (each distinct loaded VS
+/// object has one url+version).
+fn collect_vs_ref(
+    out: &mut Vec<(String, String)>,
+    ctx: &IgContext,
+    url: &str,
+) {
+    if url.is_empty() {
+        return;
+    }
+    // findTxResource(ValueSet, url): resolve to a loaded ValueSet.
+    if let Some(r) = ctx.resolve(url) {
+        if r.rtype == "ValueSet" {
+            let entry = (strip_ver(url), r.version.clone());
+            if !out.iter().any(|e| e.0 == entry.0) {
+                out.push(entry);
+            }
+        }
+    }
+}
+
+fn strip_ver(u: &str) -> String {
+    u.split('|').next().unwrap_or(u).to_string()
+}
+
+/// Recursively collect VS canonical refs from binding-bearing element arrays
+/// and compose includes. Mirrors cvr.findValueSets over own resources
+/// (cvr:1252-1368). For the used-ALL list we walk SD snapshots + own VS compose
+/// imports + Questionnaire/ConceptMap/OperationDefinition binding refs.
+fn build_used_valueset_versions(ctx: &IgContext, all: bool) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for r in ctx.own_resources() {
+        match r.rtype.as_str() {
+            "StructureDefinition" => {
+                let section = if all { "snapshot" } else { "differential" };
+                if let Some(els) = r
+                    .json
+                    .get(section)
+                    .and_then(|s| s.get("element"))
+                    .and_then(|e| e.as_array())
+                {
+                    for ed in els {
+                        if let Some(b) = ed.get("binding") {
+                            if let Some(vs) = b.get("valueSet").and_then(|x| x.as_str()) {
+                                collect_vs_ref(&mut out, ctx, vs);
+                            }
+                            if let Some(adds) = b.get("additional").and_then(|x| x.as_array()) {
+                                for ab in adds {
+                                    if let Some(vs) = ab.get("valueSet").and_then(|x| x.as_str()) {
+                                        collect_vs_ref(&mut out, ctx, vs);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "ValueSet" => {
+                // The own VS itself is in the list (findValueSets adds it), and
+                // its compose.include[].valueSet imports resolve too.
+                let uurl = r.json.get("url").and_then(|x| x.as_str()).unwrap_or("");
+                let ver = get_str(&r.json, "version").to_string();
+                let entry = (uurl.to_string(), ver);
+                if !uurl.is_empty() && !out.iter().any(|e| e.0 == entry.0) {
+                    out.push(entry);
+                }
+                if let Some(incs) = r.json.get("compose").and_then(|c| c.get("include")).and_then(|x| x.as_array()) {
+                    for inc in incs {
+                        if let Some(vss) = inc.get("valueSet").and_then(|x| x.as_array()) {
+                            for u in vss {
+                                if let Some(us) = u.as_str() {
+                                    collect_vs_ref(&mut out, ctx, us);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "Questionnaire" => {
+                walk_questionnaire_vs(&mut out, ctx, &r.json);
+            }
+            "ConceptMap" => {
+                for k in ["sourceScope", "targetScope", "sourceScopeCanonical", "targetScopeCanonical"] {
+                    if let Some(u) = r.json.get(k).and_then(|x| x.as_str()) {
+                        collect_vs_ref(&mut out, ctx, u);
+                    }
+                }
+            }
+            "OperationDefinition" => {
+                if let Some(ps) = r.json.get("parameter").and_then(|x| x.as_array()) {
+                    for p in ps {
+                        if let Some(vs) = p.get("binding").and_then(|b| b.get("valueSet")).and_then(|x| x.as_str()) {
+                            collect_vs_ref(&mut out, ctx, vs);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn walk_questionnaire_vs(out: &mut Vec<(String, String)>, ctx: &IgContext, node: &Value) {
+    if let Some(items) = node.get("item").and_then(|x| x.as_array()) {
+        for item in items {
+            if let Some(vs) = item.get("answerValueSet").and_then(|x| x.as_str()) {
+                collect_vs_ref(out, ctx, vs);
+            }
+            walk_questionnaire_vs(out, ctx, item);
+        }
+    }
+}
+
+/// The `versions` flag for codesystem-list: needVersionReferences over the
+/// USED-ALL VS list (pg:2799 passes the leftover buildUsedValueSetList(true)).
+pub fn codesystem_list_versions_flag(ctx: &IgContext, ig_version: &str) -> bool {
+    let used = build_used_valueset_versions(ctx, true);
+    used.iter().any(|(_u, v)| v != ig_version)
+}
+
 /// `codesystem-list` = cvr.renderCSList(defined, versions, used=false) (cvr:1685).
 /// NOTE the `versions` flag comes from needVersionReferences over the USED-ALL
 /// VS list (pg:2799 passes the leftover vslist), NOT the CS list — see

@@ -282,6 +282,7 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "summary-observations"
             | "deprecated-list"
             | "expansion-params"
+            | "codesystem-list"
     )
 }
 
@@ -357,6 +358,10 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "cross-version-analysis" => agg::cross_version_analysis(&npm, ig_new_format(ig), false),
         "cross-version-analysis-inline" => agg::cross_version_analysis(&npm, ig_new_format(ig), true),
         "valueset-list" => agg::valueset_list(ctx, &ig_version(ig)),
+        "codesystem-list" => {
+            let versions = agg::codesystem_list_versions_flag(ctx, &ig_version(ig));
+            agg::codesystem_list(ctx, versions)
+        }
         "summary-extensions" => agg::summary_extensions(ctx),
         "summary-observations" => agg::summary_observations(ctx),
         "deprecated-list" => agg::deprecated_list(ctx),
