@@ -283,7 +283,64 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "deprecated-list"
             | "expansion-params"
             | "codesystem-list"
+            | "canonical-index"
     )
+}
+
+/// The build's oids.ini OID registry (us-core has one; cycle/plan-net do not).
+fn ig_oids_ini(ig: &str) -> Option<render_sd::aggregates::OidMap> {
+    let path = match ig {
+        "us-core" => format!("{}/us-core/oids.ini", F0),
+        "plan-net" => format!("{}/plan-net/oids.ini", F0),
+        "cycle" => "/home/jmandel/hobby/periodicity-impl/cycle/oids.ini".to_string(),
+        _ => return None,
+    };
+    let text = std::fs::read_to_string(&path).ok()?;
+    let mut map = render_sd::aggregates::parse_oids_ini(&text);
+    // The IG itself is assigned the sushi-config `auto-oid-root` (the parent of
+    // all resource OIDs); the publisher shows it in the IG's canonical-index
+    // row but it is not listed in oids.ini. Inject it under (ImplementationGuide,
+    // ig-id).
+    if let (Some(root), Some((id, _url, _v))) = (ig_auto_oid_root(ig), ig_resource(ig)) {
+        map.entry(("ImplementationGuide".to_string(), id))
+            .or_insert_with(|| vec![root]);
+    }
+    Some(map)
+}
+
+/// The `auto-oid-root` from the build's sushi-config.yaml (the IG's own OID).
+fn ig_auto_oid_root(ig: &str) -> Option<String> {
+    let path = match ig {
+        "us-core" => format!("{}/us-core/sushi-config.yaml", F0),
+        "plan-net" => format!("{}/plan-net/sushi-config.yaml", F0),
+        "cycle" => "/home/jmandel/hobby/periodicity-impl/cycle/sushi-config.yaml".to_string(),
+        _ => return None,
+    };
+    let text = std::fs::read_to_string(&path).ok()?;
+    for line in text.lines() {
+        let l = line.trim();
+        if let Some(rest) = l.strip_prefix("auto-oid-root:") {
+            return Some(rest.trim().to_string());
+        }
+    }
+    None
+}
+
+/// The own ImplementationGuide (id, url, version) for canonical-index.
+fn ig_resource(ig: &str) -> Option<(String, String, String)> {
+    let dir = ig_sd_dir(ig);
+    for e in std::fs::read_dir(&dir).ok()?.flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
+            let t = std::fs::read_to_string(e.path()).ok()?;
+            let v: serde_json::Value = serde_json::from_str(&t).ok()?;
+            let id = v.get("id").and_then(|x| x.as_str())?.to_string();
+            let url = v.get("url").and_then(|x| x.as_str())?.to_string();
+            let ver = v.get("version").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            return Some((id, url, ver));
+        }
+    }
+    None
 }
 
 /// Per-IG build fact: does the context carry "interesting" expansion parameters
@@ -366,6 +423,10 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "summary-observations" => agg::summary_observations(ctx),
         "deprecated-list" => agg::deprecated_list(ctx),
         "expansion-params" => agg::expansion_params(ig_has_expansion_params(ig)),
+        "canonical-index" => {
+            let oid_map = ig_oids_ini(ig);
+            agg::canonical_index(ctx, ig_resource(ig), oid_map.as_ref())
+        }
         _ => unreachable!(),
     };
     wrap_raw(&body)

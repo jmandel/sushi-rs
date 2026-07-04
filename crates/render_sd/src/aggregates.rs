@@ -520,6 +520,220 @@ fn fetch_code_system(ctx: &IgContext, uri: &str) -> Option<crate::context::Resol
     Some(r)
 }
 
+// ---------------------------------------------------------------------------
+// canonical-index (generateCanonicalSummary, pg:4755)
+// ---------------------------------------------------------------------------
+
+/// One row of the canonical index: a CanonicalResource with a url.
+pub struct CanonRow {
+    pub rtype: String,
+    pub id: String,
+    pub url: String,
+    pub version: String,
+    pub web_path: Option<String>,
+    pub oids: Vec<String>,
+    pub alt_urls: Vec<String>,
+}
+
+/// The build's `oids.ini` OID registry (when present): (fhirType, id) -> oids.
+/// The publisher injects these into each resource's identifier at build time,
+/// so `cr.getIdentifier()` returns them even for types (CapabilityStatement)
+/// whose R4 output JSON has no identifier element. Authoritative when present.
+pub type OidMap = std::collections::HashMap<(String, String), Vec<String>>;
+
+/// Parse `oids.ini`: `[Type]` sections mapping `id = oid` (id may repeat).
+pub fn parse_oids_ini(text: &str) -> OidMap {
+    let mut map: OidMap = std::collections::HashMap::new();
+    let mut section = String::new();
+    // The non-type sections to ignore.
+    let skip = ["Documentation", "Key"];
+    for line in text.lines() {
+        let l = line.trim();
+        if l.starts_with('[') && l.ends_with(']') {
+            section = l[1..l.len() - 1].to_string();
+            continue;
+        }
+        if section.is_empty() || skip.contains(&section.as_str()) {
+            continue;
+        }
+        if let Some((k, v)) = l.split_once('=') {
+            let id = k.trim().to_string();
+            let oid = v.trim().to_string();
+            if id.is_empty() || oid.is_empty() {
+                continue;
+            }
+            map.entry((section.clone(), id)).or_default().push(oid);
+        }
+    }
+    map
+}
+
+fn canon_row(
+    rtype: &str,
+    id: &str,
+    web: Option<String>,
+    j: &Value,
+    oid_map: Option<&OidMap>,
+) -> Option<CanonRow> {
+    let url = j.get("url").and_then(|x| x.as_str())?.to_string();
+    let mut json_oids = Vec::new();
+    let mut alt = Vec::new();
+    if let Some(ids) = j.get("identifier").and_then(|x| x.as_array()) {
+        for id in ids {
+            if id.get("system").and_then(|x| x.as_str()) == Some("urn:ietf:rfc:3986") {
+                if let Some(val) = id.get("value").and_then(|x| x.as_str()) {
+                    if let Some(oid) = val.strip_prefix("urn:oid:") {
+                        json_oids.push(oid.to_string());
+                    } else {
+                        alt.push(val.to_string());
+                    }
+                }
+            }
+        }
+    }
+    // OIDs: the oids.ini registry (authoritative, complete) when present for
+    // this (type, id); else the JSON-embedded oid identifiers.
+    let oids = oid_map
+        .and_then(|m| m.get(&(rtype.to_string(), id.to_string())).cloned())
+        .unwrap_or(json_oids);
+    Some(CanonRow {
+        rtype: rtype.to_string(),
+        id: id.to_string(),
+        url,
+        version: get_str(j, "version").to_string(),
+        web_path: web,
+        oids,
+        alt_urls: alt,
+    })
+}
+
+/// Detect an R5-in-R4 `Basic` wrapper: returns (fhirType, url, version) from
+/// the `http://hl7.org/fhir/5.0/StructureDefinition/extension-{Type}.{field}`
+/// extensions. None if not such a wrapper.
+fn xver_basic(j: &Value) -> Option<(String, String, String)> {
+    const PFX: &str = "http://hl7.org/fhir/5.0/StructureDefinition/extension-";
+    let exts = j.get("extension")?.as_array()?;
+    let mut xtype: Option<String> = None;
+    let mut url: Option<String> = None;
+    let mut version = String::new();
+    for e in exts {
+        let u = e.get("url").and_then(|x| x.as_str()).unwrap_or("");
+        if let Some(rest) = u.strip_prefix(PFX) {
+            // rest = "{Type}.{field}"
+            if let Some((ty, field)) = rest.split_once('.') {
+                xtype.get_or_insert_with(|| ty.to_string());
+                match field {
+                    "url" => {
+                        url = e.get("valueUri").and_then(|x| x.as_str()).map(String::from);
+                    }
+                    "version" => {
+                        version = e
+                            .get("valueString")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    match (xtype, url) {
+        (Some(t), Some(u)) => Some((t, u, version)),
+        _ => None,
+    }
+}
+
+/// `canonical-index` = generateCanonicalSummary (pg:4755). All own
+/// CanonicalResources (incl. the ImplementationGuide), sorted by (fhirType,
+/// id), grouped by type with an `#eeeeee` header row. XhtmlComposer(true) =
+/// compact XML. `ig` carries the ImplementationGuide's (id, url, version) —
+/// its webPath is `index.html`.
+pub fn canonical_index(
+    ctx: &IgContext,
+    ig: Option<(String, String, String)>,
+    oid_map: Option<&OidMap>,
+) -> String {
+    let mut rows: Vec<CanonRow> = Vec::new();
+    for r in ctx.own_resources() {
+        // R5-in-R4 cross-version encoding: an R5 resource (e.g. Requirements)
+        // is stored as a `Basic` carrying `http://hl7.org/fhir/5.0/
+        // StructureDefinition/extension-{Type}.{field}` extensions. The
+        // publisher converts it back to its R5 CanonicalResource. Detect the
+        // `.url` marker and re-project the row.
+        if r.rtype == "Basic" {
+            if let Some((xtype, xurl, xver)) = xver_basic(&r.json) {
+                let web = format!("{}-{}.html", xtype, r.id);
+                let oids = oid_map
+                    .and_then(|m| m.get(&(xtype.clone(), r.id.clone())).cloned())
+                    .unwrap_or_default();
+                rows.push(CanonRow {
+                    rtype: xtype,
+                    id: r.id.clone(),
+                    url: xurl,
+                    version: xver,
+                    web_path: Some(web),
+                    oids,
+                    alt_urls: Vec::new(),
+                });
+                continue;
+            }
+        }
+        if let Some(row) = canon_row(&r.rtype, &r.id, Some(r.web_path.clone()), &r.json, oid_map) {
+            rows.push(row);
+        }
+    }
+    if let Some((id, url, version)) = ig {
+        // The IG is assigned the auto-oid-root itself (from oids.ini's
+        // ImplementationGuide entry or, when absent, the sushi-config
+        // auto-oid-root supplied via the map under the IG's id).
+        let ig_oids = oid_map
+            .and_then(|m| m.get(&("ImplementationGuide".to_string(), id.clone())).cloned())
+            .unwrap_or_default();
+        rows.push(CanonRow {
+            rtype: "ImplementationGuide".to_string(),
+            id,
+            url,
+            version,
+            web_path: Some("index.html".to_string()),
+            oids: ig_oids,
+            alt_urls: Vec::new(),
+        });
+    }
+    // CanonicalResourceSortByTypeId (ResourceSorters:28): fhirType then id.
+    rows.sort_by(|a, b| a.rtype.cmp(&b.rtype).then(a.id.cmp(&b.id)));
+
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\">");
+    b.push_str("<tr><td><b>Canonical</b></td><td><b>Id</b></td><td><b>Version</b></td><td><b>Oids</b></td><td><b>Other URLS</b></td></tr>");
+    let mut cur_type = String::new();
+    for row in &rows {
+        if cur_type != row.rtype {
+            cur_type = row.rtype.clone();
+            b.push_str(&format!(
+                "<tr style=\"background-color: #eeeeee\"><td colspan=\"5\"><h3><a name=\"{t}\"> </a>{t}</h3></td></tr>",
+                t = escape_xml(&cur_type)
+            ));
+        }
+        b.push_str("<tr>");
+        match &row.web_path {
+            Some(w) => b.push_str(&format!(
+                "<td><a href=\"{}\">{}</a></td>",
+                escape_xml(w),
+                escape_xml(&row.url)
+            )),
+            None => b.push_str(&format!("<td><code>{}</code></td>", escape_xml(&row.url))),
+        }
+        b.push_str(&format!("<td>{}</td>", escape_xml(&row.id)));
+        b.push_str(&format!("<td>{}</td>", escape_xml(&row.version)));
+        b.push_str(&format!("<td>{}</td>", escape_xml(&row.oids.join(", "))));
+        b.push_str(&format!("<td>{}</td>", escape_xml(&row.alt_urls.join(", "))));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
+}
+
 /// `describeSource` (cvr:1523): a code-system uri -> a short source label.
 fn describe_source(ctx: &IgContext, uri: &str) -> String {
     // worker.fetchCodeSystem(uri): resolves + relative webPath => "Internal".
