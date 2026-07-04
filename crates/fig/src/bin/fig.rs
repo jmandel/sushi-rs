@@ -159,11 +159,18 @@ fn cmd_resolve(args: &[String]) -> Result<Value> {
 fn cmd_packages(args: &[String]) -> Result<Value> {
     match positional(args, 2) {
         Some("bundle") => {
+            // `--template <id#ver>` emits the editor's warm-start artifact from the
+            // LOADER's materialized template tree (task #39: the packed-bundle the
+            // editor consumes becomes an artifact the loader emits — same bytes the
+            // parity gate proves). Otherwise the regular package-bundle path.
+            if let Some(coord) = opt(args, "--template") {
+                return cmd_bundle_template(args, coord);
+            }
             let cache = opt(args, "--cache").context("packages bundle needs --cache <dir>")?;
             let out = opt(args, "-o").or_else(|| opt(args, "--out")).context("packages bundle needs --out <dir>")?;
             let labels: Vec<String> = args.iter().skip(3).filter(|a| !a.starts_with('-') && a.contains('#')).cloned().collect();
             if labels.is_empty() {
-                bail!("packages bundle needs at least one <id#version>");
+                bail!("packages bundle needs at least one <id#version> (or --template <id#ver>)");
             }
             let manifest = package_acquisition::build_bundle_set(Path::new(cache), &labels, Path::new(out))?;
             let bytes = manifest.to_bytes();
@@ -189,6 +196,51 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
         }
         _ => bail!("usage: fig packages <fetch <id#ver> | bundle --cache <dir> --out <dir> <id#ver>...>"),
     }
+}
+
+/// `fig packages bundle --template <id#ver>` — materialize the template chain via
+/// the LOADER and emit it as the editor's warm-start artifact: a `mountSite`-
+/// compatible files-JSON (`{ "<rel>": "<text>" | {"b64":"<bytes>"} }`), plus a
+/// small manifest. This is the SAME materialized bytes the parity gate proves, so
+/// the editor's warm-start template tree is loader-produced (task #39). Text files
+/// go verbatim; binary assets are base64'd — exactly the shape `mountSite` /
+/// `mountTemplate` parse.
+fn cmd_bundle_template(args: &[String], coord: &str) -> Result<Value> {
+    let out = opt(args, "-o").or_else(|| opt(args, "--out"))
+        .context("packages bundle --template needs -o <file.json>")?;
+    let cache = opt(args, "--template-cache")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("fig-template-cache"));
+    let cas = package_acquisition::PackageCas::new(package_acquisition::PackageCas::default_root()?);
+    let registries = package_acquisition::default_registries();
+    let offline = has(args, "--offline");
+    let tree = fig::template::acquire_and_materialize(coord, &cache, &cas, &registries, offline)?;
+
+    // Build the mountSite files-JSON: UTF-8 text verbatim, else {"b64":...}.
+    let mut files = serde_json::Map::new();
+    let mut binary = 0usize;
+    for (rel, bytes) in tree.files() {
+        let v = match std::str::from_utf8(bytes) {
+            Ok(text) => json!(text),
+            Err(_) => {
+                binary += 1;
+                json!({ "b64": fig::template::b64_encode(bytes) })
+            }
+        };
+        files.insert(rel.clone(), v);
+    }
+    let doc = json!({
+        "template": coord,
+        "files": Value::Object(files),
+        "fileCount": tree.len(),
+        "binaryCount": binary,
+    });
+    std::fs::write(out, serde_json::to_vec(&doc)?)
+        .with_context(|| format!("write {out}"))?;
+    if !has(args, "--json") {
+        eprintln!("fig packages bundle --template {coord}: {} files ({binary} binary) -> {out}", tree.len());
+    }
+    Ok(json!({ "out": out, "template": coord, "fileCount": tree.len(), "binaryCount": binary }))
 }
 
 // ===========================================================================
@@ -312,15 +364,37 @@ fn cmd_render(args: &[String]) -> Result<Value> {
         return render_via_generator(args, build, out, gen);
     }
 
-    let root = fig::engine::RenderRoot::detect(Path::new(build))?;
+    let mut root = fig::engine::RenderRoot::detect(Path::new(build))?;
+
+    // Template story (task #39): `--template <id#ver>` is the DRIVEN default —
+    // acquire the chain via the SAME acquisition machinery regular packages use and
+    // materialize it with the loader; `--template-dir <dir>` is the explicit
+    // pre-materialized escape hatch. Neither → the staged `_includes/` (frozen
+    // fallback). The materialize composition lives in `fig::template` (iron rule).
+    let template_dir = fig::template::materialized_dir_or_acquire(
+        opt(args, "--template"),
+        opt(args, "--template-dir"),
+        Path::new(build),
+        opt(args, "--template-cache").map(Path::new),
+        has(args, "--offline"),
+    )?;
+    if let Some(td) = &template_dir {
+        root = root.with_template_dir(td);
+    }
+
     let opts = render_opts(args);
     let outcome = fig::engine::render_site(&root, &opts)?;
     let assets = fig::engine::write_site(&root, &outcome, Path::new(out))?;
     let pages = outcome.pages.len();
     if !has(args, "--json") {
         eprintln!(
-            "fig render: {pages} pages, {} fragment materializations, {} total files -> {out}",
-            outcome.fragment_misses, assets,
+            "fig render: {pages} pages, {} fragment materializations, {} total files -> {out}{}",
+            outcome.fragment_misses,
+            assets,
+            template_dir
+                .as_ref()
+                .map(|d| format!(" (template: {})", d.display()))
+                .unwrap_or_default(),
         );
     }
     Ok(json!({
@@ -328,6 +402,7 @@ fn cmd_render(args: &[String]) -> Result<Value> {
         "pages": pages,
         "fragmentMisses": outcome.fragment_misses,
         "filesWritten": assets,
+        "template": template_dir.as_ref().map(|d| d.display().to_string()),
     }))
 }
 
@@ -448,7 +523,8 @@ fn print_usage() {
          \x20 sitedb <ig> --sushi-out <d> --cache <d> -o <db>  S1-S7 site.db producer\n\
          \x20 fragment <build-dir> <ref> <kind>                Render ONE fragment\n\
          \x20 fragments <build-dir> -o <dir> [--kinds k1,k2]   Materialize fragment files\n\
-         \x20 render <build-dir> -o <site/> [--generator ts:*] Full static site (Publisher parity)\n\
+         \x20 render <build-dir> -o <site/> [--template i#v]  Full static site (Publisher parity)\n\
+         \x20                              [--template-dir d] [--generator ts:*]\n\
          \x20 watch <build-dir> [--serve :port]                Incremental dev loop + live-reload\n\
          \x20 version                                          Engine + pins\n\
          \n\

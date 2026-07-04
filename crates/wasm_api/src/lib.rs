@@ -786,6 +786,22 @@ impl Session {
         )
     }
 
+    /// Materialize a template `id#ver` chain from the MOUNTED bundle packages and
+    /// merge the staged `template/` tree into the site tree — the driven template
+    /// story (task #39). Fetch the template chain packages first via the SAME
+    /// bundle path regular packages take (`resolveProject`/`mount`); this call then
+    /// walks the `base` chain and materializes byte-exactly (the same bytes the
+    /// parity gate proves). Envelope result: `{ "files": <count> }`.
+    #[wasm_bindgen(js_name = mountTemplate)]
+    pub fn mount_template(&self, coord: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "mountTemplate",
+            with_engine(|e| e.mount_template(coord))
+                .map(|n| serde_json::json!({ "files": n })),
+        )
+    }
+
     /// Render one fragment (`ref` = `{Type}-{id}`, `kind` = the registered
     /// fragment kind, e.g. `snapshot`). Served through the session-shared
     /// first-include-miss store (same map the page pass fills). Envelope
@@ -997,6 +1013,37 @@ impl Engine {
             self.site_files = files;
         }
         let n = self.site_files.len();
+        self.render_state = None;
+        Ok(n)
+    }
+
+    /// Materialize a template `id#ver` chain from the MOUNTED bundle packages and
+    /// merge the staged `template/` tree into the site tree — the wasm half of the
+    /// driven template story (task #39). The host fetches the template chain
+    /// packages via the SAME bundle path regular packages take (resolve → fetch →
+    /// `mount`); Rust then walks the `base` chain and materializes with the loader
+    /// (`package_store::template_loader`) — Rust decides, host fetches.
+    ///
+    /// The materialized tree is merged additively into the site tree: `includes/X`
+    /// maps to `_includes/X` (so the render surface's include resolution serves the
+    /// template's `template-page.html`/`fragment-*.html`); every other file mounts
+    /// under `template/X` for reference. Envelope result: `{ "files": <count> }`.
+    fn mount_template(&mut self, coord: &str) -> Result<usize, String> {
+        let (source, cache_root, _packages) = self.source()?;
+        let paths = package_store::template_loader::TemplatePaths::new(&cache_root);
+        let tree = package_store::template_loader::materialize(&source, &paths, coord)
+            .map_err(|e| format!("mountTemplate {coord}: {e}"))?;
+        let n = tree.len();
+        for (rel, bytes) in tree.into_files() {
+            // includes/* -> _includes/* (the render surface's include dir); other
+            // files under template/* for reference/assets.
+            let mapped = match rel.strip_prefix("includes/") {
+                Some(name) => format!("_includes/{name}"),
+                None => format!("template/{rel}"),
+            };
+            self.site_files
+                .insert(PathBuf::from(format!("/site/{mapped}")), bytes);
+        }
         self.render_state = None;
         Ok(n)
     }

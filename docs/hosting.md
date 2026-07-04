@@ -202,11 +202,61 @@ fig render <build-dir> -o site/            # us-core, plan-net, any staged IG
 
 `<build-dir>` is a completed build tree (`temp/pages` staged pages + `_data` +
 `_includes`, `output/` snapshot-complete resources, `.home/.fhir/packages`,
-`input-cache/txcache`) — the F0-build shape. One engine yields every stock-style
-template: a new template is a bundle + zero code. This is byte-identical to the
-Publisher's Jekyll output: **plan-net 678/678, us-core 1332/1334 (+2 classified)**
-(`crates/render_page/src/bin/pagecorpus.rs` is the oracle;
-`examples/cli-quickstart` byte-checks it in CI).
+`input-cache/txcache`). One engine yields every stock-style template. This is
+byte-identical to the Publisher's Jekyll output: **plan-net 678/678, us-core
+1332/1334 (+2 classified)** (`crates/render_page/src/bin/pagecorpus.rs` is the
+oracle; `examples/cli-quickstart` byte-checks it in CI).
+
+### 6a. The driven template loader — `--template <id#ver>` (the default story)
+
+Template handling is **truly driven**: pick any `template#version` and the engine
+materializes it — no frozen snapshot. `fig render --template <id#ver>` fetches the
+template package, walks its `base` chain (`package.json.base` +
+`dependencies[base]`), union-copies root→leaf, applies the `_append.` concat and
+the `config.json` deep-merge, and serves the resulting `template/` tree — exactly
+what the IG Publisher's `TemplateManager` stages, in **pure Rust with ZERO
+XSLT/ant/JVM**:
+
+```
+fig render <build-dir> -o site/ --template hl7.fhir.template#1.0.0   # driven (default)
+fig render <build-dir> -o site/ --template-dir path/to/template/     # pre-materialized (escape hatch)
+```
+
+- `--template <id#ver>` acquires the chain through the **same acquisition
+  machinery regular packages use** (registry → CAS) and materializes on the fly.
+- `--template-dir <dir>` is the explicit escape hatch: use an already-materialized
+  `template/` tree as-is (still accepted, no longer the primary path).
+- `--offline` / `--template-cache <dir>` control acquisition.
+
+The materialization is **byte-exact** vs the Java-Publisher output — the
+`package_store::template_loader` gate proves it against two chains: **us-core**
+(3-package `hl7.fhir → hl7.base → fhir.base` chain) and **plan-net** (4-package
+davinci chain), every staged file accounted for (identical, or a classified ant
+runtime product the site never reads). The Publisher's F0 `template/` trees are
+kept **as the oracle / test fixture** (`crates/package_store/tests/
+template_materialization_gate.rs`), not as the runtime source.
+
+**Firm line — no ant, ever.** The loader NEVER runs the template's ant/Saxon
+hooks. Every durable site-feeding effect of those hooks is already produced by the
+native fragment generators; the rest is QA/publication tooling the site never
+reads. A template whose hooks would compute site-feeding content outside the known
+set fails loudly (`AntHookError`, "custom-ant templates require server-side
+rendering") rather than materializing a silently-incomplete tree.
+
+### 6b. The editor warm-start artifact — `packages bundle --template`
+
+The packed template bundle the browser editor warm-starts from is **an artifact
+the loader emits** (same bytes the gate proves), not a hand-curated snapshot:
+
+```
+fig packages bundle --template hl7.fhir.template#1.0.0 -o template-bundle.json
+```
+
+emits a `mountSite`/`mountTemplate`-compatible files-JSON
+(`{ "<rel>": "<text>" | {"b64":"<bytes>"} }`). In the browser, `Session.mountTemplate("id#ver")`
+materializes the same tree directly from the mounted template packages (fetched
+via the SAME JS-managed bundle path as regular packages — Rust decides the chain
+walk + merge, the host fetches).
 
 ---
 

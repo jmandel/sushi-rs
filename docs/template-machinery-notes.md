@@ -101,11 +101,23 @@ top-level `content/`, `includes/`, `layouts/`, `liquid/`, `data/`, `config/`,
 `package/` dir holding only `package.json`+index. **The `$root` prefix**
 (`config.json:123`, `:126`) maps to the top-level of the package.
 
-`unPackWithAppend` (fhir-core, not in scratchpad — see header note) implements
-the **`_append.` merge convention**, reconstructed empirically in §3:
-a package file named `_append.X` has its bytes **appended** (newline-separated)
-to file `X` produced by earlier packages in the chain, rather than overwriting.
-All other files **overwrite** by relative path (last-writer-wins = leaf wins).
+`unPackWithAppend` (fhir-core) implements the **`_append.` merge convention**.
+Reconstructed empirically in §3, then **pinned against fhir-core SOURCE in task
+#39** (`NpmPackage.unPack:1464-1494` + `FileUtilities.appendBytesToFile:65-69` at
+`/home/jmandel/hobby/fhir-perf/repos/fhir-core`): a package file named `_append.X`
+has its bytes **appended** to file `X` produced by earlier packages in the chain,
+rather than overwriting. All other files **overwrite** by relative path
+(last-writer-wins = leaf wins).
+
+> **M2 CORRECTION (task #39, from source):** the separator is **`\r\n` (CRLF)**,
+> not a plain `\n` — `appendBytesToFile` writes `byte[]{13,10}` unconditionally
+> BEFORE the append bytes, and ONLY when the target already exists (`if
+> (f.exists())`, `NpmPackage.java:1485`); when the target does not yet exist the
+> append file becomes the target **verbatim, no separator**. Additionally the
+> literal `_append.X` file is ALSO staged (a Java brace-bug at
+> `NpmPackage.java:1489-1491`: the trailing `bytesToFile` runs for both branches),
+> carrying the last layer's bytes (last-writer-wins). All three points are
+> byte-verified and gate-green in `template_materialization_gate.rs`.
 
 ### 1e. config.json merge — `TemplateManager.applyConfigChanges`
 `TemplateManager.java:216-246`
@@ -295,9 +307,10 @@ The **4** non-identical files are the *entire* non-copy surface of materializati
 - `includes/fragment-css.html`, `fragment-footer.html`, `fragment-header.html`
   — the `_append.` cumulative concat (§1d).
 
-**Empirically derived `_append.` rule** (from these 3 files):
-`staged X = base_X + "\n" + append_layer1_X + "\n" + append_layer2_X …` in chain
-staging order (root→leaf). Verified per file: staged `fragment-css.html` =
+**The `_append.` rule** (from these 3 files; separator CORRECTED to CRLF per M2
+source-pin above): `staged X = base_X + "\r\n" + append_layer1_X + "\r\n" +
+append_layer2_X …` in chain staging order (root→leaf). Verified per file: staged
+`fragment-css.html` =
 base placeholder + `hl7.base`'s `hl7.css` line + `hl7.fhir`'s `fhir-ig.css`
 line; staged `fragment-header.html` = base placeholder + `hl7.base`'s
 `hl7-nav` div + `hl7.fhir`'s `family-nav`+`search` divs.

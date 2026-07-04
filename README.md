@@ -47,6 +47,13 @@ target/release/fig render <build-dir> -o site/
 #   build-dir = a staged build (temp/pages + output/ + .home/.fhir/packages +
 #   input-cache/txcache), e.g. an F0 build. Byte-identical to the Java Publisher's
 #   Jekyll output; 678 plan-net pages render in ~0.6s.
+
+target/release/fig render <build-dir> -o site/ --template hl7.fhir.template#1.0.0
+#   --template <id#ver> is the DRIVEN default: fetch + materialize any template
+#   chain (walk `base`, union-copy, _append concat, config deep-merge) in pure
+#   Rust — ZERO XSLT/ant. Byte-exact vs the Java Publisher's template/ tree
+#   (gate: crates/package_store/tests/template_materialization_gate.rs).
+#   --template-dir <dir> uses a pre-materialized tree (escape hatch).
 ```
 
 Other subcommands (add `--json` to any for the shared envelope):
@@ -56,6 +63,7 @@ fig build <ig-dir> -o fsh-generated       # FSH -> resources (SUSHI)
 fig snapshot <sd.json> --package p#v       # walk-engine snapshot
 fig resolve --cache <dir> --project <ig>   # dependency closure
 fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
+fig packages bundle --template id#v -o t.json  # editor warm-start template artifact (loader-emitted)
 fig expand <valueset.json>                 # tier-1 enumerable expansion
 fig sitedb <ig> --sushi-out <d> --cache <d> -o site.db   # S1-S7 producer
 fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment

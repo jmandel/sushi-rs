@@ -147,3 +147,12 @@
   code paths; fetch Rc; dead-code sweep — the template for these passes.
 - (2026-07-03) F0 interim byte-scans (perf pass) deleted same-day by the
   CAS index — accretion lived exactly one commit.
+- (2026-07-04, task #39 template loader) **Reuse over reinvention**: the loader is
+  ~470 LOC on top of the EXISTING `package_store` substrate — no registry client
+  (acquisition delegates, as `TemplateManager` does to `pcm`), no new mount
+  primitive (`PageProvider::with_template_includes` is one fallback branch;
+  `Session.mountTemplate` reuses `site_files` merge). The scary ant/XSLT/plantuml
+  surface was correctly NOT built: §3's 98%-copy finding held, so the whole
+  compute layer collapsed to two merge rules + a JSON pretty-printer. The firm
+  `AntHookError` line means we never grow an ant runner. F0 template snapshots
+  demoted from runtime source → test fixture/oracle (kept: they're the free gate).

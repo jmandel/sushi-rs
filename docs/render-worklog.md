@@ -1807,3 +1807,76 @@ documents. The warm-edit gate is met via the page-source path.
   template-as-data). `examples/` (5 examples) executed by `scripts/examples-gate.sh`
   — **5 pass / 0 fail** (cli-quickstart byte-checks the plan-net golden). Aligned:
   unified-cli-plan.md → SHIPPED; docs/README.md map; simplification-ledger tally.
+
+## Task #39 — the driven template loader (TemplateManager, ported)
+
+Made template handling truly driven: any `template#version` is materialized by
+OUR engine, not the frozen F0 snapshots. `crates/package_store/src/template_loader.rs`
+(+ `fig::template`, `Session.mountTemplate`).
+
+**Core (`package_store::template_loader`, ~470 LOC incl. tests, wasm-clean, no
+`std::fs`).** Pure `PackageSource`-backed materialization:
+- `walk_base_chain` — root-first `base` chain walk (`package.json.base` +
+  `dependencies[base]`, visited-set loop guard, type gate). Port of
+  `TemplateManager.installTemplate:94-112`.
+- union-copy root→leaf + the `_append.` rule + `config.json` deep-merge.
+- `compose_hl7_pretty` — byte-exact port of `JsonParser.compose(pretty=true)`
+  (`JsonParser.java:632-712`, `LINE_BREAK='\n'`, `ARRAY_NESTING_OFFSET=0`, array
+  complexity size>6 / nested / len>60, `escapeJson(...,false)`).
+- `check_no_active_hooks` / `AntHookError` — the firm line: a template whose
+  `config.targets` name a hook outside the known base-family set fails loud
+  ("custom-ant templates require server-side rendering"). NO ant runner, ever.
+
+**Diligence M2 (the `_append.` rule) — pinned against fhir-core SOURCE**
+(`org.hl7.fhir.utilities` at `/home/jmandel/hobby/fhir-perf/repos/fhir-core`, now
+present). `NpmPackage.unPack:1464-1494` + `FileUtilities.appendBytesToFile:65-69`:
+- separator is unconditional **`\r\n` (CRLF)**, written BEFORE the append bytes,
+  ONLY when the target already exists (else the append file becomes the target
+  verbatim, no separator). The empirical notes said "newline-separated" — the
+  CORRECTION is CRLF. Byte-verified on all 3 us-core fragment stubs.
+- the literal `_append.X` file is ALSO staged (a real Java brace bug at
+  `NpmPackage.java:1489-1491` — the trailing `bytesToFile` runs for both
+  branches), holding the last layer's bytes (last-writer-wins). Reproduced.
+
+**Diligence M1 (`processPages.xslt`) — COVERED, not a materialization concern.**
+processPages is a `pre-process` XSLT that stages IG-authored `input/pagecontent`
+etc. into `temp/pages/_includes` — UPSTREAM of where our renderer starts
+(`fig render` reads the already-staged `temp/pages`). It is NOT part of the
+`template/` materialization this loader owns, and for us-core it is additionally a
+no-op (100% markdown; the XSLT's XHTML-only guard passes them through byte-
+identical). One latent caveat (not active for us-core/plan-net): the in-memory
+`site_db` augment path reads authored `input/pagecontent/*.xml` directly and would
+not get processPages' XHTML-only transforms — flagged, not ported. No STOP-report.
+
+**Gate (the free oracle) — BOTH chains byte-exact, every file accounted for**
+(`crates/package_store/tests/template_materialization_gate.rs`, skips if F0
+absent, like the render_sd parity gates):
+| chain | staged | byte-identical | ant-runtime excl. | ant-overwritten src | differ/missing/extra |
+|---|---|---|---|---|---|
+| us-core (3 pkg) | 201 | **164** | 37 | 0 | 0 / 0 / 0 |
+| plan-net (4 pkg) | 343 | **254** | 87 | 2 | 0 / 0 / 0 |
+Runtime products enumerated in `is_ant_runtime_product` (onLoad*/onGenerate*/
+onCheck*/jira*/validation/translations/*.xml + davinci onCheck copy-backs +
+properties/list files). The 2 plan-net `translations/strings*.json` are ant-
+overwritten sources: verified our materialized bytes == the RAW `fhir2.base`
+package file (correct static materialization; the ant `.po→.json` rewrite is a
+build product).
+
+**Surfaces wired.**
+- `fig render --template <id#ver>` — DRIVEN default (acquire chain via
+  `package_acquisition` CAS → materialize → serve as `_includes` fallback).
+  `--template-dir <dir>` = pre-materialized escape hatch. Composition in
+  `fig::template` (iron rule); `RenderRoot::with_template_dir` +
+  `PageProvider::with_template_includes` thread it into the page pass.
+- `Session.mountTemplate("id#ver")` (wasm) — materialize from the mounted bundle
+  packages, merge into the site tree (`includes/*`→`_includes/*`). Rust decides,
+  host fetches.
+- `fig packages bundle --template id#ver -o t.json` — emit the editor warm-start
+  artifact from loader output (same bytes the gate proves).
+
+**Regression floor green:** workspace tests 0 failures; pagecorpus plan-net
+**678/678**; `fig render --template-dir` on us-core = 1334 pages, byte-identical
+to the no-template baseline (additive fallback, staged `_includes` wins). Docs:
+hosting.md §6a/§6b, README render/bundle sections, stock-template-renderer-plan.md
+(TemplateBundle is loader-produced + the editor follow-up spelled out). Editor
+repo NOT modified.

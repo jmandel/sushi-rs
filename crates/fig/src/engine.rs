@@ -42,6 +42,11 @@ pub struct RenderRoot {
     pub packages_dir: PathBuf,
     /// optional tx cache.
     pub txcache_dir: Option<PathBuf>,
+    /// Optional materialized template `includes/` dir (the driven `fig render
+    /// --template` path). When set, the page pass consults it as a fallback
+    /// include source after the staged `_includes/`. `None` = the frozen/staged
+    /// path (staged `_includes/` already carries the template's includes).
+    pub template_includes_dir: Option<PathBuf>,
     /// `true` when pages live directly under `temp/pages` (flat single-lang,
     /// page.path = `<name>`); `false` for `temp/pages/en` (page.path = `en/<name>`).
     pub flat: bool,
@@ -74,8 +79,18 @@ impl RenderRoot {
             own_dir,
             packages_dir,
             txcache_dir: txcache.is_dir().then_some(txcache),
+            template_includes_dir: None,
             flat,
         })
+    }
+
+    /// Point the render at a materialized template's `includes/` dir (the driven
+    /// `fig render --template` path). `template_dir` is the materialized
+    /// `template/` root; its `includes/` subdir becomes the fallback include
+    /// source. Returns self for chaining off [`RenderRoot::detect`].
+    pub fn with_template_dir(mut self, template_dir: &Path) -> Self {
+        self.template_includes_dir = Some(template_dir.join("includes"));
+        self
     }
 }
 
@@ -178,9 +193,12 @@ pub fn build_engine(root: &RenderRoot, opts: &RenderOptions) -> FragmentEngine {
 pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutcome> {
     let site = SiteData::load(&root.data_dir);
     let engine = opts.engine.then(|| build_engine(root, opts));
-    let provider = PageProvider::new(&site, &root.includes_dir, engine.as_ref())
+    let mut provider = PageProvider::new(&site, &root.includes_dir, engine.as_ref())
         .with_engine_first(opts.engine_first)
         .with_pages_root(&root.pages_root);
+    if let Some(tinc) = &root.template_includes_dir {
+        provider = provider.with_template_includes(tinc);
+    }
 
     let mut inputs: Vec<PathBuf> = std::fs::read_dir(&root.input_dir)
         .with_context(|| format!("read page input dir {}", root.input_dir.display()))?

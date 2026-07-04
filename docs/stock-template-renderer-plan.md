@@ -85,6 +85,28 @@ parity**, re-rendering only what the edit dirtied.
    for every adapter: custom TS chrome embedding publisher-grade fragments is
    the supported mix-and-match. F6 implements: named interface, cycle
    refactored onto it, the wasm shim, and the selector reading the registry.
+
+   **The `TemplateBundle` is now loader-produced (task #39).** The producer of a
+   `TemplateBundle` is `package_store::template_loader` — it materializes ANY
+   `template#version` chain byte-exact vs the Java Publisher (`base`-chain walk +
+   union-copy + `_append` concat + `config.json` deep-merge, ZERO XSLT/ant; gate:
+   `crates/package_store/tests/template_materialization_gate.rs`, us-core +
+   plan-net). Two surfaces already emit it engine-side:
+   - `Session.mountTemplate("id#ver")` (wasm) — materializes from the mounted
+     template packages (fetched via the SAME JS bundle path as regular packages)
+     and merges the tree into the site tree (`includes/*`→`_includes/*`).
+   - `fig packages bundle --template id#ver -o t.json` (native) — emits the same
+     tree as a `mountSite`/`mountTemplate` files-JSON (the editor warm-start
+     artifact), so the packed bundle the editor consumes is loader-produced.
+
+   **Editor follow-up (in the fhir-ig-editor repo — NOT modified here):** wire the
+   template-registry / selector to (1) call `Session.mountTemplate(id#ver)` after
+   the template chain packages are mounted (resolve → fetch → mount → mountTemplate),
+   replacing the hand-curated `*-stock.json` warm-start bundle with the
+   `fig packages bundle --template` artifact; and (2) drop `scripts/build-stock-site.mjs`'s
+   reliance on a Java-materialized `temp/pages/_includes` for the template layer
+   (the IG-fragment layer it packs is unchanged). The engine side is complete; the
+   editor change is registry + one `mountTemplate` call.
 5. **Perf model for "almost immediately"**: cold page = liquid render + the
    handful of fragments that page includes, generated on miss (ms-scale each
    in Rust); edits invalidate by content hash (Ledger 1) and re-render only

@@ -19,8 +19,12 @@ pub mod bundle;
 pub mod derived_index;
 pub mod resolve;
 pub mod source;
+pub mod template_loader;
 
 pub use bundle::{BundleManifest, BundleManifestEntry, BundleSource, BUNDLE_FORMAT_VERSION};
+pub use template_loader::{
+    materialize as materialize_template, AntHookError, TemplatePaths, TemplateTree,
+};
 pub use resolve::{
     context_closure_for_root, resolve_project, version_index_from_cache, MissingPackage,
     MissingReason, RequestedSet, ResolutionStep, VersionIndex,

@@ -47,6 +47,13 @@ pub fn markdownify(src: &str) -> String {
 pub struct PageProvider<'a> {
     site: &'a SiteData,
     includes_dir: PathBuf,
+    /// Optional fallback include source: the materialized template's `includes/`
+    /// dir (from `package_store::template_loader`). Consulted AFTER the staged
+    /// `_includes/` and BEFORE the FragmentEngine, so a driven `fig render
+    /// --template` can serve the template's `template-page.html`/`fragment-*.html`
+    /// without a pre-staged copy. `None` in the frozen/staged path (staged
+    /// `_includes/` already carries them). See `fig::template`.
+    template_includes: Option<PathBuf>,
     /// Root of the STAGED PAGES tree (`temp/pages`); `include_relative`
     /// resolves against `<pages_root>/<current page dir>/<name>` (Jekyll).
     pages_root: Option<PathBuf>,
@@ -75,6 +82,7 @@ impl<'a> PageProvider<'a> {
         PageProvider {
             site,
             includes_dir: includes_dir.to_path_buf(),
+            template_includes: None,
             tree: render_sd::tree::fs_tree(),
             engine,
             pages_root: None,
@@ -88,6 +96,14 @@ impl<'a> PageProvider<'a> {
     /// Enable the engine-first (true first-include-miss) mode.
     pub fn with_engine_first(mut self, on: bool) -> Self {
         self.engine_first = on;
+        self
+    }
+
+    /// Add the materialized template's `includes/` dir as a fallback include
+    /// source (consulted after staged `_includes/`, before the engine). Enables
+    /// the driven `fig render --template` path.
+    pub fn with_template_includes(mut self, dir: &Path) -> Self {
+        self.template_includes = Some(dir.to_path_buf());
         self
     }
 
@@ -157,6 +173,13 @@ impl<'a> PageProvider<'a> {
         let p = self.includes_dir.join(name);
         if let Some(s) = self.tree.read(&p) {
             return Some(s);
+        }
+        // 1b. materialized template `includes/` (driven `--template` path). The
+        // template's fragment stubs / template-page live here when not pre-staged.
+        if let Some(tinc) = &self.template_includes {
+            if let Some(s) = self.tree.read(&tinc.join(name)) {
+                return Some(s);
+            }
         }
         // 2. FragmentEngine (first-include-miss materialization).
         if !self.engine_first {

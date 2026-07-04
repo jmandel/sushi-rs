@@ -26,6 +26,7 @@
 
 pub mod engine;
 pub mod runner;
+pub mod template;
 pub mod watch;
 
 /// Engine + pins, as the `version` op payload (shared by the human and `--json`
