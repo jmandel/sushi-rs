@@ -16,7 +16,10 @@
 //! `depr:` DependencyRenderer; `cvr:` CrossViewRenderer; `r44b:` R4ToR4BAnalyser;
 //! `phrases` = fhir-core-6911 rendering-phrases.properties.
 
+use serde_json::Value;
+
 use crate::context::IgContext;
+use crate::leaf::escape_xml;
 
 /// The trackedFragment marker (HTMLInspector.TRACK_PREFIX + id + TRACK_SUFFIX),
 /// appended to the content of tracked fragments (pg:2456).
@@ -112,4 +115,334 @@ pub fn cross_version_analysis(npm_name: &str, new_format: bool, inline: bool) ->
         format!("<p>{}</p>\r\n", body)
     };
     format!("{}{}", wrapped, track("2"))
+}
+
+// ---------------------------------------------------------------------------
+// CrossViewRenderer CS/VS "defined" lists (cvr:1393/1685)
+// ---------------------------------------------------------------------------
+
+const EXT_STANDARDS_STATUS: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status";
+const EXT_FMM_LEVEL: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm";
+
+/// The value of a simple-valued extension by url (valueCode/valueInteger/...).
+fn ext_value_str(res: &Value, url: &str) -> Option<String> {
+    let exts = res.get("extension")?.as_array()?;
+    for e in exts {
+        if e.get("url").and_then(|x| x.as_str()) == Some(url) {
+            for (k, v) in e.as_object()? {
+                if let Some(rest) = k.strip_prefix("value") {
+                    let _ = rest;
+                    return Some(match v {
+                        Value::String(s) => s.clone(),
+                        Value::Number(n) => n.to_string(),
+                        Value::Bool(b) => b.to_string(),
+                        _ => v.to_string(),
+                    });
+                }
+            }
+            return Some(String::new());
+        }
+    }
+    None
+}
+
+fn has_ext(res: &Value, url: &str) -> bool {
+    res.get("extension")
+        .and_then(|x| x.as_array())
+        .map(|a| a.iter().any(|e| e.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .unwrap_or(false)
+}
+
+/// Own CS/VS collected then sorted by url (CanonicalResourceSortByUrl,
+/// ResourceSorters:11). Returns (url, web_path, json).
+fn own_of_type(ctx: &IgContext, rtype: &str) -> Vec<(String, String, std::rc::Rc<Value>)> {
+    let mut v: Vec<(String, String, std::rc::Rc<Value>)> = ctx
+        .own_resources()
+        .into_iter()
+        .filter(|r| r.rtype == rtype)
+        .map(|r| {
+            let url = r.json.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            (url, r.web_path, r.json)
+        })
+        .collect();
+    v.sort_by(|a, b| a.0.cmp(&b.0));
+    v
+}
+
+fn get_str<'a>(v: &'a Value, k: &str) -> &'a str {
+    v.get(k).and_then(|x| x.as_str()).unwrap_or("")
+}
+
+/// countCodes (CodeSystemUtilities:830): total concepts incl. nested.
+fn count_codes(concepts: &[Value]) -> usize {
+    let mut t = concepts.len();
+    for c in concepts {
+        if let Some(kids) = c.get("concept").and_then(|x| x.as_array()) {
+            t += count_codes(kids);
+        }
+    }
+    t
+}
+
+/// hasHierarchy (CodeSystemUtilities:755): any top-level concept with children.
+fn has_hierarchy(concepts: &[Value]) -> bool {
+    concepts.iter().any(|c| {
+        c.get("concept")
+            .and_then(|x| x.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+    })
+}
+
+/// The status/flags cell shared shape (cvr:1717-1734 CS, 1427-1443 VS). The
+/// standards-status flag puts `class="{v}-flag"` ON THE td (renderStatus is a
+/// no-op — Renderer:84 returns x when changeVersion==null). `exp_sep` differs:
+/// CS uses ": " before experimental, VS uses ":".
+fn status_cell(res: &Value, exp_sep: &str) -> String {
+    let status = get_str(res, "status");
+    // The td class is set by the standards-status branch (attribute on td).
+    let ss = if has_ext(res, EXT_STANDARDS_STATUS) {
+        ext_value_str(res, EXT_STANDARDS_STATUS)
+    } else {
+        None
+    };
+    let class_attr = match &ss {
+        Some(v) => format!(" class=\"{}-flag\"", v),
+        None => String::new(),
+    };
+    let mut inner = String::new();
+    inner.push_str(&escape_xml(status));
+    if let Some(v) = &ss {
+        inner.push_str(" / ");
+        inner.push_str(&escape_xml(v));
+    }
+    if has_ext(res, EXT_FMM_LEVEL) {
+        let fmm = ext_value_str(res, EXT_FMM_LEVEL).unwrap_or_default();
+        inner.push_str(" / ");
+        inner.push_str(&format!("FMM{}", escape_xml(&fmm)));
+    }
+    if res.get("experimental").and_then(|x| x.as_bool()) == Some(true) {
+        inner.push_str(exp_sep);
+        inner.push_str("experimental");
+    }
+    format!("<td{}>{}</td>", class_attr, inner)
+}
+
+/// Name/Title cell (`name<br/>title`), cvr:1712/1421.
+fn name_title_cell(res: &Value) -> String {
+    format!(
+        "<td>{}<br/>{}</td>",
+        escape_xml(get_str(res, "name")),
+        escape_xml(get_str(res, "title"))
+    )
+}
+
+/// `needVersionReferences` (cvr:1385): any resource version != igVersion.
+fn need_version_references(list: &[(String, String, std::rc::Rc<Value>)], ig_version: &str) -> bool {
+    list.iter().any(|(_u, _w, j)| get_str(j, "version") != ig_version)
+}
+
+/// `codesystem-list` = cvr.renderCSList(defined, versions, used=false) (cvr:1685).
+/// NOTE the `versions` flag comes from needVersionReferences over the USED-ALL
+/// VS list (pg:2799 passes the leftover vslist), NOT the CS list — see
+/// classification. `versions` is supplied by the caller.
+pub fn codesystem_list(ctx: &IgContext, versions: bool) -> String {
+    let list = own_of_type(ctx, "CodeSystem");
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\"><tr><th>URL</th>");
+    if versions {
+        b.push_str("<th>Version</th>");
+    }
+    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Count</th></tr>");
+    for (url, web, j) in &list {
+        b.push_str("<tr>");
+        b.push_str(&format!(
+            "<td><a href=\"{}\">{}</a></td>",
+            escape_xml(web),
+            escape_xml(url)
+        ));
+        if versions {
+            b.push_str(&format!("<td>{}</td>", escape_xml(get_str(j, "version"))));
+        }
+        b.push_str(&name_title_cell(j));
+        b.push_str(&status_cell(j, ": "));
+        // Flags: hierarchyMeaning, flat, compositional, versionNeeded.
+        let empty: Vec<Value> = Vec::new();
+        let concepts = j.get("concept").and_then(|x| x.as_array()).unwrap_or(&empty);
+        let mut flags = String::new();
+        if let Some(hm) = j.get("hierarchyMeaning").and_then(|x| x.as_str()) {
+            flags.push_str(&escape_xml(hm));
+            flags.push(' ');
+        }
+        if !has_hierarchy(concepts) {
+            flags.push_str("flat ");
+        }
+        if j.get("compositional").and_then(|x| x.as_bool()) == Some(true) {
+            flags.push_str("compositional ");
+        }
+        if j.get("versionNeeded").and_then(|x| x.as_bool()) == Some(true) {
+            flags.push_str("version-needed ");
+        }
+        b.push_str(&format!("<td>{}</td>", flags));
+        // Count.
+        let mut count = format!("{}", count_codes(concepts));
+        if let Some(content) = j.get("content").and_then(|x| x.as_str()) {
+            count.push_str(&format!(" ({})", content));
+        }
+        b.push_str(&format!("<td>{}</td>", escape_xml(&count)));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
+}
+
+/// `worker.fetchCodeSystem(uri)`: the resolved CodeSystem, or None. See the
+/// classification note on describe_source for the multi-version THO caveat.
+fn fetch_code_system(ctx: &IgContext, uri: &str) -> Option<crate::context::Resolved> {
+    let r = ctx.resolve(uri)?;
+    if r.rtype != "CodeSystem" {
+        return None;
+    }
+    Some(r)
+}
+
+/// `describeSource` (cvr:1523): a code-system uri -> a short source label.
+fn describe_source(ctx: &IgContext, uri: &str) -> String {
+    // worker.fetchCodeSystem(uri): resolves + relative webPath => "Internal".
+    if let Some(r) = fetch_code_system(ctx, uri) {
+        if !is_absolute_url(&r.web_path) {
+            return "Internal".to_string();
+        }
+    }
+    match uri {
+        "http://snomed.info/sct" => return "SCT".to_string(),
+        "http://loinc.org" => return "LOINC".to_string(),
+        "http://dicom.nema.org/resources/ontology/DCM" => return "DICOM".to_string(),
+        "http://unitsofmeasure.org" => return "UCUM".to_string(),
+        "http://www.nlm.nih.gov/research/umls/rxnorm" => return "RxNorm".to_string(),
+        _ => {}
+    }
+    if uri.starts_with("http://terminology.hl7.org/CodeSystem/v3-") {
+        return "THO (V3)".to_string();
+    }
+    if uri.starts_with("http://terminology.hl7.org/CodeSystem/v2-") {
+        return "THO (V2)".to_string();
+    }
+    if uri.starts_with("http://terminology.hl7.org") {
+        return "THO".to_string();
+    }
+    // cs.hasSourcePackage(): the resolved CS's source package id.
+    if let Some(r) = fetch_code_system(ctx, uri) {
+        if let Some(pkg) = &r.pkg {
+            return pkg.id.clone();
+        }
+    }
+    if uri.starts_with("http://hl7.org/fhir") {
+        return "FHIR".to_string();
+    }
+    "Other".to_string()
+}
+
+/// `Utilities.isAbsoluteUrl`: has a scheme like `http://`.
+fn is_absolute_url(s: &str) -> bool {
+    s.starts_with("http://") || s.starts_with("https://") || s.contains("://")
+}
+
+/// `valueset-list` = cvr.renderVSList(defined, versions, used=false) (cvr:1393).
+/// The `versions` flag is needVersionReferences over the DEFINED VS list here
+/// (pg:2784) — fully derivable from own resources.
+pub fn valueset_list(ctx: &IgContext, ig_version: &str) -> String {
+    let list = own_of_type(ctx, "ValueSet");
+    let versions = need_version_references(&list, ig_version);
+    render_vs_list(ctx, &list, versions)
+}
+
+fn render_vs_list(
+    ctx: &IgContext,
+    list: &[(String, String, std::rc::Rc<Value>)],
+    versions: bool,
+) -> String {
+    let mut b = String::new();
+    b.push_str("<table class=\"grid\"><tr><th>URL</th>");
+    if versions {
+        b.push_str("<th>Version</th>");
+    }
+    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Source</th></tr>");
+    for (url, web, j) in list {
+        b.push_str("<tr>");
+        b.push_str(&format!(
+            "<td><a href=\"{}\">{}</a></td>",
+            escape_xml(web),
+            escape_xml(url)
+        ));
+        if versions {
+            b.push_str(&format!("<td>{}</td>", escape_xml(get_str(j, "version"))));
+        }
+        b.push_str(&name_title_cell(j));
+        b.push_str(&status_cell(j, ":"));
+        // Flags cell: Locked-Date, Inactive, then A/I/E/V; plus Source cell.
+        let mut flags = String::new();
+        let empty: Vec<Value> = Vec::new();
+        let compose = j.get("compose");
+        if compose.and_then(|c| c.get("lockedDate")).is_some() {
+            flags.push_str("Locked-Date ");
+        }
+        if compose.and_then(|c| c.get("inactive")).and_then(|x| x.as_bool()) == Some(true) {
+            flags.push_str("Inactive ");
+        }
+        let includes = compose
+            .and_then(|c| c.get("include"))
+            .and_then(|x| x.as_array())
+            .unwrap_or(&empty);
+        let (mut inc_i, mut inc_e, mut inc_v, mut inc_a) = (false, false, false, false);
+        let mut sources: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for inc in includes {
+            if inc.get("valueSet").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false)
+                || inc.get("valueSet").map(|v| !v.is_null()).unwrap_or(false)
+            {
+                // hasValueSet(): the compose include references value set(s).
+                if inc.get("valueSet").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(inc.get("valueSet").is_some()) {
+                    inc_v = true;
+                }
+            }
+            if let Some(system) = inc.get("system").and_then(|x| x.as_str()) {
+                sources.insert(describe_source(ctx, system));
+                if inc.get("concept").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+                    inc_e = true;
+                } else if inc.get("filter").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+                    inc_i = true;
+                } else {
+                    inc_a = true;
+                }
+            }
+        }
+        if inc_a {
+            flags.push_str("<span title=\"All Code System\">A </span>");
+        }
+        if inc_i {
+            flags.push_str("<span title=\"Intensional\">I </span>");
+        }
+        if inc_e {
+            flags.push_str("<span title=\"Extensional\">E </span>");
+        }
+        if inc_v {
+            flags.push_str("<span title=\"Imports Valueset(s)\">V </span>");
+        }
+        b.push_str(&format!("<td>{}</td>", flags));
+        // Source cell: sorted sources, comma-separated.
+        let mut src = String::new();
+        let mut first = true;
+        for s in &sources {
+            if first {
+                first = false;
+            } else {
+                src.push_str(", ");
+            }
+            src.push_str(&escape_xml(s));
+        }
+        b.push_str(&format!("<td>{}</td>", src));
+        b.push_str("</tr>");
+    }
+    b.push_str("</table>");
+    b
 }

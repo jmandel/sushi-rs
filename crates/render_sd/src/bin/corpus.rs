@@ -277,7 +277,29 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "deleted-extensions"
             | "cross-version-analysis"
             | "cross-version-analysis-inline"
+            | "valueset-list"
     )
+}
+
+/// The IG's business version (ImplementationGuide.version) — read from the
+/// own IG resource. needVersionReferences comparator baseline.
+fn ig_version(ig: &str) -> String {
+    let dir = ig_sd_dir(ig);
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
+                if let Ok(t) = std::fs::read_to_string(e.path()) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
+                        if let Some(ver) = v.get("version").and_then(|x| x.as_str()) {
+                            return ver.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    String::new()
 }
 
 /// Per-IG build fact: did the PreviousVersionComparator load a lastVersion?
@@ -320,6 +342,7 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "deleted-extensions" => agg::deleted_extensions(ig_has_previous(ig)),
         "cross-version-analysis" => agg::cross_version_analysis(&npm, ig_new_format(ig), false),
         "cross-version-analysis-inline" => agg::cross_version_analysis(&npm, ig_new_format(ig), true),
+        "valueset-list" => agg::valueset_list(ctx, &ig_version(ig)),
         _ => unreachable!(),
     };
     wrap_raw(&body)
