@@ -280,7 +280,19 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "valueset-list"
             | "summary-extensions"
             | "summary-observations"
+            | "deprecated-list"
+            | "expansion-params"
     )
+}
+
+/// Per-IG build fact: does the context carry "interesting" expansion parameters
+/// (anything beyond x-system-cache-id/defaultDisplayLanguage)? Not derivable
+/// from output/. Golden-matched: cycle/plan-net none, us-core a grid.
+fn ig_has_expansion_params(ig: &str) -> bool {
+    match ig {
+        "us-core" => true,
+        _ => false,
+    }
 }
 
 /// The IG's business version (ImplementationGuide.version) — read from the
@@ -347,6 +359,8 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "valueset-list" => agg::valueset_list(ctx, &ig_version(ig)),
         "summary-extensions" => agg::summary_extensions(ctx),
         "summary-observations" => agg::summary_observations(ctx),
+        "deprecated-list" => agg::deprecated_list(ctx),
+        "expansion-params" => agg::expansion_params(ig_has_expansion_params(ig)),
         _ => unreachable!(),
     };
     wrap_raw(&body)

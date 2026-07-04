@@ -159,6 +159,55 @@ pub fn summary_observations(ctx: &IgContext) -> String {
     }
 }
 
+const EXT_STANDARDS_STATUS_RESULT: &str = EXT_STANDARDS_STATUS;
+
+/// Own resources that carry the standards-status extension with value
+/// `deprecated` (the `dep=true` branch of dpr.deprecationSummary, dpr:41; this
+/// branch fires regardless of the previous-version comparator). Count only.
+fn count_own_deprecated(ctx: &IgContext) -> usize {
+    ctx.own_resources()
+        .into_iter()
+        .filter(|r| {
+            ext_value_str(&r.json, EXT_STANDARDS_STATUS_RESULT).as_deref() == Some("deprecated")
+        })
+        .count()
+}
+
+/// `deprecated-list` = dpr.deprecationSummary (dpr:30). With no deprecated
+/// resources (and previous comparator contributing none) the list is empty ->
+/// `<p>No deprecated content</p>` (dpr:79). cycle/plan-net hit this.
+/// LOUD GAP: the grid branch (dpr:82, own deprecated resources) — us-core.
+pub fn deprecated_list(ctx: &IgContext) -> String {
+    if count_own_deprecated(ctx) == 0 {
+        "<p>No deprecated content</p>".to_string()
+    } else {
+        panic!(
+            "LOUD GAP: deprecated-list grid branch (dpr:82) not ported — \
+             IG has deprecated resources"
+        );
+    }
+}
+
+/// `expansion-params` = renderExpansionParameters (pg:1686). Empty when the
+/// context's expansion parameters hold nothing beyond `x-system-cache-id` /
+/// `defaultDisplayLanguage` (pg:1690-1697) -> "" (and pg:2922 emits the plain
+/// non-tracked empty fragment). cycle/plan-net hit this.
+///
+/// `has_interesting_params` is a per-IG build fact (the context's expansion
+/// parameters come from the build's tx setup, NOT output/*.json). Golden-
+/// matched: cycle/plan-net empty, us-core a grid (tracked "5").
+/// LOUD GAP: the grid branch (pg:1698) — us-core.
+pub fn expansion_params(has_interesting_params: bool) -> String {
+    if !has_interesting_params {
+        String::new()
+    } else {
+        panic!(
+            "LOUD GAP: expansion-params grid branch (pg:1698) not ported — \
+             IG has interesting expansion parameters"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // CrossViewRenderer CS/VS "defined" lists (cvr:1393/1685)
 // ---------------------------------------------------------------------------
