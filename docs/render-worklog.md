@@ -1731,3 +1731,15 @@ bumps, and the merge fast-path.
 command (exit 1, no output) — headless-chromium profiles are the hog; delete
 them after each run; silent `rm -rf >/dev/null 2>&1` still executes when the
 capture path is full.
+
+## F6 SHIPPED — coordinator live verification (2026-07-04)
+
+Deploy: editor main @ Session-only engine 92ed7362 (two CI failures on the
+way were BOTH stale free-function callers in editor CI scripts —
+byte-check.mjs and consistency-gate.mjs — migrated to Session envelopes;
+the byte/consistency gates correctly blocked deploy until every consumer
+migrated). Live verification against joshuamandel.com/fhir-ig-editor/:
+E2E GATE: PASS — cycle editToPreviewMs 933, stockIndexLen 4032,
+stockEditResult ok, **stockWarmEditMs 609 (<1000 gate)**. The committed
+vision — US Core, stock FHIR template, live browser editing at Publisher
+parity, warm edits under a second — is live in production.
