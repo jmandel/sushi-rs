@@ -318,8 +318,16 @@ enum Inline {
     HardBreak,
 }
 
+/// CommonMark "ASCII punctuation" (spec §2.1) — the set escapable by backslash.
+fn is_ascii_punct(c: char) -> bool {
+    matches!(c,
+        '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-' | '.' | '/'
+        | ':' | ';' | '<' | '=' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '_' | '`' | '{' | '|'
+        | '}' | '~')
+}
+
 /// First pass: pull out code spans and links (highest precedence after
-/// backslash escapes, which the corpus does not use). Everything else is Text.
+/// backslash escapes). Everything else is Text.
 fn tokenize_inline(chars: &[char]) -> Vec<Inline> {
     let mut tokens = Vec::new();
     let mut buf = String::new();
@@ -331,6 +339,19 @@ fn tokenize_inline(chars: &[char]) -> Vec<Inline> {
     };
     while i < chars.len() {
         let ch = chars[i];
+        // CommonMark backslash escape: `\` before an ASCII-punctuation char makes
+        // that char literal and drops the backslash (spec §2.4). `\` before any
+        // other char is a literal backslash.
+        // KNOWN LIMITATION (corpus-safe, measured): the unescaped char joins the
+        // Text buffer, so the LATER emphasis pass can't distinguish an escaped
+        // `*`/`_` from a real delimiter — a PAIR of escaped emphasis chars on one
+        // line (`\*a\*`) would still emphasize. The corpus has only single
+        // escaped chars per field (`\-`, lone `\*`), where no pairing occurs.
+        if ch == '\\' && i + 1 < chars.len() && is_ascii_punct(chars[i + 1]) {
+            buf.push(chars[i + 1]);
+            i += 2;
+            continue;
+        }
         if ch == '`' {
             // Code span: opening run of N backticks, closing run of exactly N.
             let open = run_len(chars, i, '`');
