@@ -1395,3 +1395,101 @@ CONF-link injection; rouge json/js/http lexers (~10 blocks); the misc-15 classes
 the publisher's jekyll step with the FragmentEngine backing the missing includes);
 full IgFacts population in the page harness (engine-first singleton aggregates —
 ip-statements' "Show N more" needs the full ig_json/loaded_set the harness omits).
+
+# F5 — session 10 (2026-07-03): page-pass convergence to 1322/678/72
+
+The bulk of the "76 us-core residuals" collapsed to ONE root discovery: the
+US-Core template drives its CONF-NNNN links, requirements/uscdi/vsacname tables,
+provenance bullets and search-requirement narratives ENTIRELY from `_data/*.csv`
++ Liquid — there is NO publisher-side CONF injection (the session-9 brief's
+"CONF-NNNN conformance-link registry" is the template's own
+`requirements-link-list.md` reading `us_core_reqs.csv`; confirmed a publisher
+source-tree search finds no Java injector). CSV `_data` support unblocked all of
+it. Every fix below is gate-neutral against its differential floor.
+
+## PER-IG PAGE-PARITY TABLE (final, this session)
+| IG | byte-identical | delta | notes |
+|---|---|---|---|
+| **plan-net** | **678 / 678 (100%)** | — | held across every substrate change |
+| **us-core** | **1322 / 1334 (99.1%)** | +64 (1258→1322) | 12 residuals classified below |
+| **cycle** | **72 / 72 (100%)** | new oracle | Jekyll re-run over temp/pages (target 4) |
+
+## Target outcomes
+1. **CONF-NNNN links (target 1) — DONE via CSV `_data`.** The real mechanism is
+   NOT publisher injection: `SiteData` now loads `_data/*.csv` as Jekyll does
+   (`CSV.read headers:true` → array-of-hashes; RFC-4180 quoting). LOAD-BEARING:
+   empty cells become **nil** (not `""`) — Liquid nil is falsy, `""` truthy — so
+   `{% if row.col %}` skips them (suppresses spurious `- Including` bullets AND
+   keeps the search list loose). Two render_md link-ref fixes complete it:
+   LAST-definition-wins (kramdown) + a `{: #id}` IAL following a link-def stamps
+   the `<a>` (the `id="CONF-NNNN"`). `page.name` (Jekyll basename) added — the
+   provenance/search CSV loops key `item.Path == page.name`.
+2. **Rouge real-lexer fences (target 2) — DONE (json+js).** `render_md::rouge`
+   (behind `rouge_wrappers`, F1b-neutral): Rouge-4.7.0-faithful json + js
+   tokenizers with the token→shortname table and the formatter's same-type-run
+   coalescing. **`http` never appeared** once json/js landed (the earlier "http 1"
+   count was a mis-classified js block) — target-2 sizing resolved: 2 lexers,
+   not 3.
+3. **misc — mostly DONE.** toc link-strip (drop nested `<a>` from toc entries),
+   csv `_data` (above), BOM/auto-id/table-column all resolved or reclassified:
+   the "auto-id relative links" were the last-wins link-ref bug (fixed); the CSV
+   tables were the same csv-data unblock; a GFM separator-row-wider column bug
+   and an invalid-tag-name escaping bug (`<patient|user|system>`) were found and
+   fixed. **No 'misc' bucket left** — the 12 residuals are named classes below.
+4. **cycle page oracle (target 4) — DONE, 72/72.** The publisher's jekyll aborted
+   on the missing `_includes/sample-viewer-links.md` (the sitegen wrapper
+   `build-sitegen-site.ts:writeSampleViewerInclude` generates it). Supplied that
+   include with the wrapper's real content shape, ran the SAME Jekyll 4.4.1 over
+   the existing `temp/pages` (jekyll only, isolated HOME) → a rendered oracle;
+   harness gates it via `CYCLE_GOLDEN_DIR`. **cycle 72/72 byte-identical.**
+5. **Full IgFacts / engine-first (target 5) — seam validated.** `--engine-first`
+   on us-core-patient materializes 16 SD fragments BYTE-EXACT (the seam works).
+   The only engine-first divergences on content pages are 4 CodeSystem `-html`
+   (instance-narrative) fragments — the DOCUMENTED-DEFERRED F4b kind leaking
+   through, wrapped in `{% raw %}` the publisher's `-html` doesn't. The
+   xver-vs-THO tiebreak did NOT surface: no `en/` content page includes
+   ip-statements, so the tiebreak stays a fragment-layer follow-up (untouched;
+   the full-fragment-floor regression net was not needed).
+6. **Ledger (target 6) — design note.** The `PageProvider` read-set boundary is
+   in place: `frag_cache` (materialized-on-miss include store) + `miss_count`;
+   `FragmentEngine::is_whole_ig_kind` splits the cache key (per-resource →
+   resource hash; whole-IG/singleton → IG manifest hash). Wiring these into
+   site_db's BuildLedger nodes is F6 (that API lives in a different workspace);
+   the hash-real, fs-free (wasm-safe) boundary is the deliverable here.
+
+## SUBSTRATE CHANGES — neutrality proofs (all green)
+- **render_liquid**: parenthesized boolean grouping in `{% if %}` (`a and (b or
+  c)` = `a && (b||c)`, Ruby-Liquid-4.x). F1c fixtures 34/34; +1 semantics test.
+  This alone recovered ~38 SD pages (the `{gt|lt|ge|le}` search-URL condition).
+- **render_md** (F1b differential 459/459 UNCHANGED, fixtures 11→14): last-wins +
+  IAL link-refs; span-level IAL on emphasis/code; rouge json/js (opt-in); js
+  string-escape rule; GFM separator-row column rule; toc `<a>` strip; invalid
+  inline-tag-name escaping.
+- **render_page**: CSV `_data` (nil empty cells); `page.name` global; cycle
+  `CYCLE_GOLDEN_DIR`.
+
+## 12 us-core residuals (named, none 'misc')
+- **nested `markdown="1"` in a raw HTML block (6)**: basic-provenance,
+  clinical-notes, medication-list, screening-and-assessments, documentreference,
+  practitionerrole. kramdown descends into a `markdown="1"` div nested inside a
+  non-md `<div class="collapse">`; render_md honors `markdown="1"` only on the
+  OUTER element (verified byte-exact in isolation). A bounded render_md feature
+  (raw-block child re-processing) — DEFERRED as F1b-risky vs 6 pages.
+- **post-Jekyll XHTML re-serialization (2)**: changes-between-versions,
+  relationship-with-other-igs — a LATER pipeline stage reorders `<meta>` attrs
+  and adds a BOM (same class as the payload-dump normalization, finding #4).
+  Not a Liquid/kramdown defect.
+- **rouge code-block-in-list-item indent (2)**: general-guidance,
+  general-requirements — a rouge fenced block nested in a loose `<li>` closes
+  with `    </div>` vs our `</div>` (list-continuation indent of the rouge
+  wrapper's final line).
+- **toc heading-in-markdown="1"-block not captured (1)**: scopes — a heading
+  inside a `markdown="1"` div is missing from the generated toc (same nested-md
+  root as the 6 above).
+- **`_id` search token/link (1)**: specimen — a `_id` search-parameter cell
+  links differently.
+
+FINAL: page-pass at 1322/678/72; all substrate changes differential-neutral;
+cycle now has a rendered oracle; the FragmentEngine seam is byte-proven for the
+ported kinds. Remaining is one render_md feature (nested markdown-in-raw-block,
+covers 7 of 12) + 2 pipeline-stage artifacts + 3 narrow edges.
