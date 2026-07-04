@@ -159,17 +159,13 @@ pub fn summary_observations(ctx: &IgContext) -> String {
     }
 }
 
-const EXT_STANDARDS_STATUS_RESULT: &str = EXT_STANDARDS_STATUS;
-
 /// Own resources that carry the standards-status extension with value
 /// `deprecated` (the `dep=true` branch of dpr.deprecationSummary, dpr:41; this
 /// branch fires regardless of the previous-version comparator). Count only.
 fn count_own_deprecated(ctx: &IgContext) -> usize {
     ctx.own_resources()
         .into_iter()
-        .filter(|r| {
-            ext_value_str(&r.json, EXT_STANDARDS_STATUS_RESULT).as_deref() == Some("deprecated")
-        })
+        .filter(|r| ext_value_str(&r.json, EXT_STANDARDS_STATUS).as_deref() == Some("deprecated"))
         .count()
 }
 
