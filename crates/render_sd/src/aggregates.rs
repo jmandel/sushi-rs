@@ -117,6 +117,48 @@ pub fn cross_version_analysis(npm_name: &str, new_format: bool, inline: bool) ->
     format!("{}{}", wrapped, track("2"))
 }
 
+/// Count own StructureDefinitions whose `type` == `type_code` (the seeResource
+/// filter, cvr:180/183: extList/obsList get an entry per such SD).
+fn count_own_sd_of_type(ctx: &IgContext, type_code: &str) -> usize {
+    ctx.own_resources()
+        .into_iter()
+        .filter(|r| {
+            r.rtype == "StructureDefinition"
+                && r.json.get("type").and_then(|x| x.as_str()) == Some(type_code)
+        })
+        .count()
+}
+
+/// `summary-extensions` = cvr.getExtensionSummary (cvr:453). Empty branch
+/// (`extList.size() == 0`, i.e. the IG defines no Extension SD):
+/// `<p>No Extensions Defined by this Implementation Guide</p>\r\n`.
+/// LOUD GAP: the grid branch (>=1 own Extension SD) is not ported here.
+pub fn summary_extensions(ctx: &IgContext) -> String {
+    if count_own_sd_of_type(ctx, "Extension") == 0 {
+        "<p>No Extensions Defined by this Implementation Guide</p>\r\n".to_string()
+    } else {
+        panic!(
+            "LOUD GAP: summary-extensions grid branch (cvr:457) not ported — \
+             IG defines Extension StructureDefinition(s)"
+        );
+    }
+}
+
+/// `summary-observations` = cvr.getObservationSummary (cvr:487). Empty branch
+/// (`obsList.size() == 0`, no own Observation SD):
+/// `<p>No Observations Found</p>\r\n`.
+/// LOUD GAP: the grid branch (>=1 own Observation SD) is not ported here.
+pub fn summary_observations(ctx: &IgContext) -> String {
+    if count_own_sd_of_type(ctx, "Observation") == 0 {
+        "<p>No Observations Found</p>\r\n".to_string()
+    } else {
+        panic!(
+            "LOUD GAP: summary-observations grid branch (cvr:491) not ported — \
+             IG defines Observation StructureDefinition(s)"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // CrossViewRenderer CS/VS "defined" lists (cvr:1393/1685)
 // ---------------------------------------------------------------------------

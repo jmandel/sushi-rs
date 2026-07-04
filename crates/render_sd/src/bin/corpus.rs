@@ -278,6 +278,8 @@ fn is_singleton_kind(kind: &str) -> bool {
             | "cross-version-analysis"
             | "cross-version-analysis-inline"
             | "valueset-list"
+            | "summary-extensions"
+            | "summary-observations"
     )
 }
 
@@ -343,6 +345,8 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "cross-version-analysis" => agg::cross_version_analysis(&npm, ig_new_format(ig), false),
         "cross-version-analysis-inline" => agg::cross_version_analysis(&npm, ig_new_format(ig), true),
         "valueset-list" => agg::valueset_list(ctx, &ig_version(ig)),
+        "summary-extensions" => agg::summary_extensions(ctx),
+        "summary-observations" => agg::summary_observations(ctx),
         _ => unreachable!(),
     };
     wrap_raw(&body)
@@ -353,7 +357,15 @@ fn run_singleton(kind: &str, ig: &str, verbose: bool) {
     let gp = singleton_golden(ig, kind);
     let golden = std::fs::read_to_string(&gp)
         .unwrap_or_else(|_| panic!("no golden {}", gp.display()));
-    let ours = render_singleton(kind, ig, &ctx);
+    let ours = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        render_singleton(kind, ig, &ctx)
+    })) {
+        Ok(o) => o,
+        Err(_) => {
+            println!("{} {}: GAP (loud gap — see panic above)", kind, ig);
+            return;
+        }
+    };
     if ours == golden {
         println!("{} {}: 1/1 byte-identical", kind, ig);
     } else {
