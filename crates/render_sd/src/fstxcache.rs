@@ -69,6 +69,8 @@ impl<'a> FsTxCache<'a> {
             "valueCode": "en"
         })];
         let mut seen_params: Vec<String> = Vec::new();
+        // property definitions collected across includes (code -> uri).
+        let mut prop_defs: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
         for inc in includes {
             let system = inc.get("system").and_then(|x| x.as_str())?;
             if inc.get("filter").and_then(|f| f.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
@@ -88,6 +90,9 @@ impl<'a> FsTxCache<'a> {
                 return None;
             }
             let cs_version = cs_json.get("version").and_then(|x| x.as_str()).unwrap_or("");
+            // Collect the CS property definitions (code -> uri) for the expansion
+            // property columns (only `status` and other displayable props matter).
+            collect_cs_property_defs(&cs_json, &mut prop_defs);
             // used-codesystem param: "{system}|{version}".
             let param_val = format!("{}|{}", system, cs_version);
             if !seen_params.contains(&param_val) {
@@ -108,22 +113,53 @@ impl<'a> FsTxCache<'a> {
                         .and_then(|x| x.as_str())
                         .map(String::from)
                         .or_else(|| cs_lookup_display(&cs_json, code));
-                    contains.push(mk_contains(system, cs_version, code, display.as_deref()));
+                    let cprops = cs_concept_props(&cs_json, code);
+                    contains.push(mk_contains(system, cs_version, code, display.as_deref(), &cprops));
                 }
             } else {
                 // all codes: enumerate the CS concepts in order.
+                let hier = hierarchy_prop_codes(&cs_json);
                 if let Some(cs_concepts) = cs_json.get("concept").and_then(|x| x.as_array()) {
-                    enumerate_cs(cs_concepts, system, cs_version, &mut contains);
+                    enumerate_cs(cs_concepts, system, cs_version, &hier, &mut contains);
+                }
+            }
+        }
+        // Apply excludes (concept lists only; a filtered/valueSet exclude falls
+        // back to the cache path). Remove excluded (system, code) pairs.
+        if let Some(excludes) = compose.get("exclude").and_then(|x| x.as_array()) {
+            for exc in excludes {
+                let esys = exc.get("system").and_then(|x| x.as_str());
+                if exc.get("filter").is_some() || exc.get("valueSet").is_some() {
+                    return None; // not locally enumerable
+                }
+                if let Some(ecodes) = exc.get("concept").and_then(|x| x.as_array()) {
+                    let codes: Vec<&str> = ecodes.iter().filter_map(|c| c.get("code").and_then(|x| x.as_str())).collect();
+                    contains.retain(|c| {
+                        let csys = c.get("system").and_then(|x| x.as_str());
+                        let ccode = c.get("code").and_then(|x| x.as_str()).unwrap_or("");
+                        !(csys == esys && codes.contains(&ccode))
+                    });
+                } else {
+                    // exclude all codes of a system → drop them.
+                    contains.retain(|c| c.get("system").and_then(|x| x.as_str()) != esys);
                 }
             }
         }
         // The publisher's local expander reports a total (== the flat count).
         let total = count_flat(&contains) as i64;
+        // expansion.property[] = the collected {code, uri} defs (status etc.),
+        // but only those that some contains entry actually carries a value for.
+        let properties: Vec<Value> = prop_defs
+            .into_iter()
+            .filter(|(code, _)| contains_any_prop(&contains, code))
+            .map(|(code, uri)| serde_json::json!({"code": code, "uri": uri}))
+            .collect();
         Some(ExpandedValueSet {
             contains,
             parameters: params,
             total: Some(total),
             source: Some("internal".to_string()),
+            properties,
         })
     }
 
@@ -170,11 +206,13 @@ impl<'a> FsTxCache<'a> {
                 let server = extract_bare_source(&resp)
                     .map(|s| strip_scheme(&s))
                     .unwrap_or_else(|| "tx.fhir.org".to_string());
+                let properties = expansion.get("property").and_then(|x| x.as_array()).cloned().unwrap_or_default();
                 return Some(ExpandedValueSet {
                     contains,
                     parameters,
                     total,
                     source: Some(server),
+                    properties,
                 });
             }
         }
@@ -231,7 +269,7 @@ impl TxCacheSource for FsTxCache<'_> {
     }
 }
 
-fn mk_contains(system: &str, _version: &str, code: &str, display: Option<&str>) -> Value {
+fn mk_contains(system: &str, _version: &str, code: &str, display: Option<&str>, props: &[Value]) -> Value {
     // The publisher's local expander does NOT stamp a per-code `version` on the
     // contains entries (the version lives in the `used-codesystem` param); so the
     // expansion table shows no Version column. The JSON/XML copy version is read
@@ -242,7 +280,97 @@ fn mk_contains(system: &str, _version: &str, code: &str, display: Option<&str>) 
     if let Some(d) = display {
         m.insert("display".into(), Value::String(d.to_string()));
     }
+    if !props.is_empty() {
+        m.insert("property".into(), Value::Array(props.to_vec()));
+    }
     Value::Object(m)
+}
+
+/// Hierarchy properties (parent/child links) are consumed by the expander for
+/// nesting, not shown as columns — so they never become expansion properties.
+fn is_hierarchy_property(uri: &str) -> bool {
+    matches!(
+        uri,
+        "http://hl7.org/fhir/concept-properties#parent"
+            | "http://hl7.org/fhir/concept-properties#child"
+            | "http://hl7.org/fhir/concept-properties#partOf"
+    )
+}
+
+/// The CS `property[]` definitions → the (code, uri) pairs (only those with a
+/// uri, e.g. `status` → concept-properties#status). Hierarchy props are skipped.
+fn collect_cs_property_defs(cs: &Value, out: &mut std::collections::BTreeMap<String, String>) {
+    if let Some(props) = cs.get("property").and_then(|x| x.as_array()) {
+        for p in props {
+            if let (Some(code), Some(uri)) = (
+                p.get("code").and_then(|x| x.as_str()),
+                p.get("uri").and_then(|x| x.as_str()),
+            ) {
+                if is_hierarchy_property(uri) {
+                    continue;
+                }
+                out.entry(code.to_string()).or_insert_with(|| uri.to_string());
+            }
+        }
+    }
+}
+
+/// The set of property codes that are hierarchy links in this CS (to drop from
+/// the carried concept properties).
+fn hierarchy_prop_codes(cs: &Value) -> Vec<String> {
+    cs.get("property")
+        .and_then(|x| x.as_array())
+        .map(|a| {
+            a.iter()
+                .filter(|p| p.get("uri").and_then(|x| x.as_str()).map(is_hierarchy_property).unwrap_or(false))
+                .filter_map(|p| p.get("code").and_then(|x| x.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// A concept's property[] entries as expansion-contains property values
+/// ({code, valueX}). Only scalar-valued props (code/string/boolean/integer).
+fn cs_concept_props(cs: &Value, code: &str) -> Vec<Value> {
+    fn find<'a>(list: &'a [Value], code: &str) -> Option<&'a Value> {
+        for c in list {
+            if c.get("code").and_then(|x| x.as_str()) == Some(code) {
+                return Some(c);
+            }
+            if let Some(sub) = c.get("concept").and_then(|x| x.as_array()) {
+                if let Some(f) = find(sub, code) {
+                    return Some(f);
+                }
+            }
+        }
+        None
+    }
+    let Some(concepts) = cs.get("concept").and_then(|x| x.as_array()) else { return Vec::new() };
+    let Some(c) = find(concepts, code) else { return Vec::new() };
+    let hier = hierarchy_prop_codes(cs);
+    c.get("property")
+        .and_then(|x| x.as_array())
+        .map(|a| a.iter().filter(|p| keep_concept_prop(p, &hier)).cloned().collect())
+        .unwrap_or_default()
+}
+
+/// A concept property to carry into the expansion: not a hierarchy link, and not
+/// the suppressed default `status=active`.
+fn keep_concept_prop(p: &Value, hier: &[String]) -> bool {
+    let code = p.get("code").and_then(|x| x.as_str()).unwrap_or("");
+    if hier.iter().any(|h| h == code) {
+        return false;
+    }
+    !(code == "status" && p.get("valueCode").and_then(|x| x.as_str()) == Some("active"))
+}
+
+fn contains_any_prop(contains: &[Value], code: &str) -> bool {
+    contains.iter().any(|c| {
+        c.get("property")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().any(|p| p.get("code").and_then(|x| x.as_str()) == Some(code)))
+            .unwrap_or(false)
+    })
 }
 
 fn count_flat(contains: &[Value]) -> usize {
@@ -256,13 +384,18 @@ fn count_flat(contains: &[Value]) -> usize {
     n
 }
 
-fn enumerate_cs(concepts: &[Value], system: &str, version: &str, out: &mut Vec<Value>) {
+fn enumerate_cs(concepts: &[Value], system: &str, version: &str, hier: &[String], out: &mut Vec<Value>) {
     for c in concepts {
         let code = c.get("code").and_then(|x| x.as_str()).unwrap_or("");
         let display = c.get("display").and_then(|x| x.as_str());
-        out.push(mk_contains(system, version, code, display));
+        let props: Vec<Value> = c
+            .get("property")
+            .and_then(|x| x.as_array())
+            .map(|a| a.iter().filter(|p| keep_concept_prop(p, hier)).cloned().collect())
+            .unwrap_or_default();
+        out.push(mk_contains(system, version, code, display, &props));
         if let Some(sub) = c.get("concept").and_then(|x| x.as_array()) {
-            enumerate_cs(sub, system, version, out);
+            enumerate_cs(sub, system, version, hier, out);
         }
     }
 }

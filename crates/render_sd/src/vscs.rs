@@ -80,16 +80,18 @@ fn b_cell_nowrap(label: &str) -> XhtmlNode {
     td
 }
 
-/// `Utilities.nmtokenize`: replace any char that is not a letter/digit/`.`/`-`
-/// with `-` (FHIR id token). Verified against the corpus anchors (codes here are
-/// already token-safe, but SNOMED etc. can carry chars).
+/// `Utilities.nmtokenize` (Utilities.java:638): keep `[a-zA-Z0-9_-]` verbatim,
+/// drop spaces, and replace every other char with `.{decimal-codepoint}`
+/// (e.g. `/` (47) → `.47`). Note `.` itself is NOT kept — a literal dot becomes
+/// `.46`.
 fn nmtokenize(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
-        if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
             out.push(c);
-        } else {
-            out.push('-');
+        } else if c != ' ' {
+            out.push('.');
+            out.push_str(&(c as u32).to_string());
         }
     }
     out
@@ -740,17 +742,33 @@ fn has_md_link(s: &str) -> bool {
     false
 }
 
-/// MDP.hasTextSpecial(s, ch): `ch` appears wrapping some text (e.g. `*bold*`).
-/// Conservative: two occurrences of `ch` with non-space between.
+/// MDP.hasTextSpecial(s, ch) — a proper emphasis pair: the OPENING `ch` is
+/// preceded by whitespace and followed by punctuation/alnum; the CLOSING `ch`
+/// is followed by whitespace and preceded by punctuation/alnum. (So
+/// `Invoke_Image_Display` — underscores between letters — is NOT emphasis.)
 fn has_text_special(s: &str, ch: char) -> bool {
-    let first = s.find(ch);
-    if let Some(f) = first {
-        if let Some(rel) = s[f + ch.len_utf8()..].find(ch) {
-            let between = &s[f + ch.len_utf8()..f + ch.len_utf8() + rel];
-            return !between.trim().is_empty();
+    let chars: Vec<char> = s.chars().collect();
+    let mut second = false;
+    for i in 0..chars.len() {
+        let prev = if i == 0 { ' ' } else { chars[i - 1] };
+        let next = if i < chars.len() - 1 { chars[i + 1] } else { ' ' };
+        if chars[i] != ch {
+            // nothing
+        } else if second {
+            if next.is_whitespace() && (is_md_punctuation(prev) || prev.is_alphanumeric()) {
+                return true;
+            }
+            second = false;
+        } else if prev.is_whitespace() && (is_md_punctuation(next) || next.is_alphanumeric()) {
+            second = true;
         }
     }
     false
+}
+
+/// MDP.isPunctation (sic) — only `.`, `,`, `!`, `?`.
+fn is_md_punctuation(c: char) -> bool {
+    matches!(c, '.' | ',' | '!' | '?')
 }
 
 /// The intro `<p>` (csr:234-242). English template CODESYSTEM_CONTENT_COMPLETE:
@@ -1088,6 +1106,29 @@ struct CsRes {
 }
 
 fn resolve_cs(ctx: &IgContext, system: &str, ver: Option<&str>) -> Option<CsRes> {
+    // findTxResource: a tx-fetched external CodeSystem (cs-externals.json) wins
+    // — its webPath = the tx server base (render_external_link), content is
+    // "not-present", version is the fetched business version → the ⏿ FOUND note.
+    if let Some((server, json)) = ctx.resolve_cs_external(system) {
+        let cs_id = get_str(&json, "id").unwrap_or("").to_string();
+        let version = get_str(&json, "version").map(String::from);
+        let content = get_str(&json, "content").map(String::from);
+        // A tx-fetched CS's webPath = pathURL(server, "ValueSet", id)
+        // (BaseWorkerContext), used by getCsRef for the concept code links; the
+        // `render_external_link` (= server) is used by addCsRef for the CS ref.
+        let server_base = server.trim_end_matches('/');
+        return Some(CsRes {
+            id: cs_id.clone(),
+            web_path: Some(format!("{}/ValueSet/{}", server_base, cs_id)),
+            version,
+            present: get_str(&json, "title").or_else(|| get_str(&json, "name")).map(String::from),
+            from_this_package: false,
+            from_packages: false,
+            content,
+            json: Some(json),
+            external_link: Some(server),
+        });
+    }
     let canonical = match ver {
         Some(v) if !v.is_empty() => format!("{}|{}", system, v),
         _ => system.to_string(),
@@ -1128,9 +1169,10 @@ fn add_cs_ref(li: &mut XhtmlNode, system: &str, ver: Option<&str>, cs: &Option<C
         push_code(&mut a, system);
         li.add_child_node(a);
     } else if let Some(cs) = cs {
-        // ref: external link first, else webPath.
+        // ref: render_external_link (addHtml=false, tr:155-159) first, else the
+        // webPath (addHtml=false when a webPath exists, tr:161-164).
         let mut r = cs.external_link.clone().or_else(|| cs.web_path.clone());
-        let add_html = cs.external_link.is_some();
+        let add_html = false;
         if let Some(ref mut rr) = r {
             if add_html && !rr.contains(".html") {
                 rr.push_str(".html");
@@ -1216,8 +1258,11 @@ fn push_version_ref(span: &mut XhtmlNode, cs: &Option<CsRes>, stated: Option<&st
         tx(span, "\u{1F4E6}");
         tx(span, &av);
     } else if let Some(av) = actual {
-        span.set_attribute("title", format!("Version is not explicitly stated. When building this specification, the most recent version {} has been used", av));
+        // golden attr order: style then title (the outer `version` span already
+        // had no attrs; renderVersionReference's x.style()+x.attribute("title")
+        // serialize style-first here).
         span.set_attribute("style", "opacity: 0.5");
+        span.set_attribute("title", format!("Version is not explicitly stated. When building this specification, the most recent version {} has been used", av));
         tx(span, "\u{23FF}");
         tx(span, &av);
     } else if cs.is_some() && !cs_null {
@@ -1347,12 +1392,15 @@ fn add_code_to_table(td: &mut XhtmlNode, system: &str, _ver: Option<&str>, code:
             tx(&mut a, code);
             td.add_child_node(a);
         } else if let Some(cs) = cs {
-            // external ValueSet-based link (e.g. nucc via tx server): href =
-            // {external}/ValueSet/{id}#{id}-{code}? — corpus nucc uses the
-            // tx-server VS page. Fall back to webPath link.
+            // external tx-fetched CS (not-present content): getCsRef(e) =
+            // {render_external_link}/ValueSet/{cs.id}; then (no '#') append
+            // "#{cs.id}-{code}". Golden nucc:
+            // http://tx.fhir.org/r4/ValueSet/nucc-provider-taxonomy#nucc-provider-taxonomy-101200000X
             if let Some(link) = &cs.external_link {
+                let base = format!("{}/ValueSet/{}", link, cs.id);
+                let href = format!("{}#{}-{}", base, cs.id, nmtokenize(code));
                 let mut a = el("a");
-                a.set_attribute("href", format!("{}#{}", link, code));
+                a.set_attribute("href", href);
                 tx(&mut a, code);
                 td.add_child_node(a);
             } else {
@@ -1564,18 +1612,44 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
     if do_inactive {
         tr.add_child_node(b_cell("Inactive"));
     }
+    // property columns: scanForProperties = exp.property entries with a uri that
+    // some contains actually carries, keyed by code, sorted by code. Rendered
+    // after Definition (vsr:326-335) as <td><b><a href="{uri}">{code}</a></b>.
+    let mut props: Vec<(String, String)> = exp
+        .properties
+        .iter()
+        .filter_map(|p| {
+            let code = get_str(p, "code")?.to_string();
+            let uri = get_str(p, "uri")?.to_string();
+            if contains_has_property(&exp.contains, &code) {
+                Some((code, uri))
+            } else {
+                None
+            }
+        })
+        .collect();
+    props.sort_by(|a, b| a.0.cmp(&b.0));
     if do_definition {
         tr.add_child_node(b_cell("Definition"));
+    }
+    for (code, uri) in &props {
+        let mut td = el("td");
+        let mut b = el("b");
+        let mut a = el("a");
+        a.set_attribute("href", uri.as_str());
+        tx(&mut a, code);
+        b.add_child_node(a);
+        td.add_child_node(b);
+        tr.add_child_node(td);
     }
     // JSON/XML columns (forPublisher).
     tr.add_child_node(b_cell("JSON"));
     tr.add_child_node(b_cell("XML"));
     t.add_child_node(tr);
 
-    let scoped_prefix = format!("x-{}", ""); // res.getScopedId() is "x" prefix + id? Actually prefixAnchor("x") + tgt. See below.
-    let _ = scoped_prefix;
+    let prop_codes: Vec<String> = props.iter().map(|(c, _)| c.clone()).collect();
     for c in &exp.contains {
-        add_expansion_row(&mut t, c, 1, do_level, do_version, do_inactive, do_definition, &exp.parameters, ctx);
+        add_expansion_row(&mut t, c, 1, do_level, do_version, do_inactive, do_definition, &prop_codes, &exp.parameters, ctx);
     }
     div.add_child_node(t);
 
@@ -1640,6 +1714,7 @@ fn add_expansion_row(
     do_version: bool,
     do_inactive: bool,
     do_definition: bool,
+    prop_codes: &[String],
     params: &[Value],
     ctx: &IgContext,
 ) {
@@ -1647,8 +1722,13 @@ fn add_expansion_row(
     let code = get_str(c, "code").unwrap_or("");
     let display = get_str(c, "display");
     let mut tr = el("tr");
-    if c.get("inactive").and_then(|x| x.as_bool()) == Some(true) {
-        // isDeprecated highlight only for deprecated, not inactive; skip.
+    // isDeprecated(vs, c) highlight (vsr:997-999): the contains entry's `status`
+    // property is deprecated/retired → #ffeeee row.
+    if concept_property_value(c, "status")
+        .map(|s| s == "deprecated" || s == "retired")
+        .unwrap_or(false)
+    {
+        tr.set_attribute("style", "background-color: #ffeeee");
     }
 
     // anchor cell: <a name="x-{system}-{code}"> </a> (prefix "x", scoped id).
@@ -1700,9 +1780,32 @@ fn add_expansion_row(
         if let Some(j) = ctx.load_resource(system) {
             if let Some(concepts) = j.get("concept") {
                 if let Some(defn) = find_concept(concepts, code).and_then(|c| get_str(c, "definition")) {
-                    tx(&mut td, defn);
+                    // vsr:1039-1043: markdown-in-definitions → addMarkdown (a
+                    // <div><p>..); else plain text.
+                    if has_markdown_in_definitions(&j) {
+                        let html = crate::publisher_markdown::md_process(defn);
+                        let mut d = el("div");
+                        for node in crate::publisher_markdown::markdown_children_from_html(&html) {
+                            for inner in node.child_nodes() {
+                                d.add_child_node(inner.clone());
+                            }
+                        }
+                        td.add_child_node(d);
+                    } else {
+                        tx(&mut td, defn);
+                    }
                 }
             }
+        }
+        tr.add_child_node(td);
+    }
+
+    // property value cells (vsr:1046-1052), sorted by code — same order as
+    // headers.
+    for pc in prop_codes {
+        let mut td = el("td");
+        if let Some(pv) = concept_property_value(c, pc) {
+            tx(&mut td, &pv);
         }
         tr.add_child_node(td);
     }
@@ -1717,8 +1820,50 @@ fn add_expansion_row(
     t.add_child_node(tr);
 
     for cc in c.get("contains").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
-        add_expansion_row(t, cc, i + 1, do_level, do_version, do_inactive, do_definition, params, ctx);
+        add_expansion_row(t, cc, i + 1, do_level, do_version, do_inactive, do_definition, prop_codes, params, ctx);
     }
+}
+
+/// getPropertyValue(c, n) (vsr:1086) — the primitive value of the contains
+/// entry's property with code `n`.
+fn concept_property_value(c: &Value, code: &str) -> Option<String> {
+    let props = c.get("property")?.as_array()?;
+    for p in props {
+        if get_str(p, "code") == Some(code) {
+            // primitiveValue of valueX (code/string/boolean/integer).
+            if let Some(obj) = p.as_object() {
+                for (k, v) in obj {
+                    if let Some(rest) = k.strip_prefix("value") {
+                        if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+                            return match v {
+                                Value::String(s) => Some(s.clone()),
+                                Value::Bool(b) => Some(b.to_string()),
+                                Value::Number(n) => Some(n.to_string()),
+                                _ => None,
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// anyActualproperties: does some contains entry (recursively) carry a value for
+/// property `code`?
+fn contains_has_property(contains: &[Value], code: &str) -> bool {
+    for c in contains {
+        if concept_property_value(c, code).is_some() {
+            return true;
+        }
+        if let Some(sub) = c.get("contains").and_then(|x| x.as_array()) {
+            if contains_has_property(sub, code) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// DataRenderer.makeAnchor(system, code) → "{system}-{code}" with each char that

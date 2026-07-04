@@ -60,6 +60,10 @@ pub struct ExpandedValueSet {
     /// (e.g. `"tx.fhir.org"` → "Expansion from tx.fhir.org based on ..."). None
     /// means the plain "Expansion based on ..." header (no source userdata).
     pub source: Option<String>,
+    /// `expansion.property[]` — the property definitions ({code, uri}) that back
+    /// the expansion table's property columns (e.g. the `status` column). Each
+    /// contains entry carries matching `property` values.
+    pub properties: Vec<Value>,
 }
 
 /// The terminology-cache seam. Minimal + storage-agnostic (no `std::fs`, no
