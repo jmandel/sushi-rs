@@ -1,14 +1,10 @@
-# Standalone crate (own [workspace] table) — intentionally NOT a member of the
-# root workspace, per task F1b. This lets render_md build and be gated in
-# isolation while the kramdown-subset engine stabilizes.
 [package]
 name = "render_md"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "kramdown-subset markdown engine matching Jekyll/FHIR-IG-Publisher output"
-
-[workspace]
 
 [lib]
 name = "render_md"

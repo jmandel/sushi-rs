@@ -13,6 +13,12 @@ members = [
     "crates/snapshot_gen",
     "crates/site_db",
     "crates/wasm_api",
+    "crates/render_xhtml",
+    "crates/render_liquid",
+    "crates/render_md",
+    "crates/render_tables",
+    "crates/render_sd",
+    "crates/render_page",
 ]
 
 [workspace.package]
@@ -33,6 +39,12 @@ diagnostics = { path = "crates/diagnostics" }
 json_emit = { path = "crates/json_emit" }
 snapshot_gen = { path = "crates/snapshot_gen" }
 site_db = { path = "crates/site_db", default-features = false }
+render_xhtml = { path = "crates/render_xhtml" }
+render_liquid = { path = "crates/render_liquid" }
+render_md = { path = "crates/render_md" }
+render_tables = { path = "crates/render_tables" }
+render_sd = { path = "crates/render_sd" }
+render_page = { path = "crates/render_page" }
 
 # External
 serde = { version = "1", features = ["derive"] }

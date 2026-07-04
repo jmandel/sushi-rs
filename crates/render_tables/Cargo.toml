@@ -1,18 +1,15 @@
-# Standalone crate — has its OWN [workspace] table so it does NOT join the root
-# workspace (another agent churns the root Cargo.toml; integration happens later).
-[workspace]
-
 [package]
 name = "render_tables"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
 description = "C2: byte-exact port of fhir-core's HierarchicalTableGenerator (org.hl7.fhir.utilities.xhtml)"
 
 [lib]
 name = "render_tables"
 
 [dependencies]
-render_xhtml = { path = "../render_xhtml" }
+render_xhtml = { workspace = true }
 
 [dev-dependencies]

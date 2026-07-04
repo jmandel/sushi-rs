@@ -598,6 +598,49 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
+name = "render_liquid"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "render_md"
+version = "0.1.0"
+
+[[package]]
+name = "render_page"
+version = "0.1.0"
+dependencies = [
+ "render_liquid",
+ "render_md",
+ "render_sd",
+ "render_xhtml",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
+name = "render_sd"
+version = "0.1.0"
+dependencies = [
+ "render_tables",
+ "render_xhtml",
+ "serde_json",
+]
+
+[[package]]
+name = "render_tables"
+version = "0.1.0"
+dependencies = [
+ "render_xhtml",
+]
+
+[[package]]
+name = "render_xhtml"
+version = "0.1.0"
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
