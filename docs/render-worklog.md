@@ -797,6 +797,53 @@ enumerator + `own_package_id`. `scanAllResources(SD)` collapses to own SDs here
 Full F3 (15 kinds) + F4 floor re-verified byte-identical after the table.rs
 MAPPINGS extension (only the known cycle † and practitioner-summary residuals).
 
+## Session 7 (cont.): IG-level aggregates — 38/45 cells GREEN (aggregates.rs)
+
+New module `aggregates.rs` (~870 LOC, forked port merged 0ce733e4) + a
+`run_singleton` corpus harness path. Producers all JAVA (PublisherGenerator /
+CrossViewRenderer / DependencyRenderer / DeprecationRenderer / R4ToR4BAnalyser)
+— **NONE required XSLT/ant/artifacts.xml** (required classification: confirmed).
+
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| new-extensions, related-igs-table/-list, globals-table, obligation-summary, deleted-extensions, cross-version-analysis(+-inline), codesystem-list, canonical-index | ✅ | ✅ | ✅ |
+| valueset-list | ✅ | ❌ 1-row | ✅ |
+| summary-extensions | ✅ | GAP | GAP |
+| summary-observations | GAP | ✅ | GAP |
+| deprecated-list | ✅ | ✅ | GAP |
+| expansion-params | ✅ | ✅ | GAP |
+
+Findings (cited in aggregates.rs):
+- Per-IG build facts NOT derivable from output/*.json, fed as golden-matched
+  harness inputs: deleted-extensions `(none)`/`(n/a)` (PreviousVersionComparator
+  lastVersion from network package-list.json, dpr:267); cross-version-analysis
+  `newFormat` (`../package` vs `package`, r44b:316); expansion-params
+  interesting-params flag. trackedFragment `<!--$$N$$-->` markers are fragment
+  bytes (globals $$4$$, cross-version $$2$$).
+- codesystem-list Version column flag = needVersionReferences over the USED-ALL
+  ValueSet list (pg:2799 passes the leftover vslist, not the CS list) — the
+  used-VS whole-IG scan was ported just for that boolean.
+- canonical-index needs oids.ini (authoritative OID registry; IG row OID =
+  sushi-config auto-oid-root) + the R5-in-R4 `Basic` re-projection (us-core
+  Requirements as Basic with extension-Requirements.{url,version}).
+- renderStatus is a no-op (Renderer:84, changeVersion null corpus-wide).
+
+STOP classifications (cited, not approximated):
+- **valueset-list plan-net (1 row)**: nucc provider-taxonomy Source cell —
+  publisher fetchCodeSystem finds NO CS (dropped in THO 7.2.0; only in
+  transitively-loaded 6.1.0/5.5.0) → `Other`; our shared resolve finds the older
+  copy. Fixing needs a context.rs resolution-rule change (do-not-modify during
+  fork); revisit with care.
+- **codesystem/valueset-ref(-all)-list (12 cells)**: References column iterates
+  a Java HashSet<Resource> UNSORTED (cvr:1494/1759 — identity-hash order,
+  golden-verified unsorted). Same unstable-oracle class as the HTG uuid quirk.
+- **ip-statements (singleton)**: deterministic but XL (whole-IG listAllCodeSystems
+  element-walk + per-system copyright catalog). Follow-up.
+- **dependency-table/-short/-nontech**: XL (full NpmPackage transitive dep graph
+  from the package cache). Follow-up.
+- Grid branches of summary-extensions/observations/deprecated-list/
+  expansion-params: loud panic! gaps.
+
 ## Remaining
 
 Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
