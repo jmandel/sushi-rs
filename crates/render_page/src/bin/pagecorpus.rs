@@ -70,17 +70,20 @@ fn ig_paths(ig: &str) -> IgPaths {
         }
         "cycle" => {
             let b = "/home/jmandel/hobby/periodicity-impl/cycle";
-            // cycle output/ has no en pages (Jekyll didn't finish) — the golden
-            // is the publisher's temp/pages/en re-render vs our render of the
-            // same input... but temp/pages/en IS the input. cycle's true page
-            // goldens are absent; we gate cycle input->render self-consistency by
-            // rendering and comparing against temp/pages/en if a sibling
-            // rendered-output tree is supplied. Default: use input as golden dir
-            // is meaningless, so cycle golden_dir points at output/en if present.
+            // cycle's committed output/ has no en pages (the publisher's Jekyll
+            // step aborted on the missing `_includes/sample-viewer-links.md`,
+            // which the sitegen wrapper generates in a real build). We regenerate
+            // the rendered oracle by supplying that include (the wrapper's real
+            // content shape) and running the SAME Jekyll (4.4.1) over the existing
+            // temp/pages, then gate against it. `CYCLE_GOLDEN_DIR` points at that
+            // fresh Jekyll output tree (see docs/render-worklog.md F5 target 4).
+            let golden_dir = std::env::var("CYCLE_GOLDEN_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from(format!("{}/output/en", b)));
             IgPaths {
                 pages_root: PathBuf::from(format!("{}/temp/pages", b)),
                 input_dir: PathBuf::from(format!("{}/temp/pages/en", b)),
-                golden_dir: PathBuf::from(format!("{}/output/en", b)),
+                golden_dir,
                 data_dir: PathBuf::from(format!("{}/temp/pages/_data", b)),
                 includes_dir: PathBuf::from(format!("{}/temp/pages/_includes", b)),
                 own_dir: PathBuf::from(format!("{}/temp/pages", b)),
