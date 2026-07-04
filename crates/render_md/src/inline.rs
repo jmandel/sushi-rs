@@ -678,7 +678,16 @@ fn try_code_span(chars: &[char], i: usize) -> Option<(String, usize)> {
                 let content: String = chars[content_start..k].iter().collect();
                 let trimmed = trim_code_span(&content, fence);
                 let escaped = escape_html_text(&trimmed);
-                return Some((format!("<code>{escaped}</code>"), m));
+                // Jekyll's rouge markdownify tags every code span as plaintext
+                // (`<code class="language-plaintext highlighter-rouge">`).
+                // Verified against Jekyll's converter (bare kramdown = plain
+                // `<code>`). Gated by the render Options::rouge_wrappers flag.
+                let open = if crate::render::rouge_on() {
+                    "<code class=\"language-plaintext highlighter-rouge\">"
+                } else {
+                    "<code>"
+                };
+                return Some((format!("{open}{escaped}</code>"), m));
             }
             k = m;
         } else {

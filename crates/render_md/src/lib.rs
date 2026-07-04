@@ -48,4 +48,4 @@ mod inline;
 mod render;
 mod util;
 
-pub use render::{render, Options};
+pub use render::{render, render_with, Options};

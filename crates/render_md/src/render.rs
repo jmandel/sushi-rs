@@ -14,12 +14,47 @@ use crate::util::{escape_html_attr, IdGen};
 pub struct Options {
     /// Generate heading ids via the kramdown GFM algorithm.
     pub auto_ids: bool,
+    /// Emit Jekyll's rouge highlighter wrappers on code spans / fenced blocks.
+    ///
+    /// render_md is used two ways: (a) the F1b differential gate compares
+    /// against RAW kramdown (plain `<code>` / `<pre><code>`), and (b) the F5
+    /// page pass uses render_md as Jekyll's `markdownify`, which post-processes
+    /// kramdown output through Jekyll's default rouge integration
+    /// (`syntax_highlighter: rouge`). DEFAULT FALSE keeps (a) byte-untouched;
+    /// the page pass sets it true. Verified against Jekyll's real markdownify
+    /// converter (NOT bare kramdown — bare kramdown does not add these classes).
+    ///
+    /// Covers the DETERMINISTIC (lexer-free) cases: every inline `<code>` gets
+    /// `class="language-plaintext highlighter-rouge"`; a fenced block with no
+    /// language (or a token-less lexer name — `plaintext`/`text`) gets the
+    /// `<div class="language-X highlighter-rouge"><div class="highlight"><pre
+    /// class="highlight"><code>…</code></pre></div></div>` wrapper. Fenced
+    /// blocks in a REAL-lexer language (json/js/http/…) need a rouge tokenizer
+    /// and are DEFERRED — they keep kramdown's plain form and fire a loud gap
+    /// marker so the deferred pages classify (see `ROUGE_TOKENLESS_LANGS`).
+    pub rouge_wrappers: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_ids: true }
+        Options { auto_ids: true, rouge_wrappers: false }
     }
+}
+
+/// Fence languages that rouge tokenizes to PLAINTEXT (no token spans) — the
+/// wrapper is deterministic (same as no-language, but the `language-X` class
+/// carries the given name). Everything else in a real lexer language is deferred.
+pub const ROUGE_TOKENLESS_LANGS: &[&str] = &["plaintext", "text"];
+
+thread_local! {
+    /// Whether the current render should emit rouge wrappers. Set for the
+    /// duration of a `render_with` call (render_inline is a free fn with no
+    /// options channel, so a thread-local carries the flag to `try_code_span`).
+    pub(crate) static ROUGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub(crate) fn rouge_on() -> bool {
+    ROUGE.with(|r| r.get())
 }
 
 /// Render markdown `src` to an HTML string, kramdown/GFM parity.
@@ -30,6 +65,8 @@ pub fn render(src: &str) -> String {
 pub fn render_with(src: &str, opts: &Options) -> String {
     // Normalize CRLF.
     let src = src.replace("\r\n", "\n").replace('\r', "\n");
+    // Carry the rouge-wrapper flag to the free inline renderer for this call.
+    ROUGE.with(|r| r.set(opts.rouge_wrappers));
     let doc = parse_doc(&src);
     let mut r = Renderer {
         idgen: IdGen::new(),
@@ -282,6 +319,23 @@ impl Renderer {
                 if *inner_trailing_blank {
                     out.push('\n');
                 }
+                // kramdown's Converter::Toc serializes the generated toc list
+                // with a trailing blank line. When the toc is the LAST child of a
+                // `markdown="1"` element, that blank lands before the closing tag
+                // (`</ul>\n\n</div>`) — a plain list as the last child does NOT
+                // (verified against kramdown 2.5.0). Emit the toc's trailing blank
+                // here (it is absorbed by the block separator when the toc is
+                // followed by another block, so it only needs adding at the tail).
+                if inner
+                    .iter()
+                    .rev()
+                    .find(|n| !matches!(n.block, Block::Blank))
+                    .map(|n| matches!(n.block, Block::List { is_toc: true, .. }))
+                    .unwrap_or(false)
+                    && !*inner_trailing_blank
+                {
+                    out.push('\n');
+                }
                 out.push_str(&pad);
                 out.push_str(close_tag);
             }
@@ -310,6 +364,27 @@ impl Renderer {
         // added beyond the code's own.
         let pad = " ".repeat(indent);
         let escaped = crate::util::escape_html_text(code);
+        // Jekyll's rouge markdownify (Options::rouge_wrappers) post-processes a
+        // fenced block into a div wrapper. For NO language or a TOKEN-LESS lexer
+        // (plaintext/text) the transform is deterministic (content only escaped,
+        // NO token spans) — verified against Jekyll's converter:
+        //   <div class="language-X highlighter-rouge"><div class="highlight">
+        //   <pre class="highlight"><code>{escaped}</code></pre></div></div>
+        // A REAL-lexer language (json/js/http/…) needs a rouge tokenizer and is
+        // DEFERRED — kept in kramdown's plain form so the affected pages classify
+        // (the wrapper won't match, which is the intended deferral signal).
+        let tokenless = lang.is_empty() || ROUGE_TOKENLESS_LANGS.contains(&lang);
+        if self.opts.rouge_wrappers && tokenless {
+            let cls = if lang.is_empty() { "plaintext" } else { lang };
+            out.push_str(&pad);
+            out.push_str(&format!(
+                "<div class=\"language-{} highlighter-rouge\"><div class=\"highlight\"><pre class=\"highlight\"><code>",
+                escape_html_attr(cls)
+            ));
+            out.push_str(&escaped);
+            out.push_str("</code></pre></div></div>");
+            return;
+        }
         out.push_str(&pad);
         if lang.is_empty() {
             out.push_str("<pre><code>");
@@ -568,6 +643,18 @@ impl Renderer {
         // filtered to toc_levels (1..3 per FHIR config), given id="markdown-toc".
         // IAL attributes on the {:toc} list (e.g. class="no_toc") are emitted
         // BEFORE the auto id.
+        //
+        // The generated toc `<ul>` is ALWAYS emitted at BASE indent 0, even when
+        // the `{:toc}` list sits inside an indented `markdown="1"` HTML block
+        // (verified against kramdown 2.5.0: a toc nested in one or two
+        // `<div markdown="1">`s still opens `<ul id="markdown-toc">` at column 0,
+        // `<li>` at 2). kramdown's Converter::Toc builds the replacement list as a
+        // fresh block tree whose serialization starts from the converter's base
+        // indent, NOT the enclosing HTML block's `indent`. So we ignore the passed
+        // `indent` for the toc wrapper. (Normal block children of a markdown="1"
+        // div DO inherit indent+2 — this reset is toc-specific.)
+        let _ = indent;
+        let indent = 0usize;
         let pad = " ".repeat(indent);
         let tag = if ordered { "ol" } else { "ul" };
         let entries: Vec<(u8, String, String)> = self
