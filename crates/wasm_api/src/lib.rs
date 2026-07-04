@@ -1143,14 +1143,52 @@ impl Engine {
         if let Some(rs) = &self.render_state {
             return Ok(rs.clone());
         }
+        let compiled = self.snapshot_complete_own()?;
         let rs = Rc::new(build_render_state(
-            &self.last_compiled,
+            &compiled,
             self.bundle.clone(),
             &self.site_files,
             &self.site_options,
         )?);
         self.render_state = Some(rs.clone());
         Ok(rs)
+    }
+
+    /// Snapshot-complete the compiled StructureDefinitions for the render
+    /// surface's `/own` dir — the render layer walks `snapshot.element`, and
+    /// compile() emits differential-only SDs. Mirrors build_site_db's S3
+    /// EXACTLY: a PackageContext over ONLY the FHIR core package, with the
+    /// whole compile as locals so cross-profile bases resolve. SDs that
+    /// already carry a snapshot pass through untouched. With no SDs (or no
+    /// core package mounted — pure site smoke), this is a pass-through.
+    fn snapshot_complete_own(&self) -> Result<Vec<(PathBuf, Value)>, String> {
+        let needs: Vec<usize> = self
+            .last_compiled
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, v))| {
+                v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
+                    && v.get("snapshot").is_none()
+            })
+            .map(|(i, _)| i)
+            .collect();
+        if needs.is_empty() {
+            return Ok(self.last_compiled.clone());
+        }
+        let (source, cache_root, packages) = self.source()?;
+        let core_package = pick_core_package(&packages)
+            .ok_or("render surface: no FHIR core package (hl7.fhir.r{4,5}.core) mounted")?;
+        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
+            .map_err(|e| format!("render surface: package context: {e:#}"))?;
+        ctx.load_local_resources(self.last_compiled.clone());
+        let mut out = self.last_compiled.clone();
+        for i in needs {
+            let (path, body) = &out[i];
+            let snap = snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
+                .map_err(|e| format!("render surface: snapshot {}: {e:#}", path.display()))?;
+            out[i].1 = snap;
+        }
+        Ok(out)
     }
 
     /// ContentApi: Liquid over the session provider (+ caller globals).
