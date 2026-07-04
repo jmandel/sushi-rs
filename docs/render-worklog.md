@@ -1692,3 +1692,42 @@ rather than chasing bytes the editor never produces.
 full corpus; plan-net 678/678; F1b 459/459 all-byte-identical; workspace
 211/0; session_equiv green; WASM PARITY PASS. Fixtures: spaced-ref-links,
 rouge-http, + the 10 html-island probes.
+
+---
+
+## F6 session 4 (fork) — FINAL: scopes 3(d)/4/5 complete
+
+**Scope 4**: wasm-parity-driver.mjs migrated to Session envelopes; the 8
+deprecated free-function exports DELETED (Session is the only API; parity PASS
+on the Session-only driver, workspace 211/0). SiteOptions.merge (92ed7362):
+the editor mounts the packed tree once, warm re-inits send only the live
+overlay — stockWarmEditMs 904-1077 (borderline) -> **613 ms**, gate <1000
+PASS with margin. adapter.invalidate remains STRUCTURAL (compile drops the
+whole render state; the warm gate passes without replay-skip — documented in
+PUBLISH.md as a future optimization, not silently claimed).
+
+**Scope 3(d)**: US Core 9.0.0 is resource-authored (NO FSH upstream; verified
+HL7/US-Core@9.0.0) — loaded as a baked predefined-resources + pagecontent
+project. export-ig-manifest --src/--out; build-stock-site --flat +
+--exclude-live-kinds + txcache filtered to what the renderer reads (the Java
+tx-client *.cache logs are fhir-core internals; loinc.cache alone 19 MB).
+LIVE (headless): Open US Core -> resolver loop clears the registry closure
+(blocked: none) -> stock template lists 962 pages, index 12 ms,
+us-core-patient renders with tables. Live md staging: the publisher's exact
+transform (byte-copy include + CRLF shim), overlaid per compile at BOTH
+include-name forms — the template's {{page.path}}-derived include name is
+DYNAMIC and invisible to the static closure (this also fixed the index body
+silently missing from stock renders).
+
+**Scope 5**: PUBLISH.md carries the full deploy sequence + live-verification
+checklist + known-limits (F4b fallbacks; us-core in-editor fragment set not
+yet byte-audited vs the closed native corpus; structural invalidate).
+
+**Full-program fidelity**: 17/17 pages byte-identical vs the ORIGINAL
+pre-refactor baseline after the liquid cutover, adapter layer, FOUR engine
+bumps, and the merge fast-path.
+
+**Ops note**: /tmp output-capture quota exhaustion silently kills every shell
+command (exit 1, no output) — headless-chromium profiles are the hog; delete
+them after each run; silent `rm -rf >/dev/null 2>&1` still executes when the
+capture path is full.
