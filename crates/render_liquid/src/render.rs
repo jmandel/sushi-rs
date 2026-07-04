@@ -162,7 +162,9 @@ impl<'p> Renderer<'p> {
             }
             Node::Break => return Flow::Break,
             Node::Continue => return Flow::Continue,
-            Node::Include { name, params } => self.render_include(name, params, out),
+            Node::Include { name, params, relative } => {
+                self.render_include(name, params, *relative, out)
+            }
             Node::UnknownTag { .. } => { /* passthrough: emit nothing */ }
         }
         Flow::Normal
@@ -221,7 +223,13 @@ impl<'p> Renderer<'p> {
         Flow::Normal
     }
 
-    fn render_include(&mut self, name: &IncludeName, params: &[(String, Expr)], out: &mut String) {
+    fn render_include(
+        &mut self,
+        name: &IncludeName,
+        params: &[(String, Expr)],
+        relative: bool,
+        out: &mut String,
+    ) {
         // Resolve the include name (dynamic names are rendered first).
         let resolved_name = match name {
             IncludeName::Literal(s) => s.clone(),
@@ -252,7 +260,16 @@ impl<'p> Renderer<'p> {
             Some(Value::Hash(Rc::new(m)))
         };
 
-        let Some(src) = self.provider.include_source(&resolved_name) else {
+        // include_relative: the page-dir path first (Jekyll semantics); a
+        // provider without page context falls back to the include path.
+        let looked_up = if relative {
+            self.provider
+                .include_source_relative(&resolved_name)
+                .or_else(|| self.provider.include_source(&resolved_name))
+        } else {
+            self.provider.include_source(&resolved_name)
+        };
+        let Some(src) = looked_up else {
             // include-not-found: emit nothing (host decides policy). Jekyll
             // would raise; the plan wires a real provider so a miss here means
             // an unmodeled artifact — silent by default, host can override.

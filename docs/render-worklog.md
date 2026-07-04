@@ -1599,6 +1599,12 @@ adapter refactor); "E2E GATE: PASS"; stock adapter live in headless Chromium:
 with tables, zero exceptions; wasm-parity PASS ×3 (each engine bump);
 workspace 211/0; session_api 6/6.
 
+**session_equiv = PERMANENT GATE** (coordinator ruling, 2026-07-04): it has
+now caught two wasm-only divergences no other gate can see (the vacuous
+front-matter double-strip; the IgContext raw-fs closure check that dropped
+every dependency package in wasm). Run it before any engine push that touches
+the render surface: `cargo test --release -p wasm_api --lib -- --ignored`.
+
 **Remaining (scopes 3-5)**: US Core loading in-editor + the 12 named page
 residuals; live md→staged-html staging (editing pagecontent under the stock
 template — packed tree is point-in-time until then); BuildLedger/RenderDeps
@@ -1606,3 +1612,44 @@ wiring → <1s warm-edit gate + adapter.invalidate; deprecated free-function
 wasm exports deletion (wasm-parity-driver.mjs must migrate to Session first);
 deploy prep (PUBLISH.md; coordinator merges/deploys). Fidelity harness note:
 serve dist with a %23-faithful server (python http.server), NOT vite preview.
+
+---
+
+## F6 session 3 (fork) — scope 3 start: residuals driven 1322 -> 1329
+
+Three engine features, each oracle-derived (kramdown 2.5.0 probes + a TRUE
+Jekyll-4.4.1 markdownify harness for the rouge boundary):
+
+1. **Nested `markdown` islands in raw HTML** (the 7-page residual class):
+   kramdown honors the attribute at ANY depth inside a raw element
+   (handle_html_start_tag). New `Block::HtmlBlockSegmented` — raw markup
+   passes through with ONE shared tag stack (auto-close only at the final
+   segment); islands re-enter the parser, content at 2 x depth, close tag at
+   2 x (depth-1); span-model islands render inline in place; `markdown="0"`
+   strips the attribute only. 10 oracle fixtures committed
+   (tests/fixtures/html-island-*).
+2. **Rouge wrapper block indent**: Jekyll's kramdown emits the block indent
+   BEFORE the wrapper's final `</div>` (open+body+pad+close) — verified
+   against Jekyll's real converter, NOT bare kramdown (bare kramdown does not
+   even wrap indented blocks; scripts note). Fixes the 2 rouge-in-list pages
+   AND island-nested code blocks; indent-0 bytes unchanged.
+3. **`include_relative` finally distinguished from `include`**: Jekyll
+   resolves it against the including PAGE's directory; us-core stages
+   DIFFERENT bytes at the two paths (page-dir example JSON = pretty FHIR
+   form; `_includes/` = compact dump). `Include.relative` through
+   ast/parser/render; `DataProvider::include_source_relative` (default:
+   defer); PageProvider `with_pages_root` + per-render current-page-dir;
+   wired in pagecorpus AND the session render surface (falls back to the old
+   path when the relative file is absent).
+
+GATES: us-core pages 1322 -> **1329/1334**; plan-net **678/678** unchanged;
+F1b differential now **459/459 ALL byte-identical, zero explained classes
+left**; workspace 211/0; session_equiv green; md-diff harness path fixed for
+the workspace fold-in (ONE root target dir).
+
+Remaining 5 us-core pages (named): practitionerrole + documentreference-class
+sibling = SearchParameter chained-parameter list content (`practitioner.
+identifier,name` comma-joined in gold vs split tokens — GENERATED sp data, not
+markdown; next session), specimen `_id` link, changes-between-versions +
+relationship-with-other-igs (post-Jekyll XHTML+BOM pipeline stage — classify
+vs editor needs).

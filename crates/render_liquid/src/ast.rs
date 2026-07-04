@@ -49,9 +49,14 @@ pub enum Node {
     Break,
     Continue,
     /// `{% include name.md k=v %}` (name may be a variable expr).
+    /// `relative` marks `{% include_relative %}`: Jekyll resolves it against
+    /// the INCLUDING PAGE's directory, not `_includes/` (us-core stages
+    /// DIFFERENT bytes at the two paths — page-dir example JSON is the
+    /// pretty FHIR form, `_includes/` the compact dump).
     Include {
         name: IncludeName,
         params: Vec<(String, Expr)>,
+        relative: bool,
     },
     /// A tag we recognize by name but treat as a passthrough/no-op with a
     /// registry note (e.g. lang-fragment, fragment, sql). Emits nothing by

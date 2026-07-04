@@ -16,6 +16,31 @@ fn is_span_element(name: &str) -> bool {
     HTML_SPAN_ELEMENTS.contains(&name)
 }
 
+/// One segment of a raw HTML block with nested `markdown` islands.
+#[derive(Debug, Clone)]
+pub enum HtmlSeg {
+    /// Verbatim raw markup (normalized at render with a SHARED tag stack).
+    Raw(String),
+    /// A nested `markdown="1"/"block"` element: content parsed as blocks.
+    IslandBlock {
+        open_tag: String,
+        inner: Vec<BlockNode>,
+        inner_leading_blank: bool,
+        inner_trailing_blank: bool,
+        close_tag: String,
+        /// Element depth within the raw block (root = 1); content indents by
+        /// 2 x depth, the close tag by 2 x (depth - 1).
+        depth: usize,
+    },
+    /// A nested `markdown="span"` (or span-content-model `markdown="1"`)
+    /// element: inner text rendered at span level, in place.
+    IslandSpan {
+        open_tag: String,
+        inner_text: String,
+        close_tag: String,
+    },
+}
+
 /// kramdown HTML_CONTENT_MODEL_SPAN (parser/html.rb:42-44): elements whose
 /// `markdown="1"` content is parsed at SPAN level.
 fn is_span_content_model(name: &str) -> bool {
@@ -150,6 +175,14 @@ pub enum Block {
     /// the outer tags is re-parsed as markdown (markdown="1").
     HtmlBlock {
         raw: String,
+    },
+    /// Raw HTML block containing nested `markdown` islands: kramdown honors a
+    /// `markdown` attribute at ANY depth inside a raw element (html.rb
+    /// handle_html_start_tag) — the surrounding markup passes through raw
+    /// while each island's content re-enters the markdown parser, indented by
+    /// 2 x element depth (close tag at 2 x (depth-1); oracle-probed 2.5.0).
+    HtmlBlockSegmented {
+        segments: Vec<HtmlSeg>,
     },
     HtmlBlockMd {
         open_tag: String,
@@ -1070,6 +1103,11 @@ impl Parser {
         let mut stack: Vec<String> = Vec::new();
         let mut pos = 0usize;
         let mut end_at: Option<usize> = None;
+        // Nested `markdown` islands (kramdown honors the attribute at ANY
+        // depth inside raw HTML): raw text is cut around each island; the
+        // island content re-enters the markdown parser.
+        let mut segments: Vec<HtmlSeg> = Vec::new();
+        let mut last_cut = 0usize;
         while pos < an {
             if achars[pos] != '<' {
                 pos += 1;
@@ -1100,6 +1138,114 @@ impl Parser {
                         // non-matching close: literal text (normalizer escapes
                         // it); does not affect the stack.
                     } else if !is_self && !is_void_tag(&name) {
+                        // `markdown` attribute on a NESTED open tag (the root
+                        // is handled by the has_md path above): kramdown
+                        // strips the attribute always; a value other than "0"
+                        // re-enters markdown parsing for the element content.
+                        if pos > 0 {
+                            if let Some(mdval) = markdown_attr_value(&raw_tag) {
+                                if mdval == "0" {
+                                    // Raw content; only the attribute is
+                                    // consumed. Splice the stripped tag in as
+                                    // its own raw segment.
+                                    segments.push(HtmlSeg::Raw(
+                                        achars[last_cut..pos].iter().collect(),
+                                    ));
+                                    segments.push(HtmlSeg::Raw(
+                                        crate::render::strip_markdown_attr_pub(&raw_tag),
+                                    ));
+                                    last_cut = ni;
+                                    stack.push(name);
+                                    pos = ni;
+                                    continue;
+                                }
+                                let depth = stack.len() + 1;
+                                let model = match mdval.as_str() {
+                                    "span" => ContentModel::Span,
+                                    "block" => ContentModel::Block,
+                                    _ => default_content_model(&name),
+                                };
+                                // Find the island's matching close (same naive
+                                // substring depth-count as collect_until_close).
+                                let open_pat: Vec<char> =
+                                    format!("<{name}").chars().collect();
+                                let close_pat: Vec<char> =
+                                    format!("</{name}>").chars().collect();
+                                let mut depth_n = 1i32;
+                                let mut cur = ni;
+                                let mut close_start = None;
+                                while cur < an {
+                                    if chars_at(&achars, cur, &close_pat) {
+                                        depth_n -= 1;
+                                        if depth_n == 0 {
+                                            close_start = Some(cur);
+                                            break;
+                                        }
+                                        cur += close_pat.len();
+                                    } else if chars_at(&achars, cur, &open_pat) {
+                                        depth_n += 1;
+                                        cur += open_pat.len();
+                                    } else {
+                                        cur += 1;
+                                    }
+                                }
+                                let Some(cs) = close_start else {
+                                    // No close: fall through as plain raw.
+                                    stack.push(name);
+                                    pos = ni;
+                                    continue;
+                                };
+                                let mut inner_text: String =
+                                    achars[ni..cs].iter().collect();
+                                // The close tag's own leading indentation is
+                                // NOT island content — drop a whitespace-only
+                                // final line fragment (keep its newline).
+                                if let Some(k) = inner_text.rfind('\n') {
+                                    if inner_text[k + 1..]
+                                        .chars()
+                                        .all(|c| c == ' ' || c == '\t')
+                                    {
+                                        inner_text.truncate(k + 1);
+                                    }
+                                }
+                                let close_tag: String = close_pat.iter().collect();
+                                segments.push(HtmlSeg::Raw(
+                                    achars[last_cut..pos].iter().collect(),
+                                ));
+                                if model == ContentModel::Span {
+                                    segments.push(HtmlSeg::IslandSpan {
+                                        open_tag: raw_tag.clone(),
+                                        inner_text,
+                                        close_tag,
+                                    });
+                                } else {
+                                    let inner_doc = parse_doc_with_opts(
+                                        &inner_text,
+                                        self.parse_block_html,
+                                    );
+                                    let inner_leading_blank = {
+                                        let mut it = inner_text.split('\n');
+                                        match it.next() {
+                                            Some(first) if is_blank(first) => {
+                                                it.next().map(is_blank).unwrap_or(false)
+                                            }
+                                            _ => false,
+                                        }
+                                    };
+                                    segments.push(HtmlSeg::IslandBlock {
+                                        open_tag: raw_tag.clone(),
+                                        inner: inner_doc.nodes,
+                                        inner_leading_blank,
+                                        inner_trailing_blank: inner_doc.trailing_blank,
+                                        close_tag,
+                                        depth,
+                                    });
+                                }
+                                last_cut = cs + close_pat.len();
+                                pos = last_cut;
+                                continue;
+                            }
+                        }
                         stack.push(name);
                     }
                 }
@@ -1123,12 +1269,20 @@ impl Parser {
                     let line_rest = line_rest.to_string();
                     self.lines.insert(self.i, line_rest);
                 }
+                if !segments.is_empty() {
+                    segments.push(HtmlSeg::Raw(achars[last_cut..endp].iter().collect()));
+                    return Some(Block::HtmlBlockSegmented { segments });
+                }
             }
             None => {
                 // Unclosed root: kramdown consumes the REST of the document
                 // into the raw block and auto-closes.
-                raw = all_text;
+                raw = all_text.clone();
                 self.i = self.lines.len();
+                if !segments.is_empty() {
+                    segments.push(HtmlSeg::Raw(achars[last_cut..].iter().collect()));
+                    return Some(Block::HtmlBlockSegmented { segments });
+                }
             }
         }
         Some(Block::HtmlBlock { raw })
@@ -1565,6 +1719,26 @@ impl Parser {
 
 // ---------------------------------------------------------------------------
 // free helpers
+
+/// The `markdown` attribute value on an open tag, if present ("1", "0",
+/// "span", "block"). Both quote styles.
+fn markdown_attr_value(open_tag: &str) -> Option<String> {
+    for q in ['"', '\''] {
+        let pat = format!("markdown={q}");
+        if let Some(i) = open_tag.find(&pat) {
+            let rest = &open_tag[i + pat.len()..];
+            if let Some(j) = rest.find(q) {
+                return Some(rest[..j].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Does `chars[at..]` start with `pat`?
+fn chars_at(chars: &[char], at: usize, pat: &[char]) -> bool {
+    chars.len() >= at + pat.len() && chars[at..at + pat.len()] == *pat
+}
 
 fn attach_ial_nodes(nodes: &mut [BlockNode], attrs: Attrs) {
     if let Some(last) = nodes.last_mut() {

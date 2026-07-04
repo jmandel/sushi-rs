@@ -98,7 +98,8 @@ impl Parser {
             "for" => self.parse_for(rest).map(Some),
             "break" => Ok(Some(Node::Break)),
             "continue" => Ok(Some(Node::Continue)),
-            "include" | "include_relative" => self.parse_include(rest).map(Some),
+            "include" => self.parse_include(rest, false).map(Some),
+            "include_relative" => self.parse_include(rest, true).map(Some),
             // Recognized-but-passthrough tags (registry-documented). They emit
             // nothing by default; the host may register handlers later.
             "lang-fragment" | "fragment" | "sql" | "sqlToData" => Ok(Some(Node::UnknownTag {
@@ -239,7 +240,7 @@ impl Parser {
         })
     }
 
-    fn parse_include(&mut self, src: &str) -> Result<Node, ParseError> {
+    fn parse_include(&mut self, src: &str, relative: bool) -> Result<Node, ParseError> {
         // `NAME [key=value key2=value2 ...]` where NAME is a bare filename
         // (possibly containing `{{ }}` for dynamic includes) up to the first
         // space that precedes a `key=`.
@@ -252,7 +253,7 @@ impl Parser {
             IncludeName::Literal(name_part.to_string())
         };
         let params = parse_include_params(params_part)?;
-        Ok(Node::Include { name, params })
+        Ok(Node::Include { name, params, relative })
     }
 
     fn expect_end(&mut self, _tag: &str) -> Result<(), ParseError> {

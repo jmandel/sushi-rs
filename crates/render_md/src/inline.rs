@@ -127,13 +127,23 @@ pub fn normalize_open_tag(raw: &str) -> String {
 }
 
 pub fn normalize_html_block(raw: &str) -> String {
+    let mut stack: Vec<String> = Vec::new();
+    normalize_html_block_segment(raw, &mut stack, true)
+}
+
+/// Segment form of [`normalize_html_block`]: the open-tag stack is SHARED
+/// across the raw segments of one block (islands are balanced and never touch
+/// it), and kramdown's end-of-block auto-close runs only when `finalize` is
+/// set (the last segment).
+pub fn normalize_html_block_segment(
+    raw: &str,
+    stack: &mut Vec<String>,
+    finalize: bool,
+) -> String {
     let chars: Vec<char> = raw.chars().collect();
     let n = chars.len();
     let mut out = String::new();
     let mut i = 0;
-    // Stack of currently-open (non-void, non-self-closed) tag names. kramdown
-    // escapes a closing tag with no matching open tag as literal text.
-    let mut stack: Vec<String> = Vec::new();
     while i < n {
         let c = chars[i];
         if c == '<' {
@@ -227,7 +237,7 @@ pub fn normalize_html_block(raw: &str) -> String {
     // block ("Found no end tag ... auto-closing it"), emitting the close tags
     // compactly at the end. The block's text ends at a line boundary, so the
     // closes start on a fresh line.
-    if !stack.is_empty() {
+    if finalize && !stack.is_empty() {
         let trimmed_end = out.trim_end_matches([' ', '\t']).len();
         out.truncate(trimmed_end);
         if !out.ends_with('\n') {

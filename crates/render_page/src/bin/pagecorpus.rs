@@ -221,7 +221,9 @@ fn main() {
     let engine = if use_engine { Some(build_engine(ig, &p)) } else { None };
     let engine_first = args.iter().any(|a| a == "--engine-first");
     let provider =
-        PageProvider::new(&site, &p.includes_dir, engine.as_ref()).with_engine_first(engine_first);
+        PageProvider::new(&site, &p.includes_dir, engine.as_ref())
+            .with_engine_first(engine_first)
+            .with_pages_root(&p.pages_root);
     // Post-Jekyll ReleaseHeader substitution (us-core's output/ is this later
     // stage; plan-net's is pre-substitution -> None -> no-op).
     let release_header = harvest_release_header(&p.golden_dir);

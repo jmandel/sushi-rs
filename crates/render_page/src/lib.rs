@@ -47,6 +47,12 @@ pub fn markdownify(src: &str) -> String {
 pub struct PageProvider<'a> {
     site: &'a SiteData,
     includes_dir: PathBuf,
+    /// Root of the STAGED PAGES tree (`temp/pages`); `include_relative`
+    /// resolves against `<pages_root>/<current page dir>/<name>` (Jekyll).
+    pages_root: Option<PathBuf>,
+    /// Directory (relative to `pages_root`) of the page being rendered — set
+    /// by [`render_page`] per call ("" for a flat layout, "en" for en/…).
+    current_page_dir: RefCell<String>,
     /// Read seam for `_includes/` lookups (FsTree natively; MemTree in wasm).
     tree: std::rc::Rc<dyn render_sd::tree::TreeSource>,
     engine: Option<&'a FragmentEngine>,
@@ -71,6 +77,8 @@ impl<'a> PageProvider<'a> {
             includes_dir: includes_dir.to_path_buf(),
             tree: render_sd::tree::fs_tree(),
             engine,
+            pages_root: None,
+            current_page_dir: RefCell::new(String::new()),
             engine_first: false,
             frag_cache: std::rc::Rc::new(RefCell::new(HashMap::new())),
             miss_count: RefCell::new(0),
@@ -81,6 +89,25 @@ impl<'a> PageProvider<'a> {
     pub fn with_engine_first(mut self, on: bool) -> Self {
         self.engine_first = on;
         self
+    }
+
+    /// Enable Jekyll `include_relative` resolution against the staged pages
+    /// tree. Without it, include_relative falls back to `_includes/` (the
+    /// engine default — pre-us-core corpora never distinguished the paths).
+    pub fn with_pages_root(mut self, root: &Path) -> Self {
+        self.pages_root = Some(root.to_path_buf());
+        self
+    }
+
+    /// Set the directory of the page about to render (relative to
+    /// pages_root). Called by [`render_page`]; interior-mutable because the
+    /// provider is shared across the page loop.
+    pub fn set_current_page_dir(&self, page_path: &str) {
+        let dir = match page_path.rsplit_once('/') {
+            Some((d, _)) => d.to_string(),
+            None => String::new(),
+        };
+        *self.current_page_dir.borrow_mut() = dir;
     }
 
     /// Use a non-fs read seam (the wasm session's MemTree).
@@ -151,6 +178,16 @@ impl<'a> DataProvider for PageProvider<'a> {
     fn include_source(&self, name: &str) -> Option<String> {
         self.resolve_include(name)
     }
+    fn include_source_relative(&self, name: &str) -> Option<String> {
+        let root = self.pages_root.as_ref()?;
+        let dir = self.current_page_dir.borrow();
+        let p = if dir.is_empty() {
+            root.join(name)
+        } else {
+            root.join(&*dir).join(name)
+        };
+        self.tree.read(&p)
+    }
 }
 
 /// Strip Jekyll front-matter (a leading `---\n … \n---\n`). Returns the body
@@ -207,6 +244,7 @@ pub fn strip_front_matter(src: &str) -> &str {
 /// HTML. `page_path` is the Jekyll-relative path (e.g. `en/toc.html`), exposed
 /// to Liquid as `page.path`.
 pub fn render_page(src: &str, page_path: &str, provider: &PageProvider) -> String {
+    provider.set_current_page_dir(page_path);
     // Jekyll semantics: only files with YAML front-matter are Liquid-processed;
     // a file WITHOUT a leading `---` line is a static asset, copied VERBATIM
     // (verified: `searchform.html` has no front-matter and its golden is a

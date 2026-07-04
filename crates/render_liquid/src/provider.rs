@@ -37,6 +37,14 @@ pub trait DataProvider {
         let _ = name;
         None
     }
+
+    /// `{% include_relative NAME %}` body — Jekyll resolves it against the
+    /// including PAGE's directory, not `_includes/` (us-core stages DIFFERENT
+    /// bytes at the two paths). Default: no page context — defer to
+    /// [`DataProvider::include_source`].
+    fn include_source_relative(&self, name: &str) -> Option<String> {
+        self.include_source(name)
+    }
 }
 
 /// A trivial provider backed by a JSON-shaped in-memory context. Used by the

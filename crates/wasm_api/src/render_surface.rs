@@ -237,6 +237,7 @@ impl RenderState {
             Some(&self.engine),
         )
         .with_engine_first(self.engine_first_includes)
+        .with_pages_root(Path::new(SITE_DIR))
         .with_tree(self.tree.clone())
         .with_shared_cache(self.frag_cache.clone())
     }
@@ -379,7 +380,8 @@ mod tests {
         let engine = FragmentEngine::new(ctx, uuid.clone(), true, facts);
         let site = SiteData::load(&b.join("temp/pages/_data"));
         let provider = PageProvider::new(&site, &b.join("temp/pages/_includes"), Some(&engine))
-            .with_engine_first(true);
+            .with_engine_first(true)
+            .with_pages_root(&b.join("temp/pages"));
 
         // ---- session side: virtual layout from the same bytes.
         // packages -> BundleSource

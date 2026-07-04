@@ -295,6 +295,71 @@ impl Renderer {
                     out.push_str(norm.trim_end_matches([' ', '\t']));
                 }
             }
+            Block::HtmlBlockSegmented { segments } => {
+                // Raw markup passes through with ONE shared open-tag stack
+                // (auto-close only after the final segment); islands render
+                // in place — content at 2 x depth, close tag at 2 x (depth-1)
+                // (oracle-probed kramdown 2.5.0; see block.rs HtmlSeg).
+                let mut tag_stack: Vec<String> = Vec::new();
+                let last = segments.len().saturating_sub(1);
+                for (si, seg) in segments.iter().enumerate() {
+                    match seg {
+                        crate::block::HtmlSeg::Raw(rawseg) => {
+                            let norm = crate::inline::normalize_html_block_segment(
+                                rawseg,
+                                &mut tag_stack,
+                                si == last,
+                            );
+                            let mut piece: &str = &norm;
+                            let trimmed_start;
+                            if si == 0 {
+                                trimmed_start = norm.trim_start_matches([' ', '\t']).to_string();
+                                piece = &trimmed_start;
+                                out.push_str(&pad);
+                            }
+                            if si == last {
+                                out.push_str(piece.trim_end_matches([' ', '\t']));
+                            } else {
+                                out.push_str(piece);
+                            }
+                        }
+                        crate::block::HtmlSeg::IslandBlock {
+                            open_tag,
+                            inner,
+                            inner_leading_blank,
+                            inner_trailing_blank,
+                            close_tag,
+                            depth,
+                        } => {
+                            let cleaned = strip_markdown_attr(open_tag);
+                            let open_norm = normalize_open_tag(&cleaned);
+                            out.push_str(open_norm.trim_end());
+                            out.push('\n');
+                            if *inner_leading_blank {
+                                out.push('\n');
+                            }
+                            self.render_blocks(inner, out, depth * 2, false);
+                            out.push('\n');
+                            if *inner_trailing_blank {
+                                out.push('\n');
+                            }
+                            out.push_str(&" ".repeat((depth - 1) * 2));
+                            out.push_str(close_tag);
+                        }
+                        crate::block::HtmlSeg::IslandSpan {
+                            open_tag,
+                            inner_text,
+                            close_tag,
+                        } => {
+                            let cleaned = strip_markdown_attr(open_tag);
+                            let open_norm = normalize_open_tag(&cleaned);
+                            out.push_str(open_norm.trim_end());
+                            out.push_str(&render_inline(inner_text));
+                            out.push_str(close_tag);
+                        }
+                    }
+                }
+            }
             Block::HtmlBlockMd {
                 open_tag,
                 inner,
@@ -382,7 +447,12 @@ impl Renderer {
                 escape_html_attr(cls)
             ));
             out.push_str(&escaped);
-            out.push_str("</code></pre></div></div>");
+            // Jekyll's kramdown emits the block indent BEFORE the wrapper's
+            // final </div> (format_as_indented_block_html: open+body+pad+close;
+            // verified against Jekyll 4.4.1's converter at indent 0/2/4).
+            out.push_str("</code></pre></div>");
+            out.push_str(&pad);
+            out.push_str("</div>");
             return;
         }
         // Real-lexer languages (json/js): a rouge tokenizer produces the inner
@@ -395,7 +465,9 @@ impl Renderer {
                     escape_html_attr(lang)
                 ));
                 out.push_str(&inner);
-                out.push_str("</code></pre></div></div>");
+                out.push_str("</code></pre></div>");
+                out.push_str(&pad);
+                out.push_str("</div>");
                 return;
             }
         }
@@ -812,6 +884,12 @@ fn render_toc_level(
 
 /// Remove a `markdown="1"` / `markdown='1'` attribute (and its surrounding
 /// whitespace) from an opening tag string.
+/// Public wrapper for block.rs (markdown="0" tags splice their stripped form
+/// into the raw stream).
+pub(crate) fn strip_markdown_attr_pub(open_tag: &str) -> String {
+    strip_markdown_attr(open_tag)
+}
+
 fn strip_markdown_attr(open_tag: &str) -> String {
     let mut s = open_tag.to_string();
     for pat in [" markdown=\"1\"", " markdown='1'", "markdown=\"1\"", "markdown='1'"] {

@@ -27,7 +27,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ORACLE = ROOT / "scripts" / "kramdown-oracle.rb"
 STRIP = ROOT / "scripts" / "strip-liquid.py"
-RUST_BIN = ROOT / "crates" / "render_md" / "target" / "debug" / "render_md_cli"
+# Workspace fold-in (consolidation #3): ONE root target dir.
+RUST_BIN = ROOT / "target" / "debug" / "render_md_cli"
 
 # The survey corpus lives in the session scratchpad (READ-ONLY input).
 CORPUS = Path(
