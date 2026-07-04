@@ -473,3 +473,25 @@ we must not overlook + a firm "no ant runner, ever" line.**
 oracle is free (both sides on disk); the only real diligence item is the one
 `processPages` XSLT and pinning the empirically-derived `_append.` rule against
 the real `NpmPackage` source once fhir-core is available.
+
+## Addendum (2026-07-04, coordinator): "template 2" identified + demo default verified
+
+- **Demo default version check**: packages.fhir.org `dist-tags.latest` for
+  hl7.fhir.template = **1.0.0** (versions end at 1.0.0), so the demo's
+  defaultVersion=1.0.0 IS the newest published version, not a fallback
+  artifact. Check closed.
+- **"Template 2" = `fhir2.base.template`** (repo HL7/ig-template-base2,
+  "New release that supports languages and translations", published 0.1.0,
+  actively developed — updated 2026-06-26). It is a different PACKAGE NAME,
+  not a version — and it is a BASE template: users don't select it directly;
+  it arrives via a leaf template's `base` chain. **We already cover it**:
+  the plan-net oracle chain (hl7.davinci.template → hl7.fhir.template →
+  hl7.base.template → fhir2.base.template) is the loader's generalization
+  gate — and its language machinery is exactly why the plan-net pipeline
+  has the multi-language layout (temp/pages/en, output/en, langs redirect
+  stubs) that F5 ported. When leaf templates repoint their base to fhir2,
+  the chain walk handles it with zero loader changes.
+- ig-guidance's official leaf-template set also includes hl7.cda.template,
+  hl7.ehrs.template, hl7.other.template — candidates for the curated
+  dropdown later (cda likely carries custom generators; verify hooks via
+  AntHookError before promoting).
