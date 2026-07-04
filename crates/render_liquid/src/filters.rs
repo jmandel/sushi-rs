@@ -110,7 +110,17 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
         "jsonify" => Value::str(jsonify(&input)),
         "slugify" => Value::str(slugify(&input.to_str(), a0.as_ref())),
         "number_of_words" => Value::Int(input.to_str().split_whitespace().count() as i64),
-        "date" => Value::str(input.to_str()), // dates are pre-formatted strings in corpus
+        // Jekyll/Liquid `date` filter: Time.parse(input).strftime(fmt). The
+        // F1c survey measured dates as pre-formatted (no `date:` calls), so the
+        // differential oracle is unaffected. F5's page footer DOES use it:
+        // `{{ site.data.fhir.genDate | date: "%Y-%m-%d %H:%M:%S %z" }}`. Ported
+        // for the corpus-observed input shape + strftime tokens (fails loud on an
+        // unrecognized input so a new date shape surfaces rather than passing
+        // through silently).
+        "date" => match liquid_date(&input.to_str(), &arg_str(&a0)) {
+            Some(s) => Value::str(s),
+            None => Value::str(input.to_str()),
+        },
         "inspect" => Value::str(jsonify(&input)),
 
         // unknown filter: Jekyll strict_filters=false -> passthrough
@@ -123,6 +133,119 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
 
 fn arg_str(a: &Option<Value>) -> String {
     a.as_ref().map(|v| v.to_str()).unwrap_or_default()
+}
+
+/// A parsed instant (the fields strftime needs). Seconds default to 0 — the
+/// publisher's `genDate` (`Fri, Jul 3, 2026 11:10-0500`) carries no seconds, and
+/// the golden's `%H:%M:%S %z` renders `:00` (verified against output/en goldens).
+struct DateParts {
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    min: u32,
+    sec: u32,
+    /// timezone offset like "-0500" (already `±HHMM`), or "" if none.
+    tz: String,
+}
+
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Parse the publisher's `genDate` form: `Fri, Jul 3, 2026 11:10-0500`
+/// (`%a, %b %-d, %Y %H:%M%z`). Also accepts an ISO-8601 `2026-07-03T11:10:36-05:00`
+/// (the `ig.date` form). Returns None on any other shape (caller passes through).
+fn parse_date(input: &str) -> Option<DateParts> {
+    let s = input.trim();
+    // ISO-8601: 2026-07-03T11:10:36-05:00 or ...Z
+    if s.len() >= 10 && s.as_bytes()[4] == b'-' && s.as_bytes()[7] == b'-' {
+        let year: i32 = s.get(0..4)?.parse().ok()?;
+        let month: u32 = s.get(5..7)?.parse().ok()?;
+        let day: u32 = s.get(8..10)?.parse().ok()?;
+        let (mut hour, mut min, mut sec, mut tz) = (0u32, 0u32, 0u32, String::new());
+        if s.len() > 11 && (s.as_bytes()[10] == b'T' || s.as_bytes()[10] == b' ') {
+            let rest = &s[11..];
+            hour = rest.get(0..2)?.parse().ok()?;
+            min = rest.get(3..5)?.parse().ok()?;
+            if rest.len() >= 8 && rest.as_bytes()[5] == b':' {
+                sec = rest.get(6..8)?.parse().ok()?;
+            }
+            // tz tail: +05:00 / -0500 / Z
+            if let Some(p) = rest[5..].find(['+', '-']) {
+                let raw = &rest[5 + p..];
+                tz = raw.replace(':', "");
+            } else if rest.ends_with('Z') {
+                tz = "+0000".to_string();
+            }
+        }
+        return Some(DateParts { year, month, day, hour, min, sec, tz });
+    }
+    // genDate: `Fri, Jul 3, 2026 11:10-0500`
+    // Drop the weekday prefix up to the first ", ".
+    let after_wd = s.splitn(2, ", ").nth(1).unwrap_or(s);
+    // after_wd = "Jul 3, 2026 11:10-0500"
+    let mon_str = after_wd.split(' ').next()?;
+    let month = (MONTHS.iter().position(|m| *m == mon_str)? + 1) as u32;
+    let rest = after_wd[mon_str.len()..].trim_start();
+    // rest = "3, 2026 11:10-0500"
+    let day_str = rest.split(',').next()?.trim();
+    let day: u32 = day_str.parse().ok()?;
+    let rest2 = rest.splitn(2, ", ").nth(1)?; // "2026 11:10-0500"
+    let mut it = rest2.splitn(2, ' ');
+    let year: i32 = it.next()?.parse().ok()?;
+    let time = it.next().unwrap_or(""); // "11:10-0500"
+    let (mut hour, mut min, mut sec, mut tz) = (0u32, 0u32, 0u32, String::new());
+    if !time.is_empty() {
+        // split off tz (+/-)
+        let tzpos = time[1..].find(['+', '-']).map(|p| p + 1);
+        let (hms, tzs) = match tzpos {
+            Some(p) => (&time[..p], &time[p..]),
+            None => (time, ""),
+        };
+        let mut hp = hms.split(':');
+        hour = hp.next().unwrap_or("0").parse().unwrap_or(0);
+        min = hp.next().unwrap_or("0").parse().unwrap_or(0);
+        sec = hp.next().unwrap_or("0").parse().unwrap_or(0);
+        tz = tzs.replace(':', "");
+    }
+    Some(DateParts { year, month, day, hour, min, sec, tz })
+}
+
+/// Apply a strftime format to parsed parts. Supports the corpus tokens
+/// (`%Y %m %d %H %M %S %z`) plus the common name tokens; unknown `%x` are kept
+/// verbatim. Returns None if the input didn't parse.
+fn liquid_date(input: &str, fmt: &str) -> Option<String> {
+    if fmt.is_empty() {
+        return None;
+    }
+    let p = parse_date(input)?;
+    let mut out = String::new();
+    let mut chars = fmt.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('Y') => out.push_str(&format!("{:04}", p.year)),
+            Some('m') => out.push_str(&format!("{:02}", p.month)),
+            Some('d') => out.push_str(&format!("{:02}", p.day)),
+            Some('H') => out.push_str(&format!("{:02}", p.hour)),
+            Some('M') => out.push_str(&format!("{:02}", p.min)),
+            Some('S') => out.push_str(&format!("{:02}", p.sec)),
+            Some('z') => out.push_str(&p.tz),
+            Some('b') => out.push_str(MONTHS.get((p.month.max(1) - 1) as usize).unwrap_or(&"")),
+            Some('y') => out.push_str(&format!("{:02}", p.year % 100)),
+            Some('%') => out.push('%'),
+            Some(other) => {
+                out.push('%');
+                out.push(other);
+            }
+            None => out.push('%'),
+        }
+    }
+    Some(out)
 }
 
 fn capitalize(s: &str) -> String {

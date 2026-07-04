@@ -17,6 +17,7 @@ pub mod context;
 pub mod dict;
 pub mod deptable;
 pub mod diff;
+pub mod engine;
 pub mod fstxcache;
 pub mod txcache;
 pub mod vscs;

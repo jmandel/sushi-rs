@@ -218,7 +218,7 @@ fn raw_publisher_quirk_evaluates_inner() {
         "X{% raw %}{{ bar }}{% endraw %}Y",
         &p,
         &[("bar", Value::str("Z"))],
-        Options { publisher_raw_quirk: true },
+        Options { publisher_raw_quirk: true, ..Options::default() },
     );
     assert_eq!(out, "XZY");
 }

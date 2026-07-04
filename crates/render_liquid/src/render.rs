@@ -13,6 +13,11 @@ pub struct Options {
     /// Reproduce the IG Publisher quirk of evaluating tags inside `{% raw %}`
     /// (survey nasty #4). Default = correct Liquid raw (verbatim body).
     pub publisher_raw_quirk: bool,
+    /// Optional real `markdownify` implementation (F5 page pass wires kramdown =
+    /// render_md here). `None` (the default) preserves the F1c differential
+    /// oracle's deterministic `MD…/MD` marker stub — so this field is fully
+    /// gate-neutral for the render_liquid differential suite, which never sets it.
+    pub markdownify: Option<fn(&str) -> String>,
 }
 
 /// A single stack frame of local variables (assign/capture/for-var/include
@@ -341,6 +346,15 @@ impl<'p> Renderer<'p> {
                 "find_exp" => {
                     val = self.find_exp(val, &f.args);
                     continue;
+                }
+                "markdownify" => {
+                    // F5: if a real kramdown hook is installed, use it; else fall
+                    // through to filters::apply's deterministic `MD…/MD` marker
+                    // (the F1c oracle stub — preserved when the hook is None).
+                    if let Some(md) = self.opts.markdownify {
+                        val = Value::str(md(&val.to_str()));
+                        continue;
+                    }
                 }
                 _ => {}
             }

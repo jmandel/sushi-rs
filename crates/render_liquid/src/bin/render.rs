@@ -87,6 +87,7 @@ fn main() {
 
     let opts = Options {
         publisher_raw_quirk: raw_quirk,
+        ..Options::default()
     };
     let out = render_with(&src, &prov, &globals, opts);
     print!("{out}");

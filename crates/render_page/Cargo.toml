@@ -1,0 +1,27 @@
+# Standalone crate — its OWN [workspace] so it does not join the root workspace
+# (F5 convergence; integration into the root workspace happens in F6).
+[workspace]
+
+[package]
+name = "render_page"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "F5: the Jekyll-equivalent page pass — layouts/includes via render_liquid, kramdown via render_md, fragments via render_sd's FragmentEngine, at Publisher byte-parity."
+
+[lib]
+name = "render_page"
+
+[[bin]]
+name = "pagecorpus"
+path = "src/bin/pagecorpus.rs"
+
+[dependencies]
+render_liquid = { path = "../render_liquid" }
+render_md = { path = "../render_md" }
+render_sd = { path = "../render_sd" }
+render_xhtml = { path = "../render_xhtml" }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+
+[dev-dependencies]

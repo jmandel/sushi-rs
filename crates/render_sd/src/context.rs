@@ -421,6 +421,19 @@ impl IgContext {
         self.own_package_id.as_deref()
     }
 
+    /// Load the raw JSON text of an own resource by its `{Type}-{id}` reference
+    /// (the fragment include prefix, e.g. `StructureDefinition-us-core-patient`).
+    /// The FragmentEngine uses this to fetch the single resource a per-resource
+    /// fragment renders. Matches `{rtype}-{id}` against the loaded own_files.
+    pub fn load_own_file(&self, refname: &str) -> Option<String> {
+        for (rtype, id, path) in &self.own_files {
+            if format!("{}-{}", rtype, id) == refname {
+                return std::fs::read_to_string(path).ok();
+            }
+        }
+        None
+    }
+
     /// Enumerate the IG's OWN resources (all `output/*.json` we loaded), the
     /// whole-IG scan denominator (uses/references/aggregates). Sorted by
     /// `{Type}-{id}` for determinism. The full JSON is loaded lazily and cached
