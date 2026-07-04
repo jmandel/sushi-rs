@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# DRY gate (task #32): the transitive R4 context closure produced by the native
-# Rust resolver (`rust_sushi resolve --root`) MUST equal the Node fallback in
-# snapshot/package-deps.cjs, byte-for-byte, on a set of published IGs. A drift
-# here means the two implementations diverged — fix the Node fallback (Rust is
-# the source of truth) until they agree.
+# Regression gate for the package-deps.cjs SHIM WIRING (task #32; Node fallback
+# retired in Consolidation Pass 1). There is now ONE resolver — Rust
+# (`rust_sushi resolve --root`); package-deps.cjs is a pure shim over it. This
+# gate asserts, on a set of published IGs, that the SHIM's stdout is byte-for-byte
+# identical to a DIRECT `rust_sushi resolve` invocation — i.e. the shim's arg
+# parsing / cache-path resolution / stdout passthrough is intact (no swallowed
+# lines, no reordering, no trailing-newline drift).
+#
+# (Before the fallback was deleted, this compared the retained Node algorithm to
+# Rust; that parity soaked green across #32. It now guards the wiring instead.)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,19 +36,18 @@ IGS=(
 
 pass=0; fail=0
 for root in "${IGS[@]}"; do
-  # Rust native (the source of truth).
-  rust_out="$("$BIN" resolve --cache "$CACHE" --root "$root")"
-  # Node FALLBACK path: force it by pointing the shim at a non-existent binary,
-  # so we compare the retained JS algorithm (not the shim re-invoking Rust).
-  cjs_out="$(RUST_SUSHI_BIN=/nonexistent/rust_sushi node "$CJS" --cache "$CACHE" "$root")"
-  if [ "$rust_out" = "$cjs_out" ]; then
+  # Direct native resolver (the source of truth).
+  rust_out="$(RUST_SUSHI_BIN="$BIN" "$BIN" resolve --cache "$CACHE" --root "$root")"
+  # The shim path: node package-deps.cjs (which shells out to the same binary).
+  shim_out="$(RUST_SUSHI_BIN="$BIN" node "$CJS" --cache "$CACHE" "$root")"
+  if [ "$rust_out" = "$shim_out" ]; then
     n="$(printf '%s\n' "$rust_out" | grep -c .)"
     echo "PASS $root ($n pkgs)"; pass=$((pass+1))
   else
-    echo "FAIL $root"; diff <(printf '%s' "$cjs_out") <(printf '%s' "$rust_out") | head -20
+    echo "FAIL $root"; diff <(printf '%s' "$shim_out") <(printf '%s' "$rust_out") | head -20
     fail=$((fail+1))
   fi
 done
 
-echo "=== package-deps DRY parity: $pass pass, $fail fail ==="
+echo "=== package-deps shim-wiring parity: $pass pass, $fail fail ==="
 [ "$fail" -eq 0 ]
