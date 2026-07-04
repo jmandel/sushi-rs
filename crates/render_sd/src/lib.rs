@@ -14,6 +14,9 @@
 pub mod commonmark;
 pub mod context;
 pub mod diff;
+pub mod fstxcache;
+pub mod txcache;
+pub mod vscs;
 pub mod gentypes;
 pub mod grid;
 pub mod leaf;
