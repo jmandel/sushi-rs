@@ -23,6 +23,15 @@ const WASM_DIR = process.argv[3];
 const BUNDLE_DIR = process.argv[4];
 
 const mod = await import(path.join(WASM_DIR, 'wasm_api.js'));
+// The Session surface (the only wasm API since the free-function wrappers were
+// deleted). Envelopes: { apiVersion, ok, op, result | error }.
+const session = new mod.Session();
+function unwrap(envJson) {
+  const env = JSON.parse(envJson);
+  if (env.apiVersion !== 1) throw new Error(`bad apiVersion ${env.apiVersion}`);
+  if (!env.ok) throw new Error(`${env.op}: ${env.error.message}`);
+  return env.result;
+}
 
 // ---- bundle loading -------------------------------------------------------
 // Each package bundle is a gzipped tar (built by `rust_sushi bundle`). We inflate
@@ -63,8 +72,9 @@ function mountBundles(labels) {
     const tgz = path.join(BUNDLE_DIR, `${label}.tgz`);
     return { label, files: untarGz(tgz) };
   });
-  const n = mod.init(JSON.stringify(bundles));
-  if (n !== labels.length) throw new Error(`init mounted ${n}, expected ${labels.length}`);
+  const { mounted } = unwrap(session.init(JSON.stringify(bundles)));
+  if (mounted !== labels.length)
+    throw new Error(`init mounted ${mounted}, expected ${labels.length}`);
 }
 
 // ---- comparison helpers ---------------------------------------------------
@@ -131,7 +141,7 @@ function runLadder() {
       const fp = path.join(fixturesDir, `${name}.json`);
       if (fs.existsSync(fp)) locals[`${name}.json`] = readJson(fp);
     }
-    mod.set_local_resources(JSON.stringify(locals));
+    unwrap(session.setLocalResources(JSON.stringify(locals)));
     for (const name of rungs) {
       const goldenPath = path.join(REPO, 'snapshot/goldens', `${name}.snapshot.json`);
       const fixturePath = path.join(fixturesDir, `${name}.json`);
@@ -140,7 +150,7 @@ function runLadder() {
         continue;
       }
       const input = fs.readFileSync(fixturePath, 'utf8');
-      const res = JSON.parse(mod.generate_snapshot(input));
+      const res = unwrap(session.snapshot(input));
       if (!res.snapshot) {
         failures.push(`${name}: engine error: ${res.messages.join('; ')}`);
         continue;
@@ -210,7 +220,7 @@ function runCorpus(igKey) {
       }
     }
   }
-  mod.set_local_resources(JSON.stringify(locals));
+  unwrap(session.setLocalResources(JSON.stringify(locals)));
 
   let ok = 0;
   const failures = [];
@@ -223,7 +233,7 @@ function runCorpus(igKey) {
       continue;
     }
     const input = fs.readFileSync(fixturePath, 'utf8');
-    const res = JSON.parse(mod.generate_snapshot(input));
+    const res = unwrap(session.snapshot(input));
     if (!res.snapshot) {
       failures.push(`${name}: engine error: ${res.messages.join('; ')}`);
       continue;
@@ -245,7 +255,7 @@ function report(label, r, expected) {
   for (const f of r.failures.slice(0, 8)) console.log(`        - ${f}`);
 }
 
-console.log(`engine: ${mod.version()}`);
+console.log(`engine: ${mod.Session.version()}`);
 report('ladder', runLadder(), 17);
 report('ips', runCorpus('ips'), 29);
 report('mcode', runCorpus('mcode'), 46);

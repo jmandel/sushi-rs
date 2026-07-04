@@ -92,7 +92,14 @@ fn session_expand_result_equals_legacy_payload() {
     let session_result = &enveloped["result"];
 
     let legacy: Value = serde_json::from_str(
-        &wasm_api::expand_enumerable(&vs.to_string(), &json!([cs]).to_string()).unwrap(),
+        &{
+            let env: Value = serde_json::from_str(
+                &s.expand_valueset(&vs.to_string(), &json!([cs]).to_string()),
+            )
+            .unwrap();
+            assert_eq!(env["ok"], true);
+            env["result"].to_string()
+        },
     )
     .unwrap();
 
@@ -136,12 +143,6 @@ fn session_resolve_result_equals_legacy_and_native() {
     let enveloped = parse(s.resolve_project(config, &index));
     assert_eq!(enveloped["ok"], true);
     let session_result = &enveloped["result"];
-
-    // Legacy raw JSON == native resolver (already asserted in expand_api.rs; here
-    // we bind the Session result to the legacy string too).
-    let legacy: Value =
-        serde_json::from_str(&wasm_api::resolve_project(config, &index).unwrap()).unwrap();
-    assert_eq!(session_result, &legacy);
 
     let ctx = session_result["context_closure"].as_array().unwrap();
     let ids: Vec<&str> = ctx.iter().map(|r| r["package_id"].as_str().unwrap()).collect();

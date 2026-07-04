@@ -27,7 +27,7 @@
 //! Methods never throw for domain errors — they return `ok:false`; only a
 //! genuinely unusable argument (non-string) surfaces as a JS exception.
 //!
-//! # Legacy free-function surface (DEPRECATED — kept for the live editor)
+//! # Legacy free-function surface — DELETED (F6): `Session` is the only API.
 //!
 //! The original flat exports (`init` / `mount_bundles` / `compile` /
 //! `set_local_resources` / `generate_snapshot` / `expand_enumerable` /
@@ -892,112 +892,8 @@ impl Session {
 }
 
 // ===========================================================================
-// Legacy free-function surface — DEPRECATED thin wrappers over the shared engine.
-// They preserve their exact historical output shapes byte-for-byte (the M2 editor
-// + parity harness depend on them). F6 migrates callers to `Session`, then these
-// go away. `JsError` is reconstructed here so the wire type is unchanged.
+// Shared helpers (used by the Engine methods above).
 // ===========================================================================
-
-/// DEPRECATED: use `new Session().init(bundles)`. Mount prebuilt bundles as the
-/// package cache. Returns the package count.
-#[deprecated(note = "use Session::init (the session surface). Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn init(bundles_json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    with_engine(|e| e.init(bundles_json)).map_err(|m| JsError::new(&m))
-}
-
-/// DEPRECATED: use `new Session().mount(bundles)`. Additive, idempotent mount.
-/// Returns the total package count.
-#[deprecated(note = "use Session::mount. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn mount_bundles(bundles_json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    with_engine(|e| e.mount(bundles_json)).map_err(|m| JsError::new(&m))
-}
-
-/// DEPRECATED: use `new Session().compile(...)`. Returns `{ resources,
-/// diagnostics, timings }` (the RAW payload, not the session envelope).
-#[deprecated(note = "use Session::compile. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn compile(files_json: &str, config: &str, predefined_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let r = with_engine(|e| e.compile(files_json, config, predefined_json));
-    match r {
-        Ok(payload) => serde_json::to_string(&payload)
-            .map_err(|e| JsError::new(&format!("compile: serialize: {e}"))),
-        Err(m) => Err(JsError::new(&m)),
-    }
-}
-
-/// DEPRECATED: use `new Session().setLocalResources(json)`. Returns the count.
-#[deprecated(note = "use Session::set_local_resources. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn set_local_resources(json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    with_engine(|e| e.set_local_resources(json)).map_err(|m| JsError::new(&m))
-}
-
-/// DEPRECATED: use `new Session().snapshot(input)`. Returns `{ snapshot, messages }`
-/// (the RAW payload, not the session envelope).
-#[deprecated(note = "use Session::snapshot. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn generate_snapshot(input: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let r = with_engine(|e| e.snapshot(input));
-    match r {
-        Ok(payload) => serde_json::to_string(&payload)
-            .map_err(|e| JsError::new(&format!("serialize: {e}"))),
-        Err(m) => Err(JsError::new(&m)),
-    }
-}
-
-/// DEPRECATED: use `new Session().expandValueSet(vs, resources)`. Returns the RAW
-/// expansion payload (`{ ok, ... }`), not the session envelope.
-#[deprecated(note = "use Session::expand_valueset. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn expand_enumerable(valueset_json: &str, resources_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let r = with_engine(|e| e.expand_valueset(valueset_json, resources_json));
-    match r {
-        Ok(payload) => serde_json::to_string(&payload)
-            .map_err(|e| JsError::new(&format!("expand_enumerable: serialize: {e}"))),
-        Err(m) => Err(JsError::new(&m)),
-    }
-}
-
-/// DEPRECATED: use `new Session().buildSiteDb(input)`. Returns the RAW row-model
-/// JSON, not the session envelope.
-#[deprecated(note = "use Session::build_site_db. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn build_site_db(input_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let r = with_engine(|e| e.build_site_db(input_json));
-    match r {
-        Ok(payload) => serde_json::to_string(&payload)
-            .map_err(|e| JsError::new(&format!("build_site_db: serialize rows: {e}"))),
-        Err(m) => Err(JsError::new(&m)),
-    }
-}
-
-/// DEPRECATED: use `new Session().resolveProject(config, versionIndex)`. Returns
-/// the RAW `ResolutionStep` JSON, not the session envelope.
-#[deprecated(note = "use Session::resolve_project. Kept for the live editor; F6 removes it.")]
-#[wasm_bindgen]
-pub fn resolve_project(config: &str, version_index_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    // Hand back the exact `ResolutionStep::to_json()` bytes (byte-identical to the
-    // historical output the parity gate + editor consume).
-    with_engine(|e| e.resolve_project(config, version_index_json)).map_err(|m| JsError::new(&m))
-}
-
-/// Engine version + build commit, as a JSON string `{ version, commit }`. (Not
-/// deprecated — the same info `Session::version()` returns; a free accessor is
-/// convenient and harmless.)
-#[wasm_bindgen]
-pub fn version() -> String {
-    version_json()
-}
 
 // ---------------------------------------------------------------------------
 // internals
@@ -1098,7 +994,6 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
     }
     Ok(out)
 }
-
 
 // ===========================================================================
 // F6 render surface — Engine methods (Session wrappers below in Session impl).

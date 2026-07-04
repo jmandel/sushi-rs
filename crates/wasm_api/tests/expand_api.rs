@@ -16,9 +16,34 @@
 #![allow(deprecated)]
 
 use serde_json::{json, Value};
-use wasm_api::{expand_enumerable, init, mount_bundles};
+use wasm_api::Session;
 
-fn ok(r: Result<String, wasm_bindgen::JsError>) -> Value {
+/// Session-envelope helpers: every op returns `{apiVersion, ok, op, result|error}`.
+fn call(env_json: String) -> Value {
+    let env: Value = serde_json::from_str(&env_json).unwrap();
+    assert_eq!(env["ok"], true, "engine error: {env}");
+    env["result"].clone()
+}
+fn expand_enumerable(vs: &str, resources: &str) -> Result<String, String> {
+    let s = Session::new();
+    let env: Value = serde_json::from_str(&s.expand_valueset(vs, resources)).unwrap();
+    if env["ok"] == true {
+        Ok(env["result"].to_string())
+    } else {
+        Err(env["error"]["message"].to_string())
+    }
+}
+fn init(bundles: &str) -> Result<u32, String> {
+    Ok(call(Session::new().init(bundles))["mounted"].as_u64().unwrap() as u32)
+}
+fn mount_bundles(bundles: &str) -> Result<u32, String> {
+    Ok(call(Session::new().mount(bundles))["mounted"].as_u64().unwrap() as u32)
+}
+fn wasm_resolve(config: &str, index: &str) -> Result<String, String> {
+    Ok(call(Session::new().resolve_project(config, index)).to_string())
+}
+
+fn ok(r: Result<String, String>) -> Value {
     // `JsError` has no Debug/Display we can read natively; on Err we only know it
     // failed. Surface that as a test failure with a generic message.
     match r {
@@ -157,7 +182,6 @@ fn mount_bundles_is_additive_and_idempotent() {
 /// thin marshalling shell over the same Rust function the CLI + `.cjs` shim drive.
 #[test]
 fn wasm_resolver_equals_native_resolver() {
-    use wasm_api::resolve_project as wasm_resolve;
 
     // Build two synthetic R4 packages with a transitive dep, plus the core, as
     // bundle inputs. `dep` depends on `t`; both R4.
@@ -234,8 +258,8 @@ fn wasm_resolver_equals_native_resolver() {
     assert!(ids.contains(&"dep") && ids.contains(&"t") && ids.contains(&"hl7.fhir.r4.core"));
 }
 
-fn unwrap_u32(r: Result<u32, wasm_bindgen::JsError>) -> u32 {
-    r.unwrap_or_else(|_| panic!("wasm-api call returned Err(JsError)"))
+fn unwrap_u32(r: Result<u32, String>) -> u32 {
+    r.unwrap_or_else(|e| panic!("wasm-api call returned Err: {e}"))
 }
 
 /// Minimal standard base64 encode (mirrors the decoder in the crate).
