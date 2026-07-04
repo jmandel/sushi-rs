@@ -98,3 +98,10 @@ fn table_extra_sep() {
     // table (kramdown ignores the extra `---`). Golden from the oracle.
     check("table_extra_sep");
 }
+
+#[test]
+fn invalid_tag_escape() {
+    // `<patient|user|system>` is not a valid HTML tag name (`|`), so kramdown
+    // escapes the `<`/`>` as literal text; a real `<span>` still passes through.
+    check("invalid_tag_escape");
+}

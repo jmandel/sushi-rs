@@ -825,6 +825,20 @@ fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
     if j >= n || !chars[j].is_ascii_alphabetic() {
         return None;
     }
+    // Validate the tag NAME: kramdown's HTML tag name is `[\w:-]+` (letters,
+    // digits, `_`, `:`, `-`). After the name, only whitespace, `/`, or `>` may
+    // follow. A name-terminating char outside that set (e.g. the `|` in
+    // `<patient|user|system>`) means this is NOT a valid tag — kramdown escapes
+    // the `<`/`>` as literal text rather than passing it through.
+    {
+        let mut m = j;
+        while m < n && (chars[m].is_ascii_alphanumeric() || matches!(chars[m], '_' | ':' | '-')) {
+            m += 1;
+        }
+        if m < n && !chars[m].is_whitespace() && !matches!(chars[m], '/' | '>') {
+            return None;
+        }
+    }
     // scan to matching >
     let mut k = j;
     let mut in_str: Option<char> = None;
