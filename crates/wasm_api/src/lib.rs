@@ -50,6 +50,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use package_store::{BundleSource, PackageSource};
+
+mod render_surface;
+use render_surface::{build_render_state, RenderState, SiteOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
@@ -108,6 +111,14 @@ struct Engine {
     /// Last `compile()` outputs `(synthetic path, body)`, indexed as local
     /// resources for snapshot base resolution.
     last_compiled: Vec<(PathBuf, Value)>,
+    /// The mounted site tree (template statics + staged pagecontent + _data +
+    /// _includes + optional txcache), keyed by virtual path under /site.
+    site_files: std::collections::HashMap<PathBuf, Vec<u8>>,
+    site_options: SiteOptions,
+    /// Lazily-built render surface; dropped whole on ANY state change
+    /// (structural invalidation — the F6 "cache keyed off compile()
+    /// generations" contract).
+    render_state: Option<Rc<RenderState>>,
 }
 
 thread_local! {
@@ -137,6 +148,7 @@ impl Engine {
         self.bundle = Some(Rc::new(src));
         self.packages = labels;
         self.last_compiled.clear();
+        self.render_state = None;
         Ok(parsed.len() as u32)
     }
 
@@ -213,6 +225,7 @@ impl Engine {
         .map_err(|e| format!("compile failed: {e:#}"))?;
 
         // Stash the compiled resources as local resources for snapshot resolution.
+        self.render_state = None;
         self.last_compiled = compiled
             .iter()
             .map(|r| {
@@ -267,6 +280,7 @@ impl Engine {
             .map(|(p, v)| (PathBuf::from(format!("/__local__/{p}")), v))
             .collect();
         let n = locals.len() as u32;
+        self.render_state = None;
         self.last_compiled = locals;
         Ok(n)
     }
@@ -793,6 +807,57 @@ impl Session {
         envelope("resolveProject", payload)
     }
 
+    /// Mount (REPLACE) the site tree the render surface serves pages/includes
+    /// from. `files_json`: `{ "<rel path>": "<text>" | {"b64": "<bytes>"} }`
+    /// (rel paths: `en/index.md`, `_includes/…`, `_data/…`, `txcache/…`);
+    /// `options_json`: `{ "activeTables": bool, "runUuid": "…" }` or "".
+    /// Envelope result: `{ "mounted": <count> }`.
+    #[wasm_bindgen(js_name = mountSite)]
+    pub fn mount_site(&self, files_json: &str, options_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "mountSite",
+            with_engine(|e| e.mount_site(files_json, options_json))
+                .map(|n| serde_json::json!({ "mounted": n })),
+        )
+    }
+
+    /// Render one fragment (`ref` = `{Type}-{id}`, `kind` = the registered
+    /// fragment kind, e.g. `snapshot`). Served through the session-shared
+    /// first-include-miss store (same map the page pass fills). Envelope
+    /// result: `{ "html": "…" }`.
+    #[wasm_bindgen(js_name = renderFragment)]
+    pub fn render_fragment(&self, ref_: &str, kind: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "renderFragment",
+            with_engine(|e| e.render_fragment(ref_, kind))
+                .map(|h| serde_json::json!({ "html": h })),
+        )
+    }
+
+    /// Render a page by output name (e.g. `index.html`). Envelope result:
+    /// `{ "html": "…" }`.
+    #[wasm_bindgen(js_name = renderPage)]
+    pub fn render_page(&self, name: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "renderPage",
+            with_engine(|e| e.render_page(name)).map(|h| serde_json::json!({ "html": h })),
+        )
+    }
+
+    /// The renderable page names (sorted `stem.html`). Envelope result:
+    /// `{ "pages": [ … ] }`.
+    #[wasm_bindgen(js_name = listPages)]
+    pub fn list_pages(&self) -> String {
+        set_panic_hook();
+        envelope(
+            "listPages",
+            with_engine(|e| e.list_pages()).map(|p| serde_json::json!({ "pages": p })),
+        )
+    }
+
     /// Engine version + build commit, as a JSON string `{ version, commit, engine }`
     /// (NOT enveloped — a static build-info accessor).
     pub fn version() -> String {
@@ -1006,4 +1071,74 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
         }
     }
     Ok(out)
+}
+
+
+// ===========================================================================
+// F6 render surface — Engine methods (Session wrappers below in Session impl).
+// ===========================================================================
+impl Engine {
+    /// Mount (REPLACE) the site tree: `files_json` = `{ "<rel path>": "<text>"
+    /// | { "b64": "<bytes>" } }` with rel paths like `en/index.md`,
+    /// `_includes/menu.xml`, `_data/pages.json`, `txcache/vs-externals.json`.
+    /// `options_json` = `{ "activeTables": bool, "runUuid": "..." }` (or "").
+    fn mount_site(&mut self, files_json: &str, options_json: &str) -> Result<usize, String> {
+        let m: std::collections::BTreeMap<String, Value> = serde_json::from_str(files_json)
+            .map_err(|e| format!("mountSite: bad files JSON: {e}"))?;
+        let mut files = std::collections::HashMap::new();
+        for (rel, v) in m {
+            let bytes = match &v {
+                Value::String(t) => t.as_bytes().to_vec(),
+                Value::Object(o) => {
+                    let b64 = o
+                        .get("b64")
+                        .and_then(|x| x.as_str())
+                        .ok_or_else(|| format!("mountSite: {rel}: object without b64"))?;
+                    base64_decode(b64).map_err(|e| format!("mountSite: {rel}: bad b64: {e}"))?
+                }
+                _ => return Err(format!("mountSite: {rel}: value must be text or {{b64}}")),
+            };
+            files.insert(PathBuf::from(format!("/site/{}", rel.trim_start_matches('/'))), bytes);
+        }
+        self.site_options = if options_json.trim().is_empty() {
+            SiteOptions::default()
+        } else {
+            serde_json::from_str(options_json)
+                .map_err(|e| format!("mountSite: bad options JSON: {e}"))?
+        };
+        let n = files.len();
+        self.site_files = files;
+        self.render_state = None;
+        Ok(n)
+    }
+
+    /// The lazily-(re)built render surface for the current generation.
+    fn render_state(&mut self) -> Result<Rc<RenderState>, String> {
+        if let Some(rs) = &self.render_state {
+            return Ok(rs.clone());
+        }
+        let rs = Rc::new(build_render_state(
+            &self.last_compiled,
+            self.bundle.clone(),
+            &self.site_files,
+            &self.site_options,
+        )?);
+        self.render_state = Some(rs.clone());
+        Ok(rs)
+    }
+
+    fn render_fragment(&mut self, ref_: &str, kind: &str) -> Result<String, String> {
+        let rs = self.render_state()?;
+        rs.render_fragment(ref_, kind).map_err(|e| e.to_string())
+    }
+
+    fn render_page(&mut self, name: &str) -> Result<String, String> {
+        let rs = self.render_state()?;
+        rs.render_page_by_name(name)
+    }
+
+    fn list_pages(&mut self) -> Result<Vec<String>, String> {
+        let rs = self.render_state()?;
+        Ok(rs.list_pages())
+    }
 }

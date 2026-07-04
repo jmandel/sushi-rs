@@ -1493,3 +1493,52 @@ FINAL: page-pass at 1322/678/72; all substrate changes differential-neutral;
 cycle now has a rendered oracle; the FragmentEngine seam is byte-proven for the
 ported kinds. Remaining is one render_md feature (nested markdown-in-raw-block,
 covers 7 of 12) + 2 pipeline-stage artifacts + 3 narrow edges.
+
+---
+
+## F6 session 1 (fork) — wasm gate closed + Session render surface
+
+**Scope 0 (deferred wasm gate)**: `scripts/wasm-parity.sh` run with the scratch
+toolchain (rustc 1.96.1 / wasm-bindgen 0.2.126) — PASS on the consolidation-era
+Session API (ladder 17/17, ips 29/29, mcode 46/46, sdc 73/73), and PASS again
+after the render surface landed.
+
+**Scope 1 (Session render surface)**:
+- **TreeSource seam** (`render_sd::tree`): FsTree (exact former `std::fs`
+  calls) / MemTree (sorted `read_dir`), threaded through IgContext (17 sites,
+  incl. lazy render-time reads), SiteData, PageProvider, deptable npm walk,
+  pseudojson ext-SD loads, FsTxCache. Neutrality proven byte-identical:
+  snapshot us-core 70/70, dict cycle 7/7, cld plan-net 24/24,
+  dependency-table-nontech 1/1, pages plan-net 678/678 + us-core 1322/1334.
+- **wasm_api::render_surface**: virtual layout `/own` (last compile outputs) +
+  `/site` (mounted tree: staged pages, `_includes`, `_data`, optional
+  `txcache`) + bundle cache root (BundleSource-served packages) behind one
+  SessionTree. Session methods: `mountSite(files, options)`,
+  `renderFragment(ref, kind)`, `renderPage(relPath)`, `listPages()`. ONE
+  shared first-include-miss store per generation (page include loop and
+  external renderFragment share the map); ANY state mutation (init/mount/
+  compile/setLocalResources/mountSite) drops the whole render state.
+- **Equivalence gate** (`session_equiv_plannet`, `--ignored`, release): every
+  plan-net page rendered through the session's virtual layout byte-equals the
+  F5-proven native path; fragment cache-hit identity. Run:
+  `cargo test --release -p wasm_api --lib -- --ignored session_equiv`.
+- **Node smoke caught a real bug**: the surface pre-stripped front matter then
+  called `render_page`, whose own front-matter gate saw none and returned the
+  page VERBATIM — and the equivalence test's direct side had replicated the
+  same wrong call, so it passed vacuously. Fixed (pass FULL source; render_page
+  owns the gate), test's direct side now the exact pagecorpus call. Lesson
+  re-learned: an equivalence test is only as strong as its reference side —
+  smoke through the REAL wire (wasm module in Node) before trusting it.
+- `scripts/pack-site-tree.cjs`: staged-dir → mountSite files JSON (the
+  template-bundle packaging path; overlay merging is the caller's job).
+
+**Session-vs-publisher deltas, documented not hidden**: fixed run_uuid
+(run-context quirk class), IgFacts = pagecorpus's page-pass set (version +
+txcache; richer whole-IG aggregate kinds fire their loud gaps), no
+ReleaseHeader post-pass (publish-box placeholder shows in preview), md staging
+NOT reproduced (staged `.html` is the contract; editor staging layer owns
+md→html, F6 scope 3).
+
+**Next (scope 2+)**: editor migration to Session on branch `f6-integration`
+(delete M2 shims, ledger #8), stock-template adapter + selector UI, US Core +
+the 12 named residuals, ledger wiring + <1s warm-edit gate, deploy prep.

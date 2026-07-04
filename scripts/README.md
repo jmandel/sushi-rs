@@ -44,6 +44,7 @@ Owner-phase legend: **P0** snapshot walk engine · **#32** one Rust resolver ·
 | `md-diff.py` | Render the survey corpus through `render_md`, classify diffs vs kramdown. | F1b |
 | `md-diff-cluster.py` | Cluster unexplained md diffs by changed-line signature (find the dominant bug). | F1b |
 | `refresh-terminology-goldens.py` | Refresh the tx/expansion goldens used by the renderer/terminology tests. | F4 |
+| `pack-site-tree.cjs` | Pack a staged site dir into the `Session.mountSite` files JSON (text/b64 map). | F6 |
 | `wasm-parity.sh` | Build `wasm_api` (wasm32 + wasm-bindgen) and run the fixture+corpus gates against the WASM build. | P/M |
 | `wasm-parity-driver.mjs` | Node driver `wasm-parity.sh` invokes (init → set_local → generate_snapshot vs goldens). | P/M |
 
