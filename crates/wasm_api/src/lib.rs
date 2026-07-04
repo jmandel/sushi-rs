@@ -1027,8 +1027,12 @@ impl Engine {
             serde_json::from_str(options_json)
                 .map_err(|e| format!("mountSite: bad options JSON: {e}"))?
         };
-        let n = files.len();
-        self.site_files = files;
+        if self.site_options.merge {
+            self.site_files.extend(files);
+        } else {
+            self.site_files = files;
+        }
+        let n = self.site_files.len();
         self.render_state = None;
         Ok(n)
     }

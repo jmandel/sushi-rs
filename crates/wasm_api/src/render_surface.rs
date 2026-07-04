@@ -88,6 +88,12 @@ pub struct SiteOptions {
     /// value so re-renders are stable and the ledgers can hash outputs.
     #[serde(default)]
     pub run_uuid: Option<String>,
+    /// Merge into the existing mounted tree instead of REPLACING it. The
+    /// editor mounts a large packed template tree ONCE, then per-compile
+    /// re-mounts only the small live-overlay set (pagecontent copies + shims)
+    /// with merge:true — the render state still drops whole either way.
+    #[serde(default)]
+    pub merge: bool,
     /// Include resolution order. TRUE (default; the stock-template path): LIVE
     /// engine fragments shadow staged tree copies. FALSE (custom generators,
     /// e.g. cycle): the mounted `_includes` — the generator's own include
@@ -439,6 +445,7 @@ mod tests {
         let opts = SiteOptions {
             active_tables: true,
             run_uuid: Some(uuid),
+            merge: false,
             engine_first_includes: true,
         };
         let rs = build_render_state(&compiled, Some(Rc::new(bundle)), &site_files, &opts)
