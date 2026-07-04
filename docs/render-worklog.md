@@ -852,6 +852,22 @@ branch `agent-txfrag-ae811bd`). The TxCacheSource seam doc will land with that
 branch; the requirement (a storage-agnostic trait over the build txcache that the
 editor's OPFS cache can back) was handed over in full.
 
+**Group-4 results pointer (NOT merged here — owner's call):** a completed
+implementation exists on branch `worktree-agent-ae811bd549ee68d98` (HEAD
+`f3131c0c`, 4 commits atop 0fc79919): CS content **19/19 GREEN**, VS cld
+**46/47** (1 cited cross-fragment-anchor residual, same unstable-oracle class
+as HTG-uuid), VS expansion **35/35 rendered GREEN** + 9 loud-gapped multi-
+include cache-miss cases. TxCacheSource seam: `src/txcache.rs` (trait, owned-
+data signatures, OPFS-implementable) + `src/fstxcache.rs` (the only std::fs
+implementor; parses .cache request/response blocks + cs/vs-externals.json +
+internal-expansion synthesis). Additive `IgContext::resolve_cs_external`;
+`resolve()` untouched. Key cited quirks in that branch: composer split
+(content/cld=HTML-compact vs expansion=XML `<p/>`+literal NBSP);
+`Utilities.nmtokenize` (other chars → `.{decimal-codepoint}`); TWO different
+processRelativeUrls (DataRenderer.java:83 unconditional dir-prefix for
+expansion definitions vs ProfileUtilities' BASE_FILENAMES-gated one); cld
+filter `{prop}  {op}` double-space (vsr:1517); version-note emoji set (rr:1597).
+
 ### The entry-point shape: promote corpus.rs's dispatcher into the library
 
 Everything F5 needs already EXISTS in `bin/corpus.rs` but as harness code. The
