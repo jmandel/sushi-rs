@@ -9,17 +9,30 @@
 
 ## Open candidates (spotted → collapse when owning agents quiesce)
 
-2. **Editor worker protocol** — grew organically across M1/M2/#22/#32.
-   Unify message envelope + progress reporting; one place for engine-call
-   marshalling. (Editor-repo owned; not in Consolidation Pass 1 scope.)
-8. **Editor M2 shim layering** — vite resolveId dbShim + @cycle aliases +
-   process.env stubs; revisit when the adapter contract (F6) lands — the
-   contract should DELETE shims, not wrap them. (Editor-repo owned.)
 9. **cycle rust-feed-spike branch** — carries spike wiring + fixture regen;
    fold what's permanent into a clean PR to cycle main, drop the rest.
    (cycle-repo owned.)
 
 ## Done
+
+- (2026-07-04, F6 scope 2) **#2 Editor worker protocol — DONE** (editor
+  `2d1c654`): ONE typed op table (`EngineOps`) types every operation's args +
+  result; worker = a handler per op, client = `call(op, ...args)`; Session
+  envelopes unwrapped in ONE place (apiVersion check, `ok:false` → throw).
+  Gate: tsc clean, vite build, verify-e2e PASS.
+- (2026-07-04, F6 scope 2) **#8 Editor M2 shims — RESOLVED with a documented
+  remainder** (editor `6e0c866`, `25a0f3b`): DELETED — `@cycle/core/liquid`
+  import + the `liquidjs` vite alias (TS liquid sunset; cycle narrative Liquid
+  runs in the engine ContentApi, byte-gate 17/17); the M2-special worker
+  surface is now the generic op table behind the SiteGeneratorAdapter
+  contract. RETAINED lawfully — the vite `core/db` resolveId redirect,
+  `@cycle/*` aliases, and `process.env.SITE_*` defines: they exist to run the
+  READ-ONLY cycle submodule's React chrome in a browser worker, which the
+  adapter contract keeps as cycle's presentation layer by design.
+  markdown-it also stays: cycle's markdown config is DESIGN (table-scroll
+  wrappers, heading-anchor permalinks, task-list checkboxes, code-col
+  detection, custom slugify) — a kramdown swap cannot hold the byte gate by
+  construction; conflict reported to the coordinator with the feature list.
 
 - (2026-07-03, Consolidation Pass 1 — item #3) **Standalone-crate workspaces
   folded into root**: render_{xhtml,liquid,md,tables,sd,page} each carried their

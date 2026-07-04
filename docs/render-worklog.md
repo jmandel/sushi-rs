@@ -1542,3 +1542,67 @@ md→html, F6 scope 3).
 **Next (scope 2+)**: editor migration to Session on branch `f6-integration`
 (delete M2 shims, ledger #8), stock-template adapter + selector UI, US Core +
 the 12 named residuals, ledger wiring + <1s warm-edit gate, deploy prep.
+
+---
+
+## F6 session 2 (fork) — scope 2: adapter contract + ContentApi + editor migration
+
+Engine commits (snapshot-gen): `6b1a89cd` (engine-first + 2 real-bug fixes),
+`42117ff2` (ContentApi), `e8c34e7f` (engineFirstIncludes option), `4c5f911d`
+(render-surface S3 snapshot-complete). Editor commits (f6-integration, PUSHED
+not merged): `f742d0e` (#32 wiring), `e0ddb0b`/`4a0a366` (engine bumps),
+`2d1c654` (protocol unification, ledger #2), `6e0c866` (TS-liquid sunset),
+`25a0f3b` (Adapter API v1 + stock adapter + selector).
+
+**Engine-first + the fs bug only the session test could catch**: flipping the
+session provider to engine-first exposed (a) `render_singleton` lacked the
+per-resource panic barrier — LOUD-GAP panics (dependency-table) killed whole
+pages; now `FragError::Gap` + tree fallback; (b) `IgContext`'s package-closure
+existence check was `pdir.exists()` (std::fs!) — bundle-served packages have
+no fs presence, so EVERY dependency package silently dropped in wasm (THO/ISO
+canonicals unresolvable, ip-statements lost 2/3 groups). Both fixed; native
+disk-first gates unchanged (plan-net 678/678, us-core 1322/1334, workspace
+210/0); session_equiv byte-green engine-first both sides.
+
+**ContentApi (TS-liquid sunset)**: Session.renderLiquid (session provider +
+caller globals + kramdown markdownify) and Session.renderMarkdown
+(rougeWrappers default ON). `render_page::markdownify` pub — ONE impl. NO
+renderPageBody: the F5 pipeline has no layout step, renderPage IS the body
+pipeline (alias = accretion). Editor cutover: cycle narrative Liquid now runs
+in the engine; cycle's include design ships as DATA (registry outputs +
+site.db text assets + wrapper placeholders, mounted `engineFirstIncludes:
+false` so cycle's OWN includes win). cycle's `{% sql %}`/`{% fragment %}`
+liquid tags sunset with TS liquid — its committed content uses NEITHER
+(verified across input/pagecontent; liquid-subset.md's Metadata mention is
+docs-only); use now fails loud in the engine parser.
+
+**markdown-it stays — instruction/gate conflict surfaced, not silently
+resolved**: cycle's markdown-it is deeply customized DESIGN (table-scroll
+wrappers, heading-anchor permalinks inserted inside headings, task-list
+checkboxes, code-col table detection, custom slugify). kramdown output cannot
+byte-match it by construction, so "replace markdown-it" and "bytes must not
+move" cannot both hold. Chose the gate; reported the evidence.
+
+**Adapter API v1 landed**: contract + build-time registry; cycleAdapter (M2
+path behind the contract); stockAdapter = the Rust renderer behind the SAME
+contract over a packed publisher-staged tree (63 en pages + the TRANSITIVE
+static include closure — 295 include names, not the publisher's 10,989-file
+eager dump; fragment kinds regenerate LIVE engine-first, staged copies only
+serve unported kinds e.g. -html/F4b). Template selector in the preview bar,
+persisted. Render-surface S3: /own SDs snapshot-complete exactly as
+build_site_db (core-only ctx + compile as locals).
+
+**GATES (verbatim)**: M2 HTML fidelity "identical 17/17" (pre-refactor
+baseline vs final adapter build, fixed epoch — held through liquid cutover AND
+adapter refactor); "E2E GATE: PASS"; stock adapter live in headless Chromium:
+63 pages, index "rendered in 9 ms", menstrual-flow-definitions 64,634 chars
+with tables, zero exceptions; wasm-parity PASS ×3 (each engine bump);
+workspace 211/0; session_api 6/6.
+
+**Remaining (scopes 3-5)**: US Core loading in-editor + the 12 named page
+residuals; live md→staged-html staging (editing pagecontent under the stock
+template — packed tree is point-in-time until then); BuildLedger/RenderDeps
+wiring → <1s warm-edit gate + adapter.invalidate; deprecated free-function
+wasm exports deletion (wasm-parity-driver.mjs must migrate to Session first);
+deploy prep (PUBLISH.md; coordinator merges/deploys). Fidelity harness note:
+serve dist with a %23-faithful server (python http.server), NOT vite preview.
