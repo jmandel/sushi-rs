@@ -219,7 +219,30 @@ impl Parser {
                 _ => {}
             }
         }
-        let iterable = parse_expr(iter_src.trim())?;
+        // Ruby Liquid's for-tag markup regex captures the collection as a
+        // QuotedFragment, which STOPS at `|` — a filter pipeline in the
+        // collection is silently IGNORED (`{% for i in x | split: "," %}`
+        // iterates the raw value; us-core's search-requirement-handler.md
+        // depends on this, oracle-verified against liquid 4.0.4). Truncate at
+        // the first pipe outside quotes.
+        let iter_trunc = {
+            let t = iter_src.trim();
+            let mut cut = t.len();
+            let mut q: Option<char> = None;
+            for (bi, ch) in t.char_indices() {
+                match (q, ch) {
+                    (Some(open), _) if ch == open => q = None,
+                    (None, '"') | (None, '\'') => q = Some(ch),
+                    (None, '|') => {
+                        cut = bi;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            &t[..cut]
+        };
+        let iterable = parse_expr(iter_trunc.trim())?;
         let body = self.parse_block(&["else", "endfor"])?;
         let mut else_body = None;
         if let Some(Token::Tag { inner, .. }) = self.tokens.get(self.pos).cloned() {

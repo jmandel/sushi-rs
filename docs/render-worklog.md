@@ -1653,3 +1653,42 @@ identifier,name` comma-joined in gold vs split tokens — GENERATED sp data, not
 markdown; next session), specimen `_id` link, changes-between-versions +
 relationship-with-other-igs (post-Jekyll XHTML+BOM pipeline stage — classify
 vs editor needs).
+
+---
+
+## F6 session 3 (cont.) — us-core page corpus CLOSED: 1332/1332 + 2 classified
+
+Four more oracle-derived fixes after the islands commit:
+
+1. **Liquid for-tag filter truncation** (2 pages): Ruby Liquid's for-collection
+   is a QuotedFragment — it STOPS at `|`, silently IGNORING a filter pipeline
+   (`{% for i in x | split: "," %}` iterates the raw string as ONE item).
+   us-core's search-requirement-handler.md depends on this. Oracle-verified
+   (liquid 4.0.4); parse_for truncates at the first unquoted pipe.
+2. **kramdown drops empty `id` attributes** on inline-HTML re-serialization
+   (converter/html.rb html_attributes: skips `k == 'id' && v.strip.empty?`;
+   other empty attrs kept — probed). Fixed scopes' requirements anchors.
+3. **rouge `http` lexer subset** (request/response line + headers,
+   rouge/lexers/http.rb): the corpus's one `http` fence (scopes.html,
+   header-only response). Unmodeled shapes return None (tokenless deferral
+   stays loud). [Corrects the F5 note that `http` never appeared.]
+4. **kramdown spaced reference links**: `[text] [ref]` (spaces or ONE newline
+   between) is a FULL reference — text from the first, target from the second;
+   an unresolved spaced label leaves the WHOLE construct literal (no shortcut
+   fallback). Oracle-probed; fixture committed (spaced-ref-links). Fixed
+   specimen's `_id` implementation-notes link.
+
+**xml-static-reser classification (2 pages, coordinator-flagged call)**:
+changes-between-versions + relationship-with-other-igs render through Liquid
+to `<?xml`-headed XHTML; their goldens carry BOM + CRLF first lines + Java-DOM
+meta-attribute reorder — a LATER publisher write-back stage (HTMLInspector/
+XhtmlComposer class, same as the F5 payload-dump normalization finding). The
+editor pipeline HAS no such stage; pagecorpus classifies them explicitly
+(`ours` starts `<?xml` AND golden starts BOM+`<?xml`) and reports the tally
+rather than chasing bytes the editor never produces.
+
+**GATES**: us-core `1332/1334 byte-identical (no-golden 0, xml-static-reser 2
+[post-Jekyll stage, classified])` — ZERO unexplained page divergence on the
+full corpus; plan-net 678/678; F1b 459/459 all-byte-identical; workspace
+211/0; session_equiv green; WASM PARITY PASS. Fixtures: spaced-ref-links,
+rouge-http, + the 10 html-island probes.

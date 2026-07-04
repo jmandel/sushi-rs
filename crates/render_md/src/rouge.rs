@@ -11,15 +11,18 @@
 //! span. Escaping is HTML-text escaping (`&`,`<`,`>`; quotes are left literal —
 //! matching the goldens' `<span class="s2">"Parameters"</span>`).
 //!
-//! Only these two lexers are ported (the corpus's real-lexer fences: json 6,
-//! js 3; `http` did not appear once these two landed — see the worklog). An
-//! unhandled language falls back to the caller's tokenless wrapper.
+//! Ported lexers: `json`, `javascript`/`js`, and the `http` REQUEST/RESPONSE
+//! LINE + HEADERS subset (rouge/lexers/http.rb; us-core scopes.html has the
+//! corpus's one `http` fence — a header-only response). An http block whose
+//! shape the subset does not model returns None (the tokenless deferral
+//! signal) rather than emitting wrong tokens. An unhandled language falls
+//! back to the caller's tokenless wrapper.
 
 use crate::util::escape_html_text;
 
 /// Is `lang` a language we can tokenize with a real lexer?
 pub fn has_lexer(lang: &str) -> bool {
-    matches!(lang, "json" | "javascript" | "js")
+    matches!(lang, "json" | "javascript" | "js" | "http")
 }
 
 /// Tokenize `code` for `lang` and render the inner `<code>` body (token spans),
@@ -29,6 +32,7 @@ pub fn highlight(lang: &str, code: &str) -> Option<String> {
     let toks = match lang {
         "json" => tokenize_json(code),
         "javascript" | "js" => tokenize_js(code),
+        "http" => tokenize_http(code)?,
         _ => return None,
     };
     // Rouge's HTML formatter coalesces CONSECUTIVE tokens of the SAME type into
@@ -564,4 +568,127 @@ mod tests {
         assert!(h.contains("<span class=\"dl\">\"</span>"), "{h}");
         assert!(h.contains("<span class=\"s2\">resourceType</span>"), "{h}");
     }
+}
+
+// ---------------------------------------------------------------------------
+// http (rouge/lexers/http.rb, request/response line + headers subset)
+//
+// Rules reproduced (Rouge 4.7.0):
+//   response line: ^(HTTP)(/)(\d(?:\.\d)?)( +)(\d{3})( +)([^\r\n]+)
+//     -> Keyword k, Operator o, Num m, Text, Num m, Text, Name::Exception ne
+//   request line:  ^(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|TRACE|CONNECT)
+//                  ( +)([^ ]+)( +)(HTTP)(/)(\d(?:\.\d)?)
+//     -> Name::Function nf, Text, Name::Namespace nn, Text, Keyword k,
+//        Operator o, Num m
+//   header line:   ^([^\s:]+)( *)(:)( *)([^\r\n]+)
+//     -> Name::Attribute na, Text, Punctuation p, Text, Str s
+// Body delegation (content-type sub-lexing) is NOT modeled: a block with a
+// body (or any unmodeled line) returns None so the caller's tokenless path
+// keeps the deferral loud.
+
+fn tokenize_http(code: &str) -> Option<Vec<(&'static str, String)>> {
+    let mut toks: Vec<(&'static str, String)> = Vec::new();
+    let mut lines = code.split_inclusive('\n').peekable();
+    let mut first = true;
+    while let Some(line) = lines.next() {
+        let (body, nl) = match line.strip_suffix('\n') {
+            Some(b) => (b, "\n"),
+            None => (line, ""),
+        };
+        if body.is_empty() {
+            // Blank line = the header/body separator; a body follows -> not
+            // modeled unless it is only trailing whitespace.
+            if lines.peek().is_some() {
+                return None;
+            }
+            toks.push(("", nl.to_string()));
+            continue;
+        }
+        if first {
+            first = false;
+            if let Some(t) = http_status_line(body) {
+                toks.extend(t);
+                toks.push(("", nl.to_string()));
+                continue;
+            }
+            if let Some(t) = http_request_line(body) {
+                toks.extend(t);
+                toks.push(("", nl.to_string()));
+                continue;
+            }
+            return None;
+        }
+        // header line
+        let colon = body.find(':')?;
+        let (name, rest) = body.split_at(colon);
+        if name.is_empty() || name.contains(char::is_whitespace) {
+            return None;
+        }
+        let rest = &rest[1..]; // drop ':'
+        let val_start = rest.len() - rest.trim_start().len();
+        toks.push(("na", name.to_string()));
+        toks.push(("p", ":".to_string()));
+        toks.push(("", rest[..val_start].to_string()));
+        toks.push(("s", rest[val_start..].to_string()));
+        toks.push(("", nl.to_string()));
+    }
+    Some(toks)
+}
+
+fn http_status_line(line: &str) -> Option<Vec<(&'static str, String)>> {
+    let rest = line.strip_prefix("HTTP/")?;
+    let (ver, rest) = rest.split_at(rest.find(' ')?);
+    if !ver.chars().all(|c| c.is_ascii_digit() || c == '.') || ver.is_empty() {
+        return None;
+    }
+    let sp1_len = rest.len() - rest.trim_start().len();
+    let (sp1, rest) = rest.split_at(sp1_len);
+    let code_end = rest.find(' ').unwrap_or(rest.len());
+    let (code, rest) = rest.split_at(code_end);
+    if code.len() != 3 || !code.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let sp2_len = rest.len() - rest.trim_start().len();
+    let (sp2, reason) = rest.split_at(sp2_len);
+    let mut t = vec![
+        ("k", "HTTP".to_string()),
+        ("o", "/".to_string()),
+        ("m", ver.to_string()),
+        ("", sp1.to_string()),
+        ("m", code.to_string()),
+    ];
+    if !reason.is_empty() {
+        t.push(("", sp2.to_string()));
+        t.push(("ne", reason.to_string()));
+    }
+    Some(t)
+}
+
+fn http_request_line(line: &str) -> Option<Vec<(&'static str, String)>> {
+    const METHODS: [&str; 9] = [
+        "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT",
+    ];
+    let method = METHODS.iter().find(|m| {
+        line.starts_with(**m) && line[m.len()..].starts_with(' ')
+    })?;
+    let rest = &line[method.len()..];
+    let sp1_len = rest.len() - rest.trim_start().len();
+    let (sp1, rest) = rest.split_at(sp1_len);
+    let path_end = rest.find(' ')?;
+    let (path, rest) = rest.split_at(path_end);
+    let sp2_len = rest.len() - rest.trim_start().len();
+    let (sp2, rest) = rest.split_at(sp2_len);
+    let ver = rest.strip_prefix("HTTP/")?;
+    if !ver.chars().all(|c| c.is_ascii_digit() || c == '.') || ver.is_empty() {
+        return None;
+    }
+    Some(vec![
+        ("nf", method.to_string()),
+        ("", sp1.to_string()),
+        ("nn", path.to_string()),
+        ("", sp2.to_string()),
+        ("k", "HTTP".to_string()),
+        ("o", "/".to_string()),
+        ("m", ver.to_string()),
+    ])
 }

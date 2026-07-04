@@ -905,6 +905,25 @@ fn normalize_inline_tag(raw: &str) -> String {
         .unwrap_or(body.len());
     let name = &body[..name_end];
     let rest = &body[name_end..];
+    // kramdown drops an `id` attribute whose value is (whitespace-)empty —
+    // converter/html.rb html_attributes: `v.nil? || (k == 'id' && v.strip.
+    // empty?)` skips the attribute. Other empty attributes are kept.
+    let stripped_id;
+    let rest = {
+        let mut r = rest.to_string();
+        for pat in ["id=\"\"", "id=''"] {
+            if let Some(k) = r.find(pat) {
+                // only when preceded by whitespace (a real attribute position)
+                if r[..k].ends_with([' ', '\t']) {
+                    let before = r[..k].trim_end().to_string();
+                    let after = &r[k + pat.len()..];
+                    r = format!("{}{}", before, after);
+                }
+            }
+        }
+        stripped_id = r;
+        &stripped_id
+    };
     let lname = name.to_lowercase();
     // Only normalize recognized HTML elements (kramdown lowercases only those).
     if !is_known_html(&lname) {
@@ -1223,6 +1242,24 @@ fn try_link(chars: &[char], i: usize) -> Option<(String, usize)> {
     }
 
     // Reference link: [text][ref] / [text][] / shortcut [text]
+    // kramdown's LINK regex allows WHITESPACE (spaces, even a newline) between
+    // the text and the reference label — `[text] [ref]` is a FULL reference
+    // (oracle-probed 2.5.0: `[A] [B]` -> href of B, text A; an UNRESOLVED
+    // spaced label leaves the WHOLE construct literal, no shortcut fallback).
+    let mut j = j;
+    if j < n && chars[j] != '[' {
+        let mut w = j;
+        let mut newlines = 0;
+        while w < n && (chars[w] == ' ' || chars[w] == '\t' || chars[w] == '\n') {
+            if chars[w] == '\n' {
+                newlines += 1;
+            }
+            w += 1;
+        }
+        if w > j && w < n && chars[w] == '[' && newlines <= 1 && chars.get(w + 1) != Some(&'^') {
+            j = w;
+        }
+    }
     // Collapsed/full reference: [text][ref]
     if j < n && chars[j] == '[' {
         // read ref label up to ']'
