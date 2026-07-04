@@ -261,6 +261,93 @@ fn first_divergence(a: &str, b: &str) -> usize {
     a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
 }
 
+// ---------------------------------------------------------------------------
+// SINGLETON IG-level aggregate harness (render_sd::aggregates)
+// ---------------------------------------------------------------------------
+
+/// The IG-level aggregate fragment kinds (one golden per IG, no SD prefix).
+fn is_singleton_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "new-extensions"
+            | "related-igs-table"
+            | "related-igs-list"
+            | "globals-table"
+            | "obligation-summary"
+            | "deleted-extensions"
+            | "cross-version-analysis"
+            | "cross-version-analysis-inline"
+    )
+}
+
+/// Per-IG build fact: did the PreviousVersionComparator load a lastVersion?
+/// (network `package-list.json` fetch; not derivable from output/). Golden-
+/// matched: cycle has a previous published version, plan-net/us-core do not.
+fn ig_has_previous(ig: &str) -> bool {
+    match ig {
+        "cycle" => true,
+        "plan-net" | "us-core" => false,
+        _ => false,
+    }
+}
+
+/// Per-IG build fact: R4ToR4BAnalyser `newFormat` (isNewML) — selects the
+/// `../package` (true) vs `package` (false) tgz-link prefix. Golden-matched.
+fn ig_new_format(ig: &str) -> bool {
+    match ig {
+        "cycle" | "plan-net" => true,
+        "us-core" => false,
+        _ => true,
+    }
+}
+
+fn singleton_golden(ig: &str, kind: &str) -> PathBuf {
+    PathBuf::from(format!(
+        "{}/render-goldens/{}/fragments/{}.xhtml",
+        REPO, ig, kind
+    ))
+}
+
+fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
+    use render_sd::aggregates as agg;
+    let npm = ctx.own_package_id().unwrap_or("").to_string();
+    let body = match kind {
+        "new-extensions" => agg::new_extensions(ctx),
+        "related-igs-table" => agg::related_igs_table(ctx),
+        "related-igs-list" => agg::related_igs_list(ctx),
+        "globals-table" => agg::globals_table(ctx),
+        "obligation-summary" => agg::obligation_summary(ctx),
+        "deleted-extensions" => agg::deleted_extensions(ig_has_previous(ig)),
+        "cross-version-analysis" => agg::cross_version_analysis(&npm, ig_new_format(ig), false),
+        "cross-version-analysis-inline" => agg::cross_version_analysis(&npm, ig_new_format(ig), true),
+        _ => unreachable!(),
+    };
+    wrap_raw(&body)
+}
+
+fn run_singleton(kind: &str, ig: &str, verbose: bool) {
+    let ctx = build_ctx(ig).unwrap_or_else(|| panic!("no ctx for {}", ig));
+    let gp = singleton_golden(ig, kind);
+    let golden = std::fs::read_to_string(&gp)
+        .unwrap_or_else(|_| panic!("no golden {}", gp.display()));
+    let ours = render_singleton(kind, ig, &ctx);
+    if ours == golden {
+        println!("{} {}: 1/1 byte-identical", kind, ig);
+    } else {
+        let d = first_divergence(&ours, &golden);
+        println!(
+            "{} {}: 0/1  first-divergence @ {} / golden-len {}",
+            kind,
+            ig,
+            d,
+            golden.len()
+        );
+        if verbose {
+            report_diff(ig, &ours, &golden, d);
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -270,6 +357,13 @@ fn main() {
     let kind = &args[1];
     let ig = &args[2];
     let verbose = args.iter().any(|a| a == "--verbose");
+
+    // SINGLETON IG-level aggregate fragments: ONE golden per IG at
+    // render-goldens/<ig>/fragments/<kind>.xhtml (no resource-type prefix).
+    if is_singleton_kind(kind) {
+        run_singleton(kind, ig, verbose);
+        return;
+    }
 
     // Resource-level CONSTANT kinds (contained-index, history) are produced for
     // EVERY resource type (SD/VS/CS/instances), always empty in this corpus.
