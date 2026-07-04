@@ -53,6 +53,28 @@ scripts — they are gate infrastructure, not user surface.
   compatibility, then removed; harness scripts migrate to `fig`).
 - **Distribution**: one static binary; `cargo install` + a release artifact.
 
+## 3b. Non-Rust generators + fragments on the CLI (Josh, 2026-07-04)
+
+**Key fact: the wasm module runs under Bun/Node too** — the same wasm_api
+Session as the browser. So TS generators get fragments via an import, not
+an IPC protocol.
+
+- **TS-first**: `fig sitedb` then run your generator yourself (cycle's flow,
+  works day one, no new contract).
+- **fig-orchestrated**: `fig render --generator ts:<adapter.mjs>` — fig
+  builds site.db, spawns bun with a runner harness that loads the SAME
+  SiteGeneratorAdapter contract as the editor and a FragmentApi shim over
+  session.renderFragment (same wasm module). One contract, three hosts
+  (browser worker / fig runner / user scripts).
+- **Fragments-as-files escape hatch**: `fig fragments <ig> [--kinds ...|
+  --used-by-template <tpl>] -o _includes/` materializes publisher-parity
+  fragments as files, reproducing the Publisher's own _includes contract —
+  ANY tool (real Jekyll, python, make) can consume without knowing our
+  stack. On-demand wasm is preferred; files are the compatibility floor.
+- **watch + TS adapters**: ledger invalidation is language-independent —
+  the adapter's next fragment() call after an edit regenerates only the
+  dirty cone.
+
 ## 4. Gates
 
 - Every subcommand's output byte-identical to the binary it replaces (the
@@ -60,6 +82,10 @@ scripts — they are gate infrastructure, not user surface.
 - `fig render` gates on the F5 page corpora (plan-net 678/678, cycle 72/72,
   us-core current floor).
 - `fig watch`: the F6 <1s warm-edit gate, native.
+- TS-adapter path: cycle's generator run via the fig runner produces pages
+  byte-identical to its own-process run (same rows, same fragments).
+- `fig fragments -o`: emitted files byte-match the corresponding
+  render-goldens entries for the used set.
 - `--json` envelopes: schema-identical to Session envelopes (shared tests).
 
 ## 5. Open (decide at build time)
