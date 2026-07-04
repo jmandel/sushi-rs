@@ -844,6 +844,55 @@ STOP classifications (cited, not approximated):
 - Grid branches of summary-extensions/observations/deprecated-list/
   expansion-params: loud panic! gaps.
 
+## Session 7 (cont.): dict family MERGED — 487/495 (98.4%), zero loud gaps
+
+`dict.rs` (~2,700 LOC, forked port, merge 26c1de16-content). Scoreboard:
+
+| kind | cycle | plan-net | us-core |
+|---|---|---|---|
+| dict | **7/7** | **22/22** | 69/70 |
+| dict-active | **7/7** | **22/22** | 69/70 |
+| dict-ms | **7/7** | **22/22** | 69/70 |
+| dict-key | **7/7** | **22/22** | 67/70 |
+| dict-diff | **7/7** | **22/22** | 69/70 |
+
+Full floor re-verified post-merge (dict extended the SHARED commonmark.rs +
+publisher_markdown.rs engines — commonmark backslash escapes §2.4; publisher_
+markdown isLikelySourceURLReference resourceNames branch (BaseRenderer passes
+webUrl="" so it was always live). Only the known residuals remain (cycle † 6/7,
+us-core summary 69/70) — the shared-engine changes are floor-neutral-or-better.
+
+dict findings/quirks (cited in dict.rs):
+- **incProfiledOut**: ALL dict kinds pass true EXCEPT dict-active (false) —
+  PG:2019-2038. (The session-5 assumption that -key/-ms/-diff drop prohibited
+  elements was WRONG; only dict-active drops them.)
+- **hashmap_order_surviving** (NEW hashorder variant): describeTypes' leftover
+  compare-type map capacity reflects the PEAK put count (Java HashMap removes
+  don't shrink capacity) — affects attribute order.
+- **Lazy-getter compare semantics** (dict-key/diff): Java compare.getBinding()/
+  getCommentElement() never null when the compare ELEMENT exists — an absent
+  field compares as empty-but-present, selecting compareMarkdown's not-equal
+  branch WITHOUT fixFontSizes + renderBinding's removed "For codes, see" conf.
+- **Base-element rewriting** (SDR getElementById:4065 updateURLs): markdown
+  relative-URL rewrite + core canonical |version pinning on the BASE element
+  drives areEqual/DarkGray + versioned-strikethrough bytes.
+- **additional-binding purpose rows are NOT rendered in dict** (only max/min
+  ValueSet: 73 Max / 2 Min corpus-wide, zero additional-binding) — collection
+  skips the extension, golden-proven.
+- **generateSlicing Java bug preserved** (SDR:4810): builds a `<ul>` but appends
+  `<li>`s to the PARENT → `<ul></ul><li>…`.
+- dict us-core golden count is 76 but 6 are Questionnaire-* resources (not
+  SDs) — the SD denominator is 70.
+
+dict residuals (8 fragments, cited in-code):
+1. us-core-questionnaireresponse (all 5 kinds): comment `"-"` — commonmark-java
+   evidently yields noString for the bare dash (we render the empty
+   `<ul><li></li></ul>`); not verifiable from static source.
+2. us-core-device / us-core-servicerequest (dict-key): base-element links
+   `device-mappings.html`/`event.html` corePath-prefixed via a live-publisher
+   runtime spec-page set that is provably neither BASE_FILENAMES nor
+   getResourceNames() — needs the live context's name sets.
+
 ## F5 handoff assessment — what the page pass needs from the fragment layer
 
 **Ownership note:** Group 4 (VS cld/expansion, CS content, TxCacheSource) was
