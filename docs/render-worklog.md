@@ -844,6 +844,84 @@ STOP classifications (cited, not approximated):
 - Grid branches of summary-extensions/observations/deprecated-list/
   expansion-params: loud panic! gaps.
 
+## F5 handoff assessment — what the page pass needs from the fragment layer
+
+**Ownership note:** Group 4 (VS cld/expansion, CS content, TxCacheSource) was
+reassigned mid-session to a separate worker (worktree `sushi-rs-snapshot-txfrag`,
+branch `agent-txfrag-ae811bd`). The TxCacheSource seam doc will land with that
+branch; the requirement (a storage-agnostic trait over the build txcache that the
+editor's OPFS cache can back) was handed over in full.
+
+### The entry-point shape: promote corpus.rs's dispatcher into the library
+
+Everything F5 needs already EXISTS in `bin/corpus.rs` but as harness code. The
+seam is a two-step promotion into `render_sd`:
+
+```rust
+pub struct FragmentEngine {
+    ctx: IgContext,          // build_ctx: output/ + packages + txcache
+    run_uuid: String,        // quirk #1 (per-run HTG uuid; editor: mint one per build)
+    active_tables: bool,     // per-IG template param (PublisherIGLoader:443)
+}
+impl FragmentEngine {
+    /// `ref_` = "StructureDefinition-us-core-patient" ("" for IG singletons);
+    /// `kind` = the fragment suffix ("snapshot", "dict", "uses", "canonical-index"…).
+    /// Returns the FULL fragment file body (wrap_raw applied) or a typed error.
+    pub fn render_fragment(&self, ref_: &str, kind: &str) -> Result<String, FragError>;
+}
+pub enum FragError {
+    UnknownKind(String),          // kind not in the registry at all
+    Gap { kind: String, msg: String }, // documented loud gap (catch_unwind boundary)
+    NoSuchResource(String),
+}
+```
+
+- The kind registry = the two `match` arms in corpus.rs today (`render()` for
+  per-resource kinds @75, `render_singleton()` @405). Everything else the
+  dispatcher derives internally: `def_file` = `{ref_}-definitions.html`,
+  `core_path` from the SD's fhirVersion (corpus.rs:47), element-list selection
+  per kind. F5 should NOT need to know any of that.
+- The engine's per-IG constructor consumes exactly corpus.rs's `build_ctx` +
+  `harvest_uuid` + `ig_active_tables` triple. In the editor, run_uuid is minted
+  (uuid v4 lowercase) once per build — parity-testing harvests it from goldens.
+- `catch_unwind` moves INSIDE `render_fragment` so loud gaps surface as
+  `FragError::Gap` values, not process panics (the corpus harness already
+  proves this boundary works per-SD).
+
+### First-include-miss integration points (the page pass)
+
+The publisher pre-generates every fragment file, then Jekyll `{% include %}`s
+them into pages. For the editor's lazy model:
+1. **Include resolution in render_liquid**: on `{% include {name}.xhtml %}` miss
+   → parse `{name}` into (ref_, kind) — the split is LAST-suffix-wins against
+   the kind registry (ids contain hyphens; kinds are a closed set, so match the
+   longest registered kind suffix) → `engine.render_fragment(ref_, kind)` →
+   cache the result under the include name.
+2. **Cache invalidation** keys on the resource content hash + the IG-level
+   inputs (the whole-IG scan kinds — uses/sd-xref/maps/aggregates — depend on
+   ALL resources, so their key is the IG manifest hash, not the single resource).
+   This split (per-resource vs whole-IG kinds) is already explicit in the
+   registry: per-resource kinds take `ref_`, whole-IG kinds consult
+   `ctx.own_resources()`.
+3. **Unknown/gapped kinds**: pages that include a not-yet-ported fragment get
+   the FragError surfaced as a visible placeholder (NOT silent empty) — same
+   loud-gap discipline at the page level.
+
+### Remaining fragment inventory for the registry (post-session-7 truth)
+
+- GREEN per-resource: the F3 15 table kinds + grid/span/spanall + 20+ F4 leaves
+  (inv*, tx*, summary*, pseudo-*, sd-use-context, uses, sd-xref, maps,
+  contained-index, history) + dict family (pending fork merge).
+- GREEN singletons: 10 aggregate kinds (see scoreboard above).
+- DOCUMENTED-DEFERRED: dependency-table*, ip-statements, *-ref(-all)-list
+  (unstable oracle), instance `html` (F4b narrative), VS/CS group (txfrag
+  worker), and the newly-enumerated phase-2 SD leaves: adl/adl-all,
+  class-table, crumbs, ctxts, eview/-all, experimental-warning, header,
+  json-schema, maturity, obligations/-all (the DISTINCT oo/ooa wrapper),
+  other-versions, sd-changes, search-params, shex, status, summary-table,
+  typename, validate, validation, and the by-key/by-mustsupport × bindings/
+  obligations combo tables (engine components all exist; wiring is bounded).
+
 ## Remaining
 
 Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
