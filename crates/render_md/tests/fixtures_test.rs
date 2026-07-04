@@ -91,3 +91,10 @@ fn inline() {
 fn footnotes() {
     check("footnotes");
 }
+
+#[test]
+fn table_extra_sep() {
+    // A separator row with MORE columns than the header does NOT widen the
+    // table (kramdown ignores the extra `---`). Golden from the oracle.
+    check("table_extra_sep");
+}

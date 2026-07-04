@@ -357,15 +357,29 @@ fn tokenize_js(src: &str) -> Vec<(&'static str, String)> {
             out.push(("cm", ch[s..i].iter().collect()));
             continue;
         }
-        // double / single quoted string -> dl "…" with s2/s1 body, se escapes
+        // double / single quoted string -> dl "…" with s2/s1 body, se escapes.
+        // rouge js `:dq`/`:sq` escape rule is `\\[\\nrt"]?` / `\\[\\nrt']?` — the
+        // escaped char is OPTIONAL from a fixed set, so `\'` inside a "…" string
+        // tokenizes as `se`=`\` then the `'` continues as body (NOT `\'` as one
+        // escape). This matters for `"Saint Luke \'s Hospital"`.
         if c == '"' || c == '\'' {
             let (body_short, quote) = if c == '"' { ("s2", '"') } else { ("s1", '\'') };
             out.push(("dl", quote.to_string()));
             i += 1;
             while i < n && ch[i] != quote {
-                if ch[i] == '\\' && i + 1 < n {
-                    out.push(("se", ch[i..i + 2].iter().collect()));
-                    i += 2;
+                if ch[i] == '\\' {
+                    // The escaped char is consumed only if it is `\`, n, r, t, or
+                    // the string's own quote char.
+                    let esc_next = ch.get(i + 1).copied();
+                    let takes_next = matches!(esc_next, Some('\\') | Some('n') | Some('r') | Some('t'))
+                        || esc_next == Some(quote);
+                    if takes_next {
+                        out.push(("se", ch[i..i + 2].iter().collect()));
+                        i += 2;
+                    } else {
+                        out.push(("se", "\\".into()));
+                        i += 1;
+                    }
                 } else {
                     let s = i;
                     while i < n && ch[i] != quote && ch[i] != '\\' {

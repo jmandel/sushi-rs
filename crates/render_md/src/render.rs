@@ -421,10 +421,12 @@ impl Renderer {
         indent: usize,
     ) {
         let pad = " ".repeat(indent);
-        // Column count = the MAX column count across the alignment row, the
-        // header, and every body/footer row (kramdown does not clip rows to the
-        // separator's column count — a header/row with more cells widens the
-        // table).
+        // Column count = the MAX column count across the HEADER and every
+        // body/footer row. The SEPARATOR (alignment) row does NOT widen the
+        // table: kramdown reads `|---|---|---|` under a 2-col header as a 2-col
+        // table (the extra `---` is ignored) — verified against the oracle. A
+        // header/body row with more cells DOES widen it. (Alignment beyond
+        // `ncols` is simply unused.)
         let hcols = header.as_ref().map(|h| h.len()).unwrap_or(0);
         let bcols = body
             .iter()
@@ -433,7 +435,7 @@ impl Renderer {
             .map(|r| r.len())
             .max()
             .unwrap_or(0);
-        let ncols = aligns.len().max(hcols).max(bcols);
+        let ncols = hcols.max(bcols);
         out.push_str(&pad);
         out.push_str("<table");
         out.push_str(&attr_string(attrs, false));
