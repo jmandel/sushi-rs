@@ -162,6 +162,12 @@ fn render(
         "tx-key" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_key()),
         "tx-diff" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_diff()),
         "tx-diff-must-support" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_diff_must_support()),
+        // ---- dict fragment family ----
+        "dict" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_SNAP, ""),
+        "dict-active" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), false, render_sd::dict::GEN_MODE_SNAP, ""),
+        "dict-diff" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_DIFF, "diff_"),
+        "dict-ms" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_MS, "ms_"),
+        "dict-key" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_KEY, "key_"),
         "summary" => render_sd::leaf::summary(sd, ctx?, false, &core_path_for(sd)),
         "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
         "uses" => render_sd::xref::uses(sd, ctx?),

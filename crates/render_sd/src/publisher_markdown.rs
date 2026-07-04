@@ -32,12 +32,14 @@
 //! on the corpus and are ported faithfully but fire a loud gap if a table appears.
 //!
 //! `preProcessMarkdown` (BaseRenderer.java:78-183): `||`->para, `[[[link]]]`
-//! resolution, and `ProfileUtilities.processRelativeUrls` (PU:2179). corePath is
-//! `http://hl7.org/fhir/R4/` etc., so `isLikelySourceURLReference` (PU:2320) takes
-//! the `baseUrl.startsWith("http://hl7.org/fhir/R")` fast path: a relative `](x)`
-//! link is corePath-prefixed only if basename `x` is in `BASE_FILENAMES` (the FHIR
-//! core spec page set) or starts with `extension-`. Corpus-verified: all relative
-//! links are IG-local pages (not in BASE_FILENAMES) -> left unchanged.
+//! resolution, and `ProfileUtilities.processRelativeUrls` (PU:2179). The
+//! BaseRenderer path passes `webUrl=""` (BaseRenderer:41), so
+//! `isLikelySourceURLReference` (PU:2301) ENABLES its resourceNames branch: a
+//! relative `](x)` link is corePath-prefixed if `x` is `<resource>.html` /
+//! `<resource>-definitions.html` (R4 resource names), in `BASE_FILENAMES` (the
+//! FHIR core spec page set), or starts with `extension-`. The `updateURLs`
+//! base-element path (SDR:4065, webUrl=render_webroot which IS R-prefixed)
+//! instead DISABLES resourceNames — see `process_relative_urls_pub`.
 
 use crate::commonmark;
 use crate::context::IgContext;
@@ -401,7 +403,23 @@ fn resolve_triple(ctx: &IgContext, link_text: &str) -> (Option<String>, String) 
 /// (PU:2179-2262). Only the `](url)` branch matters here (no reference-style
 /// links in the corpus). A relative, non-`..` `url` is corePath-prefixed iff
 /// `isLikelySourceURLReference`; `processRelatives=false` disables the webUrl path.
+/// Public wrapper: `ProfileUtilities.processRelativeUrls(md, webUrl, specUrl,
+/// …, processRelatives=false)` (PU:2179) as used by StructureDefinitionRenderer's
+/// `updateURLs` on a base compare element (dict-key/dict-diff). `base_path` is the
+/// spec base (corePath without trailing slash) used for the source-URL prefix.
+pub fn process_relative_urls_pub(markdown: &str, base_path: &str) -> String {
+    // updateURLs passes webUrl = render_webroot (the core spec base, which starts
+    // with http://hl7.org/fhir/R), so isLikelySourceURLReference's resourceNames
+    // branch is DISABLED — only BASE_FILENAMES / extension- pages are prefixed.
+    process_relative_urls_impl(markdown, base_path, false)
+}
+
 fn process_relative_urls(markdown: &str, base_path: &str) -> String {
+    // BaseRenderer.processMarkdown passes webUrl="" -> resourceNames branch ACTIVE.
+    process_relative_urls_impl(markdown, base_path, true)
+}
+
+fn process_relative_urls_impl(markdown: &str, base_path: &str, resource_names: bool) -> String {
     let md: Vec<char> = format!("{} ", markdown).chars().collect();
     let mut b = String::new();
     let mut i = 0usize;
@@ -418,7 +436,7 @@ fn process_relative_urls(markdown: &str, base_path: &str) -> String {
             if j < md.len() {
                 let url: String = md[i + 2..j].iter().collect();
                 if !is_absolute_url(&url) && !url.starts_with("..") {
-                    if is_likely_source_url_reference(&url, base_path) {
+                    if is_likely_source_url_reference(&url, base_path, resource_names) {
                         b.push_str("](");
                         b.push_str(base_path);
                         if !base_path.is_empty() && !base_path.ends_with('/') {
@@ -470,12 +488,31 @@ fn is_absolute_url(url: &str) -> bool {
     false
 }
 
-/// `isLikelySourceURLReference` (PU:2320) for a corePath under
-/// `http://hl7.org/fhir/R`: prefix iff basename (before `.html`) is a core spec
-/// page (BASE_FILENAMES) or `url` starts with `extension-`.
-fn is_likely_source_url_reference(url: &str, base_url: &str) -> bool {
-    // Only the fast-path is reachable: corePath always starts http://hl7.org/fhir/R.
-    debug_assert!(base_url.starts_with("http://hl7.org/fhir/R"));
+/// `isLikelySourceURLReference` (PU:2301). The publisher's markdown processor
+/// (BaseRenderer) always passes `webUrl=""`, so the FIRST guard
+/// `baseUrl != null && !baseUrl.startsWith("http://hl7.org/fhir/R")` is TRUE
+/// (empty string), enabling the resourceNames branch: a `<resource>.html` or
+/// `<resource>-definitions.html` page (resource name lowercased) is a source ref.
+/// Then the BASE_FILENAMES / `extension-` tail always applies.
+fn is_likely_source_url_reference(url: &str, base_url: &str, resource_names: bool) -> bool {
+    let _ = base_url;
+    // PORT NOTE (corpus-inert, measured): Java's guarded block (PU:2306-2327)
+    // also has a `localFilenames` veto (returns false for IG-local pages) and a
+    // runtime `masterSourceFileNames` startsWith check between the resourceNames
+    // loop and the static BASE_FILENAMES tail. Neither list is populated in the
+    // fragment-render context we reproduce (no local page in the corpus collides
+    // with a lowercase resource-name prefix), so both are omitted here.
+    // resourceNames branch (webUrl==""): a core resource page.
+    if resource_names {
+        for rn in R4_RESOURCE_NAMES {
+            let low = rn; // already lowercase in the table
+            if url.starts_with(&format!("{}.html", low))
+                || url.starts_with(&format!("{}-definitions.html", low))
+            {
+                return true;
+            }
+        }
+    }
     if let Some(idx) = url.find(".html") {
         let base = &url[..idx];
         BASE_FILENAMES.contains(&base) || url.starts_with("extension-")
@@ -483,6 +520,44 @@ fn is_likely_source_url_reference(url: &str, base_url: &str) -> bool {
         false
     }
 }
+
+/// The R4 resource type names, lowercased (context.getResourceNames()). Used by
+/// isLikelySourceURLReference's resourceNames branch (PU:2306). A `location.html`
+/// / `bundle.html` link in an element definition's markdown is thus recognised as
+/// a spec source page and corePath-prefixed — matching the goldens.
+const R4_RESOURCE_NAMES: &[&str] = &[
+    "account", "activitydefinition", "adverseevent", "allergyintolerance", "appointment",
+    "appointmentresponse", "auditevent", "basic", "binary", "biologicallyderivedproduct",
+    "bodystructure", "bundle", "capabilitystatement", "careplan", "careteam", "catalogentry",
+    "chargeitem", "chargeitemdefinition", "claim", "claimresponse", "clinicalimpression",
+    "codesystem", "communication", "communicationrequest", "compartmentdefinition", "composition",
+    "conceptmap", "condition", "consent", "contract", "coverage", "coverageeligibilityrequest",
+    "coverageeligibilityresponse", "detectedissue", "device", "devicedefinition", "devicemetric",
+    "devicerequest", "deviceusestatement", "diagnosticreport", "documentmanifest",
+    "documentreference", "domainresource", "effectevidencesynthesis", "encounter", "endpoint",
+    "enrollmentrequest", "enrollmentresponse", "episodeofcare", "eventdefinition", "evidence",
+    "evidencevariable", "examplescenario", "explanationofbenefit", "familymemberhistory", "flag",
+    "goal", "graphdefinition", "group", "guidanceresponse", "healthcareservice", "imagingstudy",
+    "immunization", "immunizationevaluation", "immunizationrecommendation", "implementationguide",
+    "insuranceplan", "invoice", "library", "linkage", "list", "location", "measure", "measurereport",
+    "media", "medication", "medicationadministration", "medicationdispense", "medicationknowledge",
+    "medicationrequest", "medicationstatement", "medicinalproduct", "medicinalproductauthorization",
+    "medicinalproductcontraindication", "medicinalproductindication", "medicinalproductingredient",
+    "medicinalproductinteraction", "medicinalproductmanufactured", "medicinalproductpackaged",
+    "medicinalproductpharmaceutical", "medicinalproductundesirableeffect", "messagedefinition",
+    "messageheader", "molecularsequence", "namingsystem", "nutritionorder", "observation",
+    "observationdefinition", "operationdefinition", "operationoutcome", "organization",
+    "organizationaffiliation", "parameters", "patient", "paymentnotice", "paymentreconciliation",
+    "person", "plandefinition", "practitioner", "practitionerrole", "procedure", "provenance",
+    "questionnaire", "questionnaireresponse", "relatedperson", "requestgroup", "researchdefinition",
+    "researchelementdefinition", "researchstudy", "researchsubject", "resource", "riskassessment",
+    "riskevidencesynthesis", "schedule", "searchparameter", "servicerequest", "slot", "specimen",
+    "specimendefinition", "structuredefinition", "structuremap", "subscription", "substance",
+    "substancenucleicacid", "substancepolymer", "substanceprotein", "substancereferenceinformation",
+    "substancesourcematerial", "substancespecification", "supplydelivery", "supplyrequest", "task",
+    "terminologycapabilities", "testreport", "testscript", "valueset", "verificationresult",
+    "visionprescription",
+];
 
 /// `Utilities.stripPara` (Utilities.java:1870): trim, drop a leading `<p>` and a
 /// trailing `</p>`.

@@ -14,6 +14,7 @@
 pub mod aggregates;
 pub mod commonmark;
 pub mod context;
+pub mod dict;
 pub mod diff;
 pub mod gentypes;
 pub mod grid;
