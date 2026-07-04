@@ -3,16 +3,39 @@
 //! snapshot walk engine stay bindgen-free and native-tested; this crate is the
 //! only place JS types are marshalled.
 //!
-//! # Surface (the Web Worker calls these)
-//! - [`init`] — mount a set of prebuilt package bundles (the browser's package
-//!   cache) into an in-memory [`package_store::BundleSource`]. Called once.
-//! - [`compile`] — run the rust_sushi compiler in-memory over a `{path: text}`
-//!   map of FSH sources + the `sushi-config.yaml` text, returning
-//!   `{resources, diagnostics, timings}`.
-//! - [`generate_snapshot`] — generate a validation-grade snapshot for a profile
-//!   (given inline as an SD JSON or by canonical URL against the last compile +
-//!   the mounted packages), returning `{snapshot, messages}`.
-//! - [`version`] — the engine version + git commit.
+//! # The session surface (preferred)
+//!
+//! One handle — [`Session`] — with grouped methods, ONE error envelope and ONE
+//! JSON result envelope (both `apiVersion`-stamped). Construct it once in the
+//! Worker and call methods on it:
+//!
+//! ```js
+//! const s = new Session();               // or Session.global() for the shared one
+//! s.mount(bundlesJson);                  // -> { ok, apiVersion, result: { mounted } }
+//! s.compile(filesJson, config, predefinedJson);
+//! s.snapshot(urlOrInlineSd);
+//! s.buildSiteDb(inputJson);
+//! s.expandValueSet(vsJson, resourcesJson);
+//! s.resolveProject(config, versionIndexJson);
+//! Session.version();                     // static
+//! ```
+//!
+//! Every method returns a JSON string the Worker `JSON.parse`s. The envelope is
+//! uniform:
+//!   - success: `{ "apiVersion": 1, "ok": true,  "op": "<name>", "result": <payload> }`
+//!   - failure: `{ "apiVersion": 1, "ok": false, "op": "<name>", "error": { "message": "…" } }`
+//! Methods never throw for domain errors — they return `ok:false`; only a
+//! genuinely unusable argument (non-string) surfaces as a JS exception.
+//!
+//! # Legacy free-function surface (DEPRECATED — kept for the live editor)
+//!
+//! The original flat exports (`init` / `mount_bundles` / `compile` /
+//! `set_local_resources` / `generate_snapshot` / `expand_enumerable` /
+//! `build_site_db` / `resolve_project` / `version`) remain as thin wrappers over
+//! the SAME shared [`Session`] state (the process-global session). They preserve
+//! their exact historical output shapes byte-for-byte so the M2 editor + the
+//! parity harness keep working unchanged; F6 migrates callers to [`Session`] and
+//! then these can be deleted. New code must NOT use them.
 //!
 //! Everything runs synchronously in the Worker; the walk engine is the same code
 //! the native gates exercise (proven byte-identical by `scripts/wasm-parity.sh`).
@@ -30,6 +53,10 @@ use package_store::{BundleSource, PackageSource};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
+
+/// The result/error envelope version. Bump on any breaking change to the
+/// envelope SHAPE (not payload contents).
+const API_VERSION: u32 = 1;
 
 // ---------------------------------------------------------------------------
 // A shareable package source. Store/context take `impl PackageSource + 'static`
@@ -57,18 +84,22 @@ impl PackageSource for SharedBundle {
 }
 
 // ---------------------------------------------------------------------------
-// Global engine state (wasm is single-threaded; a thread_local is the right
-// shape). Holds the mounted package source + the last compile's resources so
-// `generate_snapshot(url)` can resolve a just-compiled local profile.
+// Engine — the mounted package source + last-compile locals. wasm is
+// single-threaded, so all state lives behind one process-global handle. Both the
+// `Session` object and the legacy free functions operate on the SAME `Engine`
+// (there is exactly one engine; a `Session` is a typed door onto it).
+//
+// Every operation is an inherent method returning `Result<_, String>` — plain
+// Rust errors, no `JsError` (which panics off-wasm). The two facades (Session +
+// legacy fns) do the JS marshalling.
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
 struct Engine {
     /// The bundle source packages are mounted into, wrapped in an `Rc` so each
     /// `compile`/`snapshot` call shares the (large) mounted bytes with a cheap
-    /// clone. `mount_bundles` appends lazily-fetched packages by `Rc::make_mut`
-    /// (copy-on-write only when the Rc is uniquely held, which it is between
-    /// calls) — so per-keystroke compiles never copy the bundle bytes.
+    /// clone. `mount` appends lazily-fetched packages by rebuilding a clone and
+    /// committing on success — so per-keystroke compiles never copy bundle bytes.
     bundle: Option<Rc<BundleSource>>,
     cache_root: PathBuf,
     /// The `<id>#<ver>` labels of the packages mounted, in mount order — the
@@ -80,6 +111,11 @@ struct Engine {
 }
 
 thread_local! {
+    /// The one process-global engine. `Session::global()` and every legacy free
+    /// function operate on this; a freshly-`new`d `Session` also points here (wasm
+    /// is single-threaded and the editor keeps a single engine — a second
+    /// independent engine has no use case yet, and sharing one keeps "one Engine
+    /// handle" literally true).
     static ENGINE: RefCell<Engine> = RefCell::new(Engine::default());
 }
 
@@ -88,10 +124,445 @@ fn set_panic_hook() {
     console_error_panic_hook::set_once();
 }
 
+impl Engine {
+    /// Mount a set of bundles as the package cache, REPLACING any prior mount.
+    /// Returns the number of packages mounted.
+    fn init(&mut self, bundles_json: &str) -> Result<u32, String> {
+        let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
+            .map_err(|e| format!("init: bad bundles JSON: {e}"))?;
+        let mut src = BundleSource::new();
+        let mut labels = Vec::new();
+        mount_into(&mut src, &parsed, &mut labels, "init")?;
+        self.cache_root = src.cache_root().to_path_buf();
+        self.bundle = Some(Rc::new(src));
+        self.packages = labels;
+        self.last_compiled.clear();
+        Ok(parsed.len() as u32)
+    }
+
+    /// Mount ADDITIONAL bundles (lazy per-bundle loading, editor spec §1).
+    /// Already-mounted labels are skipped (idempotent). Returns the total package
+    /// count after mounting.
+    ///
+    /// Builds on a CLONE of the mounted state and only commits it AFTER a
+    /// successful mount — so a mid-mount error (e.g. bad base64 in a lazily
+    /// fetched bundle) leaves the existing state intact rather than uninitialized.
+    fn mount(&mut self, bundles_json: &str) -> Result<u32, String> {
+        let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
+            .map_err(|e| format!("mount_bundles: bad bundles JSON: {e}"))?;
+        let mut src = (**self
+            .bundle
+            .as_ref()
+            .ok_or("mount_bundles: engine not initialized; call init() first")?)
+        .clone();
+        let mut labels = self.packages.clone();
+        let already: std::collections::BTreeSet<String> = labels.iter().cloned().collect();
+        let fresh: Vec<BundleInput> = parsed
+            .into_iter()
+            .filter(|p| !already.contains(&p.label))
+            .collect();
+        // Fallible: on Err we return WITHOUT having touched our bundle/packages.
+        mount_into(&mut src, &fresh, &mut labels, "mount_bundles")?;
+        // Commit only after success.
+        self.cache_root = src.cache_root().to_path_buf();
+        self.bundle = Some(Rc::new(src));
+        let total = labels.len() as u32;
+        self.packages = labels;
+        Ok(total)
+    }
+
+    /// The shared package source + cache root + package labels for a call. Cheap:
+    /// an `Rc` refcount bump, so the mounted bytes are shared, never copied.
+    fn source(&self) -> Result<(SharedBundle, PathBuf, Vec<String>), String> {
+        let bundle = self
+            .bundle
+            .clone()
+            .ok_or("engine not initialized: call init(bundles) first")?;
+        Ok((SharedBundle(bundle), self.cache_root.clone(), self.packages.clone()))
+    }
+
+    /// Compile a project in memory. Returns the [`CompileResult`] payload and
+    /// stashes the compiled resources as snapshot-resolution locals.
+    fn compile(
+        &mut self,
+        files_json: &str,
+        config: &str,
+        predefined_json: &str,
+    ) -> Result<CompileResult, String> {
+        let (source, cache_root, _packages) = self.source()?;
+
+        // FSH files: object -> Vec sorted by path (matches the disk walk order).
+        let files_map: std::collections::BTreeMap<String, String> =
+            serde_json::from_str(files_json).map_err(|e| format!("compile: bad files JSON: {e}"))?;
+        let fsh_files: Vec<(String, String)> = files_map.into_iter().collect();
+
+        // Predefined resources: object path -> body. Sorted by path so
+        // `PredefinedPackage::load_from` sees the disk-equivalent order.
+        let predefined: Vec<(PathBuf, Value)> = if predefined_json.trim().is_empty() {
+            Vec::new()
+        } else {
+            let m: std::collections::BTreeMap<String, Value> = serde_json::from_str(predefined_json)
+                .map_err(|e| format!("compile: bad predefined JSON: {e}"))?;
+            m.into_iter().map(|(p, v)| (PathBuf::from(p), v)).collect()
+        };
+
+        let cache = cache_root.to_string_lossy().into_owned();
+        let (compiled, diagnostics) = compiler::build_project_in_memory_with_diagnostics(
+            config, &fsh_files, predefined, source, &cache,
+        )
+        .map_err(|e| format!("compile failed: {e:#}"))?;
+
+        // Stash the compiled resources as local resources for snapshot resolution.
+        self.last_compiled = compiled
+            .iter()
+            .map(|r| {
+                (
+                    PathBuf::from(format!("/__compiled__/{}", r.filename)),
+                    r.body.clone(),
+                )
+            })
+            .collect();
+
+        let resources: Vec<CompiledResourceJs> = compiled
+            .into_iter()
+            .map(|r| {
+                let rt = r.body.get("resourceType").and_then(|v| v.as_str()).map(str::to_string);
+                let id = r.body.get("id").and_then(|v| v.as_str()).map(str::to_string);
+                let url = r.body.get("url").and_then(|v| v.as_str()).map(str::to_string);
+                CompiledResourceJs {
+                    filename: r.filename,
+                    text: r.text,
+                    resource_type: rt,
+                    id,
+                    url,
+                }
+            })
+            .collect();
+
+        let diagnostics: Vec<DiagnosticJs> = diagnostics
+            .into_iter()
+            .map(|d| DiagnosticJs {
+                severity: d.severity.to_string(),
+                message: d.message,
+                file: d.file,
+                line: d.line,
+            })
+            .collect();
+
+        Ok(CompileResult {
+            resources,
+            diagnostics,
+            timings: Timings::default(),
+        })
+    }
+
+    /// Set the "local" StructureDefinitions the next snapshot resolves bases
+    /// against — the in-memory equivalent of the CLI's `--local-dir`. Replaces the
+    /// local set from the last `compile()`. Returns the count.
+    fn set_local_resources(&mut self, json: &str) -> Result<u32, String> {
+        let map: std::collections::BTreeMap<String, Value> =
+            serde_json::from_str(json).map_err(|e| format!("set_local_resources: bad JSON: {e}"))?;
+        let locals: Vec<(PathBuf, Value)> = map
+            .into_iter()
+            .map(|(p, v)| (PathBuf::from(format!("/__local__/{p}")), v))
+            .collect();
+        let n = locals.len() as u32;
+        self.last_compiled = locals;
+        Ok(n)
+    }
+
+    /// Build a fresh `PackageContext` over the mounted packages + the last
+    /// compile's local resources.
+    fn build_context(&self) -> Result<snapshot_gen::PackageContext, String> {
+        let (source, cache_root, packages) = self.source()?;
+        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &packages)
+            .map_err(|e| format!("package context: {e:#}"))?;
+        ctx.load_local_resources(self.last_compiled.clone());
+        Ok(ctx)
+    }
+
+    /// Generate a snapshot for an inline SD JSON or a canonical URL/id/name.
+    /// Returns the [`SnapshotResult`] payload (never a hard error for a missing
+    /// profile — that lands in `messages`).
+    fn snapshot(&self, input: &str) -> Result<SnapshotResult, String> {
+        let ctx = self.build_context()?;
+
+        // Inline SD if it parses as an object with resourceType StructureDefinition;
+        // otherwise treat `input` as a URL/id/name and resolve it from local + pkgs.
+        let derived: Value = match serde_json::from_str::<Value>(input.trim()) {
+            Ok(v)
+                if v.get("resourceType").and_then(|r| r.as_str())
+                    == Some("StructureDefinition") =>
+            {
+                v
+            }
+            _ => {
+                let query = input.trim();
+                match ctx.fetch(query) {
+                    Some(rc) => (*rc).clone(),
+                    None => {
+                        return Ok(SnapshotResult {
+                            snapshot: None,
+                            messages: vec![format!("no StructureDefinition found for '{query}'")],
+                        });
+                    }
+                }
+            }
+        };
+
+        Ok(match snapshot_gen::generate_snapshot(derived, &ctx, Default::default()) {
+            Ok(v) => SnapshotResult {
+                snapshot: Some(v),
+                messages: Vec::new(),
+            },
+            Err(e) => SnapshotResult {
+                snapshot: None,
+                messages: vec![format!("{e:#}")],
+            },
+        })
+    }
+
+    /// Tier-1 in-engine ValueSet expansion (spec §6). Returns the raw payload
+    /// `Value` (either `{ ok:true, expansion, usedCodeSystems, copyright }` or
+    /// `{ ok:false, notEnumerable }`).
+    fn expand_valueset(&self, valueset_json: &str, resources_json: &str) -> Result<Value, String> {
+        use compiler::terminology::{
+            expand_enumerable as expand, MapResolver, NotEnumerable, RefusalKind,
+        };
+
+        let vs: Value = serde_json::from_str(valueset_json)
+            .map_err(|e| format!("expand_enumerable: bad ValueSet JSON: {e}"))?;
+
+        // `resources_json` may be an array (preferred) or an object map path->body
+        // (accepted for convenience — the editor's predefined map shape).
+        let mut resolver = MapResolver::new();
+        let parsed: Value = if resources_json.trim().is_empty() {
+            Value::Array(Vec::new())
+        } else {
+            serde_json::from_str(resources_json)
+                .map_err(|e| format!("expand_enumerable: bad resources JSON: {e}"))?
+        };
+        match parsed {
+            Value::Array(items) => {
+                for r in items {
+                    resolver.insert(r);
+                }
+            }
+            Value::Object(map) => {
+                for (_k, r) in map {
+                    resolver.insert(r);
+                }
+            }
+            _ => return Err("expand_enumerable: resources must be a JSON array or object".into()),
+        }
+
+        Ok(match expand(&vs, &resolver) {
+            Ok(exp) => {
+                let expansion = exp.to_expansion_json();
+                // Lift used-codesystems out of expansion.parameter for the editor's
+                // "code system versions" table (it also stays in parameter[]).
+                let used: Vec<Value> = expansion
+                    .get("parameter")
+                    .and_then(Value::as_array)
+                    .map(|params| {
+                        params
+                            .iter()
+                            .filter(|p| {
+                                p.get("name").and_then(Value::as_str) == Some("used-codesystem")
+                            })
+                            .filter_map(|p| p.get("valueUri").and_then(Value::as_str))
+                            .map(|uri| match uri.split_once('|') {
+                                Some((sys, ver)) => {
+                                    serde_json::json!({ "system": sys, "version": ver })
+                                }
+                                None => serde_json::json!({ "system": uri }),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                serde_json::json!({
+                    "ok": true,
+                    "expansion": expansion,
+                    "usedCodeSystems": used,
+                    "copyright": exp.copyright(),
+                })
+            }
+            Err(ne @ NotEnumerable { .. }) => {
+                let kind = match ne.kind {
+                    RefusalKind::ExternalSystemFilter => "ExternalSystemFilter",
+                    RefusalKind::UnresolvableOrIncompleteSystem => "UnresolvableOrIncompleteSystem",
+                    RefusalKind::UnresolvableValueSet => "UnresolvableValueSet",
+                    RefusalKind::NestedNotEnumerable => "NestedNotEnumerable",
+                    RefusalKind::UnsupportedLocalFilter => "UnsupportedLocalFilter",
+                    RefusalKind::Malformed => "Malformed",
+                    RefusalKind::CycleGuard => "CycleGuard",
+                };
+                serde_json::json!({
+                    "ok": false,
+                    "notEnumerable": {
+                        "component": ne.component,
+                        "index": ne.index,
+                        "system": ne.system,
+                        "kind": kind,
+                        // The verbatim single-line refusal (Display = "component[i]: reason").
+                        "reason": ne.reason,
+                        "display": ne.to_string(),
+                    }
+                })
+            }
+        })
+    }
+
+    /// Build the site.db ROW MODEL from fully in-memory IG inputs. Returns the row
+    /// model as a `Value` (SQLite/`core/db.ts` column casing).
+    fn build_site_db(&self, input_json: &str) -> Result<Value, String> {
+        let input: SiteDbInput =
+            serde_json::from_str(input_json).map_err(|e| format!("build_site_db: bad input JSON: {e}"))?;
+
+        let (source, cache_root, _packages) = self.source()?;
+        let cache = cache_root.to_string_lossy().into_owned();
+
+        // ---- S1/S2 (+ IG export): compile in memory, producing the IG resource. ----
+        let fsh_files: Vec<(String, String)> = input.fsh.into_iter().collect();
+        let predefined: Vec<(PathBuf, Value)> = input
+            .predefined
+            .into_iter()
+            .map(|(p, v)| (PathBuf::from(p), v))
+            .collect();
+        // The page-folder listing ig_export needs (folder -> filenames) is derived
+        // from the site_files map: the disk path would scan input/{pagecontent,
+        // pages,resource-docs}; we hand it the same names from the VFS.
+        let mut page_dir_listing: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for path in input.site_files.keys() {
+            for folder in ["pagecontent", "pages", "resource-docs"] {
+                let prefix = format!("input/{folder}/");
+                if let Some(rest) = path.strip_prefix(&prefix) {
+                    // Only direct children participate in the page scan (not nested).
+                    if !rest.is_empty() && !rest.contains('/') {
+                        page_dir_listing
+                            .entry(folder.to_string())
+                            .or_default()
+                            .push(rest.to_string());
+                    }
+                }
+            }
+        }
+
+        let (conformance, ig_resource, _diagnostics) = compiler::build_project_in_memory_with_ig(
+            &input.config,
+            &fsh_files,
+            predefined,
+            source,
+            &cache,
+            page_dir_listing,
+        )
+        .map_err(|e| format!("build_site_db: compile failed: {e:#}"))?;
+
+        // ---- S3: snapshot-complete each StructureDefinition against the compile. ----
+        // Build the snapshot context EXACTLY as the native `site_db` pipeline does:
+        // a `PackageContext` over ONLY the FHIR CORE package (r4/r5 core), plus the
+        // just-compiled conformance SDs as locals so cross-profile bases resolve.
+        // Loading the whole mounted closure here would pull extra type/extension
+        // profiles into base resolution and inflate the snapshot vs the native
+        // oracle — the native pipeline pins snapshotting to the single core package.
+        let (source, cache_root, packages) = self.source()?;
+        let core_package = pick_core_package(&packages).ok_or(
+            "build_site_db: no FHIR core package (hl7.fhir.r{4,5}.core) mounted",
+        )?;
+        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
+            .map_err(|e| format!("build_site_db: package context: {e:#}"))?;
+        let locals: Vec<(PathBuf, Value)> = conformance
+            .iter()
+            .map(|r| (PathBuf::from(format!("/__compiled__/{}", r.filename)), r.body.clone()))
+            .collect();
+        ctx.load_local_resources(locals);
+
+        let mut generated: Vec<Value> = Vec::new();
+        for r in &conformance {
+            if r.body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
+                let snap = snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default())
+                    .map_err(|e| format!("build_site_db: snapshot {}: {e:#}", r.filename))?;
+                generated.push(snap);
+            } else {
+                generated.push(r.body.clone());
+            }
+        }
+        if let Some(ig) = &ig_resource {
+            generated.push(ig.body.clone());
+        } else {
+            return Err(
+                "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)"
+                    .into(),
+            );
+        }
+
+        // Predefined `input/resources/**` bodies are the examples (S5 loadResources).
+        let examples: Vec<Value> = collect_example_resources(&input.site_files);
+
+        // ---- Site-content VFS for S6 (pagecontent/images/includes), keyed /ig. ----
+        let ig_root = PathBuf::from("/ig");
+        let mut vfs: std::collections::BTreeMap<PathBuf, Vec<u8>> =
+            std::collections::BTreeMap::new();
+        for (path, b64) in &input.site_files {
+            let bytes = base64_decode(b64)
+                .map_err(|e| format!("build_site_db: bad base64 for {path}: {e}"))?;
+            vfs.insert(ig_root.join(path), bytes);
+        }
+
+        let liquid_asset_dirs = if input.liquid_asset_dirs.is_empty() {
+            vec!["input/includes".to_string()]
+        } else {
+            input.liquid_asset_dirs
+        };
+
+        // ---- S5/S6: assemble the row model. ----
+        let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
+            generated: &generated,
+            examples: &examples,
+            sushi_config_yaml: &input.config,
+            build_epoch_secs: input.build_epoch_secs,
+            branch: input.branch,
+            revision: input.revision,
+            vfs,
+            ig_root,
+            liquid_asset_rel_dirs: liquid_asset_dirs,
+        })
+        .map_err(|e| format!("build_site_db: assemble rows: {e:#}"))?;
+
+        serde_json::to_value(&outcome.db).map_err(|e| format!("build_site_db: serialize rows: {e}"))
+    }
+
+    /// Resolve a project's two package sets against the CURRENTLY MOUNTED bundles.
+    /// Returns the [`package_store::ResolutionStep`]'s canonical JSON STRING (the
+    /// exact `ResolutionStep::to_json()` bytes the legacy wrapper hands back
+    /// verbatim; the Session path re-parses it into the envelope).
+    fn resolve_project(&self, config: &str, version_index_json: &str) -> Result<String, String> {
+        let (source, cache_root, _packages) = self.source()?;
+
+        let index: Option<package_store::VersionIndex> = if version_index_json.trim().is_empty() {
+            None
+        } else {
+            Some(
+                serde_json::from_str(version_index_json)
+                    .map_err(|e| format!("resolve_project: bad version index JSON: {e}"))?,
+            )
+        };
+
+        let step = package_store::resolve_project(config, &source, &cache_root, index.as_ref())
+            .map_err(|e| format!("resolve_project: {e:#}"))?;
+        Ok(step.to_json())
+    }
+}
+
+/// Run `f` against the process-global engine.
+fn with_engine<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
+    ENGINE.with(|e| f(&mut e.borrow_mut()))
+}
+
 // ---------------------------------------------------------------------------
-// JS-facing result shapes (serde -> JsValue via serde_wasm helpers we hand-roll
-// with serde_json to avoid an extra dep: we return JSON strings the Worker
-// JSON.parse()s, which is the simplest robust bindgen contract).
+// JS-facing result shapes (serde -> JSON string the Worker JSON.parse()s, the
+// simplest robust bindgen contract).
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -139,384 +610,13 @@ struct SnapshotResult {
     messages: Vec<String>,
 }
 
-// ---------------------------------------------------------------------------
-// init
-// ---------------------------------------------------------------------------
-
-/// Mount a set of prebuilt package bundles as the in-memory package cache.
-///
-/// `bundles_json` is a JSON string: `[{ "label": "hl7.fhir.r4.core#4.0.1",
-/// "files": { "<name>": "<base64 bytes>" , ... } }, ...]`. Each package's
-/// `files` map is its already-inflated bundle entries (the browser fetched the
-/// `.tgz`, inflated it via the `read_bundle` path or a JS gunzip, and base64'd
-/// the bytes). Resources are indexed lazily on first fetch, so this is cheap.
-///
-/// Returns the number of packages mounted.
-#[wasm_bindgen]
-pub fn init(bundles_json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
-        .map_err(|e| JsError::new(&format!("init: bad bundles JSON: {e}")))?;
-    let mut src = BundleSource::new();
-    let mut labels = Vec::new();
-    mount_into(&mut src, &parsed, &mut labels, "init")?;
-    let cache_root = src.cache_root().to_path_buf();
-    ENGINE.with(|e| {
-        let mut e = e.borrow_mut();
-        e.bundle = Some(Rc::new(src));
-        e.cache_root = cache_root;
-        e.packages = labels;
-        e.last_compiled.clear();
-    });
-    Ok(parsed.len() as u32)
-}
-
-/// Mount ADDITIONAL package bundles into the already-initialized engine (lazy
-/// per-bundle loading, editor spec §1). Bundles whose label is already mounted
-/// are skipped (idempotent). Returns the total package count after mounting.
-///
-/// This is the additive seam the editor's cold-start optimization needs: `init`
-/// mounts only the compile-critical closure (fast first paint); the heavy,
-/// snapshot-only `r5.core` bundle is fetched + `mount_bundles`'d on first
-/// snapshot / site-build. Correctness is preserved — a snapshot is never run
-/// before its bundle is mounted (the editor gates that call on this returning).
-#[wasm_bindgen]
-pub fn mount_bundles(bundles_json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
-        .map_err(|e| JsError::new(&format!("mount_bundles: bad bundles JSON: {e}")))?;
-    ENGINE.with(|e| {
-        let mut e = e.borrow_mut();
-        // Work on a CLONE of the mounted state and only commit it back to ENGINE
-        // AFTER a successful mount — so a mid-mount error (e.g. bad base64 in a
-        // lazily-fetched bundle) leaves the engine's existing state intact rather
-        // than uninitialized. (Mirrors `init`, which builds locally then assigns.)
-        let mut src = (**e
-            .bundle
-            .as_ref()
-            .ok_or_else(|| JsError::new("mount_bundles: engine not initialized; call init() first"))?)
-        .clone();
-        let mut labels = e.packages.clone();
-        let already: std::collections::BTreeSet<String> = labels.iter().cloned().collect();
-        let fresh: Vec<BundleInput> = parsed
-            .into_iter()
-            .filter(|p| !already.contains(&p.label))
-            .collect();
-        // Fallible: on Err we return WITHOUT having touched `e.bundle`/`e.packages`.
-        mount_into(&mut src, &fresh, &mut labels, "mount_bundles")?;
-        // Commit only after success.
-        e.cache_root = src.cache_root().to_path_buf();
-        e.bundle = Some(Rc::new(src));
-        let total = labels.len() as u32;
-        e.packages = labels;
-        Ok(total)
-    })
-}
-
-/// Decode + mount each bundle's base64 files under its label. Appends newly
-/// mounted labels to `labels`.
-fn mount_into(
-    src: &mut BundleSource,
-    parsed: &[BundleInput],
-    labels: &mut Vec<String>,
-    who: &str,
-) -> Result<(), JsError> {
-    for pkg in parsed {
-        let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(pkg.files.len());
-        for (name, b64) in &pkg.files {
-            let bytes = base64_decode(b64)
-                .map_err(|e| JsError::new(&format!("{who}: bad base64 for {name}: {e}")))?;
-            entries.push((name.clone(), bytes));
-        }
-        src.mount_package(&pkg.label, entries);
-        labels.push(pkg.label.clone());
-    }
-    Ok(())
-}
-
 #[derive(Deserialize)]
 struct BundleInput {
     label: String,
     files: std::collections::BTreeMap<String, String>,
 }
 
-// ---------------------------------------------------------------------------
-// compile
-// ---------------------------------------------------------------------------
-
-/// Compile a project in-memory. `files_json` is a JSON object mapping FSH file
-/// paths to their text (e.g. `{ "input/fsh/Profiles.fsh": "..." }`); `config`
-/// is the `sushi-config.yaml` text; `predefined_json` (may be `""`) is a JSON
-/// object mapping `input/resources/**` paths to their JSON resource bodies.
-///
-/// Returns a JSON string `{ resources, diagnostics, timings }`. Resources carry
-/// the byte-identical SUSHI output plus light metadata for the editor's views.
-#[wasm_bindgen]
-pub fn compile(files_json: &str, config: &str, predefined_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let (source, cache_root, _packages) = engine_source()?;
-
-    // FSH files: object -> Vec sorted by path (matches the disk walk order).
-    let files_map: std::collections::BTreeMap<String, String> = serde_json::from_str(files_json)
-        .map_err(|e| JsError::new(&format!("compile: bad files JSON: {e}")))?;
-    let fsh_files: Vec<(String, String)> = files_map.into_iter().collect();
-
-    // Predefined resources: object path -> body. Sorted by path so
-    // `PredefinedPackage::load_from` sees the disk-equivalent order.
-    let predefined: Vec<(PathBuf, Value)> = if predefined_json.trim().is_empty() {
-        Vec::new()
-    } else {
-        let m: std::collections::BTreeMap<String, Value> = serde_json::from_str(predefined_json)
-            .map_err(|e| JsError::new(&format!("compile: bad predefined JSON: {e}")))?;
-        m.into_iter().map(|(p, v)| (PathBuf::from(p), v)).collect()
-    };
-
-    let cache = cache_root.to_string_lossy().into_owned();
-    let (compiled, diagnostics) =
-        compiler::build_project_in_memory_with_diagnostics(config, &fsh_files, predefined, source, &cache)
-            .map_err(|e| JsError::new(&format!("compile failed: {e:#}")))?;
-
-    // Stash the compiled resources as local resources for snapshot resolution.
-    let locals: Vec<(PathBuf, Value)> = compiled
-        .iter()
-        .map(|r| {
-            (
-                PathBuf::from(format!("/__compiled__/{}", r.filename)),
-                r.body.clone(),
-            )
-        })
-        .collect();
-    ENGINE.with(|e| e.borrow_mut().last_compiled = locals);
-
-    let resources: Vec<CompiledResourceJs> = compiled
-        .into_iter()
-        .map(|r| {
-            let rt = r.body.get("resourceType").and_then(|v| v.as_str()).map(str::to_string);
-            let id = r.body.get("id").and_then(|v| v.as_str()).map(str::to_string);
-            let url = r.body.get("url").and_then(|v| v.as_str()).map(str::to_string);
-            CompiledResourceJs {
-                filename: r.filename,
-                text: r.text,
-                resource_type: rt,
-                id,
-                url,
-            }
-        })
-        .collect();
-
-    let diagnostics: Vec<DiagnosticJs> = diagnostics
-        .into_iter()
-        .map(|d| DiagnosticJs {
-            severity: d.severity.to_string(),
-            message: d.message,
-            file: d.file,
-            line: d.line,
-        })
-        .collect();
-
-    let out = CompileResult {
-        resources,
-        diagnostics,
-        timings: Timings::default(),
-    };
-    serde_json::to_string(&out).map_err(|e| JsError::new(&format!("compile: serialize: {e}")))
-}
-
-// ---------------------------------------------------------------------------
-// set_local_resources
-// ---------------------------------------------------------------------------
-
-/// Set the "local" StructureDefinitions the next `generate_snapshot` resolves
-/// bases against — the in-memory equivalent of the CLI's `--local-dir`. `json`
-/// is an object mapping a synthetic path to each SD's JSON body
-/// (`{ "<name>.json": { ...SD... } }`). This is what the parity harness uses to
-/// load a corpus IG's fixture set (the sibling profiles a rung's base resolves
-/// to), and what an editor uses to snapshot against not-yet-recompiled siblings.
-/// Replaces the local set from the last `compile()`.
-#[wasm_bindgen]
-pub fn set_local_resources(json: &str) -> Result<u32, JsError> {
-    set_panic_hook();
-    let map: std::collections::BTreeMap<String, Value> = serde_json::from_str(json)
-        .map_err(|e| JsError::new(&format!("set_local_resources: bad JSON: {e}")))?;
-    let locals: Vec<(PathBuf, Value)> = map
-        .into_iter()
-        .map(|(p, v)| (PathBuf::from(format!("/__local__/{p}")), v))
-        .collect();
-    let n = locals.len() as u32;
-    ENGINE.with(|e| e.borrow_mut().last_compiled = locals);
-    Ok(n)
-}
-
-// ---------------------------------------------------------------------------
-// generate_snapshot
-// ---------------------------------------------------------------------------
-
-/// Generate a snapshot. `input` is either an inline StructureDefinition as a
-/// JSON string, or a canonical profile URL (resolved against the last
-/// `compile()`'s outputs, then the mounted packages). Returns a JSON string
-/// `{ snapshot, messages }` where `snapshot` is the full SD with the generated
-/// `snapshot.element`, R5-internal (the walk engine's native output).
-#[wasm_bindgen]
-pub fn generate_snapshot(input: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let ctx = build_context()?;
-
-    // Inline SD if it parses as an object with resourceType StructureDefinition;
-    // otherwise treat `input` as a URL/id/name and resolve it from local + pkgs.
-    let derived: Value = match serde_json::from_str::<Value>(input.trim()) {
-        Ok(v) if v.get("resourceType").and_then(|r| r.as_str()) == Some("StructureDefinition") => v,
-        _ => {
-            let query = input.trim();
-            match ctx.fetch(query) {
-                Some(rc) => (*rc).clone(),
-                None => {
-                    return serde_json::to_string(&SnapshotResult {
-                        snapshot: None,
-                        messages: vec![format!("no StructureDefinition found for '{query}'")],
-                    })
-                    .map_err(|e| JsError::new(&format!("serialize: {e}")));
-                }
-            }
-        }
-    };
-
-    let out = match snapshot_gen::generate_snapshot(derived, &ctx, Default::default()) {
-        Ok(v) => SnapshotResult {
-            snapshot: Some(v),
-            messages: Vec::new(),
-        },
-        Err(e) => SnapshotResult {
-            snapshot: None,
-            messages: vec![format!("{e:#}")],
-        },
-    };
-    serde_json::to_string(&out).map_err(|e| JsError::new(&format!("serialize: {e}")))
-}
-
-// ---------------------------------------------------------------------------
-// expand_enumerable — tier-1 in-engine ValueSet expansion (spec §6 tier 1)
-// ---------------------------------------------------------------------------
-
-/// Expand a ValueSet's compose IN the engine, for the composes that are pure
-/// functions of IG content (enumerated codes, whole local CodeSystems, local-CS
-/// filters, nested enumerable references). A thin wrapper over
-/// [`compiler::terminology::expand_enumerable`] (the #21 recommended surface):
-/// no tx server, no external-system subsumption — a filter over content we do
-/// not hold locally returns the precise refusal the editor renders verbatim.
-///
-/// `valueset_json` is a FHIR `ValueSet` resource (the compiler's export body).
-/// `resources_json` is a JSON ARRAY of the IG-local + cached `ValueSet` /
-/// `CodeSystem` resources the compose may reference (the editor passes the last
-/// compile's conformance resources; a whole-package scan is unnecessary for the
-/// enumerable domain and would be wasteful per keystroke).
-///
-/// Returns a JSON string, one of:
-///   `{ "ok": true,  "expansion": { total, parameter?, contains[] },
-///      "usedCodeSystems": [{ "system", "version"? }, ...],
-///      "copyright": ["..."] }`
-///   `{ "ok": false, "notEnumerable": { component, index, system?, kind, reason } }`
-/// where `reason` is the exact single-line refusal string (spec §6: "shown
-/// verbatim as the needs-terminology-server state").
-#[wasm_bindgen]
-pub fn expand_enumerable(valueset_json: &str, resources_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    use compiler::terminology::{
-        expand_enumerable as expand, MapResolver, NotEnumerable, RefusalKind,
-    };
-
-    let vs: Value = serde_json::from_str(valueset_json)
-        .map_err(|e| JsError::new(&format!("expand_enumerable: bad ValueSet JSON: {e}")))?;
-
-    // `resources_json` may be an array (preferred) or an object map path->body
-    // (accepted for convenience — the editor's predefined map shape). Build the
-    // resolver from whatever `ValueSet`/`CodeSystem` resources are present.
-    let mut resolver = MapResolver::new();
-    let parsed: Value = if resources_json.trim().is_empty() {
-        Value::Array(Vec::new())
-    } else {
-        serde_json::from_str(resources_json)
-            .map_err(|e| JsError::new(&format!("expand_enumerable: bad resources JSON: {e}")))?
-    };
-    match parsed {
-        Value::Array(items) => {
-            for r in items {
-                resolver.insert(r);
-            }
-        }
-        Value::Object(map) => {
-            for (_k, r) in map {
-                resolver.insert(r);
-            }
-        }
-        _ => {
-            return Err(JsError::new(
-                "expand_enumerable: resources must be a JSON array or object",
-            ))
-        }
-    }
-
-    let out = match expand(&vs, &resolver) {
-        Ok(exp) => {
-            let expansion = exp.to_expansion_json();
-            // Lift used-codesystems out of the expansion.parameter for the
-            // editor's "code system versions" table (it also stays in parameter[]).
-            let used: Vec<Value> = expansion
-                .get("parameter")
-                .and_then(Value::as_array)
-                .map(|params| {
-                    params
-                        .iter()
-                        .filter(|p| p.get("name").and_then(Value::as_str) == Some("used-codesystem"))
-                        .filter_map(|p| p.get("valueUri").and_then(Value::as_str))
-                        .map(|uri| match uri.split_once('|') {
-                            Some((sys, ver)) => {
-                                serde_json::json!({ "system": sys, "version": ver })
-                            }
-                            None => serde_json::json!({ "system": uri }),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            serde_json::json!({
-                "ok": true,
-                "expansion": expansion,
-                "usedCodeSystems": used,
-                "copyright": exp.copyright(),
-            })
-        }
-        Err(ne @ NotEnumerable { .. }) => {
-            let kind = match ne.kind {
-                RefusalKind::ExternalSystemFilter => "ExternalSystemFilter",
-                RefusalKind::UnresolvableOrIncompleteSystem => "UnresolvableOrIncompleteSystem",
-                RefusalKind::UnresolvableValueSet => "UnresolvableValueSet",
-                RefusalKind::NestedNotEnumerable => "NestedNotEnumerable",
-                RefusalKind::UnsupportedLocalFilter => "UnsupportedLocalFilter",
-                RefusalKind::Malformed => "Malformed",
-                RefusalKind::CycleGuard => "CycleGuard",
-            };
-            serde_json::json!({
-                "ok": false,
-                "notEnumerable": {
-                    "component": ne.component,
-                    "index": ne.index,
-                    "system": ne.system,
-                    "kind": kind,
-                    // The verbatim single-line refusal (Display = "component[i]: reason").
-                    "reason": ne.reason,
-                    "display": ne.to_string(),
-                }
-            })
-        }
-    };
-    serde_json::to_string(&out)
-        .map_err(|e| JsError::new(&format!("expand_enumerable: serialize: {e}")))
-}
-
-// ---------------------------------------------------------------------------
-// build_site_db — the M2 site-preview producer (docs/fhir-ig-editor-spec.md §7)
-// ---------------------------------------------------------------------------
-
-/// The JS input for [`build_site_db`]: the whole IG working set, in memory.
+/// The JS input for `build_site_db`: the whole IG working set, in memory.
 #[derive(Deserialize)]
 struct SiteDbInput {
     /// sushi-config.yaml text.
@@ -527,8 +627,8 @@ struct SiteDbInput {
     #[serde(default)]
     predefined: std::collections::BTreeMap<String, Value>,
     /// Site-content files (pagecontent/images/includes) the S6 augmentation reads:
-    /// project-relative path (e.g. `input/pagecontent/index.md`, `input/images/x.png`)
-    /// -> base64 bytes. Text files may be base64'd UTF-8; images are raw bytes.
+    /// project-relative path (e.g. `input/pagecontent/index.md`) -> base64 bytes.
+    /// Text files may be base64'd UTF-8; images are raw bytes.
     #[serde(default)]
     site_files: std::collections::BTreeMap<String, String>,
     /// Injected build timestamp (seconds since epoch) — genDate/genDay/date come
@@ -544,143 +644,303 @@ struct SiteDbInput {
     revision: Option<String>,
 }
 
-/// Build the site.db ROW MODEL from fully in-memory IG inputs and return it as a
-/// JSON string the editor's JS row store consumes directly (M2 site preview).
+// ---------------------------------------------------------------------------
+// Envelope helpers (the ONE result shape + the ONE error shape for Session).
+// ---------------------------------------------------------------------------
+
+/// Serialize a session-method result into the uniform envelope string. Any
+/// serialization failure degrades to a hand-built error envelope (never panics,
+/// never throws).
+fn envelope(op: &str, result: Result<Value, String>) -> String {
+    let v = match result {
+        Ok(payload) => serde_json::json!({
+            "apiVersion": API_VERSION,
+            "ok": true,
+            "op": op,
+            "result": payload,
+        }),
+        Err(message) => serde_json::json!({
+            "apiVersion": API_VERSION,
+            "ok": false,
+            "op": op,
+            "error": { "message": message },
+        }),
+    };
+    // A serde_json::Value always serializes; the fallback is defensive only.
+    serde_json::to_string(&v).unwrap_or_else(|_| {
+        format!(
+            "{{\"apiVersion\":{API_VERSION},\"ok\":false,\"op\":\"{op}\",\
+             \"error\":{{\"message\":\"envelope serialize failed\"}}}}"
+        )
+    })
+}
+
+/// Serialize a `T: Serialize` result into the envelope (for typed payloads).
+fn envelope_ser<T: Serialize>(op: &str, result: Result<T, String>) -> String {
+    let as_value = result.and_then(|payload| {
+        serde_json::to_value(&payload).map_err(|e| format!("{op}: serialize: {e}"))
+    });
+    envelope(op, as_value)
+}
+
+// ===========================================================================
+// Session — the preferred handle. One door onto the process-global engine, with
+// grouped methods and the uniform envelope.
+// ===========================================================================
+
+/// The editor's engine session. Construct once; call methods per operation.
 ///
-/// Pipeline (all in the Worker, no filesystem, no C-sqlite):
-///   S1/S2  compiler::build_project_in_memory_with_ig  -> conformance + the IG
-///   S3     snapshot_gen::generate_snapshot (per SD)    -> snapshot-complete SDs
-///   S5/S6  site_db::build_from_inputs                  -> the SiteDb row model
-///
-/// The returned JSON is `{ metadata, resources, concepts, valueSetCodes, pages,
-/// menu, siteConfig, assets }` with SQLite/`core/db.ts` column casing (assets'
-/// `Content` is base64). Byte/JSON-identical to the native disk site.db rows for
-/// the same IG (minus BuildState timestamps) — asserted by the native
-/// `inmem_vs_disk` parity test.
+/// `Session` is a zero-sized typed handle onto the single process-global engine
+/// (wasm is single-threaded). `new Session()` and `Session.global()` refer to the
+/// same underlying state — a second independent engine has no use case yet.
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct Session {
+    _private: (),
+}
+
+#[wasm_bindgen]
+impl Session {
+    /// Create a session handle (points at the shared process-global engine).
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Session {
+        set_panic_hook();
+        Session { _private: () }
+    }
+
+    /// The shared process-global session (identical to `new Session()`; provided
+    /// so callers can name the intent).
+    pub fn global() -> Session {
+        Session::new()
+    }
+
+    /// Mount a set of prebuilt package bundles as the package cache, REPLACING any
+    /// prior mount. `bundles_json`: `[{ "label": "id#ver", "files": { name: b64 }}]`.
+    /// Envelope result: `{ "mounted": <count> }`.
+    pub fn init(&self, bundles_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "init",
+            with_engine(|e| e.init(bundles_json)).map(|n| serde_json::json!({ "mounted": n })),
+        )
+    }
+
+    /// Mount ADDITIONAL bundles (additive, idempotent). Envelope result:
+    /// `{ "mounted": <total-count> }`.
+    pub fn mount(&self, bundles_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "mount",
+            with_engine(|e| e.mount(bundles_json)).map(|n| serde_json::json!({ "mounted": n })),
+        )
+    }
+
+    /// Compile a project in memory. Envelope result: `{ resources, diagnostics,
+    /// timings }`.
+    pub fn compile(&self, files_json: &str, config: &str, predefined_json: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "compile",
+            with_engine(|e| e.compile(files_json, config, predefined_json)),
+        )
+    }
+
+    /// Replace the local StructureDefinitions the next `snapshot` resolves bases
+    /// against. Envelope result: `{ "count": <n> }`.
+    #[wasm_bindgen(js_name = setLocalResources)]
+    pub fn set_local_resources(&self, json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "setLocalResources",
+            with_engine(|e| e.set_local_resources(json)).map(|n| serde_json::json!({ "count": n })),
+        )
+    }
+
+    /// Generate a snapshot for an inline SD JSON or a canonical URL/id/name.
+    /// Envelope result: `{ snapshot, messages }`.
+    pub fn snapshot(&self, input: &str) -> String {
+        set_panic_hook();
+        envelope_ser("snapshot", with_engine(|e| e.snapshot(input)))
+    }
+
+    /// Build the site.db row model from in-memory IG inputs. Envelope result: the
+    /// row model object.
+    #[wasm_bindgen(js_name = buildSiteDb)]
+    pub fn build_site_db(&self, input_json: &str) -> String {
+        set_panic_hook();
+        envelope("buildSiteDb", with_engine(|e| e.build_site_db(input_json)))
+    }
+
+    /// Tier-1 in-engine ValueSet expansion. Envelope result is the expansion
+    /// payload (`{ ok, expansion, ... }` or `{ ok:false, notEnumerable }`).
+    #[wasm_bindgen(js_name = expandValueSet)]
+    pub fn expand_valueset(&self, valueset_json: &str, resources_json: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "expandValueSet",
+            with_engine(|e| e.expand_valueset(valueset_json, resources_json)),
+        )
+    }
+
+    /// Resolve a project's package sets against the mounted bundles. Envelope
+    /// result: `{ compile_set, context_closure, missing, satisfied }`.
+    #[wasm_bindgen(js_name = resolveProject)]
+    pub fn resolve_project(&self, config: &str, version_index_json: &str) -> String {
+        set_panic_hook();
+        let payload = with_engine(|e| e.resolve_project(config, version_index_json)).and_then(|s| {
+            serde_json::from_str::<Value>(&s).map_err(|e| format!("resolveProject: reparse: {e}"))
+        });
+        envelope("resolveProject", payload)
+    }
+
+    /// Engine version + build commit, as a JSON string `{ version, commit, engine }`
+    /// (NOT enveloped — a static build-info accessor).
+    pub fn version() -> String {
+        version_json()
+    }
+}
+
+// ===========================================================================
+// Legacy free-function surface — DEPRECATED thin wrappers over the shared engine.
+// They preserve their exact historical output shapes byte-for-byte (the M2 editor
+// + parity harness depend on them). F6 migrates callers to `Session`, then these
+// go away. `JsError` is reconstructed here so the wire type is unchanged.
+// ===========================================================================
+
+/// DEPRECATED: use `new Session().init(bundles)`. Mount prebuilt bundles as the
+/// package cache. Returns the package count.
+#[deprecated(note = "use Session::init (the session surface). Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn init(bundles_json: &str) -> Result<u32, JsError> {
+    set_panic_hook();
+    with_engine(|e| e.init(bundles_json)).map_err(|m| JsError::new(&m))
+}
+
+/// DEPRECATED: use `new Session().mount(bundles)`. Additive, idempotent mount.
+/// Returns the total package count.
+#[deprecated(note = "use Session::mount. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn mount_bundles(bundles_json: &str) -> Result<u32, JsError> {
+    set_panic_hook();
+    with_engine(|e| e.mount(bundles_json)).map_err(|m| JsError::new(&m))
+}
+
+/// DEPRECATED: use `new Session().compile(...)`. Returns `{ resources,
+/// diagnostics, timings }` (the RAW payload, not the session envelope).
+#[deprecated(note = "use Session::compile. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn compile(files_json: &str, config: &str, predefined_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    let r = with_engine(|e| e.compile(files_json, config, predefined_json));
+    match r {
+        Ok(payload) => serde_json::to_string(&payload)
+            .map_err(|e| JsError::new(&format!("compile: serialize: {e}"))),
+        Err(m) => Err(JsError::new(&m)),
+    }
+}
+
+/// DEPRECATED: use `new Session().setLocalResources(json)`. Returns the count.
+#[deprecated(note = "use Session::set_local_resources. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn set_local_resources(json: &str) -> Result<u32, JsError> {
+    set_panic_hook();
+    with_engine(|e| e.set_local_resources(json)).map_err(|m| JsError::new(&m))
+}
+
+/// DEPRECATED: use `new Session().snapshot(input)`. Returns `{ snapshot, messages }`
+/// (the RAW payload, not the session envelope).
+#[deprecated(note = "use Session::snapshot. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn generate_snapshot(input: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    let r = with_engine(|e| e.snapshot(input));
+    match r {
+        Ok(payload) => serde_json::to_string(&payload)
+            .map_err(|e| JsError::new(&format!("serialize: {e}"))),
+        Err(m) => Err(JsError::new(&m)),
+    }
+}
+
+/// DEPRECATED: use `new Session().expandValueSet(vs, resources)`. Returns the RAW
+/// expansion payload (`{ ok, ... }`), not the session envelope.
+#[deprecated(note = "use Session::expand_valueset. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn expand_enumerable(valueset_json: &str, resources_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    let r = with_engine(|e| e.expand_valueset(valueset_json, resources_json));
+    match r {
+        Ok(payload) => serde_json::to_string(&payload)
+            .map_err(|e| JsError::new(&format!("expand_enumerable: serialize: {e}"))),
+        Err(m) => Err(JsError::new(&m)),
+    }
+}
+
+/// DEPRECATED: use `new Session().buildSiteDb(input)`. Returns the RAW row-model
+/// JSON, not the session envelope.
+#[deprecated(note = "use Session::build_site_db. Kept for the live editor; F6 removes it.")]
 #[wasm_bindgen]
 pub fn build_site_db(input_json: &str) -> Result<String, JsError> {
     set_panic_hook();
-    let input: SiteDbInput = serde_json::from_str(input_json)
-        .map_err(|e| JsError::new(&format!("build_site_db: bad input JSON: {e}")))?;
+    let r = with_engine(|e| e.build_site_db(input_json));
+    match r {
+        Ok(payload) => serde_json::to_string(&payload)
+            .map_err(|e| JsError::new(&format!("build_site_db: serialize rows: {e}"))),
+        Err(m) => Err(JsError::new(&m)),
+    }
+}
 
-    let (source, cache_root, _packages) = engine_source()?;
-    let cache = cache_root.to_string_lossy().into_owned();
+/// DEPRECATED: use `new Session().resolveProject(config, versionIndex)`. Returns
+/// the RAW `ResolutionStep` JSON, not the session envelope.
+#[deprecated(note = "use Session::resolve_project. Kept for the live editor; F6 removes it.")]
+#[wasm_bindgen]
+pub fn resolve_project(config: &str, version_index_json: &str) -> Result<String, JsError> {
+    set_panic_hook();
+    // Hand back the exact `ResolutionStep::to_json()` bytes (byte-identical to the
+    // historical output the parity gate + editor consume).
+    with_engine(|e| e.resolve_project(config, version_index_json)).map_err(|m| JsError::new(&m))
+}
 
-    // ---- S1/S2 (+ IG export): compile in memory, producing the IG resource. ----
-    let fsh_files: Vec<(String, String)> = input.fsh.into_iter().collect();
-    let predefined: Vec<(PathBuf, Value)> = input
-        .predefined
-        .into_iter()
-        .map(|(p, v)| (PathBuf::from(p), v))
-        .collect();
-    // The page-folder listing ig_export needs (folder -> filenames) is derived from
-    // the site_files map: the disk path would scan input/{pagecontent,pages,
-    // resource-docs}; we hand it the same names from the VFS.
-    let mut page_dir_listing: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    for path in input.site_files.keys() {
-        for folder in ["pagecontent", "pages", "resource-docs"] {
-            let prefix = format!("input/{folder}/");
-            if let Some(rest) = path.strip_prefix(&prefix) {
-                // Only direct children participate in the page scan (not nested).
-                if !rest.is_empty() && !rest.contains('/') {
-                    page_dir_listing
-                        .entry(folder.to_string())
-                        .or_default()
-                        .push(rest.to_string());
-                }
-            }
+/// Engine version + build commit, as a JSON string `{ version, commit }`. (Not
+/// deprecated — the same info `Session::version()` returns; a free accessor is
+/// convenient and harmless.)
+#[wasm_bindgen]
+pub fn version() -> String {
+    version_json()
+}
+
+// ---------------------------------------------------------------------------
+// internals
+// ---------------------------------------------------------------------------
+
+fn version_json() -> String {
+    let v = serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "commit": option_env!("WASM_API_GIT_COMMIT").unwrap_or("unknown"),
+        "engine": "rust_sushi + snapshot_gen (walk)",
+        "apiVersion": API_VERSION,
+    });
+    v.to_string()
+}
+
+/// Decode + mount each bundle's base64 files under its label. Appends newly
+/// mounted labels to `labels`.
+fn mount_into(
+    src: &mut BundleSource,
+    parsed: &[BundleInput],
+    labels: &mut Vec<String>,
+    who: &str,
+) -> Result<(), String> {
+    for pkg in parsed {
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(pkg.files.len());
+        for (name, b64) in &pkg.files {
+            let bytes =
+                base64_decode(b64).map_err(|e| format!("{who}: bad base64 for {name}: {e}"))?;
+            entries.push((name.clone(), bytes));
         }
+        src.mount_package(&pkg.label, entries);
+        labels.push(pkg.label.clone());
     }
-
-    let (conformance, ig_resource, _diagnostics) =
-        compiler::build_project_in_memory_with_ig(
-            &input.config,
-            &fsh_files,
-            predefined,
-            source,
-            &cache,
-            page_dir_listing,
-        )
-        .map_err(|e| JsError::new(&format!("build_site_db: compile failed: {e:#}")))?;
-
-    // ---- S3: snapshot-complete each StructureDefinition against the compile. ----
-    // Build the snapshot context EXACTLY as the native `site_db` pipeline does:
-    // a `PackageContext` over ONLY the FHIR CORE package (r4/r5 core), plus the
-    // just-compiled conformance SDs as locals so cross-profile bases resolve
-    // (fact <- bleeding <- flow). Loading the whole mounted closure (uv.tools /
-    // uv.extensions / terminology) here would pull extra type/extension profiles
-    // into base resolution and inflate the snapshot vs the native oracle — the
-    // native pipeline pins snapshotting to the single core package
-    // (pipeline.rs `PackageContext::new(cache, [core_package])`), so we match it.
-    let (source, cache_root, packages) = engine_source()?;
-    let core_package = pick_core_package(&packages).ok_or_else(|| {
-        JsError::new("build_site_db: no FHIR core package (hl7.fhir.r{4,5}.core) mounted")
-    })?;
-    let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
-        .map_err(|e| JsError::new(&format!("build_site_db: package context: {e:#}")))?;
-    let locals: Vec<(PathBuf, Value)> = conformance
-        .iter()
-        .map(|r| (PathBuf::from(format!("/__compiled__/{}", r.filename)), r.body.clone()))
-        .collect();
-    ctx.load_local_resources(locals);
-
-    let mut generated: Vec<Value> = Vec::new();
-    for r in &conformance {
-        if r.body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-            let snap = snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default())
-                .map_err(|e| {
-                    JsError::new(&format!("build_site_db: snapshot {}: {e:#}", r.filename))
-                })?;
-            generated.push(snap);
-        } else {
-            generated.push(r.body.clone());
-        }
-    }
-    if let Some(ig) = &ig_resource {
-        generated.push(ig.body.clone());
-    } else {
-        return Err(JsError::new(
-            "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)",
-        ));
-    }
-
-    // Predefined `input/resources/**` bodies are the examples (S5 loadResources).
-    // The compile already consumed them for the IG; re-collect them here as the
-    // example resource set the row derivation orders after the conformance ones.
-    let examples: Vec<Value> = collect_example_resources(&input.site_files);
-
-    // ---- Site-content VFS for S6 (pagecontent/images/includes), keyed under /ig. ----
-    let ig_root = PathBuf::from("/ig");
-    let mut vfs: std::collections::BTreeMap<PathBuf, Vec<u8>> = std::collections::BTreeMap::new();
-    for (path, b64) in &input.site_files {
-        let bytes = base64_decode(b64)
-            .map_err(|e| JsError::new(&format!("build_site_db: bad base64 for {path}: {e}")))?;
-        vfs.insert(ig_root.join(path), bytes);
-    }
-
-    let liquid_asset_dirs = if input.liquid_asset_dirs.is_empty() {
-        vec!["input/includes".to_string()]
-    } else {
-        input.liquid_asset_dirs
-    };
-
-    // ---- S5/S6: assemble the row model. ----
-    let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
-        generated: &generated,
-        examples: &examples,
-        sushi_config_yaml: &input.config,
-        build_epoch_secs: input.build_epoch_secs,
-        branch: input.branch,
-        revision: input.revision,
-        vfs,
-        ig_root,
-        liquid_asset_rel_dirs: liquid_asset_dirs,
-    })
-    .map_err(|e| JsError::new(&format!("build_site_db: assemble rows: {e:#}")))?;
-
-    serde_json::to_string(&outcome.db)
-        .map_err(|e| JsError::new(&format!("build_site_db: serialize rows: {e}")))
+    Ok(())
 }
 
 /// Parse `input/resources/**` JSON files out of the site_files map (base64 text)
@@ -702,62 +962,6 @@ fn collect_example_resources(
     out
 }
 
-// ---------------------------------------------------------------------------
-// resolve_project — the ONE resolution API, over the currently mounted bundles
-// ---------------------------------------------------------------------------
-
-/// Resolve a project's two package sets against the CURRENTLY MOUNTED bundles.
-///
-/// `config` is the `sushi-config.yaml` text. `version_index_json` (may be `""`) is
-/// an optional host-supplied `{ "versions": { "<id>": ["<ver>", ...] } }` map used
-/// to resolve `latest`/`current`/`M.N.x` requests (data in, decisions in Rust);
-/// absent it, a `latest` request lands in `missing` with a precise
-/// `UnresolvedVersion` reason rather than a guess.
-///
-/// Returns the [`package_store::ResolutionStep`] as a JSON string:
-/// `{ compile_set, context_closure, missing, satisfied }`. The host loop is
-/// `resolve_project -> fetch each missing -> mount_bundles -> resolve_project`
-/// until `satisfied` (editor spec §1 lazy loading, task #32). This is the SAME
-/// Rust resolver the native CLI (`rust_sushi resolve`) and the snapshot `.cjs`
-/// shim drive — no resolution logic outside Rust.
-#[wasm_bindgen]
-pub fn resolve_project(config: &str, version_index_json: &str) -> Result<String, JsError> {
-    set_panic_hook();
-    let (source, cache_root, _packages) = engine_source()?;
-
-    let index: Option<package_store::VersionIndex> = if version_index_json.trim().is_empty() {
-        None
-    } else {
-        Some(
-            serde_json::from_str(version_index_json)
-                .map_err(|e| JsError::new(&format!("resolve_project: bad version index JSON: {e}")))?,
-        )
-    };
-
-    let step = package_store::resolve_project(config, &source, &cache_root, index.as_ref())
-        .map_err(|e| JsError::new(&format!("resolve_project: {e:#}")))?;
-    Ok(step.to_json())
-}
-
-// ---------------------------------------------------------------------------
-// version
-// ---------------------------------------------------------------------------
-
-/// Engine version + build commit, as a JSON string `{ version, commit }`.
-#[wasm_bindgen]
-pub fn version() -> String {
-    let v = serde_json::json!({
-        "version": env!("CARGO_PKG_VERSION"),
-        "commit": option_env!("WASM_API_GIT_COMMIT").unwrap_or("unknown"),
-        "engine": "rust_sushi + snapshot_gen (walk)",
-    });
-    v.to_string()
-}
-
-// ---------------------------------------------------------------------------
-// internals
-// ---------------------------------------------------------------------------
-
 /// Pick the FHIR core package label (`hl7.fhir.r4.core#…` or `hl7.fhir.r5.core#…`)
 /// from the mounted set — the single package the site.db snapshot context loads,
 /// matching the native pipeline. Prefers R4 (the current corpus is R4) when both
@@ -769,31 +973,6 @@ fn pick_core_package(packages: &[String]) -> Option<String> {
         .or_else(|| packages.iter().find(|p| p.starts_with("hl7.fhir.r5.core#")))
         .or_else(|| packages.iter().find(|p| p.contains(".core#")))
         .cloned()
-}
-
-fn engine_source() -> Result<(SharedBundle, PathBuf, Vec<String>), JsError> {
-    ENGINE.with(|e| {
-        let e = e.borrow();
-        let bundle = e
-            .bundle
-            .clone()
-            .ok_or_else(|| JsError::new("engine not initialized: call init(bundles) first"))?;
-        // Cheap: `bundle` is an `Rc<BundleSource>` clone (refcount bump), so the
-        // mounted bytes are SHARED with the engine, never copied per compile call.
-        Ok((SharedBundle(bundle), e.cache_root.clone(), e.packages.clone()))
-    })
-}
-
-/// Build a fresh `PackageContext` over the mounted packages + the last compile's
-/// local resources — the same shape `snapshot_gen --package ... --local-dir ...`
-/// builds natively.
-fn build_context() -> Result<snapshot_gen::PackageContext, JsError> {
-    let (source, cache_root, packages) = engine_source()?;
-    let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &packages)
-        .map_err(|e| JsError::new(&format!("package context: {e:#}")))?;
-    let locals = ENGINE.with(|e| e.borrow().last_compiled.clone());
-    ctx.load_local_resources(locals);
-    Ok(ctx)
 }
 
 // A tiny dependency-free base64 decoder (standard alphabet, optional '='

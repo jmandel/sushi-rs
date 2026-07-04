@@ -8,6 +8,12 @@
 //! These functions return `Result<String, JsError>`; `JsError` is opaque
 //! natively, so the tests inspect the Ok JSON string and treat any Err as a
 //! failure via a small helper.
+//!
+//! This suite deliberately exercises the DEPRECATED legacy free-function surface
+//! (kept for the live editor until F6) — hence `allow(deprecated)`. The new
+//! `Session` surface is covered in tests/session_api.rs, including a check that
+//! the legacy raw payloads equal the Session envelope's `result`.
+#![allow(deprecated)]
 
 use serde_json::{json, Value};
 use wasm_api::{expand_enumerable, init, mount_bundles};
