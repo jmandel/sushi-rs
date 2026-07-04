@@ -8,7 +8,7 @@ OK rust parameters-questionnaire-populate-link-out
 OK rust parameters-questionnaire-populate-out
 OK rust parameters-questionnaire-process-response-in
 OK rust parameters-questionnaireresponse-extract-in
-OK rust sdc-codesystem
+FAIL rust sdc-codesystem: base not found: http://hl7.org/fhir/5.0/StructureDefinition/profile-CodeSystem
 OK rust sdc-library
 OK rust sdc-questionnaire-answerExpression
 OK rust sdc-questionnaire-answerKey
@@ -68,7 +68,8 @@ OK rust sdc-questionnaire-width
 OK rust sdc-rendering-criticalExtension
 OK rust sdc-servicerequest-questionnaire
 OK rust sdc-servicerequest
-OK rust sdc-task
+FAIL rust sdc-task: base not found: http://hl7.org/fhir/5.0/StructureDefinition/profile-Task
 OK rust sdc-usagecontext
-OK rust sdc-valueset
-RUST BATCH: ok=73 failed=0 total=73
+FAIL rust sdc-valueset: base not found: http://hl7.org/fhir/5.0/StructureDefinition/profile-ValueSet
+RUST BATCH: ok=70 failed=3 total=73
+Error: Rust batch had 3 failures

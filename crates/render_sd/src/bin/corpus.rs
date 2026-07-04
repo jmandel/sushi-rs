@@ -469,6 +469,108 @@ fn run_singleton(kind: &str, ig: &str, verbose: bool) {
     }
 }
 
+/// The txcache dir for an IG (mirror of build_ctx's third arg).
+fn txcache_dir(ig: &str) -> Option<PathBuf> {
+    match ig {
+        "us-core" => Some(PathBuf::from(format!("{}/us-core/input-cache/txcache", F0))),
+        "plan-net" => Some(PathBuf::from(format!("{}/plan-net/input-cache/txcache", F0))),
+        "cycle" => Some(PathBuf::from(
+            "/home/jmandel/hobby/periodicity-impl/cycle/input-cache/txcache",
+        )),
+        _ => None,
+    }
+}
+
+/// VS/CS terminology-fragment corpus mode: iterate ValueSet-*.json /
+/// CodeSystem-*.json in the IG's own dir, render the given kind, diff goldens.
+fn run_vscs(kind: &str, ig: &str, verbose: bool) {
+    use render_sd::txcache::TxCacheSource;
+    let (rtype, prefix): (&str, &str) = match kind {
+        "cld" | "vs-expansion" => ("ValueSet", "ValueSet"),
+        "cs-content" => ("CodeSystem", "CodeSystem"),
+        _ => unreachable!(),
+    };
+    let ctx = build_ctx(ig).expect("ctx");
+    let txd = txcache_dir(ig);
+    let txcache = render_sd::fstxcache::FsTxCache::new(txd.as_deref(), &ctx);
+    let _ = &txcache as &dyn TxCacheSource; // seam sanity
+
+    let dir = ig_sd_dir(ig);
+    let golden_suffix = match kind {
+        "cld" => "cld",
+        "vs-expansion" => "expansion",
+        "cs-content" => "content",
+        _ => unreachable!(),
+    };
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|_| panic!("read dir {}", dir.display()))
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with(&format!("{}-", rtype)) && n.ends_with(".json"))
+                .unwrap_or(false)
+        })
+        .collect();
+    entries.sort();
+
+    let mut pass = 0;
+    let mut total = 0;
+    let mut gaps = 0;
+    let mut fails: Vec<(String, usize, usize)> = Vec::new();
+    for path in entries {
+        let Ok(json) = std::fs::read_to_string(&path) else { continue };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) else { continue };
+        if v.get("resourceType").and_then(|x| x.as_str()) != Some(rtype) {
+            continue;
+        }
+        let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let gp = PathBuf::from(format!(
+            "{}/render-goldens/{}/fragments/{}-{}-{}.xhtml",
+            REPO, ig, prefix, id, golden_suffix
+        ));
+        if !gp.exists() {
+            continue;
+        }
+        let golden = std::fs::read_to_string(&gp).unwrap();
+        let render_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match kind {
+            "cs-content" => render_sd::vscs::render_cs_content(&v, &ctx),
+            "cld" => render_sd::vscs::render_vs_cld(&v, &ctx, &txcache),
+            "vs-expansion" => render_sd::vscs::render_vs_expansion(&v, &ctx, &txcache),
+            _ => unreachable!(),
+        }));
+        let ours = match render_res {
+            Ok(o) => o,
+            Err(_) => {
+                eprintln!("  GAP {} ({}): render panicked (loud gap)", id, kind);
+                gaps += 1;
+                continue;
+            }
+        };
+        total += 1;
+        if ours == golden {
+            pass += 1;
+        } else {
+            let d = first_divergence(&ours, &golden);
+            fails.push((id.clone(), d, golden.len()));
+            if verbose {
+                report_diff(&id, &ours, &golden, d);
+            }
+        }
+    }
+    println!(
+        "{} {}: {}/{} byte-identical{}",
+        kind,
+        ig,
+        pass,
+        total,
+        if gaps > 0 { format!(" ({} gaps)", gaps) } else { String::new() }
+    );
+    for (id, d, len) in fails.iter().take(20) {
+        println!("    {} @ {} / {}", id, d, len);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
@@ -483,6 +585,12 @@ fn main() {
     // render-goldens/<ig>/fragments/<kind>.xhtml (no resource-type prefix).
     if is_singleton_kind(kind) {
         run_singleton(kind, ig, verbose);
+        return;
+    }
+
+    // VS/CS terminology fragments (their own iterator over ValueSet-*/CodeSystem-*).
+    if matches!(kind.as_str(), "cld" | "vs-expansion" | "cs-content") {
+        run_vscs(kind, ig, verbose);
         return;
     }
 

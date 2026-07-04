@@ -116,6 +116,11 @@ pub struct IgContext {
     /// tx-server-fetched resources (input-cache/txcache/vs-externals.json):
     /// canonical -> (server, file). Last-resort resolution, external=true.
     tx_externals: HashMap<String, (String, PathBuf)>,
+    /// tx-server-fetched CodeSystems (input-cache/txcache/cs-externals.json):
+    /// canonical -> (server, file). Used by the VS/CS terminology fragments to
+    /// resolve an external CodeSystem's `render_external_link` (the tx server
+    /// base) + business version, as `findTxResource` would.
+    cs_externals: HashMap<String, (String, PathBuf)>,
     /// The IG's canonical base (`igpkp.getCanonical()`) — the ImplementationGuide
     /// url minus its `/ImplementationGuide/<id>` tail. Used as span's
     /// `constraintPrefix` (only in-IG constraint profiles are spanned).
@@ -348,16 +353,57 @@ impl IgContext {
             }
         }
 
+        let mut cs_externals = HashMap::new();
+        if let Some(txd) = txcache_dir {
+            if let Ok(text) = std::fs::read_to_string(txd.join("cs-externals.json")) {
+                if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                    if let Some(obj) = v.as_object() {
+                        for (canonical, entry) in obj {
+                            if let (Some(server), Some(fname)) = (
+                                entry.get("server").and_then(|x| x.as_str()),
+                                entry.get("filename").and_then(|x| x.as_str()),
+                            ) {
+                                cs_externals.insert(
+                                    canonical.clone(),
+                                    (server.to_string(), txd.join(fname)),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         IgContext {
             own,
             packages,
             cache: RefCell::new(HashMap::new()),
             res_cache: RefCell::new(HashMap::new()),
             tx_externals,
+            cs_externals,
             own_canonical,
             own_package_id,
             own_files,
         }
+    }
+
+    /// Resolve an external (tx-fetched) CodeSystem from `cs-externals.json`:
+    /// returns (server-base, resource JSON) if present. This is the
+    /// `findTxResource(CodeSystem,...)` copy the publisher prefers for systems
+    /// it fetched from the terminology server (its webPath = the server base,
+    /// carrying the `render_external_link` userdata).
+    pub fn resolve_cs_external(&self, system: &str) -> Option<(String, std::rc::Rc<Value>)> {
+        let (server, file) = self.cs_externals.get(system)?;
+        let key = format!("__csext__{}", system);
+        if let Some(hit) = self.res_cache.borrow().get(&key) {
+            return hit.clone().map(|j| (server.clone(), j));
+        }
+        let loaded = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .map(std::rc::Rc::new);
+        self.res_cache.borrow_mut().insert(key, loaded.clone());
+        loaded.map(|j| (server.clone(), j))
     }
 
     /// The IG's package id (ImplementationGuide.packageId), `xigReference`'s arg.

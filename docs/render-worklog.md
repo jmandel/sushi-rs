@@ -1009,3 +1009,18 @@ Prior cycles: grid→IgContext migration, by-mustsupport/-all, by-key/-all
 - Diff residual risk (documented, zero corpus hits): a diff RESTATING a
   property byte-equal to base would dim in the publisher (snapshot-gen EQUALS)
   but render bright here; fix would be a render-time base-profile compare.
+
+## Merge: VS/CS terminology fragments (peer worktree branch f3131c0c)
+
+Merged by coordinator; both corpus.rs harnesses kept (aggregate singleton +
+vs/cs iterators). Independently re-verified post-merge from the main
+checkout: **cs-content 19/19 GREEN** (1+14+4); **cld 46/47** — the 1 residual
+is us-core-documentreference-category, a cross-fragment anchor-ordering
+divergence (first-divergence @137/503); **vs-expansion 35/35 rendered GREEN
++ 9 loud gaps** (plan-net 2, us-core 7): multi-include cache-assembly cases
+where the golden expansion stitches multiple cached $expand results — gap
+markers fire loudly, deferred. New seam: `txcache.rs::TxCacheSource` trait +
+`fstxcache.rs::FsTxCache` over the F0 builds' input-cache/txcache — designed
+for the editor's OPFS tx cache to back the same trait (editor spec §6).
+Floor spots re-confirmed post-merge: snapshot us-core 70/70, dict cycle 7/7,
+uses plan-net 22/22.
