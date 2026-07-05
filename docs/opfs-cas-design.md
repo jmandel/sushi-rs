@@ -1,13 +1,17 @@
-# OPFS content-addressed package store + derived-index persistence (design)
+# Unified content-addressed package store (CAS) — OPFS + native, derived-index persistence (design)
 
 > Design investigation for task #41. READ-ONLY: this doc proposes work for a
 > follow-up agent to implement after the current editor cache/resolver branch
 > merges. It touches TWO repos — `fhir-ig-editor` (host/OPFS, the bulk) and
-> `sushi-rs-snapshot` (one small wasm seam, a separate gated commit).
+> `sushi-rs-snapshot` (the wasm seam + the native `CasSource` — gated commits).
 >
 > Goal (Josh): make the browser's OPFS package cache a content-addressed store
 > (CAS) "just like local rust" — mirror the native engine's **CAS + derived-index**
-> model so warm opens stop re-deriving the per-package metadata index.
+> model so warm opens stop re-deriving the per-package metadata index. **Folded in
+> (Josh, 2026-07-05): the native/`fig` side is the same store.** fig should work
+> DIRECTLY from CAS — no `id#version/package/` folder materialization required —
+> so there is ONE `CasSource` concept, disk-blob-backed natively and OPFS-blob-
+> backed in wasm; the only difference between the two is the blob backend. See §9.
 
 ---
 
@@ -389,3 +393,64 @@ writable source), each independently shippable and gated.** Don't do "both
 together" — the derived store delivers essentially the whole felt win by itself,
 and coupling it to the blob-CAS migration only enlarges the first gate for little
 extra benefit.
+
+---
+
+## 9. The native / `fig` side is the same store (folded in, Josh 2026-07-05)
+
+**Question (Josh): with the fig CLI do we need to materialize `id#version/package/`
+folders, or can it work directly from CAS?** Answer: **no materialization needed —
+fig needs a `PackageSource`, and CAS can be one.** This makes the native store and
+the OPFS store ONE design (`CasSource`), differing only in blob backend.
+
+### 9.1 The engine already accesses packages through an abstraction, not the FS
+
+- `IgContext::load` delegates to `load_with_tree(tree::fs_tree(), …)`
+  (`crates/render_sd/src/context.rs:167,177`): it is generic over a `TreeSource`,
+  not bound to `std::fs`.
+- Packages are addressed by a **virtual path convention**, not physical folders:
+  `packages_dir.join(format!("{id}#{ver}")).join("package")` then read through
+  `tree.read_dir(packages_dir)` (`context.rs:304,321`). The `id#version/package/`
+  shape is a path *convention inside the tree*, not a directory requirement.
+- **Proof it is already decoupled:** wasm runs completely folder-free today —
+  `MemTree` over `BundleSource` serves packages by that same virtual path with no
+  directories on disk (§2.1). Native `fig` uses `fs_tree()` over real
+  `.fhir/packages` folders purely because that store is what exists, not because
+  anything requires the layout.
+
+So fig's folder use is incidental. A CAS-backed tree that presents the same virtual
+`id#version/package/<file>` paths, backed by content-hashed blobs + a per-package
+file→hash manifest, satisfies the identical interface. fig then reads DIRECTLY from
+CAS: no untar-to-folders, dedup across versions, no tgz+inflated double-storage.
+
+### 9.2 What this adds to the build (native `CasSource`)
+
+- A `package_store::CasSource` (a `TreeSource`/`PackageSource` impl) that resolves
+  the virtual package path → blob-by-content-hash via a manifest. Disk-blob-backed
+  natively; the OPFS store (§4) is the SAME logical store, blob-backed by OPFS.
+  Native and wasm differ ONLY in the blob backend.
+- `IgContext`'s one remaining literal-path parameter (`packages_dir: &Path`) is
+  already routed through `TreeSource`, so pointing it at a CAS-backed tree is small
+  — no change to the render/snapshot logic above it.
+- The derived index (§1, §4.3) lives in the SAME CAS keyed by content hash, so a
+  package populated by `fig` and one populated by the browser share the identical
+  derived-index artifact — the DRY endpoint.
+
+### 9.3 Interop: materialization becomes an optional EXPORT, not the working form
+
+- `fig packages export --to ~/.fhir/packages` materializes folders **on demand**,
+  for coexistence with the Java IG Publisher / SUSHI / any tool that reads the
+  standard layout. Not needed for fig's own operation.
+- Keep the existing `DiskSource` as an **input** option too, so fig drops into a
+  machine SUSHI/Publisher already populated (`~/.fhir/packages`). The store thus
+  reads three ways — CAS (native default), an existing folder cache (DiskSource),
+  or mounted bundles (wasm) — and materializes folders only when asked.
+
+### 9.4 Sequencing this piece
+
+Native `CasSource` is **M/L-adjacent**: it depends on the content-addressed blob
+store (M) existing, and is the native consumer of it. Recommended order becomes
+**S (derived store + engine seam) → M (blob CAS, now spec'd as shared native+OPFS)
+→ native `CasSource` + `fig` CAS-default + `export` (the native half of M) → L**.
+The derived-index win (S) still lands first and independently; the folder-free fig
+operation rides on the same blob CAS the browser needs, built once.
