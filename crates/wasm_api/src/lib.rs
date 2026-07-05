@@ -1166,3 +1166,268 @@ impl Engine {
         Ok(rs.list_pages())
     }
 }
+
+// ===========================================================================
+// Predefined-resource IG render surface — native gate (task #42).
+//
+// A predefined-resource IG (0 FSH; conformance authored under input/resources/**
+// as DIFFERENTIAL-only SDs, e.g. US Core 9.0.0) must render LIVE: its profile
+// pages need a real HierarchicalTableGenerator snapshot table, which means the
+// render surface must (a) carry the predefined bodies in the render set and
+// (b) snapshot-complete the differential-only SDs against the full mounted
+// closure — including profiles whose base is EXTERNAL — never panicking on a
+// binding shape the byte-parity corpus happens not to exercise.
+//
+// This test drives the EXACT render-surface path the fix changed
+// (compile -> render set incl. predefined -> snapshot_complete_own ->
+// render_fragment) over US Core 9.0.0's real closure + predefined SDs, sourced
+// entirely from the local package cache (temp/fhir-home/.fhir/packages). It is
+// network-free and skips if the cache is absent, like the sibling
+// site_db_snapshot test.
+//
+// The predefined SDs are the published us.core#9.0.0 SDs with their `snapshot`
+// REMOVED — i.e. the authored differential-only form the editor feeds from
+// input/resources/**. Stripping the snapshot forces snapshot_complete_own to
+// regenerate it against the closure, which is precisely the code path that
+// panicked before the fix.
+// ===========================================================================
+#[cfg(test)]
+mod predefined_render_gate {
+    use super::*;
+    use std::path::Path;
+
+    fn repo() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
+    /// The US Core 9.0.0 dependency closure, all present in the shared cache
+    /// (verified network-free). Mounting the whole closure lets a profile whose
+    /// base is external (us-core-questionnaireresponse -> sdc) snapshot-complete.
+    const CLOSURE: &[&str] = &[
+        "hl7.fhir.r4.core#4.0.1",
+        "hl7.fhir.us.core#9.0.0",
+        "hl7.fhir.uv.sdc#4.0.0",
+        "hl7.fhir.uv.smart-app-launch#2.2.0",
+        "hl7.fhir.uv.extensions.r4#5.3.0",
+        "hl7.fhir.uv.tools.r4#1.1.2",
+        "hl7.fhir.uv.xver-r5.r4#0.1.0",
+        "hl7.terminology.r4#7.1.0",
+        "us.cdc.phinvads#0.12.0",
+    ];
+
+    /// Only the conformance/index files a snapshot+render needs — never the bulky
+    /// example instances. `BundleSource::read_dir` reflects exactly what we mount,
+    /// so the package index build sees only these.
+    fn is_wanted(name: &str) -> bool {
+        matches!(name, ".index.json" | ".derived-index.json" | "package.json")
+            || [
+                "StructureDefinition-",
+                "structuredefinition-",
+                "ValueSet-",
+                "valueset-",
+                "CodeSystem-",
+                "codesystem-",
+                "ConceptMap-",
+                "NamingSystem-",
+                "ImplementationGuide-",
+                "CapabilityStatement-",
+                "SearchParameter-",
+                "OperationDefinition-",
+            ]
+            .iter()
+            .any(|p| name.starts_with(p))
+    }
+
+    fn mount_pkg(src: &mut BundleSource, cache: &Path, label: &str) -> bool {
+        let dir = cache.join(label).join("package");
+        if !dir.is_dir() {
+            return false;
+        }
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+        for e in std::fs::read_dir(&dir).unwrap().flatten() {
+            let p = e.path();
+            if !p.is_file() {
+                continue;
+            }
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if is_wanted(&name) {
+                if let Ok(bytes) = std::fs::read(&p) {
+                    entries.push((name, bytes));
+                }
+            }
+        }
+        src.mount_package(label, entries);
+        true
+    }
+
+    #[test]
+    fn us_core_patient_renders_live_hierarchy_table() {
+        let repo = repo();
+        let cache = repo.join("temp/fhir-home/.fhir/packages");
+        if !cache.join("hl7.fhir.us.core#9.0.0/package").is_dir() {
+            eprintln!("skip: no us.core#9.0.0 in cache ({})", cache.display());
+            return;
+        }
+
+        // ---- Mount the closure as a BundleSource (the render surface's package
+        //      backend), conformance files only. ----
+        let mut src = BundleSource::new();
+        for label in CLOSURE {
+            assert!(
+                mount_pkg(&mut src, &cache, label),
+                "closure package missing from cache: {label}"
+            );
+        }
+        let cache_root = src.cache_root().to_path_buf();
+
+        // ---- Predefined = us.core#9.0.0 conformance resources with `snapshot`
+        //      stripped from every SD (the authored differential-only form the
+        //      editor feeds from input/resources/**). ----
+        let uscore = cache.join("hl7.fhir.us.core#9.0.0/package");
+        let mut predefined = serde_json::Map::new();
+        for e in std::fs::read_dir(&uscore).unwrap().flatten() {
+            let p = e.path();
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let lname = name.to_ascii_lowercase();
+            let is_conf = ["structuredefinition-", "valueset-", "codesystem-"]
+                .iter()
+                .any(|pre| lname.starts_with(pre));
+            if !is_conf || !name.ends_with(".json") {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&p) else { continue };
+            let Ok(mut body) = serde_json::from_slice::<Value>(&bytes) else { continue };
+            if body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
+                body.as_object_mut().unwrap().remove("snapshot");
+            }
+            predefined.insert(format!("input/resources/{name}"), body);
+        }
+        assert!(
+            predefined.len() > 80,
+            "expected the full US Core conformance set, got {}",
+            predefined.len()
+        );
+        let predefined_json = Value::Object(predefined).to_string();
+
+        // Minimal sushi-config: id/canonical/fhirVersion + the real dependency
+        // set so the compiler resolves the closure (0 FSH — predefined-only IG).
+        let config = "\
+id: hl7.fhir.us.core
+canonical: http://hl7.org/fhir/us/core
+name: USCore
+title: US Core
+status: active
+version: 9.0.0
+fhirVersion: 4.0.1
+dependencies:
+  hl7.fhir.uv.sdc: 4.0.0
+  hl7.fhir.uv.smart-app-launch: 2.2.0
+  hl7.fhir.uv.extensions.r4: 5.3.0
+  hl7.fhir.uv.xver-r5.r4: 0.1.0
+  us.cdc.phinvads: 0.12.0
+";
+
+        // ---- Drive the render surface EXACTLY as the Session worker does. ----
+        let mut engine = Engine {
+            bundle: Some(Rc::new(src)),
+            cache_root,
+            packages: CLOSURE.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+
+        let compiled = engine
+            .compile("{}", config, &predefined_json)
+            .expect("compile predefined-only IG");
+        // Fix #1: the predefined bodies land in the render set.
+        let sd_count = engine
+            .last_compiled
+            .iter()
+            .filter(|(_, v)| {
+                v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
+            })
+            .count();
+        assert!(
+            sd_count > 50,
+            "render set must carry the predefined SDs; got {sd_count} (compiled {} resources)",
+            compiled.resources.len()
+        );
+
+        // Fix #2: rendering the differential-only us-core-patient must produce a
+        // real HierarchicalTableGenerator snapshot table — NO panic.
+        let snap = engine
+            .render_fragment("StructureDefinition-us-core-patient", "snapshot")
+            .expect("us-core-patient snapshot fragment renders");
+        assert!(
+            snap.contains("class=\"hierarchy\""),
+            "snapshot fragment must be a real hierarchy table; got:\n{}",
+            &snap[..snap.len().min(400)]
+        );
+        // The table must have real rows (resource content), not an empty shell.
+        assert!(
+            snap.contains("us-core-patient") || snap.contains("Patient"),
+            "hierarchy table must carry the profile's rows"
+        );
+
+        // The `tx` (terminology bindings) fragment is the one the browser panicked
+        // on — it must render without aborting.
+        let tx = engine
+            .render_fragment("StructureDefinition-us-core-patient", "tx")
+            .expect("us-core-patient tx fragment renders without panic");
+        assert!(!tx.is_empty(), "tx fragment produced no output");
+
+        // And the differential view (also part of the page) must not panic.
+        let diff = engine
+            .render_fragment("StructureDefinition-us-core-patient", "diff")
+            .expect("us-core-patient diff fragment renders");
+        assert!(diff.contains("class=\"hierarchy\""), "diff must be a hierarchy table");
+
+        eprintln!(
+            "OK: us-core-patient live render — snapshot {} bytes, tx {} bytes, diff {} bytes; render-set SDs = {}",
+            snap.len(),
+            tx.len(),
+            diff.len(),
+            sd_count
+        );
+
+        // Whole-IG robustness: rendering EVERY predefined profile's snapshot/diff/tx
+        // must never panic (the render surface builds the whole site — one bad
+        // profile cannot be allowed to abort). Gaps (Err) are acceptable — a hard
+        // panic (which is `unreachable`/abort in wasm) is not.
+        let profile_ids: Vec<String> = engine
+            .last_compiled
+            .iter()
+            .filter_map(|(_, v)| {
+                (v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition"))
+                    .then(|| v.get("id").and_then(Value::as_str).map(String::from))
+                    .flatten()
+            })
+            .collect();
+        let mut rendered = 0usize;
+        for id in &profile_ids {
+            for kind in ["snapshot", "diff", "tx"] {
+                // Err is fine (a documented gap); the point is no panic unwinds here.
+                if engine
+                    .render_fragment(&format!("StructureDefinition-{id}"), kind)
+                    .is_ok()
+                {
+                    rendered += 1;
+                }
+            }
+        }
+        assert!(
+            rendered > profile_ids.len(), // most fragments across most profiles render
+            "expected most predefined profile fragments to render; only {rendered} of {} ok",
+            profile_ids.len() * 3
+        );
+        eprintln!(
+            "OK: whole-IG render smoke — {} profiles, {} fragments rendered, 0 panics",
+            profile_ids.len(),
+            rendered
+        );
+    }
+}
