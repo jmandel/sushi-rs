@@ -19,6 +19,7 @@ members = [
     "crates/render_tables",
     "crates/render_sd",
     "crates/render_page",
+    "crates/site_producer",
     "crates/api_envelope",
     "crates/fig",
 ]
@@ -47,6 +48,7 @@ render_md = { path = "crates/render_md" }
 render_tables = { path = "crates/render_tables" }
 render_sd = { path = "crates/render_sd" }
 render_page = { path = "crates/render_page" }
+site_producer = { path = "crates/site_producer" }
 api_envelope = { path = "crates/api_envelope" }
 
 # External

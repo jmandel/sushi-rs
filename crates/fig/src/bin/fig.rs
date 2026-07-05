@@ -33,6 +33,7 @@ fn main() {
         Some("sitedb") => cmd_sitedb(&args),
         Some("fragment") => cmd_fragment(&args),
         Some("fragments") => cmd_fragments(&args),
+        Some("produce") => cmd_produce(&args),
         Some("render") => cmd_render(&args),
         Some("watch") => cmd_watch(&args),
         Some("version") | Some("--version") => {
@@ -353,6 +354,39 @@ fn cmd_fragments(args: &[String]) -> Result<Value> {
 }
 
 // ===========================================================================
+// produce — synthesize the stock template's page SHELLS + _data model from an
+// IG source dir tree (the missing IG-Publisher piece; site_producer crate). This
+// is what lets `fig render` run from source without a pre-baked temp/pages tree.
+// ===========================================================================
+fn cmd_produce(args: &[String]) -> Result<Value> {
+    let build = positional(args, 2)
+        .context("usage: fig produce <ig-source-dir> [-o <pages-root>]")?;
+    let build_path = Path::new(build);
+    // Default output is the build's own temp/pages (where RenderRoot::detect looks).
+    let pages_root = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| build_path.join("temp/pages"));
+
+    let inputs = site_producer::gather_inputs(build_path)?;
+    let output = site_producer::produce(&inputs)?;
+    let written = output.write_to(&pages_root)?;
+    if !has(args, "--json") {
+        eprintln!(
+            "fig produce: {} page shells + {} _data files -> {}",
+            output.pages.len(),
+            output.data.len(),
+            pages_root.display()
+        );
+    }
+    Ok(json!({
+        "pagesRoot": pages_root.display().to_string(),
+        "shells": output.pages.len(),
+        "dataFiles": output.data.keys().collect::<Vec<_>>(),
+        "filesWritten": written,
+    }))
+}
+
 // render — THE headline: full static site at Publisher parity
 // ===========================================================================
 fn cmd_render(args: &[String]) -> Result<Value> {
@@ -362,6 +396,26 @@ fn cmd_render(args: &[String]) -> Result<Value> {
     // --generator ts:<adapter.mjs> routes through the bun runner (§3b).
     if let Some(gen) = opt(args, "--generator") {
         return render_via_generator(args, build, out, gen);
+    }
+
+    // Source-driven render (task #44): when there is no staged temp/pages but the
+    // dir IS an IG source tree (template/config.json present), synthesize the
+    // shells + _data model first via the producer, then render over them. This is
+    // what makes `fig render <ig-source-dir>` work without a pre-baked tree.
+    let build_path = Path::new(build);
+    if !build_path.join("temp/pages").is_dir()
+        && build_path.join("template/config.json").is_file()
+    {
+        let inputs = site_producer::gather_inputs(build_path)?;
+        let output = site_producer::produce(&inputs)?;
+        let n = output.write_to(&build_path.join("temp/pages"))?;
+        if !has(args, "--json") {
+            eprintln!(
+                "fig render: produced {} shells + {} _data files from source ({n} files)",
+                output.pages.len(),
+                output.data.len()
+            );
+        }
     }
 
     let mut root = fig::engine::RenderRoot::detect(Path::new(build))?;

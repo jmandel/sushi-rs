@@ -238,6 +238,7 @@ dependencies = [
  "serde",
  "serde_json",
  "site_db",
+ "site_producer",
  "snapshot_gen",
  "tiny_http",
  "wasm_api",
@@ -913,6 +914,15 @@ dependencies = [
  "sha2",
  "snapshot_gen",
  "tempfile",
+]
+
+[[package]]
+name = "site_producer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]

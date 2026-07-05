@@ -1880,3 +1880,47 @@ to the no-template baseline (additive fallback, staged `_includes` wins). Docs:
 hosting.md §6a/§6b, README render/bundle sections, stock-template-renderer-plan.md
 (TemplateBundle is loader-produced + the editor follow-up spelled out). Editor
 repo NOT modified.
+
+---
+
+## Task #44 — site-producer: page SHELLS + `_data` model from source (F5/F6 bridge)
+
+**The missing IG-Publisher piece.** The stock render path mounted a pre-baked
+`-stock.json` (a Java `temp/pages` snapshot). New crate `crates/site_producer`
+synthesizes, from an IG source dir tree (compiled + predefined + example
+resources) + the template `config.json` + its layouts, the two things the
+publisher generates that we didn't: **(a) per-artifact page shells**,
+**(b) the `_data` site-data model**. Fragment bodies still fill live via the
+first-include-miss engine (unchanged) — producer emits shells + `_data` ONLY.
+
+**Cited model** (pinned publisher clone): `makeTemplates`
+(`PublisherGenerator.java:1019`) → `genWrapperInner` (`:1378`) reads the
+`defaults`-selected layout and runs `doReplacements` (`IGKnowledgeProvider.java:147`,
+`{{[id]}}/[type]/[title]/[name]/[fmt]/[uid]`); config selection via
+`findConfiguration`/`getSDType` (`:417`/`:293`); property precedence `getProperty`
+(`:255`); resource order = IG `definition.resource[]`.
+
+**Parity (vs the raw US Core F0 `temp/pages` oracle — NOT the filtered
+`uscore-stock.json` bundle):**
+- **Page shells: 1297 / 1297 byte-identical** (base/definitions/mappings/testing/
+  examples/profile-history/change-history over 442 resources).
+- **`_data/artifacts.json`: byte-identical** (442 entries, IG-resource order).
+- `structuredefinitions.json`: field-derivable (~90%), load-bearing identity
+  fields exact; remaining = Java JsonObject pretty-printer + core-package
+  basename/basepath + extension contexts + `date` (Java TZ) + `maturities`.
+- resources.json/fhir.json/info.json/pages.json: designed, per-field run-context
+  gap catalog in `docs/site-producer.md` §5 (abs `source` path, genDate/errorCount/
+  tooling/counters, build-year copyrightyear).
+
+**Surfaces.** `fig produce <ig-source-dir> [-o <pages-root>]` (direct); `fig
+render <ig-source-dir>` auto-produces when no `temp/pages` + `template/config.json`
+present, then renders — demo: US Core source → 1297 shells produced + `ok:true,
+pages:1297`. wasm/Session: `ProducerInputs::from_memory(resources, config_json,
+layouts_map, ig_json)` (std::fs-free via `LayoutSource::Map`) — the source-driven
+stock adapter calls it after `Session.mountTemplate`; one binding line
+(`Session.produceStockSite`) is the editor follow-up.
+
+**Gate.** `crates/site_producer/tests/producer_gate.rs` — 3 tests (shells byte,
+artifacts byte, SD fields), skip-clean when the F0 corpus is absent. Workspace
+builds green; existing render_page/fig suites unchanged (producer ADDS, does not
+alter render output). Quirks Q-SP1..4 registered.
