@@ -260,15 +260,25 @@ fn tx_item(
                     a.set_attribute("href", format!("https://loinc.org/{}", code));
                     txt(&mut a, &name);
                     td.add_child_node(a);
+                } else if u.starts_with("http://") || u.starts_with("https://") {
+                    // igp.resolveActualUrl (IGKnowledgeProvider): an absolute
+                    // http(s) valueSet uri that resolves to no resource in the
+                    // closure still renders as a plain external link — url =
+                    // display = uri. The publisher never drops the cell (psdr:947).
+                    // No plan-net/cycle golden reaches this branch (corpus only
+                    // hits the uri==None empty cell), but a predefined-resource IG
+                    // (US Core: Patient.address.state -> the terminology.hl7.org
+                    // USPS-State value set, not in its mounted closure) does — so
+                    // render it faithfully rather than aborting the whole page.
+                    let mut a = el("a");
+                    a.set_attribute("style", format!("opacity: {}", opacity_str(inherited)));
+                    a.set_attribute("href", u.clone());
+                    txt(&mut a, u);
+                    td.add_child_node(a);
                 } else {
-                    // igp.resolveActualUrl (IGKnowledgeProvider): http(s) uri ->
-                    // url=display=uri; urn -> display only. Corpus: only the
-                    // uri==None empty cell occurs; fire loud on the others so a
-                    // silently wrong link shape can't pass.
-                    panic!(
-                        "LOUD GAP: tx unresolved non-LOINC valueSet uri {:?} (psdr:947 resolveActualUrl) at {}",
-                        u, id
-                    );
+                    // urn: / other non-linkable uri -> display only (no href),
+                    // same resolveActualUrl rule.
+                    txt(&mut td, u);
                 }
             }
             // uri None -> td.markdown(null) adds nothing (empty cell).
