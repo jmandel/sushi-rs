@@ -624,9 +624,18 @@ fn pages_json(inputs: &ProducerInputs) -> Value {
     // Example grouping: exampleCanonical (profile url) -> [(exampleUrl, title)].
     let examples_by_profile = example_groups(ig);
 
+    // Artifact page title = the IG `definition.resource[].name` (keyed by Type/id).
+    // The publisher titles every artifact page (SD/example/VS/CS) from its IG
+    // registration name, not the resource's own title/name — an example instance
+    // carries no title, so the resource-field fallback would wrongly show `Type/id`.
+    let ig_names = ig_resource_names(ig);
+
     for r in &inputs.resources {
         let url = r.base_path();
-        let title = artifact_title(r);
+        let title = ig_names
+            .get(&format!("{}/{}", r.rt, r.id))
+            .cloned()
+            .unwrap_or_else(|| artifact_title(r));
         let mut entry = Map::new();
         entry.insert("title".into(), json!(title));
         entry.insert("titlelang".into(), json!({}));
@@ -733,6 +742,32 @@ fn artifact_title(r: &Resource) -> String {
     str_field(&r.json, "title")
         .or_else(|| r.name.clone())
         .unwrap_or_else(|| format!("{}/{}", r.rt, r.id))
+}
+
+/// `Type/id` -> the IG registration `name`, from `IG.definition.resource[]`.
+/// This is the publisher's artifact-page title source for every artifact kind.
+fn ig_resource_names(ig: &Value) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    let Some(arr) = ig
+        .get("definition")
+        .and_then(|d| d.get("resource"))
+        .and_then(Value::as_array)
+    else {
+        return map;
+    };
+    for r in arr {
+        let Some(reference) = r
+            .get("reference")
+            .and_then(|x| x.get("reference"))
+            .and_then(Value::as_str)
+        else {
+            continue;
+        };
+        if let Some(name) = r.get("name").and_then(Value::as_str) {
+            map.insert(reference.to_string(), name.to_string());
+        }
+    }
+    map
 }
 
 /// exampleCanonical (profile url) -> [(example page url, example title)], from
