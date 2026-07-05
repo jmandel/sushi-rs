@@ -454,3 +454,36 @@ store (M) existing, and is the native consumer of it. Recommended order becomes
 → native `CasSource` + `fig` CAS-default + `export` (the native half of M) → L**.
 The derived-index win (S) still lands first and independently; the folder-free fig
 operation rides on the same blob CAS the browser needs, built once.
+
+### 9.5 Native warm-build savings — the same win, on the CLI (Josh 2026-07-05)
+
+The derived-index + in-memory hold saves warm BUILD time natively too, not just
+browser warm opens. Two distinct native cases, one already covered, one a real hole:
+
+- **Cross-invocation (`fig render` / `fig build` run twice) — ALREADY saved for
+  writable caches.** `derived_index::load` writes the `.derived-index.json` sidecar
+  write-once on first miss (`derived_index.rs:172-174`), so the second process reads
+  it instead of re-parsing the closure. GAPS the content-hashed derived CAS closes:
+  (a) read-only / CAS-symlinked package content fails the write-once and re-derives
+  every process (`derived_index.rs:167-175` fail-soft path); (b) a registry-fetched
+  package that lands in a cache the process can't write never gets a sidecar. Making
+  the derived index a first-class CAS artifact keyed by content hash (§4.3) — rather
+  than a sidecar that may be unwritable — makes cross-invocation reuse unconditional.
+
+- **Within `fig watch` (the dev loop) — NOT saved; this is the native warm-build
+  hole.** `watch.rs:167` builds a **fresh engine per dirty rebuild** ("fresh engine
+  so own-resource edits are seen") and re-loads the whole closure's `IgContext`
+  (`watch.rs:60`) on every edit — re-reading/re-deriving the entire immutable closure
+  when only the user's own source changed. Fix (the native analog of the browser's
+  per-generation fragment cache): split the **immutable closure context** (parsed
+  conformance + derived index for the dependency closure — held across edits, keyed
+  by the closure's content hashes, invalidated only when a dependency changes) from
+  the **mutable own-resource layer** (rebuilt per edit). An edit then re-parses only
+  the edited IG resources, not `hl7.fhir.r4.core` + the closure. This is the warm
+  `fig watch` payoff, and it is the SAME hold the browser needs (§L in-session cache)
+  — one design, both surfaces.
+
+  **Gate:** measure `fig watch` warm re-render before/after (the current fresh-engine
+  path vs the split); byte-identical rendered output; the fragment/page corpora green.
+  This belongs with **L** (in-session held context), promoted from "optional" to a
+  named native-warm-build deliverable given Josh's callout.
