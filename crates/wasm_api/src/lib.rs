@@ -115,6 +115,10 @@ struct Engine {
     /// _includes + optional txcache), keyed by virtual path under /site.
     site_files: std::collections::HashMap<PathBuf, Vec<u8>>,
     site_options: SiteOptions,
+    /// `menu.xml` generated from the last `compile()`'s sushi-config `menu:` tree
+    /// (the navbar is IG data, not template chrome). `produceStockSite` stages it
+    /// into `_includes/` so the layouts' `{% include menu.xml %}` resolves.
+    menu_xml: Option<String>,
     /// Lazily-built render surface; dropped whole on ANY state change
     /// (structural invalidation — the F6 "cache keyed off compile()
     /// generations" contract).
@@ -253,6 +257,12 @@ impl Engine {
             render_set.push((PathBuf::from(format!("/__predefined__/{fname}")), body.clone()));
         }
         self.last_compiled = render_set;
+
+        // Generate the navbar (menu.xml) from the sushi-config `menu:` tree so
+        // produceStockSite can stage it into _includes/ — SUSHI writes this per-IG;
+        // it is IG data, not template chrome (the template only supplies the
+        // `{% include menu.xml %}` point).
+        self.menu_xml = compiler::menu::menu_xml(config);
 
         let resources: Vec<CompiledResourceJs> = compiled
             .into_iter()
@@ -1323,6 +1333,16 @@ impl Engine {
         for (name, body) in out.data {
             self.site_files
                 .insert(PathBuf::from(format!("/site/_data/{name}")), body.into_bytes());
+        }
+        // Stage the generated navbar so the layouts' `{% include menu.xml %}`
+        // resolves (an absent include renders an empty navbar). Only overwrites
+        // when we generated one; an IG-authored input/includes/menu.xml already
+        // mounted under _includes stays if the config carried no `menu:`.
+        if let Some(menu) = &self.menu_xml {
+            self.site_files.insert(
+                PathBuf::from("/site/_includes/menu.xml"),
+                menu.clone().into_bytes(),
+            );
         }
         self.render_state = None;
         Ok((np, nd))

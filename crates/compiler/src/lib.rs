@@ -11,6 +11,7 @@ pub mod config;
 pub mod export;
 pub mod ig_export;
 pub mod instance_export;
+pub mod menu;
 pub mod paths;
 pub mod predefined;
 pub mod sd_export;
