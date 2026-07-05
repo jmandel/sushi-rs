@@ -119,6 +119,29 @@ pub struct ProducerInputs {
     pub layouts: LayoutSource,
     /// IG-level fields used as fallbacks / for the `_data` model (publisher, etc.).
     pub ig: IgContext,
+    /// The raw ImplementationGuide resource JSON — the `_data` builders walk its
+    /// `definition.page`/`definition.resource`/`definition.parameter` + top-level
+    /// `extension`/`contact`/`jurisdiction` to derive pages.json / resources.json /
+    /// fhir.json / info.json. `Value::Null` when no IG was found.
+    pub ig_json: Value,
+    /// The set of page-fragment include filenames actually present (staged
+    /// `_includes/*` or source `input/{pagecontent,intro-notes}/*`), e.g.
+    /// `StructureDefinition-us-core-patient-intro.md`. `pages.json` emits a
+    /// page's `intro`/`notes` key ONLY when the corresponding file is here —
+    /// `fragment-notes.html` renders an unconditional `<h3>Notes:</h3>` header
+    /// whenever `notes != null`, so emitting a non-existent name would inject a
+    /// spurious heading (publisher gates on file existence, PublisherGenerator
+    /// `addPageDataRow` :3690).
+    pub page_includes: std::collections::HashSet<String>,
+    /// Output page-directory prefix for the shell file locations AND the
+    /// `pages.json` KEYS — these two must be equal to the render surface's
+    /// `page.path` (`site.data.pages[page.path]`). Empty (native `fig`,
+    /// `producer_gate`: FLAT, byte-exact vs the F0 oracle); `"en/"` for the
+    /// editor's `hl7.fhir.template` render (its staged pages live under `en/`).
+    /// Only the shell key + `pages.json` key carry it — `artifacts.json` keys,
+    /// `structuredefinitions.json.path`, breadcrumb/prev/next/example hrefs stay
+    /// FLAT (in-site relative links).
+    pub page_prefix: String,
 }
 
 impl ProducerInputs {
@@ -131,6 +154,8 @@ impl ProducerInputs {
         config_json: &Value,
         layouts: std::collections::HashMap<String, String>,
         ig: &Value,
+        page_includes: std::collections::HashSet<String>,
+        page_prefix: &str,
     ) -> Result<ProducerInputs> {
         let mut resources = resources;
         if let Some(order) = ig_resource_order(ig) {
@@ -141,6 +166,9 @@ impl ProducerInputs {
             defaults: Defaults::from_value(config_json)?,
             layouts: LayoutSource::Map(layouts),
             ig: IgContext::from_ig(ig),
+            ig_json: ig.clone(),
+            page_includes,
+            page_prefix: page_prefix.to_string(),
         })
     }
 }
@@ -197,6 +225,7 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
 
     let mut resources = Vec::new();
     let mut ig = IgContext::default();
+    let mut ig_json = Value::Null;
     let mut ig_order: Option<Vec<(String, String)>> = None;
     for (sub, is_example) in [
         ("input/resources", false),
@@ -214,6 +243,7 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
                 }) {
                     ig = IgContext::from_ig(&v);
                     ig_order = ig_resource_order(&v);
+                    ig_json = v;
                 }
                 continue; // IG has no generated shell (base=index.html, template-base="")
             }
@@ -228,11 +258,27 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         order_resources(&mut resources, order);
     }
 
+    // Page-fragment includes present in source (for pages.json intro/notes gating).
+    let mut page_includes = std::collections::HashSet::new();
+    for sub in ["input/pagecontent", "input/intro-notes", "input/includes"] {
+        let dir = build_dir.join(sub);
+        if let Ok(rd) = std::fs::read_dir(&dir) {
+            for e in rd.flatten() {
+                if let Some(name) = e.file_name().to_str() {
+                    page_includes.insert(name.to_string());
+                }
+            }
+        }
+    }
+
     Ok(ProducerInputs {
         resources,
         defaults,
         layouts: LayoutSource::Dir(build_dir.to_path_buf()),
         ig,
+        ig_json,
+        page_includes,
+        page_prefix: String::new(),
     })
 }
 

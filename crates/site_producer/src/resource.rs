@@ -43,6 +43,30 @@ impl Resource {
     pub fn base_path(&self) -> String {
         format!("{}-{}.html", self.rt, self.id)
     }
+
+    /// Build a `Resource` from an already-parsed resource `Value` (the wasm /
+    /// `Session` path, where the render set lives in memory). `file_name` is the
+    /// publisher-style origin filename (`{Type}-{id}.json`) used for the
+    /// `resources.json` `source`/`sourceTail` fields. Returns `None` for a Value
+    /// without `resourceType` + `id`.
+    pub fn from_value(v: Value, file_name: &str, is_example: bool) -> Option<Resource> {
+        let rt = v.get("resourceType").and_then(Value::as_str)?.to_string();
+        let id = v.get("id").and_then(Value::as_str)?.to_string();
+        let name = v.get("name").and_then(Value::as_str).map(str::to_string);
+        Some(Resource {
+            rt,
+            id,
+            name,
+            url: v.get("url").and_then(Value::as_str).map(str::to_string),
+            kind: v.get("kind").and_then(Value::as_str).map(str::to_string),
+            derivation: v.get("derivation").and_then(Value::as_str).map(str::to_string),
+            type_: v.get("type").and_then(Value::as_str).map(str::to_string),
+            abstract_: v.get("abstract").and_then(Value::as_bool).unwrap_or(false),
+            is_example,
+            json: v,
+            file: PathBuf::from(file_name),
+        })
+    }
 }
 
 /// Enumerate every resource JSON directly under `dir` (non-recursive, matching

@@ -65,7 +65,9 @@ fn emit_one(
             format!("{{{{[type]}}}}-{{{{[id]}}}}{ext}{f}.html")
         });
     let out = do_replacements(&out, r, fmt);
-    pages.insert(out, content);
+    // The shell FILE location carries the page-dir prefix (must equal the render
+    // surface's page.path); FLAT for native/producer_gate, `en/` for the editor.
+    pages.insert(format!("{}{out}", inputs.page_prefix), content);
 }
 
 /// `makeTemplates` for every resource: base + definitions + each extraTemplate

@@ -1175,6 +1175,7 @@ dependencies = [
  "serde",
  "serde_json",
  "site_db",
+ "site_producer",
  "snapshot_gen",
  "wasm-bindgen",
 ]

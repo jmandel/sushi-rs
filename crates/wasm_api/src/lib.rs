@@ -820,6 +820,21 @@ impl Session {
         )
     }
 
+    /// Synthesize the stock-template page shells + `_data` model from the current
+    /// compile + mounted template and merge them into the site tree (task #45 —
+    /// the source-driven replacement for the pre-baked `-stock.json`). Call after
+    /// `compile()` + `mountTemplate()`, before rendering. Envelope result:
+    /// `{ "pages": <shell count>, "data": <_data file count> }`.
+    #[wasm_bindgen(js_name = produceStockSite)]
+    pub fn produce_stock_site(&self) -> String {
+        set_panic_hook();
+        envelope(
+            "produceStockSite",
+            with_engine(|e| e.produce_stock_site())
+                .map(|(pages, data)| serde_json::json!({ "pages": pages, "data": data })),
+        )
+    }
+
     /// Render one fragment (`ref` = `{Type}-{id}`, `kind` = the registered
     /// fragment kind, e.g. `snapshot`). Served through the session-shared
     /// first-include-miss store (same map the page pass fills). Envelope
@@ -947,6 +962,37 @@ fn collect_example_resources(
     out
 }
 
+/// The `(resourceType, id)` set the IG marks as examples — an entry in
+/// `definition.resource[]` with `exampleBoolean == true` or an `exampleCanonical`
+/// (the publisher's example signal). Drives `is_example` in the stock producer.
+fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, String)> {
+    let mut set = std::collections::HashSet::new();
+    let Some(arr) = ig
+        .get("definition")
+        .and_then(|d| d.get("resource"))
+        .and_then(Value::as_array)
+    else {
+        return set;
+    };
+    for r in arr {
+        let is_example = r.get("exampleBoolean").and_then(Value::as_bool) == Some(true)
+            || r.get("exampleCanonical").and_then(Value::as_str).is_some();
+        if !is_example {
+            continue;
+        }
+        if let Some(reference) = r
+            .get("reference")
+            .and_then(|x| x.get("reference"))
+            .and_then(Value::as_str)
+        {
+            if let Some((rt, id)) = reference.split_once('/') {
+                set.insert((rt.to_string(), id.to_string()));
+            }
+        }
+    }
+    set
+}
+
 /// Pick the FHIR core package label (`hl7.fhir.r4.core#…` or `hl7.fhir.r5.core#…`)
 /// from the mounted set — the single package the site.db snapshot context loads,
 /// matching the native pipeline. Prefers R4 (the current corpus is R4) when both
@@ -1064,6 +1110,131 @@ impl Engine {
         }
         self.render_state = None;
         Ok(n)
+    }
+
+    /// Synthesize the stock-template page SHELLS + `_data` model from the CURRENT
+    /// compile (the render set + mounted template) and merge them into the site
+    /// tree — the source-driven replacement for the pre-baked `-stock.json`
+    /// warm-start bundle (task #45). Requires a prior `compile()` (for the render
+    /// set incl. the IG) and `mountTemplate()` (for `config.json` + `layouts/*`).
+    ///
+    /// Wiring over `site_producer::ProducerInputs::from_memory`:
+    ///   * `config.json` ← the mounted `/site/template/config.json`;
+    ///   * `layouts/*`  ← the mounted `/site/template/layouts/*` (keyed
+    ///     `template/layouts/<name>`, the config-relative path the producer reads);
+    ///   * resources    ← the last compile's render set (the IG is pulled out and
+    ///     passed as `ig`); example-ness comes from the IG's
+    ///     `definition.resource[].example*` markers (publisher-faithful);
+    ///   * page-fragment includes ← the staged `/site/_includes/*` names (so
+    ///     `pages.json` only emits `intro`/`notes` for fragments that exist).
+    ///
+    /// Merges the produced shells to `/site/<name>` and `_data` to
+    /// `/site/_data/<name>`, drops the render state, and returns
+    /// `(pages, data)` counts.
+    fn produce_stock_site(&mut self) -> Result<(usize, usize), String> {
+        // 1. Template config.json (mountTemplate stores template files under
+        //    /site/template/<rel>).
+        let cfg_bytes = self
+            .site_files
+            .get(&PathBuf::from("/site/template/config.json"))
+            .ok_or(
+                "produceStockSite: no template config at /site/template/config.json \
+                 — call mountTemplate() first",
+            )?;
+        let config_json: Value = serde_json::from_slice(cfg_bytes)
+            .map_err(|e| format!("produceStockSite: bad template config.json: {e}"))?;
+
+        // 2. layouts/* -> "template/layouts/<name>" (the producer's LayoutSource::Map
+        //    also accepts the template-root-relative "layouts/<name>" fallback).
+        let mut layouts: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for (p, bytes) in &self.site_files {
+            if let Ok(rel) = p.strip_prefix("/site/template/") {
+                let rels = rel.to_string_lossy();
+                if rels.starts_with("layouts/") {
+                    if let Ok(txt) = String::from_utf8(bytes.clone()) {
+                        layouts.insert(format!("template/{rels}"), txt);
+                    }
+                }
+            }
+        }
+        if layouts.is_empty() {
+            return Err("produceStockSite: no template layouts mounted (template/layouts/*) \
+                 — call mountTemplate() first"
+                .into());
+        }
+
+        // 3. Render set -> resources + IG. Example-ness from the IG's
+        //    definition.resource example markers.
+        let ig_json = self
+            .last_compiled
+            .iter()
+            .find(|(_, v)| {
+                v.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
+            })
+            .map(|(_, v)| v.clone())
+            .ok_or(
+                "produceStockSite: no ImplementationGuide in the render set — compile() first",
+            )?;
+        let example_refs = example_reference_set(&ig_json);
+
+        let mut resources = Vec::new();
+        for (path, body) in &self.last_compiled {
+            let rt = body
+                .get("resourceType")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if rt == "ImplementationGuide" {
+                continue;
+            }
+            let id = body.get("id").and_then(Value::as_str).unwrap_or("");
+            let fname = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(String::from)
+                .unwrap_or_else(|| format!("{rt}-{id}.json"));
+            let is_example = example_refs.contains(&(rt.to_string(), id.to_string()));
+            if let Some(r) = site_producer::Resource::from_value(body.clone(), &fname, is_example) {
+                resources.push(r);
+            }
+        }
+
+        // 4. Staged page-fragment include filenames (for pages.json intro/notes).
+        let mut page_includes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for p in self.site_files.keys() {
+            if let Ok(rel) = p.strip_prefix("/site/_includes") {
+                if let Some(name) = rel.file_name().and_then(|n| n.to_str()) {
+                    page_includes.insert(name.to_string());
+                }
+            }
+        }
+
+        // The editor renders via hl7.fhir.template, whose staged pages live under
+        // `en/`; the shell FILE keys + pages.json KEYS must match that page.path.
+        let inputs = site_producer::ProducerInputs::from_memory(
+            resources,
+            &config_json,
+            layouts,
+            &ig_json,
+            page_includes,
+            "en/",
+        )
+        .map_err(|e| format!("produceStockSite: {e:#}"))?;
+        let out =
+            site_producer::produce(&inputs).map_err(|e| format!("produceStockSite: {e:#}"))?;
+
+        let (np, nd) = (out.pages.len(), out.data.len());
+        for (name, body) in out.pages {
+            self.site_files
+                .insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
+        }
+        for (name, body) in out.data {
+            self.site_files
+                .insert(PathBuf::from(format!("/site/_data/{name}")), body.into_bytes());
+        }
+        self.render_state = None;
+        Ok((np, nd))
     }
 
     /// The lazily-(re)built render surface for the current generation.
@@ -1428,6 +1599,301 @@ dependencies:
             "OK: whole-IG render smoke — {} profiles, {} fragments rendered, 0 panics",
             profile_ids.len(),
             rendered
+        );
+    }
+}
+
+// ===========================================================================
+// A/B _data-sufficiency gate (task #45).
+//
+// Proves the source-driven `_data` model (site_producer) renders US Core pages
+// identically to the known-good F0 publisher `_data`. Both sides share the SAME
+// shells, `_includes`, compiled+snapshotted SDs and package closure — the ONLY
+// variable is the structural `_data/*.json` (resources/structuredefinitions/
+// pages/fhir/info/...). Any diff is therefore attributable to `_data`; we assert
+// only the cited run-context classes remain (OID identifiers, artifact-page
+// label numbering, cross-section prev/next nav — see docs/site-producer.md).
+//
+// Network-free; skips if the US Core package cache or F0 build tree is absent.
+// Run: cargo test -q --release -p wasm_api -- --ignored ab_data
+// ===========================================================================
+#[cfg(test)]
+mod ab_data_parity_gate {
+    use super::*;
+    use render_sd::tree::{FsTree, TreeSource};
+    use std::collections::HashMap;
+    use std::path::Path;
+
+    const F0_USCORE: &str = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/us-core";
+
+    fn repo() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
+    const CLOSURE: &[&str] = &[
+        "hl7.fhir.r4.core#4.0.1",
+        "hl7.fhir.us.core#9.0.0",
+        "hl7.fhir.uv.sdc#4.0.0",
+        "hl7.fhir.uv.smart-app-launch#2.2.0",
+        "hl7.fhir.uv.extensions.r4#5.3.0",
+        "hl7.fhir.uv.tools.r4#1.1.2",
+        "hl7.fhir.uv.xver-r5.r4#0.1.0",
+        "hl7.terminology.r4#7.1.0",
+        "us.cdc.phinvads#0.12.0",
+    ];
+
+    fn is_wanted(name: &str) -> bool {
+        matches!(name, ".index.json" | ".derived-index.json" | "package.json")
+            || [
+                "StructureDefinition-", "structuredefinition-", "ValueSet-", "valueset-",
+                "CodeSystem-", "codesystem-", "ConceptMap-", "NamingSystem-",
+                "ImplementationGuide-", "CapabilityStatement-", "SearchParameter-",
+                "OperationDefinition-",
+            ]
+            .iter()
+            .any(|p| name.starts_with(p))
+    }
+
+    fn mount_pkg(src: &mut BundleSource, cache: &Path, label: &str) -> bool {
+        let dir = cache.join(label).join("package");
+        if !dir.is_dir() {
+            return false;
+        }
+        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
+        for e in std::fs::read_dir(&dir).unwrap().flatten() {
+            let p = e.path();
+            if !p.is_file() {
+                continue;
+            }
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if is_wanted(&name) {
+                if let Ok(bytes) = std::fs::read(&p) {
+                    entries.push((name, bytes));
+                }
+            }
+        }
+        src.mount_package(label, entries);
+        true
+    }
+
+    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            for e in rd.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else {
+                    out.push(p);
+                }
+            }
+        }
+    }
+
+    /// Read the F0 `temp/pages` tree into a `/site/**` site_files map.
+    fn load_site_files(pages_root: &Path, txcache: &Path) -> HashMap<PathBuf, Vec<u8>> {
+        let mut site: HashMap<PathBuf, Vec<u8>> = HashMap::new();
+        let mut all = Vec::new();
+        walk(pages_root, &mut all);
+        for f in all {
+            let rel = f.strip_prefix(pages_root).unwrap().to_string_lossy().to_string();
+            site.insert(PathBuf::from(format!("/site/{rel}")), std::fs::read(&f).unwrap());
+        }
+        if txcache.is_dir() {
+            let mut tx = Vec::new();
+            walk(txcache, &mut tx);
+            for f in tx {
+                let rel = f.strip_prefix(txcache).unwrap().to_string_lossy().to_string();
+                site.insert(
+                    PathBuf::from(format!("/site/txcache/{rel}")),
+                    std::fs::read(&f).unwrap(),
+                );
+            }
+        }
+        site
+    }
+
+    /// Classify a per-line diff as an ACCEPTED (cited) run-context class, or a
+    /// hard content diff. Returns Some(class) if accepted, None if it must fail.
+    fn classify(line: &str) -> Option<&'static str> {
+        let l = line.trim();
+        // OID identifiers row (publisher auto-assigned registry, not in source)
+        if l.contains("Other Identifiers") || l.contains("OID:") || l.contains("UUID:") {
+            return Some("oid-identifiers");
+        }
+        // artifact-page label numbering (CSS --heading-prefix var) + prev/next nav
+        if l.contains("--heading-prefix") || l.contains("&lt;prev") || l.contains("next&gt;") {
+            return Some("label-or-nav");
+        }
+        // footer/run-context (genDate/build year/publish-box placeholder)
+        if l.contains("genDate") || l.contains("publish-box") || l.contains("Publish Box") {
+            return Some("run-context");
+        }
+        None
+    }
+
+    fn render_both(
+        compiled: &[(PathBuf, Value)],
+        bundle: Option<Rc<BundleSource>>,
+        site_a: &HashMap<PathBuf, Vec<u8>>,
+        site_b: &HashMap<PathBuf, Vec<u8>>,
+        page: &str,
+    ) -> (String, String) {
+        let opts = SiteOptions {
+            active_tables: true,
+            run_uuid: Some("00000000-0000-4000-8000-abdata000000".to_string()),
+            merge: false,
+            engine_first_includes: true,
+        };
+        let rs_a = build_render_state(compiled, bundle.clone(), site_a, &opts).expect("A state");
+        let rs_b = build_render_state(compiled, bundle, site_b, &opts).expect("B state");
+        (
+            rs_a.render_page_by_name(page).expect("A render"),
+            rs_b.render_page_by_name(page).expect("B render"),
+        )
+    }
+
+    #[test]
+    #[ignore = "needs the US Core F0 build tree + package cache; run explicitly"]
+    fn ab_data_sufficiency_uscore() {
+        let f0 = Path::new(F0_USCORE);
+        let cache = repo().join("temp/fhir-home/.fhir/packages");
+        if !f0.exists() || !cache.join("hl7.fhir.us.core#9.0.0/package").is_dir() {
+            eprintln!("skip: missing F0 tree ({}) or us.core cache ({})", f0.display(), cache.display());
+            return;
+        }
+
+        // ---- package closure ----
+        let mut src = BundleSource::new();
+        for label in CLOSURE {
+            assert!(mount_pkg(&mut src, &cache, label), "closure pkg missing: {label}");
+        }
+        let cache_root = src.cache_root().to_path_buf();
+        let bundle = Some(Rc::new(src));
+
+        // ---- compile the predefined US Core IG (differential SDs from input/resources) ----
+        let mut predefined = serde_json::Map::new();
+        let resdir = f0.join("input/resources");
+        for e in std::fs::read_dir(&resdir).unwrap().flatten() {
+            let p = e.path();
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&p) else { continue };
+            let Ok(body) = serde_json::from_slice::<Value>(&bytes) else { continue };
+            predefined.insert(format!("input/resources/{name}"), body);
+        }
+        let predefined_json = Value::Object(predefined).to_string();
+        // also feed the fsh-generated IG (predefined-resource IGs keep the IG there)
+        let mut fsh_predef = serde_json::Map::new();
+        let gendir = f0.join("fsh-generated/resources");
+        for e in std::fs::read_dir(&gendir).unwrap().flatten() {
+            let p = e.path();
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if !name.starts_with("ImplementationGuide") || !name.ends_with(".json") {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&p) else { continue };
+            let Ok(body) = serde_json::from_slice::<Value>(&bytes) else { continue };
+            fsh_predef.insert(format!("input/resources/{name}"), body);
+        }
+        // Merge the IG into the predefined set so it lands in the render set.
+        let mut all_predef: serde_json::Map<String, Value> =
+            serde_json::from_str(&predefined_json).unwrap();
+        all_predef.extend(fsh_predef);
+        let predefined_json = Value::Object(all_predef).to_string();
+
+        let config = "\
+id: hl7.fhir.us.core
+canonical: http://hl7.org/fhir/us/core
+name: USCore
+title: US Core
+status: active
+version: 9.0.0
+fhirVersion: 4.0.1
+dependencies:
+  hl7.fhir.uv.sdc: 4.0.0
+  hl7.fhir.uv.smart-app-launch: 2.2.0
+  hl7.fhir.uv.extensions.r4: 5.3.0
+  hl7.fhir.uv.xver-r5.r4: 0.1.0
+  us.cdc.phinvads: 0.12.0
+";
+        let mut engine = Engine {
+            bundle: bundle.clone(),
+            cache_root,
+            packages: CLOSURE.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        engine.compile("{}", config, &predefined_json).expect("compile US Core");
+        let compiled = engine.snapshot_complete_own().expect("snapshot-complete render set");
+
+        // ---- site trees: A = F0 _data, B = producer _data overlaid ----
+        let pages_root = f0.join("temp/pages");
+        let txcache = repo().join("temp/fhir-home"); // absent → no txcache; fine
+        let site_a = load_site_files(&pages_root, &txcache);
+
+        // Producer _data from source (gather_inputs over the F0 build dir).
+        let inputs = site_producer::gather_inputs(f0).expect("gather_inputs");
+        let produced = site_producer::produce(&inputs).expect("produce");
+        let mut site_b = site_a.clone();
+        for (name, body) in &produced.data {
+            site_b.insert(
+                PathBuf::from(format!("/site/_data/{name}")),
+                body.clone().into_bytes(),
+            );
+        }
+
+        // ---- render + classify ----
+        let pages = ["StructureDefinition-us-core-patient.html", "index.html"];
+        let mut hard_failures: Vec<String> = Vec::new();
+        for page in pages {
+            // ensure the shell + narrative source exists in the tree
+            if FsTree.read(&pages_root.join(page)).is_none() {
+                eprintln!("skip page (no shell): {page}");
+                continue;
+            }
+            let (a, b) = render_both(&compiled, bundle.clone(), &site_a, &site_b, page);
+            let a_lines: Vec<&str> = a.lines().collect();
+            let b_lines: Vec<&str> = b.lines().collect();
+            let mut classes: std::collections::BTreeMap<&str, usize> = Default::default();
+            let mut matched = 0usize;
+            let max = a_lines.len().max(b_lines.len());
+            for i in 0..max {
+                let al = a_lines.get(i).copied().unwrap_or("");
+                let bl = b_lines.get(i).copied().unwrap_or("");
+                if al == bl {
+                    matched += 1;
+                    continue;
+                }
+                // a diff at line i — classify by BOTH sides' content
+                let cls = classify(al).or_else(|| classify(bl));
+                match cls {
+                    Some(c) => *classes.entry(c).or_default() += 1,
+                    None => {
+                        if hard_failures.len() < 12 {
+                            hard_failures.push(format!(
+                                "{page} L{i}:\n   A: {}\n   B: {}",
+                                al.trim(),
+                                bl.trim()
+                            ));
+                        }
+                    }
+                }
+            }
+            eprintln!(
+                "A/B {page}: {}/{} lines identical; accepted-diff classes = {:?}",
+                matched, max, classes
+            );
+        }
+        assert!(
+            hard_failures.is_empty(),
+            "UNCLASSIFIED content diffs (not run-context/OID/label-nav):\n{}",
+            hard_failures.join("\n")
         );
     }
 }

@@ -19,6 +19,7 @@ package_store = { workspace = true }
 # its `writer` module touches rusqlite, and we never import that here — so this
 # adds no C-sqlite to the wasm build (the whole point of the model.rs seam, §5).
 site_db = { workspace = true, default-features = false }
+site_producer = { workspace = true }
 render_sd = { workspace = true }
 render_page = { workspace = true }
 api_envelope = { workspace = true }
