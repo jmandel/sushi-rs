@@ -409,9 +409,30 @@ fn cmd_render(args: &[String]) -> Result<Value> {
         let inputs = site_producer::gather_inputs(build_path)?;
         let output = site_producer::produce(&inputs)?;
         let n = output.write_to(&build_path.join("temp/pages"))?;
+        // Stage the IG's OWN includes into _includes/ so layouts resolve them —
+        // most importantly `menu.xml` (SUSHI-generated from the sushi-config
+        // `menu:` into fsh-generated/includes/), plus any IG-authored
+        // input/includes/*. The publisher stages these into temp/pages/_includes/;
+        // the pre-baked tree already carries them, so the source-driven path must
+        // reproduce that staging or every page renders with an empty nav menu.
+        let inc_dst = build_path.join("temp/pages/_includes");
+        let mut staged = 0usize;
+        for sub in ["fsh-generated/includes", "input/includes"] {
+            let src = build_path.join(sub);
+            if let Ok(rd) = std::fs::read_dir(&src) {
+                std::fs::create_dir_all(&inc_dst).ok();
+                for e in rd.flatten() {
+                    if e.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                        if std::fs::copy(e.path(), inc_dst.join(e.file_name())).is_ok() {
+                            staged += 1;
+                        }
+                    }
+                }
+            }
+        }
         if !has(args, "--json") {
             eprintln!(
-                "fig render: produced {} shells + {} _data files from source ({n} files)",
+                "fig render: produced {} shells + {} _data files + {staged} includes from source ({n} files)",
                 output.pages.len(),
                 output.data.len()
             );
