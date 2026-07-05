@@ -965,6 +965,90 @@ fn collect_example_resources(
 /// The `(resourceType, id)` set the IG marks as examples — an entry in
 /// `definition.resource[]` with `exampleBoolean == true` or an `exampleCanonical`
 /// (the publisher's example signal). Drives `is_example` in the stock producer.
+/// FHIR conformance/definitional resource types the publisher lists as ARTIFACTS
+/// (not examples). Anything else in the render set is an instance → an example.
+const DEFINITIONAL_TYPES: &[&str] = &[
+    "StructureDefinition", "ValueSet", "CodeSystem", "CapabilityStatement",
+    "OperationDefinition", "SearchParameter", "ConceptMap", "NamingSystem",
+    "StructureMap", "ExampleScenario", "GraphDefinition", "MessageDefinition",
+    "CompartmentDefinition", "TerminologyCapabilities", "ImplementationGuide",
+];
+
+/// Synthesize a minimal ImplementationGuide from the render-set resources when the
+/// real (publisher-generated) one is absent — the in-wasm equivalent of the IG the
+/// disk build gets from `ig_export`. Produces the fields the site-producer reads:
+/// `url`/`version`/`id`/`name` (IG context) and `definition.resource[]` (each
+/// resource's `Type/id` reference, display `name`, and `exampleBoolean` flag).
+/// Ordering follows the render set (compiled first, then predefined) — the same
+/// order `Session.compile` assembles it in.
+fn synthesize_ig(render_set: &[(PathBuf, Value)]) -> Value {
+    let field = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
+
+    // Derive the IG canonical + version from any conformance resource's url/version:
+    // a profile url is `<canonical>/<ResourceType>/<id>`, so strip the last two
+    // segments to recover the IG canonical base.
+    let mut canonical = String::new();
+    let mut version = String::new();
+    for (_, body) in render_set {
+        let rt = body.get("resourceType").and_then(Value::as_str).unwrap_or("");
+        if !DEFINITIONAL_TYPES.contains(&rt) {
+            continue;
+        }
+        if canonical.is_empty() {
+            if let Some(url) = field(body, "url") {
+                if let Some((base, _)) = url.rsplit_once(&format!("/{rt}/")) {
+                    canonical = base.to_string();
+                }
+            }
+        }
+        if version.is_empty() {
+            if let Some(v) = field(body, "version") {
+                version = v;
+            }
+        }
+        if !canonical.is_empty() && !version.is_empty() {
+            break;
+        }
+    }
+    let ig_id = canonical.rsplit('/').next().unwrap_or("ig").to_string();
+
+    let mut resource_entries = Vec::new();
+    for (_, body) in render_set {
+        let rt = body.get("resourceType").and_then(Value::as_str).unwrap_or("");
+        if rt.is_empty() || rt == "ImplementationGuide" {
+            continue;
+        }
+        let id = body.get("id").and_then(Value::as_str).unwrap_or("");
+        if id.is_empty() {
+            continue;
+        }
+        // Display name: the resource's own title/name; instances rarely carry one.
+        let name = field(body, "title")
+            .or_else(|| field(body, "name"))
+            .unwrap_or_else(|| format!("{rt}/{id}"));
+        let is_example = !DEFINITIONAL_TYPES.contains(&rt);
+        let mut entry = serde_json::Map::new();
+        entry.insert(
+            "reference".into(),
+            serde_json::json!({ "reference": format!("{rt}/{id}") }),
+        );
+        entry.insert("name".into(), Value::String(name));
+        if is_example {
+            entry.insert("exampleBoolean".into(), Value::Bool(true));
+        }
+        resource_entries.push(Value::Object(entry));
+    }
+
+    serde_json::json!({
+        "resourceType": "ImplementationGuide",
+        "id": ig_id,
+        "url": format!("{canonical}/ImplementationGuide/{ig_id}"),
+        "version": version,
+        "name": ig_id,
+        "definition": { "resource": resource_entries },
+    })
+}
+
 fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, String)> {
     let mut set = std::collections::HashSet::new();
     let Some(arr) = ig
@@ -1166,6 +1250,15 @@ impl Engine {
 
         // 3. Render set -> resources + IG. Example-ness from the IG's
         //    definition.resource example markers.
+        //
+        // The publisher's ImplementationGuide resource is a build artifact: FSH IGs
+        // get it from disk-only `ig_export` (not run in-wasm), and predefined-resource
+        // IGs (US Core/IPS) never ship it in `input/resources` (it too is generated).
+        // So the render set usually has NO IG. When absent, synthesize a minimal IG
+        // from the render-set resources themselves — enough to drive the producer
+        // (definition.resource[] for ordering/titles/example flags + canonical/version
+        // for the IG context). The native/disk path is unaffected (it reads the real
+        // IG from the built tree); this fallback lives only in the wasm surface.
         let ig_json = self
             .last_compiled
             .iter()
@@ -1173,9 +1266,7 @@ impl Engine {
                 v.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
             })
             .map(|(_, v)| v.clone())
-            .ok_or(
-                "produceStockSite: no ImplementationGuide in the render set — compile() first",
-            )?;
+            .unwrap_or_else(|| synthesize_ig(&self.last_compiled));
         let example_refs = example_reference_set(&ig_json);
 
         let mut resources = Vec::new();
