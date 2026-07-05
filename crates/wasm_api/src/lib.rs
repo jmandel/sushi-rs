@@ -219,14 +219,24 @@ impl Engine {
         };
 
         let cache = cache_root.to_string_lossy().into_owned();
+        // Keep the predefined bodies: the compiler consumes them for resolution
+        // but does NOT re-emit them as `compiled` output. A predefined-resource IG
+        // (0 FSH; conformance lives under input/resources/**, e.g. US Core / IPS)
+        // would otherwise leave the render set holding only the ImplementationGuide
+        // — every profile fragment misses. They ARE part of the publisher `output/`
+        // tree, so they belong in the render set (/own) too.
+        let predefined_for_render = predefined.clone();
         let (compiled, diagnostics) = compiler::build_project_in_memory_with_diagnostics(
             config, &fsh_files, predefined, source, &cache,
         )
         .map_err(|e| format!("compile failed: {e:#}"))?;
 
-        // Stash the compiled resources as local resources for snapshot resolution.
+        // Stash the render set as snapshot-resolution locals: the FSH compile
+        // output FIRST, then the predefined conformance/example resources keyed
+        // by their publisher filename (`output/{Type}-{id}.json` parity). Both
+        // land in the render surface's /own dir and act as base-resolution locals.
         self.render_state = None;
-        self.last_compiled = compiled
+        let mut render_set: Vec<(PathBuf, Value)> = compiled
             .iter()
             .map(|r| {
                 (
@@ -235,6 +245,14 @@ impl Engine {
                 )
             })
             .collect();
+        for (path, body) in &predefined_for_render {
+            let fname = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("resource.json");
+            render_set.push((PathBuf::from(format!("/__predefined__/{fname}")), body.clone()));
+        }
+        self.last_compiled = render_set;
 
         let resources: Vec<CompiledResourceJs> = compiled
             .into_iter()
@@ -1064,13 +1082,24 @@ impl Engine {
         Ok(rs)
     }
 
-    /// Snapshot-complete the compiled StructureDefinitions for the render
-    /// surface's `/own` dir — the render layer walks `snapshot.element`, and
-    /// compile() emits differential-only SDs. Mirrors build_site_db's S3
-    /// EXACTLY: a PackageContext over ONLY the FHIR core package, with the
-    /// whole compile as locals so cross-profile bases resolve. SDs that
-    /// already carry a snapshot pass through untouched. With no SDs (or no
-    /// core package mounted — pure site smoke), this is a pass-through.
+    /// Snapshot-complete the differential-only StructureDefinitions in the
+    /// render set for the render surface's `/own` dir — the render layer walks
+    /// `snapshot.element`. Resolves `baseDefinition` (and the type/extension/
+    /// contentReference canonicals the walk touches) against the FULL mounted
+    /// package closure + the render set as locals — i.e. the SAME context the
+    /// on-demand `snapshot` op uses (`build_context`), the publisher-faithful
+    /// model the wasm-parity corpus gates (ips/mcode/sdc, full per-IG closure)
+    /// prove byte-correct. This is deliberately NOT the core-only pinning
+    /// build_site_db uses: that matches the native `site_db` oracle, but a
+    /// predefined-resource IG has profiles based on EXTERNAL bases (e.g. US
+    /// Core's us-core-questionnaireresponse → sdc-questionnaireresponse), which
+    /// core-only cannot resolve ("base not found: .../sdc/...").
+    ///
+    /// SDs that already carry a snapshot pass through untouched. A per-SD
+    /// snapshot failure is non-fatal: the differential body is left in place so
+    /// the rest of the site still renders (that one page surfaces the editor's
+    /// fragment-gap notice) rather than one bad profile blanking every page.
+    /// With no differential-only SDs, this is a pure pass-through.
     fn snapshot_complete_own(&self) -> Result<Vec<(PathBuf, Value)>, String> {
         let needs: Vec<usize> = self
             .last_compiled
@@ -1085,18 +1114,13 @@ impl Engine {
         if needs.is_empty() {
             return Ok(self.last_compiled.clone());
         }
-        let (source, cache_root, packages) = self.source()?;
-        let core_package = pick_core_package(&packages)
-            .ok_or("render surface: no FHIR core package (hl7.fhir.r{4,5}.core) mounted")?;
-        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
-            .map_err(|e| format!("render surface: package context: {e:#}"))?;
-        ctx.load_local_resources(self.last_compiled.clone());
+        let ctx = self.build_context()?;
         let mut out = self.last_compiled.clone();
         for i in needs {
-            let (path, body) = &out[i];
-            let snap = snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
-                .map_err(|e| format!("render surface: snapshot {}: {e:#}", path.display()))?;
-            out[i].1 = snap;
+            let body = out[i].1.clone();
+            if let Ok(snap) = snapshot_gen::generate_snapshot(body, &ctx, Default::default()) {
+                out[i].1 = snap;
+            }
         }
         Ok(out)
     }
