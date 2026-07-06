@@ -119,6 +119,11 @@ struct Engine {
     /// (the navbar is IG data, not template chrome). `produceStockSite` stages it
     /// into `_includes/` so the layouts' `{% include menu.xml %}` resolves.
     menu_xml: Option<String>,
+    /// Input page-folder listing (`input/{pagecontent,pages,resource-docs}` ->
+    /// filenames) threaded into IG export so the generated IG's `definition.page`
+    /// narrative tree is complete (narrative titles + the artifacts-section number).
+    /// Set via `set_page_listing`; empty by default (artifact layer needs no pages).
+    page_listing: std::collections::HashMap<String, Vec<String>>,
     /// Lazily-built render surface; dropped whole on ANY state change
     /// (structural invalidation — the F6 "cache keyed off compile()
     /// generations" contract).
@@ -230,8 +235,19 @@ impl Engine {
         // — every profile fragment misses. They ARE part of the publisher `output/`
         // tree, so they belong in the render set (/own) too.
         let predefined_for_render = predefined.clone();
-        let (compiled, diagnostics) = compiler::build_project_in_memory_with_diagnostics(
-            config, &fsh_files, predefined, source, &cache,
+        // Generate the REAL ImplementationGuide (byte-identical to the disk build's
+        // ImplementationGuide-<id>.json) alongside the conformance resources, so the
+        // render set carries a faithful IG — correct artifact/example titles and
+        // example markers — instead of the minimal produceStockSite synthesis. The
+        // page-folder listing (for definition.page narrative pages) is threaded via
+        // `self.page_listing`; empty is fine for the artifact layer.
+        let (compiled, ig_resource, diagnostics) = compiler::build_project_in_memory_with_ig(
+            config,
+            &fsh_files,
+            predefined,
+            source,
+            &cache,
+            self.page_listing.clone(),
         )
         .map_err(|e| format!("compile failed: {e:#}"))?;
 
@@ -255,6 +271,12 @@ impl Engine {
                 .and_then(|n| n.to_str())
                 .unwrap_or("resource.json");
             render_set.push((PathBuf::from(format!("/__predefined__/{fname}")), body.clone()));
+        }
+        // The generated ImplementationGuide joins the render set so produceStockSite
+        // finds a faithful IG (correct titles/example markers/page tree) rather than
+        // falling back to the minimal synthesis.
+        if let Some(ig) = ig_resource {
+            render_set.push((PathBuf::from(format!("/__ig__/{}", ig.filename)), ig.body));
         }
         self.last_compiled = render_set;
 
