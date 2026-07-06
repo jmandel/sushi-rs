@@ -810,7 +810,7 @@ fn push_content_intro(div: &mut XhtmlNode, cs: &Value) {
             tx(&mut p, &format!(" that includes following code{}{}:", plural, hpart));
         }
         "supplement" => {
-            panic!("LOUD GAP: CS content supplement mode (csr:224) url={}", url);
+            crate::loud_gap!((), "LOUD GAP: CS content supplement mode (csr:224) url={}", url);
         }
         _ => {
             // complete
@@ -1043,7 +1043,7 @@ fn gen_include(
         if inc.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|x| {
             matches!(get_str(x, "url"), Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-rules") | Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-group"))
         })).unwrap_or(false) {
-            panic!("LOUD GAP: cld expand-rules/group (vsr:1565) vs={}", get_str(vs, "id").unwrap_or(""));
+            crate::loud_gap!((), "LOUD GAP: cld expand-rules/group (vsr:1565) vs={}", get_str(vs, "id").unwrap_or(""));
         }
     } else {
         // pure import (vsr:1569-1593).

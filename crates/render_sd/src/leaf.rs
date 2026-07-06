@@ -710,7 +710,7 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) 
                 })
                 .unwrap_or(false)
             {
-                panic!("LOUD GAP: sd-use-context fhir-version-specific-use range (psdr:2942) for {}", sd.id());
+                crate::loud_gap!((), "LOUD GAP: sd-use-context fhir-version-specific-use range (psdr:2942) for {}", sd.id());
             }
             ul.add_child_node(li);
         }
@@ -761,7 +761,7 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) 
         sd,
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-version-specific-use",
     ) {
-        panic!(
+        crate::loud_gap!((),
             "LOUD GAP: sd-use-context SD-level fhir-version-specific-use (psdr:2966) for {}",
             sd.id()
         );
@@ -1175,7 +1175,7 @@ pub fn inv(
                 tx(&mut td_d, "Requirements");
                 tx(&mut td_d, ": ");
                 // markdown(requirements) — loud gap: no corpus hit yet
-                panic!("LOUD GAP: inv requirements markdown (psdr:1256) req={:?}", req);
+                crate::loud_gap!((), "LOUD GAP: inv requirements markdown (psdr:1256) req={:?}", req);
             }
             tr.add_child_node(td_d);
             // Expression

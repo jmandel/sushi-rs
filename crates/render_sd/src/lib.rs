@@ -11,6 +11,22 @@
 //! Depends on `render_tables` (C2) for the table model + render engine and
 //! `render_xhtml` (C3) for the byte-exact composer.
 
+/// An unported render feature. On NATIVE it panics LOUDLY (the dev/parity
+/// discipline — an unported path must never silently render wrong output). On
+/// WASM it DEGRADES to `$fallback` instead, because wasm32-unknown-unknown forces
+/// `panic=abort`: a panic there aborts the WHOLE engine and 404s every later page
+/// of the preview. `$fallback` is the graceful value for the call site (`()` to
+/// skip an optional row, `None`, or a visible placeholder string/node).
+#[macro_export]
+macro_rules! loud_gap {
+    ($fallback:expr, $($arg:tt)*) => {{
+        #[cfg(not(target_arch = "wasm32"))]
+        { panic!($($arg)*) }
+        #[cfg(target_arch = "wasm32")]
+        { $fallback }
+    }};
+}
+
 pub mod aggregates;
 pub mod commonmark;
 pub mod context;

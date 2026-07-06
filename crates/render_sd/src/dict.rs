@@ -460,7 +460,7 @@ impl<'a> DictRenderer<'a> {
                 "This primitive type must have a value (the value must be present, and cannot be replaced by an extension)");
         } else if d.v.get("valueAlternatives").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
             // hasValueAlternatives (SDR:4397): renderCanonicalList(PRIM_TYPE_PRESENT).
-            panic!("LOUD GAP: dict primitive value-alternatives (SDR:4398) for {} ({})", self.sd.id(), d.id());
+            crate::loud_gap!((), "LOUD GAP: dict primitive value-alternatives (SDR:4398) for {} ({})", self.sd.id(), d.id());
         } else if self.has_primitive_types(d) {
             // STRUC_DEF_PRIM_ELE (SDR:4400).
             self.row_text(tbl, "Primitive Value", Some("elementdefinition.html#primitives"),
@@ -593,7 +593,7 @@ impl<'a> DictRenderer<'a> {
         ];
         for (url, tag) in UNPORTED {
             if d.has_extension(url) {
-                panic!("LOUD GAP: dict un-ported row {} ({}) for {} ({})", tag, url, self.sd.id(), d.id());
+                crate::loud_gap!((), "LOUD GAP: dict un-ported row {} ({}) for {} ({})", tag, url, self.sd.id(), d.id());
             }
         }
         // JSON/XML tooling-format extensions (SDR:4492-4503) except XML-representation.
@@ -603,7 +603,7 @@ impl<'a> DictRenderer<'a> {
                 || u.contains("implied-string-prefix") || u.contains("binding-style") || u.contains("extension-style")
                 || u.contains("xml-namespace") || u.contains("xml-name")
             {
-                panic!("LOUD GAP: dict tooling-format row for {} ({}) ext {}", self.sd.id(), d.id(), u);
+                crate::loud_gap!((), "LOUD GAP: dict tooling-format row for {} ({}) ext {}", self.sd.id(), d.id(), u);
             }
         }
     }
@@ -1038,7 +1038,7 @@ impl<'a> DictRenderer<'a> {
         }
         // type parameter extension (SDR:5047) — loud gap.
         if t.v.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|e| e.get("url").and_then(|u| u.as_str()) == Some("http://hl7.org/fhir/tools/StructureDefinition/type-parameter"))).unwrap_or(false) {
-            panic!("LOUD GAP: describeType type-parameter (SDR:5047) for {}", self.sd.id());
+            crate::loud_gap!((), "LOUD GAP: describeType type-parameter (SDR:5047) for {}", self.sd.id());
         }
         // profiles (SDR:5069).
         let has_profile = !t.profiles().is_empty();
@@ -1085,7 +1085,7 @@ impl<'a> DictRenderer<'a> {
             // aggregation (SDR:5101) — loud gap if present.
             let agg = t.v.get("aggregation").and_then(|a| a.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
             if agg {
-                panic!("LOUD GAP: describeType aggregation (SDR:5101) for {}", self.sd.id());
+                crate::loud_gap!((), "LOUD GAP: describeType aggregation (SDR:5101) for {}", self.sd.id());
             }
         }
     }
@@ -1261,7 +1261,7 @@ impl<'a> DictRenderer<'a> {
         }
         // concept-domain extension (SDR:5246) -> loud gap (renderCoding).
         if binding_has_ext(binding, "http://hl7.org/fhir/tools/StructureDefinition/binding-conceptDomain") {
-            panic!("LOUD GAP: describeBinding concept-domain (SDR:5246) for {} ({})", self.sd.id(), d.id());
+            crate::loud_gap!((), "LOUD GAP: describeBinding concept-domain (SDR:5246) for {} ({})", self.sd.id(), d.id());
         }
         // Additional bindings (SDR:5253-5268): max/min ValueSet + additional-binding.
         let show_compare = mode != GEN_MODE_SNAP && mode != GEN_MODE_MS;
@@ -1582,7 +1582,7 @@ impl<'a> DictRenderer<'a> {
             tx(x, ")");
         }
         if version.is_some() {
-            panic!("LOUD GAP: renderCodingWithDetails version note (DataRenderer:1362) for {}", self.sd.id());
+            crate::loud_gap!((), "LOUD GAP: renderCodingWithDetails version note (DataRenderer:1362) for {}", self.sd.id());
         }
     }
 
@@ -1617,7 +1617,7 @@ impl<'a> DictRenderer<'a> {
             Some("http://snomed.info/sct") => {
                 // SnomedUtilities.getSctLink — corpus has snomed codes; fire a
                 // loud gap if hit (the sct link format needs the edition logic).
-                panic!("LOUD GAP: getLinkForCode snomed sct link for {}", self.sd.id());
+                return crate::loud_gap!(None, "LOUD GAP: getLinkForCode snomed sct link for {}", self.sd.id());
             }
             Some(s) => {
                 // getLinkForSystem: CodeSystem webPath (renderCoding uses cs.webPath
@@ -1824,7 +1824,7 @@ impl AdditionalBindings {
         let usage = self.bindings.iter().any(|b| b.has_usage);
         let any = self.bindings.iter().any(|b| b.any);
         if usage {
-            panic!("LOUD GAP: additional-binding usage column (ABR:237)");
+            crate::loud_gap!((), "LOUD GAP: additional-binding usage column (ABR:237)");
         }
         // header row.
         let mut tr = el("tr");

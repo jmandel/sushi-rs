@@ -335,7 +335,7 @@ pub fn md_process(source: &str) -> String {
     // `|` followed by a `---|---` delimiter row) would need the extension — fire a
     // loud gap so it's never silently mis-rendered.
     if has_gfm_table(&pre) {
-        panic!("LOUD GAP: publisher_markdown TablesExtension (MDP:240) — GFM table in markdown source");
+        crate::loud_gap!((), "LOUD GAP: publisher_markdown TablesExtension (MDP:240) — GFM table in markdown source");
     }
     let html = commonmark::render_html(&pre);
     html.replace("<table>", "<table class=\"grid\">")

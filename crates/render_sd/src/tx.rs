@@ -98,7 +98,7 @@ pub fn render_tx(sd: &Sd, ctx: &IgContext, core_path: &str, opts: TxOpts) -> Str
         // zero corpus hits; fire loud rather than silently mis-shape the path.
         let types = ed.types();
         if types.len() == 1 && types[0].working_code() == "Extension" {
-            panic!(
+            crate::loud_gap!((),
                 "LOUD GAP: tx Extension-typed binding element id append (psdr:872) at {}",
                 ed.id()
             );
@@ -176,7 +176,7 @@ fn tx_item(
         })
         .unwrap_or(false)
     {
-        panic!("LOUD GAP: tx version-resolution-method extension (RR:1598 LATEST branch) at {}", id);
+        crate::loud_gap!((), "LOUD GAP: tx version-resolution-method extension (RR:1598 LATEST branch) at {}", id);
     }
 
     // strength + strengthInh (psdr:914-922).
@@ -411,7 +411,7 @@ fn show_version_resolved(
     let stated: Option<String> = uri.and_then(|u| u.split_once('|').map(|(_, v)| v.to_string()));
     match (&stated, actual) {
         (Some(s), Some(a)) if s != a && from_packages => {
-            panic!(
+            crate::loud_gap!((),
                 "LOUD GAP: tx version WILDCARD_BY_PACKAGE branch (RR:1605) stated={} actual={}",
                 s, a
             );
@@ -452,7 +452,7 @@ fn show_version_resolved(
         }
         (None, None) => {
             // tgt != null -> VS_VERSION_NONE (∅ + null text) — zero corpus hits.
-            panic!("LOUD GAP: tx version NONE branch (RR:1637) — resolved VS without version");
+            crate::loud_gap!((), "LOUD GAP: tx version NONE branch (RR:1637) — resolved VS without version");
         }
     }
 }

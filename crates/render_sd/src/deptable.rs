@@ -413,7 +413,7 @@ fn resolve_dep(tree: &dyn crate::tree::TreeSource, cache: &Path, d: &DependsOn) 
     let id = d.package_id.clone().or_else(|| {
         // pcm.getPackageId(uri): not needed for the corpus (all dependsOn carry
         // packageId). Fire a loud gap if a uri-only dep ever appears.
-        d.uri.as_ref().map(|_| panic!("LOUD GAP: dependency uri->packageId lookup (depr:621) not ported"))
+        d.uri.as_ref().and_then(|_| crate::loud_gap!(None::<String>, "LOUD GAP: dependency uri->packageId lookup (depr:621) not ported"))
     })?;
     load_npm(tree, cache, &id, &d.version)
 }
