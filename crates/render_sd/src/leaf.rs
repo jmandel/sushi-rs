@@ -1033,22 +1033,22 @@ fn constraint_key_cmp(a: &str, b: &str) -> std::cmp::Ordering {
             false
         }
     }
-    if matches_dashnum(a) && matches_dashnum(b) {
-        // aStart = substring(0, lastIndexOf("-")-1)  (Java: note the -1)
-        let apos = a.rfind('-').unwrap();
-        let bpos = b.rfind('-').unwrap();
-        let a_start = &a[..apos.saturating_sub(1)];
-        let b_start = &b[..bpos.saturating_sub(1)];
-        if a_start == b_start {
-            let a_end: i64 = a[apos + 1..].parse().unwrap_or(0);
-            let b_end: i64 = b[bpos + 1..].parse().unwrap_or(0);
-            a_end.cmp(&b_end)
+    // Derive a TOTAL sort key. The original comparator switched schemes based on
+    // whether BOTH sides matched `.+-\d+` (numeric suffix), which is non-transitive
+    // — std's sort detects that and PANICS ("comparison not a total order"), which
+    // on wasm aborts the whole engine (e.g. rendering an mCODE bundle profile).
+    // Map each key to (prefix, number) instead and compare keys: dashnum keys group
+    // by their pre-suffix prefix and order numerically; other keys order by their
+    // full string (number sentinel). Key comparison is inherently total.
+    fn sort_key(s: &str) -> (&str, i64) {
+        if matches_dashnum(s) {
+            let pos = s.rfind('-').unwrap();
+            (&s[..pos.saturating_sub(1)], s[pos + 1..].parse().unwrap_or(0))
         } else {
-            a_start.cmp(b_start)
+            (s, i64::MIN)
         }
-    } else {
-        a.cmp(b)
     }
+    sort_key(a).cmp(&sort_key(b))
 }
 
 /// Elements for the given mode.
