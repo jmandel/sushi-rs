@@ -75,4 +75,8 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 opt-level = 3
 lto = "thin"
 codegen-units = 1
+# NOTE: wasm32-unknown-unknown forces panic=abort regardless of this setting, so
+# the render engine's per-fragment `catch_unwind` barriers do NOT contain a panic
+# in the browser — a LOUD-GAP panic aborts the WHOLE wasm engine. Unported render
+# gaps must therefore DEGRADE (return a visible placeholder) rather than panic.
 panic = "abort"

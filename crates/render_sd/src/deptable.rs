@@ -341,11 +341,11 @@ pub fn dependency_table(
     _details: bool,
     _run_uuid: &str,
 ) -> String {
-    panic!(
-        "LOUD GAP: dependency-table/-short (depr:298 render) not ported — needs \
-         HTG inlineGraphics=true tree-line PNG oracle (captured; genImage is \
-         Java ImageIO PNG) + load-graph row-tree + version-comment column"
-    );
+    // Unported (needs the HTG inlineGraphics tree-line PNG oracle). DEGRADE to a
+    // visible placeholder rather than panic: on wasm a panic aborts the WHOLE
+    // engine (wasm32 forces panic=abort, defeating render_fragment's catch_unwind),
+    // which 404s every later page. A missing dependency table is cosmetic.
+    "<p class=\"ig-editor-gap\"><em>(dependency table is not rendered in the in-browser preview)</em></p>\n".to_string()
 }
 
 // ---------------------------------------------------------------------------

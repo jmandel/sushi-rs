@@ -1545,7 +1545,12 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
     // anchors, no version box). Anchors on rows get the "x-" scoped prefix.
     let exp = match tx_cache.expand(vs_url, vs) {
         Some(e) => e,
-        None => panic!("LOUD GAP: expansion cache miss (pg:1562) vs={}", id),
+        // Not cached (needs a terminology server the browser preview doesn't call).
+        // DEGRADE rather than panic — a wasm panic aborts the whole engine.
+        None => {
+            let _ = id;
+            return "<div class=\"ig-editor-gap\"><em>(value set expansion is not available in the in-browser preview)</em></div>".to_string();
+        }
     };
 
     let mut div = narrative_div();
