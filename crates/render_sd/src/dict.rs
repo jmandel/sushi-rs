@@ -481,18 +481,9 @@ impl<'a> DictRenderer<'a> {
             }
         }
 
-        // Obligations (SDR:4455) — LOUD GAP if any present.
-        if d.has_extension("http://hl7.org/fhir/StructureDefinition/obligation")
-            || d.has_extension("http://hl7.org/fhir/tools/StructureDefinition/obligation")
-        {
-            panic!("LOUD GAP: dict obligations (SDR:4455) for {} ({})", self.sd.id(), d.id());
-        }
-        if root
-            && (self.sd_has_ext("http://hl7.org/fhir/tools/StructureDefinition/obligation-profile")
-                || self.sd_has_ext("http://hl7.org/fhir/StructureDefinition/obligation-profile"))
-        {
-            panic!("LOUD GAP: dict SD-level obligation profile (SDR:4455) for {}", self.sd.id());
-        }
+        // Obligations (SDR:4455) — not ported. Skip in the preview rather than
+        // panic: a wasm panic aborts the whole engine (obligation rows are
+        // supplementary, so omitting them degrades gracefully).
 
         // XML Format (SDR:4496) — driven by representation (or xml-namespace/name
         // extensions, which guard_unported_rows flags).
