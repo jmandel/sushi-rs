@@ -48,20 +48,62 @@ fn trim_is_not_a_filter() {
 #[test]
 fn liquid_truthiness() {
     // Only nil and false are falsy; 0 and "" are truthy.
-    assert_eq!(r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::Int(0))]), "T");
-    assert_eq!(r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::str(""))]), "T");
-    assert_eq!(r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::Nil)]), "F");
-    assert_eq!(r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::Bool(false))]), "F");
+    assert_eq!(
+        r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::Int(0))]),
+        "T"
+    );
+    assert_eq!(
+        r(
+            "{% if z %}T{% else %}F{% endif %}",
+            &[("z", Value::str(""))]
+        ),
+        "T"
+    );
+    assert_eq!(
+        r("{% if z %}T{% else %}F{% endif %}", &[("z", Value::Nil)]),
+        "F"
+    );
+    assert_eq!(
+        r(
+            "{% if z %}T{% else %}F{% endif %}",
+            &[("z", Value::Bool(false))]
+        ),
+        "F"
+    );
 }
 
 #[test]
 fn empty_vs_blank_sentinels() {
     // `"" == empty` is true; `"" == blank` is FALSE (Jekyll's plain Liquid has
     // no blank? on strings). `nil == empty` is false. (Verified via oracle.)
-    assert_eq!(r("{% if s == empty %}Y{% else %}N{% endif %}", &[("s", Value::str(""))]), "Y");
-    assert_eq!(r("{% if s == blank %}Y{% else %}N{% endif %}", &[("s", Value::str(""))]), "N");
-    assert_eq!(r("{% if m == empty %}Y{% else %}N{% endif %}", &[("m", Value::Nil)]), "N");
-    assert_eq!(r("{% if a == empty %}Y{% else %}N{% endif %}", &[("a", arr(&[]))]), "Y");
+    assert_eq!(
+        r(
+            "{% if s == empty %}Y{% else %}N{% endif %}",
+            &[("s", Value::str(""))]
+        ),
+        "Y"
+    );
+    assert_eq!(
+        r(
+            "{% if s == blank %}Y{% else %}N{% endif %}",
+            &[("s", Value::str(""))]
+        ),
+        "N"
+    );
+    assert_eq!(
+        r(
+            "{% if m == empty %}Y{% else %}N{% endif %}",
+            &[("m", Value::Nil)]
+        ),
+        "N"
+    );
+    assert_eq!(
+        r(
+            "{% if a == empty %}Y{% else %}N{% endif %}",
+            &[("a", arr(&[]))]
+        ),
+        "Y"
+    );
 }
 
 #[test]
@@ -86,11 +128,17 @@ fn for_loop_and_forloop() {
     // offset + limit
     let nums = arr(&(1..=5).map(Value::Int).collect::<Vec<_>>());
     assert_eq!(
-        r("{% for x in l offset:1 limit:2 %}{{x}}{% endfor %}", &[("l", nums.clone())]),
+        r(
+            "{% for x in l offset:1 limit:2 %}{{x}}{% endfor %}",
+            &[("l", nums.clone())]
+        ),
         "23"
     );
     // reversed
-    assert_eq!(r("{% for x in l reversed %}{{x}}{% endfor %}", &[("l", nums)]), "54321");
+    assert_eq!(
+        r("{% for x in l reversed %}{{x}}{% endfor %}", &[("l", nums)]),
+        "54321"
+    );
     // range
     assert_eq!(r("{% for i in (1..3) %}{{i}}{% endfor %}", &[]), "123");
 }
@@ -99,11 +147,17 @@ fn for_loop_and_forloop() {
 fn break_and_continue() {
     let l = arr(&(1..=4).map(Value::Int).collect::<Vec<_>>());
     assert_eq!(
-        r("{% for x in l %}{% if x == 3 %}{% break %}{% endif %}{{x}}{% endfor %}", &[("l", l.clone())]),
+        r(
+            "{% for x in l %}{% if x == 3 %}{% break %}{% endif %}{{x}}{% endfor %}",
+            &[("l", l.clone())]
+        ),
         "12"
     );
     assert_eq!(
-        r("{% for x in l %}{% if x == 2 %}{% continue %}{% endif %}{{x}}{% endfor %}", &[("l", l)]),
+        r(
+            "{% for x in l %}{% if x == 2 %}{% continue %}{% endif %}{{x}}{% endfor %}",
+            &[("l", l)]
+        ),
         "134"
     );
 }
@@ -118,7 +172,10 @@ fn if_operators_and_boolean() {
     // .size operand + elsif
     let a = arr(&[Value::str("x"), Value::str("y"), Value::str("z")]);
     assert_eq!(
-        r("{% if a.size > 2 %}big{% elsif a.size == 2 %}two{% else %}small{% endif %}", &[("a", a)]),
+        r(
+            "{% if a.size > 2 %}big{% elsif a.size == 2 %}two{% else %}small{% endif %}",
+            &[("a", a)]
+        ),
         "big"
     );
 }
@@ -127,19 +184,37 @@ fn if_operators_and_boolean() {
 fn unless_with_contains_is_negated_correctly() {
     // Regression: `unless X contains "!"` must NOT be mis-inverted into
     // `if X contains "!"` (US Core screening-and-assessments).
-    assert_eq!(r("{% unless s contains '!' %}Y{% else %}N{% endunless %}", &[("s", Value::str("clean"))]), "Y");
-    assert_eq!(r("{% unless s contains '!' %}Y{% else %}N{% endunless %}", &[("s", Value::str("bad!"))]), "N");
+    assert_eq!(
+        r(
+            "{% unless s contains '!' %}Y{% else %}N{% endunless %}",
+            &[("s", Value::str("clean"))]
+        ),
+        "Y"
+    );
+    assert_eq!(
+        r(
+            "{% unless s contains '!' %}Y{% else %}N{% endunless %}",
+            &[("s", Value::str("bad!"))]
+        ),
+        "N"
+    );
 }
 
 #[test]
 fn case_when() {
     assert_eq!(
-        r("{% case x %}{% when 'a' %}A{% when 'b' %}B{% else %}O{% endcase %}", &[("x", Value::str("b"))]),
+        r(
+            "{% case x %}{% when 'a' %}A{% when 'b' %}B{% else %}O{% endcase %}",
+            &[("x", Value::str("b"))]
+        ),
         "B"
     );
     // comma / or separated
     assert_eq!(
-        r("{% case x %}{% when 'a', 'b' %}AB{% else %}O{% endcase %}", &[("x", Value::str("b"))]),
+        r(
+            "{% case x %}{% when 'a', 'b' %}AB{% else %}O{% endcase %}",
+            &[("x", Value::str("b"))]
+        ),
         "AB"
     );
 }
@@ -152,13 +227,33 @@ fn where_map_sort_uniq() {
         hash(&[("a", Value::str("3")), ("b", Value::str("x"))]),
     ]);
     assert_eq!(
-        r("{% assign m = rows | where: 'b', 'x' | first %}{{ m.a }}", &[("rows", rows.clone())]),
+        r(
+            "{% assign m = rows | where: 'b', 'x' | first %}{{ m.a }}",
+            &[("rows", rows.clone())]
+        ),
         "1"
     );
-    assert_eq!(r("{{ rows | where: 'b','x' | size }}", &[("rows", rows.clone())]), "2");
-    assert_eq!(r("{{ rows | map: 'a' | join: ',' }}", &[("rows", rows)]), "1,2,3");
-    let dups = arr(&[Value::str("b"), Value::str("a"), Value::str("b"), Value::str("c")]);
-    assert_eq!(r("{{ d | uniq | join: ',' }}", &[("d", dups.clone())]), "b,a,c");
+    assert_eq!(
+        r(
+            "{{ rows | where: 'b','x' | size }}",
+            &[("rows", rows.clone())]
+        ),
+        "2"
+    );
+    assert_eq!(
+        r("{{ rows | map: 'a' | join: ',' }}", &[("rows", rows)]),
+        "1,2,3"
+    );
+    let dups = arr(&[
+        Value::str("b"),
+        Value::str("a"),
+        Value::str("b"),
+        Value::str("c"),
+    ]);
+    assert_eq!(
+        r("{{ d | uniq | join: ',' }}", &[("d", dups.clone())]),
+        "b,a,c"
+    );
     assert_eq!(r("{{ d | sort | join: ',' }}", &[("d", dups)]), "a,b,b,c");
 }
 
@@ -204,7 +299,10 @@ fn raw_preserves_exact_spacing() {
     // Regression (smart/app-launch): raw must preserve the ORIGINAL inner bytes,
     // e.g. `{{access_token}}` (no spaces) must NOT become `{{ access_token }}`.
     assert_eq!(
-        r("X{% raw %}{{access_token}} {%if y%}z{%endif%}{% endraw %}Y", &[]),
+        r(
+            "X{% raw %}{{access_token}} {%if y%}z{%endif%}{% endraw %}Y",
+            &[]
+        ),
         "X{{access_token}} {%if y%}z{%endif%}Y"
     );
 }
@@ -218,7 +316,10 @@ fn raw_publisher_quirk_evaluates_inner() {
         "X{% raw %}{{ bar }}{% endraw %}Y",
         &p,
         &[("bar", Value::str("Z"))],
-        Options { publisher_raw_quirk: true, ..Options::default() },
+        Options {
+            publisher_raw_quirk: true,
+            ..Options::default()
+        },
     );
     assert_eq!(out, "XZY");
 }
@@ -226,7 +327,13 @@ fn raw_publisher_quirk_evaluates_inner() {
 #[test]
 fn assign_capture_comment() {
     assert_eq!(r("{% assign x = 'v' %}{{ x }}", &[]), "v");
-    assert_eq!(r("{% capture c %}a{{ n }}b{% endcapture %}{{ c }}", &[("n", Value::Int(1))]), "a1b");
+    assert_eq!(
+        r(
+            "{% capture c %}a{{ n }}b{% endcapture %}{{ c }}",
+            &[("n", Value::Int(1))]
+        ),
+        "a1b"
+    );
     assert_eq!(r("A{% comment %}hidden{% endcomment %}B", &[]), "AB");
 }
 
@@ -282,14 +389,20 @@ fn site_data_deep_mixed_access() {
             None
         }
     }
-    let out = render_with("{{ site.data.d.parameter[1].part.[0].x }}", &P, &[], Options::default());
+    let out = render_with(
+        "{{ site.data.d.parameter[1].part.[0].x }}",
+        &P,
+        &[],
+        Options::default(),
+    );
     assert_eq!(out, "B");
 }
 
 #[test]
 fn parameterized_include_with_include_dot() {
     let mut p = JsonProvider::new();
-    p.includes.insert("greet.md".into(), "Hello, {{ include.who }}!".into());
+    p.includes
+        .insert("greet.md".into(), "Hello, {{ include.who }}!".into());
     let out = render_with(
         r#"{% include greet.md who="World" %}"#,
         &p,
@@ -305,8 +418,12 @@ fn paramless_nested_include_inherits_parent_include_hash() {
     // a param-less nested include inherits the parent's include.* (US Core
     // observation_guidance_1 -> obs_cat_guidance reads include.category).
     let mut p = JsonProvider::new();
-    p.includes.insert("child.md".into(), "[{{ include.category }}]".into());
-    p.includes.insert("parent.md".into(), "{{ include.category }}{% include child.md %}".into());
+    p.includes
+        .insert("child.md".into(), "[{{ include.category }}]".into());
+    p.includes.insert(
+        "parent.md".into(),
+        "{{ include.category }}{% include child.md %}".into(),
+    );
     let out = render_with(
         r#"{% include parent.md category="LAB" %}"#,
         &p,
@@ -333,16 +450,25 @@ fn dynamic_include_name() {
 fn index_with_filter_and_dynamic_key() {
     // `item["title" | trim]` -> item.title (trim no-op). Verified via oracle.
     let item = hash(&[("title", Value::str("T"))]);
-    assert_eq!(r("{{ item['title' | trim ] }}", &[("item", item.clone())]), "T");
+    assert_eq!(
+        r("{{ item['title' | trim ] }}", &[("item", item.clone())]),
+        "T"
+    );
     // dynamic key from a variable
-    assert_eq!(r("{% assign k = 'title' %}{{ item[k] }}", &[("item", item)]), "T");
+    assert_eq!(
+        r("{% assign k = 'title' %}{{ item[k] }}", &[("item", item)]),
+        "T"
+    );
 }
 
 #[test]
 fn nested_braces_in_tag() {
     // `{% assign x = {{v}} | append: 'y' %}` interpolates {{v}} (Jekyll quirk).
     assert_eq!(
-        r("{% assign x = {{ v }} | append: 'y' %}{{ x }}", &[("v", Value::str("http://a/"))]),
+        r(
+            "{% assign x = {{ v }} | append: 'y' %}{{ x }}",
+            &[("v", Value::str("http://a/"))]
+        ),
         "http://a/y"
     );
 }
@@ -357,9 +483,24 @@ fn parenthesized_boolean_grouping() {
     let t = "{% if a and (b or c) %}Y{% else %}N{% endif %}";
     let tv = Value::str("x");
     // a truthy, b truthy, c nil -> (b or c) true -> Y
-    assert_eq!(r(t, &[("a", tv.clone()), ("b", tv.clone()), ("c", Value::Nil)]), "Y");
+    assert_eq!(
+        r(
+            t,
+            &[("a", tv.clone()), ("b", tv.clone()), ("c", Value::Nil)]
+        ),
+        "Y"
+    );
     // a truthy, b nil, c nil -> (b or c) false -> N
-    assert_eq!(r(t, &[("a", tv.clone()), ("b", Value::Nil), ("c", Value::Nil)]), "N");
+    assert_eq!(
+        r(
+            t,
+            &[("a", tv.clone()), ("b", Value::Nil), ("c", Value::Nil)]
+        ),
+        "N"
+    );
     // a nil -> false regardless -> N
-    assert_eq!(r(t, &[("a", Value::Nil), ("b", tv.clone()), ("c", tv)]), "N");
+    assert_eq!(
+        r(t, &[("a", Value::Nil), ("b", tv.clone()), ("c", tv)]),
+        "N"
+    );
 }

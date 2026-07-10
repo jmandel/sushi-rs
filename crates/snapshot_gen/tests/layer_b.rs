@@ -38,11 +38,8 @@ fn resolver_gates_by_resource_type_and_version() {
     // VS canonical resolves to a ValueSet with version 4.0.1 (Layer A's SD-only
     // index cannot see this; the opt-in resolver can).
     assert_eq!(
-        pkg.resolve_canonical_version(
-            "http://hl7.org/fhir/ValueSet/observation-codes",
-            "ValueSet"
-        )
-        .as_deref(),
+        pkg.resolve_canonical_version("http://hl7.org/fhir/ValueSet/observation-codes", "ValueSet")
+            .as_deref(),
         Some("4.0.1"),
         "core observation-codes VS resolves to 4.0.1"
     );
@@ -221,5 +218,8 @@ fn projection_round_trip_recovers_r4_artifact_fields() {
     let ekeys: Vec<&str> = ed.as_object().unwrap().keys().map(String::as_str).collect();
     let ms = ekeys.iter().position(|k| *k == "mustSupport").unwrap();
     let im = ekeys.iter().position(|k| *k == "isModifier").unwrap();
-    assert!(ms < im, "R4 order: mustSupport before isModifier ({ekeys:?})");
+    assert!(
+        ms < im,
+        "R4 order: mustSupport before isModifier ({ekeys:?})"
+    );
 }

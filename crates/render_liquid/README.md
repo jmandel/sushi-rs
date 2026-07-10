@@ -1,10 +1,20 @@
-# render_liquid — just-enough Jekyll/Liquid (T1+T2) at Publisher parity
+# render_liquid — native Publisher-template Liquid
 
-Task **F1c** of `docs/stock-template-renderer-plan.md`. A standalone Rust crate
-(its own `[workspace]`; the root workspace is untouched) that interprets the
-Liquid subset the FHIR IG Publisher actually runs, matching
-**Jekyll 4.4.1 / Liquid 4.0.4** byte-for-byte on the survey cutline **plus the
-US-Core T2 layer** (Josh's 2026-07-03 scope decision).
+This Rust workspace crate interprets the Liquid subset used by native Publisher
+templates, matching **Jekyll 4.4.1 / Liquid 4.0.4** byte-for-byte on the measured
+survey cutline plus the US Core T2 layer. It began as task F1c of the now
+historical `docs/stock-template-renderer-plan.md`; the current composition is
+documented in the repository README and `docs/hosting.md`.
+
+`render_liquid` powers both `fig` native Publisher rendering and the WASM stock
+template surface (`Session.renderPage` / `Session.renderLiquid`). It is a member
+of the root Rust workspace, not a standalone workspace.
+
+It does **not** power Cycle. The Cycle external builder intentionally uses
+LiquidJS through one shared Cycle content implementation for both its native CLI
+and browser renderer. Thus the overall stack has two Liquid implementations,
+one per renderer architecture, rather than two competing implementations of the
+same native path.
 
 When Jekyll's Liquid diverges from the Shopify spec, **Jekyll wins** — every such
 case is pinned by the oracle (`scripts/liquid-oracle.rb`), not docs.
@@ -13,7 +23,7 @@ case is pinned by the oracle (`scripts/liquid-oracle.rb`), not docs.
 
 ```
 crates/render_liquid/
-  Cargo.toml            # OWN [workspace]; does not touch root Cargo.toml
+  Cargo.toml            # crate manifest; versions/dependencies come from root workspace
   src/
     value.rs            # Value model + EXACT truthiness/coercion/compare/to_s
     lexer.rs            # {{ }} / {% %} tokenizer + whitespace control (-%}),
@@ -28,7 +38,7 @@ crates/render_liquid/
     lib.rs              # public API `render_with(...)` + `tag_registry()`
     bin/render.rs       # CLI mirroring the oracle, for the differential gate
   tests/
-    semantics.rs        # 23 unit tests pinning load-bearing behaviors
+    semantics.rs        # unit tests pinning load-bearing behaviors
     fixtures/           # 34 synthetic per-construct fixtures (+contexts)
     corpus/             # gate manifest + generated contexts/overlays
 scripts/
@@ -41,8 +51,8 @@ scripts/
 
 ## The `DataProvider` seam
 
-T1's dynamic surfaces are served through a trait so the same engine is backed by
-an in-memory context today and `site.db` later (F5):
+Dynamic lookups are supplied through a small synchronous trait. The crate has no
+filesystem, database, compiler, or `SiteBuild` dependency:
 
 ```rust
 pub trait DataProvider {
@@ -57,6 +67,18 @@ pub trait DataProvider {
 ```rust
 let out = render_liquid::render_with(src, &provider, &[("page", page_value)], Options::default());
 ```
+
+In the native page stack, `render_page::PageProvider` implements this trait over
+the mounted `_data` and include trees. A registered Publisher fragment name may
+cross a separate, explicit boundary in `render_page`: the legacy filename is
+translated to a typed `site_build::ArtifactKey`, resolved by an
+`ArtifactResolver`, cached by that key, and recorded in `PageArtifactReadSet`.
+This crate only asks its provider for include source; it does not know whether a
+caller served an ordinary file or a typed materialized artifact.
+
+`site.db` is not the backing model for this trait. In the current architecture it
+is one compatibility artifact for the closed Cycle render target. Native
+Publisher `site.data.*` comes from the produced/mounted `_data` model.
 
 ## Scope (what's IN)
 
@@ -87,15 +109,17 @@ The Java Publisher evaluates `{% fragment %}`/`{% include %}` even inside
 (raw verbatim); set `Options { publisher_raw_quirk: true }` to reproduce the wart
 (the raw body is re-parsed + evaluated). Documented in `tag_registry()`.
 
-## Out of scope (fail-loud / emit-nothing, not silently mis-rendered)
+## Out of scope (handled by a surrounding layer or rejected)
 
-- **Artifact `.xhtml` includes** (dependency-table, globals-table,
-  cross-version-analysis, ip-statements, expansion-params, table-*, …) — these
-  are Publisher-generated fragments, the `page`/fragment crate's job (F4/F5).
+- **Producing artifact `.xhtml` includes** (dependency-table, globals-table,
+  cross-version-analysis, ip-statements, expansion-params, table-*, …) — the
+  outer native page provider's typed artifact resolver owns production.
 - **Example-resource includes** (`{% include(_relative) X.json|xml %}` of
-  checked-in/Publisher example instances).
-- `{% sql %}` / `{% sqlToData %}` — IG-Guidance/genomics extension (survey (d));
-  plain Jekyll can't parse them either.
+  checked-in/Publisher example instances) unless the provider supplies them as
+  ordinary include files.
+- `{% sql %}` / `{% sqlToData %}` — not part of native Publisher Liquid. Cycle's
+  separate LiquidJS implementation may explicitly inject legacy read-only SQL
+  in its trusted native CLI; portable/browser Cycle mode does not.
 - `highlight` / `tablerow` / `cycle` — measured **zero** in the corpus.
 - Layout inheritance / `{% layout %}` — the `page` crate (F5), not Liquid-core.
 
@@ -126,5 +150,5 @@ UNEXPLAINED            :   0
 ```
 
 Every residual diff is an accounted out-of-scope class; **0 unexplained on the
-cutline**. Plus 25 `cargo test` unit tests and 34 synthetic fixtures, all
-byte-equal to the oracle.
+cutline**. The `cargo test -p render_liquid` and 34 synthetic-fixture commands
+above are the authoritative current gates rather than a duplicated test count.

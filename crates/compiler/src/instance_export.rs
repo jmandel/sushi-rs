@@ -7,7 +7,9 @@
 use crate::config::Config;
 use crate::sd_export::SdContext;
 use fhir_model::{Fisher, StructureDefinition};
-use fsh_model::{FshCode, FshDocument, FshQuantity, FshReference, Instance, Rule, Value as FshValue};
+use fsh_model::{
+    FshCode, FshDocument, FshQuantity, FshReference, Instance, Rule, Value as FshValue,
+};
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value as J};
 use std::collections::HashMap;
@@ -38,7 +40,11 @@ fn parse_ipath(path: &str) -> Vec<IPathPart> {
 /// `getArrayIndex` — last bracket parsed as a non-negative int.
 fn get_array_index(p: &IPathPart) -> Option<i64> {
     let last = p.brackets.last()?;
-    if last.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '+') && !last.is_empty() {
+    if last
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == '-' || c == '+')
+        && !last.is_empty()
+    {
         if let Ok(n) = last.parse::<i64>() {
             if n >= 0 {
                 return Some(n);
@@ -94,7 +100,10 @@ fn is_primitive_code(code: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 fn el_min(sd: &StructureDefinition, idx: usize) -> i64 {
-    sd.elements[idx].get("min").and_then(|v| v.as_i64()).unwrap_or(0)
+    sd.elements[idx]
+        .get("min")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
 }
 fn el_max<'a>(sd: &'a StructureDefinition, idx: usize) -> Option<&'a str> {
     sd.elements[idx].get("max").and_then(|v| v.as_str())
@@ -178,14 +187,23 @@ impl StructIndex {
                     inner.children[p].push(j);
                 }
             }
-            inner.by_path.entry(e.path().to_string()).or_default().push(j);
+            inner
+                .by_path
+                .entry(e.path().to_string())
+                .or_default()
+                .push(j);
         }
         inner.len = n;
     }
 
     fn children(&self, sd: &StructureDefinition, idx: usize) -> Vec<usize> {
         self.ensure(sd);
-        self.inner.borrow().children.get(idx).cloned().unwrap_or_default()
+        self.inner
+            .borrow()
+            .children
+            .get(idx)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn slices(&self, sd: &StructureDefinition, idx: usize) -> Vec<usize> {
@@ -365,7 +383,12 @@ fn tokenize_xhtml(input: &str) -> Vec<XTok> {
                 }
                 let end = (j + 3).min(n);
                 let raw: String = chars[i..end].iter().collect();
-                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                toks.push(XTok {
+                    kind: TokKind::Comment,
+                    rendered: raw,
+                    name: String::new(),
+                    unary: false,
+                });
                 i = end;
                 continue;
             }
@@ -377,7 +400,12 @@ fn tokenize_xhtml(input: &str) -> Vec<XTok> {
                 }
                 let end = (j + 1).min(n);
                 let raw: String = chars[i..end].iter().collect();
-                toks.push(XTok { kind: TokKind::Comment, rendered: raw, name: String::new(), unary: false });
+                toks.push(XTok {
+                    kind: TokKind::Comment,
+                    rendered: raw,
+                    name: String::new(),
+                    unary: false,
+                });
                 i = end;
                 continue;
             }
@@ -406,11 +434,21 @@ fn tokenize_xhtml(input: &str) -> Vec<XTok> {
             let raw: String = chars[i..=j.min(n - 1)].iter().collect();
             let name = tag_element_name(&raw);
             if is_end {
-                toks.push(XTok { kind: TokKind::End, rendered: String::new(), name, unary: false });
+                toks.push(XTok {
+                    kind: TokKind::End,
+                    rendered: String::new(),
+                    name,
+                    unary: false,
+                });
             } else {
                 let body = raw.strip_suffix('>').unwrap_or(&raw);
                 let unary = body.trim_end().ends_with('/') || is_void_element(&name);
-                toks.push(XTok { kind: TokKind::Start, rendered: rewrite_tag_quotes(&raw), name, unary });
+                toks.push(XTok {
+                    kind: TokKind::Start,
+                    rendered: rewrite_tag_quotes(&raw),
+                    name,
+                    unary,
+                });
             }
             i = j + 1;
         } else {
@@ -419,7 +457,12 @@ fn tokenize_xhtml(input: &str) -> Vec<XTok> {
                 j += 1;
             }
             let raw: String = chars[i..j].iter().collect();
-            toks.push(XTok { kind: TokKind::Text, rendered: raw, name: String::new(), unary: false });
+            toks.push(XTok {
+                kind: TokKind::Text,
+                rendered: raw,
+                name: String::new(),
+                unary: false,
+            });
             i = j;
         }
     }
@@ -826,8 +869,23 @@ fn can_collapse_ws(tag: &str) -> bool {
 fn is_void_element(name: &str) -> bool {
     matches!(
         name,
-        "area" | "base" | "basefont" | "br" | "col" | "embed" | "frame" | "hr" | "img"
-            | "input" | "isindex" | "keygen" | "link" | "meta" | "param" | "source" | "track"
+        "area"
+            | "base"
+            | "basefont"
+            | "br"
+            | "col"
+            | "embed"
+            | "frame"
+            | "hr"
+            | "img"
+            | "input"
+            | "isindex"
+            | "keygen"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
             | "wbr"
     )
 }
@@ -836,11 +894,47 @@ fn is_void_element(name: &str) -> bool {
 fn is_inline_tag(name: &str) -> bool {
     matches!(
         name,
-        "a" | "abbr" | "acronym" | "b" | "bdi" | "bdo" | "big" | "button" | "cite" | "code"
-            | "del" | "dfn" | "em" | "font" | "i" | "ins" | "kbd" | "label" | "mark" | "math"
-            | "nobr" | "object" | "q" | "rp" | "rt" | "rtc" | "ruby" | "s" | "samp" | "select"
-            | "small" | "span" | "strike" | "strong" | "sub" | "sup" | "svg" | "textarea"
-            | "time" | "tt" | "u" | "var"
+        "a" | "abbr"
+            | "acronym"
+            | "b"
+            | "bdi"
+            | "bdo"
+            | "big"
+            | "button"
+            | "cite"
+            | "code"
+            | "del"
+            | "dfn"
+            | "em"
+            | "font"
+            | "i"
+            | "ins"
+            | "kbd"
+            | "label"
+            | "mark"
+            | "math"
+            | "nobr"
+            | "object"
+            | "q"
+            | "rp"
+            | "rt"
+            | "rtc"
+            | "ruby"
+            | "s"
+            | "samp"
+            | "select"
+            | "small"
+            | "span"
+            | "strike"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "svg"
+            | "textarea"
+            | "time"
+            | "tt"
+            | "u"
+            | "var"
     )
 }
 
@@ -848,9 +942,31 @@ fn is_inline_tag(name: &str) -> bool {
 fn is_inline_text_tag(name: &str) -> bool {
     matches!(
         name,
-        "a" | "abbr" | "acronym" | "b" | "big" | "del" | "em" | "font" | "i" | "ins" | "kbd"
-            | "mark" | "nobr" | "rp" | "s" | "samp" | "small" | "span" | "strike" | "strong"
-            | "sub" | "sup" | "time" | "tt" | "u" | "var"
+        "a" | "abbr"
+            | "acronym"
+            | "b"
+            | "big"
+            | "del"
+            | "em"
+            | "font"
+            | "i"
+            | "ins"
+            | "kbd"
+            | "mark"
+            | "nobr"
+            | "rp"
+            | "s"
+            | "samp"
+            | "small"
+            | "span"
+            | "strike"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "time"
+            | "tt"
+            | "u"
+            | "var"
     )
 }
 
@@ -925,7 +1041,9 @@ fn num_json(f: f64) -> J {
     if f.fract() == 0.0 && f.abs() < 1e15 {
         J::Number((f as i64).into())
     } else {
-        serde_json::Number::from_f64(f).map(J::Number).unwrap_or(J::Null)
+        serde_json::Number::from_f64(f)
+            .map(J::Number)
+            .unwrap_or(J::Null)
     }
 }
 
@@ -995,9 +1113,7 @@ fn coerce_value(
         }
         FshValue::Canonical(c) => {
             // Resolve canonical url from the entity metadata.
-            let mut url = c
-                .entity_name
-                .clone();
+            let mut url = c.entity_name.clone();
             if let Some(meta) = fisher.fish_for_metadata(&c.entity_name) {
                 if let Some(u) = meta.url {
                     url = u;
@@ -1148,7 +1264,8 @@ fn validate_value_at_path(
         if current_idx.is_none() && path_parts[i].base == "resourceType" {
             if let (Some(FshValue::Str(s)), Some(prev)) = (value, previous_idx) {
                 let prev_types = el_type_codes(sd, prev);
-                if prev_types.len() == 1 && is_inherited_resource(s, &prev_types[0], fisher, false) {
+                if prev_types.len() == 1 && is_inherited_resource(s, &prev_types[0], fisher, false)
+                {
                     return Some(Validated {
                         assigned_value: Some(J::String(s.clone())),
                         path_parts,
@@ -1206,10 +1323,14 @@ fn validate_value_at_path(
             .and_then(|b| b.get("max"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        let base_is_array =
-            base_max.as_deref().map(|m| m != "0" && m != "1").unwrap_or(false);
-        let current_is_array =
-            max.as_deref().map(|m| m != "0" && m != "1").unwrap_or(false);
+        let base_is_array = base_max
+            .as_deref()
+            .map(|m| m != "0" && m != "1")
+            .unwrap_or(false);
+        let current_is_array = max
+            .as_deref()
+            .map(|m| m != "0" && m != "1")
+            .unwrap_or(false);
         if base_is_array && (array_index.is_none() || !current_is_array) {
             path_parts[i].brackets.push("0".to_string());
         }
@@ -1390,11 +1511,7 @@ fn set_prop_rec(current: &mut J, parts: &[IPathPart], i: usize, assigned_value: 
                 let mirror = obj
                     .get(&format!("_{}", pp.base))
                     .and_then(|v| v.as_array())
-                    .map(|a| {
-                        a.iter()
-                            .map(|x| sliceish(x))
-                            .collect::<Vec<J>>()
-                    })
+                    .map(|a| a.iter().map(|x| sliceish(x)).collect::<Vec<J>>())
                     .unwrap_or_default();
                 obj.insert(pp.base.clone(), J::Array(mirror));
             }
@@ -1413,7 +1530,11 @@ fn set_prop_rec(current: &mut J, parts: &[IPathPart], i: usize, assigned_value: 
 
         // Resolve slice index → absolute index.
         if let Some(sn) = &slice_name {
-            let base_arr_key = if pp.primitive { pp.base.clone() } else { key.clone() };
+            let base_arr_key = if pp.primitive {
+                pp.base.clone()
+            } else {
+                key.clone()
+            };
             let mut slice_indices: Vec<usize> = Vec::new();
             if let Some(arr) = obj.get(&base_arr_key).and_then(|v| v.as_array()) {
                 for (ii, el) in arr.iter().enumerate() {
@@ -1424,7 +1545,11 @@ fn set_prop_rec(current: &mut J, parts: &[IPathPart], i: usize, assigned_value: 
                     }
                 }
             }
-            let arr_len = obj.get(&key).and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+            let arr_len = obj
+                .get(&key)
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
             if (index as usize) >= slice_indices.len() {
                 index = index - slice_indices.len() as i64 + arr_len as i64;
             } else {
@@ -1475,7 +1600,9 @@ fn set_prop_rec(current: &mut J, parts: &[IPathPart], i: usize, assigned_value: 
             }
         }
     } else if !last {
-        let child = obj.entry(key.clone()).or_insert_with(|| J::Object(Map::new()));
+        let child = obj
+            .entry(key.clone())
+            .or_insert_with(|| J::Object(Map::new()));
         set_prop_rec(child, parts, i + 1, assigned_value);
     } else {
         // scalar leaf
@@ -1511,12 +1638,26 @@ fn sliceish(x: &J) -> J {
     }
 }
 
-fn grow_array(obj: &mut Map<String, J>, pp: &IPathPart, key: &str, index: usize, slice_name: Option<&str>) {
-    let cur_len = obj.get(key).and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0);
+fn grow_array(
+    obj: &mut Map<String, J>,
+    pp: &IPathPart,
+    key: &str,
+    index: usize,
+    slice_name: Option<&str>,
+) {
+    let cur_len = obj
+        .get(key)
+        .and_then(|v| v.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
     for j in 0..=index {
         if j < cur_len && j == index {
             // already exists; ensure non-null object if currently null
-            let is_null = obj.get(key).and_then(|v| v.as_array()).map(|a| a[j].is_null()).unwrap_or(true);
+            let is_null = obj
+                .get(key)
+                .and_then(|v| v.as_array())
+                .map(|a| a[j].is_null())
+                .unwrap_or(true);
             if is_null {
                 if pp.primitive {
                     set_arr_if_null(obj, &pp.base, j, J::Object(Map::new()));
@@ -1587,18 +1728,17 @@ fn assign_complex_value(current: &mut J, assigned: &J) {
                     }
                 } else {
                     let ao = ae.as_object().unwrap();
-                    let perfect = cur.iter().any(|ce| {
-                        !ce.is_null()
-                            && ao.iter().all(|(k, v)| ce.get(k) == Some(v))
-                    });
+                    let perfect = cur
+                        .iter()
+                        .any(|ce| !ce.is_null() && ao.iter().all(|(k, v)| ce.get(k) == Some(v)));
                     if !perfect {
                         // partial match: a (possibly null) element where every
                         // assigned key is null or equal.
                         let partial = cur.iter().position(|ce| {
                             ce.is_null()
-                                || ao.iter().all(|(k, v)| {
-                                    ce.get(k).map(|c| c == v).unwrap_or(true)
-                                })
+                                || ao
+                                    .iter()
+                                    .all(|(k, v)| ce.get(k).map(|c| c == v).unwrap_or(true))
                         });
                         if let Some(p) = partial {
                             if cur[p].is_null() {
@@ -1683,8 +1823,7 @@ fn join_seg(base: &str, seg: &str) -> String {
 /// `p == base || p.starts_with(&format!("{base}."))` with no allocation: `p`
 /// equals `base` or is a deeper path (`base` immediately followed by `.`).
 fn path_eq_or_under(p: &str, base: &str) -> bool {
-    p == base
-        || (p.len() > base.len() && p.as_bytes()[base.len()] == b'.' && p.starts_with(base))
+    p == base || (p.len() > base.len() && p.as_bytes()[base.len()] == b'.' && p.starts_with(base))
 }
 
 /// Build slice tree counts feeding `effective_mins` (sliceTree.ts).
@@ -1729,7 +1868,12 @@ fn slice_tree_sum(node: &SliceNode) -> i64 {
     node.count + node.children.iter().map(slice_tree_sum).sum::<i64>()
 }
 
-fn calc_slice_tree(sd: &StructureDefinition, node: &mut SliceNode, known: &HashMap<String, i64>, key_start: &str) {
+fn calc_slice_tree(
+    sd: &StructureDefinition,
+    node: &mut SliceNode,
+    known: &HashMap<String, i64>,
+    key_start: &str,
+) {
     for c in &mut node.children {
         calc_slice_tree(sd, c, known, key_start);
     }
@@ -1751,7 +1895,12 @@ fn reslice_brackets(seg: &str) -> String {
     }
 }
 
-fn collect_effective_mins(sd: &StructureDefinition, node: &SliceNode, trace_path: &str, out: &mut HashMap<String, i64>) {
+fn collect_effective_mins(
+    sd: &StructureDefinition,
+    node: &SliceNode,
+    trace_path: &str,
+    out: &mut HashMap<String, i64>,
+) {
     let mut trace_key = trace_path.to_string();
     let sn = el_slice_name(sd, node.idx);
     let base_path = sd.elements[node.idx]
@@ -1924,8 +2073,10 @@ fn set_implied_properties_on_instance(
                 }
             }
             // children
-            let children: Vec<String> =
-                children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
+            let children: Vec<String> = children_direct(sd, cur_idx, &ix)
+                .iter()
+                .map(|&i| el_id(sd, i))
+                .collect();
             let mut existing_slice_count = 0i64;
             if final_min < cur_min && el_slice_name(sd, cur_idx).is_none() {
                 for s in get_slices(sd, cur_idx, &ix) {
@@ -1965,15 +2116,20 @@ fn set_implied_properties_on_instance(
                     requirement_roots.insert(trace_path.clone(), current.requirement_root.clone());
                 }
             }
-            let mut children: Vec<String> =
-                children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
+            let mut children: Vec<String> = children_direct(sd, cur_idx, &ix)
+                .iter()
+                .map(|&i| el_id(sd, i))
+                .collect();
             let is_assigned_resource = matching_idx
                 .map(|m| assigned_resource_paths.contains(&paths[m]))
                 .unwrap_or(false);
             if children.is_empty() && !is_assigned_resource {
                 sd.unfold_by_id(&current.id, fisher);
                 let cur_idx = sd.find_element(&current.id).unwrap();
-                children = children_direct(sd, cur_idx, &ix).iter().map(|&i| el_id(sd, i)).collect();
+                children = children_direct(sd, cur_idx, &ix)
+                    .iter()
+                    .map(|&i| el_id(sd, i))
+                    .collect();
             }
             let child_hist = join_seg(&current.history, &next_trace);
             let ghost = matching_idx.is_none();
@@ -2003,7 +2159,11 @@ fn set_implied_properties_on_instance(
     }
 
     let value_for = |k: &str| -> Option<J> {
-        sd_rule_map.iter().rev().find(|(p, _)| p == k).map(|(_, v)| v.clone())
+        sd_rule_map
+            .iter()
+            .rev()
+            .find(|(p, _)| p == k)
+            .map(|(_, v)| v.clone())
     };
 
     for path in sorted {
@@ -2138,9 +2298,7 @@ fn stable_sort_rule_paths(
         let a_root = roots.get(a).cloned().unwrap_or_default();
         let b_root = roots.get(b).cloned().unwrap_or_default();
         if a_root == b_root {
-            let first_rule = rule_paths
-                .iter()
-                .find(|p| path_eq_or_under(p, &a_root));
+            let first_rule = rule_paths.iter().find(|p| path_eq_or_under(p, &a_root));
             if let Some(fr) = first_rule {
                 let fr_split = crate::paths::split_on_path_periods_borrowed(fr);
                 let a_split = crate::paths::split_on_path_periods_borrowed(a);
@@ -2170,12 +2328,8 @@ fn stable_sort_rule_paths(
             }
             return Ordering::Equal;
         }
-        let first_a = rule_paths
-            .iter()
-            .position(|p| path_eq_or_under(p, &a_root));
-        let first_b = rule_paths
-            .iter()
-            .position(|p| path_eq_or_under(p, &b_root));
+        let first_a = rule_paths.iter().position(|p| path_eq_or_under(p, &a_root));
+        let first_b = rule_paths.iter().position(|p| path_eq_or_under(p, &b_root));
         if first_a == first_b {
             return b_root.len().cmp(&a_root.len());
         }
@@ -2281,13 +2435,19 @@ fn create_useful_slices(
                 let obj = ensure_obj(current);
                 // ensure arrays exist
                 if pp.primitive {
-                    obj.entry(pp.base.clone()).or_insert_with(|| J::Array(vec![]));
-                    obj.entry(format!("_{}", pp.base)).or_insert_with(|| J::Array(vec![]));
+                    obj.entry(pp.base.clone())
+                        .or_insert_with(|| J::Array(vec![]));
+                    obj.entry(format!("_{}", pp.base))
+                        .or_insert_with(|| J::Array(vec![]));
                 } else {
                     obj.entry(key.clone()).or_insert_with(|| J::Array(vec![]));
                 }
                 let slice_name_s = get_slice_name(pp);
-                let slice_name = if slice_name_s.is_empty() { None } else { Some(slice_name_s) };
+                let slice_name = if slice_name_s.is_empty() {
+                    None
+                } else {
+                    Some(slice_name_s)
+                };
                 let mut effective_index = rule_index;
                 if let Some(sn) = &slice_name {
                     let slice_path = format!("{current_path}[{}]", sn.replace('/', "]["));
@@ -2298,7 +2458,8 @@ fn create_useful_slices(
                     let mut slice_indices: Vec<i64> = Vec::new();
                     if let Some(arr) = obj.get(&pp.base).and_then(|v| v.as_array()) {
                         for (ii, el) in arr.iter().enumerate() {
-                            let by_name = el.get("_sliceName").and_then(|v| v.as_str()) == Some(sn.as_str());
+                            let by_name =
+                                el.get("_sliceName").and_then(|v| v.as_str()) == Some(sn.as_str());
                             let by_url = is_extension_base(&pp.base)
                                 && el.get("url").is_some()
                                 && el.get("url").and_then(|v| v.as_str()) == ext_url.as_deref();
@@ -2307,7 +2468,11 @@ fn create_useful_slices(
                             }
                         }
                     }
-                    let base_len = obj.get(&pp.base).and_then(|v| v.as_array()).map(|a| a.len() as i64).unwrap_or(0);
+                    let base_len = obj
+                        .get(&pp.base)
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.len() as i64)
+                        .unwrap_or(0);
                     if rule_index >= slice_indices.len() as i64 {
                         effective_index = rule_index - slice_indices.len() as i64 + base_len;
                     } else {
@@ -2323,7 +2488,13 @@ fn create_useful_slices(
                     current_path.push_str(b);
                     current_path.push(']');
                 }
-                grow_array(obj, pp, &key, effective_index as usize, slice_name.as_deref());
+                grow_array(
+                    obj,
+                    pp,
+                    &key,
+                    effective_index as usize,
+                    slice_name.as_deref(),
+                );
                 if i == n - 1 {
                     break;
                 }
@@ -2331,7 +2502,9 @@ fn create_useful_slices(
                 current = &mut arr[effective_index as usize];
             } else if i < n - 1 {
                 let obj = ensure_obj(current);
-                current = obj.entry(key.clone()).or_insert_with(|| J::Object(Map::new()));
+                current = obj
+                    .entry(key.clone())
+                    .or_insert_with(|| J::Object(Map::new()));
             } else {
                 break;
             }
@@ -2355,7 +2528,9 @@ fn strip_numeric_brackets(path: &str) -> String {
                 j += 1;
             }
             let numeric = !inner.is_empty()
-                && inner.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '+');
+                && inner
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '-' || c == '+');
             if numeric {
                 i = j + 1;
                 continue;
@@ -2614,9 +2789,7 @@ impl InstanceIndex {
                     by_ref
                         .entry(inst.name.clone())
                         .or_insert((io.clone(), id.clone()));
-                    by_ref
-                        .entry(id.clone())
-                        .or_insert((io.clone(), id.clone()));
+                    by_ref.entry(id.clone()).or_insert((io.clone(), id.clone()));
                     // The canonical url used when this instance is referenced via
                     // Canonical()/Reference(): an explicit `* url = "..."` wins,
                     // else — for any non-Inline instance — it is derived as
@@ -2648,7 +2821,12 @@ impl InstanceIndex {
 /// The effective canonical url of an instance: the last `* url = "..."` rule.
 fn effective_instance_url(inst: &Instance) -> Option<String> {
     for r in inst.rules.iter().rev() {
-        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+        if let Rule::Assignment {
+            path,
+            value: Some(FshValue::Str(s)),
+            ..
+        } = r
+        {
             if path == "url" {
                 return Some(s.clone());
             }
@@ -2661,7 +2839,12 @@ fn effective_instance_url(inst: &Instance) -> Option<String> {
 /// else the declared id (which defaults to the instance name).
 fn effective_instance_id(inst: &Instance) -> String {
     for r in inst.rules.iter().rev() {
-        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+        if let Rule::Assignment {
+            path,
+            value: Some(FshValue::Str(s)),
+            ..
+        } = r
+        {
             if path == "id" {
                 return s.clone();
             }
@@ -2694,7 +2877,13 @@ impl DefIndex {
                 .or_insert(("StructureDefinition".to_string(), id.to_string()));
         };
         for doc in docs {
-            for (_k, d) in doc.profiles.iter().chain(&doc.extensions).chain(&doc.logicals).chain(&doc.resources) {
+            for (_k, d) in doc
+                .profiles
+                .iter()
+                .chain(&doc.extensions)
+                .chain(&doc.logicals)
+                .chain(&doc.resources)
+            {
                 add_sd(&d.name, &d.id);
             }
         }
@@ -2737,12 +2926,15 @@ impl DefIndex {
         // mirroring TankIndex::build (entities before instances).
         for doc in docs {
             for (_k, inst) in &doc.instances {
-                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
-                let (target_url, fhir_type): (&mut HashMap<String, String>, &str) = match instance_of {
-                    "CodeSystem" => (&mut cs_url, "CodeSystem"),
-                    "ValueSet" => (&mut vs_url, "ValueSet"),
-                    _ => continue,
+                let Some(instance_of) = inst.instance_of.as_deref() else {
+                    continue;
                 };
+                let (target_url, fhir_type): (&mut HashMap<String, String>, &str) =
+                    match instance_of {
+                        "CodeSystem" => (&mut cs_url, "CodeSystem"),
+                        "ValueSet" => (&mut vs_url, "ValueSet"),
+                        _ => continue,
+                    };
                 if inst.usage == "Inline" {
                     continue;
                 }
@@ -2759,7 +2951,11 @@ impl DefIndex {
                 target_url.entry(id).or_insert(url);
             }
         }
-        DefIndex { by_ref, cs_url, vs_url }
+        DefIndex {
+            by_ref,
+            cs_url,
+            vs_url,
+        }
     }
 }
 
@@ -2772,21 +2968,30 @@ fn replace_references(
 ) {
     match value {
         FshValue::Reference(r) => {
-            let base = r.reference.split('|').next().unwrap_or(&r.reference).to_string();
-            let resolved: Option<(String, String)> = if let Some((io, id)) = inst_idx.by_ref.get(&base) {
-                fisher.fish_for_metadata(io).and_then(|m| m.sd_type).map(|t| (t, id.clone()))
-            } else if let Some((t, id)) = def_idx.by_ref.get(&base) {
-                Some((t.clone(), id.clone()))
-            } else {
-                fisher.fish_for_fhir(&base).and_then(|j| {
-                    let rt = j.get("resourceType").and_then(|v| v.as_str());
-                    let id = j.get("id").and_then(|v| v.as_str());
-                    match (rt, id) {
-                        (Some(rt), Some(id)) => Some((rt.to_string(), id.to_string())),
-                        _ => None,
-                    }
-                })
-            };
+            let base = r
+                .reference
+                .split('|')
+                .next()
+                .unwrap_or(&r.reference)
+                .to_string();
+            let resolved: Option<(String, String)> =
+                if let Some((io, id)) = inst_idx.by_ref.get(&base) {
+                    fisher
+                        .fish_for_metadata(io)
+                        .and_then(|m| m.sd_type)
+                        .map(|t| (t, id.clone()))
+                } else if let Some((t, id)) = def_idx.by_ref.get(&base) {
+                    Some((t.clone(), id.clone()))
+                } else {
+                    fisher.fish_for_fhir(&base).and_then(|j| {
+                        let rt = j.get("resourceType").and_then(|v| v.as_str());
+                        let id = j.get("id").and_then(|v| v.as_str());
+                        match (rt, id) {
+                            (Some(rt), Some(id)) => Some((rt.to_string(), id.to_string())),
+                            _ => None,
+                        }
+                    })
+                };
             if let Some((t, id)) = resolved {
                 if !r.reference.contains('/') {
                     r.reference = format!("{t}/{id}");
@@ -2816,7 +3021,11 @@ fn replace_references(
             // coerce_value via the fisher; per ElementDefinition.ts:2006 stock
             // fishes SD types BEFORE ValueSet/CodeSystem/Instance, so only fall
             // back to these locals when the fisher can't resolve an SD url.)
-            if fisher.fish_for_metadata(&c.entity_name).and_then(|m| m.url).is_none() {
+            if fisher
+                .fish_for_metadata(&c.entity_name)
+                .and_then(|m| m.url)
+                .is_none()
+            {
                 if let Some(url) = def_idx
                     .vs_url
                     .get(&c.entity_name)
@@ -3022,7 +3231,10 @@ pub fn export_instances(
     }
     let inst_idx = {
         let inner_fisher = ctx.fisher();
-        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        let index_fisher = AliasFisher {
+            inner: &inner_fisher,
+            aliases: &aliases,
+        };
         InstanceIndex::build(docs, cfg, &index_fisher)
     };
     let exporter = Exporter {
@@ -3093,7 +3305,10 @@ pub fn export_inline_instance(ctx: &SdContext, name: &str) -> Option<(J, String)
     }
     let inst_idx = {
         let inner_fisher = ctx.fisher();
-        let index_fisher = AliasFisher { inner: &inner_fisher, aliases: &aliases };
+        let index_fisher = AliasFisher {
+            inner: &inner_fisher,
+            aliases: &aliases,
+        };
         InstanceIndex::build(docs, cfg, &index_fisher)
     };
     let exporter = Exporter {
@@ -3129,7 +3344,10 @@ impl<'a> Exporter<'a> {
         }
         // External instance: fish raw FHIR JSON from packages. This body is owned
         // by the AssignRule and mutated downstream, so clone out of the shared Rc.
-        self.ctx.fisher().fish_for_fhir(base).map(|rc| (*rc).clone())
+        self.ctx
+            .fisher()
+            .fish_for_fhir(base)
+            .map(|rc| (*rc).clone())
     }
 
     /// Like `fish_instance`, but also returns the instance's FHIR type name so the
@@ -3169,7 +3387,9 @@ impl<'a> Exporter<'a> {
         // In-progress guard against circular inline instances.
         self.memo.borrow_mut().insert(name.to_string(), None);
         let result = self.export_compute(name);
-        self.memo.borrow_mut().insert(name.to_string(), result.clone());
+        self.memo
+            .borrow_mut()
+            .insert(name.to_string(), result.clone());
         // Record completion order (stock pushes to pkg.instances here).
         self.complete_order.borrow_mut().push(name.to_string());
         result
@@ -3193,7 +3413,10 @@ impl<'a> Exporter<'a> {
     fn export_compute(&self, name: &str) -> Option<ExportedInst> {
         let inst = *self.by_name.get(name)?;
         let inner_fisher = self.ctx.fisher();
-        let fisher = AliasFisher { inner: &inner_fisher, aliases: &self.aliases };
+        let fisher = AliasFisher {
+            inner: &inner_fisher,
+            aliases: &self.aliases,
+        };
         let instance_of = inst.instance_of.as_ref()?;
         let base = instance_of.split('|').next().unwrap_or(instance_of);
         let mut sd = self.fish_sd_template(base)?;
@@ -3247,7 +3470,10 @@ impl<'a> Exporter<'a> {
         let filename = sanitize(&format!("{type_name}-{id}.json"));
 
         // IG resource metadata (IGExporter.addPackageResource for instances).
-        let body_title = body.get("title").and_then(|v| v.as_str()).map(str::to_string);
+        let body_title = body
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let body_description = body
             .get("description")
             .and_then(|v| v.as_str())
@@ -3315,9 +3541,18 @@ impl<'a> Exporter<'a> {
     }
 
     /// Usage: #definition — set url/title/description if the SD has those elements.
-    fn set_definition_metadata(&self, inst: &Instance, obj: &mut Map<String, J>, sd: &StructureDefinition) {
+    fn set_definition_metadata(
+        &self,
+        inst: &Instance,
+        obj: &mut Map<String, J>,
+        sd: &StructureDefinition,
+    ) {
         let pt = sd.path_type();
-        let has = |suffix: &str| sd.elements.iter().any(|e| e.id() == format!("{pt}.{suffix}"));
+        let has = |suffix: &str| {
+            sd.elements
+                .iter()
+                .any(|e| e.id() == format!("{pt}.{suffix}"))
+        };
         if has("url") {
             // Stock uses `fshDefinition.id` (InstanceExporter.ts:853), whose getter
             // resolves a `* id = ...` rule before falling back to the instance name
@@ -3325,7 +3560,12 @@ impl<'a> Exporter<'a> {
             // the effective id to match (app-feature: feature-query vs FeatureQuery).
             obj.insert(
                 "url".into(),
-                J::String(format!("{}/{}/{}", self.cfg.canonical, pt, effective_instance_id(inst))),
+                J::String(format!(
+                    "{}/{}/{}",
+                    self.cfg.canonical,
+                    pt,
+                    effective_instance_id(inst)
+                )),
             );
         }
         if let Some(t) = &inst.title {
@@ -3345,7 +3585,10 @@ fn should_set_id(sd: &StructureDefinition) -> bool {
     let pt = sd.path_type();
     sd.elements.iter().any(|e| {
         e.path() == format!("{pt}.id")
-            && e.type_codes().first().map(|t| t == "string" || t == "id").unwrap_or(false)
+            && e.type_codes()
+                .first()
+                .map(|t| t == "string" || t == "id")
+                .unwrap_or(false)
             && e.get("max").and_then(|v| v.as_str()) == Some("1")
             && e.get("base")
                 .and_then(|b| b.get("max"))
@@ -3396,7 +3639,9 @@ fn apply_meta_profile(instance: &mut J, sd: &StructureDefinition, instance_of: &
     if already {
         return;
     }
-    let meta = obj.entry("meta".to_string()).or_insert_with(|| J::Object(Map::new()));
+    let meta = obj
+        .entry("meta".to_string())
+        .or_insert_with(|| J::Object(Map::new()));
     let meta_obj = meta.as_object_mut().unwrap();
     match meta_obj.get_mut("profile") {
         None => {
@@ -3432,205 +3677,232 @@ struct AssignRule {
 }
 
 impl Exporter<'_> {
-fn set_assigned_values(
-    &self,
-    inst: &Instance,
-    instance: &mut J,
-    sd: &mut StructureDefinition,
-    fisher: &dyn Fisher,
-) {
-    let inst_idx = &self.inst_idx;
-    let def_idx = &self.def_idx;
-    let manual_slice_ordering = self.cfg.manual_slice_ordering();
-    // 1. resolve soft indexing on a clone of the rules.
-    let mut rules: Vec<Rule> = inst.rules.clone();
-    crate::paths::resolve_soft_indexing(&mut rules, manual_slice_ordering);
+    fn set_assigned_values(
+        &self,
+        inst: &Instance,
+        instance: &mut J,
+        sd: &mut StructureDefinition,
+        fisher: &dyn Fisher,
+    ) {
+        let inst_idx = &self.inst_idx;
+        let def_idx = &self.def_idx;
+        let manual_slice_ordering = self.cfg.manual_slice_ordering();
+        // 1. resolve soft indexing on a clone of the rules.
+        let mut rules: Vec<Rule> = inst.rules.clone();
+        crate::paths::resolve_soft_indexing(&mut rules, manual_slice_ordering);
 
-    // 2. normalize [0] indices away; replaceReferences.
-    let mut assign_rules: Vec<AssignRule> = Vec::new();
-    for r in &rules {
-        match r {
-            Rule::Assignment { path, value, is_instance, raw_value, .. } => {
-                let mut path = path.clone();
-                path = strip_zero_indices(&path);
-                let mut value = value.clone();
-                if *is_instance {
-                    // Inline instance assignment: fish and embed the instance JSON.
-                    // The instance name may be a non-string token (e.g. a numeric
-                    // id), so fall back to the raw value text.
-                    let name = match &value {
-                        Some(FshValue::Str(s)) => s.clone(),
-                        _ => match raw_value {
-                            Some(rv) => rv.clone(),
-                            None => continue,
-                        },
-                    };
-                    if let Some(body) = self.fish_instance(&name) {
-                        assign_rules.push(AssignRule { path, value: None, is_path: false, inline: Some(body) });
-                    }
-                    continue;
-                }
-                // A numeric/boolean value assigned to a Resource-typed element is
-                // actually an inline instance referenced by its (numeric) id —
-                // mirror InstanceExporter's MismatchedTypeError recovery.
-                let numericish = matches!(
+        // 2. normalize [0] indices away; replaceReferences.
+        let mut assign_rules: Vec<AssignRule> = Vec::new();
+        for r in &rules {
+            match r {
+                Rule::Assignment {
+                    path,
                     value,
-                    Some(FshValue::BigInt(_)) | Some(FshValue::Bool(_)) | Some(FshValue::Float(_))
-                );
-                if numericish {
-                    if let Some(rv) = raw_value {
-                        if leaf_is_resource(sd, &path, fisher) {
-                            if let Some(body) = self.fish_instance(rv) {
-                                assign_rules.push(AssignRule {
-                                    path,
-                                    value: None,
-                                    is_path: false,
-                                    inline: Some(body),
-                                });
-                                continue;
+                    is_instance,
+                    raw_value,
+                    ..
+                } => {
+                    let mut path = path.clone();
+                    path = strip_zero_indices(&path);
+                    let mut value = value.clone();
+                    if *is_instance {
+                        // Inline instance assignment: fish and embed the instance JSON.
+                        // The instance name may be a non-string token (e.g. a numeric
+                        // id), so fall back to the raw value text.
+                        let name = match &value {
+                            Some(FshValue::Str(s)) => s.clone(),
+                            _ => match raw_value {
+                                Some(rv) => rv.clone(),
+                                None => continue,
+                            },
+                        };
+                        if let Some(body) = self.fish_instance(&name) {
+                            assign_rules.push(AssignRule {
+                                path,
+                                value: None,
+                                is_path: false,
+                                inline: Some(body),
+                            });
+                        }
+                        continue;
+                    }
+                    // A numeric/boolean value assigned to a Resource-typed element is
+                    // actually an inline instance referenced by its (numeric) id —
+                    // mirror InstanceExporter's MismatchedTypeError recovery.
+                    let numericish = matches!(
+                        value,
+                        Some(FshValue::BigInt(_))
+                            | Some(FshValue::Bool(_))
+                            | Some(FshValue::Float(_))
+                    );
+                    if numericish {
+                        if let Some(rv) = raw_value {
+                            if leaf_is_resource(sd, &path, fisher) {
+                                if let Some(body) = self.fish_instance(rv) {
+                                    assign_rules.push(AssignRule {
+                                        path,
+                                        value: None,
+                                        is_path: false,
+                                        inline: Some(body),
+                                    });
+                                    continue;
+                                }
                             }
                         }
                     }
+                    if let Some(v) = &mut value {
+                        replace_references(v, inst_idx, def_idx, fisher);
+                    }
+                    assign_rules.push(AssignRule {
+                        path,
+                        value,
+                        is_path: false,
+                        inline: None,
+                    });
                 }
-                if let Some(v) = &mut value {
-                    replace_references(v, inst_idx, def_idx, fisher);
+                Rule::Path { path, .. } => {
+                    let path = strip_zero_indices(path);
+                    assign_rules.push(AssignRule {
+                        path,
+                        value: None,
+                        is_path: true,
+                        inline: None,
+                    });
                 }
-                assign_rules.push(AssignRule { path, value, is_path: false, inline: None });
+                _ => {}
             }
-            Rule::Path { path, .. } => {
-                let path = strip_zero_indices(path);
-                assign_rules.push(AssignRule { path, value: None, is_path: true, inline: None });
-            }
-            _ => {}
         }
-    }
 
-    // 2b. Collect inlineResourcePaths (InstanceExporter.ts:137-159): for each
-    // inline-instance assignment, {path, instanceOf = body.meta.profile[0] ??
-    // body.resourceType}; for each `<x>.resourceType = "Type"` rule, {x, Type}.
-    // These switch the element type during validation so sub-paths of an inline
-    // resource resolve against the right resource StructureDefinition.
-    let mut inline_resource_paths: Vec<(String, String)> = Vec::new();
-    for ar in &assign_rules {
-        if let Some(body) = &ar.inline {
-            let io = body
-                .get("meta")
-                .and_then(|m| m.get("profile"))
-                .and_then(|p| p.as_array())
-                .and_then(|a| a.first())
-                .and_then(|v| v.as_str())
-                .or_else(|| body.get("resourceType").and_then(|v| v.as_str()))
-                .map(str::to_string);
-            if let Some(io) = io {
-                inline_resource_paths.push((ar.path.clone(), io));
-            }
-        } else if let Some(stripped) = ar.path.strip_suffix(".resourceType") {
-            if let Some(FshValue::Str(s)) = &ar.value {
-                inline_resource_paths.push((stripped.to_string(), s.clone()));
-            }
-        }
-    }
-    // Helper: build the sparse inlineResourceTypes array for a given rule path.
-    let inline_types_for = |rule_path: &str| -> Vec<Option<String>> {
-        let mut out: Vec<Option<String>> = Vec::new();
-        for (ip_path, io) in &inline_resource_paths {
-            let prefix = format!("{ip_path}.");
-            if rule_path.starts_with(&prefix) && rule_path != format!("{ip_path}.resourceType") {
-                let idx = split_periods(ip_path).len() - 1;
-                if out.len() <= idx {
-                    out.resize(idx + 1, None);
+        // 2b. Collect inlineResourcePaths (InstanceExporter.ts:137-159): for each
+        // inline-instance assignment, {path, instanceOf = body.meta.profile[0] ??
+        // body.resourceType}; for each `<x>.resourceType = "Type"` rule, {x, Type}.
+        // These switch the element type during validation so sub-paths of an inline
+        // resource resolve against the right resource StructureDefinition.
+        let mut inline_resource_paths: Vec<(String, String)> = Vec::new();
+        for ar in &assign_rules {
+            if let Some(body) = &ar.inline {
+                let io = body
+                    .get("meta")
+                    .and_then(|m| m.get("profile"))
+                    .and_then(|p| p.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_str())
+                    .or_else(|| body.get("resourceType").and_then(|v| v.as_str()))
+                    .map(str::to_string);
+                if let Some(io) = io {
+                    inline_resource_paths.push((ar.path.clone(), io));
                 }
-                out[idx] = Some(io.clone());
+            } else if let Some(stripped) = ar.path.strip_suffix(".resourceType") {
+                if let Some(FshValue::Str(s)) = &ar.value {
+                    inline_resource_paths.push((stripped.to_string(), s.clone()));
+                }
             }
         }
-        out
-    };
+        // Helper: build the sparse inlineResourceTypes array for a given rule path.
+        let inline_types_for = |rule_path: &str| -> Vec<Option<String>> {
+            let mut out: Vec<Option<String>> = Vec::new();
+            for (ip_path, io) in &inline_resource_paths {
+                let prefix = format!("{ip_path}.");
+                if rule_path.starts_with(&prefix) && rule_path != format!("{ip_path}.resourceType")
+                {
+                    let idx = split_periods(ip_path).len() - 1;
+                    if out.len() <= idx {
+                        out.resize(idx + 1, None);
+                    }
+                    out[idx] = Some(io.clone());
+                }
+            }
+            out
+        };
 
-    // 3. Build ruleMap (validate each rule), keyed by rule path (last-wins replaced).
-    let mut rule_map: Vec<(String, Vec<IPathPart>, J)> = Vec::new();
-    for ar in &assign_rules {
-        let path = &ar.path;
-        let inline_types = inline_types_for(path);
-        if let Some(validated) = validate_value_at_path(sd, path, ar.value.as_ref(), &inline_types, fisher) {
-            // skip choice [x] unresolved
-            let av = if let Some(body) = &ar.inline {
-                // Stock applies `value.toJSON()` to inline-instance values
-                // (StructureDefinition.ts:777), reordering resourceType/id/meta
-                // to the front. No-op for our already-ordered FSH-instance bodies.
-                instance_definition_json_order(body)
-            } else {
-                validated.assigned_value.clone().unwrap_or(J::Null)
-            };
-            let final_path = if let Some(cp) = validated.child_path {
-                format!("{path}.{cp}")
+        // 3. Build ruleMap (validate each rule), keyed by rule path (last-wins replaced).
+        let mut rule_map: Vec<(String, Vec<IPathPart>, J)> = Vec::new();
+        for ar in &assign_rules {
+            let path = &ar.path;
+            let inline_types = inline_types_for(path);
+            if let Some(validated) =
+                validate_value_at_path(sd, path, ar.value.as_ref(), &inline_types, fisher)
+            {
+                // skip choice [x] unresolved
+                let av = if let Some(body) = &ar.inline {
+                    // Stock applies `value.toJSON()` to inline-instance values
+                    // (StructureDefinition.ts:777), reordering resourceType/id/meta
+                    // to the front. No-op for our already-ordered FSH-instance bodies.
+                    instance_definition_json_order(body)
+                } else {
+                    validated.assigned_value.clone().unwrap_or(J::Null)
+                };
+                let final_path = if let Some(cp) = validated.child_path {
+                    format!("{path}.{cp}")
+                } else {
+                    path.clone()
+                };
+                // record (replace existing same key, keep position)
+                if av.is_null() && rule_map.iter().any(|(k, _, _)| k == &final_path) {
+                    continue;
+                }
+                if let Some(existing) = rule_map.iter_mut().find(|(k, _, _)| k == &final_path) {
+                    existing.1 = validated.path_parts;
+                    existing.2 = av;
+                } else {
+                    rule_map.push((final_path, validated.path_parts, av));
+                }
+            }
+        }
+
+        // 4. paths array for implied properties. Also collect the paths where an
+        // inline resource was assigned (`inlineResourcePaths`) so setImpliedProperties
+        // does NOT unfold/inject implied values into the embedded resource
+        // (InstanceExporter.ts:140-160 + common.ts:518).
+        let mut paths: Vec<String> = vec![String::new()];
+        let mut assigned_resource_paths: Vec<String> = Vec::new();
+        for ar in &assign_rules {
+            let path = &ar.path;
+            // find validated pathParts for this rule path (first match)
+            let path_dot = format!("{path}.");
+            let assembled = if let Some((_, parts, _)) = rule_map
+                .iter()
+                .find(|(k, _, _)| k == path || k.starts_with(&path_dot))
+            {
+                strip_zero_only(&assemble_fsh_path(parts))
             } else {
                 path.clone()
             };
-            // record (replace existing same key, keep position)
-            if av.is_null() && rule_map.iter().any(|(k, _, _)| k == &final_path) {
-                continue;
+            if ar.inline.is_some() {
+                assigned_resource_paths.push(assembled.clone());
             }
-            if let Some(existing) = rule_map.iter_mut().find(|(k, _, _)| k == &final_path) {
-                existing.1 = validated.path_parts;
-                existing.2 = av;
-            } else {
-                rule_map.push((final_path, validated.path_parts, av));
-            }
+            paths.push(assembled);
         }
-    }
 
-    // 4. paths array for implied properties. Also collect the paths where an
-    // inline resource was assigned (`inlineResourcePaths`) so setImpliedProperties
-    // does NOT unfold/inject implied values into the embedded resource
-    // (InstanceExporter.ts:140-160 + common.ts:518).
-    let mut paths: Vec<String> = vec![String::new()];
-    let mut assigned_resource_paths: Vec<String> = Vec::new();
-    for ar in &assign_rules {
-        let path = &ar.path;
-        // find validated pathParts for this rule path (first match)
-        let path_dot = format!("{path}.");
-        let assembled = if let Some((_, parts, _)) =
-            rule_map.iter().find(|(k, _, _)| k == path || k.starts_with(&path_dot))
-        {
-            strip_zero_only(&assemble_fsh_path(parts))
+        // 5. knownSlices (+ createUsefulSlices mutation under manualSliceOrdering).
+        let rm_for_known: Vec<(String, Vec<IPathPart>)> = rule_map
+            .iter()
+            .map(|(k, p, _)| (k.clone(), p.clone()))
+            .collect();
+        let known = if manual_slice_ordering {
+            create_useful_slices(instance, sd, &rm_for_known, fisher)
         } else {
-            path.clone()
+            determine_known_slices(sd, &rm_for_known, fisher)
         };
-        if ar.inline.is_some() {
-            assigned_resource_paths.push(assembled.clone());
+
+        // 6. setImpliedProperties on instance.
+        set_implied_properties_on_instance(
+            instance,
+            sd,
+            &paths,
+            &assigned_resource_paths,
+            fisher,
+            &known,
+            manual_slice_ordering,
+        );
+
+        // 7. rule assignment on a clone, then merge.
+        let mut rule_instance = instance.clone();
+        for (_k, parts, av) in &rule_map {
+            set_property_on_instance(&mut rule_instance, parts, av);
         }
-        paths.push(assembled);
+        merge(instance, &rule_instance);
     }
-
-    // 5. knownSlices (+ createUsefulSlices mutation under manualSliceOrdering).
-    let rm_for_known: Vec<(String, Vec<IPathPart>)> = rule_map
-        .iter()
-        .map(|(k, p, _)| (k.clone(), p.clone()))
-        .collect();
-    let known = if manual_slice_ordering {
-        create_useful_slices(instance, sd, &rm_for_known, fisher)
-    } else {
-        determine_known_slices(sd, &rm_for_known, fisher)
-    };
-
-    // 6. setImpliedProperties on instance.
-    set_implied_properties_on_instance(
-        instance,
-        sd,
-        &paths,
-        &assigned_resource_paths,
-        fisher,
-        &known,
-        manual_slice_ordering,
-    );
-
-    // 7. rule assignment on a clone, then merge.
-    let mut rule_instance = instance.clone();
-    for (_k, parts, av) in &rule_map {
-        set_property_on_instance(&mut rule_instance, parts, av);
-    }
-    merge(instance, &rule_instance);
-}
 }
 
 /// Port of `common.ts:isInheritedResource`. Does `resource_type` (a resource
@@ -3699,7 +3971,14 @@ fn strip_zero_only(path: &str) -> String {
 
 fn order_instance(instance: &J) -> J {
     let obj = instance.as_object().unwrap();
-    let prefix = ["resourceType", "_resourceType", "id", "_id", "meta", "_meta"];
+    let prefix = [
+        "resourceType",
+        "_resourceType",
+        "id",
+        "_id",
+        "meta",
+        "_meta",
+    ];
     let mut ordered = Map::new();
     for k in prefix {
         if let Some(v) = obj.get(k) {

@@ -42,7 +42,11 @@ pub(crate) fn diffs_constrain_types(
         let s = &n[rn.len()..];
         if !s.contains('.') {
             let sn = has_slice_name(ed);
-            let type_count = ed.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            let type_count = ed
+                .get("type")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
             if sn && type_count == 1 {
                 type_list.push(TypeSlice {
                     ed_idx_in_diff_matches: i,
@@ -50,27 +54,51 @@ pub(crate) fn diffs_constrain_types(
                 });
             } else if sn && type_count == 0 {
                 if is_data_type_str(ctx, s) {
-                    type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(s.to_string()) });
+                    type_list.push(TypeSlice {
+                        ed_idx_in_diff_matches: i,
+                        type_: Some(s.to_string()),
+                    });
                 } else if is_primitive_str(ctx, &uncapitalize(s)) {
-                    type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(uncapitalize(s)) });
+                    type_list.push(TypeSlice {
+                        ed_idx_in_diff_matches: i,
+                        type_: Some(uncapitalize(s)),
+                    });
                 } else if let Some(slice_name) = ed.get("sliceName").and_then(Value::as_str) {
                     let tn = &slice_name[n.len().min(slice_name.len())..];
                     if is_data_type_str(ctx, tn) {
-                        type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(tn.to_string()) });
+                        type_list.push(TypeSlice {
+                            ed_idx_in_diff_matches: i,
+                            type_: Some(tn.to_string()),
+                        });
                     } else if is_primitive_str(ctx, &uncapitalize(tn)) {
-                        type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(uncapitalize(tn)) });
+                        type_list.push(TypeSlice {
+                            ed_idx_in_diff_matches: i,
+                            type_: Some(uncapitalize(tn)),
+                        });
                     }
                 }
             } else if !sn && s != "[x]" {
                 if is_data_type_str(ctx, s) {
-                    type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(s.to_string()) });
+                    type_list.push(TypeSlice {
+                        ed_idx_in_diff_matches: i,
+                        type_: Some(s.to_string()),
+                    });
                 } else if is_constrained_data_type(ctx, s) {
-                    type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(base_type_of(ctx, s)) });
+                    type_list.push(TypeSlice {
+                        ed_idx_in_diff_matches: i,
+                        type_: Some(base_type_of(ctx, s)),
+                    });
                 } else if is_primitive_str(ctx, &uncapitalize(s)) {
-                    type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: Some(uncapitalize(s)) });
+                    type_list.push(TypeSlice {
+                        ed_idx_in_diff_matches: i,
+                        type_: Some(uncapitalize(s)),
+                    });
                 }
             } else if !sn && s == "[x]" {
-                type_list.push(TypeSlice { ed_idx_in_diff_matches: i, type_: None });
+                type_list.push(TypeSlice {
+                    ed_idx_in_diff_matches: i,
+                    type_: None,
+                });
             }
         }
     }
@@ -153,7 +181,9 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
         "processSimplePathWhereDiffsConstrainTypes.entry",
         None,
         trace::id(&ctx.diff[diff_match_idx[0]]).as_deref(),
-        Some(json!({ "shortCut": short_cut, "typeSlices": type_list.len(), "basePath": current_base_path })),
+        Some(
+            json!({ "shortCut": short_cut, "typeSlices": type_list.len(), "basePath": current_base_path }),
+        ),
     );
 
     // Working diff-match indices (into the LIVE ctx.diff). After anchor insert,
@@ -195,11 +225,17 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
     let mut new_diff_limit = find_end_of_element(&ctx.diff, new_diff_cursor);
 
     // Slicing legality on diffMatches[0].slicing (PPP:608-623).
-    let anchor_slicing = ctx.diff[dm_idx[0]].get("slicing").cloned().unwrap_or(Value::Null);
+    let anchor_slicing = ctx.diff[dm_idx[0]]
+        .get("slicing")
+        .cloned()
+        .unwrap_or(Value::Null);
     if anchor_slicing.get("ordered").and_then(Value::as_bool) == Some(true) {
         anyhow::bail!("TYPE_SLICING_WITH_SLICINGORDERED_TRUE at {current_base_path}");
     }
-    if let Some(discs) = anchor_slicing.get("discriminator").and_then(Value::as_array) {
+    if let Some(discs) = anchor_slicing
+        .get("discriminator")
+        .and_then(Value::as_array)
+    {
         if discs.len() != 1
             || discs[0].get("type").and_then(Value::as_str) != Some("type")
             || discs[0].get("path").and_then(Value::as_str) != Some("$this")
@@ -216,7 +252,9 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
         let row = &ctx.diff[live_idx];
         match row.get("sliceName").and_then(Value::as_str) {
             None => {
-                diff_mutate(ctx, live_idx, |v| set_field(v, "sliceName", Value::String(tn.clone())));
+                diff_mutate(ctx, live_idx, |v| {
+                    set_field(v, "sliceName", Value::String(tn.clone()))
+                });
             }
             Some(existing) if existing != tn => {
                 // autoFixSliceNames=false under oracle → throw (PPP:634).
@@ -227,14 +265,20 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
             _ => {}
         }
         let row = &ctx.diff[live_idx];
-        let types = row.get("type").and_then(Value::as_array).cloned().unwrap_or_default();
+        let types = row
+            .get("type")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         if types.is_empty() {
             let code = tn_type.clone();
             diff_mutate(ctx, live_idx, |v| {
                 set_field(v, "type", json!([{ "code": code }]));
             });
         } else if types.len() > 1 {
-            anyhow::bail!("ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_MORE_THAN_ONE_TYPE_ at {current_base_path}");
+            anyhow::bail!(
+                "ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_MORE_THAN_ONE_TYPE_ at {current_base_path}"
+            );
         } else if types[0].get("code").and_then(Value::as_str) != Some(tn_type.as_str()) {
             anyhow::bail!("ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_WRONG_TYPE_ at {current_base_path}");
         }
@@ -318,7 +362,8 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
         sframe.slicing =
             SlicingParams::done_with(Some(Rc::new(ctx.output[root_idx].clone())), None)
                 .with_diffs(&dm_values);
-        let slice_res = super::loop_::process_paths(ctx, &mut scur, &sframe, Some(&slicer_element))?;
+        let slice_res =
+            super::loop_::process_paths(ctx, &mut scur, &sframe, Some(&slicer_element))?;
         if type_list.len() > start + 1 {
             if let Some(si) = slice_res {
                 set_field(&mut ctx.output[si], "min", Value::from(0u64));
@@ -339,7 +384,10 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
 
     // fixedType pruning on the root element (PPP:709-716).
     if let Some(ft) = &fixed_type {
-        if let Some(types) = ctx.output[root_idx].get_mut("type").and_then(Value::as_array_mut) {
+        if let Some(types) = ctx.output[root_idx]
+            .get_mut("type")
+            .and_then(Value::as_array_mut)
+        {
             types.retain(|tr| tr.get("code").and_then(Value::as_str) == Some(ft.as_str()));
         }
     }
@@ -361,7 +409,11 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
                 allowed_types.retain(|x| x != t);
             } else if let Some(&live_idx) = dm_idx.get(dm_pos) {
                 // Adjust for a removed synthesized anchor before this row.
-                let live_idx = if inserted_anchor && live_idx > dm_idx[0] { live_idx - 1 } else { live_idx };
+                let live_idx = if inserted_anchor && live_idx > dm_idx[0] {
+                    live_idx - 1
+                } else {
+                    live_idx
+                };
                 if let Some(row) = ctx.diff.get(live_idx) {
                     if has_slice_name(row) {
                         let codes: Vec<String> = row
@@ -369,7 +421,9 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
                             .and_then(Value::as_array)
                             .map(|a| {
                                 a.iter()
-                                    .filter_map(|t| t.get("code").and_then(Value::as_str).map(str::to_string))
+                                    .filter_map(|t| {
+                                        t.get("code").and_then(Value::as_str).map(str::to_string)
+                                    })
                                     .collect()
                             })
                             .unwrap_or_default();
@@ -382,7 +436,10 @@ pub(crate) fn process_simple_path_where_diffs_constrain_types(
         }
         if !allowed_types.is_empty() {
             if current_base_path.contains("xtension.value") && short_cut {
-                if let Some(types) = ctx.output[root_idx].get_mut("type").and_then(Value::as_array_mut) {
+                if let Some(types) = ctx.output[root_idx]
+                    .get_mut("type")
+                    .and_then(Value::as_array_mut)
+                {
                     types.retain(|tr| {
                         !allowed_types
                             .iter()
@@ -466,7 +523,12 @@ fn find_base_slices(list: &[Value], start: usize) -> Vec<BaseTypeSlice> {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        res.push(BaseTypeSlice { type_, start: s, end: i - 1, handled: false });
+        res.push(BaseTypeSlice {
+            type_,
+            start: s,
+            end: i - 1,
+            handled: false,
+        });
     }
     res
 }
@@ -494,7 +556,9 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
         "processPathWithSlicedBaseWhereDiffsConstrainTypes.entry",
         None,
         trace::id(&ctx.diff[diff_match_idx[0]]).as_deref(),
-        Some(json!({ "shortCut": short_cut, "typeSlices": type_list.len(), "basePath": current_base_path })),
+        Some(
+            json!({ "shortCut": short_cut, "typeSlices": type_list.len(), "basePath": current_base_path }),
+        ),
     );
 
     let mut dm_idx: Vec<usize> = diff_match_idx.to_vec();
@@ -526,11 +590,17 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
     let mut new_diff_limit = find_end_of_element(&ctx.diff, new_diff_cursor);
 
     // Slicing legality on diffMatches[0].slicing (PPP:1697-1712).
-    let anchor_slicing = ctx.diff[dm_idx[0]].get("slicing").cloned().unwrap_or(Value::Null);
+    let anchor_slicing = ctx.diff[dm_idx[0]]
+        .get("slicing")
+        .cloned()
+        .unwrap_or(Value::Null);
     if anchor_slicing.get("ordered").and_then(Value::as_bool) == Some(true) {
         anyhow::bail!("TYPE_SLICING_WITH_SLICINGORDERED_TRUE at {current_base_path}");
     }
-    if let Some(discs) = anchor_slicing.get("discriminator").and_then(Value::as_array) {
+    if let Some(discs) = anchor_slicing
+        .get("discriminator")
+        .and_then(Value::as_array)
+    {
         if discs.len() != 1
             || discs[0].get("type").and_then(Value::as_str) != Some("type")
             || discs[0].get("path").and_then(Value::as_str) != Some("$this")
@@ -548,7 +618,9 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
         let row = &ctx.diff[live_idx];
         match row.get("sliceName").and_then(Value::as_str) {
             None => {
-                diff_mutate(ctx, live_idx, |v| set_field(v, "sliceName", Value::String(tn.clone())));
+                diff_mutate(ctx, live_idx, |v| {
+                    set_field(v, "sliceName", Value::String(tn.clone()))
+                });
             }
             Some(existing) if existing != tn => {
                 anyhow::bail!(
@@ -558,12 +630,20 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
             _ => {}
         }
         let row = &ctx.diff[live_idx];
-        let types = row.get("type").and_then(Value::as_array).cloned().unwrap_or_default();
+        let types = row
+            .get("type")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         if types.is_empty() {
             let code = tn_type.clone();
-            diff_mutate(ctx, live_idx, |v| set_field(v, "type", json!([{ "code": code }])));
+            diff_mutate(ctx, live_idx, |v| {
+                set_field(v, "type", json!([{ "code": code }]))
+            });
         } else if types.len() > 1 {
-            anyhow::bail!("ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_MORE_THAN_ONE_TYPE_ at {current_base_path}");
+            anyhow::bail!(
+                "ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_MORE_THAN_ONE_TYPE_ at {current_base_path}"
+            );
         } else if types[0].get("code").and_then(Value::as_str) != Some(tn_type.as_str()) {
             anyhow::bail!("ERROR_AT_PATH__SLICE_FOR_TYPE__HAS_WRONG_TYPE_ at {current_base_path}");
         }
@@ -665,7 +745,10 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
 
     // fixedType pruning on the root (PPP:1799-1806).
     if let Some(ft) = &fixed_type {
-        if let Some(types) = ctx.output[root_idx].get_mut("type").and_then(Value::as_array_mut) {
+        if let Some(types) = ctx.output[root_idx]
+            .get_mut("type")
+            .and_then(Value::as_array_mut)
+        {
             types.retain(|tr| tr.get("code").and_then(Value::as_str) == Some(ft.as_str()));
         }
     }
@@ -730,7 +813,11 @@ pub(crate) fn process_path_with_sliced_base_where_diffs_constrain_types(
 
 /// PU:1727 determineFixedType.
 fn determine_fixed_type(ctx: &WalkContext, row: &Value) -> anyhow::Result<String> {
-    let types = row.get("type").and_then(Value::as_array).cloned().unwrap_or_default();
+    let types = row
+        .get("type")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     if types.is_empty() && has_slice_name(row) {
         let n = tail(path_of(row)).replace("[x]", "");
         let slice_name = row.get("sliceName").and_then(Value::as_str).unwrap_or("");

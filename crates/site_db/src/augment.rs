@@ -251,7 +251,10 @@ fn walk_pages(
             .or_else(|| p.get("name").and_then(Value::as_str))
             .unwrap_or("")
             .to_string();
-        let slug = name_url.strip_suffix(".html").unwrap_or(&name_url).to_string();
+        let slug = name_url
+            .strip_suffix(".html")
+            .unwrap_or(&name_url)
+            .to_string();
         if !slug.is_empty() && slug != "toc" {
             let md_path = pagecontent_dir.join(format!("{slug}.md"));
             let xml_path = pagecontent_dir.join(format!("{slug}.xml"));

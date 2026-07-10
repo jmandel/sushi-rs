@@ -20,7 +20,9 @@ fn repo() -> PathBuf {
 fn gather_fsh(ig_dir: &std::path::Path) -> Vec<(String, String)> {
     let root = ig_dir.join("input").join("fsh");
     fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
-        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).collect();
         es.sort_by_key(|e| e.path());
         for e in es {
@@ -35,7 +37,12 @@ fn gather_fsh(ig_dir: &std::path::Path) -> Vec<(String, String)> {
     let mut fs = Vec::new();
     walk(&root, &mut fs);
     fs.into_iter()
-        .map(|p| (p.to_string_lossy().into_owned(), std::fs::read_to_string(&p).unwrap()))
+        .map(|p| {
+            (
+                p.to_string_lossy().into_owned(),
+                std::fs::read_to_string(&p).unwrap(),
+            )
+        })
         .collect()
 }
 
@@ -65,17 +72,33 @@ fn site_db_snapshot_counts_match_disk() {
 
     let locals: Vec<(PathBuf, Value)> = conformance
         .iter()
-        .map(|r| (PathBuf::from(format!("/__compiled__/{}", r.filename)), r.body.clone()))
+        .map(|r| {
+            (
+                PathBuf::from(format!("/__compiled__/{}", r.filename)),
+                r.body.clone(),
+            )
+        })
         .collect();
-    let mut ctx = snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r4.core#4.0.1".to_string()]).unwrap();
+    let mut ctx =
+        snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r4.core#4.0.1".to_string()]).unwrap();
     ctx.load_local_resources(locals);
 
     let mut mem_counts = std::collections::BTreeMap::new();
     for r in &conformance {
         if r.body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-            let snap = snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default()).unwrap();
-            let id = r.body.get("id").and_then(Value::as_str).unwrap_or("").to_string();
-            let n = snap.pointer("/snapshot/element").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            let snap =
+                snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default()).unwrap();
+            let id = r
+                .body
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let n = snap
+                .pointer("/snapshot/element")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
             mem_counts.insert(id, n);
         }
     }
@@ -100,7 +123,11 @@ fn site_db_snapshot_counts_match_disk() {
     for rr in &outcome.db.resources {
         if rr.type_ == "StructureDefinition" {
             let j: Value = serde_json::from_str(&rr.json).unwrap();
-            let n = j.pointer("/snapshot/element").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            let n = j
+                .pointer("/snapshot/element")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
             disk_counts.insert(rr.id.clone(), n);
         }
     }
@@ -108,5 +135,8 @@ fn site_db_snapshot_counts_match_disk() {
 
     eprintln!("mem : {mem_counts:?}");
     eprintln!("disk: {disk_counts:?}");
-    assert_eq!(mem_counts, disk_counts, "snapshot element counts differ (mem vs disk)");
+    assert_eq!(
+        mem_counts, disk_counts,
+        "snapshot element counts differ (mem vs disk)"
+    );
 }

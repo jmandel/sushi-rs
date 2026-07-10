@@ -59,7 +59,10 @@ impl Resource {
             name,
             url: v.get("url").and_then(Value::as_str).map(str::to_string),
             kind: v.get("kind").and_then(Value::as_str).map(str::to_string),
-            derivation: v.get("derivation").and_then(Value::as_str).map(str::to_string),
+            derivation: v
+                .get("derivation")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             type_: v.get("type").and_then(Value::as_str).map(str::to_string),
             abstract_: v.get("abstract").and_then(Value::as_bool).unwrap_or(false),
             is_example,
@@ -89,8 +92,12 @@ pub fn enumerate_resources(dir: &Path, is_example: bool) -> Result<Vec<Resource>
             Ok(v) => v,
             Err(_) => continue,
         };
-        let Some(rt) = v.get("resourceType").and_then(Value::as_str) else { continue };
-        let Some(id) = v.get("id").and_then(Value::as_str) else { continue };
+        let Some(rt) = v.get("resourceType").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(id) = v.get("id").and_then(Value::as_str) else {
+            continue;
+        };
         let name = v.get("name").and_then(Value::as_str).map(str::to_string);
         out.push(Resource {
             rt: rt.to_string(),
@@ -98,7 +105,10 @@ pub fn enumerate_resources(dir: &Path, is_example: bool) -> Result<Vec<Resource>
             name,
             url: v.get("url").and_then(Value::as_str).map(str::to_string),
             kind: v.get("kind").and_then(Value::as_str).map(str::to_string),
-            derivation: v.get("derivation").and_then(Value::as_str).map(str::to_string),
+            derivation: v
+                .get("derivation")
+                .and_then(Value::as_str)
+                .map(str::to_string),
             type_: v.get("type").and_then(Value::as_str).map(str::to_string),
             abstract_: v.get("abstract").and_then(Value::as_bool).unwrap_or(false),
             is_example,

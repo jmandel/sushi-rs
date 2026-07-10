@@ -365,7 +365,8 @@ fn expand_rules(
                 && !context.is_empty()
             {
                 diag.push(mk(
-                    "Do not insert a RuleSet at a path when the RuleSet adds a concept.".to_string(),
+                    "Do not insert a RuleSet at a path when the RuleSet adds a concept."
+                        .to_string(),
                 ));
             }
 
@@ -546,9 +547,17 @@ fn build_project_inner(
 
     let loaded: Vec<(String, String)> = files
         .iter()
-        .map(|p| Ok((p.to_string_lossy().into_owned(), std::fs::read_to_string(p)?)))
+        .map(|p| {
+            Ok((
+                p.to_string_lossy().into_owned(),
+                std::fs::read_to_string(p)?,
+            ))
+        })
         .collect::<anyhow::Result<_>>()?;
-    let refs: Vec<(&str, &str)> = loaded.iter().map(|(p, c)| (p.as_str(), c.as_str())).collect();
+    let refs: Vec<(&str, &str)> = loaded
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
 
     // The FHIR package cache (needed by VS external-name resolution + SD export).
     let cache_dir = resolve_cache_dir(explicit_cache_dir)?;
@@ -626,7 +635,12 @@ pub struct CompileDiagnostic {
 
 impl CompileDiagnostic {
     fn error(message: impl Into<String>, file: Option<String>, line: Option<u32>) -> Self {
-        Self { severity: "error", message: message.into(), file, line }
+        Self {
+            severity: "error",
+            message: message.into(),
+            file,
+            line,
+        }
     }
 }
 
@@ -823,8 +837,7 @@ pub fn build_project_in_memory(
 ) -> anyhow::Result<Vec<CompiledResource>> {
     // Build the store over the mounted package source, resolving deps from the
     // config TEXT (no `std::fs` on the IG project).
-    let store =
-        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    let store = package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
     let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
     let refs: Vec<(&str, &str)> = fsh_files
         .iter()
@@ -846,8 +859,7 @@ pub fn build_project_in_memory_with_diagnostics(
     source: impl package_store::PackageSource + 'static,
     cache_dir: &str,
 ) -> anyhow::Result<(Vec<CompiledResource>, Vec<CompileDiagnostic>)> {
-    let store =
-        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    let store = package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
     let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
     let refs: Vec<(&str, &str)> = fsh_files
         .iter()
@@ -881,9 +893,12 @@ pub fn build_project_in_memory_with_ig(
     source: impl package_store::PackageSource + 'static,
     cache_dir: &str,
     page_dir_listing: std::collections::HashMap<String, Vec<String>>,
-) -> anyhow::Result<(Vec<CompiledResource>, Option<CompiledResource>, Vec<CompileDiagnostic>)> {
-    let store =
-        package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+) -> anyhow::Result<(
+    Vec<CompiledResource>,
+    Option<CompiledResource>,
+    Vec<CompileDiagnostic>,
+)> {
+    let store = package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
     let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
     let refs: Vec<(&str, &str)> = fsh_files
         .iter()
@@ -937,7 +952,10 @@ fn conformance_from_body(body: &serde_json::Value) -> Option<ig_export::Conforma
         reference_key: format!("{rt}/{id}"),
         name,
         description,
-        fhir_name: body.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        fhir_name: body
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         url: body.get("url").and_then(|v| v.as_str()).map(str::to_string),
     })
 }

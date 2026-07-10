@@ -66,7 +66,12 @@ fn check_fixture(name: &str) -> Result<(), String> {
     let golden_raw = fs::read_to_string(goldens_dir().join(format!("{name}.tokens.json")))
         .map_err(|e| format!("read golden: {e}"))?;
     let golden: serde_json::Value = serde_json::from_str(&golden_raw).unwrap();
-    let expected: Vec<Row> = golden.as_array().unwrap().iter().map(row_from_golden).collect();
+    let expected: Vec<Row> = golden
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(row_from_golden)
+        .collect();
 
     let actual: Vec<Row> = lex_document(&fsh).iter().map(row_from_token).collect();
 
@@ -80,7 +85,9 @@ fn check_fixture(name: &str) -> Result<(), String> {
     }
     for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
         if a != e {
-            return Err(format!("{name}: token #{i} mismatch\n  actual:   {a:?}\n  expected: {e:?}"));
+            return Err(format!(
+                "{name}: token #{i} mismatch\n  actual:   {a:?}\n  expected: {e:?}"
+            ));
         }
     }
     Ok(())
@@ -90,11 +97,19 @@ fn first_diff(a: &[Row], e: &[Row]) -> String {
     let n = a.len().max(e.len());
     let mut s = String::new();
     for i in 0..n {
-        let av = a.get(i).map(|r| format!("{} {:?}", r.kind, r.text)).unwrap_or_else(|| "<none>".into());
-        let ev = e.get(i).map(|r| format!("{} {:?}", r.kind, r.text)).unwrap_or_else(|| "<none>".into());
+        let av = a
+            .get(i)
+            .map(|r| format!("{} {:?}", r.kind, r.text))
+            .unwrap_or_else(|| "<none>".into());
+        let ev = e
+            .get(i)
+            .map(|r| format!("{} {:?}", r.kind, r.text))
+            .unwrap_or_else(|| "<none>".into());
         let mark = if av == ev { "  " } else { "!=" };
         s.push_str(&format!("  [{i}] {mark} actual={av}  expected={ev}\n"));
-        if i > 40 { break; }
+        if i > 40 {
+            break;
+        }
     }
     s
 }

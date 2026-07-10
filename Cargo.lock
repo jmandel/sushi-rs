@@ -237,10 +237,14 @@ dependencies = [
  "render_sd",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "site_build",
  "site_db",
  "site_producer",
  "snapshot_gen",
+ "tempfile",
  "tiny_http",
+ "walkdir",
  "wasm_api",
 ]
 
@@ -668,6 +672,7 @@ dependencies = [
  "render_xhtml",
  "serde_json",
  "serde_yaml",
+ "site_build",
 ]
 
 [[package]]
@@ -900,6 +905,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 
 [[package]]
+name = "site_build"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "site_db",
+ "thiserror",
+]
+
+[[package]]
 name = "site_db"
 version = "0.1.0"
 dependencies = [
@@ -1002,6 +1019,26 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1174,6 +1211,8 @@ dependencies = [
  "render_sd",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "site_build",
  "site_db",
  "site_producer",
  "snapshot_gen",

@@ -11,6 +11,7 @@ members = [
     "crates/json_emit",
     "crates/rust_sushi",
     "crates/snapshot_gen",
+    "crates/site_build",
     "crates/site_db",
     "crates/wasm_api",
     "crates/render_xhtml",
@@ -41,6 +42,7 @@ compiler = { path = "crates/compiler" }
 diagnostics = { path = "crates/diagnostics" }
 json_emit = { path = "crates/json_emit" }
 snapshot_gen = { path = "crates/snapshot_gen" }
+site_build = { path = "crates/site_build" }
 site_db = { path = "crates/site_db", default-features = false }
 render_xhtml = { path = "crates/render_xhtml" }
 render_liquid = { path = "crates/render_liquid" }

@@ -117,7 +117,6 @@ pub fn cross_version_analysis(npm_name: &str, new_format: bool, inline: bool) ->
     format!("{}{}", wrapped, track("2"))
 }
 
-
 /// A used-type entry (cvr UsedType, cvr:54): a type code + its must-support flag.
 struct UsedType {
     name: String,
@@ -141,8 +140,11 @@ fn type_is_ms(ed: &Value, tr: &Value) -> bool {
         return true;
     }
     // TypeRefComponent _mustSupport extension (EXT_MUST_SUPPORT).
-    ext_value_str(tr, "http://hl7.org/fhir/StructureDefinition/structuredefinition-mustSupport")
-        .as_deref()
+    ext_value_str(
+        tr,
+        "http://hl7.org/fhir/StructureDefinition/structuredefinition-mustSupport",
+    )
+    .as_deref()
         == Some("true")
 }
 
@@ -152,13 +154,22 @@ fn types_contain(types: &[UsedType], name: &str) -> bool {
 
 /// The definition string of an element (getDefinition()).
 fn ed_definition(ed: &Value) -> String {
-    ed.get("definition").and_then(|x| x.as_str()).unwrap_or("").to_string()
+    ed.get("definition")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string()
 }
 
 /// The fixed/pattern primitive value of a `url` element (getFixedOrPattern().
 /// primitiveValue() for a uri): `fixedUri`/`patternUri`.
 fn fixed_uri(ed: &Value) -> Option<String> {
-    for k in ["fixedUri", "patternUri", "fixedString", "patternString", "fixedCanonical"] {
+    for k in [
+        "fixedUri",
+        "patternUri",
+        "fixedString",
+        "patternString",
+        "fixedCanonical",
+    ] {
         if let Some(s) = ed.get(k).and_then(|x| x.as_str()) {
             return Some(s.to_string());
         }
@@ -205,10 +216,18 @@ fn process_ext_component(
             }
         }
         if path.starts_with("Extension.extension.value") {
-            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+            for tr in ed
+                .get("type")
+                .and_then(|x| x.as_array())
+                .map(|a| a.as_slice())
+                .unwrap_or(&[])
+            {
                 let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
                 if !types_contain(&exd.types, code) {
-                    exd.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                    exd.types.push(UsedType {
+                        name: code.to_string(),
+                        ms: type_is_ms(ed, tr),
+                    });
                 }
             }
         }
@@ -234,7 +253,12 @@ fn see_extension_definition(res: &OwnResource, canonical: &str) -> Option<ExtDef
     let mut exd = ExtDef {
         code,
         web: Some(res.web_path.clone()),
-        definition: res.json.get("description").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        definition: res
+            .json
+            .get("description")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
         types: Vec::new(),
         components: Vec::new(),
     };
@@ -251,16 +275,28 @@ fn see_extension_definition(res: &OwnResource, canonical: &str) -> Option<ExtDef
         let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
         let max = ed.get("max").and_then(|x| x.as_str()).unwrap_or("");
         if path.starts_with("Extension.value") && max != "0" {
-            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+            for tr in ed
+                .get("type")
+                .and_then(|x| x.as_array())
+                .map(|a| a.as_slice())
+                .unwrap_or(&[])
+            {
                 let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
                 if !types_contain(&exd.types, code) {
-                    exd.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                    exd.types.push(UsedType {
+                        name: code.to_string(),
+                        ms: type_is_ms(ed, tr),
+                    });
                 }
             }
         }
         if path.starts_with("Extension.extension.") {
             // defn = the definition of element i-1 (the slice header). cvr:403.
-            let defn = if i > 0 { ed_definition(&els[i - 1]) } else { String::new() };
+            let defn = if i > 0 {
+                ed_definition(&els[i - 1])
+            } else {
+                String::new()
+            };
             i = process_ext_component(&mut exd, els, defn, canonical, i);
         } else {
             i += 1;
@@ -287,7 +323,12 @@ fn base_ext_types(ctx: &IgContext) -> Vec<String> {
             let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
             let max = ed.get("max").and_then(|x| x.as_str()).unwrap_or("");
             if path.starts_with("Extension.value") && max != "0" {
-                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                for tr in ed
+                    .get("type")
+                    .and_then(|x| x.as_array())
+                    .map(|a| a.as_slice())
+                    .unwrap_or(&[])
+                {
                     if let Some(c) = tr.get("code").and_then(|x| x.as_str()) {
                         if !out.iter().any(|x| x == c) {
                             out.push(c.to_string());
@@ -308,8 +349,10 @@ fn all_ms_are_same(types: &[UsedType]) -> bool {
     types.iter().all(|t| t.ms == ms)
 }
 
-const MS_SPAN: &str = " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span> ";
-const MS_SPAN_TRAIL: &str = " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span>";
+const MS_SPAN: &str =
+    " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span> ";
+const MS_SPAN_TRAIL: &str =
+    " <span style=\"color:white; background-color: #D50000; font-weight:bold\">S</span>";
 
 /// renderTypeCell (cvr:605): the Value Types cell. `render` is always true for
 /// the extension/observation tables; the `(all)` collapse fires only when the
@@ -362,7 +405,10 @@ pub fn summary_extensions(ctx: &IgContext) -> String {
     let mut ext_list: Vec<(String, ExtDef)> = ctx
         .own_resources()
         .into_iter()
-        .filter(|r| r.rtype == "StructureDefinition" && r.json.get("type").and_then(|x| x.as_str()) == Some("Extension"))
+        .filter(|r| {
+            r.rtype == "StructureDefinition"
+                && r.json.get("type").and_then(|x| x.as_str()) == Some("Extension")
+        })
         .filter_map(|r| {
             let url = r.json.get("url").and_then(|x| x.as_str())?.to_lowercase();
             see_extension_definition(&r, &canonical).map(|e| (url, e))
@@ -376,7 +422,9 @@ pub fn summary_extensions(ctx: &IgContext) -> String {
     let base = base_ext_types(ctx);
     let mut b = String::new();
     b.push_str("<table class=\"grid\">\r\n");
-    b.push_str(" <tr><td><b>Code</b></td><td><b>Value Types</b></td><td><b>Definition</b></td></tr>\r\n");
+    b.push_str(
+        " <tr><td><b>Code</b></td><td><b>Value Types</b></td><td><b>Definition</b></td></tr>\r\n",
+    );
     for (_url, op) in &ext_list {
         b.push_str(" <tr>");
         b.push_str(&format!(
@@ -464,8 +512,16 @@ fn fixed_coding(ed: &Value) -> Option<SumCoding> {
 
 fn coding_of(c: &Value) -> SumCoding {
     SumCoding {
-        system: c.get("system").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-        code: c.get("code").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        system: c
+            .get("system")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
+        code: c
+            .get("code")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
         version: c.get("version").and_then(|x| x.as_str()).map(String::from),
     }
 }
@@ -474,7 +530,11 @@ fn binding_of(ed: &Value) -> Option<SumBinding> {
     let b = ed.get("binding")?;
     let vs = b.get("valueSet").and_then(|x| x.as_str())?;
     Some(SumBinding {
-        strength: b.get("strength").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        strength: b
+            .get("strength")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
         value_set: vs.to_string(),
     })
 }
@@ -502,11 +562,23 @@ fn dot_count(path: &str) -> usize {
 
 /// processObservationComponent (cvr:327): consume the `Observation.component.*`
 /// run starting at `i` into one component ObsProfile. Returns the next index.
-fn process_obs_component(parent: &mut ObsProfile, els: &[Value], comp_slice: &str, mut i: usize) -> usize {
-    let mut obs = ObsProfile { name: comp_slice.to_string(), ..Default::default() };
+fn process_obs_component(
+    parent: &mut ObsProfile,
+    els: &[Value],
+    comp_slice: &str,
+    mut i: usize,
+) -> usize {
+    let mut obs = ObsProfile {
+        name: comp_slice.to_string(),
+        ..Default::default()
+    };
     let mut system: Option<String> = None;
     while i < els.len()
-        && els[i].get("path").and_then(|x| x.as_str()).map(|p| p.starts_with("Observation.component.")).unwrap_or(false)
+        && els[i]
+            .get("path")
+            .and_then(|x| x.as_str())
+            .map(|p| p.starts_with("Observation.component."))
+            .unwrap_or(false)
     {
         let ed = &els[i];
         let path = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
@@ -549,10 +621,18 @@ fn process_obs_component(parent: &mut ObsProfile, els: &[Value], comp_slice: &st
         }
         if path.starts_with("Observation.component.value") && dot_count(path) == 2 {
             if ed.get("max").and_then(|x| x.as_str()) != Some("0") {
-                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                for tr in ed
+                    .get("type")
+                    .and_then(|x| x.as_array())
+                    .map(|a| a.as_slice())
+                    .unwrap_or(&[])
+                {
                     let code = tr.get("code").and_then(|x| x.as_str()).unwrap_or("");
                     if !types_contain(&obs.types, code) {
-                        obs.types.push(UsedType { name: code.to_string(), ms: type_is_ms(ed, tr) });
+                        obs.types.push(UsedType {
+                            name: code.to_string(),
+                            ms: type_is_ms(ed, tr),
+                        });
                     }
                 }
             }
@@ -581,7 +661,12 @@ fn see_observation(res: &OwnResource) -> Option<ObsProfile> {
         ..Default::default()
     };
     let empty: Vec<Value> = Vec::new();
-    let els = res.json.get("snapshot").and_then(|s| s.get("element")).and_then(|x| x.as_array()).unwrap_or(&empty);
+    let els = res
+        .json
+        .get("snapshot")
+        .and_then(|s| s.get("element"))
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
     let mut i = 0;
     let mut system: Option<String> = None;
     let mut comp_slice: Option<String> = None;
@@ -605,7 +690,11 @@ fn see_observation(res: &OwnResource) -> Option<ObsProfile> {
         }
         if path == "Observation.category.coding.code" {
             if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
-                obs.category.push(SumCoding { system: sys.clone(), code, version: None });
+                obs.category.push(SumCoding {
+                    system: sys.clone(),
+                    code,
+                    version: None,
+                });
                 system = None;
             }
         }
@@ -631,29 +720,55 @@ fn see_observation(res: &OwnResource) -> Option<ObsProfile> {
         }
         if path == "Observation.code.coding.code" {
             if let (Some(sys), Some(code)) = (&system, primitive_fixed(ed)) {
-                obs.code.push(SumCoding { system: sys.clone(), code, version: None });
+                obs.code.push(SumCoding {
+                    system: sys.clone(),
+                    code,
+                    version: None,
+                });
                 system = None;
             }
         }
 
         if path == "Observation.effective[x]" {
-            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+            for tr in ed
+                .get("type")
+                .and_then(|x| x.as_array())
+                .map(|a| a.as_slice())
+                .unwrap_or(&[])
+            {
                 let code = working_code(tr);
                 if !types_contain(&obs.effective_types, &code) {
-                    obs.effective_types.push(UsedType { name: code, ms: type_is_ms(ed, tr) });
+                    obs.effective_types.push(UsedType {
+                        name: code,
+                        ms: type_is_ms(ed, tr),
+                    });
                 }
             }
         }
-        if path.starts_with("Observation.value") && dot_count(path) == 1 && ed.get("max").and_then(|x| x.as_str()) != Some("0") {
-            for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+        if path.starts_with("Observation.value")
+            && dot_count(path) == 1
+            && ed.get("max").and_then(|x| x.as_str()) != Some("0")
+        {
+            for tr in ed
+                .get("type")
+                .and_then(|x| x.as_array())
+                .map(|a| a.as_slice())
+                .unwrap_or(&[])
+            {
                 let code = working_code(tr);
                 if !types_contain(&obs.types, &code) {
-                    obs.types.push(UsedType { name: code, ms: type_is_ms(ed, tr) });
+                    obs.types.push(UsedType {
+                        name: code,
+                        ms: type_is_ms(ed, tr),
+                    });
                 }
             }
         }
         if path == "Observation.component" {
-            comp_slice = ed.get("sliceName").and_then(|x| x.as_str()).map(String::from);
+            comp_slice = ed
+                .get("sliceName")
+                .and_then(|x| x.as_str())
+                .map(String::from);
         }
         let prohibited = ed.get("max").and_then(|x| x.as_str()) == Some("0");
         if path.starts_with("Observation.component.") && !prohibited && comp_slice.is_some() {
@@ -709,7 +824,11 @@ fn render_coding_cell(
         let vs_url = strip_version(&bind.value_set);
         match ctx.resolve(&vs_url) {
             Some(vs) if vs.rtype == "ValueSet" && !vs.web_path.is_empty() => {
-                b.push_str(&format!("<a href=\"{}\">{}</a>", vs.web_path, escape_xml(&vs.present())));
+                b.push_str(&format!(
+                    "<a href=\"{}\">{}</a>",
+                    vs.web_path,
+                    escape_xml(&vs.present())
+                ));
             }
             Some(vs) if vs.rtype == "ValueSet" => {
                 b.push_str(&escape_xml(&vs.present()));
@@ -732,7 +851,11 @@ fn render_coding_cell(
 }
 
 /// One coding within renderCodingCell's coding branch (cvr:674-700).
-fn render_one_coding(ctx: &IgContext, tx: &dyn crate::txcache::TxCacheSource, t: &SumCoding) -> String {
+fn render_one_coding(
+    ctx: &IgContext,
+    tx: &dyn crate::txcache::TxCacheSource,
+    t: &SumCoding,
+) -> String {
     // sys = displaySystem(system); if it equals the system, sys=null, then try
     // fetchCodeSystem(system).getTitle().
     let mut sys = display_system(ctx, &t.system);
@@ -750,7 +873,9 @@ fn render_one_coding(ctx: &IgContext, tx: &dyn crate::txcache::TxCacheSource, t:
         let title = format!(
             "{}{}: {}",
             t.system,
-            sys.as_ref().map(|s| format!(" ({})", s)).unwrap_or_default(),
+            sys.as_ref()
+                .map(|s| format!(" ({})", s))
+                .unwrap_or_default(),
             disp
         );
         // Link when fetchCodeSystem has a webPath (cvr:691-696).
@@ -769,7 +894,9 @@ fn render_one_coding(ctx: &IgContext, tx: &dyn crate::txcache::TxCacheSource, t:
         let title = format!(
             "{}{}",
             t.system,
-            sys.as_ref().map(|s| format!(" ({}): ", s)).unwrap_or_default()
+            sys.as_ref()
+                .map(|s| format!(" ({}): ", s))
+                .unwrap_or_default()
         );
         format!("<span title=\"{}\">{}</span>", title, t.code)
     }
@@ -825,7 +952,10 @@ pub fn summary_observations(
     let mut obs_list: Vec<(String, ObsProfile)> = ctx
         .own_resources()
         .into_iter()
-        .filter(|r| r.rtype == "StructureDefinition" && r.json.get("type").and_then(|x| x.as_str()) == Some("Observation"))
+        .filter(|r| {
+            r.rtype == "StructureDefinition"
+                && r.json.get("type").and_then(|x| x.as_str()) == Some("Observation")
+        })
         .filter_map(|r| {
             let url = r.json.get("url").and_then(|x| x.as_str())?.to_lowercase();
             see_observation(&r).map(|o| (url, o))
@@ -839,8 +969,15 @@ pub fn summary_observations(
     let profiles: Vec<&ObsProfile> = obs_list.iter().map(|(_, o)| o).collect();
 
     // Column presence flags (cvr:494-517).
-    let (mut has_cat, mut has_code, mut has_eff, mut has_types, mut has_dar, mut has_body, mut has_method) =
-        (false, false, false, false, false, false, false);
+    let (
+        mut has_cat,
+        mut has_code,
+        mut has_eff,
+        mut has_types,
+        mut has_dar,
+        mut has_body,
+        mut has_method,
+    ) = (false, false, false, false, false, false, false);
     for op in &profiles {
         has_cat = has_cat || !op.category.is_empty() || op.cat_vs.is_some();
         has_code = has_code || !op.code.is_empty() || op.code_vs.is_some();
@@ -907,10 +1044,22 @@ pub fn summary_observations(
             escape_xml(&op.id)
         ));
         if has_cat {
-            b.push_str(&render_coding_cell(ctx, tx, core_path, &op.category, op.cat_vs.as_ref()));
+            b.push_str(&render_coding_cell(
+                ctx,
+                tx,
+                core_path,
+                &op.category,
+                op.cat_vs.as_ref(),
+            ));
         }
         if has_code {
-            b.push_str(&render_coding_cell(ctx, tx, core_path, &op.code, op.code_vs.as_ref()));
+            b.push_str(&render_coding_cell(
+                ctx,
+                tx,
+                core_path,
+                &op.code,
+                op.code_vs.as_ref(),
+            ));
         }
         if has_eff {
             b.push_str(&render_type_cell(ctx, &op.effective_types, &base_eff));
@@ -933,7 +1082,13 @@ pub fn summary_observations(
             b.push_str(&format!("<td>&nbsp;&nbsp;{}</td>", escape_xml(&c.name)));
             b.push_str("<td></td>");
             if has_code {
-                b.push_str(&render_coding_cell(ctx, tx, core_path, &c.code, c.code_vs.as_ref()));
+                b.push_str(&render_coding_cell(
+                    ctx,
+                    tx,
+                    core_path,
+                    &c.code,
+                    c.code_vs.as_ref(),
+                ));
             }
             if has_eff {
                 b.push_str(&render_type_cell(ctx, &c.effective_types, &base_eff));
@@ -963,7 +1118,12 @@ fn is_same_codes(l1: &[SumCoding], l2: &[SumCoding]) -> bool {
         return false;
     }
     l1.iter().all(|c1| {
-        l2.iter().any(|c2| !c2.system.is_empty() && c2.system == c1.system && !c2.code.is_empty() && c2.code == c1.code)
+        l2.iter().any(|c2| {
+            !c2.system.is_empty()
+                && c2.system == c1.system
+                && !c2.code.is_empty()
+                && c2.code == c1.code
+        })
     })
 }
 
@@ -971,18 +1131,32 @@ fn is_same_codes(l1: &[SumCoding], l2: &[SumCoding]) -> bool {
 /// effective[x] (exact path) or value[x] (prefix + dotcount==1 + max!=0).
 fn base_types_of(ctx: &IgContext, type_name: &str, path: &str, is_value: bool) -> Vec<String> {
     let mut out = Vec::new();
-    if let Some(r) = ctx.load_resource(&format!("http://hl7.org/fhir/StructureDefinition/{}", type_name)) {
+    if let Some(r) = ctx.load_resource(&format!(
+        "http://hl7.org/fhir/StructureDefinition/{}",
+        type_name
+    )) {
         let empty: Vec<Value> = Vec::new();
-        let els = r.get("snapshot").and_then(|s| s.get("element")).and_then(|x| x.as_array()).unwrap_or(&empty);
+        let els = r
+            .get("snapshot")
+            .and_then(|s| s.get("element"))
+            .and_then(|x| x.as_array())
+            .unwrap_or(&empty);
         for ed in els {
             let p = ed.get("path").and_then(|x| x.as_str()).unwrap_or("");
             let hit = if is_value {
-                p.starts_with(path) && dot_count(p) == 1 && ed.get("max").and_then(|x| x.as_str()) != Some("0")
+                p.starts_with(path)
+                    && dot_count(p) == 1
+                    && ed.get("max").and_then(|x| x.as_str()) != Some("0")
             } else {
                 p == path
             };
             if hit {
-                for tr in ed.get("type").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
+                for tr in ed
+                    .get("type")
+                    .and_then(|x| x.as_array())
+                    .map(|a| a.as_slice())
+                    .unwrap_or(&[])
+                {
                     let code = working_code(tr);
                     if !code.is_empty() && !out.iter().any(|x| x == &code) {
                         out.push(code);
@@ -1057,14 +1231,24 @@ pub fn deprecated_list(ctx: &IgContext, core_path: &str) -> String {
             .or_else(|| r.json.get("name").and_then(|x| x.as_str()))
             .unwrap_or(&r.id)
             .to_string();
-        let desc = r.json.get("description").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let desc = r
+            .json
+            .get("description")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         list.push(DeprInfo {
             path: r.web_path.clone(),
             rtype: r.rtype.clone(),
             name,
             reason: standards_status_reason(&r.json),
             desc,
-            status: r.json.get("status").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            status: r
+                .json
+                .get("status")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
         });
     }
     // DeprecationInfoSorter (dpr:166): dstatus (all UNKNOWN here) then name.
@@ -1124,7 +1308,11 @@ pub fn deprecated_list(ctx: &IgContext, core_path: &str) -> String {
         }
         tr.add_child_node(td_status);
         // Reason + Description cells: markdown(preProcessMarkdown(...)) (dpr:110-111).
-        tr.add_child_node(markdown_td(ctx, di.reason.as_deref().unwrap_or(""), core_path));
+        tr.add_child_node(markdown_td(
+            ctx,
+            di.reason.as_deref().unwrap_or(""),
+            core_path,
+        ));
         tr.add_child_node(markdown_td(ctx, &di.desc, core_path));
         tbl.add_child_node(tr);
     }
@@ -1188,7 +1376,8 @@ pub fn expansion_params(has_interesting_params: bool) -> String {
 // CrossViewRenderer CS/VS "defined" lists (cvr:1393/1685)
 // ---------------------------------------------------------------------------
 
-const EXT_STANDARDS_STATUS: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status";
+const EXT_STANDARDS_STATUS: &str =
+    "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status";
 const EXT_FMM_LEVEL: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm";
 
 /// The value of a simple-valued extension by url (valueCode/valueInteger/...).
@@ -1216,7 +1405,10 @@ fn ext_value_str(res: &Value, url: &str) -> Option<String> {
 fn has_ext(res: &Value, url: &str) -> bool {
     res.get("extension")
         .and_then(|x| x.as_array())
-        .map(|a| a.iter().any(|e| e.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .map(|a| {
+            a.iter()
+                .any(|e| e.get("url").and_then(|u| u.as_str()) == Some(url))
+        })
         .unwrap_or(false)
 }
 
@@ -1228,7 +1420,12 @@ fn own_of_type(ctx: &IgContext, rtype: &str) -> Vec<(String, String, std::rc::Rc
         .into_iter()
         .filter(|r| r.rtype == rtype)
         .map(|r| {
-            let url = r.json.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let url = r
+                .json
+                .get("url")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
             (url, r.web_path, r.json)
         })
         .collect();
@@ -1305,19 +1502,19 @@ fn name_title_cell(res: &Value) -> String {
 }
 
 /// `needVersionReferences` (cvr:1385): any resource version != igVersion.
-fn need_version_references(list: &[(String, String, std::rc::Rc<Value>)], ig_version: &str) -> bool {
-    list.iter().any(|(_u, _w, j)| get_str(j, "version") != ig_version)
+fn need_version_references(
+    list: &[(String, String, std::rc::Rc<Value>)],
+    ig_version: &str,
+) -> bool {
+    list.iter()
+        .any(|(_u, _w, j)| get_str(j, "version") != ig_version)
 }
 
 /// A resolved ValueSet in a used-VS list: (url, version). Identity is by
 /// object in Java (`list.contains(vs)`); here we dedup by (url, version) which
 /// is behavior-equivalent for the version-flag boolean (each distinct loaded VS
 /// object has one url+version).
-fn collect_vs_ref(
-    out: &mut Vec<(String, String)>,
-    ctx: &IgContext,
-    url: &str,
-) {
+fn collect_vs_ref(out: &mut Vec<(String, String)>, ctx: &IgContext, url: &str) {
     if url.is_empty() {
         return;
     }
@@ -1377,7 +1574,12 @@ fn build_used_valueset_versions(ctx: &IgContext, all: bool) -> Vec<(String, Stri
                 if !uurl.is_empty() && !out.iter().any(|e| e.0 == entry.0) {
                     out.push(entry);
                 }
-                if let Some(incs) = r.json.get("compose").and_then(|c| c.get("include")).and_then(|x| x.as_array()) {
+                if let Some(incs) = r
+                    .json
+                    .get("compose")
+                    .and_then(|c| c.get("include"))
+                    .and_then(|x| x.as_array())
+                {
                     for inc in incs {
                         if let Some(vss) = inc.get("valueSet").and_then(|x| x.as_array()) {
                             for u in vss {
@@ -1393,7 +1595,12 @@ fn build_used_valueset_versions(ctx: &IgContext, all: bool) -> Vec<(String, Stri
                 walk_questionnaire_vs(&mut out, ctx, &r.json);
             }
             "ConceptMap" => {
-                for k in ["sourceScope", "targetScope", "sourceScopeCanonical", "targetScopeCanonical"] {
+                for k in [
+                    "sourceScope",
+                    "targetScope",
+                    "sourceScopeCanonical",
+                    "targetScopeCanonical",
+                ] {
                     if let Some(u) = r.json.get(k).and_then(|x| x.as_str()) {
                         collect_vs_ref(&mut out, ctx, u);
                     }
@@ -1402,7 +1609,11 @@ fn build_used_valueset_versions(ctx: &IgContext, all: bool) -> Vec<(String, Stri
             "OperationDefinition" => {
                 if let Some(ps) = r.json.get("parameter").and_then(|x| x.as_array()) {
                     for p in ps {
-                        if let Some(vs) = p.get("binding").and_then(|b| b.get("valueSet")).and_then(|x| x.as_str()) {
+                        if let Some(vs) = p
+                            .get("binding")
+                            .and_then(|b| b.get("valueSet"))
+                            .and_then(|x| x.as_str())
+                        {
                             collect_vs_ref(&mut out, ctx, vs);
                         }
                     }
@@ -1469,7 +1680,10 @@ fn cs_row_cells(url: &str, web: &str, j: &Value, versions: bool) -> String {
     b.push_str(&status_cell(j, ": "));
     // Flags: hierarchyMeaning, flat, compositional, versionNeeded.
     let empty: Vec<Value> = Vec::new();
-    let concepts = j.get("concept").and_then(|x| x.as_array()).unwrap_or(&empty);
+    let concepts = j
+        .get("concept")
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
     let mut flags = String::new();
     if let Some(hm) = j.get("hierarchyMeaning").and_then(|x| x.as_str()) {
         flags.push_str(&escape_xml(hm));
@@ -1672,7 +1886,10 @@ pub fn canonical_index(
         // ImplementationGuide entry or, when absent, the sushi-config
         // auto-oid-root supplied via the map under the IG's id).
         let ig_oids = oid_map
-            .and_then(|m| m.get(&("ImplementationGuide".to_string(), id.clone())).cloned())
+            .and_then(|m| {
+                m.get(&("ImplementationGuide".to_string(), id.clone()))
+                    .cloned()
+            })
             .unwrap_or_default();
         rows.push(CanonRow {
             rtype: "ImplementationGuide".to_string(),
@@ -1711,7 +1928,10 @@ pub fn canonical_index(
         b.push_str(&format!("<td>{}</td>", escape_xml(&row.id)));
         b.push_str(&format!("<td>{}</td>", escape_xml(&row.version)));
         b.push_str(&format!("<td>{}</td>", escape_xml(&row.oids.join(", "))));
-        b.push_str(&format!("<td>{}</td>", escape_xml(&row.alt_urls.join(", "))));
+        b.push_str(&format!(
+            "<td>{}</td>",
+            escape_xml(&row.alt_urls.join(", "))
+        ));
         b.push_str("</tr>");
     }
     b.push_str("</table>");
@@ -1793,13 +2013,17 @@ fn render_vs_list(
 /// pg:2789/2794). Identical VS cells + a References column (see xreflist).
 pub fn valueset_ref_list(ctx: &IgContext, ig_version: &str, all: bool) -> String {
     let rows = crate::xreflist::used_vs_rows(ctx, all);
-    let versions = rows.iter().any(|r| get_str(&r.json, "version") != ig_version);
+    let versions = rows
+        .iter()
+        .any(|r| get_str(&r.json, "version") != ig_version);
     let mut b = String::new();
     b.push_str("<table class=\"grid\"><tr><th>URL</th>");
     if versions {
         b.push_str("<th>Version</th>");
     }
-    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Source</th><th>References</th></tr>");
+    b.push_str(
+        "<th>Name / Title</th><th>Status</th><th>Flags</th><th>Source</th><th>References</th></tr>",
+    );
     for r in &rows {
         b.push_str("<tr>");
         b.push_str(&vs_row_cells(ctx, &r.url, &r.web, &r.json, versions));
@@ -1820,7 +2044,9 @@ pub fn codesystem_ref_list(ctx: &IgContext, versions: bool, all: bool) -> String
     if versions {
         b.push_str("<th>Version</th>");
     }
-    b.push_str("<th>Name / Title</th><th>Status</th><th>Flags</th><th>Count</th><th>References</th></tr>");
+    b.push_str(
+        "<th>Name / Title</th><th>Status</th><th>Flags</th><th>Count</th><th>References</th></tr>",
+    );
     for r in &rows {
         b.push_str("<tr>");
         b.push_str(&cs_row_cells(&r.url, &r.web, &r.json, versions));
@@ -1833,13 +2059,7 @@ pub fn codesystem_ref_list(ctx: &IgContext, versions: bool, all: bool) -> String
 
 /// The VS list row cells (URL .. Source), shared by valueset-list and the ref
 /// variants. Does NOT emit the `<tr>`/`</tr>` nor the References column.
-fn vs_row_cells(
-    ctx: &IgContext,
-    url: &str,
-    web: &str,
-    j: &Value,
-    versions: bool,
-) -> String {
+fn vs_row_cells(ctx: &IgContext, url: &str, web: &str, j: &Value, versions: bool) -> String {
     {
         let mut b = String::new();
         b.push_str(&format!(
@@ -1859,7 +2079,11 @@ fn vs_row_cells(
         if compose.and_then(|c| c.get("lockedDate")).is_some() {
             flags.push_str("Locked-Date ");
         }
-        if compose.and_then(|c| c.get("inactive")).and_then(|x| x.as_bool()) == Some(true) {
+        if compose
+            .and_then(|c| c.get("inactive"))
+            .and_then(|x| x.as_bool())
+            == Some(true)
+        {
             flags.push_str("Inactive ");
         }
         let includes = compose
@@ -1869,19 +2093,38 @@ fn vs_row_cells(
         let (mut inc_i, mut inc_e, mut inc_v, mut inc_a) = (false, false, false, false);
         let mut sources: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for inc in includes {
-            if inc.get("valueSet").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false)
+            if inc
+                .get("valueSet")
+                .and_then(|x| x.as_array())
+                .map(|a| !a.is_empty())
+                .unwrap_or(false)
                 || inc.get("valueSet").map(|v| !v.is_null()).unwrap_or(false)
             {
                 // hasValueSet(): the compose include references value set(s).
-                if inc.get("valueSet").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(inc.get("valueSet").is_some()) {
+                if inc
+                    .get("valueSet")
+                    .and_then(|x| x.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(inc.get("valueSet").is_some())
+                {
                     inc_v = true;
                 }
             }
             if let Some(system) = inc.get("system").and_then(|x| x.as_str()) {
                 sources.insert(describe_source(ctx, system));
-                if inc.get("concept").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+                if inc
+                    .get("concept")
+                    .and_then(|x| x.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false)
+                {
                     inc_e = true;
-                } else if inc.get("filter").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+                } else if inc
+                    .get("filter")
+                    .and_then(|x| x.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false)
+                {
                     inc_i = true;
                 } else {
                     inc_a = true;

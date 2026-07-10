@@ -73,10 +73,16 @@ impl<'a> FsTxCache<'a> {
         })];
         let mut seen_params: Vec<String> = Vec::new();
         // property definitions collected across includes (code -> uri).
-        let mut prop_defs: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+        let mut prop_defs: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
         for inc in includes {
             let system = inc.get("system").and_then(|x| x.as_str())?;
-            if inc.get("filter").and_then(|f| f.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+            if inc
+                .get("filter")
+                .and_then(|f| f.as_array())
+                .map(|a| !a.is_empty())
+                .unwrap_or(false)
+            {
                 return None;
             }
             if inc.get("valueSet").is_some() {
@@ -100,7 +106,10 @@ impl<'a> FsTxCache<'a> {
             if !matches!(content, Some("complete") | Some("fragment")) {
                 return None;
             }
-            let cs_version = cs_json.get("version").and_then(|x| x.as_str()).unwrap_or("");
+            let cs_version = cs_json
+                .get("version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             // Collect the CS property definitions (code -> uri) for the expansion
             // property columns (only `status` and other displayable props matter).
             collect_cs_property_defs(&cs_json, &mut prop_defs);
@@ -125,7 +134,13 @@ impl<'a> FsTxCache<'a> {
                         .map(String::from)
                         .or_else(|| cs_lookup_display(&cs_json, code));
                     let cprops = cs_concept_props(&cs_json, code);
-                    contains.push(mk_contains(system, cs_version, code, display.as_deref(), &cprops));
+                    contains.push(mk_contains(
+                        system,
+                        cs_version,
+                        code,
+                        display.as_deref(),
+                        &cprops,
+                    ));
                 }
             } else {
                 // all codes: enumerate the CS concepts in order.
@@ -144,7 +159,10 @@ impl<'a> FsTxCache<'a> {
                     return None; // not locally enumerable
                 }
                 if let Some(ecodes) = exc.get("concept").and_then(|x| x.as_array()) {
-                    let codes: Vec<&str> = ecodes.iter().filter_map(|c| c.get("code").and_then(|x| x.as_str())).collect();
+                    let codes: Vec<&str> = ecodes
+                        .iter()
+                        .filter_map(|c| c.get("code").and_then(|x| x.as_str()))
+                        .collect();
                     contains.retain(|c| {
                         let csys = c.get("system").and_then(|x| x.as_str());
                         let ccode = c.get("code").and_then(|x| x.as_str()).unwrap_or("");
@@ -186,38 +204,70 @@ impl<'a> FsTxCache<'a> {
         let want_fp = compose_fingerprint(want_includes);
 
         for cf in &self.cache_files {
-            let Some(text) = self.ctx.tree().read(cf) else { continue };
+            let Some(text) = self.ctx.tree().read(cf) else {
+                continue;
+            };
             for (req, tag, resp) in parse_cache_blocks(&text) {
                 if tag != "e" {
                     continue;
                 }
                 // req has {"valueSet": {compose...}} (+ maybe "hierarchical").
-                let Some(req_v) = serde_json::from_str::<Value>(&req).ok() else { continue };
-                let Some(req_vs) = req_v.get("valueSet") else { continue };
-                let Some(req_inc) = req_vs.get("compose").and_then(|c| c.get("include")).and_then(|x| x.as_array()) else { continue };
+                let Some(req_v) = serde_json::from_str::<Value>(&req).ok() else {
+                    continue;
+                };
+                let Some(req_vs) = req_v.get("valueSet") else {
+                    continue;
+                };
+                let Some(req_inc) = req_vs
+                    .get("compose")
+                    .and_then(|c| c.get("include"))
+                    .and_then(|x| x.as_array())
+                else {
+                    continue;
+                };
                 if compose_fingerprint(req_inc) != want_fp {
                     continue;
                 }
                 // The cached `e:` response envelope is NOT strict JSON — it has a
                 // bare `"source" : tx.fhir.org` (unquoted). Extract just the inner
                 // `"valueSet": { ... }` object (valid JSON) by brace-matching.
-                let Some(vsv) = extract_json_object(&resp, "\"valueSet\"") else { continue };
-                let Some(expansion) = vsv.get("expansion") else { continue };
-                let contains = expansion.get("contains").and_then(|x| x.as_array()).cloned().unwrap_or_default();
-                let mut parameters = expansion.get("parameter").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+                let Some(vsv) = extract_json_object(&resp, "\"valueSet\"") else {
+                    continue;
+                };
+                let Some(expansion) = vsv.get("expansion") else {
+                    continue;
+                };
+                let contains = expansion
+                    .get("contains")
+                    .and_then(|x| x.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                let mut parameters = expansion
+                    .get("parameter")
+                    .and_then(|x| x.as_array())
+                    .cloned()
+                    .unwrap_or_default();
                 // The publisher expands `withLanguage("en")`; expandVS stamps a
                 // `displayLanguage` param on the returned expansion (drives the
                 // "Display (en)" column). The cached server response may omit it,
                 // so inject it if absent (matches the publisher's post-expand VS).
-                if !parameters.iter().any(|p| p.get("name").and_then(|x| x.as_str()) == Some("displayLanguage")) {
-                    parameters.push(serde_json::json!({"name": "displayLanguage", "valueCode": "en"}));
+                if !parameters
+                    .iter()
+                    .any(|p| p.get("name").and_then(|x| x.as_str()) == Some("displayLanguage"))
+                {
+                    parameters
+                        .push(serde_json::json!({"name": "displayLanguage", "valueCode": "en"}));
                 }
                 let total = expansion.get("total").and_then(|x| x.as_i64());
                 // server source: the bare `"source" : <host>` line in the envelope.
                 let server = extract_bare_source(&resp)
                     .map(|s| strip_scheme(&s))
                     .unwrap_or_else(|| "tx.fhir.org".to_string());
-                let properties = expansion.get("property").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+                let properties = expansion
+                    .get("property")
+                    .and_then(|x| x.as_array())
+                    .cloned()
+                    .unwrap_or_default();
                 return Some(ExpandedValueSet {
                     contains,
                     parameters,
@@ -234,12 +284,16 @@ impl<'a> FsTxCache<'a> {
     /// CodeSystems. Builds a per-call scan (small corpus).
     fn cache_lookup_display(&self, system: &str, code: &str) -> Option<String> {
         for cf in &self.cache_files {
-            let Some(text) = self.ctx.tree().read(cf) else { continue };
+            let Some(text) = self.ctx.tree().read(cf) else {
+                continue;
+            };
             for (req, tag, resp) in parse_cache_blocks(&text) {
                 if tag != "v" {
                     continue;
                 }
-                let Some(req_v) = serde_json::from_str::<Value>(&req).ok() else { continue };
+                let Some(req_v) = serde_json::from_str::<Value>(&req).ok() else {
+                    continue;
+                };
                 // request code coding: {"code":{"coding":[{system,code}]}} or {"code":{"code":..},"url":..}
                 let (rsys, rcode) = extract_req_code(&req_v);
                 if rsys.as_deref() == Some(system) && rcode.as_deref() == Some(code) {
@@ -267,8 +321,16 @@ impl TxCacheSource for FsTxCache<'_> {
 
     fn lookup_display(&self, system: &str, code: &str, version: &str) -> Option<String> {
         // Loaded CodeSystem first.
-        let canonical = if version.is_empty() { system.to_string() } else { format!("{}|{}", system, version) };
-        if let Some(cs) = self.ctx.load_resource(&canonical).or_else(|| self.ctx.load_resource(system)) {
+        let canonical = if version.is_empty() {
+            system.to_string()
+        } else {
+            format!("{}|{}", system, version)
+        };
+        if let Some(cs) = self
+            .ctx
+            .load_resource(&canonical)
+            .or_else(|| self.ctx.load_resource(system))
+        {
             if let Some(d) = cs_lookup_display(&cs, code) {
                 return Some(d);
             }
@@ -280,7 +342,13 @@ impl TxCacheSource for FsTxCache<'_> {
     }
 }
 
-fn mk_contains(system: &str, _version: &str, code: &str, display: Option<&str>, props: &[Value]) -> Value {
+fn mk_contains(
+    system: &str,
+    _version: &str,
+    code: &str,
+    display: Option<&str>,
+    props: &[Value],
+) -> Value {
     // The publisher's local expander does NOT stamp a per-code `version` on the
     // contains entries (the version lives in the `used-codesystem` param); so the
     // expansion table shows no Version column. The JSON/XML copy version is read
@@ -320,7 +388,8 @@ fn collect_cs_property_defs(cs: &Value, out: &mut std::collections::BTreeMap<Str
                 if is_hierarchy_property(uri) {
                     continue;
                 }
-                out.entry(code.to_string()).or_insert_with(|| uri.to_string());
+                out.entry(code.to_string())
+                    .or_insert_with(|| uri.to_string());
             }
         }
     }
@@ -333,7 +402,12 @@ fn hierarchy_prop_codes(cs: &Value) -> Vec<String> {
         .and_then(|x| x.as_array())
         .map(|a| {
             a.iter()
-                .filter(|p| p.get("uri").and_then(|x| x.as_str()).map(is_hierarchy_property).unwrap_or(false))
+                .filter(|p| {
+                    p.get("uri")
+                        .and_then(|x| x.as_str())
+                        .map(is_hierarchy_property)
+                        .unwrap_or(false)
+                })
                 .filter_map(|p| p.get("code").and_then(|x| x.as_str()).map(String::from))
                 .collect()
         })
@@ -356,12 +430,21 @@ fn cs_concept_props(cs: &Value, code: &str) -> Vec<Value> {
         }
         None
     }
-    let Some(concepts) = cs.get("concept").and_then(|x| x.as_array()) else { return Vec::new() };
-    let Some(c) = find(concepts, code) else { return Vec::new() };
+    let Some(concepts) = cs.get("concept").and_then(|x| x.as_array()) else {
+        return Vec::new();
+    };
+    let Some(c) = find(concepts, code) else {
+        return Vec::new();
+    };
     let hier = hierarchy_prop_codes(cs);
     c.get("property")
         .and_then(|x| x.as_array())
-        .map(|a| a.iter().filter(|p| keep_concept_prop(p, &hier)).cloned().collect())
+        .map(|a| {
+            a.iter()
+                .filter(|p| keep_concept_prop(p, &hier))
+                .cloned()
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -379,7 +462,10 @@ fn contains_any_prop(contains: &[Value], code: &str) -> bool {
     contains.iter().any(|c| {
         c.get("property")
             .and_then(|x| x.as_array())
-            .map(|a| a.iter().any(|p| p.get("code").and_then(|x| x.as_str()) == Some(code)))
+            .map(|a| {
+                a.iter()
+                    .any(|p| p.get("code").and_then(|x| x.as_str()) == Some(code))
+            })
             .unwrap_or(false)
     })
 }
@@ -395,14 +481,25 @@ fn count_flat(contains: &[Value]) -> usize {
     n
 }
 
-fn enumerate_cs(concepts: &[Value], system: &str, version: &str, hier: &[String], out: &mut Vec<Value>) {
+fn enumerate_cs(
+    concepts: &[Value],
+    system: &str,
+    version: &str,
+    hier: &[String],
+    out: &mut Vec<Value>,
+) {
     for c in concepts {
         let code = c.get("code").and_then(|x| x.as_str()).unwrap_or("");
         let display = c.get("display").and_then(|x| x.as_str());
         let props: Vec<Value> = c
             .get("property")
             .and_then(|x| x.as_array())
-            .map(|a| a.iter().filter(|p| keep_concept_prop(p, hier)).cloned().collect())
+            .map(|a| {
+                a.iter()
+                    .filter(|p| keep_concept_prop(p, hier))
+                    .cloned()
+                    .collect()
+            })
             .unwrap_or_default();
         out.push(mk_contains(system, version, code, display, &props));
         if let Some(sub) = c.get("concept").and_then(|x| x.as_array()) {
@@ -434,11 +531,19 @@ fn cs_lookup_display(cs: &Value, code: &str) -> Option<String> {
 fn compose_fingerprint(includes: &[Value]) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
     for inc in includes {
-        let system = inc.get("system").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let system = inc
+            .get("system")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         let mut codes: Vec<String> = inc
             .get("concept")
             .and_then(|x| x.as_array())
-            .map(|a| a.iter().filter_map(|c| c.get("code").and_then(|x| x.as_str()).map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|c| c.get("code").and_then(|x| x.as_str()).map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         codes.sort();
         // include filters in the fingerprint so filtered includes match distinctly.
@@ -458,20 +563,37 @@ fn compose_fingerprint(includes: &[Value]) -> Vec<(String, Vec<String>)> {
 }
 
 fn extract_req_code(req: &Value) -> (Option<String>, Option<String>) {
-    let Some(code) = req.get("code") else { return (None, None) };
+    let Some(code) = req.get("code") else {
+        return (None, None);
+    };
     // form 1: {"code": {"coding": [{system, code}]}}
-    if let Some(coding) = code.get("coding").and_then(|x| x.as_array()).and_then(|a| a.first()) {
+    if let Some(coding) = code
+        .get("coding")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.first())
+    {
         return (
-            coding.get("system").and_then(|x| x.as_str()).map(String::from),
-            coding.get("code").and_then(|x| x.as_str()).map(String::from),
+            coding
+                .get("system")
+                .and_then(|x| x.as_str())
+                .map(String::from),
+            coding
+                .get("code")
+                .and_then(|x| x.as_str())
+                .map(String::from),
         );
     }
     // form 2: {"code": {"system": ..., "code": ...}}  (Coding inline)
     if let Some(sys) = code.get("system").and_then(|x| x.as_str()) {
-        return (Some(sys.to_string()), code.get("code").and_then(|x| x.as_str()).map(String::from));
+        return (
+            Some(sys.to_string()),
+            code.get("code").and_then(|x| x.as_str()).map(String::from),
+        );
     }
     // form 3: {"code": {"code": ...}, "system"/"url": ...}  (bare code)
-    let sys = req.get("system").and_then(|x| x.as_str())
+    let sys = req
+        .get("system")
+        .and_then(|x| x.as_str())
         .or_else(|| req.get("url").and_then(|x| x.as_str()))
         .map(String::from);
     let c = code.get("code").and_then(|x| x.as_str()).map(String::from);
@@ -537,8 +659,14 @@ fn extract_bare_source(text: &str) -> Option<String> {
 }
 
 fn strip_scheme(s: &str) -> String {
-    s.trim_start_matches("https://").trim_start_matches("http://").trim_start_matches("//").trim_end_matches('/')
-        .split('/').next().unwrap_or(s).to_string()
+    s.trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_start_matches("//")
+        .trim_end_matches('/')
+        .split('/')
+        .next()
+        .unwrap_or(s)
+        .to_string()
 }
 
 /// Parse a `.cache` file into (request, tag, response) blocks. Blocks are
@@ -552,11 +680,15 @@ fn parse_cache_blocks(text: &str) -> Vec<(String, String, String)> {
         if block.is_empty() {
             continue;
         }
-        let Some(idx) = block.find("####") else { continue };
+        let Some(idx) = block.find("####") else {
+            continue;
+        };
         let req = block[..idx].to_string();
         let after = &block[idx + 4..];
         // after = "<tag>: <response>"
-        let Some(colon) = after.find(':') else { continue };
+        let Some(colon) = after.find(':') else {
+            continue;
+        };
         let tag = after[..colon].trim().to_string();
         let resp = after[colon + 1..].trim_start().to_string();
         out.push((req, tag, resp));

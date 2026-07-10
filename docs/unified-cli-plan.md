@@ -1,5 +1,12 @@
 # Unified CLI — Plan
 
+> **HISTORICAL SHIPPED PLAN.** Keep this for the derivation and as-built deltas
+> of `fig`; it is not the current cross-host architecture or API catalog. See
+> the repository [`README.md`](../README.md) and [`hosting.md`](hosting.md).
+> In particular, the callback-oriented `fig::runner` and
+> `fig render --generator ts:*` described below were later retired; they are not
+> available APIs.
+
 > Status: **SHIPPED** (2026-07-04, Consolidation Pass 2). The `fig` crate
 > (`crates/fig`) lands the full §2 surface; `crates/api_envelope` is the shared
 > envelope. Original intent below preserved; deltas from as-built noted inline

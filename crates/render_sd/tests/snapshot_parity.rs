@@ -32,7 +32,9 @@ fn harvest_uuid(ig: &str) -> String {
 }
 
 fn check(ig: &str, id: &str, active_tables: bool) {
-    check_kind(ig, id, active_tables, "snapshot", |u| TableConfig::snapshot(u));
+    check_kind(ig, id, active_tables, "snapshot", |u| {
+        TableConfig::snapshot(u)
+    });
 }
 
 fn check_kind(

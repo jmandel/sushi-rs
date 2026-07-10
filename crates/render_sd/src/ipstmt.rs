@@ -206,7 +206,13 @@ fn walk_element(
             if let Some(Value::String(system)) = map.get("system") {
                 if map.contains_key("code") {
                     see_system(
-                        systems, order, src.ctx, Some(system), &src.key, &src.title, &src.path,
+                        systems,
+                        order,
+                        src.ctx,
+                        Some(system),
+                        &src.key,
+                        &src.title,
+                        &src.path,
                     );
                 }
             }
@@ -236,12 +242,18 @@ fn scan_vs(
             if let Some(arr) = compose.get(key).and_then(|x| x.as_array()) {
                 for inc in arr {
                     let sys = inc.get("system").and_then(|x| x.as_str());
-                    see_system(systems, order, src.ctx, sys, &src.key, &src.title, &src.path);
+                    see_system(
+                        systems, order, src.ctx, sys, &src.key, &src.title, &src.path,
+                    );
                 }
             }
         }
     }
-    if let Some(exp) = vs.get("expansion").and_then(|e| e.get("contains")).and_then(|c| c.as_array()) {
+    if let Some(exp) = vs
+        .get("expansion")
+        .and_then(|e| e.get("contains"))
+        .and_then(|c| c.as_array())
+    {
         scan_expansion(systems, order, src, exp);
     }
 }
@@ -254,7 +266,9 @@ fn scan_expansion(
 ) {
     for c in contains {
         let sys = c.get("system").and_then(|x| x.as_str());
-        see_system(systems, order, src.ctx, sys, &src.key, &src.title, &src.path);
+        see_system(
+            systems, order, src.ctx, sys, &src.key, &src.title, &src.path,
+        );
         if let Some(sub) = c.get("contains").and_then(|x| x.as_array()) {
             scan_expansion(systems, order, src, sub);
         }
@@ -293,7 +307,9 @@ fn scan_resource(
         Some("CodeSystem") => {
             // seeSystem(cs.getSupplements()) (ipr:284-286).
             let sup = res.get("supplements").and_then(|x| x.as_str());
-            see_system(systems, order, src.ctx, sup, &src.key, &src.title, &src.path);
+            see_system(
+                systems, order, src.ctx, sup, &src.key, &src.title, &src.path,
+            );
         }
         Some("OperationDefinition") => {
             if let Some(params) = res.get("parameter").and_then(|x| x.as_array()) {
@@ -416,7 +432,10 @@ fn xver_name(j: &Value) -> Option<String> {
         if u.starts_with("http://hl7.org/fhir/5.0/StructureDefinition/extension-")
             && u.ends_with(".name")
         {
-            return e.get("valueString").and_then(|x| x.as_str()).map(String::from);
+            return e
+                .get("valueString")
+                .and_then(|x| x.as_str())
+                .map(String::from);
         }
     }
     None
@@ -489,7 +508,10 @@ pub fn ip_statements(ctx: &IgContext, ig_json: &Value) -> String {
         systems.insert(sys.clone(), su);
     }
 
-    let is_hl7 = ctx.own_package_id().map(|p| p.starts_with("hl7.")).unwrap_or(false);
+    let is_hl7 = ctx
+        .own_package_id()
+        .map(|p| p.starts_with("hl7."))
+        .unwrap_or(false);
     if usages.is_empty() {
         // IP_NONE / IP_NONE_EXT (ipr:139).
         return if is_hl7 {

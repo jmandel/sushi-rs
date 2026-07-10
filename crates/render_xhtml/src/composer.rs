@@ -580,4 +580,3 @@ fn break_blocks_with_lines_list(list: &mut Vec<XhtmlNode>) {
         }
     }
 }
-

@@ -1,9 +1,18 @@
 # The site-producer — page shells + `_data` model, from source
 
-> Task #44. Status: page shells + `artifacts.json` at **byte-parity** (native +
-> wasm-ready); the rest of the `_data` model designed with a cited run-context
-> gap catalog. Crate: `crates/site_producer`. Gate:
-> `crates/site_producer/tests/producer_gate.rs`.
+> **Current-state correction (2026-07-09).** The original task write-up below
+> predated the landed WASM integration. `Session.produceStockSite()` now calls
+> this crate from the current compile and mounted template. The producer emits
+> page shells plus eight derivable `_data` files; `artifacts.json` and page
+> shells retain the corpus byte-parity gates. Generated fragment bodies are not
+> hidden file-miss behavior owned by this crate: `render_page` translates a
+> registered Publisher include name to a typed `ArtifactKey` and calls an
+> explicit `ArtifactResolver`. See [`hosting.md`](hosting.md) and
+> [`crates/site_build/README.md`](../crates/site_build/README.md) for the current
+> execution contracts.
+
+Crate: `crates/site_producer`. Gate:
+`crates/site_producer/tests/producer_gate.rs`.
 
 ## 1. What this is / why
 
@@ -18,10 +27,11 @@ things the publisher generates that we didn't already produce:
 * **(b) the `_data/*.json` SITE-DATA MODEL** — what the stock layouts/fragments
   read via `site.data.*`.
 
-Fragment **bodies** (`_includes/*.xhtml`) are NOT produced here — they fill live
-via the fragment engine's first-include-miss (`render_sd::engine::FragmentEngine`).
-The producer emits **shells + `_data` only**. Downstream, the existing
-`render_page`/`fig::engine` page pass consumes the produced tree unchanged.
+Fragment **bodies** (`_includes/*.xhtml`) are not produced here. The native page
+stack may materialize a registered fragment through
+`render_page::ArtifactResolver`; authored/template includes remain tree files.
+The producer emits **shells + `_data` only**. Downstream,
+`render_page`/`fig::engine` or the WASM render state consumes that produced tree.
 
 ## 2. Where it lives
 
@@ -35,8 +45,8 @@ crates/site_producer/
   tests/producer_gate.rs   byte-parity gate vs the US Core F0 temp/pages oracle
 ```
 
-Consumed by `fig` (`fig produce`, and auto-produce inside `fig render`) and
-ready for the wasm `Session` surface (§6).
+Consumed by `fig` (`fig produce`, and auto-produce inside `fig render`) and by
+the WASM `Session.produceStockSite()` surface (§6).
 
 ## 3. Publisher parity model (cited — pinned publisher clone
 `org.hl7.fhir.publisher.core`)
@@ -85,8 +95,8 @@ IG-Publisher output at `/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/us-core`
 |---|---|
 | **Page shells** | **1297 / 1297 byte-identical** (base + definitions + mappings + testing + examples + profile-history + change-history across 442 resources) |
 | **`_data/artifacts.json`** | **byte-identical** (442 entries, IG-resource order) |
-| `_data/structuredefinitions.json` | field-derivable (~90%); load-bearing identity fields exact; see gap catalog |
-| other `_data/*.json` | designed; run-context gaps cataloged (§5) |
+| `_data/structuredefinitions.json` | emitted; load-bearing identity fields exact, with classified run-context/model gaps (§5) |
+| other load-bearing `_data/*.json` | emitted from source; classified fidelity gaps remain (§5) |
 
 > Oracle note: the editor's pre-baked bundle
 > `fhir-ig-editor/site-bundles/uscore-stock.json` is a **filtered subset** of
@@ -95,44 +105,31 @@ IG-Publisher output at `/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/us-core`
 > *raw* publisher `temp/pages` (superset); the editor filter is a bundling step,
 > not a producer concern. Compare against `temp/pages`, not the bundle.
 
-## 5. `_data` gap catalog (what needs info the source+resources+config lack)
+## 5. `_data` outputs and classified gaps
 
-The `_data` files that are not yet byte-emitted are **derivable in shape** but
-carry per-field **run-context** values the Java publisher injects. These are the
-specific, cited gaps (report-as-gap per house rules):
+`data::emit_data` currently writes `artifacts.json`,
+`structuredefinitions.json`, `resources.json`, `pages.json`, `fhir.json`,
+`info.json`, `languages.json`, and `related.json`. The values are serialized for
+Liquid to parse; except for the separately gated `artifacts.json`, matching the
+Java pretty-printer's whitespace is not a page-rendering requirement.
 
-* **`structuredefinitions.json`** — field-derivable now (`structuredefinitions_model`),
-  exact for url/name/title/kind/type/base/status/abstract/derivation/path/
-  description/copyright. Remaining for byte-parity:
-  1. the publisher's `JsonObject` pretty-printer (`"key" : value`, 2-space
-     indent, `{\n  }` empties) — characterizable, not yet ported;
-  2. `basename`/`basepath` when a profile's `baseDefinition` is a **core R4**
-     type — needs the core FHIR package loaded to resolve the base SD's name +
-     the `hl7.org/fhir/R4/<type>.html` spec path (57/70 US Core profiles);
-  3. extension `contexts`/`extension-contexts` (derivable from `SD.context`);
-  4. **`date`** — Java `Date.toString()` in the **build machine's timezone**
-     (`"Tue Oct 17 00:00:00 CDT 2023"`): a timezone-formatted run-context value;
-  5. the special `maturities` aggregate key (not a resource row);
-  6. `publisher` falls back to the **IG-level** publisher when the SD omits it.
-* **`resources.json`** — `source` is an **absolute build-machine path**
-  (`/home/.../ImplementationGuide-...json`): run-context, not portable.
-* **`fhir.json`** — substantial run-context: `genDate`/`genDay` (build clock),
-  `errorCount` (validation-run result), `revision`/`versionFull`/tooling* (build
-  tooling), `totalFiles`/`processedFiles` (run counters), `repoSource` (git
-  remote), the `ver`/tx-server maps (dependency-resolution context). Derivable
-  parts: the `ig` block, `canonical`, `igVer`, `resourceTypes`/`dataTypes` (from
-  the core package).
-* **`info.json`** — mostly IG `template-parameters`, but `copyrightyear` uses the
-  **build year**.
-* **`pages.json`** — derivable from the IG `definition.page` tree + breadcrumbs
-  (`addPageData`, `PublisherGenerator.java:3583`), large but source-derivable;
-  the history/example row gating (`historyTemplates`/`exampleTemplates` +
-  `r.getAudits().isEmpty()`/`getStatedExamples().isEmpty()`, `:3609`) is the
-  same logic as the shell pass.
+The remaining known fidelity gaps are explicit in `src/data.rs`:
 
-None of these blocks the shells (the novel engine piece). They are the follow-up
-for full `_data` byte-parity; the two load-bearing, fully-derivable files
-(shells, `artifacts.json`) ship gated now.
+* `resources.json.identifiers` cannot reproduce Publisher-assigned OIDs that are
+  absent from source; history/test-plan/test-script flags require audit/run
+  context and currently remain false.
+* `structuredefinitions.json.date` is Java `Date.toString()` in the build
+  machine timezone and is not read by the template. Other load-bearing identity
+  fields are pinned by the field-level gate.
+* several `fhir.json` values are build-run context: validation error counts,
+  tooling/version strings, repository source, and processed-file counters.
+  They are stubbed or omitted when unavailable.
+* `pages.json` does not yet reproduce the Publisher's global interleaving and
+  hierarchical numbering for every narrative/artifact page. The residual
+  affects small previous/next footer links and a heading-prefix value.
+
+These gaps do not block page-shell generation, but they must remain classified
+rather than being presented as full `_data` byte parity.
 
 ## 6. Surfaces
 
@@ -143,15 +140,15 @@ for full `_data` byte-parity; the two load-bearing, fully-derivable files
 * `fig render <ig-source-dir> -o <site/>` — when there is **no** staged
   `temp/pages` but the dir is an IG source tree (`template/config.json` present),
   auto-produces the shells + `_data` first, then runs the existing page pass.
-  Demonstrated: US Core source → `produced 1297 shells + 1 _data files from
+  Demonstrated: US Core source → `produced 1297 shells + 8 _data files from
   source`, then `ok: true, pages: 1297`. (ValueSet expansion-cache misses seen in
   the demo are the fragment engine's tx-cache **input**, unrelated to the
   producer.)
 
-### wasm / `Session` (for the editor's source-driven stock adapter — follow-up)
+### WASM / `Session` (landed)
 
-The library is `std::fs`-free on the hot path via `LayoutSource::Map`. The
-Session-facing entry point is:
+The library is `std::fs`-free on the in-memory hot path via
+`LayoutSource::Map`. The underlying entry point is:
 
 ```rust
 let inputs = site_producer::ProducerInputs::from_memory(
@@ -159,16 +156,23 @@ let inputs = site_producer::ProducerInputs::from_memory(
     &config_json,  // the materialized template's config.json, as serde_json::Value
     layouts_map,   // HashMap<"template/layouts/layout-*.html", contents> from the template tree
     &ig_json,      // the ImplementationGuide resource (for order + publisher fallback)
+    page_includes, // names that really exist, for intro/notes gating
+    "en/",        // browser stock page path prefix
 );
 let out = site_producer::produce(&inputs)?;   // out.pages, out.data (relpath -> bytes)
 ```
 
-The editor's stock adapter would call this after `Session.mountTemplate(id#ver)`
-(which already materializes the template tree in memory), merge `out.pages` +
-`out.data` into the site tree at `temp/pages/…`, and render — replacing the
-hand-curated `-stock.json` warm-start bundle. Exposing a thin
-`Session.produceStockSite()` wrapper over `from_memory` is the one wasm-binding
-line the follow-up adds.
+`Session.produceStockSite()` is the landed wrapper. After `compileProject`,
+`mountSite`, and `mountTemplate`, it gathers the current render resources,
+template config/layouts, and staged intro/notes names; produces the tree; merges
+shells and `_data` into `/site`; stages generated `menu.xml` when available; and
+invalidates the render state. If a generated ImplementationGuide resource is
+absent on the WASM path, the wrapper synthesizes the minimal IG context needed
+for page ordering and metadata.
+
+This producer integration is native-render state, not yet a complete stock
+`SiteBuild` target. Promoting stock pages, assets, and typed resolver results to
+addressed artifacts in an immutable manifest remains architecture work.
 
 ## 7. Quirks registered
 

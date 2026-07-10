@@ -109,9 +109,17 @@ pub(crate) fn lenient_r5_read_r4(sd: &Value) -> Value {
 /// and the r2b removeIf are not exercised by this corpus. See
 /// PackageHackerR5.java:14-135.
 pub(crate) fn fix_loaded_resource(sd: &mut Value, package_id: Option<&str>) {
-    let url = sd.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+    let url = sd
+        .get("url")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let ver = sd.get("fhirVersion").and_then(Value::as_str).unwrap_or("");
-    let rtype = sd.get("type").and_then(Value::as_str).unwrap_or("").to_string();
+    let rtype = sd
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let base_def = sd
         .get("baseDefinition")
         .and_then(Value::as_str)
@@ -262,7 +270,9 @@ pub(crate) fn fetch_sd(pkg: &PackageContext, query: &str) -> Option<Value> {
     } else {
         lenient_r5_read_r4(raw)
     };
-    let package_id = pkg.package_id_for(url).or_else(|| pkg.package_id_for(query));
+    let package_id = pkg
+        .package_id_for(url)
+        .or_else(|| pkg.package_id_for(query));
     fix_loaded_resource(&mut out, package_id.as_deref());
     Some(out)
 }

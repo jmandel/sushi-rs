@@ -188,7 +188,10 @@ impl Piece {
         !self.children.is_empty()
     }
     pub fn has_attributes(&self) -> bool {
-        self.attributes.as_ref().map(|a| !a.is_empty()).unwrap_or(false)
+        self.attributes
+            .as_ref()
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
     }
     pub fn add_html(&mut self, x: XhtmlNode) -> &mut Piece {
         self.children.push(x);
@@ -235,13 +238,15 @@ impl Cell {
         let mut c = Cell::new();
         if let Some(p) = prefix {
             if !p.is_empty() {
-                c.pieces.push(Piece::ref_text(None, Some(p.to_string()), None));
+                c.pieces
+                    .push(Piece::ref_text(None, Some(p.to_string()), None));
             }
         }
         c.pieces.push(Piece::ref_text(reference, text, hint));
         if let Some(s) = suffix {
             if !s.is_empty() {
-                c.pieces.push(Piece::ref_text(None, Some(s.to_string()), None));
+                c.pieces
+                    .push(Piece::ref_text(None, Some(s.to_string()), None));
             }
         }
         c
@@ -253,7 +258,8 @@ impl Cell {
     }
     /// `addText(text)` (HTG:526) — returns index of the added piece.
     pub fn add_text(&mut self, text: impl Into<String>) -> usize {
-        self.pieces.push(Piece::ref_text(None, Some(text.into()), None));
+        self.pieces
+            .push(Piece::ref_text(None, Some(text.into()), None));
         self.pieces.len() - 1
     }
     /// `addStyle(style)` (HTG:489): apply to every piece.
@@ -454,5 +460,3 @@ impl TableModel {
         self.active && self.active_tables
     }
 }
-
-

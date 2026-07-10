@@ -94,7 +94,9 @@ fn yaml_to_json(v: &Y) -> J {
             } else if let Some(u) = n.as_u64() {
                 J::Number(u.into())
             } else if let Some(f) = n.as_f64() {
-                serde_json::Number::from_f64(f).map(J::Number).unwrap_or(J::Null)
+                serde_json::Number::from_f64(f)
+                    .map(J::Number)
+                    .unwrap_or(J::Null)
             } else {
                 J::Null
             }
@@ -157,7 +159,11 @@ fn parse_code_lexeme(text: &str) -> (Option<String>, String) {
                     .replace("\\\\", "\\")
                     .replace("\\\"", "\"");
             }
-            let sys = if system.is_empty() { None } else { Some(system) };
+            let sys = if system.is_empty() {
+                None
+            } else {
+                Some(system)
+            };
             (sys, code)
         }
     }
@@ -194,7 +200,7 @@ fn find_display_split(text: &str) -> Option<usize> {
     // find the opening quote: scan from the end for an unescaped `"` preceded by whitespace.
     let bytes = t.as_bytes();
     let mut i = t.len() - 1; // closing quote
-    // walk back to matching opening quote
+                             // walk back to matching opening quote
     let mut j = i;
     while j > 0 {
         j -= 1;
@@ -251,13 +257,13 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     let id = yget_str(cfg_yaml, "id")?;
     let canonical = cfg.canonical.clone();
     let fhir_version = cfg.fhir_version();
-    let is_r4 = fhir_version
-        .as_deref()
-        .map(is_r4_version)
-        .unwrap_or(true);
+    let is_r4 = fhir_version.as_deref().map(is_r4_version).unwrap_or(true);
 
     let mut ig: Map<String, J> = Map::new();
-    ig.insert("resourceType".into(), J::String("ImplementationGuide".into()));
+    ig.insert(
+        "resourceType".into(),
+        J::String("ImplementationGuide".into()),
+    );
     ig.insert("id".into(), J::String(id.clone()));
 
     // Optional passthrough metadata keys (in literal order). Only `extension` is
@@ -331,7 +337,9 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     insert_passthrough(&mut ig, cfg_yaml, "date");
 
     // publisher (first publisher's name)
-    let publishers = yget(cfg_yaml, "publisher").map(norm_array).unwrap_or_default();
+    let publishers = yget(cfg_yaml, "publisher")
+        .map(norm_array)
+        .unwrap_or_default();
     if let Some(first) = publishers.first() {
         if let Some(name) = yget_str(first, "name").or_else(|| ystr(first)) {
             ig.insert("publisher".into(), J::String(name));
@@ -389,10 +397,7 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     // R5-only top-level additions (after definition).
     if !is_r4 {
         if let Some(cl) = yget_str(cfg_yaml, "copyrightLabel") {
-            ig.insert(
-                "copyrightLabel".into(),
-                J::String(cl),
-            );
+            ig.insert("copyrightLabel".into(), J::String(cl));
         }
     }
 
@@ -541,7 +546,9 @@ fn build_depends_on(cfg_yaml: &Y, is_r4: bool, cache_dir: &str) -> Option<Vec<J>
     let Y::Mapping(map) = deps else { return None };
     let mut out = Vec::new();
     for (pkg_key, val) in map {
-        let Some(package_id) = ystr(pkg_key) else { continue };
+        let Some(package_id) = ystr(pkg_key) else {
+            continue;
+        };
         let mut package_id = if package_id.chars().any(|c| c.is_ascii_uppercase()) {
             package_id.to_lowercase()
         } else {
@@ -709,7 +716,9 @@ fn merge_or_set_extension(entry: &mut Vec<(String, J)>, ext: J) {
 fn installed_versions(cache_dir: &str, package_id: &str) -> Vec<String> {
     let prefix = format!("{package_id}#");
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(cache_dir) else { return out };
+    let Ok(rd) = std::fs::read_dir(cache_dir) else {
+        return out;
+    };
     for entry in rd.flatten() {
         if let Some(name) = entry.file_name().to_str() {
             if let Some(ver) = name.strip_prefix(&prefix) {
@@ -776,7 +785,6 @@ fn max_satisfying_x(installed: &[String], range: &str) -> Option<String> {
     }
     best.map(|(_, s)| s)
 }
-
 
 /// Resolve the version used for the dependency URI lookup (fixDependsOn,
 /// IGExporter.ts:289-315). For `latest`, pick an installed version and mutate
@@ -941,7 +949,12 @@ fn build_definition(
     def.insert("resource".into(), J::Array(resources));
 
     // page
-    let page = build_page(cfg_yaml, is_r4, &inputs.ig_dir, inputs.page_dir_listing.as_ref());
+    let page = build_page(
+        cfg_yaml,
+        is_r4,
+        &inputs.ig_dir,
+        inputs.page_dir_listing.as_ref(),
+    );
     def.insert("page".into(), page);
 
     // parameter
@@ -1147,8 +1160,7 @@ fn build_resources(
         if cr.map(|c| c.omit).unwrap_or(false) {
             continue;
         }
-        let entry =
-            make_package_resource_instance(inst, cr, inputs, cfg, &mut add_group);
+        let entry = make_package_resource_instance(inst, cr, inputs, cfg, &mut add_group);
         entries.push(entry);
     }
 
@@ -1182,27 +1194,39 @@ fn build_resources(
     let mut url_to_ref: HashMap<String, String> = HashMap::new();
     for c in &inputs.conformance {
         if let Some((_, id)) = c.reference_key.split_once('/') {
-            id_to_ref.entry(id.to_string()).or_insert_with(|| c.reference_key.clone());
+            id_to_ref
+                .entry(id.to_string())
+                .or_insert_with(|| c.reference_key.clone());
         }
         if let Some(n) = &c.fhir_name {
-            name_to_ref.entry(n.clone()).or_insert_with(|| c.reference_key.clone());
+            name_to_ref
+                .entry(n.clone())
+                .or_insert_with(|| c.reference_key.clone());
         }
         if let Some(u) = &c.url {
-            url_to_ref.entry(u.clone()).or_insert_with(|| c.reference_key.clone());
+            url_to_ref
+                .entry(u.clone())
+                .or_insert_with(|| c.reference_key.clone());
         }
     }
     for inst in &inputs.instances {
         if let Some((_, id)) = inst.reference_key.split_once('/') {
-            id_to_ref.entry(id.to_string()).or_insert_with(|| inst.reference_key.clone());
+            id_to_ref
+                .entry(id.to_string())
+                .or_insert_with(|| inst.reference_key.clone());
         }
         if let Some(n) = &inst.name {
-            name_to_ref.entry(n.clone()).or_insert_with(|| inst.reference_key.clone());
+            name_to_ref
+                .entry(n.clone())
+                .or_insert_with(|| inst.reference_key.clone());
         }
     }
     // Also let any built entry resolve by its id (covers predefined resources).
     for e in &entries {
         if let Some((_, id)) = e.reference_key.split_once('/') {
-            id_to_ref.entry(id.to_string()).or_insert_with(|| e.reference_key.clone());
+            id_to_ref
+                .entry(id.to_string())
+                .or_insert_with(|| e.reference_key.clone());
         }
     }
     let resolve_ref = |r: &str| -> String {
@@ -1296,9 +1320,7 @@ fn make_package_resource_conformance(
     refmap.insert("reference".into(), J::String(c.reference_key.clone()));
     pairs.push(("reference".into(), J::Object(refmap)));
 
-    let name = cr
-        .and_then(|c| c.name.clone())
-        .or_else(|| c.name.clone());
+    let name = cr.and_then(|c| c.name.clone()).or_else(|| c.name.clone());
     let description = cr
         .and_then(|c| c.description.clone())
         .or_else(|| c.description.clone());
@@ -1354,7 +1376,9 @@ fn make_package_resource_instance(
     refmap.insert("reference".into(), J::String(inst.reference_key.clone()));
     pairs.push(("reference".into(), J::Object(refmap)));
 
-    let name = cr.and_then(|c| c.name.clone()).or_else(|| inst.name.clone());
+    let name = cr
+        .and_then(|c| c.name.clone())
+        .or_else(|| inst.name.clone());
     let description = cr
         .and_then(|c| c.description.clone())
         .or_else(|| inst.description.clone());
@@ -1396,8 +1420,11 @@ fn make_package_resource_instance(
                     None => true,
                     Some(v) => {
                         // version === (availableProfileOrLogical.version ?? config.version)
-                        let effective =
-                            if local_ver.is_empty() { cfg.version.clone().unwrap_or_default() } else { local_ver.clone() };
+                        let effective = if local_ver.is_empty() {
+                            cfg.version.clone().unwrap_or_default()
+                        } else {
+                            local_ver.clone()
+                        };
                         v == effective
                     }
                 },
@@ -1418,7 +1445,10 @@ fn make_package_resource_instance(
         if ext.as_array().map(|a| !a.is_empty()).unwrap_or(false) {
             if let Some(arr) = ext.as_array() {
                 had_format_ext = arr.iter().any(|e| {
-                    e.get("url").and_then(|u| u.as_str()).map(is_resource_format_ext).unwrap_or(false)
+                    e.get("url")
+                        .and_then(|u| u.as_str())
+                        .map(is_resource_format_ext)
+                        .unwrap_or(false)
                 });
             }
             pairs.push(("extension".into(), ext));
@@ -1432,7 +1462,10 @@ fn make_package_resource_instance(
                 "url".into(),
                 J::String("http://hl7.org/fhir/tools/StructureDefinition/implementationguide-resource-format".into()),
             );
-            m.insert("valueCode".into(), J::String("application/fhir+json".into()));
+            m.insert(
+                "valueCode".into(),
+                J::String("application/fhir+json".into()),
+            );
             J::Object(m)
         };
         if let Some((_, v)) = pairs.iter_mut().find(|(k, _)| k == "extension") {
@@ -1470,7 +1503,10 @@ fn make_config_only_resource(c: &ConfigResource) -> ResEntry {
         pairs.push((k.clone(), v.clone()));
     }
     if let Some(p) = &c.profile {
-        pairs.push(("profile".into(), J::Array(p.iter().cloned().map(J::String).collect())));
+        pairs.push((
+            "profile".into(),
+            J::Array(p.iter().cloned().map(J::String).collect()),
+        ));
     }
     if let Some(fv) = &c.fhir_version {
         pairs.push((
@@ -1539,7 +1575,10 @@ fn add_predefined_resources(
         let binary_match = configured_binary.iter().any(|c| {
             (c.reference == format!("Binary/{}", pf.id)
                 && (c.example_canonical.as_deref()
-                    == Some(&format!("{}/StructureDefinition/{}", cfg.canonical, pf.resource_type))
+                    == Some(&format!(
+                        "{}/StructureDefinition/{}",
+                        cfg.canonical, pf.resource_type
+                    ))
                     || c.example_canonical.as_deref() == Some(pf.resource_type.as_str())))
                 || c.reference == format!("Binary/{}", pf.file_stem)
         });
@@ -1555,7 +1594,9 @@ fn add_predefined_resources(
             continue;
         }
         // existing FSH/instance entry (replace in place).
-        let existing_index = entries.iter().position(|e| e.reference_key == reference_key);
+        let existing_index = entries
+            .iter()
+            .position(|e| e.reference_key == reference_key);
         let existing = existing_index.map(|i| &entries[i]);
         let existing_is_example = existing
             .map(|e| {
@@ -1617,7 +1658,11 @@ fn make_predefined_resource(
     pairs.push(("reference".into(), J::Object(refmap)));
 
     let is_conformance = is_conformance_type(&pf.resource_type);
-    let meta_ext_name = if is_conformance { None } else { pf.name.clone() }; // approx: no meta.extension parsing
+    let meta_ext_name = if is_conformance {
+        None
+    } else {
+        pf.name.clone()
+    }; // approx: no meta.extension parsing
     let _ = meta_ext_name;
 
     // description (set before example/name)
@@ -1731,10 +1776,7 @@ fn is_conformance_type(rt: &str) -> bool {
 /// `* path from <Name>` binding resolves to a locally-defined ValueSet's url
 /// before falling through to the FHIR packages (which may carry a wrong same-named
 /// THO/core ValueSet, or none at all).
-pub fn predefined_vs_map(
-    ig_dir: &str,
-    cfg_yaml: &Y,
-) -> std::collections::HashMap<String, String> {
+pub fn predefined_vs_map(ig_dir: &str, cfg_yaml: &Y) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
     for pf in collect_predefined_files(ig_dir, cfg_yaml) {
         if pf.resource_type != "ValueSet" {
@@ -1779,7 +1821,8 @@ fn collect_predefined_files(ig_dir: &str, cfg_yaml: &Y) -> Vec<PredefinedRes> {
                 for val in norm_array(v) {
                     if let Some(s) = ystr(&val) {
                         let rel = s.trim_end_matches("/*");
-                        let full = Path::new(ig_dir).join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+                        let full =
+                            Path::new(ig_dir).join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
                         if full.is_dir() {
                             dirs.push(full);
                         }
@@ -1843,13 +1886,23 @@ fn parse_predefined_file(
             .get("meta")
             .and_then(|m| m.get("profile"))
             .and_then(|p| p.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         Some(PredefinedRes {
             resource_type: rt.to_string(),
             id,
-            title: json.get("title").and_then(|v| v.as_str()).map(str::to_string),
-            name: json.get("name").and_then(|v| v.as_str()).map(str::to_string),
+            title: json
+                .get("title")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            name: json
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
             url: json.get("url").and_then(|v| v.as_str()).map(str::to_string),
             description: json
                 .get("description")
@@ -1881,7 +1934,11 @@ fn parse_predefined_xml(text: &str, folder: &str, stem: &str) -> Option<Predefin
     let mut in_meta_depth: Option<i32> = None;
     for t in &toks {
         match t {
-            XmlTok::Start { tag, attrs, self_closing } => {
+            XmlTok::Start {
+                tag,
+                attrs,
+                self_closing,
+            } => {
                 depth += 1;
                 if root.is_none() {
                     root = Some(tag.clone());
@@ -2148,7 +2205,11 @@ fn apply_order(entries: &mut [ResEntry], order: Vec<usize>) {
     }
 }
 
-fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool, cr: Option<&ConfigResource>) {
+fn transform_resource_entry(
+    pairs: &mut Vec<(String, J)>,
+    is_r4: bool,
+    cr: Option<&ConfigResource>,
+) {
     let config_profile: Vec<String> = cr.and_then(|c| c.profile.clone()).unwrap_or_default();
     let config_is_example = cr.and_then(|c| c.is_example);
     if is_r4 {
@@ -2161,7 +2222,11 @@ fn transform_resource_entry(pairs: &mut Vec<(String, J)>, is_r4: bool, cr: Optio
         //     first as exampleCanonical (deleting exampleBoolean).
         if example_canonical.is_none() && !config_profile.is_empty() {
             pairs.retain(|(k, _)| k != "exampleBoolean");
-            set_or_append(pairs, "exampleCanonical", J::String(config_profile[0].clone()));
+            set_or_append(
+                pairs,
+                "exampleCanonical",
+                J::String(config_profile[0].clone()),
+            );
         }
         // Recompute after the possible assignment above.
         let example_canonical = pairs
@@ -2289,8 +2354,7 @@ fn build_configured_page(name_key: &Y, details: &Y, is_r4: bool, _cfg_yaml: &Y) 
         None => (name_url.clone(), String::new()),
         Some(p) => (name_url[..p].to_string(), name_url[p + 1..].to_string()),
     };
-    let title = yget_str(details, "title")
-        .unwrap_or_else(|| title_case_from_name(&name));
+    let title = yget_str(details, "title").unwrap_or_else(|| title_case_from_name(&name));
     let generation = yget_str(details, "generation").unwrap_or_else(|| {
         if file_type == "md" {
             "markdown".into()
@@ -2340,7 +2404,12 @@ fn build_configured_page(name_key: &Y, details: &Y, is_r4: bool, _cfg_yaml: &Y) 
             o.insert("page".into(), J::Array(subpages));
         }
         // R4: add name/source extensions if config name/sourceUrl differ
-        add_r4_page_extensions(&mut o, &name_url, config_name.as_deref(), source_url.as_deref());
+        add_r4_page_extensions(
+            &mut o,
+            &name_url,
+            config_name.as_deref(),
+            source_url.as_deref(),
+        );
     } else {
         // R5: title, generation, [extension], [page], name, sourceUrl
         o.insert("title".into(), J::String(title));
@@ -2351,7 +2420,9 @@ fn build_configured_page(name_key: &Y, details: &Y, is_r4: bool, _cfg_yaml: &Y) 
         if !subpages.is_empty() {
             o.insert("page".into(), J::Array(subpages));
         }
-        let r5_name = config_name.clone().unwrap_or_else(|| format!("{name}.html"));
+        let r5_name = config_name
+            .clone()
+            .unwrap_or_else(|| format!("{name}.html"));
         o.insert("name".into(), J::String(r5_name.clone()));
         // sourceUrl: config sourceUrl, else default to name
         let src = source_url.clone().unwrap_or_else(|| format!("{name}.html"));
@@ -2470,7 +2541,11 @@ fn build_disk_pages(
             let supported = p.file_type == "md" || p.file_type == "xml";
             let intro_notes = p.name.ends_with("-intro") || p.name.ends_with("-notes");
             if supported && !intro_notes {
-                let generation = if p.file_type == "md" { "markdown" } else { "html" };
+                let generation = if p.file_type == "md" {
+                    "markdown"
+                } else {
+                    "html"
+                };
                 out.push(make_disk_page(
                     &format!("{}.html", p.name),
                     &p.title,
@@ -2539,7 +2614,8 @@ fn organize_page_content(pages: &[String]) -> Vec<DiskPage> {
         let names: Vec<String> = data.iter().map(|d| d.name.clone()).collect();
         for d in &mut data {
             if names.iter().filter(|n| **n == d.name).count() > 1 {
-                let nn = d.original_name[..d.original_name.rfind('.').unwrap_or(d.original_name.len())]
+                let nn = d.original_name
+                    [..d.original_name.rfind('.').unwrap_or(d.original_name.len())]
                     .to_string();
                 if nn != d.name {
                     d.name = nn;
@@ -2619,10 +2695,8 @@ fn words(s: &str) -> Vec<String> {
         if !cur.is_empty() {
             let prev = chars[i - 1];
             let lower_to_upper = is_lower(prev) && is_upper(c);
-            let acronym_end = is_upper(prev)
-                && is_upper(c)
-                && i + 1 < chars.len()
-                && is_lower(chars[i + 1]);
+            let acronym_end =
+                is_upper(prev) && is_upper(c) && i + 1 < chars.len() && is_lower(chars[i + 1]);
             let digit_boundary = (prev.is_ascii_digit() && c.is_alphabetic())
                 || (prev.is_alphabetic() && c.is_ascii_digit());
             if lower_to_upper || acronym_end || digit_boundary {
@@ -2662,8 +2736,9 @@ fn title_case(input: &str) -> String {
     while i < total {
         let c = chars[i];
         // tokenize: [^\s:–—-]+ | .
-        let is_sep =
-            |ch: char| ch.is_whitespace() || ch == ':' || ch == '\u{2013}' || ch == '\u{2014}' || ch == '-';
+        let is_sep = |ch: char| {
+            ch.is_whitespace() || ch == ':' || ch == '\u{2013}' || ch == '\u{2014}' || ch == '-'
+        };
         let start = i;
         if is_sep(c) {
             // single-char token
@@ -2685,8 +2760,8 @@ fn title_case(input: &str) -> String {
         let at_edge = index == 0 || index + token_len == total;
         // URL check
         let next_char = chars.get(j).copied();
-        let url_ok = next_char != Some(':')
-            || chars.get(j + 1).map(|c| c.is_whitespace()).unwrap_or(false);
+        let url_ok =
+            next_char != Some(':') || chars.get(j + 1).map(|c| c.is_whitespace()).unwrap_or(false);
 
         if !is_manual && (!is_small || at_edge) && url_ok {
             // uppercase first alphanumeric/latin char
@@ -2738,10 +2813,14 @@ fn build_parameters(
     // (code, value) pairs in build order.
     let mut params: Vec<(String, String)> = Vec::new();
 
-    if let Some(cy) = yget_str(cfg_yaml, "copyrightYear").or_else(|| yget_str(cfg_yaml, "copyrightyear")) {
+    if let Some(cy) =
+        yget_str(cfg_yaml, "copyrightYear").or_else(|| yget_str(cfg_yaml, "copyrightyear"))
+    {
         params.push(("copyrightyear".into(), cy));
     }
-    if let Some(rl) = yget_str(cfg_yaml, "releaseLabel").or_else(|| yget_str(cfg_yaml, "releaselabel")) {
+    if let Some(rl) =
+        yget_str(cfg_yaml, "releaseLabel").or_else(|| yget_str(cfg_yaml, "releaselabel"))
+    {
         params.push(("releaselabel".into(), rl));
     }
     if let Some(Y::Mapping(pm)) = yget(cfg_yaml, "parameters") {
@@ -2756,12 +2835,10 @@ fn build_parameters(
     }
 
     // path-history (HL7 IGs)
-    let is_hl7 = canonical.starts_with("http://hl7.org/") || canonical.starts_with("https://hl7.org/");
+    let is_hl7 =
+        canonical.starts_with("http://hl7.org/") || canonical.starts_with("https://hl7.org/");
     if is_hl7 && !params.iter().any(|(c, _)| c == "path-history") {
-        params.push((
-            "path-history".into(),
-            format!("{canonical}/history.html"),
-        ));
+        params.push(("path-history".into(), format!("{canonical}/history.html")));
     }
     // autoload-resources=false if custom resources & not present
     if has_custom_resources && !params.iter().any(|(c, _)| c == "autoload-resources") {

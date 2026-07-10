@@ -101,7 +101,11 @@ impl Formatter for JsPretty<'_> {
     fn end_array<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
         self.inner.end_array(w)
     }
-    fn begin_array_value<W: ?Sized + io::Write>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+    fn begin_array_value<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         self.inner.begin_array_value(w, first)
     }
     fn end_array_value<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
@@ -113,7 +117,11 @@ impl Formatter for JsPretty<'_> {
     fn end_object<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
         self.inner.end_object(w)
     }
-    fn begin_object_key<W: ?Sized + io::Write>(&mut self, w: &mut W, first: bool) -> io::Result<()> {
+    fn begin_object_key<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
         self.inner.begin_object_key(w, first)
     }
     fn begin_object_value<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
@@ -133,8 +141,7 @@ pub fn ordered_clone_deep(input: &Value) -> Value {
         Value::Array(items) => Value::Array(items.iter().map(ordered_clone_deep).collect()),
         Value::Object(map) => {
             // Partition keys into non-underscore (base) keys and underscore keys.
-            let mut underscore: Vec<&String> =
-                map.keys().filter(|k| k.starts_with('_')).collect();
+            let mut underscore: Vec<&String> = map.keys().filter(|k| k.starts_with('_')).collect();
             let base: Vec<&String> = map.keys().filter(|k| !k.starts_with('_')).collect();
 
             let mut out = Map::new();
@@ -185,7 +192,7 @@ mod tests {
             (-0.0, "0"),
             (1.0, "1"),
             (-3.14, "-3.14"),
-            (155e-8, "0.00000155"),   // misc-025 origin.value
+            (155e-8, "0.00000155"), // misc-025 origin.value
             (1.5e-3, "0.0015"),
             (0.88e6, "880000"),
             (2.3e11, "230000000000"),

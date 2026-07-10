@@ -70,11 +70,16 @@ fn walk_ladder_matches_goldens() -> anyhow::Result<()> {
     let repo = repo();
     let cache = repo.join("temp/fhir-home/.fhir/packages");
     if !cache.is_dir() {
-        eprintln!("skipping walk ladder: no isolated FHIR cache at {}", cache.display());
+        eprintln!(
+            "skipping walk ladder: no isolated FHIR cache at {}",
+            cache.display()
+        );
         return Ok(());
     }
-    let r4_ctx = snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r4.core#4.0.1".to_string()])?;
-    let r5_ctx = snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r5.core#5.0.0".to_string()])?;
+    let r4_ctx =
+        snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r4.core#4.0.1".to_string()])?;
+    let r5_ctx =
+        snapshot_gen::PackageContext::new(&cache, &["hl7.fhir.r5.core#5.0.0".to_string()])?;
 
     let mut failures = Vec::new();
     for name in LADDER {
@@ -86,7 +91,11 @@ fn walk_ladder_matches_goldens() -> anyhow::Result<()> {
         }
         let input: Value = serde_json::from_slice(&std::fs::read(fixture_path)?)?;
         let expected: Value = serde_json::from_slice(&std::fs::read(golden_path)?)?;
-        let ctx = if name.starts_with("r4-") { &r4_ctx } else { &r5_ctx };
+        let ctx = if name.starts_with("r4-") {
+            &r4_ctx
+        } else {
+            &r5_ctx
+        };
         let actual = match snapshot_gen::generate_snapshot(input, ctx, Default::default()) {
             Ok(v) => v,
             Err(e) => {
@@ -98,6 +107,10 @@ fn walk_ladder_matches_goldens() -> anyhow::Result<()> {
             failures.push(format!("{name}: snapshot.element mismatch"));
         }
     }
-    assert!(failures.is_empty(), "walk ladder failures:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "walk ladder failures:\n{}",
+        failures.join("\n")
+    );
     Ok(())
 }

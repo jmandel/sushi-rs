@@ -67,7 +67,10 @@ impl MapResolver {
     /// Insert a resource, keying by its `.url` (version suffix stripped). Ignores
     /// resources without a `url`.
     pub fn insert(&mut self, resource: J) -> &mut Self {
-        let rt = resource.get("resourceType").and_then(J::as_str).unwrap_or("");
+        let rt = resource
+            .get("resourceType")
+            .and_then(J::as_str)
+            .unwrap_or("");
         if let Some(url) = resource.get("url").and_then(J::as_str) {
             let key = strip_version(url).to_string();
             match rt {
@@ -234,7 +237,10 @@ impl Expansion {
 /// `valueset` is a FHIR `ValueSet` resource JSON (the compiler's export body).
 /// A ValueSet that already carries a literal `expansion` is re-derived from its
 /// `compose` here — this evaluator does not trust a pre-baked expansion.
-pub fn expand_enumerable(valueset: &J, resolver: &dyn Resolver) -> Result<Expansion, NotEnumerable> {
+pub fn expand_enumerable(
+    valueset: &J,
+    resolver: &dyn Resolver,
+) -> Result<Expansion, NotEnumerable> {
     let mut guard = BTreeSet::new();
     if let Some(url) = valueset.get("url").and_then(J::as_str) {
         guard.insert(strip_version(url).to_string());
@@ -276,7 +282,8 @@ fn expand_inner(
             .iter()
             .map(|c| (c.system.clone(), c.code.clone()))
             .collect();
-        acc.concepts.retain(|c| !drop.contains(&(c.system.clone(), c.code.clone())));
+        acc.concepts
+            .retain(|c| !drop.contains(&(c.system.clone(), c.code.clone())));
         // exclude does not contribute used-systems/copyright it didn't already.
     }
 
@@ -327,9 +334,8 @@ impl Accumulator {
 
     fn finish(mut self) -> Expansion {
         // Deterministic ordering: (system, code) byte-wise. See module docs.
-        self.concepts.sort_by(|a, b| {
-            a.system.cmp(&b.system).then_with(|| a.code.cmp(&b.code))
-        });
+        self.concepts
+            .sort_by(|a, b| a.system.cmp(&b.system).then_with(|| a.code.cmp(&b.code)));
         Expansion {
             contains: self.concepts,
             used_systems: self.used_systems,
@@ -395,21 +401,32 @@ fn eval_component(
         for vref in vs_refs {
             let Some(url) = vref.as_str() else {
                 return Err(refuse(
-                    side, index, system, RefusalKind::Malformed,
+                    side,
+                    index,
+                    system,
+                    RefusalKind::Malformed,
                     "`valueSet` entry is not a URL string",
                 ));
             };
             let key = strip_version(url).to_string();
             if guard.contains(&key) {
                 return Err(refuse(
-                    side, index, system, RefusalKind::CycleGuard,
+                    side,
+                    index,
+                    system,
+                    RefusalKind::CycleGuard,
                     format!("value set reference `{url}` forms a cycle"),
                 ));
             }
             let Some(inner_vs) = resolver.value_set(url) else {
                 return Err(refuse(
-                    side, index, system, RefusalKind::UnresolvableValueSet,
-                    format!("referenced value set `{url}` is not resolvable from local/cached content"),
+                    side,
+                    index,
+                    system,
+                    RefusalKind::UnresolvableValueSet,
+                    format!(
+                        "referenced value set `{url}` is not resolvable from local/cached content"
+                    ),
                 ));
             };
             guard.insert(key.clone());
@@ -422,7 +439,10 @@ fn eval_component(
                     RefusalKind::NestedNotEnumerable
                 };
                 refuse(
-                    side, index, system, kind,
+                    side,
+                    index,
+                    system,
+                    kind,
                     format!("referenced value set `{url}` is not enumerable: {e}"),
                 )
             })?;
@@ -451,9 +471,8 @@ fn eval_component(
         // present, its enumerated concepts / decidable filters).
         if let Some(sys) = system {
             if concepts.is_some() || filters.is_some() {
-                let sys_side = eval_system_component(
-                    sys, concepts, filters, resolver, side, index,
-                )?;
+                let sys_side =
+                    eval_system_component(sys, concepts, filters, resolver, side, index)?;
                 for (s, v) in &sys_side.used_systems {
                     push_used(&mut out.used_systems, s.clone(), v.clone());
                 }
@@ -515,7 +534,10 @@ fn eval_system_component(
         if filters.is_some() {
             // FHIR forbids concept + filter in the same component.
             return Err(refuse(
-                side, index, Some(sys), RefusalKind::Malformed,
+                side,
+                index,
+                Some(sys),
+                RefusalKind::Malformed,
                 "component has both `concept` and `filter` (forbidden by FHIR)",
             ));
         }
@@ -523,7 +545,10 @@ fn eval_system_component(
         for c in concept_list {
             let Some(code) = c.get("code").and_then(J::as_str) else {
                 return Err(refuse(
-                    side, index, Some(sys), RefusalKind::Malformed,
+                    side,
+                    index,
+                    Some(sys),
+                    RefusalKind::Malformed,
                     "`concept` entry has no `code`",
                 ));
             };
@@ -779,7 +804,11 @@ fn eval_local_filter(
 
 /// Transitively collect every code whose parent chain reaches `ancestor`
 /// (children of `ancestor`, and so on). Does NOT insert `ancestor` itself.
-fn collect_descendants(ancestor: &str, index: &BTreeMap<String, CsNode>, out: &mut BTreeSet<String>) {
+fn collect_descendants(
+    ancestor: &str,
+    index: &BTreeMap<String, CsNode>,
+    out: &mut BTreeSet<String>,
+) {
     // Build once per call would be O(n^2) on deep trees; local CS are tiny, so a
     // simple fixpoint over the parent edges is fine and obviously correct.
     let mut changed = true;
@@ -913,8 +942,12 @@ mod tests {
             ]}]}
         });
         let exp = expand_enumerable(&vs, &resolver_with(local_cs())).unwrap();
-        let codes: Vec<_> = exp.to_expansion_json()["contains"].as_array().unwrap()
-            .iter().map(|c| c["code"].as_str().unwrap().to_string()).collect();
+        let codes: Vec<_> = exp.to_expansion_json()["contains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["code"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(codes, vec!["bear", "grizzly", "polar"]); // reflexive
     }
 
@@ -927,8 +960,12 @@ mod tests {
             ]}]}
         });
         let exp = expand_enumerable(&vs, &resolver_with(local_cs())).unwrap();
-        let codes: Vec<_> = exp.to_expansion_json()["contains"].as_array().unwrap()
-            .iter().map(|c| c["code"].as_str().unwrap().to_string()).collect();
+        let codes: Vec<_> = exp.to_expansion_json()["contains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["code"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(codes, vec!["grizzly", "polar"]); // NOT bear itself
     }
 
@@ -950,8 +987,12 @@ mod tests {
             ]}]}
         });
         let exp = expand_enumerable(&vs, &resolver_with(cs)).unwrap();
-        let codes: Vec<_> = exp.to_expansion_json()["contains"].as_array().unwrap()
-            .iter().map(|c| c["code"].as_str().unwrap().to_string()).collect();
+        let codes: Vec<_> = exp.to_expansion_json()["contains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["code"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(codes, vec!["a", "c"]);
     }
 
@@ -970,8 +1011,12 @@ mod tests {
         let mut r = resolver_with(local_cs());
         r.insert(inner);
         let exp = expand_enumerable(&outer, &r).unwrap();
-        let codes: Vec<_> = exp.to_expansion_json()["contains"].as_array().unwrap()
-            .iter().map(|c| c["code"].as_str().unwrap().to_string()).collect();
+        let codes: Vec<_> = exp.to_expansion_json()["contains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["code"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(codes, vec!["cat", "lion"]);
     }
 
@@ -986,8 +1031,12 @@ mod tests {
             }
         });
         let exp = expand_enumerable(&vs, &resolver_with(local_cs())).unwrap();
-        let codes: Vec<_> = exp.to_expansion_json()["contains"].as_array().unwrap()
-            .iter().map(|c| c["code"].as_str().unwrap().to_string()).collect();
+        let codes: Vec<_> = exp.to_expansion_json()["contains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["code"].as_str().unwrap().to_string())
+            .collect();
         assert_eq!(codes, vec!["bear", "grizzly"]); // polar excluded
     }
 

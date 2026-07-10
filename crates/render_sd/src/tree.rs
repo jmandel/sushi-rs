@@ -105,7 +105,9 @@ impl TreeSource for MemTree {
         let mut seen = std::collections::HashSet::new();
         let mut any = false;
         for k in self.files.keys() {
-            let Ok(rest) = k.strip_prefix(&dir) else { continue };
+            let Ok(rest) = k.strip_prefix(&dir) else {
+                continue;
+            };
             any = true;
             let mut comps = rest.components();
             let Some(first) = comps.next() else { continue };

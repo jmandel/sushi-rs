@@ -205,7 +205,8 @@ impl Value {
             }
             (Value::Hash(a), Value::Hash(b)) => {
                 a.len() == b.len()
-                    && a.iter().all(|(k, v)| b.get(k).map_or(false, |w| v.liquid_eq(w)))
+                    && a.iter()
+                        .all(|(k, v)| b.get(k).map_or(false, |w| v.liquid_eq(w)))
             }
             // empty literal handling is done at the condition layer.
             _ => false,

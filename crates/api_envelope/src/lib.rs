@@ -46,8 +46,9 @@ pub fn envelope(op: &str, result: Result<Value, String>) -> String {
 
 /// Serialize a `T: Serialize` payload into the envelope (typed-payload path).
 pub fn envelope_ser<T: Serialize>(op: &str, result: Result<T, String>) -> String {
-    let as_value = result
-        .and_then(|payload| serde_json::to_value(&payload).map_err(|e| format!("{op}: serialize: {e}")));
+    let as_value = result.and_then(|payload| {
+        serde_json::to_value(&payload).map_err(|e| format!("{op}: serialize: {e}"))
+    });
     envelope(op, as_value)
 }
 

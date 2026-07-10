@@ -23,7 +23,11 @@ pub(crate) fn resolve_content_reference_pub(
 }
 
 /// PU:520 resolveContentReference — find the base element the `#frag` points to.
-fn resolve_content_reference(base: &[Value], current_index: usize, content_ref: &str) -> Option<usize> {
+fn resolve_content_reference(
+    base: &[Value],
+    current_index: usize,
+    content_ref: &str,
+) -> Option<usize> {
     let frag = &content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..];
     let mut res = current_index as isize - 1;
     while res >= 0 {
@@ -205,7 +209,11 @@ pub(crate) fn walk_into_content_reference(
         base_source_url: cur.base_source_url.clone(),
         base: tgt_list,
         base_cursor: new_base_cursor,
-        diff_cursor: if swapped.is_some() { start.saturating_sub(1) } else { start },
+        diff_cursor: if swapped.is_some() {
+            start.saturating_sub(1)
+        } else {
+            start
+        },
         context_name: cur.context_name.clone(),
         result_path_base: cur.result_path_base.clone(),
     };

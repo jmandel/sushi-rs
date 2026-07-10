@@ -186,7 +186,10 @@ fn tokenize_json(src: &str) -> Vec<(&'static str, String)> {
                     continue;
                 }
                 if let Some((len, is_float)) = json_number(&ch, i) {
-                    out.push((if is_float { "mf" } else { "mi" }, ch[i..i + len].iter().collect()));
+                    out.push((
+                        if is_float { "mf" } else { "mi" },
+                        ch[i..i + len].iter().collect(),
+                    ));
                     i += len;
                     continue;
                 }
@@ -296,25 +299,110 @@ fn json_number(ch: &[char], i: usize) -> Option<(usize, bool)> {
 // object-key `na`. JS whitespace is plain Text (NO span), unlike JSON.
 
 const JS_KEYWORDS: &[&str] = &[
-    "async", "await", "break", "case", "catch", "continue", "debugger", "default", "delete", "do",
-    "else", "export", "finally", "from", "for", "if", "import", "in", "instanceof", "new", "of",
-    "return", "super", "switch", "this", "throw", "try", "typeof", "void", "while", "yield",
+    "async",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "export",
+    "finally",
+    "from",
+    "for",
+    "if",
+    "import",
+    "in",
+    "instanceof",
+    "new",
+    "of",
+    "return",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "try",
+    "typeof",
+    "void",
+    "while",
+    "yield",
 ];
 const JS_DECLARATIONS: &[&str] = &[
-    "var", "let", "const", "with", "function", "class", "extends", "constructor", "get", "set",
+    "var",
+    "let",
+    "const",
+    "with",
+    "function",
+    "class",
+    "extends",
+    "constructor",
+    "get",
+    "set",
     "static",
 ];
-const JS_RESERVED: &[&str] =
-    &["enum", "implements", "interface", "package", "private", "protected", "public"];
+const JS_RESERVED: &[&str] = &[
+    "enum",
+    "implements",
+    "interface",
+    "package",
+    "private",
+    "protected",
+    "public",
+];
 const JS_CONSTANTS: &[&str] = &["true", "false", "null", "NaN", "Infinity", "undefined"];
 const JS_BUILTINS: &[&str] = &[
-    "Array", "Boolean", "Date", "Error", "Function", "Math", "netscape", "Number", "Object",
-    "Packages", "RegExp", "String", "sun", "decodeURI", "decodeURIComponent", "encodeURI",
-    "encodeURIComponent", "eval", "isFinite", "isNaN", "parseFloat", "parseInt", "document",
-    "window", "navigator", "self", "global", "Promise", "Set", "Map", "WeakSet", "WeakMap",
-    "Symbol", "Proxy", "Reflect", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array",
-    "Uint16Array", "Uint16ClampedArray", "Int32Array", "Uint32Array", "Uint32ClampedArray",
-    "Float32Array", "Float64Array", "DataView", "ArrayBuffer",
+    "Array",
+    "Boolean",
+    "Date",
+    "Error",
+    "Function",
+    "Math",
+    "netscape",
+    "Number",
+    "Object",
+    "Packages",
+    "RegExp",
+    "String",
+    "sun",
+    "decodeURI",
+    "decodeURIComponent",
+    "encodeURI",
+    "encodeURIComponent",
+    "eval",
+    "isFinite",
+    "isNaN",
+    "parseFloat",
+    "parseInt",
+    "document",
+    "window",
+    "navigator",
+    "self",
+    "global",
+    "Promise",
+    "Set",
+    "Map",
+    "WeakSet",
+    "WeakMap",
+    "Symbol",
+    "Proxy",
+    "Reflect",
+    "Int8Array",
+    "Uint8Array",
+    "Uint8ClampedArray",
+    "Int16Array",
+    "Uint16Array",
+    "Uint16ClampedArray",
+    "Int32Array",
+    "Uint32Array",
+    "Uint32ClampedArray",
+    "Float32Array",
+    "Float64Array",
+    "DataView",
+    "ArrayBuffer",
 ];
 
 fn is_js_id_start(c: char) -> bool {
@@ -375,8 +463,9 @@ fn tokenize_js(src: &str) -> Vec<(&'static str, String)> {
                     // The escaped char is consumed only if it is `\`, n, r, t, or
                     // the string's own quote char.
                     let esc_next = ch.get(i + 1).copied();
-                    let takes_next = matches!(esc_next, Some('\\') | Some('n') | Some('r') | Some('t'))
-                        || esc_next == Some(quote);
+                    let takes_next =
+                        matches!(esc_next, Some('\\') | Some('n') | Some('r') | Some('t'))
+                            || esc_next == Some(quote);
                     if takes_next {
                         out.push(("se", ch[i..i + 2].iter().collect()));
                         i += 2;
@@ -529,7 +618,9 @@ fn js_number(ch: &[char], i: usize) -> Option<(usize, &'static str)> {
 fn js_operator(ch: &[char], i: usize) -> Option<usize> {
     let n = ch.len();
     let s: String = ch[i..(i + 4).min(n)].iter().collect();
-    for op in ["===", "!==", ">>>", "&&", "||", "<<", ">>", "++", "--", "??"] {
+    for op in [
+        "===", "!==", ">>>", "&&", "||", "<<", ">>", "++", "--", "??",
+    ] {
         if s.starts_with(op) {
             return Some(op.chars().count());
         }
@@ -668,9 +759,9 @@ fn http_request_line(line: &str) -> Option<Vec<(&'static str, String)>> {
     const METHODS: [&str; 9] = [
         "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT",
     ];
-    let method = METHODS.iter().find(|m| {
-        line.starts_with(**m) && line[m.len()..].starts_with(' ')
-    })?;
+    let method = METHODS
+        .iter()
+        .find(|m| line.starts_with(**m) && line[m.len()..].starts_with(' '))?;
     let rest = &line[method.len()..];
     let sp1_len = rest.len() - rest.trim_start().len();
     let (sp1, rest) = rest.split_at(sp1_len);

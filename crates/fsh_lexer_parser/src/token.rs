@@ -84,7 +84,14 @@ mod tests {
 
     #[test]
     fn name_roundtrip() {
-        for n in ["KW_PROFILE", "STAR", "SEQUENCE", "CODE", "EOF", "WHITESPACE"] {
+        for n in [
+            "KW_PROFILE",
+            "STAR",
+            "SEQUENCE",
+            "CODE",
+            "EOF",
+            "WHITESPACE",
+        ] {
             assert_eq!(TokenKind::from_name(n).unwrap().name(), n);
         }
         assert!(TokenKind::from_name("NOPE").is_none());

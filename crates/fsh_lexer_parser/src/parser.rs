@@ -213,8 +213,7 @@ fn unescape_unicode(seg: &str) -> String {
             if (0xD800..=0xDBFF).contains(&cp) {
                 if let Some(low) = read_escape(i + 6) {
                     if (0xDC00..=0xDFFF).contains(&low) {
-                        let combined =
-                            0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
+                        let combined = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
                         if let Some(ch) = char::from_u32(combined) {
                             out.push(ch);
                             i += 12;
@@ -237,11 +236,7 @@ fn unescape_unicode(seg: &str) -> String {
 
 fn unescape_quoted_string(s: &str) -> String {
     // strip surrounding quotes
-    let inner = if s.len() >= 2 {
-        &s[1..s.len() - 1]
-    } else {
-        ""
-    };
+    let inner = if s.len() >= 2 { &s[1..s.len() - 1] } else { "" };
     // split on \\ , unescape each, rejoin with literal backslash
     let parts: Vec<&str> = inner.split("\\\\").collect();
     let replaced: Vec<String> = parts
@@ -273,7 +268,9 @@ fn extract_multiline_string(text: &str) -> String {
         .map(|l| l.strip_suffix('\r').unwrap_or(l))
         .map(|l| {
             let s = unescape_unicode(l);
-            s.replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
+            s.replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
         })
         .collect();
     // drop first line if only whitespace
@@ -352,7 +349,11 @@ fn parse_code_lexeme(text: &str) -> (String, Option<String>) {
             String::new()
         };
     }
-    let sys = if system.is_empty() { None } else { Some(system) };
+    let sys = if system.is_empty() {
+        None
+    } else {
+        Some(system)
+    };
     (code, sys)
 }
 
@@ -523,7 +524,10 @@ impl Cursor {
         self.toks.get(self.pos).map(|t| t.kind).unwrap_or(K::EOF)
     }
     fn la(&self, n: usize) -> K {
-        self.toks.get(self.pos + n).map(|t| t.kind).unwrap_or(K::EOF)
+        self.toks
+            .get(self.pos + n)
+            .map(|t| t.kind)
+            .unwrap_or(K::EOF)
     }
     fn tok(&self) -> &Token {
         &self.toks[self.pos]
@@ -595,7 +599,8 @@ impl Importer {
                 let kw = toks[s].kind;
                 if kw == K::KW_ALIAS {
                     self.collect_alias(&toks, s, e);
-                } else if kw == K::KW_RULESET && toks.get(s + 1).map(|t| t.kind) == Some(K::PARAM_RULESET_REFERENCE)
+                } else if kw == K::KW_RULESET
+                    && toks.get(s + 1).map(|t| t.kind) == Some(K::PARAM_RULESET_REFERENCE)
                 {
                     self.collect_param_ruleset(&appended, &toks, s, e);
                 }
@@ -652,7 +657,11 @@ impl Importer {
         if name.contains('|') {
             return;
         }
-        let dup = self.all_aliases.get(&name).map(|v| v != &value).unwrap_or(false);
+        let dup = self
+            .all_aliases
+            .get(&name)
+            .map(|v| v != &value)
+            .unwrap_or(false);
         if dup {
             return; // keep original
         }
@@ -669,13 +678,16 @@ impl Importer {
         // name + params from paramRuleSetRef
         let ref_tok = &toks[s + 1];
         let name = trim(slice_off_last(&ref_tok.text)); // "Param(" -> "Param"
-        // params: parameter* lastParameter, each slice(0,-1).trim()
+                                                        // params: parameter* lastParameter, each slice(0,-1).trim()
         let mut params = Vec::new();
         let mut star_idx = None;
         let mut i = s + 2;
         while i < e {
             match toks[i].kind {
-                K::BRACKETED_PARAM | K::PLAIN_PARAM | K::LAST_BRACKETED_PARAM | K::LAST_PLAIN_PARAM => {
+                K::BRACKETED_PARAM
+                | K::PLAIN_PARAM
+                | K::LAST_BRACKETED_PARAM
+                | K::LAST_PLAIN_PARAM => {
                     params.push(trim(slice_off_last(&toks[i].text)));
                 }
                 K::STAR => {
@@ -1607,7 +1619,9 @@ impl Importer {
             has_tail = true;
         }
         if has_tail {
-            return vec![self.finish_add_element(cur, start, star, local_path, &card_text, &flag_toks)];
+            return vec![
+                self.finish_add_element(cur, start, star, local_path, &card_text, &flag_toks)
+            ];
         }
         // cardRule (+ optional flagRule)
         let mut rules = Vec::new();
@@ -1687,7 +1701,13 @@ impl Importer {
         }
     }
 
-    fn finish_binding(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Rule {
+    fn finish_binding(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Rule {
         cur.advance(); // KW_FROM
         let name = cur.tok().text.clone();
         cur.advance();
@@ -1716,7 +1736,13 @@ impl Importer {
         }
     }
 
-    fn finish_assignment(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Rule {
+    fn finish_assignment(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Rule {
         cur.advance(); // EQUAL
         let vr = self.parse_value(cur);
         let exactly = if cur.kind() == K::KW_EXACTLY {
@@ -1739,7 +1765,13 @@ impl Importer {
         }
     }
 
-    fn finish_only(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Rule {
+    fn finish_only(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Rule {
         cur.advance(); // KW_ONLY
         let types = self.parse_target_types(cur);
         let stop = self.stop_tok(cur, start);
@@ -1814,9 +1846,15 @@ impl Importer {
         out
     }
 
-    fn finish_contains(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Vec<Rule> {
+    fn finish_contains(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Vec<Rule> {
         cur.advance(); // KW_CONTAINS
-        // items: name (KW_NAMED name)? CARD flag*  (KW_AND ...)*
+                       // items: name (KW_NAMED name)? CARD flag*  (KW_AND ...)*
         struct Item {
             name: String,
             type_: Option<String>,
@@ -1890,7 +1928,13 @@ impl Importer {
         rules
     }
 
-    fn finish_obeys(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Vec<Rule> {
+    fn finish_obeys(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Vec<Rule> {
         cur.advance(); // KW_OBEYS
         let mut names = Vec::new();
         loop {
@@ -1915,7 +1959,13 @@ impl Importer {
             .collect()
     }
 
-    fn finish_flag(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Vec<Rule> {
+    fn finish_flag(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Vec<Rule> {
         // flagRule: path (KW_AND path)* flag+
         let mut paths = vec![local_path.to_string()];
         while cur.kind() == K::KW_AND {
@@ -1939,11 +1989,20 @@ impl Importer {
             .collect()
     }
 
-    fn finish_caret(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Rule {
+    fn finish_caret(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Rule {
         // caretPath EQUAL value
         let caret_path = cur.tok().text.clone();
         cur.advance(); // CARET_SEQUENCE
-        let caret_path = caret_path.strip_prefix('^').unwrap_or(&caret_path).to_string();
+        let caret_path = caret_path
+            .strip_prefix('^')
+            .unwrap_or(&caret_path)
+            .to_string();
         let vr = self.parse_equal_value(cur);
         let value = vr.value;
         let raw_value = vr.raw_value;
@@ -1964,7 +2023,13 @@ impl Importer {
         }
     }
 
-    fn finish_code_caret(&mut self, cur: &mut Cursor, start: usize, star: &Token, keep_system: bool) -> Rule {
+    fn finish_code_caret(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        keep_system: bool,
+    ) -> Rule {
         // CODE* caretPath EQUAL value
         let mut local_code_path = Vec::new();
         while cur.kind() == K::CODE {
@@ -2006,7 +2071,13 @@ impl Importer {
         }
     }
 
-    fn finish_concept(&mut self, cur: &mut Cursor, start: usize, star: &Token, in_ruleset: bool) -> Rule {
+    fn finish_concept(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        in_ruleset: bool,
+    ) -> Rule {
         // CODE+ STRING? (STRING | MULTILINE_STRING)?
         let mut codes = Vec::new();
         while cur.kind() == K::CODE {
@@ -2039,12 +2110,12 @@ impl Importer {
         let any_system = codes.iter().any(|(_, s)| s.is_some());
         if any_system
             && in_ruleset
-                && code_part_system.is_some()
-                && definition.is_none()
-                && hierarchy.is_empty()
-            {
-                system = code_part_system;
-            }
+            && code_part_system.is_some()
+            && definition.is_none()
+            && hierarchy.is_empty()
+        {
+            system = code_part_system;
+        }
         Rule::Concept {
             source_info: SourceInfo::new(&self.current_file, location),
             path: String::new(),
@@ -2056,7 +2127,13 @@ impl Importer {
         }
     }
 
-    fn finish_mapping_rule(&mut self, cur: &mut Cursor, start: usize, star: &Token, local_path: &str) -> Rule {
+    fn finish_mapping_rule(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+        local_path: &str,
+    ) -> Rule {
         cur.advance(); // ARROW
         let map = if cur.kind() == K::STRING {
             let s = extract_string(&cur.tok().text);
@@ -2467,7 +2544,13 @@ impl Importer {
         first
     }
 
-    fn finish_ratio(&mut self, cur: &mut Cursor, _start: usize, start_tok: &Token, num: FshQuantity) -> Value {
+    fn finish_ratio(
+        &mut self,
+        cur: &mut Cursor,
+        _start: usize,
+        start_tok: &Token,
+        num: FshQuantity,
+    ) -> Value {
         cur.advance(); // COLON
         let denom = self.parse_ratio_part(cur);
         Value::Ratio(Box::new(FshRatio {
@@ -2507,7 +2590,12 @@ impl Importer {
 
     // ---------- vsComponent ----------
 
-    fn finish_vs_component(&mut self, cur: &mut Cursor, start: usize, star: &Token) -> Option<Rule> {
+    fn finish_vs_component(
+        &mut self,
+        cur: &mut Cursor,
+        start: usize,
+        star: &Token,
+    ) -> Option<Rule> {
         let mut inclusion = true;
         if cur.kind() == K::KW_INCLUDE {
             cur.advance();
@@ -2611,7 +2699,7 @@ impl Importer {
             return from;
         }
         cur.advance(); // KW_FROM
-        // (vsFromSystem (KW_AND vsFromValueset)? | vsFromValueset (KW_AND vsFromSystem)?)
+                       // (vsFromSystem (KW_AND vsFromValueset)? | vsFromValueset (KW_AND vsFromSystem)?)
         loop {
             match cur.kind() {
                 K::KW_SYSTEM => {
@@ -2652,7 +2740,9 @@ impl Importer {
         // operator: EQUAL | SEQUENCE
         let operator_raw = cur.tok().text.clone();
         cur.advance();
-        let operator = operator_raw.to_lowercase().replace("descendant", "descendent");
+        let operator = operator_raw
+            .to_lowercase()
+            .replace("descendant", "descendent");
         // value?
         let value = match cur.kind() {
             K::CODE => {
@@ -2782,7 +2872,12 @@ impl Importer {
 
     /// Returns true if the insert rule should be kept; false if SUSHI would drop
     /// it (unknown RuleSet, param-count mismatch, or failed expansion).
-    fn apply_ruleset_params(&mut self, name: &str, params: &[String], _location: &Location) -> bool {
+    fn apply_ruleset_params(
+        &mut self,
+        name: &str,
+        params: &[String],
+        _location: &Location,
+    ) -> bool {
         let prs = match self.param_rule_sets.get(name) {
             Some(p) => p.clone(),
             None => return false,
@@ -2851,7 +2946,8 @@ impl Importer {
 
         for &(s, e) in &ranges {
             let kw = toks[s].kind;
-            if kw == K::KW_RULESET && toks.get(s + 1).map(|t| t.kind) == Some(K::PARAM_RULESET_REFERENCE)
+            if kw == K::KW_RULESET
+                && toks.get(s + 1).map(|t| t.kind) == Some(K::PARAM_RULESET_REFERENCE)
             {
                 self.collect_param_ruleset(&appended, &toks, s, e);
                 continue;
@@ -3022,7 +3118,11 @@ fn canonical_choices(text: &str) -> Vec<String> {
     // text = Canonical( ... ); split inner on \s+or\s+
     let open = text.find('(').map(|i| i + 1).unwrap_or(0);
     let close = text.rfind(')').unwrap_or(text.len());
-    let inner = if close >= open { &text[open..close] } else { "" };
+    let inner = if close >= open {
+        &text[open..close]
+    } else {
+        ""
+    };
     split_ws_or(inner)
 }
 
@@ -3089,7 +3189,9 @@ fn unescape_bracketed(s: &str) -> String {
                 ws.push(chars[j]);
                 j += 1;
             }
-            if j + 1 < chars.len() && chars[j] == '\\' && (chars[j + 1] == ',' || chars[j + 1] == ')')
+            if j + 1 < chars.len()
+                && chars[j] == '\\'
+                && (chars[j + 1] == ',' || chars[j + 1] == ')')
             {
                 out.push(']');
                 out.push(']');
@@ -3159,7 +3261,10 @@ fn mini_split_rules(contents: &str) -> Vec<(usize, Vec<String>)> {
         // find STAR: [\r\n] WS* '*' [  ]
         if chars[i] == '\n' || chars[i] == '\r' {
             let mut j = i + 1;
-            while j < chars.len() && matches!(chars[j], ' ' | '\t' | '\r' | '\n' | '\u{0c}' | '\u{a0}') && chars[j] != '*' {
+            while j < chars.len()
+                && matches!(chars[j], ' ' | '\t' | '\r' | '\n' | '\u{0c}' | '\u{a0}')
+                && chars[j] != '*'
+            {
                 // whitespace before star; but newline included? WS includes \r\n
                 if chars[j] == '*' {
                     break;
@@ -3174,7 +3279,11 @@ fn mini_split_rules(contents: &str) -> Vec<(usize, Vec<String>)> {
                 indent_spaces += 1;
                 k += 1;
             }
-            if k < chars.len() && chars[k] == '*' && k + 1 < chars.len() && (chars[k + 1] == ' ' || chars[k + 1] == '\u{a0}') {
+            if k < chars.len()
+                && chars[k] == '*'
+                && k + 1 < chars.len()
+                && (chars[k + 1] == ' ' || chars[k + 1] == '\u{a0}')
+            {
                 // start of a rule
                 let body_start = k + 2;
                 let (parts, next) = mini_tokenize(&chars, body_start);
@@ -3208,7 +3317,11 @@ fn mini_tokenize(chars: &[char], start: usize) -> (Vec<String>, usize) {
             while k < chars.len() && matches!(chars[k], ' ' | '\t' | '\u{0c}' | '\u{a0}') {
                 k += 1;
             }
-            if k < chars.len() && chars[k] == '*' && k + 1 < chars.len() && (chars[k + 1] == ' ' || chars[k + 1] == '\u{a0}') {
+            if k < chars.len()
+                && chars[k] == '*'
+                && k + 1 < chars.len()
+                && (chars[k + 1] == ' ' || chars[k + 1] == '\u{a0}')
+            {
                 // next rule
                 return (parts, i);
             }
@@ -3221,7 +3334,9 @@ fn mini_tokenize(chars: &[char], start: usize) -> (Vec<String>, usize) {
             // multiline?
             if i + 2 < chars.len() && chars[i + 1] == '"' && chars[i + 2] == '"' {
                 let mut j = i + 3;
-                while j + 2 < chars.len() && !(chars[j] == '"' && chars[j + 1] == '"' && chars[j + 2] == '"') {
+                while j + 2 < chars.len()
+                    && !(chars[j] == '"' && chars[j + 1] == '"' && chars[j + 2] == '"')
+                {
                     j += 1;
                 }
                 let end = (j + 3).min(chars.len());
@@ -3247,7 +3362,9 @@ fn mini_tokenize(chars: &[char], start: usize) -> (Vec<String>, usize) {
         } else {
             // SEQUENCE: NONWS+
             let mut j = i;
-            while j < chars.len() && !matches!(chars[j], ' ' | '\t' | '\r' | '\n' | '\u{0c}' | '\u{a0}') {
+            while j < chars.len()
+                && !matches!(chars[j], ' ' | '\t' | '\r' | '\n' | '\u{0c}' | '\u{a0}')
+            {
                 j += 1;
             }
             parts.push(chars[i..j].iter().collect());
@@ -3276,9 +3393,7 @@ fn bracket_aware_substitution(rule_text: &str, params: &[String], values: &[Stri
                 let after = i + 2 + consumed;
                 if after + 1 < chars.len() && chars[after] == ']' && chars[after + 1] == ']' {
                     let idx = params.iter().position(|p| p == &pname).unwrap();
-                    let v = values[idx]
-                        .replace("]],", "]]\\,")
-                        .replace("]])", "]]\\)");
+                    let v = values[idx].replace("]],", "]]\\,").replace("]])", "]]\\)");
                     out.push_str(&format!("[[{}]]", v));
                     i = after + 2;
                     continue;
@@ -3292,7 +3407,9 @@ fn bracket_aware_substitution(rule_text: &str, params: &[String], values: &[Stri
                 if end < chars.len() && chars[end] == '}' {
                     let idx = params.iter().position(|p| p == &pname).unwrap();
                     let offset = i;
-                    let in_zone = bracket_zones.iter().any(|(s, e)| *s < offset && offset < *e);
+                    let in_zone = bracket_zones
+                        .iter()
+                        .any(|(s, e)| *s < offset && offset < *e);
                     let v = if in_zone {
                         values[idx].replace("]],", "]]\\,").replace("]])", "]]\\)")
                     } else {

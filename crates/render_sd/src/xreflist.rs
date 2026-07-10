@@ -57,13 +57,25 @@ struct Scan {
 
 impl Scan {
     fn new() -> Self {
-        Scan { order: Vec::new(), rows: HashMap::new() }
+        Scan {
+            order: Vec::new(),
+            rows: HashMap::new(),
+        }
     }
     fn into_sorted(self) -> Vec<UsedRow> {
-        let mut rows: Vec<UsedRow> = self.order.into_iter().filter_map(|k| self.rows.get(&k).map(|r| UsedRow {
-            url: r.url.clone(), web: r.web.clone(), json: r.json.clone(),
-            refs: r.refs.clone(), ref_keys: r.ref_keys.clone(),
-        })).collect();
+        let mut rows: Vec<UsedRow> = self
+            .order
+            .into_iter()
+            .filter_map(|k| {
+                self.rows.get(&k).map(|r| UsedRow {
+                    url: r.url.clone(),
+                    web: r.web.clone(),
+                    json: r.json.clone(),
+                    refs: r.refs.clone(),
+                    ref_keys: r.ref_keys.clone(),
+                })
+            })
+            .collect();
         rows.sort_by(|a, b| a.url.cmp(&b.url)); // CanonicalResourceSortByUrl
         rows
     }
@@ -90,7 +102,12 @@ impl Scan {
         }
     }
 
-    fn resolve_row(&self, ctx: &IgContext, want: &str, url: &str) -> Option<(String, String, String, Rc<Value>)> {
+    fn resolve_row(
+        &self,
+        ctx: &IgContext,
+        want: &str,
+        url: &str,
+    ) -> Option<(String, String, String, Rc<Value>)> {
         if url.is_empty() {
             return None;
         }
@@ -98,7 +115,11 @@ impl Scan {
         if let Some(res) = ctx.resolve(base) {
             if res.rtype == want {
                 let json = ctx.load_resource(base).or_else(|| own_json(ctx, base))?;
-                let row_url = json.get("url").and_then(|x| x.as_str()).unwrap_or(base).to_string();
+                let row_url = json
+                    .get("url")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(base)
+                    .to_string();
                 return Some((row_url.clone(), row_url, res.web_path, json));
             }
         }
@@ -111,7 +132,11 @@ impl Scan {
         if want == "CodeSystem" {
             if let Some((server, json)) = ctx.resolve_cs_external(base) {
                 let id = json.get("id").and_then(|x| x.as_str()).unwrap_or("");
-                let row_url = json.get("url").and_then(|x| x.as_str()).unwrap_or(base).to_string();
+                let row_url = json
+                    .get("url")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(base)
+                    .to_string();
                 let web = format!("{}/ValueSet/{}", server, id);
                 return Some((row_url.clone(), row_url, web, json));
             }
@@ -119,10 +144,22 @@ impl Scan {
         None
     }
 
-    fn ensure_row(&mut self, key: String, row_url: String, web: String, json: Rc<Value>) -> &mut UsedRow {
+    fn ensure_row(
+        &mut self,
+        key: String,
+        row_url: String,
+        web: String,
+        json: Rc<Value>,
+    ) -> &mut UsedRow {
         self.rows.entry(key.clone()).or_insert_with(|| {
             self.order.push(key);
-            UsedRow { url: row_url, web, json, refs: Vec::new(), ref_keys: Vec::new() }
+            UsedRow {
+                url: row_url,
+                web,
+                json,
+                refs: Vec::new(),
+                ref_keys: Vec::new(),
+            }
         })
     }
 }
@@ -148,7 +185,11 @@ impl SrcRef {
         } else {
             format!("{}/{}", r.rtype, r.id)
         };
-        SrcRef { title, link: r.web_path.clone(), key: r.web_path.clone() }
+        SrcRef {
+            title,
+            link: r.web_path.clone(),
+            key: r.web_path.clone(),
+        }
     }
 
     /// A source that is itself a resolved canonical resource (a ValueSet whose
@@ -159,7 +200,11 @@ impl SrcRef {
         let base = url.split('|').next().unwrap_or(url);
         let res = ctx.resolve(base)?;
         let title = res.present();
-        Some(SrcRef { title, link: res.web_path.clone(), key: res.web_path })
+        Some(SrcRef {
+            title,
+            link: res.web_path.clone(),
+            key: res.web_path,
+        })
     }
 }
 
@@ -184,9 +229,9 @@ pub fn used_vs_rows(ctx: &IgContext, all: bool) -> Vec<UsedRow> {
 /// needVersionReferences over the USED-VS list (the pg:2799 argument the CS ref
 /// tables share for their Version column flag).
 pub fn used_vs_needs_version(ctx: &IgContext, ig_version: &str, all: bool) -> bool {
-    used_vs_rows(ctx, all).iter().any(|r| {
-        r.json.get("version").and_then(|x| x.as_str()).unwrap_or("") != ig_version
-    })
+    used_vs_rows(ctx, all)
+        .iter()
+        .any(|r| r.json.get("version").and_then(|x| x.as_str()).unwrap_or("") != ig_version)
 }
 
 /// buildUsedCodeSystemList (CVR:1553) — the referenced-CS rows, sorted.
@@ -224,7 +269,12 @@ fn find_vs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
                 .and_then(|u| SrcRef::of_resolved(ctx, u));
             if let Some(vs_src) = vs_src {
                 for inc in compose_includes(res) {
-                    for u in inc.get("valueSet").and_then(|x| x.as_array()).into_iter().flatten() {
+                    for u in inc
+                        .get("valueSet")
+                        .and_then(|x| x.as_array())
+                        .into_iter()
+                        .flatten()
+                    {
                         if let Some(u) = u.as_str() {
                             s.touch(ctx, "ValueSet", u, &vs_src);
                         }
@@ -233,7 +283,14 @@ fn find_vs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
             }
         }
         Some("ConceptMap") => {
-            for k in ["sourceScope", "sourceScopeUri", "targetScope", "targetScopeUri", "source", "target"] {
+            for k in [
+                "sourceScope",
+                "sourceScopeUri",
+                "targetScope",
+                "targetScopeUri",
+                "source",
+                "target",
+            ] {
                 if let Some(u) = res.get(k).and_then(|x| x.as_str()) {
                     s.touch(ctx, "ValueSet", u, src);
                 }
@@ -245,15 +302,29 @@ fn find_vs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
             }
         }
         Some("OperationDefinition") => {
-            for p in res.get("parameter").and_then(|x| x.as_array()).into_iter().flatten() {
-                if let Some(u) = p.get("binding").and_then(|b| b.get("valueSet")).and_then(|x| x.as_str()) {
+            for p in res
+                .get("parameter")
+                .and_then(|x| x.as_array())
+                .into_iter()
+                .flatten()
+            {
+                if let Some(u) = p
+                    .get("binding")
+                    .and_then(|b| b.get("valueSet"))
+                    .and_then(|x| x.as_str())
+                {
                     s.touch(ctx, "ValueSet", u, src);
                 }
             }
         }
         _ => {}
     }
-    for c in res.get("contained").and_then(|x| x.as_array()).into_iter().flatten() {
+    for c in res
+        .get("contained")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+    {
         find_vs_refs(s, ctx, c, src, all);
     }
 }
@@ -277,12 +348,22 @@ fn find_cs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
             }
         }
         Some("ConceptMap") => {
-            for k in ["sourceScope", "sourceScopeUri", "targetScope", "targetScopeUri"] {
+            for k in [
+                "sourceScope",
+                "sourceScopeUri",
+                "targetScope",
+                "targetScopeUri",
+            ] {
                 if let Some(u) = res.get(k).and_then(|x| x.as_str()) {
                     cs_from_vs(s, ctx, u, src);
                 }
             }
-            for g in res.get("group").and_then(|x| x.as_array()).into_iter().flatten() {
+            for g in res
+                .get("group")
+                .and_then(|x| x.as_array())
+                .into_iter()
+                .flatten()
+            {
                 for k in ["source", "target"] {
                     if let Some(u) = g.get(k).and_then(|x| x.as_str()) {
                         s.touch(ctx, "CodeSystem", u, src);
@@ -296,15 +377,29 @@ fn find_cs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
             }
         }
         Some("OperationDefinition") => {
-            for p in res.get("parameter").and_then(|x| x.as_array()).into_iter().flatten() {
-                if let Some(u) = p.get("binding").and_then(|b| b.get("valueSet")).and_then(|x| x.as_str()) {
+            for p in res
+                .get("parameter")
+                .and_then(|x| x.as_array())
+                .into_iter()
+                .flatten()
+            {
+                if let Some(u) = p
+                    .get("binding")
+                    .and_then(|b| b.get("valueSet"))
+                    .and_then(|x| x.as_str())
+                {
                     cs_from_vs(s, ctx, u, src);
                 }
             }
         }
         _ => {}
     }
-    for c in res.get("contained").and_then(|x| x.as_array()).into_iter().flatten() {
+    for c in res
+        .get("contained")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+    {
         find_cs_refs(s, ctx, c, src, all);
     }
 }
@@ -314,11 +409,15 @@ fn find_cs_refs(s: &mut Scan, ctx: &IgContext, res: &Value, src: &SrcRef, all: b
 /// SD that bound it. `_outer_src` (the SD) is intentionally discarded to match.
 fn cs_from_vs(s: &mut Scan, ctx: &IgContext, vs_url: &str, _outer_src: &SrcRef) {
     let base = vs_url.split('|').next().unwrap_or(vs_url);
-    let Some(vsj) = ctx.load_resource(base).or_else(|| own_json(ctx, base)) else { return };
+    let Some(vsj) = ctx.load_resource(base).or_else(|| own_json(ctx, base)) else {
+        return;
+    };
     if vsj.get("resourceType").and_then(|x| x.as_str()) != Some("ValueSet") {
         return;
     }
-    let Some(vs_src) = SrcRef::of_resolved(ctx, base) else { return };
+    let Some(vs_src) = SrcRef::of_resolved(ctx, base) else {
+        return;
+    };
     for inc in compose_includes(&vsj) {
         if let Some(sys) = inc.get("system").and_then(|x| x.as_str()) {
             s.touch(ctx, "CodeSystem", sys, &vs_src);
@@ -347,7 +446,12 @@ fn ed_binding_valuesets(ed: &Value) -> Vec<String> {
             out.push(vs.to_string());
         }
         // R5-native binding.additional[].valueSet.
-        for ab in b.get("additional").and_then(|x| x.as_array()).into_iter().flatten() {
+        for ab in b
+            .get("additional")
+            .and_then(|x| x.as_array())
+            .into_iter()
+            .flatten()
+        {
             if let Some(vs) = ab.get("valueSet").and_then(|x| x.as_str()) {
                 out.push(vs.to_string());
             }
@@ -356,9 +460,19 @@ fn ed_binding_valuesets(ed: &Value) -> Vec<String> {
         // `additional-binding` extension carrying a nested `valueSet`
         // sub-extension (valueCanonical). ed.getBinding().getAdditional() reads
         // these in fhir-core R5. (us-core DocumentReference.type → clinical-note-type.)
-        for ext in b.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+        for ext in b
+            .get("extension")
+            .and_then(|x| x.as_array())
+            .into_iter()
+            .flatten()
+        {
             if ext.get("url").and_then(|x| x.as_str()) == Some(EXT_ADDITIONAL_BINDING) {
-                for sub in ext.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+                for sub in ext
+                    .get("extension")
+                    .and_then(|x| x.as_array())
+                    .into_iter()
+                    .flatten()
+                {
                     if sub.get("url").and_then(|x| x.as_str()) == Some("valueSet") {
                         if let Some(vs) = sub
                             .get("valueCanonical")
@@ -388,12 +502,22 @@ fn questionnaire_answer_valuesets(q: &Value) -> Vec<String> {
         if let Some(vs) = item.get("answerValueSet").and_then(|x| x.as_str()) {
             out.push(vs.to_string());
         }
-        for c in item.get("item").and_then(|x| x.as_array()).into_iter().flatten() {
+        for c in item
+            .get("item")
+            .and_then(|x| x.as_array())
+            .into_iter()
+            .flatten()
+        {
             walk(c, out);
         }
     }
     let mut out = Vec::new();
-    for item in q.get("item").and_then(|x| x.as_array()).into_iter().flatten() {
+    for item in q
+        .get("item")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+    {
         walk(item, &mut out);
     }
     out
@@ -413,7 +537,11 @@ pub fn references_cell(refs: &[(String, String)]) -> String {
             } else {
                 c.push_str(", ");
             }
-            c.push_str(&format!("<a href=\"{}\">{}</a>", escape_xml(link), escape_xml(title)));
+            c.push_str(&format!(
+                "<a href=\"{}\">{}</a>",
+                escape_xml(link),
+                escape_xml(title)
+            ));
         }
     }
     c.push_str("</td>");

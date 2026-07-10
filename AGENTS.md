@@ -5,7 +5,7 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
-## 0. HANDOFF — current state (read FIRST, updated 2026-07-01)
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-09)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
 13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
@@ -49,6 +49,43 @@ pattern/fixed values are cleaned at final SD serialization rather than during ru
 longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
 `reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
+**SITEBUILD V1 CONTRACT — FOUNDATION ADDED (2026-07-09).** The new renderer-neutral
+`site_build` crate defines the immutable/versioned compile→render handoff: exact
+content-addressed project sources and package lock, render target, typed artifact keys,
+explicit ready/deferred/unsupported/failed states, provenance/read dependencies, and
+stable diagnostics. `SiteBuild::new` computes an order-independent `sb1-sha256:` id over
+canonical JSON; deserialization rechecks both referential integrity and the id. Fragments
+carry whole-IG or resource scope, and assets are namespaced by authored/template/Publisher-
+runtime/generated/extension ownership. `RenderPlan` declares required roots;
+`ClosedSiteBuild` is created only when those roots and their transitive artifact-read closure
+are all ready, giving callback-free builders a proof-bearing input. The optional
+`site-db-compat` feature projects the existing Cycle-shaped `SiteDb` as one explicitly
+legacy content-addressed artifact (dependency direction stays SiteBuild → optional adapter,
+never SiteDb → core contract). Focused gates: `cargo test -p site_build` and
+`cargo test -p site_build --features site-db-compat`. The wasm API now emits a sealed
+Cycle handoff from the exact prior `compileProject` revision, ordinary `Session` handles
+are isolated, and `render_page` translates legacy fragment include names once into a typed
+resolver/read-set boundary. Remaining work is to promote demand-resolved native artifacts
+into new immutable SiteBuild/CAS revisions and to give the stock target a complete render
+plan; do not bypass those steps with ambient session state.
+
+**NATIVE CLOSED CYCLE BUNDLE — DONE (2026-07-09).** `fig prepare <ig>
+--target cycle-site/v1 --sushi-out <new> --cache <explicit> --out <new>
+--build-date ...` is the native producer for the same callback-free external-builder
+contract. Library composition lives in `fig::prepare`: it captures config plus every
+regular `input/**` byte, resolves the satisfied compile/context package union, normalizes
+package material through the shared browser `build_bundle -> read_bundle` path, reconstructs
+a private IG/cache tree from those captured objects, and passes only that staged filesystem
+to the one `site_db::build` (so A→B→A live mutation cannot split identity from execution).
+It verifies staged and live values after the build, derives project/FHIR identity from the
+produced IG/rows, calls shared `close_projection`, verifies all content refs, and atomically
+publishes `site-build.json` + `objects/sha256/*`. It never acquires packages or
+uses a default cache; source/nested-package symlinks, cache escapes, stale/existing SUSHI
+outputs, overlapping outputs, and ambient `SITE_LIQUID_ASSET_DIRS` fail closed. Real Cycle
+gate after its canonical example preprocessor: 23 sources, 4 packages, 28 objects, closed
+build produced successfully from the explicit workspace cache. Focused gate:
+`cargo test -p fig`.
+
 **COMPAT-BREAK MECHANISM (2026-06-30):** intentional divergences where STOCK emits invalid/
 buggy output are tracked in `docs/compat-breaks.json` + `tests/compat-golden/<ig>/<file>.diff`,
 and counted SEPARATELY from byte-parity (not failures). It is **DIFF-BASED**: the gate asserts
@@ -61,7 +98,8 @@ effect of its shared `sdCache` — stock build is SILENT (0 err/0 warn). We emit
 **Root Cause C is RESOLVED via compat-break, NOT the risky shared-cache work** (which existed
 only to reproduce invalid output where stock violates ext-1).
 
-**WHERE WE ARE (this session: 1800 → 2490/2491 + 4 compat-breaks):** the 12-IG corpus is 100%
+**HISTORICAL PARITY CHECKPOINT (the session that moved 1800 → 2490/2491 + 4
+compat-breaks):** the 12-IG corpus was 100%
 equivalent; the 6 new top-20 IGs (bulk 13/13, pdex 179/179, plannet 110/110, formulary 86/86,
 cdshooks 8/8, subscriptions 33/34) are all complete except the 1 file above. Fixed this
 session via the **investigate-then-align loop** (deep-dive stock's algorithm → port it; NEVER
@@ -78,7 +116,7 @@ copyrightLabel; the `findConnectedSliceElement` instance path) — PLUS the pack
 merge + acquisition leniency. Catalogs: `docs/holdout-findings.md` (G1-G14), `docs/mining-
 findings.md` (N1-N7), `docs/top20-findings.md` (X1-X6).
 
-**REMAINING:**
+**REMAINING AT THAT HISTORICAL CHECKPOINT (superseded by the score above):**
 - **ZERO real fails on the 18-IG set** — all 2491/2491 byte-identical (+4 compat-breaks). The
   last file (subscriptions CapStmt: X6 url-referenced extension on a primitive + the path
   sliceName-rewrite that orders implied metadata after `rest`) is FIXED (commits `7cd9756` then

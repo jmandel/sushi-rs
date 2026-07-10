@@ -47,13 +47,19 @@ impl<'a> Ed<'a> {
         self.str("max")
     }
     pub fn must_support(&self) -> bool {
-        self.v.get("mustSupport").and_then(|x| x.as_bool()).unwrap_or(false)
+        self.v
+            .get("mustSupport")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
     }
     pub fn has_must_support(&self) -> bool {
         self.v.get("mustSupport").is_some()
     }
     pub fn is_modifier(&self) -> bool {
-        self.v.get("isModifier").and_then(|x| x.as_bool()).unwrap_or(false)
+        self.v
+            .get("isModifier")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
     }
     pub fn definition(&self) -> Option<&'a str> {
         self.str("definition")
@@ -99,19 +105,29 @@ impl<'a> Ed<'a> {
         self.v.get("base")
     }
     pub fn base_max(&self) -> Option<&'a str> {
-        self.base().and_then(|b| b.get("max")).and_then(|x| x.as_str())
+        self.base()
+            .and_then(|b| b.get("max"))
+            .and_then(|x| x.as_str())
     }
     pub fn base_min(&self) -> Option<i64> {
-        self.base().and_then(|b| b.get("min")).and_then(|x| x.as_i64())
+        self.base()
+            .and_then(|b| b.get("min"))
+            .and_then(|x| x.as_i64())
     }
     pub fn short(&self) -> Option<&'a str> {
         self.str("short")
     }
     pub fn is_summary(&self) -> bool {
-        self.v.get("isSummary").and_then(|x| x.as_bool()).unwrap_or(false)
+        self.v
+            .get("isSummary")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
     }
     pub fn must_have_value(&self) -> bool {
-        self.v.get("mustHaveValue").and_then(|x| x.as_bool()).unwrap_or(false)
+        self.v
+            .get("mustHaveValue")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
     }
     pub fn order_meaning(&self) -> Option<&'a str> {
         self.str("orderMeaning")
@@ -136,7 +152,9 @@ impl<'a> Ed<'a> {
             .any(|e| e.get("url").and_then(|x| x.as_str()) == Some(url))
     }
     pub fn base_path(&self) -> Option<&'a str> {
-        self.base().and_then(|b| b.get("path")).and_then(|x| x.as_str())
+        self.base()
+            .and_then(|b| b.get("path"))
+            .and_then(|x| x.as_str())
     }
     /// A fixed[x] value: returns (json-type-suffix, value) if any key starts with
     /// "fixed".
@@ -158,7 +176,12 @@ impl<'a> Ed<'a> {
         for (k, val) in obj {
             if let Some(rest) = k.strip_prefix(prefix) {
                 // must be fixed<Type> with a capitalized type suffix
-                if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+                if rest
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_uppercase())
+                    .unwrap_or(false)
+                {
                     return Some((rest, val));
                 }
             }
@@ -230,8 +253,7 @@ impl<'a> TypeRef<'a> {
         // .isPrimitive() checks the code is a primitive type. Approximate with
         // the FHIR primitive set + System.* codes.
         let c = self.code();
-        c.starts_with("http://hl7.org/fhirpath/System.")
-            || is_fhir_primitive(c)
+        c.starts_with("http://hl7.org/fhirpath/System.") || is_fhir_primitive(c)
     }
 }
 
@@ -295,7 +317,11 @@ impl Sd {
         self.root.get("id").and_then(|x| x.as_str()).unwrap_or("")
     }
     pub fn url(&self) -> String {
-        self.root.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string()
+        self.root
+            .get("url")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
     }
     pub fn kind(&self) -> &str {
         self.root.get("kind").and_then(|x| x.as_str()).unwrap_or("")
@@ -304,10 +330,16 @@ impl Sd {
         self.kind() == "logical"
     }
     pub fn derivation(&self) -> &str {
-        self.root.get("derivation").and_then(|x| x.as_str()).unwrap_or("")
+        self.root
+            .get("derivation")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
     }
     pub fn fhir_version(&self) -> &str {
-        self.root.get("fhirVersion").and_then(|x| x.as_str()).unwrap_or("")
+        self.root
+            .get("fhirVersion")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
     }
     /// `profile.getTypeName()` — the SD's `type` (the base resource/type name).
     pub fn type_name(&self) -> &str {

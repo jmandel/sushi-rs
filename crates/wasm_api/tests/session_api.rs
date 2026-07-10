@@ -26,18 +26,38 @@ fn base64(bytes: &[u8]) -> String {
     const ALPHA: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::new();
     for chunk in bytes.chunks(3) {
-        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
         let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
         out.push(ALPHA[((n >> 18) & 63) as usize] as char);
         out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { ALPHA[((n >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHA[(n & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            ALPHA[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHA[(n & 63) as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }
 
 fn synthetic_pkg(label: &str) -> Value {
-    json!({ "label": label, "files": { ".index.json": base64(br#"{"files":[]}"#) } })
+    let (name, version) = label.split_once('#').unwrap();
+    let package_json = json!({ "name": name, "version": version }).to_string();
+    json!({
+        "label": label,
+        "files": {
+            "package.json": base64(package_json.as_bytes()),
+            ".index.json": base64(br#"{"files":[]}"#),
+        }
+    })
 }
 
 #[test]
@@ -59,7 +79,10 @@ fn session_envelope_shape_on_success_and_error() {
     assert_eq!(err["apiVersion"], 1);
     assert_eq!(err["ok"], false);
     assert_eq!(err["op"], "expandValueSet");
-    assert!(err["error"]["message"].as_str().unwrap().contains("bad ValueSet JSON"));
+    assert!(err["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("bad ValueSet JSON"));
     assert!(err.get("result").is_none());
 }
 
@@ -67,10 +90,45 @@ fn session_envelope_shape_on_success_and_error() {
 fn session_mount_is_additive_and_idempotent() {
     let s = Session::new();
     let mounted = |v: Value| v["result"]["mounted"].as_u64().unwrap();
-    assert_eq!(mounted(parse(s.init(&json!([synthetic_pkg("m.a#1.0.0")]).to_string()))), 1);
-    assert_eq!(mounted(parse(s.mount(&json!([synthetic_pkg("m.b#1.0.0")]).to_string()))), 2);
+    assert_eq!(
+        mounted(parse(
+            s.init(&json!([synthetic_pkg("m.a#1.0.0")]).to_string())
+        )),
+        1
+    );
+    assert_eq!(
+        mounted(parse(
+            s.mount(&json!([synthetic_pkg("m.b#1.0.0")]).to_string())
+        )),
+        2
+    );
     // dup is skipped
-    assert_eq!(mounted(parse(s.mount(&json!([synthetic_pkg("m.a#1.0.0")]).to_string()))), 2);
+    assert_eq!(
+        mounted(parse(
+            s.mount(&json!([synthetic_pkg("m.a#1.0.0")]).to_string())
+        )),
+        2
+    );
+}
+
+#[test]
+fn independently_constructed_sessions_do_not_share_mutable_state() {
+    let first = Session::new();
+    let second = Session::new();
+    let initialized = parse(first.init(&json!([synthetic_pkg("isolated.a#1.0.0")]).to_string()));
+    assert_eq!(initialized["ok"], true);
+
+    // The second handle has no mounted package source. Under the old zero-sized
+    // global handle this unexpectedly succeeded by observing `first`'s state.
+    let second_mount = parse(second.mount(&json!([synthetic_pkg("isolated.b#1.0.0")]).to_string()));
+    assert_eq!(second_mount["ok"], false);
+    assert!(second_mount["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("engine not initialized"));
+
+    let first_mount = parse(first.mount(&json!([synthetic_pkg("isolated.b#1.0.0")]).to_string()));
+    assert_eq!(first_mount["result"]["mounted"], 2);
 }
 
 #[test]
@@ -91,19 +149,19 @@ fn session_expand_result_equals_legacy_payload() {
     assert_eq!(enveloped["ok"], true);
     let session_result = &enveloped["result"];
 
-    let legacy: Value = serde_json::from_str(
-        &{
-            let env: Value = serde_json::from_str(
-                &s.expand_valueset(&vs.to_string(), &json!([cs]).to_string()),
-            )
-            .unwrap();
-            assert_eq!(env["ok"], true);
-            env["result"].to_string()
-        },
-    )
+    let legacy: Value = serde_json::from_str(&{
+        let env: Value =
+            serde_json::from_str(&s.expand_valueset(&vs.to_string(), &json!([cs]).to_string()))
+                .unwrap();
+        assert_eq!(env["ok"], true);
+        env["result"].to_string()
+    })
     .unwrap();
 
-    assert_eq!(session_result, &legacy, "Session result must equal legacy payload");
+    assert_eq!(
+        session_result, &legacy,
+        "Session result must equal legacy payload"
+    );
     assert_eq!(session_result["expansion"]["total"], 1);
 }
 
@@ -119,9 +177,7 @@ fn session_resolve_result_equals_legacy_and_native() {
         json!({ "name": id, "version": "1.0.0", "fhirVersions": ["4.0.1"], "dependencies": d })
             .to_string()
     };
-    let bundle = |label: &str, pkg: &str| {
-        json!({ "label": label, "files": { "package.json": base64(pkg.as_bytes()) } })
-    };
+    let bundle = |label: &str, pkg: &str| json!({ "label": label, "files": { "package.json": base64(pkg.as_bytes()) } });
     let core_pkg =
         json!({ "name": "hl7.fhir.r4.core", "version": "4.0.1", "fhirVersions": ["4.0.1"] })
             .to_string();
@@ -145,7 +201,10 @@ fn session_resolve_result_equals_legacy_and_native() {
     let session_result = &enveloped["result"];
 
     let ctx = session_result["context_closure"].as_array().unwrap();
-    let ids: Vec<&str> = ctx.iter().map(|r| r["package_id"].as_str().unwrap()).collect();
+    let ids: Vec<&str> = ctx
+        .iter()
+        .map(|r| r["package_id"].as_str().unwrap())
+        .collect();
     assert!(ids.contains(&"dep") && ids.contains(&"t") && ids.contains(&"hl7.fhir.r4.core"));
 }
 
@@ -155,6 +214,56 @@ fn session_version_is_stamped() {
     assert_eq!(v["apiVersion"], 1);
     assert!(v["version"].is_string());
     assert!(v["engine"].as_str().unwrap().contains("rust_sushi"));
+}
+
+#[test]
+fn project_compile_and_site_projection_fail_loud_without_hidden_fallbacks() {
+    let session = Session::new();
+
+    // compileProject validates the authored site manifest before it can reach the
+    // compiler/package layer.
+    let malformed = parse(session.compile_project("{}", "id: demo", "{}", "not json"));
+    assert_eq!(malformed["ok"], false);
+    assert_eq!(malformed["op"], "compileProject");
+    assert!(malformed["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("bad site-files JSON"));
+
+    // The projection API accepts no sources and cannot silently invoke a compile.
+    let projection = parse(
+        session.build_site_db_from_compile(
+            &json!({
+                "config": "id: demo",
+                "site_files": {},
+                "build_epoch_secs": 1
+            })
+            .to_string(),
+        ),
+    );
+    assert_eq!(projection["ok"], false);
+    assert_eq!(projection["op"], "buildSiteDbFromCompile");
+    assert!(projection["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("call compileProject first"));
+
+    let closed = parse(
+        session.build_site_build_from_compile(
+            &json!({
+                "config": "id: demo",
+                "site_files": {},
+                "build_epoch_secs": 1
+            })
+            .to_string(),
+        ),
+    );
+    assert_eq!(closed["ok"], false);
+    assert_eq!(closed["op"], "buildSiteBuildFromCompile");
+    assert!(closed["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("complete source revision"));
 }
 
 /// ContentApi: mountSite + renderLiquid (include from tree + data global +

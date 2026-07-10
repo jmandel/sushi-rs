@@ -17,15 +17,12 @@
 //!   - [`watch`]   — the incremental dev loop (mtime poll → dirty cone via the
 //!                   BuildState/PageProvider read-set boundary → re-render →
 //!                   live-reload server). The native twin of the browser editor.
-//!   - [`runner`]  — the `ts:<adapter.mjs>` generator harness (spawns bun with
-//!                   a runner loading the editor's SiteGeneratorAdapter contract
-//!                   over the SAME wasm module's FragmentApi/ContentApi).
 //!
 //! `--json` on every subcommand emits the shared [`api_envelope`] envelope —
 //! schema-identical to the Session's (one implementation, `api_envelope`).
 
 pub mod engine;
-pub mod runner;
+pub mod prepare;
 pub mod template;
 pub mod watch;
 

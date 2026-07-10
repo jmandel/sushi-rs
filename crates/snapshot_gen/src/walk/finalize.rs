@@ -43,14 +43,18 @@ fn prune_prohibited_type_slices(ctx: &mut WalkContext) {
     let mut removals: Vec<(usize, Vec<String>)> = Vec::new();
     for i in 0..n {
         let ed = &ctx.output[i];
-        let Some(types) = ed.get("type").and_then(Value::as_array) else { continue };
+        let Some(types) = ed.get("type").and_then(Value::as_array) else {
+            continue;
+        };
         if types.len() <= 1 {
             continue;
         }
         let path = path_of(ed).to_string();
         let mut drop_codes: Vec<String> = Vec::new();
         for tr in types {
-            let Some(code) = working_code(tr) else { continue };
+            let Some(code) = working_code(tr) else {
+                continue;
+            };
             // findTypeSlice: scan forward for a matching prohibited type slice.
             for j in (i + 1)..n {
                 let cand = &ctx.output[j];
@@ -183,11 +187,16 @@ pub(crate) fn finalize(
         }
         if let Some(constraints) = ed.get_mut("constraint").and_then(Value::as_array_mut) {
             for c in constraints {
-                let Some(src) = c.get("source").and_then(Value::as_str) else { continue };
+                let Some(src) = c.get("source").and_then(Value::as_str) else {
+                    continue;
+                };
                 let is_absolute = src.contains("://") || src.starts_with("urn:");
                 if !is_absolute {
                     let new_src = if let Some(dot) = src.find('.') {
-                        format!("http://hl7.org/fhir/StructureDefinition/{}#{src}", &src[..dot])
+                        format!(
+                            "http://hl7.org/fhir/StructureDefinition/{}#{src}",
+                            &src[..dot]
+                        )
                     } else {
                         format!("http://hl7.org/fhir/StructureDefinition/{src}")
                     };
@@ -204,7 +213,10 @@ pub(crate) fn finalize(
     prune_prohibited_type_slices(ctx);
 
     // Q6 setIds on the snapshot.
-    let type_name = derived.get("type").and_then(Value::as_str).map(str::to_string);
+    let type_name = derived
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     generate_ids_with_type(&mut ctx.output, type_name.as_deref());
 
     // Q10 slice cardinality (PU:996-1050): walk the snapshot tracking open slice

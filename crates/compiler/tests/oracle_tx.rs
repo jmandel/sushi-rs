@@ -27,19 +27,31 @@ use compiler::terminology::{expand_enumerable, MapResolver};
 use serde_json::Value as J;
 
 fn dir(sub: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(sub).join("terminology")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(sub)
+        .join("terminology")
 }
 
 fn load(sub: &str, name: &str) -> J {
     let p = dir(sub).join(name);
-    serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()))).unwrap()
+    serde_json::from_str(
+        &std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display())),
+    )
+    .unwrap()
 }
 
 /// Recursively flatten an expansion's `contains` into `(system, code) -> display`.
 fn flatten_contains(contains: &J, out: &mut BTreeMap<(String, String), Option<String>>) {
-    let Some(arr) = contains.as_array() else { return };
+    let Some(arr) = contains.as_array() else {
+        return;
+    };
     for c in arr {
-        let system = c.get("system").and_then(J::as_str).unwrap_or("").to_string();
+        let system = c
+            .get("system")
+            .and_then(J::as_str)
+            .unwrap_or("")
+            .to_string();
         let code = c.get("code").and_then(J::as_str).unwrap_or("").to_string();
         let display = c.get("display").and_then(J::as_str).map(String::from);
         // A node that is purely a grouper (abstract, no leaf meaning) still has a
@@ -82,24 +94,60 @@ struct Case {
 }
 
 const CASES: &[Case] = &[
-    Case { golden: "cycle-menstrual-flow", vs: "cycle-menstrual-flow.vs.json",
-        css: &["cycle.cs.json"], local_systems: &["https://cycle.fhir.me/CodeSystem/cycle"] },
-    Case { golden: "cycle-common-tracker-symptoms", vs: "cycle-common-tracker-symptoms.vs.json",
-        css: &[], local_systems: &[] }, // SNOMED external
-    Case { golden: "ips-pregnancy-status", vs: "ips-pregnancy-status.vs.json",
-        css: &[], local_systems: &[] },
-    Case { golden: "mcode-condition-status-trend", vs: "mcode-condition-status-trend.vs.json",
-        css: &[], local_systems: &[] },
-    Case { golden: "syn-isa-bear", vs: "syn-isa-bear.vs.json",
-        css: &["zoo.cs.json"], local_systems: &["https://ex.org/zoo"] },
-    Case { golden: "syn-descendent-animal", vs: "syn-descendent-animal.vs.json",
-        css: &["zoo.cs.json"], local_systems: &["https://ex.org/zoo"] },
-    Case { golden: "syn-whole-zoo", vs: "syn-whole-zoo.vs.json",
-        css: &["zoo.cs.json"], local_systems: &["https://ex.org/zoo"] },
-    Case { golden: "syn-prop-carnivore", vs: "syn-prop-carnivore.vs.json",
-        css: &["zoo.cs.json"], local_systems: &["https://ex.org/zoo"] },
-    Case { golden: "syn-enum-exclude", vs: "syn-enum-exclude.vs.json",
-        css: &["zoo.cs.json"], local_systems: &["https://ex.org/zoo"] },
+    Case {
+        golden: "cycle-menstrual-flow",
+        vs: "cycle-menstrual-flow.vs.json",
+        css: &["cycle.cs.json"],
+        local_systems: &["https://cycle.fhir.me/CodeSystem/cycle"],
+    },
+    Case {
+        golden: "cycle-common-tracker-symptoms",
+        vs: "cycle-common-tracker-symptoms.vs.json",
+        css: &[],
+        local_systems: &[],
+    }, // SNOMED external
+    Case {
+        golden: "ips-pregnancy-status",
+        vs: "ips-pregnancy-status.vs.json",
+        css: &[],
+        local_systems: &[],
+    },
+    Case {
+        golden: "mcode-condition-status-trend",
+        vs: "mcode-condition-status-trend.vs.json",
+        css: &[],
+        local_systems: &[],
+    },
+    Case {
+        golden: "syn-isa-bear",
+        vs: "syn-isa-bear.vs.json",
+        css: &["zoo.cs.json"],
+        local_systems: &["https://ex.org/zoo"],
+    },
+    Case {
+        golden: "syn-descendent-animal",
+        vs: "syn-descendent-animal.vs.json",
+        css: &["zoo.cs.json"],
+        local_systems: &["https://ex.org/zoo"],
+    },
+    Case {
+        golden: "syn-whole-zoo",
+        vs: "syn-whole-zoo.vs.json",
+        css: &["zoo.cs.json"],
+        local_systems: &["https://ex.org/zoo"],
+    },
+    Case {
+        golden: "syn-prop-carnivore",
+        vs: "syn-prop-carnivore.vs.json",
+        css: &["zoo.cs.json"],
+        local_systems: &["https://ex.org/zoo"],
+    },
+    Case {
+        golden: "syn-enum-exclude",
+        vs: "syn-enum-exclude.vs.json",
+        css: &["zoo.cs.json"],
+        local_systems: &["https://ex.org/zoo"],
+    },
 ];
 
 fn run_case(case: &Case) -> Result<Vec<String>, String> {
@@ -108,8 +156,12 @@ fn run_case(case: &Case) -> Result<Vec<String>, String> {
     for cs in case.css {
         resolver.insert(load("fixtures", cs));
     }
-    let exp = expand_enumerable(&vs, &resolver)
-        .map_err(|e| format!("{}: evaluator REFUSED an enumerable fixture: {e}", case.golden))?;
+    let exp = expand_enumerable(&vs, &resolver).map_err(|e| {
+        format!(
+            "{}: evaluator REFUSED an enumerable fixture: {e}",
+            case.golden
+        )
+    })?;
     let mine = eval_members(&exp.to_expansion_json());
 
     let golden = load("goldens", &format!("{}.golden.json", case.golden));
@@ -156,8 +208,11 @@ fn tier1_evaluator_matches_tx_oracle() {
     for case in CASES {
         match run_case(case) {
             Ok(notes) => {
-                eprintln!("[PASS] {} ({} members)", case.golden,
-                    golden_members(&load("goldens", &format!("{}.golden.json", case.golden))).len());
+                eprintln!(
+                    "[PASS] {} ({} members)",
+                    case.golden,
+                    golden_members(&load("goldens", &format!("{}.golden.json", case.golden))).len()
+                );
                 for n in notes {
                     eprintln!("       {n}");
                 }
@@ -165,5 +220,9 @@ fn tier1_evaluator_matches_tx_oracle() {
             Err(e) => failures.push(e),
         }
     }
-    assert!(failures.is_empty(), "oracle gate failures:\n{}", failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "oracle gate failures:\n{}",
+        failures.join("\n")
+    );
 }

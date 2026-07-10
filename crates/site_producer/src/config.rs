@@ -48,7 +48,10 @@ impl Defaults {
                 }
             }
         }
-        Ok(Defaults { table, extra_templates })
+        Ok(Defaults {
+            table,
+            extra_templates,
+        })
     }
 
     fn obj(&self, key: &str) -> Option<&Value> {
@@ -63,7 +66,12 @@ impl Defaults {
 /// The StructureDefinition flavor used to index `StructureDefinition:<flavor>`.
 /// Port of `IGKnowledgeProvider.getSDType(FetchedResource)`
 /// (IGKnowledgeProvider.java:293).
-pub fn sd_type(type_: Option<&str>, kind: Option<&str>, derivation: Option<&str>, abstract_: bool) -> String {
+pub fn sd_type(
+    type_: Option<&str>,
+    kind: Option<&str>,
+    derivation: Option<&str>,
+    abstract_: bool,
+) -> String {
     if type_ == Some("Extension") {
         return "extension".to_string();
     }
@@ -85,7 +93,12 @@ impl Defaults {
     pub fn find_config<'a>(&'a self, r: &crate::Resource) -> Option<&'a Value> {
         // StructureDefinition:<flavor>
         if r.rt == "StructureDefinition" {
-            let flavor = sd_type(r.type_.as_deref(), r.kind.as_deref(), r.derivation.as_deref(), r.abstract_);
+            let flavor = sd_type(
+                r.type_.as_deref(),
+                r.kind.as_deref(),
+                r.derivation.as_deref(),
+                r.abstract_,
+            );
             if let Some(c) = self.obj(&format!("StructureDefinition:{flavor}")) {
                 return Some(c);
             }
@@ -114,8 +127,14 @@ impl Defaults {
         }
         // 2. StructureDefinition:<flavor>
         if r.rt == "StructureDefinition" {
-            let flavor = sd_type(r.type_.as_deref(), r.kind.as_deref(), r.derivation.as_deref(), r.abstract_);
-            if let Some(v) = Self::obj_str(self.obj(&format!("StructureDefinition:{flavor}")), prop) {
+            let flavor = sd_type(
+                r.type_.as_deref(),
+                r.kind.as_deref(),
+                r.derivation.as_deref(),
+                r.abstract_,
+            );
+            if let Some(v) = Self::obj_str(self.obj(&format!("StructureDefinition:{flavor}")), prop)
+            {
                 return Some(v.to_string());
             }
         }

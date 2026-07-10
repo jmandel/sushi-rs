@@ -73,7 +73,9 @@ pub fn acquire_and_materialize(
             .and_then(|d| d.get(base))
             .and_then(Value::as_str)
             .with_context(|| {
-                format!("template {label} declares base '{base}' but does not list it in dependencies")
+                format!(
+                    "template {label} declares base '{base}' but does not list it in dependencies"
+                )
             })?;
         current = Coordinate::parse(&format!("{base}#{ver}"))?;
     }

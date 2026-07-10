@@ -81,8 +81,16 @@ fn fix_package_url(webref: &str) -> String {
 }
 
 /// Load a package.json from the cache dir (`<cache>/<id>#<version>/package/package.json`).
-pub fn load_npm(tree: &dyn crate::tree::TreeSource, cache: &Path, id: &str, version: &str) -> Option<Npm> {
-    let pj = cache.join(format!("{}#{}", id, version)).join("package").join("package.json");
+pub fn load_npm(
+    tree: &dyn crate::tree::TreeSource,
+    cache: &Path,
+    id: &str,
+    version: &str,
+) -> Option<Npm> {
+    let pj = cache
+        .join(format!("{}#{}", id, version))
+        .join("package")
+        .join("package.json");
     let v: Value = serde_json::from_str(&tree.read(&pj)?).ok()?;
     let deps = v
         .get("dependencies")
@@ -102,12 +110,27 @@ pub fn load_npm(tree: &dyn crate::tree::TreeSource, cache: &Path, id: &str, vers
         .unwrap_or("")
         .to_string();
     Some(Npm {
-        id: v.get("name").and_then(|x| x.as_str()).unwrap_or(id).to_string(),
-        version: v.get("version").and_then(|x| x.as_str()).unwrap_or(version).to_string(),
-        canonical: v.get("canonical").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+        id: v
+            .get("name")
+            .and_then(|x| x.as_str())
+            .unwrap_or(id)
+            .to_string(),
+        version: v
+            .get("version")
+            .and_then(|x| x.as_str())
+            .unwrap_or(version)
+            .to_string(),
+        canonical: v
+            .get("canonical")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string(),
         url: fix_package_url(v.get("url").and_then(|x| x.as_str()).unwrap_or("")),
         title: v.get("title").and_then(|x| x.as_str()).map(String::from),
-        description: v.get("description").and_then(|x| x.as_str()).map(String::from),
+        description: v
+            .get("description")
+            .and_then(|x| x.as_str())
+            .map(String::from),
         deps,
         fhir_version,
     })
@@ -138,7 +161,8 @@ fn nontech_title(npm: &Npm) -> String {
     } else if npm.id.ends_with(".vsac") {
         "Value Set Authority Center (VSAC)".to_string()
     } else if npm.id.ends_with(".phinvads") {
-        "Public Health Information Network Vocabulary Access and Distribution System (PHIN VADS)".to_string()
+        "Public Health Information Network Vocabulary Access and Distribution System (PHIN VADS)"
+            .to_string()
     } else {
         npm.id.clone()
     };
@@ -157,7 +181,7 @@ fn nontech_title(npm: &Npm) -> String {
 /// loaded dependencies as indirect.
 fn nontech_add_package(
     tree: &dyn crate::tree::TreeSource,
-packages: &mut BTreeMap<String, PackageInfo>,
+    packages: &mut BTreeMap<String, PackageInfo>,
     order: &mut Vec<String>,
     cache: &Path,
     loaded: &HashSet<String>,
@@ -182,15 +206,32 @@ packages: &mut BTreeMap<String, PackageInfo>,
         info.direct = info.direct || direct;
         info.versions.insert(
             npm.version.clone(),
-            PackageVersionInfo { npm: npm.clone(), direct, reason, parent },
+            PackageVersionInfo {
+                npm: npm.clone(),
+                direct,
+                reason,
+                parent,
+            },
         );
     } else {
         let mut versions = BTreeMap::new();
         versions.insert(
             npm.version.clone(),
-            PackageVersionInfo { npm: npm.clone(), direct, reason, parent },
+            PackageVersionInfo {
+                npm: npm.clone(),
+                direct,
+                reason,
+                parent,
+            },
         );
-        packages.insert(title.clone(), PackageInfo { npm: npm.clone(), direct, versions });
+        packages.insert(
+            title.clone(),
+            PackageInfo {
+                npm: npm.clone(),
+                direct,
+                versions,
+            },
+        );
         order.push(title.clone());
     }
     let _ = is_new_title;
@@ -200,7 +241,17 @@ packages: &mut BTreeMap<String, PackageInfo>,
         let d = format!("{}#{}", id, version);
         if loaded.contains(&d) {
             if let Some(dp) = load_npm(tree, cache, id, version) {
-                nontech_add_package(tree, packages, order, cache, loaded, &dp, None, false, Some(title.clone()));
+                nontech_add_package(
+                    tree,
+                    packages,
+                    order,
+                    cache,
+                    loaded,
+                    &dp,
+                    None,
+                    false,
+                    Some(title.clone()),
+                );
             }
         }
     }
@@ -237,7 +288,17 @@ pub fn dependency_table_nontech(
         if let Some(npm) = resolve_dep(tree, cache, &d) {
             if loaded.contains(&npm.vid()) {
                 let reason = dep_reason(&d);
-                nontech_add_package(tree, &mut packages, &mut order, cache, loaded, &npm, reason, true, None);
+                nontech_add_package(
+                    tree,
+                    &mut packages,
+                    &mut order,
+                    cache,
+                    loaded,
+                    &npm,
+                    reason,
+                    true,
+                    None,
+                );
             }
         }
     }
@@ -254,7 +315,11 @@ pub fn dependency_table_nontech(
     let mut line_count = 1i32;
     for name in names {
         let info = &packages[name];
-        let bg = if line_count % 2 == 0 { "#F7F7F7" } else { "white" };
+        let bg = if line_count % 2 == 0 {
+            "#F7F7F7"
+        } else {
+            "white"
+        };
         let new_row = format!(
             "<tr style=\"font-size: 11px; font-family: verdana; vertical-align: top; background-color: {}\"><td",
             bg
@@ -290,7 +355,11 @@ pub fn dependency_table_nontech(
             let reason = version_reason(ver_info);
             b.push_str(&format!(
                 "</td><td{}>{}</td></tr>",
-                if ver_info.direct { "" } else { " style=\"font-style: italic;\"" },
+                if ver_info.direct {
+                    ""
+                } else {
+                    " style=\"font-style: italic;\""
+                },
                 reason.unwrap_or_default()
             ));
             first = false;
@@ -368,7 +437,10 @@ fn ig_depends_on(ig: &Value) -> Vec<DependsOn> {
             let ext_val = |url: &str| -> Option<String> {
                 d.get("extension")
                     .and_then(|x| x.as_array())
-                    .and_then(|exts| exts.iter().find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url)))
+                    .and_then(|exts| {
+                        exts.iter()
+                            .find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url))
+                    })
                     .and_then(|e| {
                         e.get("valueMarkdown")
                             .or_else(|| e.get("valueString"))
@@ -386,8 +458,15 @@ fn ig_depends_on(ig: &Value) -> Vec<DependsOn> {
                 .map(String::from)
                 .or_else(|| ext_val("http://hl7.org/fhir/5.0/StructureDefinition/extension-ImplementationGuide.dependsOn.reason"));
             out.push(DependsOn {
-                package_id: d.get("packageId").and_then(|x| x.as_str()).map(String::from),
-                version: d.get("version").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                package_id: d
+                    .get("packageId")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                version: d
+                    .get("version")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 uri: d.get("uri").and_then(|x| x.as_str()).map(String::from),
                 reason,
                 comment_ext,
@@ -413,8 +492,12 @@ fn resolve_dep(tree: &dyn crate::tree::TreeSource, cache: &Path, d: &DependsOn) 
     let id = d.package_id.clone().or_else(|| {
         // pcm.getPackageId(uri): not needed for the corpus (all dependsOn carry
         // packageId). Fire a loud gap if a uri-only dep ever appears.
-        d.uri.as_ref().and_then(|_| crate::loud_gap!(None::<String>, "LOUD GAP: dependency uri->packageId lookup (depr:621) not ported"))
+        d.uri.as_ref().and_then(|_| {
+            crate::loud_gap!(
+                None::<String>,
+                "LOUD GAP: dependency uri->packageId lookup (depr:621) not ported"
+            )
+        })
     })?;
     load_npm(tree, cache, &id, &d.version)
 }
-

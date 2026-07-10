@@ -34,13 +34,17 @@ fn expand_enumerable(vs: &str, resources: &str) -> Result<String, String> {
     }
 }
 fn init(bundles: &str) -> Result<u32, String> {
-    Ok(call(Session::new().init(bundles))["mounted"].as_u64().unwrap() as u32)
+    Ok(call(Session::global().init(bundles))["mounted"]
+        .as_u64()
+        .unwrap() as u32)
 }
 fn mount_bundles(bundles: &str) -> Result<u32, String> {
-    Ok(call(Session::new().mount(bundles))["mounted"].as_u64().unwrap() as u32)
+    Ok(call(Session::global().mount(bundles))["mounted"]
+        .as_u64()
+        .unwrap() as u32)
 }
 fn wasm_resolve(config: &str, index: &str) -> Result<String, String> {
-    Ok(call(Session::new().resolve_project(config, index)).to_string())
+    Ok(call(Session::global().resolve_project(config, index)).to_string())
 }
 
 fn ok(r: Result<String, String>) -> Value {
@@ -77,10 +81,7 @@ fn expand_enumerable_local_codesystem() {
             {"code": "flow-moderate"}, {"code": "flow-heavy"}
         ]}]}
     });
-    let out = ok(expand_enumerable(
-        &vs.to_string(),
-        &json!([cs]).to_string(),
-    ));
+    let out = ok(expand_enumerable(&vs.to_string(), &json!([cs]).to_string()));
     assert_eq!(out["ok"], true);
     assert_eq!(out["expansion"]["total"], 5);
     let contains = out["expansion"]["contains"].as_array().unwrap();
@@ -113,7 +114,10 @@ fn expand_enumerable_external_filter_refuses_verbatim() {
     assert_eq!(ne["index"], 0);
     // A single-line, human refusal reason naming the offending system.
     let reason = ne["reason"].as_str().unwrap();
-    assert!(reason.contains("snomed"), "reason names the system: {reason}");
+    assert!(
+        reason.contains("snomed"),
+        "reason names the system: {reason}"
+    );
     // Machine-readable class for the UI to branch on.
     assert_eq!(ne["kind"], "UnresolvableOrIncompleteSystem");
     // Display = "component[index]: reason".
@@ -142,14 +146,22 @@ fn mount_bundles_is_additive_and_idempotent() {
     // init with one synthetic package, then mount_bundles a second, then re-mount
     // the first (skipped). Package count reflects the union.
     let pkg = |label: &str| {
+        let (name, version) = label.split_once('#').unwrap();
+        let package_json = json!({ "name": name, "version": version }).to_string();
         json!({
             "label": label,
-            // `.index.json` with an empty files array is a valid (if inert) package
-            // dir the BundleSource can mount; we only assert the mount bookkeeping.
-            "files": { ".index.json": base64(br#"{"files":[]}"#) }
+            // Identity metadata is mandatory even for an inert package; the
+            // mount boundary verifies that the nominal label names these bytes.
+            "files": {
+                "package.json": base64(package_json.as_bytes()),
+                ".index.json": base64(br#"{"files":[]}"#),
+            }
         })
     };
-    assert_eq!(unwrap_u32(init(&json!([pkg("pkg.a#1.0.0")]).to_string())), 1);
+    assert_eq!(
+        unwrap_u32(init(&json!([pkg("pkg.a#1.0.0")]).to_string())),
+        1
+    );
     // Add a new package.
     assert_eq!(
         unwrap_u32(mount_bundles(&json!([pkg("pkg.b#1.0.0")]).to_string())),
@@ -182,7 +194,6 @@ fn mount_bundles_is_additive_and_idempotent() {
 /// thin marshalling shell over the same Rust function the CLI + `.cjs` shim drive.
 #[test]
 fn wasm_resolver_equals_native_resolver() {
-
     // Build two synthetic R4 packages with a transitive dep, plus the core, as
     // bundle inputs. `dep` depends on `t`; both R4.
     let pkgjson = |id: &str, deps: &[(&str, &str)]| {
@@ -236,13 +247,8 @@ fn wasm_resolver_equals_native_resolver() {
         src.mount_package(label, vec![("package.json".to_string(), pkg.into_bytes())]);
     }
     let vindex: package_store::VersionIndex = serde_json::from_str(&index).unwrap();
-    let native_step = package_store::resolve_project(
-        config,
-        &src,
-        src.cache_root(),
-        Some(&vindex),
-    )
-    .expect("native resolve ok");
+    let native_step = package_store::resolve_project(config, &src, src.cache_root(), Some(&vindex))
+        .expect("native resolve ok");
     let native_json = native_step.to_json();
 
     // Compare as parsed JSON (field-for-field identical).

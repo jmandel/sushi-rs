@@ -41,10 +41,16 @@ fn dump_doc(d: &FshDocument) -> J {
     o.insert("logicals".into(), map_of(&d.logicals, dump_structure));
     o.insert("instances".into(), map_of(&d.instances, dump_instance));
     o.insert("valueSets".into(), map_of(&d.value_sets, dump_valueset));
-    o.insert("codeSystems".into(), map_of(&d.code_systems, dump_codesystem));
+    o.insert(
+        "codeSystems".into(),
+        map_of(&d.code_systems, dump_codesystem),
+    );
     o.insert("invariants".into(), map_of(&d.invariants, dump_invariant));
     o.insert("ruleSets".into(), map_of(&d.rule_sets, dump_ruleset));
-    o.insert("appliedRuleSets".into(), map_of(&d.applied_rule_sets, dump_ruleset));
+    o.insert(
+        "appliedRuleSets".into(),
+        map_of(&d.applied_rule_sets, dump_ruleset),
+    );
     o.insert("mappings".into(), map_of(&d.mappings, dump_mapping));
     J::Object(o)
 }
@@ -93,7 +99,10 @@ fn dump_structure(s: &StructureDef) -> J {
     o.insert("sourceInfo".into(), dump_source_info(&s.source_info));
     o.insert("name".into(), J::String(s.name.clone()));
     o.insert("_id".into(), J::String(s.id.clone()));
-    o.insert("rules".into(), J::Array(s.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(s.rules.iter().map(dump_rule).collect()),
+    );
     put_opt_str(&mut o, "parent", &s.parent);
     put_opt_str(&mut o, "title", &s.title);
     put_opt_str(&mut o, "description", &s.description);
@@ -106,7 +115,12 @@ fn dump_structure(s: &StructureDef) -> J {
     if s.kind == StructureKind::Logical {
         o.insert(
             "characteristics".into(),
-            J::Array(s.characteristics.iter().map(|c| J::String(c.clone())).collect()),
+            J::Array(
+                s.characteristics
+                    .iter()
+                    .map(|c| J::String(c.clone()))
+                    .collect(),
+            ),
         );
     }
     J::Object(o)
@@ -126,7 +140,10 @@ fn dump_instance(i: &Instance) -> J {
     o.insert("sourceInfo".into(), dump_source_info(&i.source_info));
     o.insert("name".into(), J::String(i.name.clone()));
     o.insert("_id".into(), J::String(i.id.clone()));
-    o.insert("rules".into(), J::Array(i.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(i.rules.iter().map(dump_rule).collect()),
+    );
     o.insert("usage".into(), J::String(i.usage.clone()));
     if let Some(io) = &i.instance_of {
         o.insert("instanceOf".into(), J::String(io.clone()));
@@ -142,7 +159,10 @@ fn dump_valueset(v: &FshValueSet) -> J {
     o.insert("sourceInfo".into(), dump_source_info(&v.source_info));
     o.insert("name".into(), J::String(v.name.clone()));
     o.insert("_id".into(), J::String(v.id.clone()));
-    o.insert("rules".into(), J::Array(v.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(v.rules.iter().map(dump_rule).collect()),
+    );
     put_opt_str(&mut o, "title", &v.title);
     put_opt_str(&mut o, "description", &v.description);
     J::Object(o)
@@ -154,7 +174,10 @@ fn dump_codesystem(v: &FshCodeSystem) -> J {
     o.insert("sourceInfo".into(), dump_source_info(&v.source_info));
     o.insert("name".into(), J::String(v.name.clone()));
     o.insert("_id".into(), J::String(v.id.clone()));
-    o.insert("rules".into(), J::Array(v.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(v.rules.iter().map(dump_rule).collect()),
+    );
     put_opt_str(&mut o, "title", &v.title);
     put_opt_str(&mut o, "description", &v.description);
     J::Object(o)
@@ -165,7 +188,10 @@ fn dump_invariant(v: &Invariant) -> J {
     o.insert("__type".into(), "Invariant".into());
     o.insert("sourceInfo".into(), dump_source_info(&v.source_info));
     o.insert("name".into(), J::String(v.name.clone()));
-    o.insert("rules".into(), J::Array(v.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(v.rules.iter().map(dump_rule).collect()),
+    );
     put_opt_str(&mut o, "description", &v.description);
     put_opt_str(&mut o, "expression", &v.expression);
     put_opt_str(&mut o, "xpath", &v.xpath);
@@ -180,7 +206,10 @@ fn dump_ruleset(v: &RuleSet) -> J {
     o.insert("__type".into(), "RuleSet".into());
     o.insert("sourceInfo".into(), dump_source_info(&v.source_info));
     o.insert("name".into(), J::String(v.name.clone()));
-    o.insert("rules".into(), J::Array(v.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(v.rules.iter().map(dump_rule).collect()),
+    );
     J::Object(o)
 }
 
@@ -190,7 +219,10 @@ fn dump_mapping(v: &Mapping) -> J {
     o.insert("sourceInfo".into(), dump_source_info(&v.source_info));
     o.insert("name".into(), J::String(v.name.clone()));
     o.insert("id".into(), J::String(v.id.clone()));
-    o.insert("rules".into(), J::Array(v.rules.iter().map(dump_rule).collect()));
+    o.insert(
+        "rules".into(),
+        J::Array(v.rules.iter().map(dump_rule).collect()),
+    );
     put_opt_str(&mut o, "source", &v.source);
     put_opt_str(&mut o, "target", &v.target);
     put_opt_str(&mut o, "description", &v.description);

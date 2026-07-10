@@ -284,4 +284,3 @@ pub(crate) fn ensure_array_field<'a>(target: &'a mut Value, key: &str) -> &'a mu
     }
     entry.as_array_mut().expect("array just inserted")
 }
-

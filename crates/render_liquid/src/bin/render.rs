@@ -189,7 +189,11 @@ fn load_data_dir(dir: &str) -> Value {
     for e in entries {
         let path = e.path();
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        let key = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let key = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
         let key = sanitize(&key);
         match ext {
             "csv" => {

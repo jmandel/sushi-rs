@@ -411,7 +411,9 @@ pub fn generate(gen: &Gen, model: &mut TableModel, image_path: &str, border: i32
         }
     }
     if model.border {
-        table.style("border: 2px black solid; font-size: 11px; font-family: verdana; vertical-align: top;");
+        table.style(
+            "border: 2px black solid; font-size: 11px; font-family: verdana; vertical-align: top;",
+        );
     } else {
         table.style(&format!(
             "border: {}px #F0F0F0 solid; font-size: 11px; font-family: verdana; vertical-align: top;",
@@ -767,7 +769,11 @@ fn build_cell(
         // final join image (HTG:1100-1127). sfx "-open" + onClick for active
         // tables with children.
         if !indents.is_empty() {
-            let sfx = if _model.is_active() && has_children { "-open" } else { "" };
+            let sfx = if _model.is_active() && has_children {
+                "-open"
+            } else {
+                ""
+            };
             let last = indents[indents.len() - 1];
             let base = match last {
                 NEW_REGULAR => "tbl_vjoin_end",
@@ -817,7 +823,10 @@ fn build_cell(
         img.set_attr("alt", "icon")
             .set_attr("src", src_for(gen, image_path, icon))
             .set_attr("class", "hierarchy")
-            .style(&format!("background-color: {}; background-color: inherit", color))
+            .style(&format!(
+                "background-color: {}; background-color: inherit",
+                color
+            ))
             .set_attr("alt", ".");
         if let Some(h) = hint {
             img.set_attr("title", h);
@@ -874,7 +883,10 @@ fn append_filter_ui(itc: &mut Elem, mid: &str, checkboxes: Option<&[(String, Str
     input.style("border: 1px #F0F0F0 solid; background-color: rgb(254, 254, 231);");
     input.set_attr(
         "onInput",
-        format!("filterTree(document.getElementById('{}'), event.target.value)", mid),
+        format!(
+            "filterTree(document.getElementById('{}'), event.target.value)",
+            mid
+        ),
     );
     span.push_elem(input);
     if let Some(cbs) = checkboxes {
@@ -1072,14 +1084,12 @@ pub mod phrase {
     pub const GENERAL_CARD: &str = "Card.";
     pub const GENERAL_TYPE: &str = "Type";
     pub const GENERAL_DESC_CONST: &str = "Description & Constraints";
-    pub const GENERAL_LOGICAL_NAME: &str =
-        "The logical name of the element";
+    pub const GENERAL_LOGICAL_NAME: &str = "The logical name of the element";
     pub const GENERAL_OBLIGATIONS: &str = "Obligations";
     pub const GENERAL_CONSTRAINTS: &str = "Constraints";
     pub const GENERAL_BINDINGS: &str = "Bindings";
 
-    pub const SD_HEAD_FLAGS_DESC: &str =
-        "Information about the use of the element";
+    pub const SD_HEAD_FLAGS_DESC: &str = "Information about the use of the element";
     pub const SD_HEAD_CARD_DESC: &str =
         "Minimum and Maximum # of times the element can appear in the instance";
     pub const SD_HEAD_DESC_DESC: &str = "Additional information about the element";

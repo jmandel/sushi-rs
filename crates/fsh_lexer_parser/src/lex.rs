@@ -735,7 +735,11 @@ static COLON_KW: &[(&str, TokenKind, Action)] = &[
     ("Source", KW_SOURCE, Action::Nothing),
     ("Target", KW_TARGET, Action::Nothing),
     ("Context", KW_CONTEXT, Action::Push(Mode::ListContexts)),
-    ("Characteristics", KW_CHARACTERISTICS, Action::Push(Mode::ListCodes)),
+    (
+        "Characteristics",
+        KW_CHARACTERISTICS,
+        Action::Push(Mode::ListCodes),
+    ),
 ];
 
 #[derive(Clone, Copy)]
@@ -771,8 +775,18 @@ static SIMPLE_KW: &[(&str, TokenKind, KwForm, Action)] = &[
     ("valueset", KW_VSREFERENCE, KwForm::Bare, Action::Nothing),
     ("system", KW_SYSTEM, KwForm::Bare, Action::Nothing),
     ("exactly", KW_EXACTLY, KwForm::Paren, Action::Nothing),
-    ("insert", KW_INSERT, KwForm::Bare, Action::Push(Mode::RulesetOrInsert)),
-    ("contentReference", KW_CONTENTREFERENCE, KwForm::Bare, Action::Nothing),
+    (
+        "insert",
+        KW_INSERT,
+        KwForm::Bare,
+        Action::Push(Mode::RulesetOrInsert),
+    ),
+    (
+        "contentReference",
+        KW_CONTENTREFERENCE,
+        KwForm::Bare,
+        Action::Nothing,
+    ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -780,7 +794,13 @@ static SIMPLE_KW: &[(&str, TokenKind, KwForm, Action)] = &[
 // ---------------------------------------------------------------------------
 
 #[inline]
-fn consider(best: &mut Option<Cand>, len: Option<usize>, kind: TokenKind, skip: bool, action: Action) {
+fn consider(
+    best: &mut Option<Cand>,
+    len: Option<usize>,
+    kind: TokenKind,
+    skip: bool,
+    action: Action,
+) {
     if let Some(l) = len {
         if l == 0 {
             return;
@@ -790,7 +810,12 @@ fn consider(best: &mut Option<Cand>, len: Option<usize>, kind: TokenKind, skip: 
             None => true,
         };
         if replace {
-            *best = Some(Cand { len: l, kind, skip, action });
+            *best = Some(Cand {
+                len: l,
+                kind,
+                skip,
+                action,
+            });
         }
     }
 }
@@ -814,29 +839,101 @@ fn match_default(s: &[char], i: usize) -> Option<Cand> {
     consider(&mut best, m_star(s, i), STAR, false, Action::Nothing);
     consider(&mut best, single(s, i, ':'), COLON, false, Action::Nothing);
     consider(&mut best, single(s, i, ','), COMMA, false, Action::Nothing);
-    consider(&mut best, starts_with(s, i, "->"), ARROW, false, Action::Nothing);
+    consider(
+        &mut best,
+        starts_with(s, i, "->"),
+        ARROW,
+        false,
+        Action::Nothing,
+    );
 
     // PATTERNS
     consider(&mut best, m_string(s, i), STRING, false, Action::Nothing);
-    consider(&mut best, m_multiline_string(s, i), MULTILINE_STRING, false, Action::Nothing);
+    consider(
+        &mut best,
+        m_multiline_string(s, i),
+        MULTILINE_STRING,
+        false,
+        Action::Nothing,
+    );
     consider(&mut best, m_number(s, i), NUMBER, false, Action::Nothing);
     consider(&mut best, m_unit(s, i), UNIT, false, Action::Nothing);
     consider(&mut best, m_code(s, i), CODE, false, Action::Nothing);
-    consider(&mut best, m_concept_string(s, i), CONCEPT_STRING, false, Action::Nothing);
-    consider(&mut best, m_datetime(s, i), DATETIME, false, Action::Nothing);
+    consider(
+        &mut best,
+        m_concept_string(s, i),
+        CONCEPT_STRING,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_datetime(s, i),
+        DATETIME,
+        false,
+        Action::Nothing,
+    );
     consider(&mut best, m_time(s, i), TIME, false, Action::Nothing);
     consider(&mut best, m_card(s, i), CARD, false, Action::Nothing);
-    consider(&mut best, m_ref(s, i, "Reference"), REFERENCE, false, Action::Nothing);
-    consider(&mut best, m_ref(s, i, "CodeableReference"), CODEABLE_REFERENCE, false, Action::Nothing);
-    consider(&mut best, m_ref(s, i, "Canonical"), CANONICAL, false, Action::Nothing);
-    consider(&mut best, m_caret_sequence(s, i), CARET_SEQUENCE, false, Action::Nothing);
+    consider(
+        &mut best,
+        m_ref(s, i, "Reference"),
+        REFERENCE,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_ref(s, i, "CodeableReference"),
+        CODEABLE_REFERENCE,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_ref(s, i, "Canonical"),
+        CANONICAL,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_caret_sequence(s, i),
+        CARET_SEQUENCE,
+        false,
+        Action::Nothing,
+    );
     consider(&mut best, m_regex(s, i), REGEX, false, Action::Nothing);
-    consider(&mut best, m_block_comment(s, i), BLOCK_COMMENT, true, Action::Nothing);
-    consider(&mut best, m_sequence(s, i), SEQUENCE, false, Action::Nothing);
+    consider(
+        &mut best,
+        m_block_comment(s, i),
+        BLOCK_COMMENT,
+        true,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_sequence(s, i),
+        SEQUENCE,
+        false,
+        Action::Nothing,
+    );
 
     // IGNORED
-    consider(&mut best, single_ws(s, i), WHITESPACE, false, Action::Nothing);
-    consider(&mut best, m_line_comment(s, i), LINE_COMMENT, true, Action::Nothing);
+    consider(
+        &mut best,
+        single_ws(s, i),
+        WHITESPACE,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_line_comment(s, i),
+        LINE_COMMENT,
+        true,
+        Action::Nothing,
+    );
 
     best
 }
@@ -850,16 +947,46 @@ fn match_ruleset_or_insert(s: &[char], i: usize) -> Option<Cand> {
         false,
         Action::Push(Mode::ParamRuleset),
     );
-    consider(&mut best, m_ruleset_reference(s, i), RULESET_REFERENCE, false, Action::Pop);
+    consider(
+        &mut best,
+        m_ruleset_reference(s, i),
+        RULESET_REFERENCE,
+        false,
+        Action::Pop,
+    );
     best
 }
 
 fn match_param_ruleset(s: &[char], i: usize) -> Option<Cand> {
     let mut best: Option<Cand> = None;
-    consider(&mut best, m_bracketed(s, i, ','), BRACKETED_PARAM, false, Action::Nothing);
-    consider(&mut best, m_bracketed(s, i, ')'), LAST_BRACKETED_PARAM, false, Action::PopPop);
-    consider(&mut best, m_plain(s, i, ','), PLAIN_PARAM, false, Action::Nothing);
-    consider(&mut best, m_plain(s, i, ')'), LAST_PLAIN_PARAM, false, Action::PopPop);
+    consider(
+        &mut best,
+        m_bracketed(s, i, ','),
+        BRACKETED_PARAM,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_bracketed(s, i, ')'),
+        LAST_BRACKETED_PARAM,
+        false,
+        Action::PopPop,
+    );
+    consider(
+        &mut best,
+        m_plain(s, i, ','),
+        PLAIN_PARAM,
+        false,
+        Action::Nothing,
+    );
+    consider(
+        &mut best,
+        m_plain(s, i, ')'),
+        LAST_PLAIN_PARAM,
+        false,
+        Action::PopPop,
+    );
     best
 }
 
@@ -875,20 +1002,40 @@ fn match_list_contexts(s: &[char], i: usize) -> Option<Cand> {
         }
     });
     consider(&mut best, quoted, QUOTED_CONTEXT, false, Action::Nothing);
-    consider(&mut best, m_string(s, i), LAST_QUOTED_CONTEXT, false, Action::Pop);
+    consider(
+        &mut best,
+        m_string(s, i),
+        LAST_QUOTED_CONTEXT,
+        false,
+        Action::Pop,
+    );
     // UNQUOTED_CONTEXT: (SEQUENCE | CODE) WS* ','
     consider(
         &mut best,
-        item_then_term(s, i, ',', |s, a, b| seq_exact(s, a, b) || code_exact(s, a, b)),
+        item_then_term(s, i, ',', |s, a, b| {
+            seq_exact(s, a, b) || code_exact(s, a, b)
+        }),
         UNQUOTED_CONTEXT,
         false,
         Action::Nothing,
     );
     // LAST_UNQUOTED_CONTEXT: (SEQUENCE | CODE)
     let last_unquoted = max_opt(m_sequence(s, i), m_code(s, i));
-    consider(&mut best, last_unquoted, LAST_UNQUOTED_CONTEXT, false, Action::Pop);
+    consider(
+        &mut best,
+        last_unquoted,
+        LAST_UNQUOTED_CONTEXT,
+        false,
+        Action::Pop,
+    );
     // CONTEXT_WHITESPACE: WS
-    consider(&mut best, single_ws(s, i), CONTEXT_WHITESPACE, false, Action::Nothing);
+    consider(
+        &mut best,
+        single_ws(s, i),
+        CONTEXT_WHITESPACE,
+        false,
+        Action::Nothing,
+    );
     best
 }
 
@@ -905,7 +1052,13 @@ fn match_list_codes(s: &[char], i: usize) -> Option<Cand> {
     // LAST_CODE_ITEM: CODE
     consider(&mut best, m_code(s, i), LAST_CODE_ITEM, false, Action::Pop);
     // CODE_LIST_WHITESPACE: WS
-    consider(&mut best, single_ws(s, i), CODE_LIST_WHITESPACE, false, Action::Nothing);
+    consider(
+        &mut best,
+        single_ws(s, i),
+        CODE_LIST_WHITESPACE,
+        false,
+        Action::Nothing,
+    );
     best
 }
 
@@ -1003,7 +1156,9 @@ impl Lexer {
                     self.apply_action(c.action);
                     if !c.skip {
                         let channel = match c.kind {
-                            WHITESPACE | CONTEXT_WHITESPACE | CODE_LIST_WHITESPACE => Channel::Hidden,
+                            WHITESPACE | CONTEXT_WHITESPACE | CODE_LIST_WHITESPACE => {
+                                Channel::Hidden
+                            }
                             _ => Channel::Default,
                         };
                         self.out.push(Token {

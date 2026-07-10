@@ -5,14 +5,14 @@
 //!
 //! Usage: pagecorpus <ig> [--verbose] [--only <name>] [--limit N] [--engine]
 //!   ig: cycle | plan-net | us-core
-//!   --engine : ALSO route include misses through the FragmentEngine (proves the
-//!              first-include-miss path materializes byte-identical fragments);
+//!   --engine : ALSO resolve registered generated includes through the typed
+//!              FragmentEngine adapter (proves byte-identical materialization);
 //!              default reads all includes from the build's pre-generated
 //!              _includes/ (pure page-pass gate, fragment layer isolated).
 
 use std::path::{Path, PathBuf};
 
-use render_page::{render_page, PageProvider, SiteData};
+use render_page::{render_page, FragmentEngineArtifactResolver, PageProvider, SiteData};
 use render_sd::context::IgContext;
 use render_sd::engine::{FragmentEngine, IgFacts};
 
@@ -112,7 +112,9 @@ fn build_engine(ig: &str, p: &IgPaths) -> FragmentEngine {
 
 fn harvest_uuid(ig: &str) -> String {
     let dir = format!("{}/render-goldens/{}/fragments", REPO, ig);
-    let Ok(rd) = std::fs::read_dir(&dir) else { return String::new() };
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return String::new();
+    };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
         if name.ends_with("-snapshot.xhtml") {
@@ -170,9 +172,13 @@ fn harvest_release_header(golden_dir: &Path) -> Option<String> {
         if p.extension().and_then(|x| x.to_str()) != Some("html") {
             continue;
         }
-        let Ok(t) = std::fs::read_to_string(&p) else { continue };
-        let (Some(a), Some(b)) = (t.find("<!--ReleaseHeader-->"), t.find("<!--EndReleaseHeader-->"))
-        else {
+        let Ok(t) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let (Some(a), Some(b)) = (
+            t.find("<!--ReleaseHeader-->"),
+            t.find("<!--EndReleaseHeader-->"),
+        ) else {
             continue;
         };
         let end = b + "<!--EndReleaseHeader-->".len();
@@ -218,12 +224,18 @@ fn main() {
 
     let p = ig_paths(ig);
     let site = SiteData::load(&p.data_dir);
-    let engine = if use_engine { Some(build_engine(ig, &p)) } else { None };
+    let engine = if use_engine {
+        Some(build_engine(ig, &p))
+    } else {
+        None
+    };
     let engine_first = args.iter().any(|a| a == "--engine-first");
-    let provider =
-        PageProvider::new(&site, &p.includes_dir, engine.as_ref())
-            .with_engine_first(engine_first)
-            .with_pages_root(&p.pages_root);
+    let mut provider = PageProvider::new(&site, &p.includes_dir)
+        .with_engine_first(engine_first)
+        .with_pages_root(&p.pages_root);
+    if let Some(engine) = engine.as_ref() {
+        provider = provider.with_artifact_resolver(FragmentEngineArtifactResolver::new(engine));
+    }
     // Post-Jekyll ReleaseHeader substitution (us-core's output/ is this later
     // stage; plan-net's is pre-substitution -> None -> no-op).
     let release_header = harvest_release_header(&p.golden_dir);
@@ -270,7 +282,11 @@ fn main() {
         let src = std::fs::read_to_string(inp).unwrap();
         // page.path is the Jekyll-relative path: `en/<name>` (multi-lang) or
         // `<name>` (flat single-lang).
-        let page_path = if flat { name.clone() } else { format!("en/{}", name) };
+        let page_path = if flat {
+            name.clone()
+        } else {
+            format!("en/{}", name)
+        };
         let mut ours = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             render_page(&src, &page_path, &provider)
         }))
@@ -314,7 +330,10 @@ fn main() {
         total,
         no_golden,
         if xml_reser > 0 {
-            format!(", xml-static-reser {} [post-Jekyll stage, classified]", xml_reser)
+            format!(
+                ", xml-static-reser {} [post-Jekyll stage, classified]",
+                xml_reser
+            )
         } else {
             String::new()
         },

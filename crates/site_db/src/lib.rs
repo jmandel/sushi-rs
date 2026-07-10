@@ -90,7 +90,10 @@ pub fn run_cli(args: &[String]) -> Result<()> {
 fn run_build(args: &[String]) -> Result<()> {
     use anyhow::Context;
     let opt = |name: &str| -> Option<&str> {
-        args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
     };
     let has_flag = |name: &str| args.iter().any(|a| a == name);
 
@@ -99,10 +102,18 @@ fn run_build(args: &[String]) -> Result<()> {
         .filter(|s| !s.starts_with('-'))
         .map(std::path::PathBuf::from)
         .context("build needs a <cycle-repo> positional arg")?;
-    let sushi_out = opt("--sushi-out").map(std::path::PathBuf::from).context("--sushi-out <dir> is required")?;
-    let cache_dir = opt("--cache").map(std::path::PathBuf::from).context("--cache <pkgcache> is required")?;
-    let out_db = opt("--out").map(std::path::PathBuf::from).context("--out <site.db> is required")?;
-    let core_package = opt("--core").unwrap_or("hl7.fhir.r4.core#4.0.1").to_string();
+    let sushi_out = opt("--sushi-out")
+        .map(std::path::PathBuf::from)
+        .context("--sushi-out <dir> is required")?;
+    let cache_dir = opt("--cache")
+        .map(std::path::PathBuf::from)
+        .context("--cache <pkgcache> is required")?;
+    let out_db = opt("--out")
+        .map(std::path::PathBuf::from)
+        .context("--out <site.db> is required")?;
+    let core_package = opt("--core")
+        .unwrap_or("hl7.fhir.r4.core#4.0.1")
+        .to_string();
     let run_sushi = !has_flag("--no-sushi");
     let branch = opt("--branch").map(str::to_string);
     let revision = opt("--revision").map(str::to_string);
@@ -115,16 +126,30 @@ fn run_build(args: &[String]) -> Result<()> {
     };
 
     let config = BuildConfig {
-        ig_dir, sushi_out, cache_dir, out_db: out_db.clone(),
-        build_epoch_secs, branch, revision, run_sushi, core_package, layer_b,
+        ig_dir,
+        sushi_out,
+        cache_dir,
+        out_db: out_db.clone(),
+        build_epoch_secs,
+        branch,
+        revision,
+        run_sushi,
+        core_package,
+        layer_b,
     };
 
     let report = build_and_write(&config)?;
     let db_written = !(report.no_op && out_db.exists());
     eprintln!(
         "site_db: {} nodes ({} clean, {} dirty){}",
-        report.ledger.nodes.len(), report.clean.len(), report.dirty.len(),
-        if report.no_op { " — NO-OP (nothing written)" } else { "" },
+        report.ledger.nodes.len(),
+        report.clean.len(),
+        report.dirty.len(),
+        if report.no_op {
+            " — NO-OP (nothing written)"
+        } else {
+            ""
+        },
     );
     let _ = db_written;
     println!("{}", out_db.display());

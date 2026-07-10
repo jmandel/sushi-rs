@@ -37,7 +37,10 @@ fn gather_fsh(ig_dir: &Path) -> Vec<(String, String)> {
         if !dir.exists() {
             return;
         }
-        let mut entries: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).collect();
+        let mut entries: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
         entries.sort_by_key(|e| e.path());
         for e in entries {
             let p = e.path();
@@ -132,10 +135,7 @@ fn mem_build(ig_dir: &Path, cache: &str) -> BTreeMap<String, String> {
     let predefined = gather_predefined(ig_dir);
     let compiled =
         compiler::build_project_in_memory(&cfg_text, &fsh, predefined, DiskSource, cache).unwrap();
-    compiled
-        .into_iter()
-        .map(|r| (r.filename, r.text))
-        .collect()
+    compiled.into_iter().map(|r| (r.filename, r.text)).collect()
 }
 
 fn assert_equiv(ig_dir: &Path, cache: &str) {
@@ -162,7 +162,10 @@ fn in_memory_matches_disk_on_cycle_and_harvest_igs() {
     let repo = repo();
     let cache = repo.join("temp/fhir-home/.fhir/packages");
     if !cache.is_dir() {
-        eprintln!("skipping compile_equiv: no isolated FHIR cache at {}", cache.display());
+        eprintln!(
+            "skipping compile_equiv: no isolated FHIR cache at {}",
+            cache.display()
+        );
         return;
     }
     let cache = cache.to_string_lossy().into_owned();
@@ -193,6 +196,9 @@ fn in_memory_matches_disk_on_cycle_and_harvest_igs() {
         }
     }
 
-    assert!(ran > 0, "compile_equiv ran zero IGs (no cycle, no harvest cases?)");
+    assert!(
+        ran > 0,
+        "compile_equiv ran zero IGs (no cycle, no harvest cases?)"
+    );
     eprintln!("compile_equiv: {ran} IGs byte-identical (disk == in-memory)");
 }

@@ -537,7 +537,12 @@ impl<'a> TCtx<'a> {
     /// then from the extension fallback element WITHOUT dimming (SDR:1448-1451).
     /// The ".." piece dims only when BOTH min and max carry EQUALS (the two-arg
     /// checkForNoChange, SDR:3509-3514).
-    fn gen_cardinality(&self, e: Ed<'_>, tracker: &mut UnusedTracker, fb: Option<&ExtDefn>) -> Cell {
+    fn gen_cardinality(
+        &self,
+        e: Ed<'_>,
+        tracker: &mut UnusedTracker,
+        fb: Option<&ExtDefn>,
+    ) -> Cell {
         let mut min = e.min();
         let mut max: Option<String> = e.max().map(String::from);
         let mut min_eq = false;
@@ -565,7 +570,11 @@ impl<'a> TCtx<'a> {
         }
         if max.is_none() {
             if let Some(f) = fb {
-                max = f.element.get("max").and_then(|x| x.as_str()).map(String::from);
+                max = f
+                    .element
+                    .get("max")
+                    .and_then(|x| x.as_str())
+                    .map(String::from);
             }
         }
         if let Some(m) = &max {
@@ -617,7 +626,12 @@ impl<'a> TCtx<'a> {
     /// the INDEX (in `rows`) of the row this element pushed iff it became the
     /// slicing row, plus its id, so the caller can route slice siblings into
     /// `rows[idx].sub_rows`.
-    fn gen_element(&mut self, rows: &mut Vec<Row>, element: Ed<'a>, root: bool) -> Option<(usize, String)> {
+    fn gen_element(
+        &mut self,
+        rows: &mut Vec<Row>,
+        element: Ed<'a>,
+        root: bool,
+    ) -> Option<(usize, String)> {
         // SDR:930: the whole element (row + children walk) is emitted only when
         // NOT (onlyInformationIsMapping || (OBLIGATIONS && no obligations here or
         // below)). onlyInformationIsMapping ~ never true for real corpora. In
@@ -657,21 +671,32 @@ impl<'a> TCtx<'a> {
         let mut ext = false;
         // icon chain (SDR:943-992)
         if s_tail == "extension" && is_extension_elem(element) {
-            if !types.is_empty() && !types[0].profiles().is_empty()
+            if !types.is_empty()
+                && !types[0].profiles().is_empty()
                 && self.extension_is_complex(types[0].profiles()[0])
             {
-                row.set_icon("icon_extension_complex.png", Some("Complex Extension".into()));
+                row.set_icon(
+                    "icon_extension_complex.png",
+                    Some("Complex Extension".into()),
+                );
             } else {
                 row.set_icon("icon_extension_simple.png", Some("Simple Extension".into()));
             }
             ext = true;
         } else if s_tail == "modifierExtension" {
-            if !types.is_empty() && !types[0].profiles().is_empty()
+            if !types.is_empty()
+                && !types[0].profiles().is_empty()
                 && self.extension_is_complex(types[0].profiles()[0])
             {
-                row.set_icon("icon_modifier_extension_complex.png", Some("Complex Extension".into()));
+                row.set_icon(
+                    "icon_modifier_extension_complex.png",
+                    Some("Complex Extension".into()),
+                );
             } else {
-                row.set_icon("icon_modifier_extension_simple.png", Some("Simple Extension".into()));
+                row.set_icon(
+                    "icon_modifier_extension_simple.png",
+                    Some("Simple Extension".into()),
+                );
             }
             ext = true;
         } else if types.is_empty() {
@@ -694,13 +719,19 @@ impl<'a> TCtx<'a> {
             }
         } else if types.len() > 1 {
             if all_are_reference(&types) {
-                row.set_icon("icon_reference.png", Some("Reference to another Resource".into()));
+                row.set_icon(
+                    "icon_reference.png",
+                    Some("Reference to another Resource".into()),
+                );
             } else {
                 row.set_icon("icon_choice.gif", Some("Choice of Types".into()));
                 // typesRow = row (choice [x] handling below)
             }
         } else if types[0].working_code().starts_with('@') {
-            row.set_icon("icon_reuse.png", Some("Reference to another Element".into()));
+            row.set_icon(
+                "icon_reuse.png",
+                Some("Reference to another Element".into()),
+            );
         } else if self.ctx.is_primitive_type(types[0].working_code()) {
             if self.key_rows.contains(&element.id().to_string()) {
                 row.set_icon("icon-key.png", Some("JSON Key Value".into()));
@@ -708,10 +739,16 @@ impl<'a> TCtx<'a> {
                 row.set_icon("icon_primitive.png", Some("Primitive Data Type".into()));
             }
         } else if types[0].has_target() {
-            row.set_icon("icon_reference.png", Some("Reference to another Resource".into()));
+            row.set_icon(
+                "icon_reference.png",
+                Some("Reference to another Resource".into()),
+            );
         } else if self.ctx.is_data_type(types[0].working_code()) {
             row.set_icon("icon_datatype.gif", Some("Data Type".into()));
-        } else if matches!(types[0].working_code(), "Base" | "Element" | "BackboneElement") {
+        } else if matches!(
+            types[0].working_code(),
+            "Base" | "Element" | "BackboneElement"
+        ) {
             row.set_icon("icon_element.gif", Some("Element".into()));
         } else {
             row.set_icon("icon_resource.png", Some("Resource".into()));
@@ -735,7 +772,8 @@ impl<'a> TCtx<'a> {
         }
 
         // name cell (SDR:1318)
-        let name_cell_idx = self.gen_element_name_cell(&mut row, element, ref_.clone(), s_name.clone());
+        let name_cell_idx =
+            self.gen_element_name_cell(&mut row, element, ref_.clone(), s_name.clone());
         // Per-mode cells (SDR:1022-1035).
         match self.cfg.mode {
             StructureMode::Summary => {
@@ -951,7 +989,9 @@ impl<'a> TCtx<'a> {
     /// (or > 5 between the sliceName element and its next sibling for #frag).
     fn extension_is_complex(&self, url: &str) -> bool {
         if let Some((base, frag)) = url.split_once('#') {
-            let Some(sd) = self.ctx.load_resource(base) else { return false };
+            let Some(sd) = self.ctx.load_resource(base) else {
+                return false;
+            };
             let elems = sd
                 .get("snapshot")
                 .and_then(|s| s.get("element"))
@@ -967,14 +1007,14 @@ impl<'a> TCtx<'a> {
             let Some(i) = i else { return false };
             let path = elems[i].get("path").and_then(|x| x.as_str()).unwrap_or("");
             let mut j = i + 1;
-            while j < elems.len()
-                && elems[j].get("path").and_then(|x| x.as_str()) != Some(path)
-            {
+            while j < elems.len() && elems[j].get("path").and_then(|x| x.as_str()) != Some(path) {
                 j += 1;
             }
             j - i > 5
         } else {
-            let Some(sd) = self.ctx.load_resource(url) else { return false };
+            let Some(sd) = self.ctx.load_resource(url) else {
+                return false;
+            };
             sd.get("snapshot")
                 .and_then(|s| s.get("element"))
                 .and_then(|e| e.as_array())
@@ -1209,7 +1249,11 @@ impl<'a> TCtx<'a> {
     }
 
     /// `render(children, b, sd)` (ABR:448-480) for one additional binding.
-    fn render_one_binding(&mut self, parent: &mut render_tables::build::Elem, b: &BindingColDetail) {
+    fn render_one_binding(
+        &mut self,
+        parent: &mut render_tables::build::Elem,
+        b: &BindingColDetail,
+    ) {
         use render_tables::build::Elem;
         if b.value_set.is_empty() {
             return; // ABR:449 — no valueSet, nothing rendered.
@@ -1340,7 +1384,10 @@ impl<'a> TCtx<'a> {
             ));
             p.add_style(CONSTRAINT_STYLE);
             // pathURL(VersionUtilities.getSpecUrl(version), "conformance-rules...")
-            p.set_reference(format!("{}conformance-rules.html#constraints", self.core_path));
+            p.set_reference(format!(
+                "{}conformance-rules.html#constraints",
+                self.core_path
+            ));
         }
         if element.has_extension(EXT_STANDARDS_STATUS) {
             self.gap("standards-status flag");
@@ -1361,7 +1408,8 @@ impl<'a> TCtx<'a> {
                             None,
                             None,
                         ));
-                        let (c, prs) = self.generate_description(element, root, None, None, walks_into_this);
+                        let (c, prs) =
+                            self.generate_description(element, root, None, None, walks_into_this);
                         row.cells.push(c);
                         row.sub_rows.extend(prs);
                     }
@@ -1410,7 +1458,8 @@ impl<'a> TCtx<'a> {
                     let c = self.gen_types(element, types, root, false);
                     row.cells.push(c);
                 }
-                let (c, prs) = self.generate_description(element, root, None, None, walks_into_this);
+                let (c, prs) =
+                    self.generate_description(element, root, None, None, walks_into_this);
                 row.cells.push(c);
                 row.sub_rows.extend(prs);
             }
@@ -1450,7 +1499,12 @@ impl<'a> TCtx<'a> {
 
     /// `makeChoiceRows` (SDR:3362). In mustSupportMode a type is shown iff the
     /// mode is off, no types are MS-marked, or this type is MS (SDR:3376).
-    fn make_choice_rows(&mut self, sub_rows: &mut Vec<Row>, element: Ed<'a>, types: &[TypeRef<'a>]) {
+    fn make_choice_rows(
+        &mut self,
+        sub_rows: &mut Vec<Row>,
+        element: Ed<'a>,
+        types: &[TypeRef<'a>],
+    ) {
         let ms_mode = self.cfg.must_support;
         let all_types_ms = all_types_must_support(types);
         for tr in types {
@@ -1481,12 +1535,17 @@ impl<'a> TCtx<'a> {
             let name = tail(element.path()).replace("[x]", &capitalize(&ts));
             if tu == "Reference" || tu == "canonical" {
                 used = true;
-                choicerow.cells.push(Cell::with(None, None, Some(name), None, None));
+                choicerow
+                    .cells
+                    .push(Cell::with(None, None, Some(name), None, None));
                 choicerow.cells.push(Cell::new());
                 choicerow
                     .cells
                     .push(Cell::with(None, None, Some("".into()), None, None));
-                choicerow.set_icon("icon_reference.png", Some("Reference to another Resource".into()));
+                choicerow.set_icon(
+                    "icon_reference.png",
+                    Some("Reference to another Resource".into()),
+                );
                 let mut c = Cell::new();
                 // ADD_REFERENCE_TO_TABLE = true (constant in SDR)
                 if tu == "canonical" {
@@ -1523,7 +1582,8 @@ impl<'a> TCtx<'a> {
                         continue;
                     }
                     if !first {
-                        c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
+                        c.pieces
+                            .push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
                     // makeChoiceRows renders the element's OWN (restated)
                     // types — never pointer-derived, so no EQUALS dim.
@@ -1543,7 +1603,8 @@ impl<'a> TCtx<'a> {
                     first = false;
                 }
                 if first {
-                    c.pieces.push(Piece::ref_text(None, Some("Any".into()), None));
+                    c.pieces
+                        .push(Piece::ref_text(None, Some("Any".into()), None));
                 }
                 c.pieces.push(Piece::ref_text(None, Some(")".into()), None));
                 choicerow.cells.push(c);
@@ -1560,7 +1621,8 @@ impl<'a> TCtx<'a> {
                         choicerow
                             .cells
                             .push(Cell::with(None, None, Some("".into()), None, None));
-                        choicerow.set_icon("icon_primitive.png", Some("Primitive Data Type".into()));
+                        choicerow
+                            .set_icon("icon_primitive.png", Some("Primitive Data Type".into()));
                         let mut c = Cell::with(
                             None,
                             Some(format!("{}datatypes.html#{}", self.core_path, tu)),
@@ -1618,7 +1680,9 @@ impl<'a> TCtx<'a> {
                 }
                 if !tr.profiles().is_empty() && used {
                     let type_cell = choicerow.cells.last_mut().unwrap();
-                    type_cell.pieces.push(Piece::ref_text(None, Some("(".into()), None));
+                    type_cell
+                        .pieces
+                        .push(Piece::ref_text(None, Some("(".into()), None));
                     let mut first = true;
                     for pt in tr.profiles() {
                         if first {
@@ -1635,12 +1699,16 @@ impl<'a> TCtx<'a> {
                                 Some(psd.present()),
                             ));
                         } else {
-                            type_cell
-                                .pieces
-                                .push(Piece::ref_text(None, Some("?gen-e2?".into()), None));
+                            type_cell.pieces.push(Piece::ref_text(
+                                None,
+                                Some("?gen-e2?".into()),
+                                None,
+                            ));
                         }
                     }
-                    type_cell.pieces.push(Piece::ref_text(None, Some(")".into()), None));
+                    type_cell
+                        .pieces
+                        .push(Piece::ref_text(None, Some(")".into()), None));
                 }
             }
             if used {
@@ -1672,7 +1740,11 @@ impl<'a> TCtx<'a> {
                 .find(|e| e.get("sliceName").and_then(|x| x.as_str()) == Some(frag))?
                 .clone();
             Some(ExtDefn {
-                url: sd.get("url").and_then(|x| x.as_str()).unwrap_or(base).to_string(),
+                url: sd
+                    .get("url")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(base)
+                    .to_string(),
                 sd: sd.clone(),
                 element: el,
             })
@@ -1685,7 +1757,11 @@ impl<'a> TCtx<'a> {
                 .and_then(|a| a.first())?
                 .clone();
             Some(ExtDefn {
-                url: sd.get("url").and_then(|x| x.as_str()).unwrap_or(url).to_string(),
+                url: sd
+                    .get("url")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(url)
+                    .to_string(),
                 sd: sd.clone(),
                 element: el,
             })
@@ -1706,14 +1782,20 @@ impl<'a> TCtx<'a> {
             .position(|e| std::ptr::eq(e, &ext.element) || e == &ext.element)?;
         idx += 1;
         while idx < elems.len() {
-            let p = elems[idx].get("path").and_then(|x| x.as_str()).unwrap_or("");
+            let p = elems[idx]
+                .get("path")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
             if !p.starts_with(&format!("{}.", epath)) {
                 break;
             }
             if p == format!("{}.value[x]", epath) || (p.starts_with(&format!("{}.value", epath))) {
                 return Some(ValueDefn {
                     json: elems[idx].clone(),
-                    max: elems[idx].get("max").and_then(|x| x.as_str()).map(String::from),
+                    max: elems[idx]
+                        .get("max")
+                        .and_then(|x| x.as_str())
+                        .map(String::from),
                 });
             }
             idx += 1;
@@ -1784,7 +1866,8 @@ impl<'a> TCtx<'a> {
                     if first {
                         first = false;
                     } else {
-                        c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
+                        c.pieces
+                            .push(Piece::ref_text(None, Some(", ".into()), None));
                     }
                     c.pieces.push(Piece::ref_text(Some(wp), Some(name), None));
                 }
@@ -1794,8 +1877,7 @@ impl<'a> TCtx<'a> {
         // url-fixed short circuit (SDR:1579)
         if definition.path().ends_with("url") && definition.fixed().is_some() {
             let (_, v) = definition.fixed().unwrap();
-            let mut p =
-                Piece::ref_text(None, Some(format!("\"{}\"", build_json(v))), None);
+            let mut p = Piece::ref_text(None, Some(format!("\"{}\"", build_json(v))), None);
             p.add_style("color: darkgreen");
             c.pieces.push(p);
             return (c, partner_rows);
@@ -1884,8 +1966,9 @@ impl<'a> TCtx<'a> {
             let status_codes = self.determine_narrative_status(definition);
             // langCtrl/source-control extensions: none in the corpus; if
             // present they are a flagged gap below.
-            let lang_ctrl_present = definition
-                .has_extension("http://hl7.org/fhir/StructureDefinition/narrative-language-control");
+            let lang_ctrl_present = definition.has_extension(
+                "http://hl7.org/fhir/StructureDefinition/narrative-language-control",
+            );
             let level_present = definition
                 .has_extension("http://hl7.org/fhir/StructureDefinition/narrative-source-control");
             if lang_ctrl_present || level_present {
@@ -1940,7 +2023,9 @@ impl<'a> TCtx<'a> {
         let binding_owner: Option<&serde_json::Value> = match _value_defn {
             Some(vd) => {
                 let b = vd.json.get("binding");
-                if b.map(|x| x.as_object().map(|o| !o.is_empty()).unwrap_or(false)).unwrap_or(false) {
+                if b.map(|x| x.as_object().map(|o| !o.is_empty()).unwrap_or(false))
+                    .unwrap_or(false)
+                {
                     binding_from_defn = false;
                     b
                 } else {
@@ -1991,8 +2076,7 @@ impl<'a> TCtx<'a> {
             }),
             _ => None,
         };
-        let binding_owner: Option<&serde_json::Value> =
-            unified_storage.as_ref().or(binding_owner);
+        let binding_owner: Option<&serde_json::Value> = unified_storage.as_ref().or(binding_owner);
         if let Some(binding) = binding_owner {
             if binding.get("valueSet").is_some() {
                 self.render_binding_summary(&mut c, definition, binding, vs_eq, str_eq, desc_eq);
@@ -2003,8 +2087,7 @@ impl<'a> TCtx<'a> {
                     br.set_class("binding");
                     c.pieces.push(br);
                 }
-                let mut lbl =
-                    Piece::ref_text(None, Some("Binding Description: ".into()), None);
+                let mut lbl = Piece::ref_text(None, Some("Binding Description: ".into()), None);
                 lbl.set_class("binding");
                 lbl.add_style("font-weight:bold");
                 c.pieces.push(lbl);
@@ -2196,7 +2279,8 @@ impl<'a> TCtx<'a> {
             let mut first = true;
             for b in &merged {
                 if !first {
-                    c.pieces.push(Piece::ref_text(None, Some(", ".into()), None));
+                    c.pieces
+                        .push(Piece::ref_text(None, Some(", ".into()), None));
                 }
                 let s = if is_primitive_value(b) {
                     build_json(b)
@@ -2223,11 +2307,8 @@ impl<'a> TCtx<'a> {
                     c.pieces.push(Piece::tag("br"));
                 }
                 let label = ex.get("label").and_then(|x| x.as_str()).unwrap_or("");
-                let mut lbl = Piece::ref_text(
-                    None,
-                    Some(format!("Example {}: ", label)),
-                    Some("".into()),
-                );
+                let mut lbl =
+                    Piece::ref_text(None, Some(format!("Example {}: ", label)), Some("".into()));
                 lbl.add_style("font-weight:bold");
                 c.pieces.push(lbl);
                 let value = ex
@@ -2246,8 +2327,7 @@ impl<'a> TCtx<'a> {
         if definition.has_extension(EXT_OBLIGATION_CORE)
             || definition.has_extension(EXT_OBLIGATION_TOOLS)
             || (root
-                && (self.sd.root.get("extension").is_some()
-                    && sd_has_obligations(&self.sd.root)))
+                && (self.sd.root.get("extension").is_some() && sd_has_obligations(&self.sd.root)))
         {
             self.gap("obligations table");
         }
@@ -2297,12 +2377,17 @@ impl<'a> TCtx<'a> {
             .map(|r| r.web_path)
             .unwrap_or_else(|| format!("{}.html", type_code));
         let ref_ = if type_link.contains(".html") {
-            format!("{}-definitions.html#", &type_link[..type_link.find(".html").unwrap()])
+            format!(
+                "{}-definitions.html#",
+                &type_link[..type_link.find(".html").unwrap()]
+            )
         } else {
             "?gen-fv?".to_string()
         };
         let type_url = format!("http://hl7.org/fhir/StructureDefinition/{}", type_code);
-        let Some(type_sd) = self.ctx.load_resource(&type_url) else { return };
+        let Some(type_sd) = self.ctx.load_resource(&type_url) else {
+            return;
+        };
         let props = type_properties(&type_sd);
         for prop in &props {
             let child_path = path.as_ref().map(|p| format!("{}.{}", p, prop.name));
@@ -2353,11 +2438,16 @@ impl<'a> TCtx<'a> {
                     let href = if prop.base_path == prop.path {
                         format!("{}{}", ref_, prop.path)
                     } else {
-                        format!("{}element-definitions.html#{}", self.core_path, prop.base_path)
+                        format!(
+                            "{}element-definitions.html#{}",
+                            self.core_path, prop.base_path
+                        )
                     };
-                    name_cell
-                        .pieces
-                        .push(Piece::ref_text(Some(href), Some(prop.name.clone()), None));
+                    name_cell.pieces.push(Piece::ref_text(
+                        Some(href),
+                        Some(prop.name.clone()),
+                        None,
+                    ));
                     row.cells.push(name_cell);
                     let mut flags = Cell::new();
                     flags.pieces.push(Piece::ref_text(None, None, None));
@@ -2368,17 +2458,33 @@ impl<'a> TCtx<'a> {
                     // datatype icon (SDR:2803-2812).
                     let tc = &prop.type_code_full;
                     if !pattern {
-                        card.pieces.push(Piece::ref_text(None, Some("0..0".into()), None));
+                        card.pieces
+                            .push(Piece::ref_text(None, Some("0..0".into()), None));
                         row.set_icon("icon_fixed.gif", Some("Fixed Value:".into()));
                     } else if self.ctx.is_primitive_type(tc) {
                         row.set_icon("icon_primitive.png", Some("Primitive Data Type".into()));
-                        card.pieces.push(Piece::ref_text(None, Some(format!("0..{}", prop.max)), None));
+                        card.pieces.push(Piece::ref_text(
+                            None,
+                            Some(format!("0..{}", prop.max)),
+                            None,
+                        ));
                     } else if tc == "Reference" || tc == "canonical" {
-                        row.set_icon("icon_reference.png", Some("Reference to another Resource".into()));
-                        card.pieces.push(Piece::ref_text(None, Some(format!("0..{}", prop.max)), None));
+                        row.set_icon(
+                            "icon_reference.png",
+                            Some("Reference to another Resource".into()),
+                        );
+                        card.pieces.push(Piece::ref_text(
+                            None,
+                            Some(format!("0..{}", prop.max)),
+                            None,
+                        ));
                     } else {
                         row.set_icon("icon_datatype.gif", Some("Data Type".into()));
-                        card.pieces.push(Piece::ref_text(None, Some(format!("0..{}", prop.max)), None));
+                        card.pieces.push(Piece::ref_text(
+                            None,
+                            Some(format!("0..{}", prop.max)),
+                            None,
+                        ));
                     }
                     row.cells.push(card);
                     let mut ty = Cell::new();
@@ -2399,11 +2505,16 @@ impl<'a> TCtx<'a> {
                     let href = if prop.base_path == prop.path {
                         format!("{}{}", ref_, prop.path)
                     } else {
-                        format!("{}element-definitions.html#{}", self.core_path, prop.base_path)
+                        format!(
+                            "{}element-definitions.html#{}",
+                            self.core_path, prop.base_path
+                        )
                     };
-                    name_cell
-                        .pieces
-                        .push(Piece::ref_text(Some(href), Some(prop.name.clone()), None));
+                    name_cell.pieces.push(Piece::ref_text(
+                        Some(href),
+                        Some(prop.name.clone()),
+                        None,
+                    ));
                     row.cells.push(name_cell);
                     let mut flags = Cell::new();
                     flags.pieces.push(Piece::ref_text(None, None, None));
@@ -2425,15 +2536,15 @@ impl<'a> TCtx<'a> {
                     // in fhirType, so no split branch here) (SDR:2858-2872).
                     let tc0 = prop.type_codes.first().cloned().unwrap_or_default();
                     let tlink = self.ctx.resolve_type(&tc0).map(|r| r.web_path);
-                    ty.pieces.push(Piece::ref_text(tlink, Some(tc0.clone()), None));
+                    ty.pieces
+                        .push(Piece::ref_text(tlink, Some(tc0.clone()), None));
                     row.cells.push(ty);
                     let mut desc = Cell::new();
                     desc.pieces
                         .push(Piece::ref_text(None, Some(prop.short.clone()), None));
                     desc.pieces.push(Piece::tag("br"));
                     if is_primitive_value(b) {
-                        let mut lbl =
-                            Piece::ref_text(None, Some("Fixed Value: ".into()), None);
+                        let mut lbl = Piece::ref_text(None, Some("Fixed Value: ".into()), None);
                         lbl.add_style("font-weight: bold");
                         desc.pieces.push(lbl);
                         let sv = build_json(b);
@@ -2443,8 +2554,7 @@ impl<'a> TCtx<'a> {
                         row.cells.push(desc);
                         rows.push(row);
                     } else {
-                        let mut lbl =
-                            Piece::ref_text(None, Some("Fixed Value: ".into()), None);
+                        let mut lbl = Piece::ref_text(None, Some("Fixed Value: ".into()), None);
                         lbl.add_style("font-weight: bold");
                         desc.pieces.push(lbl);
                         let mut val = Piece::ref_text(None, Some("(Complex)".into()), None);
@@ -2477,27 +2587,37 @@ impl<'a> TCtx<'a> {
             let tn = &tc[..i];
             let inner = &tc[i + 1..tc.rfind(')').unwrap_or(tc.len())];
             let tn_link = self.ctx.resolve_type(tn).map(|r| r.web_path);
-            ty.pieces.push(Piece::ref_text(tn_link, Some(tn.to_string()), None));
-            ty.pieces.push(Piece::ref_text(None, Some("(".into()), None));
+            ty.pieces
+                .push(Piece::ref_text(tn_link, Some(tn.to_string()), None));
+            ty.pieces
+                .push(Piece::ref_text(None, Some("(".into()), None));
             for s in inner.split('|') {
                 let link = self.ctx.resolve_type(s).map(|r| r.web_path);
-                ty.pieces.push(Piece::ref_text(link, Some(s.to_string()), None));
+                ty.pieces
+                    .push(Piece::ref_text(link, Some(s.to_string()), None));
             }
-            ty.pieces.push(Piece::ref_text(None, Some(")".into()), None));
+            ty.pieces
+                .push(Piece::ref_text(None, Some(")".into()), None));
         } else {
             let link = self.ctx.resolve_type(tc).map(|r| r.web_path);
-            ty.pieces.push(Piece::ref_text(link, Some(tc.to_string()), None));
+            ty.pieces
+                .push(Piece::ref_text(link, Some(tc.to_string()), None));
         }
     }
 
     fn has_path_in_scope(&self, path: &str, id: Option<&str>) -> bool {
-        self.all.iter().any(|ed| matches_in_scope_element(path, id, *ed))
+        self.all
+            .iter()
+            .any(|ed| matches_in_scope_element(path, id, *ed))
     }
 
     fn has_descendant_path_in_scope(&self, path: &str, id: Option<&str>) -> bool {
         self.all.iter().any(|ed| {
             let cand = ed.path();
-            if cand.len() > path.len() && cand.starts_with(path) && cand[path.len()..].starts_with('.') {
+            if cand.len() > path.len()
+                && cand.starts_with(path)
+                && cand[path.len()..].starts_with('.')
+            {
                 match id {
                     None => true,
                     Some(i) if !i.contains(':') => true,
@@ -2558,7 +2678,10 @@ impl<'a> TCtx<'a> {
         lbl.add_style("font-weight:bold");
         c.pieces.push(lbl);
 
-        let vs_ref = binding.get("valueSet").and_then(|x| x.as_str()).unwrap_or("");
+        let vs_ref = binding
+            .get("valueSet")
+            .and_then(|x| x.as_str())
+            .unwrap_or("");
         let br = self.resolve_binding(vs_ref);
         let mut p = Piece::ref_text(br.url.clone(), Some(br.display.clone()), br.uri.clone());
         p.set_class("binding");
@@ -2701,14 +2824,13 @@ impl<'a> TCtx<'a> {
             let mut td = Elem::new("td");
             td.style("font-size: 11px");
             let cp = self.core_path;
-            let link =
-                |href: String, title: &str, text: &str, td: &mut Elem| {
-                    let mut a = Elem::new("a");
-                    a.set_attr("href", href);
-                    a.set_attr("title", title);
-                    a.tx(text);
-                    td.push_elem(a);
-                };
+            let link = |href: String, title: &str, text: &str, td: &mut Elem| {
+                let mut a = Elem::new("a");
+                a.set_attr("href", href);
+                a.set_attr("title", title);
+                a.tx(text);
+                td.push_elem(a);
+            };
             match d.purpose.as_str() {
                 "maximum" => link(
                     format!("{}extension-elementdefinition-maxvalueset.html", cp),
@@ -2799,8 +2921,12 @@ impl<'a> TCtx<'a> {
     fn determine_narrative_status(&mut self, definition: Ed<'a>) -> Vec<String> {
         let status_path = format!("{}.status", definition.path());
         let status = self.all.iter().find(|e| e.path() == status_path);
-        let Some(status) = status else { return Vec::new() };
-        let Some(binding) = status.binding() else { return Vec::new() };
+        let Some(status) = status else {
+            return Vec::new();
+        };
+        let Some(binding) = status.binding() else {
+            return Vec::new();
+        };
         let Some(vs_url) = binding.get("valueSet").and_then(|x| x.as_str()) else {
             return Vec::new();
         };
@@ -2815,7 +2941,9 @@ impl<'a> TCtx<'a> {
             .and_then(|c| c.get("include"))
             .and_then(|x| x.as_array());
         let excludes = compose.and_then(|c| c.get("exclude")).is_some();
-        let Some(includes) = includes else { return Vec::new() };
+        let Some(includes) = includes else {
+            return Vec::new();
+        };
         for inc in includes {
             if inc.get("filter").is_some() || inc.get("valueSet").is_some() || excludes {
                 self.gap("narrative status VS needs real expansion");
@@ -2845,7 +2973,11 @@ impl<'a> TCtx<'a> {
     }
 
     fn sd_url(&self) -> &str {
-        self.sd.root.get("url").and_then(|x| x.as_str()).unwrap_or("")
+        self.sd
+            .root
+            .get("url")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
     }
 
     /// `isAbstractBaseProfile` (SDR:2210): resolved SD is abstract AND core url.
@@ -2919,7 +3051,9 @@ fn type_properties(type_sd: &serde_json::Value) -> Vec<PropDef> {
     else {
         return out;
     };
-    let Some(root) = elems.first() else { return out };
+    let Some(root) = elems.first() else {
+        return out;
+    };
     let root_path = root.get("path").and_then(|x| x.as_str()).unwrap_or("");
     let prefix = format!("{}.", root_path);
     for e in &elems[1..] {
@@ -2946,7 +3080,11 @@ fn type_properties(type_sd: &serde_json::Value) -> Vec<PropDef> {
         }
         out.push(PropDef {
             name,
-            type_codes: ed.types().iter().map(|t| t.working_code().to_string()).collect(),
+            type_codes: ed
+                .types()
+                .iter()
+                .map(|t| t.working_code().to_string())
+                .collect(),
             type_code_full: sigs.join("|"),
             max: ed.max().unwrap_or("1").to_string(),
             short: ed.short().unwrap_or("").to_string(),
@@ -2993,10 +3131,25 @@ fn collect_additional_bindings(binding: &serde_json::Value) -> Vec<AddBindingDet
     if let Some(adds) = binding.get("additional").and_then(|x| x.as_array()) {
         for ab in adds {
             out.push(AddBindingDetail {
-                purpose: ab.get("purpose").and_then(|x| x.as_str()).unwrap_or("").into(),
-                value_set: ab.get("valueSet").and_then(|x| x.as_str()).unwrap_or("").into(),
-                doco_short: ab.get("shortDoco").and_then(|x| x.as_str()).map(String::from),
-                has_usage: ab.get("usage").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false),
+                purpose: ab
+                    .get("purpose")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .into(),
+                value_set: ab
+                    .get("valueSet")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .into(),
+                doco_short: ab
+                    .get("shortDoco")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                has_usage: ab
+                    .get("usage")
+                    .and_then(|x| x.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false),
                 any: ab.get("any").and_then(|x| x.as_bool()).unwrap_or(false),
             });
         }
@@ -3041,10 +3194,19 @@ fn collect_additional_bindings(binding: &serde_json::Value) -> Vec<AddBindingDet
         }
         // maxValueSet -> "maximum"; minValueSet -> "minimum"
         for (url, purpose) in [
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet", "maximum"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet", "minimum"),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+                "maximum",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet",
+                "minimum",
+            ),
         ] {
-            if let Some(e) = exts.iter().find(|e| e.get("url").and_then(|x| x.as_str()) == Some(url)) {
+            if let Some(e) = exts
+                .iter()
+                .find(|e| e.get("url").and_then(|x| x.as_str()) == Some(url))
+            {
                 let vs = e
                     .get("valueCanonical")
                     .or_else(|| e.get("valueUri"))
@@ -3082,10 +3244,8 @@ pub fn core_path_for(fhir_version: &str) -> &'static str {
     }
 }
 
-pub const EXT_OBLIGATION_CORE: &str =
-    "http://hl7.org/fhir/StructureDefinition/obligation";
-pub const EXT_OBLIGATION_TOOLS: &str =
-    "http://hl7.org/fhir/tools/StructureDefinition/obligation";
+pub const EXT_OBLIGATION_CORE: &str = "http://hl7.org/fhir/StructureDefinition/obligation";
+pub const EXT_OBLIGATION_TOOLS: &str = "http://hl7.org/fhir/tools/StructureDefinition/obligation";
 pub const EXT_STANDARDS_STATUS: &str =
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status";
 
@@ -3163,16 +3323,32 @@ fn scan_bindings(all: &[Ed<'_>]) -> Vec<render_tables::Column> {
     // code; purposes use the AdditionalBindingPurpose code.
     let mk = |id: &str, title: &str, hint: &str| render_tables::Column::new(id, title, hint);
     if cols.contains("required") {
-        out.push(mk("required", "Required", "Concepts must come from this value set"));
+        out.push(mk(
+            "required",
+            "Required",
+            "Concepts must come from this value set",
+        ));
     }
     if cols.contains("extensible") {
-        out.push(mk("extensible", "Extensible", "Concepts must come from this value set if appropriate concept is in this value set"));
+        out.push(mk(
+            "extensible",
+            "Extensible",
+            "Concepts must come from this value set if appropriate concept is in this value set",
+        ));
     }
     if cols.contains("maximum") {
-        out.push(mk("maximum", "Maximum", "A required binding, for use when the binding strength is 'extensible' or 'preferred'"));
+        out.push(mk(
+            "maximum",
+            "Maximum",
+            "A required binding, for use when the binding strength is 'extensible' or 'preferred'",
+        ));
     }
     if cols.contains("minimum") {
-        out.push(mk("minimum", "Minimum", "The minimum allowable value set - any conformant system SHALL support all these codes"));
+        out.push(mk(
+            "minimum",
+            "Minimum",
+            "The minimum allowable value set - any conformant system SHALL support all these codes",
+        ));
     }
     if cols.contains("candidate") {
         out.push(mk("candidate", "Candidate", "This value set is a candidate to substitute for the overall conformance value set in some situations; usually these are defined in the documentation"));
@@ -3187,7 +3363,11 @@ fn scan_bindings(all: &[Ed<'_>]) -> Vec<render_tables::Column> {
         out.push(mk("ui", "UI", "This value set is provided for user look up in a given context. Typically, these valuesets only include a subset of codes relevant for input in a context"));
     }
     if cols.contains("starter") {
-        out.push(mk("starter", "Starter", "This value set is a good set of codes to start with when designing your system"));
+        out.push(mk(
+            "starter",
+            "Starter",
+            "This value set is a good set of codes to start with when designing your system",
+        ));
     }
     if cols.contains("component") {
         out.push(mk("component", "Component", "This value set is a component of the base value set. Usually this is called out so that documentation can be written about a portion of the value set"));
@@ -3216,12 +3396,22 @@ fn scan_bindings_rec(all: &[Ed<'_>], ed: Ed<'_>, cols: &mut std::collections::Ha
             };
         }
         // additional bindings (native + ext) contribute their purpose code.
-        for ab in binding.get("additional").and_then(|x| x.as_array()).into_iter().flatten() {
+        for ab in binding
+            .get("additional")
+            .and_then(|x| x.as_array())
+            .into_iter()
+            .flatten()
+        {
             if let Some(p) = ab.get("purpose").and_then(|x| x.as_str()) {
                 cols.insert(p.to_string());
             }
         }
-        for ext in binding.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+        for ext in binding
+            .get("extension")
+            .and_then(|x| x.as_array())
+            .into_iter()
+            .flatten()
+        {
             let url = ext.get("url").and_then(|x| x.as_str()).unwrap_or("");
             if url == EXT_BINDING_ADDITIONAL || url == EXT_BINDING_ADDITIONAL_R4 {
                 if let Some(p) = ext_sub_string(ext, "purpose") {
@@ -3248,13 +3438,21 @@ fn scan_obligations(_ctx: &IgContext, all: &[Ed<'_>]) -> Vec<render_tables::Colu
     // needs ActorDefinition fetch (not ported). No corpus golden exercises this.
     let mut out = Vec::new();
     if cols.contains("$all") {
-        out.push(render_tables::Column::new("$all", "All Actors", "Obligations that apply to all actors"));
+        out.push(render_tables::Column::new(
+            "$all",
+            "All Actors",
+            "Obligations that apply to all actors",
+        ));
     }
     for c in &cols {
         if c != "$all" {
             // GAP: actor-column title/hint need ActorDefinition resolution.
             let tail = c.rsplit('/').next().unwrap_or(c);
-            out.push(render_tables::Column::new(c.clone(), tail.to_string(), String::new()));
+            out.push(render_tables::Column::new(
+                c.clone(),
+                tail.to_string(),
+                String::new(),
+            ));
         }
     }
     out
@@ -3270,7 +3468,10 @@ fn scan_obligations_rec(all: &[Ed<'_>], ed: Ed<'_>, cols: &mut std::collections:
                 .into_iter()
                 .flatten()
                 .filter(|e| {
-                    matches!(e.get("url").and_then(|u| u.as_str()), Some("actor") | Some("actorId"))
+                    matches!(
+                        e.get("url").and_then(|u| u.as_str()),
+                        Some("actor") | Some("actorId")
+                    )
                 })
                 .filter_map(|e| e.get("valueCanonical").and_then(|x| x.as_str()))
                 .collect();
@@ -3307,13 +3508,22 @@ pub struct BindingColDetail {
 /// (4) ext-additional filtered by purpose.
 fn collect_bindings(element: Ed<'_>, type_: &str) -> Vec<BindingColDetail> {
     let mut res = Vec::new();
-    let Some(b) = element.binding() else { return res };
+    let Some(b) = element.binding() else {
+        return res;
+    };
     let strength = b.get("strength").and_then(|x| x.as_str());
     if let Some(s) = strength {
         if s == type_ {
             res.push(BindingColDetail {
-                value_set: b.get("valueSet").and_then(|x| x.as_str()).unwrap_or("").into(),
-                documentation: b.get("description").and_then(|x| x.as_str()).map(String::from),
+                value_set: b
+                    .get("valueSet")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .into(),
+                documentation: b
+                    .get("description")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
                 short_doco: None,
                 any: false,
                 has_usage: false,
@@ -3322,26 +3532,62 @@ fn collect_bindings(element: Ed<'_>, type_: &str) -> Vec<BindingColDetail> {
     }
     if type_ == "maximum" {
         if let Some(vs) = ext_value_string(b, EXT_MAX_VALUESET) {
-            res.push(BindingColDetail { value_set: vs, documentation: None, short_doco: None, any: false, has_usage: false });
+            res.push(BindingColDetail {
+                value_set: vs,
+                documentation: None,
+                short_doco: None,
+                any: false,
+                has_usage: false,
+            });
         }
     }
     if type_ == "minimum" {
         if let Some(vs) = ext_value_string(b, EXT_MIN_VALUESET) {
-            res.push(BindingColDetail { value_set: vs, documentation: None, short_doco: None, any: false, has_usage: false });
-        }
-    }
-    for ab in b.get("additional").and_then(|x| x.as_array()).into_iter().flatten() {
-        if ab.get("purpose").and_then(|x| x.as_str()) == Some(type_) {
             res.push(BindingColDetail {
-                value_set: ab.get("valueSet").and_then(|x| x.as_str()).unwrap_or("").into(),
-                documentation: ab.get("documentation").and_then(|x| x.as_str()).map(String::from),
-                short_doco: ab.get("shortDoco").and_then(|x| x.as_str()).map(String::from),
-                any: ab.get("any").and_then(|x| x.as_bool()).unwrap_or(false),
-                has_usage: ab.get("usage").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false),
+                value_set: vs,
+                documentation: None,
+                short_doco: None,
+                any: false,
+                has_usage: false,
             });
         }
     }
-    for ext in b.get("extension").and_then(|x| x.as_array()).into_iter().flatten() {
+    for ab in b
+        .get("additional")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if ab.get("purpose").and_then(|x| x.as_str()) == Some(type_) {
+            res.push(BindingColDetail {
+                value_set: ab
+                    .get("valueSet")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .into(),
+                documentation: ab
+                    .get("documentation")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                short_doco: ab
+                    .get("shortDoco")
+                    .and_then(|x| x.as_str())
+                    .map(String::from),
+                any: ab.get("any").and_then(|x| x.as_bool()).unwrap_or(false),
+                has_usage: ab
+                    .get("usage")
+                    .and_then(|x| x.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false),
+            });
+        }
+    }
+    for ext in b
+        .get("extension")
+        .and_then(|x| x.as_array())
+        .into_iter()
+        .flatten()
+    {
         let url = ext.get("url").and_then(|x| x.as_str()).unwrap_or("");
         if url == EXT_BINDING_ADDITIONAL || url == EXT_BINDING_ADDITIONAL_R4 {
             if ext_sub_string(ext, "purpose").as_deref() == Some(type_) {
@@ -3362,11 +3608,24 @@ fn collect_bindings(element: Ed<'_>, type_: &str) -> Vec<BindingColDetail> {
 fn ext_sub_string(ext: &serde_json::Value, name: &str) -> Option<String> {
     ext.get("extension")
         .and_then(|x| x.as_array())
-        .and_then(|a| a.iter().find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .and_then(|a| {
+            a.iter()
+                .find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name))
+        })
         .and_then(|s| {
-            for k in ["valueCode", "valueCanonical", "valueUri", "valueString", "valueMarkdown", "valueBoolean"] {
+            for k in [
+                "valueCode",
+                "valueCanonical",
+                "valueUri",
+                "valueString",
+                "valueMarkdown",
+                "valueBoolean",
+            ] {
                 if let Some(v) = s.get(k) {
-                    return v.as_str().map(String::from).or_else(|| v.as_bool().map(|b| b.to_string()));
+                    return v
+                        .as_str()
+                        .map(String::from)
+                        .or_else(|| v.as_bool().map(|b| b.to_string()));
                 }
             }
             None
@@ -3376,7 +3635,10 @@ fn ext_sub_string(ext: &serde_json::Value, name: &str) -> Option<String> {
 fn ext_sub_bool(ext: &serde_json::Value, name: &str) -> bool {
     ext.get("extension")
         .and_then(|x| x.as_array())
-        .and_then(|a| a.iter().find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .and_then(|a| {
+            a.iter()
+                .find(|s| s.get("url").and_then(|u| u.as_str()) == Some(name))
+        })
         .and_then(|s| s.get("valueBoolean").and_then(|x| x.as_bool()))
         .unwrap_or(false)
 }
@@ -3384,7 +3646,10 @@ fn ext_sub_bool(ext: &serde_json::Value, name: &str) -> bool {
 fn ext_sub_present(ext: &serde_json::Value, name: &str) -> bool {
     ext.get("extension")
         .and_then(|x| x.as_array())
-        .map(|a| a.iter().any(|s| s.get("url").and_then(|u| u.as_str()) == Some(name)))
+        .map(|a| {
+            a.iter()
+                .any(|s| s.get("url").and_then(|u| u.as_str()) == Some(name))
+        })
         .unwrap_or(false)
 }
 
@@ -3393,7 +3658,10 @@ fn ext_value_string(binding: &serde_json::Value, url: &str) -> Option<String> {
     binding
         .get("extension")
         .and_then(|x| x.as_array())
-        .and_then(|a| a.iter().find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .and_then(|a| {
+            a.iter()
+                .find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url))
+        })
         .and_then(|e| {
             e.get("valueCanonical")
                 .or_else(|| e.get("valueUri"))
@@ -3448,7 +3716,8 @@ fn descend<'r>(base: &'r mut Vec<Row>, path: &[usize]) -> &'r mut Vec<Row> {
 }
 
 fn uses_must_support(list: &[Ed<'_>]) -> bool {
-    list.iter().any(|e| e.has_must_support() && e.must_support())
+    list.iter()
+        .any(|e| e.has_must_support() && e.must_support())
 }
 
 pub fn tail(path: &str) -> &str {
@@ -3498,14 +3767,8 @@ fn standard_extension_slicing(e: Ed<'_>) -> bool {
     let disc = sl.get("discriminator").and_then(|x| x.as_array());
     rules != Some("closed")
         && disc.map(|d| d.len() == 1).unwrap_or(false)
-        && disc
-            .and_then(|d| d[0].get("path"))
-            .and_then(|x| x.as_str())
-            == Some("url")
-        && disc
-            .and_then(|d| d[0].get("type"))
-            .and_then(|x| x.as_str())
-            == Some("value")
+        && disc.and_then(|d| d[0].get("path")).and_then(|x| x.as_str()) == Some("url")
+        && disc.and_then(|d| d[0].get("type")).and_then(|x| x.as_str()) == Some("value")
 }
 
 /// `element.prohibited()`: max == "0".
@@ -3685,17 +3948,17 @@ fn child_is_key(
     ctx: &IgContext,
 ) -> bool {
     // significant extensions present?
-    let has_sig_ext = child
-        .extensions()
-        .iter()
-        .any(|e| {
-            e.get("url")
-                .and_then(|x| x.as_str())
-                .map(|u| SIGNIFICANT_EXTENSIONS.contains(&u))
-                .unwrap_or(false)
-        });
+    let has_sig_ext = child.extensions().iter().any(|e| {
+        e.get("url")
+            .and_then(|x| x.as_str())
+            .map(|u| SIGNIFICANT_EXTENSIONS.contains(&u))
+            .unwrap_or(false)
+    });
     // base type element lookup (by base.path).
-    let base_path = child.base().and_then(|b| b.get("path")).and_then(|x| x.as_str());
+    let base_path = child
+        .base()
+        .and_then(|b| b.get("path"))
+        .and_then(|x| x.as_str());
     let base_element = base_path.and_then(|bp| lookup_base_element(bp, ctx));
 
     // bindingChanged (SDR:731-751)
@@ -3733,7 +3996,10 @@ fn child_is_key(
         .and_then(|b| b.get("min"))
         .and_then(|x| x.as_i64());
     let child_max = child.max();
-    let base_max = child.base().and_then(|b| b.get("max")).and_then(|x| x.as_str());
+    let base_max = child
+        .base()
+        .and_then(|b| b.get("max"))
+        .and_then(|x| x.as_str());
 
     let old_ms = ms.contains(child.id())
         || child_min.map(|m| m != 0).unwrap_or(false)
@@ -3753,7 +4019,9 @@ fn child_is_key(
         || has_min_max_value_change(child, base_element.as_ref(), "maxValue")
         || has_max_length_change(child, base_element.as_ref())
         || child.must_have_value()
-        || child.has_extension("http://hl7.org/fhir/StructureDefinition/elementdefinition-value-alternatives")
+        || child.has_extension(
+            "http://hl7.org/fhir/StructureDefinition/elementdefinition-value-alternatives",
+        )
         || has_sig_ext;
 
     old_ms || new_ms
@@ -3796,7 +4064,9 @@ fn has_min_max_value_change(child: Ed<'_>, base: Option<&serde_json::Value>, kin
 }
 
 fn has_max_length_change(child: Ed<'_>, base: Option<&serde_json::Value>) -> bool {
-    let Some(cl) = child.max_length() else { return false };
+    let Some(cl) = child.max_length() else {
+        return false;
+    };
     let _ = cl;
     if child.max_length().is_none() {
         return false;
@@ -3956,11 +4226,12 @@ pub fn type_is_must_support(t: &TypeRef<'_>) -> bool {
 /// `_targetProfile`/`_profile` arrays.
 pub fn canonical_is_must_support(t: &TypeRef<'_>, u: &str) -> bool {
     for key in ["_targetProfile", "_profile"] {
-        let Some(shadow) = t.v.get(key).and_then(|x| x.as_array()) else { continue };
-        let Some(vals) = t
-            .v
-            .get(key.trim_start_matches('_'))
-            .and_then(|x| x.as_array())
+        let Some(shadow) = t.v.get(key).and_then(|x| x.as_array()) else {
+            continue;
+        };
+        let Some(vals) =
+            t.v.get(key.trim_start_matches('_'))
+                .and_then(|x| x.as_array())
         else {
             continue;
         };
@@ -4000,7 +4271,10 @@ pub fn build_json(v: &serde_json::Value) -> String {
 }
 
 pub fn is_primitive_value(v: &serde_json::Value) -> bool {
-    !matches!(v, serde_json::Value::Object(_) | serde_json::Value::Array(_))
+    !matches!(
+        v,
+        serde_json::Value::Object(_) | serde_json::Value::Array(_)
+    )
 }
 
 /// `describeSlice` (SDR:3514): "{Ordered|Unordered}, {rules} by {discriminators}".

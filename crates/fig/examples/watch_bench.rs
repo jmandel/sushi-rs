@@ -10,23 +10,36 @@ fn main() -> anyhow::Result<()> {
     eprintln!("initial full render: {} ms", t0.elapsed().as_millis());
     // A realistic warm edit: the author edits a pagecontent page source. The
     // watch loop re-renders exactly that page.
-    let mut inputs: Vec<_> = std::fs::read_dir(&root.input_dir)?.flatten()
+    let mut inputs: Vec<_> = std::fs::read_dir(&root.input_dir)?
+        .flatten()
         .map(|e| e.path())
         .filter(|f| f.extension().and_then(|x| x.to_str()) == Some("html"))
         .collect();
     inputs.sort();
-    let page = inputs.iter().find(|p| p.file_name().unwrap().to_string_lossy() == "index.html")
-        .cloned().unwrap_or_else(|| inputs[0].clone());
+    let page = inputs
+        .iter()
+        .find(|p| p.file_name().unwrap().to_string_lossy() == "index.html")
+        .cloned()
+        .unwrap_or_else(|| inputs[0].clone());
     let t1 = Instant::now();
     let n = st.on_change(&[page.clone()])?;
-    eprintln!("warm page edit ({}) -> {n} page(s) in {} ms  [gate <1000ms]",
-        page.file_name().unwrap().to_string_lossy(), t1.elapsed().as_millis());
+    eprintln!(
+        "warm page edit ({}) -> {n} page(s) in {} ms  [gate <1000ms]",
+        page.file_name().unwrap().to_string_lossy(),
+        t1.elapsed().as_millis()
+    );
     // Also time re-rendering the heaviest profile page (a table-bearing page).
-    if let Some(heavy) = inputs.iter().find(|p| p.file_name().unwrap().to_string_lossy().contains("patient")) {
+    if let Some(heavy) = inputs
+        .iter()
+        .find(|p| p.file_name().unwrap().to_string_lossy().contains("patient"))
+    {
         let t2 = Instant::now();
         let n2 = st.on_change(&[heavy.clone()])?;
-        eprintln!("warm page edit ({}) -> {n2} page(s) in {} ms",
-            heavy.file_name().unwrap().to_string_lossy(), t2.elapsed().as_millis());
+        eprintln!(
+            "warm page edit ({}) -> {n2} page(s) in {} ms",
+            heavy.file_name().unwrap().to_string_lossy(),
+            t2.elapsed().as_millis()
+        );
     }
     Ok(())
 }

@@ -31,6 +31,7 @@ fn main() {
         Some("packages") => cmd_packages(&args),
         Some("expand") => cmd_expand(&args),
         Some("sitedb") => cmd_sitedb(&args),
+        Some("prepare") => cmd_prepare(&args),
         Some("fragment") => cmd_fragment(&args),
         Some("fragments") => cmd_fragments(&args),
         Some("produce") => cmd_produce(&args),
@@ -81,7 +82,9 @@ fn main() {
 // ===========================================================================
 fn cmd_build(args: &[String]) -> Result<Value> {
     let ig = positional(args, 2).context("usage: fig build <ig-dir> [-o <out>] [--cache <dir>]")?;
-    let out = opt(args, "-o").or_else(|| opt(args, "--out")).unwrap_or("fsh-generated");
+    let out = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .unwrap_or("fsh-generated");
     let human = !has(args, "--json");
     match opt(args, "--cache") {
         Some(cache) => compiler::build_project_with_cache(ig, out, cache)?,
@@ -98,7 +101,8 @@ fn cmd_build(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_snapshot(args: &[String]) -> Result<Value> {
     // fig snapshot <sd.json> [--package <pkg#ver> ...] [--cache <dir>] [--local-dir <d> ...]
-    let input = positional(args, 2).context("usage: fig snapshot <sd.json> [--package pkg#ver ...] [--cache <dir>]")?;
+    let input = positional(args, 2)
+        .context("usage: fig snapshot <sd.json> [--package pkg#ver ...] [--cache <dir>]")?;
     let mut packages: Vec<String> = collect(args, "--package");
     packages.extend(collect(args, "-p"));
     if packages.is_empty() {
@@ -127,14 +131,19 @@ fn cmd_snapshot(args: &[String]) -> Result<Value> {
 // resolve — dependency closure (compile set + context closure) [package_store]
 // ===========================================================================
 fn cmd_resolve(args: &[String]) -> Result<Value> {
-    let cache = opt(args, "--cache").context("usage: fig resolve --cache <dir> (--root <id#ver> | --project <ig>)")?;
+    let cache = opt(args, "--cache")
+        .context("usage: fig resolve --cache <dir> (--root <id#ver> | --project <ig>)")?;
     let cache_path = Path::new(cache);
     let source = package_store::DiskSource;
     let index = package_store::version_index_from_cache(&source, cache_path);
     let human = !has(args, "--json");
     if let Some(root) = opt(args, "--root") {
-        let closure = package_store::context_closure_for_root(&source, cache_path, root, Some(&index))?;
-        let list: Vec<String> = closure.iter().map(|r| format!("{}#{}", r.package_id, r.version)).collect();
+        let closure =
+            package_store::context_closure_for_root(&source, cache_path, root, Some(&index))?;
+        let list: Vec<String> = closure
+            .iter()
+            .map(|r| format!("{}#{}", r.package_id, r.version))
+            .collect();
         if human {
             for l in &list {
                 println!("{l}");
@@ -168,26 +177,38 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
                 return cmd_bundle_template(args, coord);
             }
             let cache = opt(args, "--cache").context("packages bundle needs --cache <dir>")?;
-            let out = opt(args, "-o").or_else(|| opt(args, "--out")).context("packages bundle needs --out <dir>")?;
-            let labels: Vec<String> = args.iter().skip(3).filter(|a| !a.starts_with('-') && a.contains('#')).cloned().collect();
+            let out = opt(args, "-o")
+                .or_else(|| opt(args, "--out"))
+                .context("packages bundle needs --out <dir>")?;
+            let labels: Vec<String> = args
+                .iter()
+                .skip(3)
+                .filter(|a| !a.starts_with('-') && a.contains('#'))
+                .cloned()
+                .collect();
             if labels.is_empty() {
                 bail!("packages bundle needs at least one <id#version> (or --template <id#ver>)");
             }
-            let manifest = package_acquisition::build_bundle_set(Path::new(cache), &labels, Path::new(out))?;
+            let manifest =
+                package_acquisition::build_bundle_set(Path::new(cache), &labels, Path::new(out))?;
             let bytes = manifest.to_bytes();
             if !has(args, "--json") {
                 print!("{}", String::from_utf8_lossy(&bytes));
             }
-            Ok(serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({ "out": out, "packages": labels })))
+            Ok(serde_json::from_slice(&bytes)
+                .unwrap_or_else(|_| json!({ "out": out, "packages": labels })))
         }
         Some("fetch") => {
             use package_acquisition::{default_registries, Coordinate, PackageCas};
-            let coord = positional(args, 3).context("packages fetch <id#ver> [--cas <dir>] [--registry <url>]")?;
+            let coord = positional(args, 3)
+                .context("packages fetch <id#ver> [--cas <dir>] [--registry <url>]")?;
             let coord = Coordinate::parse(coord)?;
             let cas = PackageCas::new(
                 opt(args, "--cas").map_or(PackageCas::default_root()?, PathBuf::from),
             );
-            let registries = opt(args, "--registry").map(|r| vec![r.to_string()]).unwrap_or_else(default_registries);
+            let registries = opt(args, "--registry")
+                .map(|r| vec![r.to_string()])
+                .unwrap_or_else(default_registries);
             let pkg = cas.acquire_remote(&coord, &registries)?;
             let v = serde_json::to_value(&pkg)?;
             if !has(args, "--json") {
@@ -195,7 +216,9 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
             }
             Ok(v)
         }
-        _ => bail!("usage: fig packages <fetch <id#ver> | bundle --cache <dir> --out <dir> <id#ver>...>"),
+        _ => bail!(
+            "usage: fig packages <fetch <id#ver> | bundle --cache <dir> --out <dir> <id#ver>...>"
+        ),
     }
 }
 
@@ -207,12 +230,14 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
 /// go verbatim; binary assets are base64'd — exactly the shape `mountSite` /
 /// `mountTemplate` parse.
 fn cmd_bundle_template(args: &[String], coord: &str) -> Result<Value> {
-    let out = opt(args, "-o").or_else(|| opt(args, "--out"))
+    let out = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
         .context("packages bundle --template needs -o <file.json>")?;
     let cache = opt(args, "--template-cache")
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("fig-template-cache"));
-    let cas = package_acquisition::PackageCas::new(package_acquisition::PackageCas::default_root()?);
+    let cas =
+        package_acquisition::PackageCas::new(package_acquisition::PackageCas::default_root()?);
     let registries = package_acquisition::default_registries();
     let offline = has(args, "--offline");
     let tree = fig::template::acquire_and_materialize(coord, &cache, &cas, &registries, offline)?;
@@ -236,10 +261,12 @@ fn cmd_bundle_template(args: &[String], coord: &str) -> Result<Value> {
         "fileCount": tree.len(),
         "binaryCount": binary,
     });
-    std::fs::write(out, serde_json::to_vec(&doc)?)
-        .with_context(|| format!("write {out}"))?;
+    std::fs::write(out, serde_json::to_vec(&doc)?).with_context(|| format!("write {out}"))?;
     if !has(args, "--json") {
-        eprintln!("fig packages bundle --template {coord}: {} files ({binary} binary) -> {out}", tree.len());
+        eprintln!(
+            "fig packages bundle --template {coord}: {} files ({binary} binary) -> {out}",
+            tree.len()
+        );
     }
     Ok(json!({ "out": out, "template": coord, "fileCount": tree.len(), "binaryCount": binary }))
 }
@@ -249,20 +276,29 @@ fn cmd_bundle_template(args: &[String], coord: &str) -> Result<Value> {
 // ===========================================================================
 fn cmd_expand(args: &[String]) -> Result<Value> {
     use compiler::terminology::{expand_enumerable, MapResolver};
-    let vs_path = positional(args, 2).context("usage: fig expand <valueset.json> [--resources <r.json>]")?;
+    let vs_path =
+        positional(args, 2).context("usage: fig expand <valueset.json> [--resources <r.json>]")?;
     let vs: Value = serde_json::from_str(&std::fs::read_to_string(vs_path)?)?;
     let mut resolver = MapResolver::new();
     if let Some(rp) = opt(args, "--resources") {
         let parsed: Value = serde_json::from_str(&std::fs::read_to_string(rp)?)?;
         match parsed {
-            Value::Array(items) => items.into_iter().for_each(|r| { resolver.insert(r); }),
-            Value::Object(map) => map.into_iter().for_each(|(_k, r)| { resolver.insert(r); }),
+            Value::Array(items) => items.into_iter().for_each(|r| {
+                resolver.insert(r);
+            }),
+            Value::Object(map) => map.into_iter().for_each(|(_k, r)| {
+                resolver.insert(r);
+            }),
             _ => bail!("--resources must be a JSON array or object"),
         }
     }
     let payload = match expand_enumerable(&vs, &resolver) {
-        Ok(exp) => json!({ "ok": true, "expansion": exp.to_expansion_json(), "copyright": exp.copyright() }),
-        Err(ne) => json!({ "ok": false, "notEnumerable": { "reason": ne.reason, "display": ne.to_string() } }),
+        Ok(exp) => {
+            json!({ "ok": true, "expansion": exp.to_expansion_json(), "copyright": exp.copyright() })
+        }
+        Err(ne) => {
+            json!({ "ok": false, "notEnumerable": { "reason": ne.reason, "display": ne.to_string() } })
+        }
     };
     if !has(args, "--json") {
         println!("{}", serde_json::to_string_pretty(&payload)?);
@@ -274,10 +310,13 @@ fn cmd_expand(args: &[String]) -> Result<Value> {
 // sitedb — S1-S7 producer (site_db build)
 // ===========================================================================
 fn cmd_sitedb(args: &[String]) -> Result<Value> {
-    let ig = positional(args, 2).context("usage: fig sitedb <ig-dir> --sushi-out <dir> --cache <dir> -o <site.db>")?;
+    let ig = positional(args, 2)
+        .context("usage: fig sitedb <ig-dir> --sushi-out <dir> --cache <dir> -o <site.db>")?;
     let sushi_out = opt(args, "--sushi-out").context("--sushi-out <dir> is required")?;
     let cache = opt(args, "--cache").context("--cache <dir> is required")?;
-    let out_db = opt(args, "-o").or_else(|| opt(args, "--out")).context("-o <site.db> is required")?;
+    let out_db = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .context("-o <site.db> is required")?;
     let build_epoch = resolve_build_epoch(opt(args, "--build-date"))?;
     let config = site_db::BuildConfig {
         ig_dir: PathBuf::from(ig),
@@ -288,14 +327,18 @@ fn cmd_sitedb(args: &[String]) -> Result<Value> {
         branch: opt(args, "--branch").map(str::to_string),
         revision: opt(args, "--revision").map(str::to_string),
         run_sushi: !has(args, "--no-sushi"),
-        core_package: opt(args, "--core").unwrap_or("hl7.fhir.r4.core#4.0.1").to_string(),
+        core_package: opt(args, "--core")
+            .unwrap_or("hl7.fhir.r4.core#4.0.1")
+            .to_string(),
         layer_b: snapshot_gen::LayerBOptions::default(),
     };
     let report = site_db::build_and_write(&config)?;
     if !has(args, "--json") {
         eprintln!(
             "fig sitedb: {} nodes ({} clean, {} dirty){}",
-            report.ledger.nodes.len(), report.clean.len(), report.dirty.len(),
+            report.ledger.nodes.len(),
+            report.clean.len(),
+            report.dirty.len(),
             if report.no_op { " — NO-OP" } else { "" },
         );
         println!("{out_db}");
@@ -310,7 +353,38 @@ fn cmd_sitedb(args: &[String]) -> Result<Value> {
 }
 
 // ===========================================================================
-// fragment — render ONE fragment (the CLI face of first-include-miss)
+// prepare — exact native compile -> ClosedSiteBuild + filesystem CAS
+// ===========================================================================
+fn cmd_prepare(args: &[String]) -> Result<Value> {
+    let ig = positional(args, 2).context(
+        "usage: fig prepare <ig-dir> --target cycle-site/v1 --sushi-out <new-dir> --cache <dir> --out <new-dir> --build-date <epoch|RFC3339>",
+    )?;
+    let target = opt(args, "--target").context("--target cycle-site/v1 is required")?;
+    let sushi_out = opt(args, "--sushi-out").context("--sushi-out <new-dir> is required")?;
+    let cache = opt(args, "--cache").context("--cache <dir> is required")?;
+    let out = opt(args, "--out")
+        .or_else(|| opt(args, "-o"))
+        .context("--out <new-bundle-dir> is required")?;
+    let build_epoch_secs = resolve_build_epoch(opt(args, "--build-date"))?;
+    let outcome = fig::prepare::prepare(&fig::prepare::PrepareConfig {
+        ig_dir: PathBuf::from(ig),
+        sushi_out: PathBuf::from(sushi_out),
+        cache_dir: PathBuf::from(cache),
+        out_dir: PathBuf::from(out),
+        target: target.to_string(),
+        build_epoch_secs,
+    })?;
+    if !has(args, "--json") {
+        eprintln!(
+            "fig prepare: {} sources + {} packages -> {} objects at {} ({})",
+            outcome.sources, outcome.packages, outcome.objects, outcome.out, outcome.build_id,
+        );
+    }
+    Ok(serde_json::to_value(outcome)?)
+}
+
+// ===========================================================================
+// fragment — render ONE typed Publisher fragment
 // ===========================================================================
 fn cmd_fragment(args: &[String]) -> Result<Value> {
     // fig fragment <build-dir> <ref> <kind> [--active-tables] [--run-uuid <u>]
@@ -331,8 +405,11 @@ fn cmd_fragment(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_fragments(args: &[String]) -> Result<Value> {
     // fig fragments <build-dir> -o <dir> [--kinds k1,k2,...] [--ref R]
-    let build = positional(args, 2).context("usage: fig fragments <build-dir> -o <dir> [--kinds k1,k2] [--ref R]")?;
-    let out = opt(args, "-o").or_else(|| opt(args, "--out")).context("fragments needs -o <dir>")?;
+    let build = positional(args, 2)
+        .context("usage: fig fragments <build-dir> -o <dir> [--kinds k1,k2] [--ref R]")?;
+    let out = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .context("fragments needs -o <dir>")?;
     let root = fig::engine::RenderRoot::detect(Path::new(build))?;
     let opts = render_opts(args);
     let kinds: Vec<String> = opt(args, "--kinds")
@@ -359,8 +436,8 @@ fn cmd_fragments(args: &[String]) -> Result<Value> {
 // is what lets `fig render` run from source without a pre-baked temp/pages tree.
 // ===========================================================================
 fn cmd_produce(args: &[String]) -> Result<Value> {
-    let build = positional(args, 2)
-        .context("usage: fig produce <ig-source-dir> [-o <pages-root>]")?;
+    let build =
+        positional(args, 2).context("usage: fig produce <ig-source-dir> [-o <pages-root>]")?;
     let build_path = Path::new(build);
     // Default output is the build's own temp/pages (where RenderRoot::detect looks).
     let pages_root = opt(args, "-o")
@@ -390,12 +467,16 @@ fn cmd_produce(args: &[String]) -> Result<Value> {
 // render — THE headline: full static site at Publisher parity
 // ===========================================================================
 fn cmd_render(args: &[String]) -> Result<Value> {
-    let build = positional(args, 2).context("usage: fig render <build-dir> -o <site/> [--generator ts:<adapter.mjs>]")?;
-    let out = opt(args, "-o").or_else(|| opt(args, "--out")).context("render needs -o <site/>")?;
+    let build = positional(args, 2)
+        .context("usage: fig render <build-dir> -o <site/> [--template <id#version>]")?;
+    let out = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .context("render needs -o <site/>")?;
 
-    // --generator ts:<adapter.mjs> routes through the bun runner (§3b).
-    if let Some(gen) = opt(args, "--generator") {
-        return render_via_generator(args, build, out, gen);
+    if has(args, "--generator") {
+        bail!(
+            "fig render --generator was removed: it loaded a stale editor callback API and could recompile different inputs. Run `fig prepare <ig> --target cycle-site/v1 --sushi-out <new> --cache <dir> --out <bundle> --build-date <time>`, then invoke the generator's closed-bundle entry (for Cycle: `SITE_BUILD_DIR=<bundle> bun site-gen/build.tsx`)"
+        );
     }
 
     // Source-driven render (task #44): when there is no staged temp/pages but the
@@ -403,8 +484,7 @@ fn cmd_render(args: &[String]) -> Result<Value> {
     // shells + _data model first via the producer, then render over them. This is
     // what makes `fig render <ig-source-dir>` work without a pre-baked tree.
     let build_path = Path::new(build);
-    if !build_path.join("temp/pages").is_dir()
-        && build_path.join("template/config.json").is_file()
+    if !build_path.join("temp/pages").is_dir() && build_path.join("template/config.json").is_file()
     {
         let inputs = site_producer::gather_inputs(build_path)?;
         let output = site_producer::produce(&inputs)?;
@@ -481,25 +561,6 @@ fn cmd_render(args: &[String]) -> Result<Value> {
     }))
 }
 
-fn render_via_generator(args: &[String], _build: &str, out: &str, gen: &str) -> Result<Value> {
-    let adapter = gen.strip_prefix("ts:").context("--generator must be ts:<adapter.mjs>")?;
-    let wasm_dir = opt(args, "--wasm-dir").context("--generator needs --wasm-dir <nodejs-wasm-build>")?;
-    let project = opt(args, "--project-json").context("--generator needs --project-json <AdapterProject.json>")?;
-    let bundles = opt(args, "--bundles-json").context("--generator needs --bundles-json <Session.init bundles>")?;
-    let run = fig::runner::GeneratorRun {
-        adapter: Path::new(adapter),
-        wasm_dir: Path::new(wasm_dir),
-        project_json: Path::new(project),
-        bundles_json: Path::new(bundles),
-        out_dir: Path::new(out),
-    };
-    let pages = fig::runner::run_generator(&run)?;
-    if !has(args, "--json") {
-        eprintln!("fig render --generator: adapter rendered {pages} pages -> {out}");
-    }
-    Ok(json!({ "out": out, "pages": pages, "generator": adapter }))
-}
-
 // ===========================================================================
 // watch — incremental dev loop, native twin of the browser editor
 // ===========================================================================
@@ -510,9 +571,15 @@ fn cmd_watch(args: &[String]) -> Result<Value> {
     let state = fig::watch::WatchState::initial(root, opts)?;
     let addr = opt(args, "--serve").map(|a| {
         // Allow ":8080" shorthand -> "127.0.0.1:8080".
-        if let Some(rest) = a.strip_prefix(':') { format!("127.0.0.1:{rest}") } else { a.to_string() }
+        if let Some(rest) = a.strip_prefix(':') {
+            format!("127.0.0.1:{rest}")
+        } else {
+            a.to_string()
+        }
     });
-    let poll = opt(args, "--poll-ms").and_then(|s| s.parse().ok()).unwrap_or(300);
+    let poll = opt(args, "--poll-ms")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300);
     // Blocks until Ctrl-C.
     fig::watch::serve(state, addr.as_deref(), poll)?;
     Ok(json!({ "watched": build }))
@@ -534,10 +601,15 @@ fn render_opts(args: &[String]) -> fig::engine::RenderOptions {
 }
 
 fn positional<'a>(args: &'a [String], i: usize) -> Option<&'a str> {
-    args.get(i).map(String::as_str).filter(|s| !s.starts_with('-'))
+    args.get(i)
+        .map(String::as_str)
+        .filter(|s| !s.starts_with('-'))
 }
 fn opt<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(String::as_str)
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str)
 }
 fn collect(args: &[String], name: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -557,8 +629,9 @@ fn has(args: &[String], name: &str) -> bool {
 fn resolve_build_epoch(arg: Option<&str>) -> Result<i64> {
     let raw = match arg {
         Some(v) => v.to_string(),
-        None => std::env::var("SOURCE_DATE_EPOCH")
-            .context("no build timestamp: pass --build-date <epoch|RFC3339> or set SOURCE_DATE_EPOCH")?,
+        None => std::env::var("SOURCE_DATE_EPOCH").context(
+            "no build timestamp: pass --build-date <epoch|RFC3339> or set SOURCE_DATE_EPOCH",
+        )?,
     };
     let raw = raw.trim();
     if let Ok(secs) = raw.parse::<i64>() {
@@ -596,14 +669,18 @@ fn print_usage() {
          \x20 packages fetch <i#v> | bundle --cache -o <dir>   Acquire / CDN bundle\n\
          \x20 expand <vs.json> [--resources <r.json>]          Tier-1 VS expansion\n\
          \x20 sitedb <ig> --sushi-out <d> --cache <d> -o <db>  S1-S7 site.db producer\n\
+         \x20 prepare <ig> --target cycle-site/v1              Closed external-build bundle\n\
+         \x20         --sushi-out <new> --cache <d> --out <new>\n\
+         \x20         --build-date <epoch|RFC3339>\n\
          \x20 fragment <build-dir> <ref> <kind>                Render ONE fragment\n\
          \x20 fragments <build-dir> -o <dir> [--kinds k1,k2]   Materialize fragment files\n\
          \x20 render <build-dir> -o <site/> [--template i#v]  Full static site (Publisher parity)\n\
-         \x20                              [--template-dir d] [--generator ts:*]\n\
+         \x20                              [--template-dir d]\n\
          \x20 watch <build-dir> [--serve :port]                Incremental dev loop + live-reload\n\
          \x20 version                                          Engine + pins\n\
          \n\
          Add --json to any command for the apiVersion result envelope.",
-        env!("CARGO_PKG_VERSION"), API_VERSION,
+        env!("CARGO_PKG_VERSION"),
+        API_VERSION,
     );
 }

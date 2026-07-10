@@ -301,7 +301,10 @@ struct CandidateCanonical {
 
 /// rows.ts:212 — canonicalPinningMode.
 fn canonical_pinning_mode(cfg: &Value) -> Option<&'static str> {
-    match cfg.pointer("/parameters/pin-canonicals").and_then(Value::as_str) {
+    match cfg
+        .pointer("/parameters/pin-canonicals")
+        .and_then(Value::as_str)
+    {
         Some("pin-all") => Some("pin-all"),
         Some("pin-multiples") => Some("pin-multiples"),
         _ => None,
@@ -415,9 +418,7 @@ fn base_definition_for_db(r: &Value, cfg: &Value) -> Option<String> {
             return Some(format!("{base}|{}", dep.version));
         }
     }
-    if pin_mode == "pin-all"
-        && base.starts_with("http://hl7.org/fhir/StructureDefinition/")
-    {
+    if pin_mode == "pin-all" && base.starts_with("http://hl7.org/fhir/StructureDefinition/") {
         if let Some(fv) = fhir_version {
             return Some(format!("{base}|{fv}"));
         }
@@ -441,9 +442,16 @@ fn resource_row_id(r: &Value, cfg: &Value) -> String {
         if !pkg.is_empty() {
             return pkg;
         }
-        return r.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        return r
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
     }
-    r.get("id").and_then(Value::as_str).unwrap_or("").to_string()
+    r.get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn resource_row_url(r: &Value, cfg: &Value, id: &str) -> Option<String> {
@@ -538,7 +546,10 @@ pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
         ("toolingVersionFull", "site-gen.publisher experiment".into()),
         ("genDate", input.gen_date.clone()),
         ("genDay", input.gen_day.clone()),
-        ("gitstatus", input.branch.clone().unwrap_or_else(|| "unknown".into())),
+        (
+            "gitstatus",
+            input.branch.clone().unwrap_or_else(|| "unknown".into()),
+        ),
     ];
     pairs
         .into_iter()
@@ -703,7 +714,10 @@ pub fn derive_concept_rows(
             }
         }
     }
-    for r in resources.iter().filter(|r| resource_type(r) == "CodeSystem") {
+    for r in resources
+        .iter()
+        .filter(|r| resource_type(r) == "CodeSystem")
+    {
         if let Some(&resource_key) = key_by_ref.get(&resource_ref(r)) {
             if let Some(concepts) = r.get("concept") {
                 walk(&mut rows, resource_key, concepts, None);

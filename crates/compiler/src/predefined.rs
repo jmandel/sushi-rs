@@ -114,19 +114,36 @@ impl PredefinedPackage {
     }
 
     fn push(&mut self, path: PathBuf, body: J) {
-        let Some(rt) = body.get("resourceType").and_then(|v| v.as_str()).map(str::to_string) else {
+        let Some(rt) = body
+            .get("resourceType")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+        else {
             return;
         };
-        let id = body.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let name = body.get("name").and_then(|v| v.as_str()).map(str::to_string);
+        let id = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let name = body
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let url = body.get("url").and_then(|v| v.as_str()).map(str::to_string);
-        let title = body.get("title").and_then(|v| v.as_str()).map(str::to_string);
+        let title = body
+            .get("title")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let description = body
             .get("description")
             .and_then(|v| v.as_str())
             .map(str::to_string);
         let fish_type = classify_predefined(&body);
-        let metadata_fishable = matches!(rt.as_str(), "StructureDefinition" | "ValueSet" | "CodeSystem");
+        let metadata_fishable = matches!(
+            rt.as_str(),
+            "StructureDefinition" | "ValueSet" | "CodeSystem"
+        );
         let folder = path
             .parent()
             .and_then(|p| p.file_name())
@@ -140,7 +157,11 @@ impl PredefinedPackage {
             .get("meta")
             .and_then(|m| m.get("profile"))
             .and_then(|p| p.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
             .unwrap_or_default();
         let seq = self.resources.len();
         let entry = PredefinedResource {
@@ -287,15 +308,24 @@ fn metadata_from_predefined(r: &PredefinedResource) -> Metadata {
     let mut out = Metadata {
         id: r.id.clone(),
         name: r.name.clone().unwrap_or_default(),
-        sd_type: body.get("type").and_then(|v| v.as_str()).map(str::to_string),
+        sd_type: body
+            .get("type")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         url: r.url.clone(),
         parent: body
             .get("baseDefinition")
             .and_then(|v| v.as_str())
             .map(str::to_string),
         abstract_: body.get("abstract").and_then(|v| v.as_bool()),
-        version: body.get("version").and_then(|v| v.as_str()).map(str::to_string),
-        kind: body.get("kind").and_then(|v| v.as_str()).map(str::to_string),
+        version: body
+            .get("version")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        kind: body
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
         can_bind: false,
         can_be_target: false,
         instance_usage: None,
@@ -356,7 +386,8 @@ fn collect_predefined_paths(ig_dir: &str, cfg_yaml: &Y) -> Vec<PathBuf> {
                     if let Some(s) = ystr(&val) {
                         let recursive = s.ends_with("/*");
                         let rel = s.trim_end_matches("/*");
-                        let full = Path::new(ig_dir).join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+                        let full =
+                            Path::new(ig_dir).join(rel.replace('/', std::path::MAIN_SEPARATOR_STR));
                         if full.is_dir() {
                             push_unique(&mut dirs, full.clone());
                             if recursive {
@@ -371,7 +402,9 @@ fn collect_predefined_paths(ig_dir: &str, cfg_yaml: &Y) -> Vec<PathBuf> {
 
     let mut files = Vec::new();
     for dir in dirs {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         let mut local: Vec<PathBuf> = rd
             .filter_map(|e| e.ok())
             .map(|e| e.path())
@@ -396,7 +429,9 @@ fn push_unique(v: &mut Vec<PathBuf>, p: PathBuf) {
 }
 
 fn add_child_dirs(v: &mut Vec<PathBuf>, dir: &Path) {
-    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut children: Vec<PathBuf> = rd
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -497,7 +532,13 @@ impl<'a> FhirXmlReader<'a> {
         J::Object(obj)
     }
 
-    fn parse_complex_into(&self, obj: &mut Map<String, J>, node: &XmlNode, info: &Rc<XmlSdInfo>, prefix: &str) {
+    fn parse_complex_into(
+        &self,
+        obj: &mut Map<String, J>,
+        node: &XmlNode,
+        info: &Rc<XmlSdInfo>,
+        prefix: &str,
+    ) {
         let defer_extension_url = node.tag == "extension"
             && node.children.iter().any(|c| c.tag == "extension")
             && !node.children.iter().any(|c| c.tag.starts_with("value"));
@@ -515,8 +556,16 @@ impl<'a> FhirXmlReader<'a> {
         }
     }
 
-    fn apply_xml_attrs(&self, obj: &mut Map<String, J>, node: &XmlNode, info: &Rc<XmlSdInfo>, prefix: &str) {
-        let Some(children) = info.children.get(prefix) else { return };
+    fn apply_xml_attrs(
+        &self,
+        obj: &mut Map<String, J>,
+        node: &XmlNode,
+        info: &Rc<XmlSdInfo>,
+        prefix: &str,
+    ) {
+        let Some(children) = info.children.get(prefix) else {
+            return;
+        };
         for def in children.iter().filter(|d| d.xml_attr) {
             if let Some(raw) = attr(&node.attrs, &def.name) {
                 let value = primitive_json(&def.type_code, raw);
@@ -533,7 +582,8 @@ impl<'a> FhirXmlReader<'a> {
         current_prefix: &str,
     ) -> J {
         if def.type_code == "Resource" {
-            if let Some(resource_child) = node.children.iter().find(|c| self.info(&c.tag).is_some()) {
+            if let Some(resource_child) = node.children.iter().find(|c| self.info(&c.tag).is_some())
+            {
                 return self.parse_resource_node(resource_child).unwrap_or(J::Null);
             }
         }
@@ -553,7 +603,12 @@ impl<'a> FhirXmlReader<'a> {
         }
     }
 
-    fn parse_primitive_node(&self, node: &XmlNode, def: &XmlChildDef, _current: &Rc<XmlSdInfo>) -> J {
+    fn parse_primitive_node(
+        &self,
+        node: &XmlNode,
+        def: &XmlChildDef,
+        _current: &Rc<XmlSdInfo>,
+    ) -> J {
         let main = attr(&node.attrs, "value")
             .map(|v| primitive_json(&def.type_code, v))
             .unwrap_or(J::Null);
@@ -564,7 +619,9 @@ impl<'a> FhirXmlReader<'a> {
         // `_name`; stash the sidecar object in a marker object so insertion can
         // add both siblings in order.
         let mut side = Map::new();
-        let element = self.info("Element").or_else(|| self.info("BackboneElement"));
+        let element = self
+            .info("Element")
+            .or_else(|| self.info("BackboneElement"));
         if let Some(element) = element {
             self.apply_xml_attrs(&mut side, node, &element, "Element");
         }
@@ -591,7 +648,12 @@ impl<'a> FhirXmlReader<'a> {
             }
             if let Some(side) = marker.get("$sidecar").and_then(|v| v.as_object()) {
                 if !side.is_empty() {
-                    self.insert_value(obj, &format!("_{}", def.key), def.array, J::Object(side.clone()));
+                    self.insert_value(
+                        obj,
+                        &format!("_{}", def.key),
+                        def.array,
+                        J::Object(side.clone()),
+                    );
                 }
             }
         } else {
@@ -684,11 +746,15 @@ impl XmlSdInfo {
             if el.get("sliceName").is_some() {
                 continue;
             }
-            let Some(path) = el.get("path").and_then(|v| v.as_str()) else { continue };
+            let Some(path) = el.get("path").and_then(|v| v.as_str()) else {
+                continue;
+            };
             if path == path_type {
                 continue;
             }
-            let Some((parent, raw_name)) = path.rsplit_once('.') else { continue };
+            let Some((parent, raw_name)) = path.rsplit_once('.') else {
+                continue;
+            };
             let array = is_array_max(el);
             let types = el.get("type").and_then(|v| v.as_array());
             if let Some(stem) = raw_name.strip_suffix("[x]") {
@@ -700,11 +766,14 @@ impl XmlSdInfo {
                             .collect()
                     })
                     .unwrap_or_default();
-                choices.entry(parent.to_string()).or_default().push(XmlChoice {
-                    stem: stem.to_string(),
-                    array,
-                    options,
-                });
+                choices
+                    .entry(parent.to_string())
+                    .or_default()
+                    .push(XmlChoice {
+                        stem: stem.to_string(),
+                        array,
+                        options,
+                    });
                 continue;
             }
             let type_code = types
@@ -721,17 +790,21 @@ impl XmlSdInfo {
                 .map(|a| a.iter().any(|v| v.as_str() == Some("xmlAttr")))
                 .unwrap_or(false);
             let primitive = is_primitive_type_code(&type_code);
-            let backbone = type_code == "BackboneElement" || type_code == "Element" || content_ref.is_some();
-            children.entry(parent.to_string()).or_default().push(XmlChildDef {
-                name: raw_name.to_string(),
-                key: raw_name.to_string(),
-                type_code,
-                array,
-                primitive,
-                backbone,
-                content_ref,
-                xml_attr,
-            });
+            let backbone =
+                type_code == "BackboneElement" || type_code == "Element" || content_ref.is_some();
+            children
+                .entry(parent.to_string())
+                .or_default()
+                .push(XmlChildDef {
+                    name: raw_name.to_string(),
+                    key: raw_name.to_string(),
+                    type_code,
+                    array,
+                    primitive,
+                    backbone,
+                    content_ref,
+                    xml_attr,
+                });
         }
         Some(XmlSdInfo {
             path_type,
@@ -875,7 +948,10 @@ fn primitive_json(type_code: &str, raw: &str) -> J {
 }
 
 fn attr<'a>(attrs: &'a [(String, String)], key: &str) -> Option<&'a str> {
-    attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+    attrs
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
 }
 
 fn parse_xml_tree(text: &str) -> Option<XmlNode> {
@@ -1090,14 +1166,16 @@ mod tests {
         let fish = |name: &str| defs.get(name).cloned();
         let reader = FhirXmlReader::new(&fish);
 
-        let actual = reader.parse(
-            r#"<TestResource xmlns="http://hl7.org/fhir">
+        let actual = reader
+            .parse(
+                r#"<TestResource xmlns="http://hl7.org/fhir">
                  <id value="abc"/>
                  <name value="A&#xA;B"/>
                  <alias value="one"/>
                  <tag><code value="x"/></tag>
                </TestResource>"#,
-        ).unwrap();
+            )
+            .unwrap();
 
         assert_eq!(
             actual,
@@ -1119,8 +1197,9 @@ mod tests {
         let fish = |name: &str| defs.get(name).cloned();
         let reader = FhirXmlReader::new(&fish);
 
-        let actual = reader.parse(
-            r#"<TestResource xmlns="http://hl7.org/fhir">
+        let actual = reader
+            .parse(
+                r#"<TestResource xmlns="http://hl7.org/fhir">
                  <extension url="outer">
                    <extension url="inner">
                      <valueString value="v"/>
@@ -1130,7 +1209,8 @@ mod tests {
                    <valueString value="x"/>
                  </extension>
                </TestResource>"#,
-        ).unwrap();
+            )
+            .unwrap();
 
         let rendered = serde_json::to_string(&actual).unwrap();
         assert!(rendered.contains(

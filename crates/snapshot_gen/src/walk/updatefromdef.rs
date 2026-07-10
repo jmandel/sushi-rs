@@ -128,8 +128,16 @@ pub(crate) fn update_from_definition(
     // it after checkExtensionDoco normalized it away).
     apply_profile_root_doco(ctx, dest, source);
 
-    let path = dest.get("path").and_then(Value::as_str).unwrap_or("").to_string();
-    let derived_path = source.get("path").and_then(Value::as_str).unwrap_or("").to_string();
+    let path = dest
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let derived_path = source
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
 
     // sliceName copy
     if let Some(sn) = source.get("sliceName") {
@@ -146,7 +154,11 @@ pub(crate) fn update_from_definition(
     if let Some(d) = source.get("definition").and_then(Value::as_str) {
         if dest.get("definition").and_then(Value::as_str) != Some(d) {
             let base = dest.get("definition").and_then(Value::as_str);
-            set_field(dest, "definition", Value::String(merge_markdown_java(d, base)));
+            set_field(
+                dest,
+                "definition",
+                Value::String(merge_markdown_java(d, base)),
+            );
         }
     }
     // comment: mergeMarkdown
@@ -167,7 +179,11 @@ pub(crate) fn update_from_definition(
     if let Some(d) = source.get("requirements").and_then(Value::as_str) {
         if dest.get("requirements").and_then(Value::as_str) != Some(d) {
             let base = dest.get("requirements").and_then(Value::as_str);
-            set_field(dest, "requirements", Value::String(merge_markdown_java(d, base)));
+            set_field(
+                dest,
+                "requirements",
+                Value::String(merge_markdown_java(d, base)),
+            );
         }
     }
     // sdf-9: drop requirements on root (path has no ".") in both
@@ -226,8 +242,7 @@ pub(crate) fn update_from_definition(
             .unwrap_or_default();
         for ex in derived_examples {
             let found = base_examples.iter().any(|be| {
-                be.get("label") == ex.get("label")
-                    && example_value(be) == example_value(ex)
+                be.get("label") == ex.get("label") && example_value(be) == example_value(ex)
             });
             if !found {
                 base_examples.push(ex.clone());
@@ -274,7 +289,10 @@ pub(crate) fn update_from_definition(
         }
     }
     // valueAlternatives: additive union
-    if source.get("valueAlternatives").and_then(Value::as_array).is_some()
+    if source
+        .get("valueAlternatives")
+        .and_then(Value::as_array)
+        .is_some()
         && source.get("valueAlternatives") != dest.get("valueAlternatives")
     {
         merge_unique_array_strings(dest, source, "valueAlternatives");
@@ -303,8 +321,16 @@ pub(crate) fn update_from_definition(
     // binding: only-narrow merge
     if has(source, "binding") {
         if !has(dest, "binding") || !deep_eq(source.get("binding"), dest.get("binding")) {
-            if dest.get("binding").and_then(|b| b.get("strength")).and_then(Value::as_str) == Some("required")
-                && source.get("binding").and_then(|b| b.get("strength")).and_then(Value::as_str) != Some("required")
+            if dest
+                .get("binding")
+                .and_then(|b| b.get("strength"))
+                .and_then(Value::as_str)
+                == Some("required")
+                && source
+                    .get("binding")
+                    .and_then(|b| b.get("strength"))
+                    .and_then(Value::as_str)
+                    != Some("required")
             {
                 ctx.add_message(
                     Severity::Error,
@@ -395,7 +421,8 @@ fn update_extensions_from_definition(dest: &mut Value, source: &Value) {
         arr.retain(|ext| {
             let url = ext.get("url").and_then(Value::as_str).unwrap_or("");
             !(NON_INHERITED_ED_URLS.contains(&url)
-                || (DEFAULT_INHERITED_ED_URLS.contains(&url) && source_urls.iter().any(|u| u == url)))
+                || (DEFAULT_INHERITED_ED_URLS.contains(&url)
+                    && source_urls.iter().any(|u| u == url)))
         });
         if arr.is_empty() {
             remove_field(dest, "extension");
@@ -410,7 +437,10 @@ fn update_extensions_from_definition(dest: &mut Value, source: &Value) {
         let dest_has = dest
             .get("extension")
             .and_then(Value::as_array)
-            .map(|a| a.iter().any(|e| e.get("url").and_then(Value::as_str) == Some(url)))
+            .map(|a| {
+                a.iter()
+                    .any(|e| e.get("url").and_then(Value::as_str) == Some(url))
+            })
             .unwrap_or(false);
         if !dest_has {
             ensure_array_field(dest, "extension").push(ext.clone());
@@ -472,7 +502,9 @@ fn apply_profile_root_doco(ctx: &mut WalkContext, dest: &mut Value, source: &Val
             .unwrap_or(0);
         if dest_type_count == 1 {
             if let Some(purl) = single_type_profile(dest) {
-                profile = super::resolve::resolve_with_snapshot(ctx, &purl).ok().flatten();
+                profile = super::resolve::resolve_with_snapshot(ctx, &purl)
+                    .ok()
+                    .flatten();
             }
         }
     }
@@ -506,14 +538,16 @@ fn apply_profile_root_doco(ctx: &mut WalkContext, dest: &mut Value, source: &Val
     // Java (PU:2686/2688) rewrites the copied root definition / binding.description
     // markdown links via processRelativeUrls(..., true) against the context spec url.
     if let Some(d) = root.get("definition").and_then(Value::as_str) {
-        let rewritten =
-            crate::text::process_relative_markdown_urls(d, &ctx.spec_url, true);
+        let rewritten = crate::text::process_relative_markdown_urls(d, &ctx.spec_url, true);
         set_field(dest, "definition", Value::String(rewritten));
     }
-    if let Some(bd) = root.get("binding").and_then(|b| b.get("description")).and_then(Value::as_str) {
+    if let Some(bd) = root
+        .get("binding")
+        .and_then(|b| b.get("description"))
+        .and_then(Value::as_str)
+    {
         if let Some(binding) = dest.get_mut("binding") {
-            let rewritten =
-                crate::text::process_relative_markdown_urls(bd, &ctx.spec_url, true);
+            let rewritten = crate::text::process_relative_markdown_urls(bd, &ctx.spec_url, true);
             set_field(binding, "description", Value::String(rewritten));
         }
     }
@@ -551,11 +585,22 @@ fn merge_mappings(dest: &mut Value, source: &Value) {
     if diff_mappings.is_empty() {
         return;
     }
-    let base_mappings = dest.get("mapping").and_then(Value::as_array).cloned().unwrap_or_default();
+    let base_mappings = dest
+        .get("mapping")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let map_key = |m: &Value| -> (String, String) {
         (
-            m.get("identity").and_then(Value::as_str).unwrap_or("").to_string(),
-            m.get("map").and_then(Value::as_str).unwrap_or("").trim().to_string(),
+            m.get("identity")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+            m.get("map")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim()
+                .to_string(),
         )
     };
     let mut list: Vec<Value> = Vec::new();
@@ -581,7 +626,12 @@ fn merge_mappings(dest: &mut Value, source: &Value) {
 fn example_value(ex: &Value) -> Option<(String, Value)> {
     ex.as_object()?.iter().find_map(|(k, v)| {
         if let Some(rest) = k.strip_prefix("value") {
-            if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            if rest
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_uppercase())
+                .unwrap_or(false)
+            {
                 return Some((k.clone(), v.clone()));
             }
         }
@@ -589,7 +639,8 @@ fn example_value(ex: &Value) -> Option<(String, Value)> {
     })
 }
 
-const EXT_TRANSLATABLE: &str = "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable";
+const EXT_TRANSLATABLE: &str =
+    "http://hl7.org/fhir/StructureDefinition/elementdefinition-translatable";
 
 /// PU:2631 hack workaround for R5 snapshots: if `dest` carries exactly two
 /// EXT_TRANSLATABLE extensions, remove the second.

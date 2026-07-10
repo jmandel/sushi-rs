@@ -37,13 +37,19 @@ fn walk(root: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
         for e in rd.flatten() {
             let p = e.path();
             if p.is_dir() {
                 stack.push(p);
             } else {
-                let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+                let rel = p
+                    .strip_prefix(root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
                 out.insert(rel, std::fs::read(&p).unwrap());
             }
         }
@@ -59,7 +65,10 @@ fn gate(build: &str, root_label: &str, overwrite_src_pkg: Option<&str>) {
     let base = PathBuf::from(F0).join(build);
     let staged = base.join("template");
     if !staged.is_dir() {
-        eprintln!("skip {build}: F0 template tree absent at {}", staged.display());
+        eprintln!(
+            "skip {build}: F0 template tree absent at {}",
+            staged.display()
+        );
         return;
     }
     let cache = base.join(".home/.fhir/packages");
@@ -90,7 +99,11 @@ fn gate(build: &str, root_label: &str, overwrite_src_pkg: Option<&str>) {
             let ours = tree.get(rel).expect("overwritten source materialized");
             let src_pkg = overwrite_src_pkg.expect("chain has an overwritten source pkg");
             let raw = std::fs::read(cache.join(src_pkg).join(rel)).expect("raw source file");
-            assert_eq!(ours, raw.as_slice(), "ant-overwritten {rel}: ours must equal RAW pkg bytes");
+            assert_eq!(
+                ours,
+                raw.as_slice(),
+                "ant-overwritten {rel}: ours must equal RAW pkg bytes"
+            );
             overwritten_ok += 1;
             continue;
         }
@@ -115,9 +128,18 @@ fn gate(build: &str, root_label: &str, overwrite_src_pkg: Option<&str>) {
         extra.len()
     );
     assert!(differ.is_empty(), "{build}: byte differences: {differ:?}");
-    assert!(missing.is_empty(), "{build}: files missing from our tree: {missing:?}");
-    assert!(extra.is_empty(), "{build}: extra files in our tree: {extra:?}");
-    assert!(identical > 100, "{build}: sanity — expected many identical files");
+    assert!(
+        missing.is_empty(),
+        "{build}: files missing from our tree: {missing:?}"
+    );
+    assert!(
+        extra.is_empty(),
+        "{build}: extra files in our tree: {extra:?}"
+    );
+    assert!(
+        identical > 100,
+        "{build}: sanity — expected many identical files"
+    );
 }
 
 /// Parity gate: us-core 3-package chain, byte-exact.

@@ -17,11 +17,12 @@
 //! `fig render` over such a root is byte-identical to the pagecorpus oracle by
 //! construction.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use render_page::{render_page, PageProvider, SiteData};
+use render_page::{
+    render_page, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider, SiteData,
+};
 use render_sd::context::IgContext;
 use render_sd::engine::{FragmentEngine, IgFacts};
 
@@ -103,9 +104,9 @@ pub struct RenderOptions {
     pub run_uuid: String,
     /// The template's `active-tables` param (per-IG). Default false.
     pub active_tables: bool,
-    /// Route include misses through the FragmentEngine (first-include-miss).
-    /// TRUE is the real editor path; FALSE reads all includes from the staged
-    /// `_includes/` (pure page pass).
+    /// Permit registered generated includes to cross the typed fragment resolver
+    /// after ordinary file lookup. FALSE reads only staged `_includes/` (the pure
+    /// page pass).
     pub engine: bool,
     /// Engine-FIRST include resolution (live fragments shadow staged copies).
     pub engine_first: bool,
@@ -157,10 +158,13 @@ pub fn harvest_release_header(golden_dir: &Path) -> Option<String> {
         if p.extension().and_then(|x| x.to_str()) != Some("html") {
             continue;
         }
-        let Ok(t) = std::fs::read_to_string(&p) else { continue };
-        let (Some(a), Some(b)) =
-            (t.find("<!--ReleaseHeader-->"), t.find("<!--EndReleaseHeader-->"))
-        else {
+        let Ok(t) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let (Some(a), Some(b)) = (
+            t.find("<!--ReleaseHeader-->"),
+            t.find("<!--EndReleaseHeader-->"),
+        ) else {
             continue;
         };
         let end = b + "<!--EndReleaseHeader-->".len();
@@ -178,7 +182,11 @@ pub fn harvest_release_header(golden_dir: &Path) -> Option<String> {
 
 /// Build the FragmentEngine for a render root (the pagecorpus `build_engine`).
 pub fn build_engine(root: &RenderRoot, opts: &RenderOptions) -> FragmentEngine {
-    let ctx = IgContext::load_with_txcache(&root.own_dir, &root.packages_dir, root.txcache_dir.as_deref());
+    let ctx = IgContext::load_with_txcache(
+        &root.own_dir,
+        &root.packages_dir,
+        root.txcache_dir.as_deref(),
+    );
     let facts = IgFacts {
         txcache_dir: root.txcache_dir.clone(),
         ig_version: ig_version(&root.own_dir),
@@ -193,9 +201,12 @@ pub fn build_engine(root: &RenderRoot, opts: &RenderOptions) -> FragmentEngine {
 pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutcome> {
     let site = SiteData::load(&root.data_dir);
     let engine = opts.engine.then(|| build_engine(root, opts));
-    let mut provider = PageProvider::new(&site, &root.includes_dir, engine.as_ref())
+    let mut provider = PageProvider::new(&site, &root.includes_dir)
         .with_engine_first(opts.engine_first)
         .with_pages_root(&root.pages_root);
+    if let Some(engine) = engine.as_ref() {
+        provider = provider.with_artifact_resolver(FragmentEngineArtifactResolver::new(engine));
+    }
     if let Some(tinc) = &root.template_includes_dir {
         provider = provider.with_template_includes(tinc);
     }
@@ -221,9 +232,13 @@ pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutc
         if is_dump && !opts.include_dumps {
             continue;
         }
-        let src = std::fs::read_to_string(inp)
-            .with_context(|| format!("read page {}", inp.display()))?;
-        let page_path = if root.flat { name.clone() } else { format!("en/{}", name) };
+        let src =
+            std::fs::read_to_string(inp).with_context(|| format!("read page {}", inp.display()))?;
+        let page_path = if root.flat {
+            name.clone()
+        } else {
+            format!("en/{}", name)
+        };
         let is_static = !render_page::has_front_matter(&src);
         let mut html = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             render_page(&src, &page_path, &provider)
@@ -232,11 +247,19 @@ pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutc
         if let Some(rh) = &release_header {
             html = render_page::apply_release_header(&html, rh);
         }
-        pages.push(RenderedPage { page_path, html, is_static });
+        pages.push(RenderedPage {
+            page_path,
+            html,
+            is_static,
+        });
     }
 
     let fragment_misses = *provider.miss_count.borrow();
-    Ok(RenderOutcome { pages, fragment_misses, assets_copied: 0 })
+    Ok(RenderOutcome {
+        pages,
+        fragment_misses,
+        assets_copied: 0,
+    })
 }
 
 /// Write a render outcome to `out_dir`, preserving the page.path layout
@@ -249,8 +272,7 @@ pub fn write_site(root: &RenderRoot, out: &RenderOutcome, out_dir: &Path) -> Res
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(&dest, &page.html)
-            .with_context(|| format!("write {}", dest.display()))?;
+        std::fs::write(&dest, &page.html).with_context(|| format!("write {}", dest.display()))?;
         written += 1;
     }
     written += copy_assets(root, out_dir)?;
@@ -269,7 +291,9 @@ pub fn copy_assets(root: &RenderRoot, out_dir: &Path) -> Result<usize> {
     let base = &root.pages_root;
     let mut stack = vec![base.clone()];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for e in rd.flatten() {
             let p = e.path();
             let rel = p.strip_prefix(base).unwrap().to_string_lossy().to_string();
@@ -307,7 +331,9 @@ pub fn copy_assets(root: &RenderRoot, out_dir: &Path) -> Result<usize> {
 
 /// The ImplementationGuide.version from the own resource dir (facts input).
 fn ig_version(own_dir: &Path) -> String {
-    let Ok(rd) = std::fs::read_dir(own_dir) else { return String::new() };
+    let Ok(rd) = std::fs::read_dir(own_dir) else {
+        return String::new();
+    };
     for e in rd.flatten() {
         let n = e.file_name().to_string_lossy().to_string();
         if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
@@ -377,29 +403,41 @@ pub fn own_structure_definitions(root: &RenderRoot) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-/// A page's rendered output plus the include/fragment read-set it consulted —
-/// the [`watch`](crate::watch) dirty-cone boundary. Renders a single page with a
-/// per-page tracking provider so the caller learns which fragments it pulled.
+/// A page's rendered output plus its typed artifact request/read sets — the
+/// [`watch`](crate::watch) dirty-cone boundary. Renders a single page with a
+/// per-page tracking provider so the caller learns which artifacts it requested
+/// and which requests resolved successfully.
 pub fn render_page_tracked(
     root: &RenderRoot,
     engine: Option<&FragmentEngine>,
     site: &SiteData,
     opts: &RenderOptions,
     input_path: &Path,
-) -> Result<(String, HashMap<String, Option<String>>)> {
-    let name = input_path.file_name().unwrap().to_string_lossy().to_string();
+) -> Result<(String, PageArtifactReadSet)> {
+    let name = input_path
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     let src = std::fs::read_to_string(input_path)?;
-    let page_path = if root.flat { name.clone() } else { format!("en/{}", name) };
-    let shared: std::rc::Rc<std::cell::RefCell<HashMap<String, Option<String>>>> =
-        std::rc::Rc::new(std::cell::RefCell::new(HashMap::new()));
-    let provider = PageProvider::new(site, &root.includes_dir, engine)
+    let page_path = if root.flat {
+        name.clone()
+    } else {
+        format!("en/{}", name)
+    };
+    let mut provider = PageProvider::new(site, &root.includes_dir)
         .with_engine_first(opts.engine_first)
-        .with_pages_root(&root.pages_root)
-        .with_shared_cache(shared.clone());
+        .with_pages_root(&root.pages_root);
+    if let Some(engine) = engine {
+        provider = provider.with_artifact_resolver(FragmentEngineArtifactResolver::new(engine));
+    }
+    if let Some(tinc) = &root.template_includes_dir {
+        provider = provider.with_template_includes(tinc);
+    }
     let html = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         render_page(&src, &page_path, &provider)
     }))
     .map_err(|_| anyhow::anyhow!("page render panicked: {}", name))?;
-    let read_set = shared.borrow().clone();
+    let read_set = provider.page_artifact_reads();
     Ok((html, read_set))
 }

@@ -50,7 +50,10 @@ fn si_add(slicings: &mut [SliceInfo], si_idx: usize, tag: u64) {
 }
 
 fn si_new_slice(slicings: &mut [SliceInfo], si_idx: usize, tag: u64) {
-    slicings[si_idx].slices.get_or_insert_with(Vec::new).push(tag);
+    slicings[si_idx]
+        .slices
+        .get_or_insert_with(Vec::new)
+        .push(tag);
     if let Some(parent) = slicings[si_idx].parent {
         si_add(slicings, parent, tag);
     }
@@ -83,7 +86,9 @@ fn is_extension_slicing(ed: &Value) -> bool {
     if name != "extension" && name != "modiferExtension" {
         return false;
     }
-    let Some(slicing) = ed.get("slicing") else { return false };
+    let Some(slicing) = ed.get("slicing") else {
+        return false;
+    };
     if slicing.get("rules").and_then(Value::as_str) != Some("open") {
         return false;
     }
@@ -198,7 +203,15 @@ fn process_slices(
             let slices = slicings[i].slices.clone().unwrap();
             let slicer_tag = slicings[i].slicer_tag;
             for slice_tag in slices {
-                merge_elements(ctx, diff, &stuff, slice_tag, slicer_tag, &mut next_tag, &mut injected_tags)?;
+                merge_elements(
+                    ctx,
+                    diff,
+                    &stuff,
+                    slice_tag,
+                    slicer_tag,
+                    &mut next_tag,
+                    &mut injected_tags,
+                )?;
             }
         }
     }
@@ -272,14 +285,18 @@ fn merge_elements(
     next_tag: &mut u64,
     injected_tags: &mut Vec<u64>,
 ) -> anyhow::Result<()> {
-    let Some(slice_pos) = pos_of(elements, slice_tag) else { return Ok(()) };
+    let Some(slice_pos) = pos_of(elements, slice_tag) else {
+        return Ok(());
+    };
     let start_of_slice = slice_pos + 1;
     let mut end_of_slice = find_end_of_slice(elements, slice_pos);
 
     // Which sliceStuff rows are present in the slice?
     let mut handled: Vec<u64> = Vec::new();
     for &stuff_tag in all_slices {
-        let Some(stuff_pos) = pos_of(elements, stuff_tag) else { continue };
+        let Some(stuff_pos) = pos_of(elements, stuff_tag) else {
+            continue;
+        };
         let stuff = elements[stuff_pos].clone();
         for j in start_of_slice..=end_of_slice.min(elements.len().saturating_sub(1)) {
             if elements_match(&elements[j], &stuff) {
@@ -311,18 +328,18 @@ fn merge_elements(
         if handled.contains(&stuff_tag) {
             continue;
         }
-        let Some(stuff_pos) = pos_of(elements, stuff_tag) else { continue };
+        let Some(stuff_pos) = pos_of(elements, stuff_tag) else {
+            continue;
+        };
         let stuff = elements[stuff_pos].clone();
         let ed_def = analyse_path(ctx, &stuff)?;
-        let source_id = stuff.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let source_id = stuff
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let id = source_id.replace(&slicer_id, &slice_id);
-        let index = determine_insertion_point(
-            elements,
-            start_of_slice,
-            end_of_slice,
-            &id,
-            &ed_def,
-        );
+        let index = determine_insertion_point(elements, start_of_slice, end_of_slice, &id, &ed_def);
         let mut edc = stuff.clone();
         if let Some(obj) = edc.as_object_mut() {
             obj.insert("id".to_string(), Value::String(id.clone()));
@@ -354,7 +371,8 @@ fn determine_insertion_point(
     let p: Vec<&str> = id.split('.').collect();
     for i in (1..p.len()).rev() {
         let sub_id = p[..=i].join(".");
-        let peers: Vec<usize> = (start_of_slice..=end_of_slice.min(elements.len().saturating_sub(1)))
+        let peers: Vec<usize> = (start_of_slice
+            ..=end_of_slice.min(elements.len().saturating_sub(1)))
             .filter(|&j| {
                 elements[j]
                     .get("id")
@@ -383,7 +401,9 @@ fn comes_after_this(id: &str, ed_def: &[Analysis], peer: &Value) -> bool {
     let min = p1.len().min(p2.len());
     for i in 0..min {
         if p1[i] != p2[i] {
-            let Some(sed) = ed_def.get(i.wrapping_sub(1)) else { return false };
+            let Some(sed) = ed_def.get(i.wrapping_sub(1)) else {
+                return false;
+            };
             let i1 = index_of_name(sed, p1[i]);
             let i2 = index_of_name(sed, p2[i]);
             if i == min - 1 && i1 == i2 && !p1[i].contains(':') && p2[i].contains(':') {
@@ -431,12 +451,18 @@ fn analyse_path(ctx: &mut WalkContext, ed: &Value) -> anyhow::Result<Vec<Analysi
             };
             cur_path = pn.to_string();
             cur_sd = Some(sd);
-            res.push(Analysis { children: Vec::new() });
+            res.push(Analysis {
+                children: Vec::new(),
+            });
             continue;
         }
         // compute children of current node
-        let (children, child_source) =
-            children_of(ctx, cur_sd.clone().unwrap(), &cur_path, cur_type_override.as_deref())?;
+        let (children, child_source) = children_of(
+            ctx,
+            cur_sd.clone().unwrap(),
+            &cur_path,
+            cur_type_override.as_deref(),
+        )?;
         // find the child named pn (or [x] stem)
         let mut found: Option<(String, Option<String>)> = None;
         for (name, _p) in &children {
@@ -476,7 +502,9 @@ fn analyse_path(ctx: &mut WalkContext, ed: &Value) -> anyhow::Result<Vec<Analysi
         cur_path = format!("{src_path}.{child_name}");
         cur_sd = Some(src_sd);
         cur_type_override = type_override;
-        res.push(Analysis { children: Vec::new() });
+        res.push(Analysis {
+            children: Vec::new(),
+        });
     }
     // fill children for the last node too (used by indexOfName at the leaf level)
     if let (Some(sd), Some(last)) = (cur_sd.clone(), res.last_mut()) {
@@ -567,9 +595,22 @@ fn children_of(
 /// SGPP:1003 merge — fill-missing-only field copy.
 fn merge_fill_missing(focus: &mut Value, base: &Value) {
     let simple_fields = [
-        "label", "short", "definition", "comment", "requirements", "min", "max",
-        "meaningWhenMissing", "orderMeaning", "maxLength", "mustHaveValue", "mustSupport",
-        "isModifier", "isModifierReason", "isSummary", "binding",
+        "label",
+        "short",
+        "definition",
+        "comment",
+        "requirements",
+        "min",
+        "max",
+        "meaningWhenMissing",
+        "orderMeaning",
+        "maxLength",
+        "mustHaveValue",
+        "mustSupport",
+        "isModifier",
+        "isModifierReason",
+        "isSummary",
+        "binding",
     ];
     for key in simple_fields {
         if base.get(key).is_some() && focus.get(key).is_none() {
@@ -578,7 +619,14 @@ fn merge_fill_missing(focus: &mut Value, base: &Value) {
             }
         }
     }
-    let array_fields = ["code", "alias", "type", "example", "constraint", "valueAlternatives"];
+    let array_fields = [
+        "code",
+        "alias",
+        "type",
+        "example",
+        "constraint",
+        "valueAlternatives",
+    ];
     for key in array_fields {
         if base.get(key).is_some() && focus.get(key).is_none() {
             if let Some(v) = base.get(key) {
@@ -662,7 +710,9 @@ fn mark_extension_source(ext: &mut Value, versioned_url: &str) {
     if has_sub {
         return;
     }
-    let Some(obj) = ext.as_object_mut() else { return };
+    let Some(obj) = ext.as_object_mut() else {
+        return;
+    };
     let subs = obj
         .entry("extension".to_string())
         .or_insert_with(|| Value::Array(vec![]));

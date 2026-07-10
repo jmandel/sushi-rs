@@ -195,7 +195,8 @@ pub fn materialize(
         // folder as an EMPTY dir (its `listFiles()` excludes the metadata), so its
         // files must NOT be materialized. When the content root already IS
         // `package/` (our normalized layout), do not apply this exclusion.
-        let skip_package_meta = content_root.file_name().and_then(|n| n.to_str()) != Some("package");
+        let skip_package_meta =
+            content_root.file_name().and_then(|n| n.to_str()) != Some("package");
         let mut files = list_files_rec(source, &content_root);
         files.sort(); // deterministic staging order within a package.
         for rel in &files {
@@ -209,7 +210,9 @@ pub fn materialize(
                 continue;
             }
             let abs = content_root.join(rel);
-            let Ok(bytes) = source.read(&abs) else { continue };
+            let Ok(bytes) = source.read(&abs) else {
+                continue;
+            };
             let base = basename(rel);
             if let Some(target_name) = base.strip_prefix("_append.") {
                 // target path = same dir, name with `_append.` stripped.
@@ -279,7 +282,10 @@ impl TemplatePaths {
 
     /// `<cache>/<label>/package/package.json` (same in both layouts).
     fn package_json_path(&self, label: &str) -> PathBuf {
-        self.cache_dir.join(label).join("package").join("package.json")
+        self.cache_dir
+            .join(label)
+            .join("package")
+            .join("package.json")
     }
 
     /// Detect the *content root* for a package: the dir that holds `config.json`
@@ -410,9 +416,10 @@ fn apply_config_changes(base: &mut Value, delta: &Value) -> anyhow::Result<()> {
                 apply_config_changes(base_obj.get_mut(key).unwrap(), new_el)?;
             } else if new_el.is_array() {
                 // Array APPEND (`addAll`, :236-237) — in place, order preserved.
-                if let (Some(base_arr), Some(new_arr)) =
-                    (base_obj.get_mut(key).unwrap().as_array_mut(), new_el.as_array())
-                {
+                if let (Some(base_arr), Some(new_arr)) = (
+                    base_obj.get_mut(key).unwrap().as_array_mut(),
+                    new_el.as_array(),
+                ) {
                     base_arr.extend(new_arr.iter().cloned());
                 }
             } else {
@@ -752,8 +759,7 @@ pub fn is_ant_runtime_product(rel: &str) -> bool {
     );
     let by_infix = lower.contains("-validation") || lower.contains("validation-");
     // translation subsystem: regenerated `.xml` under translations/.
-    let translation_xml =
-        rel.starts_with("translations/") && lower.ends_with(".xml");
+    let translation_xml = rel.starts_with("translations/") && lower.ends_with(".xml");
     by_prefix || by_name || by_infix || translation_xml
 }
 
@@ -847,8 +853,16 @@ mod tests {
         let v: Value = serde_json::from_str(composed).unwrap();
         assert_eq!(v["a"], serde_json::json!(2), "primitive replaced");
         assert_eq!(v["arr"], serde_json::json!(["x", "y"]), "array appended");
-        assert_eq!(v["obj"]["k"], serde_json::json!("v"), "object deep-merged (kept)");
-        assert_eq!(v["obj"]["k2"], serde_json::json!("v2"), "object deep-merged (added)");
+        assert_eq!(
+            v["obj"]["k"],
+            serde_json::json!("v"),
+            "object deep-merged (kept)"
+        );
+        assert_eq!(
+            v["obj"]["k2"],
+            serde_json::json!("v2"),
+            "object deep-merged (added)"
+        );
         assert_eq!(v["new"], serde_json::json!(true), "new key added");
     }
 
@@ -856,7 +870,11 @@ mod tests {
     fn append_without_base_writes_verbatim() {
         // An `_append.X` with no pre-existing X → verbatim, no separator.
         let mut tree = TemplateTree::new();
-        tree.append("d/_append.foo.html", "d/foo.html".to_string(), b"ONLY".to_vec());
+        tree.append(
+            "d/_append.foo.html",
+            "d/foo.html".to_string(),
+            b"ONLY".to_vec(),
+        );
         assert_eq!(tree.get("d/foo.html").unwrap(), b"ONLY");
         assert_eq!(tree.get("d/_append.foo.html").unwrap(), b"ONLY");
     }

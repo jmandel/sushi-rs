@@ -182,8 +182,16 @@ fn base64_encode(bytes: &[u8]) -> String {
         let n = (b0 << 16) | (b1 << 8) | b2;
         out.push(ALPHA[((n >> 18) & 63) as usize] as char);
         out.push(ALPHA[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 { ALPHA[((n >> 6) & 63) as usize] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHA[(n & 63) as usize] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            ALPHA[((n >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHA[(n & 63) as usize] as char
+        } else {
+            '='
+        });
     }
     out
 }

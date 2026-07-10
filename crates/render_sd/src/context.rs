@@ -202,7 +202,9 @@ impl IgContext {
                 }
                 // Only resource-shaped files: Type-id.json
                 let Some(text) = tree.read(&p) else { continue };
-                let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+                let Ok(v) = serde_json::from_str::<Value>(&text) else {
+                    continue;
+                };
                 let rtype = v.get("resourceType").and_then(|x| x.as_str()).unwrap_or("");
                 if rtype.is_empty() {
                     continue;
@@ -260,7 +262,9 @@ impl IgContext {
                         }
                     }
                 }
-                let Some(url) = v.get("url").and_then(|x| x.as_str()) else { continue };
+                let Some(url) = v.get("url").and_then(|x| x.as_str()) else {
+                    continue;
+                };
                 own.insert(
                     url.to_string(),
                     Resolved {
@@ -270,7 +274,10 @@ impl IgContext {
                         rtype: rtype.to_string(),
                         version: String::new(),
                         kind: v.get("kind").and_then(|x| x.as_str()).map(String::from),
-                        derivation: v.get("derivation").and_then(|x| x.as_str()).map(String::from),
+                        derivation: v
+                            .get("derivation")
+                            .and_then(|x| x.as_str())
+                            .map(String::from),
                         file: Some(p.clone()),
                         external: false,
                         pkg: None,
@@ -301,7 +308,9 @@ impl IgContext {
                 continue;
             }
             seen.push((pid.clone(), ver.clone()));
-            let pdir = packages_dir.join(format!("{}#{}", pid, ver)).join("package");
+            let pdir = packages_dir
+                .join(format!("{}#{}", pid, ver))
+                .join("package");
             let pj = pdir.join("package.json");
             if let Some(text) = tree.read(&pj) {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
@@ -320,7 +329,10 @@ impl IgContext {
         if !seen.iter().any(|(p, _)| p.contains(".core")) {
             if let Some(rd) = tree.read_dir(packages_dir) {
                 for (n, _isf) in rd {
-                    if n.starts_with("hl7.fhir.r4.core#") || n.starts_with("hl7.fhir.r4b.core#") || n.starts_with("hl7.fhir.r5.core#") {
+                    if n.starts_with("hl7.fhir.r4.core#")
+                        || n.starts_with("hl7.fhir.r4b.core#")
+                        || n.starts_with("hl7.fhir.r5.core#")
+                    {
                         let parts: Vec<&str> = n.splitn(2, '#').collect();
                         seen.push((parts[0].to_string(), parts[1].to_string()));
                     }
@@ -344,14 +356,18 @@ impl IgContext {
 
         let mut packages = Vec::new();
         for (pid, ver) in &seen {
-            let pdir = packages_dir.join(format!("{}#{}", pid, ver)).join("package");
+            let pdir = packages_dir
+                .join(format!("{}#{}", pid, ver))
+                .join("package");
             // Existence via the TREE, not std::fs — bundle-served packages have
             // no filesystem presence (the session-equivalence test caught the
             // original `pdir.exists()` skipping every dependency in wasm).
             if tree.read_dir(&pdir).is_none() {
                 continue;
             }
-            let Some(mut entry) = load_package(&*tree, &pdir, ver) else { continue };
+            let Some(mut entry) = load_package(&*tree, &pdir, ver) else {
+                continue;
+            };
             entry.is_master = pid == want_core;
             packages.push(entry);
         }
@@ -493,9 +509,7 @@ impl IgContext {
                 json,
             });
         }
-        out.sort_by(|a, b| {
-            format!("{}-{}", a.rtype, a.id).cmp(&format!("{}-{}", b.rtype, b.id))
-        });
+        out.sort_by(|a, b| format!("{}-{}", a.rtype, a.id).cmp(&format!("{}-{}", b.rtype, b.id)));
         out
     }
 
@@ -531,7 +545,10 @@ impl IgContext {
                     continue;
                 }
                 if let Some((fname, rtype, rver)) = pkg.files.get(url) {
-                    if matches!(rtype.as_str(), "CodeSystem" | "ValueSet" | "StructureDefinition") {
+                    if matches!(
+                        rtype.as_str(),
+                        "CodeSystem" | "ValueSet" | "StructureDefinition"
+                    ) {
                         if let Some(v) = want_ver {
                             if rver != v && pkg.version != v {
                                 continue;
@@ -547,11 +564,12 @@ impl IgContext {
                                 fname.trim_end_matches(".json").to_string() + ".html"
                             });
                         let page = ig_override_page(url).unwrap_or(page);
-                        let web_path = if page.starts_with("http://") || page.starts_with("https://") {
-                            page.clone()
-                        } else {
-                            join_url(&pkg.base_url, &page)
-                        };
+                        let web_path =
+                            if page.starts_with("http://") || page.starts_with("https://") {
+                                page.clone()
+                            } else {
+                                join_url(&pkg.base_url, &page)
+                            };
                         let fpath = pkg.dir.join(fname);
                         let (name, title, kind, derivation) = read_meta(&*self.tree, &fpath);
                         // masterDefinitions applies to SDs only when they
@@ -564,7 +582,11 @@ impl IgContext {
                                 name,
                                 title,
                                 rtype: rtype.clone(),
-                                version: if rver.is_empty() { pkg.version.clone() } else { rver.clone() },
+                                version: if rver.is_empty() {
+                                    pkg.version.clone()
+                                } else {
+                                    rver.clone()
+                                },
                                 kind,
                                 derivation,
                                 file: Some(fpath),
@@ -653,8 +675,7 @@ impl IgContext {
                     }
                     Some(prev) => {
                         if version_gt(&cand.version, &prev.version)
-                            || (cand.version == prev.version
-                                && version_gt(&cand_pkg, &best_pkg))
+                            || (cand.version == prev.version && version_gt(&cand_pkg, &best_pkg))
                         {
                             best_pkg = cand_pkg;
                             Some(cand)
@@ -673,11 +694,7 @@ impl IgContext {
                     if let Ok(v) = serde_json::from_str::<Value>(&text) {
                         let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("");
                         best = Some(Resolved {
-                            web_path: format!(
-                                "{}/ValueSet/{}",
-                                server.trim_end_matches('/'),
-                                id
-                            ),
+                            web_path: format!("{}/ValueSet/{}", server.trim_end_matches('/'), id),
                             name: v.get("name").and_then(|x| x.as_str()).map(String::from),
                             title: v.get("title").and_then(|x| x.as_str()).map(String::from),
                             rtype: v
@@ -759,9 +776,7 @@ impl IgContext {
     /// (base abstract types like Resource/Element have no derivation -> false).
     pub fn has_link_for(&self, code: &str) -> bool {
         self.resolve_type(code)
-            .map(|r| {
-                r.kind.is_some() && r.derivation.as_deref() == Some("specialization")
-            })
+            .map(|r| r.kind.is_some() && r.derivation.as_deref() == Some("specialization"))
             .unwrap_or(false)
     }
 
@@ -775,8 +790,12 @@ impl IgContext {
                 continue;
             }
             let Some(f) = &r.file else { continue };
-            let Some(text) = self.tree.read(f) else { continue };
-            let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+            let Some(text) = self.tree.read(f) else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<Value>(&text) else {
+                continue;
+            };
             let base = v
                 .get("baseDefinition")
                 .and_then(|x| x.as_str())
@@ -798,7 +817,9 @@ impl IgContext {
         let out = self.resolve(canonical).and_then(|r| {
             let f = r.file?;
             let text = self.tree.read(&f)?;
-            serde_json::from_str::<Value>(&text).ok().map(std::rc::Rc::new)
+            serde_json::from_str::<Value>(&text)
+                .ok()
+                .map(std::rc::Rc::new)
         });
         self.res_cache
             .borrow_mut()
@@ -884,7 +905,10 @@ impl IgContext {
         if vs_ref.contains("cts.nlm.nih.gov") {
             let oid = vs_ref.rsplit('/').next().unwrap_or("");
             return BindingRes {
-                url: Some(format!("https://vsac.nlm.nih.gov/valueset/{}/expansion", oid)),
+                url: Some(format!(
+                    "https://vsac.nlm.nih.gov/valueset/{}/expansion",
+                    oid
+                )),
                 display: format!("VSAC {}", oid),
                 uri: Some(vs_ref.to_string()),
                 external: true,
@@ -927,8 +951,15 @@ pub fn strip_version(url: &str) -> String {
 fn load_package(tree: &dyn crate::tree::TreeSource, pdir: &Path, ver: &str) -> Option<PkgEntry> {
     let pj: Value = serde_json::from_str(&tree.read(&pdir.join("package.json"))?).ok()?;
     let base_url = fix_package_url(pj.get("url").and_then(|x| x.as_str())?);
-    let pkg_id = pj.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let pkg_canonical = pj.get("canonical").and_then(|x| x.as_str()).map(String::from);
+    let pkg_id = pj
+        .get("name")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string();
+    let pkg_canonical = pj
+        .get("canonical")
+        .and_then(|x| x.as_str())
+        .map(String::from);
     let pkg_title = pj.get("title").and_then(|x| x.as_str()).map(String::from);
     let mut files = HashMap::new();
     if let Some(text) = tree.read(&pdir.join(".index.json")) {
@@ -1022,7 +1053,12 @@ fn read_meta_source(tree: &dyn crate::tree::TreeSource, path: &Path) -> Option<S
 fn read_meta(
     tree: &dyn crate::tree::TreeSource,
     path: &Path,
-) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
     let Some(text) = tree.read(path) else {
         return (None, None, None, None);
     };
@@ -1033,7 +1069,9 @@ fn read_meta(
         v.get("name").and_then(|x| x.as_str()).map(String::from),
         v.get("title").and_then(|x| x.as_str()).map(String::from),
         v.get("kind").and_then(|x| x.as_str()).map(String::from),
-        v.get("derivation").and_then(|x| x.as_str()).map(String::from),
+        v.get("derivation")
+            .and_then(|x| x.as_str())
+            .map(String::from),
     )
 }
 

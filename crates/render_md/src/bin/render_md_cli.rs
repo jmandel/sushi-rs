@@ -14,7 +14,10 @@ fn main() {
     let html = if rouge {
         render_md::render_with(
             &input,
-            &render_md::Options { rouge_wrappers: true, ..Default::default() },
+            &render_md::Options {
+                rouge_wrappers: true,
+                ..Default::default()
+            },
         )
     } else {
         render_md::render(&input)

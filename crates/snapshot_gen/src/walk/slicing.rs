@@ -75,14 +75,15 @@ pub(crate) fn process_simple_path_default(
     current_base_path: &str,
     diff_match_idx: &[usize],
 ) -> anyhow::Result<()> {
-    let diff_matches: Vec<Value> = diff_match_idx.iter().map(|&i| ctx.diff[i].clone()).collect();
+    let diff_matches: Vec<Value> = diff_match_idx
+        .iter()
+        .map(|&i| ctx.diff[i].clone())
+        .collect();
     let diff0 = diff_matches[0].clone();
     let diff0_idx = diff_match_idx[0];
 
     // Preconditions.
-    if !unbounded(current_base)
-        && !(is_sliced_to_one_only(&diff0) || is_type_slicing(&diff0))
-    {
+    if !unbounded(current_base) && !(is_sliced_to_one_only(&diff0) || is_type_slicing(&diff0)) {
         anyhow::bail!(
             "ATTEMPT_TO_A_SLICE_AN_ELEMENT_THAT_DOES_NOT_REPEAT: {}",
             path_of(current_base)
@@ -113,7 +114,9 @@ pub(crate) fn process_simple_path_default(
             "processSimplePathDefault.defaultBeforeSlices",
             trace::id(current_base).as_deref(),
             trace::id(&diff0).as_deref(),
-            Some(json!({ "sliceGroupSize": diff_matches.len(), "sliceGroupIds": diff_ids(ctx, diff_match_idx) })),
+            Some(
+                json!({ "sliceGroupSize": diff_matches.len(), "sliceGroupIds": diff_ids(ctx, diff_match_idx) }),
+            ),
         );
         let new_diff_cursor = diff0_idx;
         let new_diff_limit = find_end_of_element(&ctx.diff, new_diff_cursor);
@@ -180,7 +183,11 @@ pub(crate) fn process_simple_path_default(
                 trace::id(&diff0).as_deref(),
                 None,
             );
-            set_field(&mut outcome, "slicing", diff0.get("slicing").cloned().unwrap());
+            set_field(
+                &mut outcome,
+                "slicing",
+                diff0.get("slicing").cloned().unwrap(),
+            );
             for i in 1..diff_matches.len() {
                 if has_slicing(&diff_matches[i])
                     && !slicing_matches(
@@ -291,10 +298,13 @@ pub(crate) fn process_simple_path_default(
                     .and_then(Value::as_str)
                     .unwrap_or("")
                     .to_string();
-                let frag = content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..].to_string();
-                if let Some(bstart) =
-                    super::contentref::resolve_content_reference_pub(&cur.base, cur.base_cursor, &content_ref)
-                {
+                let frag =
+                    content_ref[content_ref.find('#').map(|i| i + 1).unwrap_or(0)..].to_string();
+                if let Some(bstart) = super::contentref::resolve_content_reference_pub(
+                    &cur.base,
+                    cur.base_cursor,
+                    &content_ref,
+                ) {
                     let bend = find_end_of_element_no_slices(&cur.base, bstart);
                     trace::rec(
                         "processSimplePathDefault",
@@ -362,10 +372,15 @@ pub(crate) fn process_simple_path_default(
         let mut nframe = frame.clone();
         nframe.base_limit = new_base_limit;
         nframe.diff_limit = new_diff_limit as isize;
-        nframe.profile_name = format!("{}{}", frame.profile_name, super::simple::path_tail(&diff_matches[i]));
+        nframe.profile_name = format!(
+            "{}{}",
+            frame.profile_name,
+            super::simple::path_tail(&diff_matches[i])
+        );
         // PathSlicingParams(true, slicerElement, null): path is null, not current_base_path.
-        nframe.slicing = SlicingParams::done_with(Some(std::rc::Rc::new(slicer_element.clone())), None)
-            .with_diffs(&diff_matches);
+        nframe.slicing =
+            SlicingParams::done_with(Some(std::rc::Rc::new(slicer_element.clone())), None)
+                .with_diffs(&diff_matches);
         super::loop_::process_paths(ctx, &mut ncur, &nframe, Some(&slicer_element))?;
     }
 
@@ -375,7 +390,9 @@ pub(crate) fn process_simple_path_default(
 }
 
 fn diff_ids(ctx: &WalkContext, idx: &[usize]) -> Vec<String> {
-    idx.iter().filter_map(|&i| trace::id(&ctx.diff[i])).collect()
+    idx.iter()
+        .filter_map(|&i| trace::id(&ctx.diff[i]))
+        .collect()
 }
 
 /// PU:2417 isSlicedToOneOnly.

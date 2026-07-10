@@ -125,7 +125,10 @@ impl PackageContext {
         let package_id = package.split('#').next().unwrap_or(package).to_string();
         let package_dir = cache_dir.join(package).join("package");
         if !self.source.is_dir(&package_dir) {
-            bail!("package directory does not exist: {}", package_dir.display());
+            bail!(
+                "package directory does not exist: {}",
+                package_dir.display()
+            );
         }
         // Remember the dir for the opt-in Layer-B canonical-version resolver.
         self.package_dirs.push(package_dir.clone());
@@ -157,9 +160,7 @@ impl PackageContext {
             }
             let path = package_dir.join(&row.filename);
             if let Some(id) = &row.id {
-                self.by_id
-                    .entry(id.clone())
-                    .or_insert_with(|| path.clone());
+                self.by_id.entry(id.clone()).or_insert_with(|| path.clone());
             }
             if let Some(url) = &row.url {
                 let version = row.version.clone();
@@ -263,7 +264,13 @@ impl PackageContext {
                 .get("version")
                 .and_then(Value::as_str)
                 .map(str::to_string);
-            self.insert_url(url, path.clone(), version.clone(), local, package_id.clone());
+            self.insert_url(
+                url,
+                path.clone(),
+                version.clone(),
+                local,
+                package_id.clone(),
+            );
             if let Some(version) = version {
                 self.by_url.insert(
                     format!("{url}|{version}"),
@@ -366,7 +373,10 @@ impl PackageContext {
         self.canonical_versions
             .borrow()
             .as_ref()
-            .and_then(|m| m.get(&(resource_type.to_string(), url.to_string())).cloned())
+            .and_then(|m| {
+                m.get(&(resource_type.to_string(), url.to_string()))
+                    .cloned()
+            })
             .filter(|v| !v.is_empty())
     }
 
@@ -408,12 +418,16 @@ impl PackageContext {
         // In-memory local resources have no file behind their synthetic path; serve
         // the stashed parsed body. Everything else reads through `source` (disk or
         // bundle), byte-for-byte as before.
-        let parsed = path.as_deref().and_then(|p| self.local_bodies.get(p)).cloned().or_else(|| {
-            path.as_deref()
-                .and_then(|p| self.source.read(p).ok())
-                .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-                .map(Rc::new)
-        });
+        let parsed = path
+            .as_deref()
+            .and_then(|p| self.local_bodies.get(p))
+            .cloned()
+            .or_else(|| {
+                path.as_deref()
+                    .and_then(|p| self.source.read(p).ok())
+                    .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+                    .map(Rc::new)
+            });
         self.fetch_cache
             .borrow_mut()
             .insert(query.to_string(), parsed.clone());

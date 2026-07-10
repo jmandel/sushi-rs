@@ -18,9 +18,10 @@ fn f0_build() -> Option<PathBuf> {
             return Some(p);
         }
     }
-    std::env::var("USCORE_F0_BUILD").ok().map(PathBuf::from).filter(|p| {
-        p.join("temp/pages").is_dir() && p.join("template/config.json").is_file()
-    })
+    std::env::var("USCORE_F0_BUILD")
+        .ok()
+        .map(PathBuf::from)
+        .filter(|p| p.join("temp/pages").is_dir() && p.join("template/config.json").is_file())
 }
 
 #[test]
@@ -55,9 +56,20 @@ fn page_shells_byte_identical_vs_publisher() {
         mismatch.len(),
         missing.len()
     );
-    assert!(mismatch.is_empty(), "shell mismatches: {:?}", &mismatch[..mismatch.len().min(10)]);
-    assert!(missing.is_empty(), "produced shells absent from oracle: {:?}", &missing[..missing.len().min(10)]);
-    assert!(checked > 1000, "expected >1000 shells for US Core, got {checked}");
+    assert!(
+        mismatch.is_empty(),
+        "shell mismatches: {:?}",
+        &mismatch[..mismatch.len().min(10)]
+    );
+    assert!(
+        missing.is_empty(),
+        "produced shells absent from oracle: {:?}",
+        &missing[..missing.len().min(10)]
+    );
+    assert!(
+        checked > 1000,
+        "expected >1000 shells for US Core, got {checked}"
+    );
 }
 
 #[test]
@@ -111,7 +123,17 @@ fn structuredefinitions_fields_derive() {
     }
     eprintln!("structuredefinitions field mismatches (non-byte gaps): {field_miss:?}");
     // Load-bearing identity fields MUST be exact:
-    for key in ["url", "name", "title", "kind", "type", "status", "derivation", "abstract", "path"] {
+    for key in [
+        "url",
+        "name",
+        "title",
+        "kind",
+        "type",
+        "status",
+        "derivation",
+        "abstract",
+        "path",
+    ] {
         assert_eq!(
             field_miss.get(key).copied().unwrap_or(0),
             0,

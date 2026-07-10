@@ -46,10 +46,45 @@ pub enum HtmlSeg {
 fn is_span_content_model(name: &str) -> bool {
     matches!(
         name,
-        "a" | "abbr" | "acronym" | "b" | "bdo" | "big" | "button" | "cite" | "caption" | "del"
-            | "dfn" | "dt" | "em" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "i" | "ins"
-            | "label" | "legend" | "optgroup" | "p" | "q" | "rb" | "rbc" | "rp" | "rt" | "rtc"
-            | "ruby" | "select" | "small" | "span" | "strong" | "sub" | "sup" | "th" | "tt"
+        "a" | "abbr"
+            | "acronym"
+            | "b"
+            | "bdo"
+            | "big"
+            | "button"
+            | "cite"
+            | "caption"
+            | "del"
+            | "dfn"
+            | "dt"
+            | "em"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "i"
+            | "ins"
+            | "label"
+            | "legend"
+            | "optgroup"
+            | "p"
+            | "q"
+            | "rb"
+            | "rbc"
+            | "rp"
+            | "rt"
+            | "rtc"
+            | "ruby"
+            | "select"
+            | "small"
+            | "span"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "th"
+            | "tt"
     )
 }
 
@@ -59,10 +94,34 @@ fn is_span_content_model(name: &str) -> bool {
 fn is_block_content_model(name: &str) -> bool {
     matches!(
         name,
-        "address" | "applet" | "article" | "aside" | "blockquote" | "body" | "dd" | "details"
-            | "div" | "dl" | "fieldset" | "figure" | "figcaption" | "footer" | "form" | "header"
-            | "hgroup" | "iframe" | "li" | "main" | "map" | "menu" | "nav" | "noscript"
-            | "object" | "section" | "summary" | "td"
+        "address"
+            | "applet"
+            | "article"
+            | "aside"
+            | "blockquote"
+            | "body"
+            | "dd"
+            | "details"
+            | "div"
+            | "dl"
+            | "fieldset"
+            | "figure"
+            | "figcaption"
+            | "footer"
+            | "form"
+            | "header"
+            | "hgroup"
+            | "iframe"
+            | "li"
+            | "main"
+            | "map"
+            | "menu"
+            | "nav"
+            | "noscript"
+            | "object"
+            | "section"
+            | "summary"
+            | "td"
     )
 }
 
@@ -277,7 +336,10 @@ pub struct Doc {
 /// used by `requirements-link-list.md` to stamp `id="CONF-NNNN"` on each ref).
 fn extract_link_refs(
     src: &str,
-) -> (String, std::collections::HashMap<String, crate::inline::LinkRef>) {
+) -> (
+    String,
+    std::collections::HashMap<String, crate::inline::LinkRef>,
+) {
     let mut map = std::collections::HashMap::new();
     let mut kept: Vec<&str> = Vec::new();
     let lines: Vec<&str> = src.split('\n').collect();
@@ -295,7 +357,11 @@ fn extract_link_refs(
             }
             map.insert(
                 crate::inline::normalize_ref_label(&label),
-                crate::inline::LinkRef { dest, title, attr_prefix },
+                crate::inline::LinkRef {
+                    dest,
+                    title,
+                    attr_prefix,
+                },
             );
             i += 1;
             continue;
@@ -395,9 +461,7 @@ fn parse_doc_with_opts(src: &str, parse_block_html: bool) -> Doc {
     let mut leading_blank = false;
     {
         let mut k = 0;
-        while k < p.lines.len()
-            && (is_blank(&p.lines[k]) || is_kramdown_ext_line(&p.lines[k]))
-        {
+        while k < p.lines.len() && (is_blank(&p.lines[k]) || is_kramdown_ext_line(&p.lines[k])) {
             leading_blank = true;
             k += 1;
         }
@@ -679,10 +743,7 @@ impl Parser {
                 continue;
             }
             let s = l.trim();
-            if !s.is_empty()
-                && s.chars().all(|c| c == fence_char)
-                && s.len() >= fence_len
-            {
+            if !s.is_empty() && s.chars().all(|c| c == fence_char) && s.len() >= fence_len {
                 close_idx = Some(k);
                 break;
             }
@@ -723,9 +784,7 @@ impl Parser {
                 blanks += 1;
                 j += 1;
             }
-            if j >= self.lines.len()
-                || !is_indent_line(&self.lines[j])
-                || is_blank(&self.lines[j])
+            if j >= self.lines.len() || !is_indent_line(&self.lines[j]) || is_blank(&self.lines[j])
             {
                 break;
             }
@@ -1002,8 +1061,7 @@ impl Parser {
             ContentModel::Raw
         } else if open_tag.contains("markdown=\"span\"") || open_tag.contains("markdown='span'") {
             ContentModel::Span
-        } else if open_tag.contains("markdown=\"block\"") || open_tag.contains("markdown='block'")
-        {
+        } else if open_tag.contains("markdown=\"block\"") || open_tag.contains("markdown='block'") {
             ContentModel::Block
         } else if open_tag.contains("markdown=\"1\"") || open_tag.contains("markdown='1'") {
             default_content_model(&tagname)
@@ -1075,9 +1133,7 @@ impl Parser {
                 inner_leading_blank: {
                     let mut it = inner_text.split('\n');
                     match it.next() {
-                        Some(first) if is_blank(first) => {
-                            it.next().map(is_blank).unwrap_or(false)
-                        }
+                        Some(first) if is_blank(first) => it.next().map(is_blank).unwrap_or(false),
                         _ => false,
                     }
                 },
@@ -1125,8 +1181,7 @@ impl Parser {
             }
             if let Some((_norm, ni)) = crate::inline::probe_tag(&achars, pos) {
                 let raw_tag: String = achars[pos..ni].iter().collect();
-                if let Some((name, is_close, is_self)) = crate::inline::inspect_tag_pub(&raw_tag)
-                {
+                if let Some((name, is_close, is_self)) = crate::inline::inspect_tag_pub(&raw_tag) {
                     if is_close {
                         if stack.last().map(|t| t == &name).unwrap_or(false) {
                             stack.pop();
@@ -1148,9 +1203,8 @@ impl Parser {
                                     // Raw content; only the attribute is
                                     // consumed. Splice the stripped tag in as
                                     // its own raw segment.
-                                    segments.push(HtmlSeg::Raw(
-                                        achars[last_cut..pos].iter().collect(),
-                                    ));
+                                    segments
+                                        .push(HtmlSeg::Raw(achars[last_cut..pos].iter().collect()));
                                     segments.push(HtmlSeg::Raw(
                                         crate::render::strip_markdown_attr_pub(&raw_tag),
                                     ));
@@ -1167,10 +1221,8 @@ impl Parser {
                                 };
                                 // Find the island's matching close (same naive
                                 // substring depth-count as collect_until_close).
-                                let open_pat: Vec<char> =
-                                    format!("<{name}").chars().collect();
-                                let close_pat: Vec<char> =
-                                    format!("</{name}>").chars().collect();
+                                let open_pat: Vec<char> = format!("<{name}").chars().collect();
+                                let close_pat: Vec<char> = format!("</{name}>").chars().collect();
                                 let mut depth_n = 1i32;
                                 let mut cur = ni;
                                 let mut close_start = None;
@@ -1195,23 +1247,17 @@ impl Parser {
                                     pos = ni;
                                     continue;
                                 };
-                                let mut inner_text: String =
-                                    achars[ni..cs].iter().collect();
+                                let mut inner_text: String = achars[ni..cs].iter().collect();
                                 // The close tag's own leading indentation is
                                 // NOT island content — drop a whitespace-only
                                 // final line fragment (keep its newline).
                                 if let Some(k) = inner_text.rfind('\n') {
-                                    if inner_text[k + 1..]
-                                        .chars()
-                                        .all(|c| c == ' ' || c == '\t')
-                                    {
+                                    if inner_text[k + 1..].chars().all(|c| c == ' ' || c == '\t') {
                                         inner_text.truncate(k + 1);
                                     }
                                 }
                                 let close_tag: String = close_pat.iter().collect();
-                                segments.push(HtmlSeg::Raw(
-                                    achars[last_cut..pos].iter().collect(),
-                                ));
+                                segments.push(HtmlSeg::Raw(achars[last_cut..pos].iter().collect()));
                                 if model == ContentModel::Span {
                                     segments.push(HtmlSeg::IslandSpan {
                                         open_tag: raw_tag.clone(),
@@ -1219,10 +1265,8 @@ impl Parser {
                                         close_tag,
                                     });
                                 } else {
-                                    let inner_doc = parse_doc_with_opts(
-                                        &inner_text,
-                                        self.parse_block_html,
-                                    );
+                                    let inner_doc =
+                                        parse_doc_with_opts(&inner_text, self.parse_block_html);
                                     let inner_leading_blank = {
                                         let mut it = inner_text.split('\n');
                                         match it.next() {
@@ -1353,7 +1397,9 @@ impl Parser {
                 if k < self.lines.len()
                     && (leading_spaces(&self.lines[k]) <= 3
                         || leading_spaces(&self.lines[k]) < cur_content_indent)
-                    && list_marker(&self.lines[k]).map(|(o, _, _)| o == ordered).unwrap_or(false)
+                    && list_marker(&self.lines[k])
+                        .map(|(o, _, _)| o == ordered)
+                        .unwrap_or(false)
                 {
                     // Same-type marker after a blank line: loose separator.
                     // kramdown accepts each item's marker within OPT_SPACE
@@ -1376,7 +1422,8 @@ impl Parser {
             if this_indent < base_indent && !is_sibling_marker {
                 break;
             }
-            if is_sibling_marker || (this_indent >= base_indent && this_indent < cur_content_indent) {
+            if is_sibling_marker || (this_indent >= base_indent && this_indent < cur_content_indent)
+            {
                 if let Some((o2, _s2, ml)) = list_marker(&l) {
                     if o2 != ordered {
                         // different list type -> stop
@@ -1445,16 +1492,11 @@ impl Parser {
                             // in this item (list.rb:87), later re-parsed as a
                             // nested list.
                             break;
-                        } else if parse_block_ial_line(&cl).is_some()
-                            || is_kramdown_ext_line(&cl)
-                        {
+                        } else if parse_block_ial_line(&cl).is_some() || is_kramdown_ext_line(&cl) {
                             // A block IAL / extension line terminates the item so
                             // it can attach to the list itself (e.g. `{:toc}`).
                             break;
-                        } else if item_lines
-                            .last()
-                            .map(|l| !is_blank(&l))
-                            .unwrap_or(false)
+                        } else if item_lines.last().map(|l| !is_blank(&l)).unwrap_or(false)
                             && !is_lazy_end_html(&cl)
                         {
                             // Lazy paragraph continuation: an under-indented,
@@ -1515,8 +1557,8 @@ impl Parser {
                     // The item is "followed by blank" if the line that ended it
                     // is a blank line (kramdown then appends a trailing :blank to
                     // the item, forcing a loose <p> rendering).
-                    let followed_by_blank = self.i < self.lines.len()
-                        && is_blank(&self.lines[self.i]);
+                    let followed_by_blank =
+                        self.i < self.lines.len() && is_blank(&self.lines[self.i]);
                     items.push(ListItem {
                         blocks,
                         tight: true,
@@ -1802,12 +1844,15 @@ fn is_hr(t: &str) -> bool {
     if compact.len() < 3 {
         return false;
     }
-    (compact.chars().all(|c| c == '*') || compact.chars().all(|c| c == '-') || compact.chars().all(|c| c == '_'))
+    (compact.chars().all(|c| c == '*')
+        || compact.chars().all(|c| c == '-')
+        || compact.chars().all(|c| c == '_'))
         && compact.len() >= 3
 }
 
 fn is_setext_underline(t: &str) -> bool {
-    (!t.is_empty() && t.chars().all(|c| c == '=')) || (!t.is_empty() && t.chars().all(|c| c == '-') && t.len() >= 1)
+    (!t.is_empty() && t.chars().all(|c| c == '='))
+        || (!t.is_empty() && t.chars().all(|c| c == '-') && t.len() >= 1)
 }
 
 fn leading_spaces(l: &str) -> usize {
@@ -1835,7 +1880,6 @@ fn leading_spaces(l: &str) -> usize {
     let _ = n;
     bytes
 }
-
 
 fn count_occurrences(hay: &str, needle: &str) -> usize {
     if needle.is_empty() {
@@ -1877,11 +1921,21 @@ fn html_tag_name(t: &str) -> Option<String> {
 fn is_void_tag(name: &str) -> bool {
     matches!(
         name,
-        "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col" | "embed"
-            | "param" | "source" | "track" | "wbr"
+        "br" | "hr"
+            | "img"
+            | "input"
+            | "meta"
+            | "link"
+            | "area"
+            | "base"
+            | "col"
+            | "embed"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }
-
 
 fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
     let indent = leading_spaces(l);
@@ -1895,10 +1949,17 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
     // that follows (kramdown computes the item's content indent from the full
     // marker match, so `-   x` has content indent 4).
     if (bytes[0] == b'-' || bytes[0] == b'*' || bytes[0] == b'+')
-        && bytes.get(1).map(|&c| c == b' ' || c == b'\t').unwrap_or(rest.len() == 1)
+        && bytes
+            .get(1)
+            .map(|&c| c == b' ' || c == b'\t')
+            .unwrap_or(rest.len() == 1)
     {
         let mut w = 1;
-        while bytes.get(w).map(|&c| c == b' ' || c == b'\t').unwrap_or(false) {
+        while bytes
+            .get(w)
+            .map(|&c| c == b' ' || c == b'\t')
+            .unwrap_or(false)
+        {
             w += 1;
         }
         if w == 1 {
@@ -1913,12 +1974,19 @@ fn list_marker(l: &str) -> Option<(bool, Option<u64>, usize)> {
         i += 1;
     }
     if i > 0 && i <= 9 && bytes.get(i) == Some(&b'.') {
-        let has_space = bytes.get(i + 1).map(|&c| c == b' ' || c == b'\t').unwrap_or(rest.len() == i + 1);
+        let has_space = bytes
+            .get(i + 1)
+            .map(|&c| c == b' ' || c == b'\t')
+            .unwrap_or(rest.len() == i + 1);
         if has_space {
             let num: u64 = rest[..i].parse().unwrap_or(1);
             // width = digits + delimiter + the whole run of spaces
             let mut w = i + 1;
-            while bytes.get(w).map(|&c| c == b' ' || c == b'\t').unwrap_or(false) {
+            while bytes
+                .get(w)
+                .map(|&c| c == b' ' || c == b'\t')
+                .unwrap_or(false)
+            {
                 w += 1;
             }
             if w == i + 1 {

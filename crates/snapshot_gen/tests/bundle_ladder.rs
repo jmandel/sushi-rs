@@ -70,13 +70,16 @@ const LADDER: &[&str] = &[
 /// Build a `BundleSource` mounting `labels` from the disk cache by going through
 /// the real bundle round-trip: `build_bundle` (tar+gzip) -> `read_bundle`
 /// (inflate) -> `mount_package`. This is exactly the browser cold-start path.
-fn bundle_source_from_cache(cache: &std::path::Path, labels: &[&str]) -> anyhow::Result<BundleSource> {
+fn bundle_source_from_cache(
+    cache: &std::path::Path,
+    labels: &[&str],
+) -> anyhow::Result<BundleSource> {
     let mut src = BundleSource::new();
     for label in labels {
         let package_dir = cache.join(label).join("package");
         let blob = package_acquisition::build_bundle(&package_dir)?;
-        let entries = package_acquisition::read_bundle(&blob)?;
-        src.mount_package(label, entries);
+        let material = package_acquisition::read_normalized_bundle(label, &blob)?;
+        src.mount_package(label, material.files);
     }
     Ok(src)
 }
@@ -123,7 +126,11 @@ fn bundle_source_drives_ladder_to_goldens() -> anyhow::Result<()> {
         }
         let input: Value = serde_json::from_slice(&std::fs::read(fixture_path)?)?;
         let expected: Value = serde_json::from_slice(&std::fs::read(golden_path)?)?;
-        let ctx = if name.starts_with("r4-") { &r4_ctx } else { &r5_ctx };
+        let ctx = if name.starts_with("r4-") {
+            &r4_ctx
+        } else {
+            &r5_ctx
+        };
         let actual = match snapshot_gen::generate_snapshot(input, ctx, Default::default()) {
             Ok(v) => v,
             Err(e) => {
@@ -132,7 +139,9 @@ fn bundle_source_drives_ladder_to_goldens() -> anyhow::Result<()> {
             }
         };
         if snapshot_elements(&expected) != snapshot_elements(&actual) {
-            failures.push(format!("{name}: snapshot.element mismatch via BundleSource"));
+            failures.push(format!(
+                "{name}: snapshot.element mismatch via BundleSource"
+            ));
         }
         ran += 1;
     }

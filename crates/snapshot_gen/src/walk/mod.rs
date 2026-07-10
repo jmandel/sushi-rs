@@ -4,8 +4,8 @@
 //! R5-internal; R4 inputs and bases pass through convert.rs at load.
 
 mod consts;
-mod context;
 mod contentref;
+mod context;
 mod emit;
 mod finalize;
 mod frame;
@@ -15,8 +15,8 @@ mod paths;
 mod preprocess;
 mod resolve;
 mod simple;
-mod slicing;
 mod sliced;
+mod slicing;
 mod sort;
 mod trace;
 mod types;
@@ -137,7 +137,10 @@ fn generate_snapshot_with_opts(
         .to_string();
     let base = resolve::resolve_with_snapshot(ctx, &base_url)?
         .with_context(|| format!("base not found: {base_url}"))?;
-    let base_version = base.get("version").and_then(Value::as_str).map(str::to_string);
+    let base_version = base
+        .get("version")
+        .and_then(Value::as_str)
+        .map(str::to_string);
 
     // P6: fixTypeOfResourceId on the base (R4+ config). Base snapshots already
     // ship the fhir-type extension in R5; the R4 convert path handles it. No-op
@@ -167,10 +170,10 @@ fn generate_snapshot_with_opts(
     // The R5 oracle (SnapOracle) does not do this; gate on R4 input.
     let is_r4_input = top_level
         && derived
-        .get("fhirVersion")
-        .and_then(Value::as_str)
-        .map(|v| v.starts_with('4'))
-        .unwrap_or(false);
+            .get("fhirVersion")
+            .and_then(Value::as_str)
+            .map(|v| v.starts_with('4'))
+            .unwrap_or(false);
     if is_r4_input {
         let first_path = diff_elements
             .first()
@@ -249,7 +252,11 @@ fn generate_snapshot_with_opts(
     ctx.output_ann = Vec::new();
 
     // The walk.
-    let base_source_url = base.get("url").and_then(Value::as_str).unwrap_or(&base_url).to_string();
+    let base_source_url = base
+        .get("url")
+        .and_then(Value::as_str)
+        .unwrap_or(&base_url)
+        .to_string();
     let mut cur = WalkCursor {
         base_source_url: base_source_url.clone(),
         base: Rc::new(base_elements.clone()),

@@ -4,7 +4,7 @@
 //! immutable CAS, then materialize a `.fhir/packages`-shaped cache root for the
 //! existing `package_store` read side.
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
 use flate2::read::GzDecoder;
 use flate2::{Compression, GzBuilder};
 use serde::{Deserialize, Serialize};
@@ -1533,7 +1533,10 @@ use package_store::{BundleManifest, BundleManifestEntry};
 /// read path and `BundleSource` consult.
 pub fn build_bundle(package_dir: &Path) -> anyhow::Result<Vec<u8>> {
     if !package_dir.is_dir() {
-        bail!("bundle: package dir does not exist: {}", package_dir.display());
+        bail!(
+            "bundle: package dir does not exist: {}",
+            package_dir.display()
+        );
     }
 
     // Collect top-level files (name -> bytes), sorted for determinism.
@@ -1577,19 +1580,18 @@ pub fn build_bundle(package_dir: &Path) -> anyhow::Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Inflate a bundle blob back into its `filename -> bytes` entries, ready for
-/// `package_store::BundleSource::mount_package`. Native readers use this; the
-/// browser does the same inflation JS-side or via this on a wasm build (flate2 +
-/// tar are wasm-clean).
+/// Inflate a bundle blob into its untrusted package-relative container entries.
+/// Call [`read_normalized_bundle`] before mounting; this low-level parser alone
+/// does not validate package identity, dependency metadata, or path semantics.
 pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
     let gz = GzDecoder::new(Cursor::new(bytes));
     let mut archive = Archive::new(gz);
     let mut out = Vec::new();
     for entry in archive.entries()? {
         let mut entry = entry?;
-        // Skip directory members (raw registry tarballs carry a `package/` dir
-        // entry); only real files mount.
-        if entry.header().entry_type().is_dir() {
+        // Mount regular files only. Symlink/hardlink/device entries are not
+        // package bytes and the browser transport applies the same rule.
+        if !entry.header().entry_type().is_file() {
             continue;
         }
         // Normalize the member name to the package-relative filename the
@@ -1598,11 +1600,18 @@ pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
         // npm tarballs root every file under `package/`. Stripping it here makes
         // `read_bundle` mount a raw tgz identically to a repacked bundle — matching
         // the browser inflate (`app/src/worker/inflate.ts` strips the same prefixes).
-        let name = entry
-            .path()?
-            .to_string_lossy()
+        let path = entry.path()?;
+        let raw_name = path
+            .to_str()
+            .ok_or_else(|| anyhow!("package bundle member name is not UTF-8"))?
             .trim_start_matches("./")
-            .trim_start_matches("package/")
+            .to_string();
+        // Strip the npm package root exactly once. Repeated stripping would
+        // promote `package/package/foo` to top-level `foo`, disagreeing with the
+        // browser and with ordinary extraction semantics.
+        let name = raw_name
+            .strip_prefix("package/")
+            .unwrap_or(&raw_name)
             .to_string();
         if name.is_empty() {
             continue;
@@ -1612,6 +1621,23 @@ pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
         out.push((name, data));
     }
     Ok(out)
+}
+
+/// Inflate and pass one exact package through the authoritative shared
+/// identity/path/dependency/derived-index boundary. Hosts should mount
+/// `material.files` and use `material.payload` for semantic content addressing.
+pub fn read_normalized_bundle(
+    label: &str,
+    bytes: &[u8],
+) -> anyhow::Result<package_store::NormalizedPackageMaterial> {
+    let mut entries = BTreeMap::new();
+    for (name, body) in read_bundle(bytes)? {
+        if entries.insert(name.clone(), body).is_some() {
+            bail!("duplicate package bundle member after root normalization: {name}");
+        }
+    }
+    package_store::normalize_package_material(label, entries)
+        .with_context(|| format!("normalize package bundle {label}"))
 }
 
 /// Build a set of package bundles from an explicit cache, writing each package's
@@ -1630,8 +1656,8 @@ pub fn build_bundle_set(
             .split_once('#')
             .ok_or_else(|| anyhow::anyhow!("bundle label must be <id>#<version>: {label}"))?;
         let package_dir = cache_dir.join(label).join("package");
-        let blob = build_bundle(&package_dir)
-            .with_context(|| format!("building bundle for {label}"))?;
+        let blob =
+            build_bundle(&package_dir).with_context(|| format!("building bundle for {label}"))?;
         let bundle_name = format!("{label}.tgz");
         write_bytes_atomically(&out_dir.join(&bundle_name), &blob)?;
         manifest.packages.push(BundleManifestEntry {
@@ -1848,8 +1874,10 @@ mod tests {
         );
         // The derived-columns sidecar is hardlinked out next to `.index.json`,
         // and carries the `name` column the stock index omits.
-        let sidecar =
-            out.join(format!("example.fhir.pkg#1.0.0/package/{}", derived_index::SIDECAR_NAME));
+        let sidecar = out.join(format!(
+            "example.fhir.pkg#1.0.0/package/{}",
+            derived_index::SIDECAR_NAME
+        ));
         let rows = derived_index::parse(&fs::read(&sidecar).unwrap()).expect("current sidecar");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].filename, "ValueSet-Test.json");
@@ -2052,6 +2080,20 @@ mod tests {
         builder.append_data(&mut header, path, data).unwrap();
     }
 
+    #[test]
+    fn bundle_reader_strips_the_registry_package_root_only_once() {
+        let raw = package_tgz_with_files(
+            "example.pkg",
+            "1.0.0",
+            &[("package/package/nested.json", br#"{}"#)],
+        );
+        let entries = read_bundle(&raw).unwrap();
+        assert!(entries
+            .iter()
+            .any(|(name, _)| name == "package/nested.json"));
+        assert!(!entries.iter().any(|(name, _)| name == "nested.json"));
+    }
+
     /// Raw-tgz mount parity (task #32 gate iii): a RAW REGISTRY npm tarball
     /// (files under `package/`, NO `.derived-index.json`) mounts into the engine
     /// IDENTICALLY to a repacked bundle (bare filenames + a `.derived-index.json`
@@ -2059,9 +2101,7 @@ mod tests {
     /// same derived index (derived in-memory when the sidecar is absent).
     #[test]
     fn raw_registry_tgz_mounts_identically_to_repacked_bundle() {
-        use package_store::{
-            derived_index, BundleSource, DiskSource, FishType, PackageStore,
-        };
+        use package_store::{derived_index, BundleSource, DiskSource, FishType, PackageStore};
 
         let label = "example.pkg#1.0.0";
         let sd = br#"{"resourceType":"StructureDefinition","id":"Foo","url":"http://ex/Foo","name":"Foo","kind":"resource","type":"Patient","derivation":"constraint","baseDefinition":"http://hl7.org/fhir/StructureDefinition/Patient"}"#;
@@ -2074,7 +2114,9 @@ mod tests {
         );
         let raw_entries = read_bundle(&raw).unwrap();
         // read_bundle stripped `package/` — the mounted names are bare.
-        assert!(raw_entries.iter().any(|(n, _)| n == "StructureDefinition-Foo.json"));
+        assert!(raw_entries
+            .iter()
+            .any(|(n, _)| n == "StructureDefinition-Foo.json"));
         assert!(!raw_entries.iter().any(|(n, _)| n.contains("package/")));
 
         // (B) REPACKED bundle: materialize the raw tgz to a real package dir, then
@@ -2095,10 +2137,13 @@ mod tests {
         );
 
         // Mount both into separate BundleSources.
+        let material_a = read_normalized_bundle(label, &raw).unwrap();
+        let material_b = read_normalized_bundle(label, &repacked).unwrap();
+        assert_eq!(material_a.payload, material_b.payload);
         let mut src_a = BundleSource::new();
-        src_a.mount_package(label, raw_entries);
+        src_a.mount_package(label, material_a.files);
         let mut src_b = BundleSource::new();
-        src_b.mount_package(label, repacked_entries);
+        src_b.mount_package(label, material_b.files);
 
         // Derived index parity: A derives it in-memory (no sidecar); B reads the
         // shipped sidecar. The rows must be identical.
@@ -2116,12 +2161,18 @@ mod tests {
         // auto-deps/core aren't mounted — index_package skips missing dirs).
         let cfg = "fhirVersion: 4.0.1\ndependencies:\n  example.pkg: 1.0.0\n";
         // Use for_project_with_config over the mounted source.
-        let store_a =
-            PackageStore::for_project_with_config(src_a.clone(), cfg, &src_a.cache_root().to_string_lossy())
-                .unwrap();
-        let store_b =
-            PackageStore::for_project_with_config(src_b.clone(), cfg, &src_b.cache_root().to_string_lossy())
-                .unwrap();
+        let store_a = PackageStore::for_project_with_config(
+            src_a.clone(),
+            cfg,
+            &src_a.cache_root().to_string_lossy(),
+        )
+        .unwrap();
+        let store_b = PackageStore::for_project_with_config(
+            src_b.clone(),
+            cfg,
+            &src_b.cache_root().to_string_lossy(),
+        )
+        .unwrap();
         for q in ["Foo", "http://ex/Foo"] {
             let a = store_a.fish_for_fhir(q, &[FishType::Profile]);
             let b = store_b.fish_for_fhir(q, &[FishType::Profile]);

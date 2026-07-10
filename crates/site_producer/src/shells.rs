@@ -15,7 +15,11 @@ use crate::{ProducerInputs, Resource};
 /// format)` (IGKnowledgeProvider.java:147). `vars` always carries
 /// `langsuffix=""` (lang == null path) in a single-language build.
 fn do_replacements(s: &str, r: &Resource, fmt: Option<&str>) -> String {
-    let name = format!("{}{}-html", r.id, fmt.map(|f| format!("-{f}")).unwrap_or_default());
+    let name = format!(
+        "{}{}-html",
+        r.id,
+        fmt.map(|f| format!("-{f}")).unwrap_or_default()
+    );
     let mut out = s
         .replace("{{[title]}}", &r.title())
         .replace("{{[name]}}", &name)
@@ -49,7 +53,11 @@ fn emit_one(
     fmt: Option<&str>,
     pages: &mut BTreeMap<String, String>,
 ) {
-    let Some(tmpl) = inputs.defaults.get_property(r, template_prop).filter(|s| !s.is_empty()) else {
+    let Some(tmpl) = inputs
+        .defaults
+        .get_property(r, template_prop)
+        .filter(|s| !s.is_empty())
+    else {
         return;
     };
     let Some(layout) = read_layout(inputs, &tmpl) else {
@@ -60,7 +68,11 @@ fn emit_one(
     let out = output_prop
         .and_then(|p| inputs.defaults.get_property(r, p))
         .unwrap_or_else(|| {
-            let ext = if extension.is_empty() { String::new() } else { format!("-{extension}") };
+            let ext = if extension.is_empty() {
+                String::new()
+            } else {
+                format!("-{extension}")
+            };
             let f = if fmt.is_some() { ".{{[fmt]}}" } else { "" };
             format!("{{{{[type]}}}}-{{{{[id]}}}}{ext}{f}.html")
         });
@@ -77,7 +89,15 @@ pub fn emit_shells(inputs: &ProducerInputs, pages: &mut BTreeMap<String, String>
         // base page
         emit_one(inputs, r, "template-base", Some("base"), "", None, pages);
         // definitions page
-        emit_one(inputs, r, "template-defns", Some("defns"), "definitions", None, pages);
+        emit_one(
+            inputs,
+            r,
+            "template-defns",
+            Some("defns"),
+            "definitions",
+            None,
+            pages,
+        );
         // extraTemplates
         for tn in &inputs.defaults.extra_templates {
             if tn == "format" || tn == "defns" {

@@ -1,0 +1,21 @@
+[package]
+name = "site_build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+site_db = { workspace = true, optional = true }
+
+[features]
+default = []
+# Deliberately one-way: SiteBuild is the core contract; site.db is only a
+# compatibility serialization that can be projected into an artifact.
+site-db-compat = ["dep:site_db"]

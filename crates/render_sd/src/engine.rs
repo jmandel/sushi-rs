@@ -3,10 +3,10 @@
 //! returns the FULL fragment file body (`{% raw %}`-wrapped) that the publisher
 //! would have written to `_includes/{ref_}-{kind}.xhtml`, or a typed error.
 //!
-//! The page pass (`render_page`) calls this on a `{% include %}` MISS: the
-//! publisher pre-generates every fragment, but the editor's lazy model
-//! materializes a fragment only when a page's include asks for it
-//! (first-include-miss, plan §2 decision 2).
+//! At the compatibility edge, the page pass (`render_page`) translates a
+//! registered legacy include name into a typed artifact request. The Publisher
+//! pre-generates every fragment; the editor materializes only the typed
+//! artifacts a page requests.
 //!
 //! ## The (ref_, kind) split
 //! An include name like `StructureDefinition-us-core-patient-snapshot.xhtml` is
@@ -69,7 +69,11 @@ pub enum FragError {
     /// The named resource does not exist in the IG.
     NoSuchResource(String),
     /// A documented loud gap (the renderer panicked at a gap marker).
-    Gap { kind: String, refname: String, msg: String },
+    Gap {
+        kind: String,
+        refname: String,
+        msg: String,
+    },
 }
 
 impl std::fmt::Display for FragError {
@@ -181,7 +185,12 @@ const WHOLE_IG_PER_RESOURCE: &[&str] = &["uses", "sd-xref", "maps"];
 
 impl FragmentEngine {
     pub fn new(ctx: IgContext, run_uuid: String, active_tables: bool, facts: IgFacts) -> Self {
-        FragmentEngine { ctx, run_uuid, active_tables, facts }
+        FragmentEngine {
+            ctx,
+            run_uuid,
+            active_tables,
+            facts,
+        }
     }
 
     pub fn ctx(&self) -> &IgContext {
@@ -258,12 +267,7 @@ impl FragmentEngine {
     /// The per-resource dispatch (mirrors corpus.rs::render). Returns the raw
     /// body (pre-wrap). `Err(FragError)` for a kind that needs a resource shape
     /// it did not get (e.g. an SD kind on a ValueSet).
-    fn render_per_resource(
-        &self,
-        _ref: &str,
-        kind: &str,
-        json: &str,
-    ) -> Result<String, FragError> {
+    fn render_per_resource(&self, _ref: &str, kind: &str, json: &str) -> Result<String, FragError> {
         use crate::txcache::TxCacheSource;
         let ctx = &self.ctx;
         let run_uuid = &self.run_uuid;
@@ -273,10 +277,7 @@ impl FragmentEngine {
         if matches!(kind, "cld" | "expansion" | "content") {
             let v: serde_json::Value = serde_json::from_str(json)
                 .map_err(|_| FragError::NoSuchResource(_ref.to_string()))?;
-            let txcache = crate::fstxcache::FsTxCache::new(
-                self.facts.txcache_dir.as_deref(),
-                ctx,
-            );
+            let txcache = crate::fstxcache::FsTxCache::new(self.facts.txcache_dir.as_deref(), ctx);
             let _ = &txcache as &dyn TxCacheSource;
             let body = match kind {
                 "content" => crate::vscs::render_cs_content(&v, ctx),
@@ -288,8 +289,7 @@ impl FragmentEngine {
         }
 
         // Everything else is an SD kind.
-        let sd = Sd::from_json(json)
-            .map_err(|_| FragError::NoSuchResource(_ref.to_string()))?;
+        let sd = Sd::from_json(json).map_err(|_| FragError::NoSuchResource(_ref.to_string()))?;
         let def_file = format!("StructureDefinition-{}-definitions.html", sd.id());
         let cp = core_path_for(&sd);
         use crate::table::TableConfig;
@@ -307,42 +307,92 @@ impl FragmentEngine {
             }
             "snapshot" => tbl(TableConfig::snapshot(run_uuid), at, &sd, ctx, &def_file),
             "snapshot-all" => tbl(TableConfig::snapshot_all(run_uuid), at, &sd, ctx, &def_file),
-            "snapshot-by-mustsupport" => {
-                tbl(TableConfig::snapshot_by_mustsupport(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-by-mustsupport-all" => {
-                tbl(TableConfig::snapshot_by_mustsupport_all(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-by-key" => {
-                tbl(TableConfig::snapshot_by_key(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-by-key-all" => {
-                tbl(TableConfig::snapshot_by_key_all(run_uuid), at, &sd, ctx, &def_file)
-            }
+            "snapshot-by-mustsupport" => tbl(
+                TableConfig::snapshot_by_mustsupport(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-by-mustsupport-all" => tbl(
+                TableConfig::snapshot_by_mustsupport_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-by-key" => tbl(
+                TableConfig::snapshot_by_key(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-by-key-all" => tbl(
+                TableConfig::snapshot_by_key_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
             "diff" => tbl(TableConfig::diff_view(run_uuid), at, &sd, ctx, &def_file),
             "diff-all" => tbl(TableConfig::diff_all(run_uuid), at, &sd, ctx, &def_file),
-            "snapshot-bindings" => {
-                tbl(TableConfig::snapshot_bindings(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-bindings-all" => {
-                tbl(TableConfig::snapshot_bindings_all(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-obligations" => {
-                tbl(TableConfig::snapshot_obligations(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "snapshot-obligations-all" => {
-                tbl(TableConfig::snapshot_obligations_all(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "diff-bindings" => tbl(TableConfig::diff_bindings(run_uuid), at, &sd, ctx, &def_file),
-            "diff-bindings-all" => {
-                tbl(TableConfig::diff_bindings_all(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "diff-obligations" => {
-                tbl(TableConfig::diff_obligations(run_uuid), at, &sd, ctx, &def_file)
-            }
-            "diff-obligations-all" => {
-                tbl(TableConfig::diff_obligations_all(run_uuid), at, &sd, ctx, &def_file)
-            }
+            "snapshot-bindings" => tbl(
+                TableConfig::snapshot_bindings(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-bindings-all" => tbl(
+                TableConfig::snapshot_bindings_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-obligations" => tbl(
+                TableConfig::snapshot_obligations(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "snapshot-obligations-all" => tbl(
+                TableConfig::snapshot_obligations_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "diff-bindings" => tbl(
+                TableConfig::diff_bindings(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "diff-bindings-all" => tbl(
+                TableConfig::diff_bindings_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "diff-obligations" => tbl(
+                TableConfig::diff_obligations(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
+            "diff-obligations-all" => tbl(
+                TableConfig::diff_obligations_all(run_uuid),
+                at,
+                &sd,
+                ctx,
+                &def_file,
+            ),
             // leaves
             "contained-index" | "history" => crate::leaf::empty_body(),
             "pseudo-ttl" => crate::leaf::pseudo_ttl(),
@@ -388,14 +438,13 @@ impl FragmentEngine {
     fn render_singleton(&self, kind: &str) -> Result<String, FragError> {
         let ctx = &self.ctx;
         let f = &self.facts;
-        let body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.singleton_body(kind)
-        }))
-        .map_err(|e| FragError::Gap {
-            kind: kind.to_string(),
-            refname: String::new(),
-            msg: panic_msg(e),
-        })?;
+        let body =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.singleton_body(kind)))
+                .map_err(|e| FragError::Gap {
+                    kind: kind.to_string(),
+                    refname: String::new(),
+                    msg: panic_msg(e),
+                })?;
         let _ = (ctx, f);
         Ok(wrap_raw(&body))
     }
@@ -423,8 +472,7 @@ impl FragmentEngine {
             }
             "summary-extensions" => agg::summary_extensions(ctx),
             "summary-observations" => {
-                let txcache =
-                    crate::fstxcache::FsTxCache::new(f.txcache_dir.as_deref(), ctx);
+                let txcache = crate::fstxcache::FsTxCache::new(f.txcache_dir.as_deref(), ctx);
                 agg::summary_observations(ctx, &txcache, &f.singleton_core_path)
             }
             "deprecated-list" => agg::deprecated_list(ctx, &f.singleton_core_path),
@@ -441,29 +489,42 @@ impl FragmentEngine {
             "dependency-table" => format!(
                 "{}<!--$$3$$-->",
                 crate::deptable::dependency_table(
-                    &f.cache_dir, &f.ig_json, &f.loaded_set, &f.dep_dst_folder, true, &self.run_uuid
+                    &f.cache_dir,
+                    &f.ig_json,
+                    &f.loaded_set,
+                    &f.dep_dst_folder,
+                    true,
+                    &self.run_uuid
                 )
             ),
             "dependency-table-short" => format!(
                 "{}<!--$$3$$-->",
                 crate::deptable::dependency_table(
-                    &f.cache_dir, &f.ig_json, &f.loaded_set, &f.dep_dst_folder, false, &self.run_uuid
+                    &f.cache_dir,
+                    &f.ig_json,
+                    &f.loaded_set,
+                    &f.dep_dst_folder,
+                    false,
+                    &self.run_uuid
                 )
             ),
             "dependency-table-nontech" => format!(
                 "{}<!--$$3$$-->",
-                crate::deptable::dependency_table_nontech(self.ctx.tree(), &f.cache_dir, &f.ig_json, &f.loaded_set)
+                crate::deptable::dependency_table_nontech(
+                    self.ctx.tree(),
+                    &f.cache_dir,
+                    &f.ig_json,
+                    &f.loaded_set
+                )
             ),
             "valueset-ref-list" => agg::valueset_ref_list(ctx, &f.ig_version, false),
             "valueset-ref-all-list" => agg::valueset_ref_list(ctx, &f.ig_version, true),
             "codesystem-ref-list" => {
-                let versions =
-                    crate::xreflist::used_vs_needs_version(ctx, &f.ig_version, true);
+                let versions = crate::xreflist::used_vs_needs_version(ctx, &f.ig_version, true);
                 agg::codesystem_ref_list(ctx, versions, false)
             }
             "codesystem-ref-all-list" => {
-                let versions =
-                    crate::xreflist::used_vs_needs_version(ctx, &f.ig_version, true);
+                let versions = crate::xreflist::used_vs_needs_version(ctx, &f.ig_version, true);
                 agg::codesystem_ref_list(ctx, versions, true)
             }
             _ => panic!("unregistered singleton kind {}", kind),

@@ -1,7 +1,9 @@
-//! The Session render surface (F6): FragmentEngine + page rendering over the
-//! engine's in-memory state — compiled project + mounted package bundles +
-//! the mounted site tree (template statics, pagecontent, _data, _includes,
-//! optional txcache).
+//! The Session render surface (F6) has two deliberately separate lifetimes:
+//! [`RenderSemantics`] is the semantic FHIR core (compiled resources, packages,
+//! optional txcache, and fragment options), while [`RenderState`] is the cheap
+//! per-site projection (page sources, layouts/includes, and `site.data`). A
+//! page/template overlay rebuilds only `RenderState`; a semantic compile input
+//! or output, package, txcache, or semantic-option change rebuilds both.
 //!
 //! Virtual layout (all reads via `TreeSource`):
 //!   /own/<Type>-<id>.json      — the last compile()'s resources (incl. the IG)
@@ -12,10 +14,11 @@
 //!   /site/txcache/...          — optional tx cache (vs-externals.json etc.)
 //!   <bundle cache root>/...    — mounted packages, served by BundleSource
 //!
-//! One shared fragment cache per generation: the page include loop and the
-//! external `render_fragment` hit the SAME map; a new compile() generation
-//! drops the whole render state (structural invalidation — staleness is
-//! impossible, not merely unlikely).
+//! One shared fragment cache per site generation: the page include loop and the
+//! external `render_fragment` hit the SAME map. The FragmentEngine itself can
+//! span site generations because its TreeSource intentionally contains only
+//! semantic inputs (`/own`, package files, and `/site/txcache`) — never mutable
+//! page/template bytes.
 //!
 //! Page sources are the publisher's STAGED shape: `.html` with front matter
 //! (every F0 tree stages pages that way — plan-net/us-core/cycle carry no
@@ -31,7 +34,10 @@ use std::rc::Rc;
 
 use package_store::bundle::BundleSource;
 use package_store::source::PackageSource;
-use render_page::{render_page, PageProvider, SiteData};
+use render_page::{
+    legacy_include_to_artifact_key, render_page, FragmentEngineArtifactResolver, PageProvider,
+    SharedArtifactCache, SiteData,
+};
 use render_sd::context::IgContext;
 use render_sd::engine::{FragError, FragmentEngine, IgFacts};
 use render_sd::tree::{DirEntry, MemTree, TreeSource};
@@ -76,7 +82,7 @@ impl TreeSource for SessionTree {
 }
 
 /// Options for the mounted site tree.
-#[derive(Debug, Default, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteOptions {
     /// The template config's `active-tables` param (per-IG; publisher
@@ -91,29 +97,68 @@ pub struct SiteOptions {
     /// Merge into the existing mounted tree instead of REPLACING it. The
     /// editor mounts a large packed template tree ONCE, then per-compile
     /// re-mounts only the small live-overlay set (pagecontent copies + shims)
-    /// with merge:true — the render state still drops whole either way.
+    /// with merge:true — only the cheap page surface drops for such overlays.
     #[serde(default)]
     pub merge: bool,
-    /// Include resolution order. TRUE (default; the stock-template path): LIVE
-    /// engine fragments shadow staged tree copies. FALSE (custom generators,
-    /// e.g. cycle): the mounted `_includes` — the generator's own include
-    /// design — win; the engine only serves tree misses.
+    /// Include resolution order. TRUE (default; the stock-template path): live
+    /// engine fragments shadow staged tree copies. FALSE: mounted `_includes`
+    /// win and the resolver is consulted only afterward.
     #[serde(default = "default_true")]
     pub engine_first_includes: bool,
+    /// Permit registered Publisher fragment includes to cross the typed
+    /// ArtifactResolver boundary. TRUE by default for the stock native
+    /// template path. A callback-free native consumer can set this FALSE: a
+    /// missing include then remains a missing file and cannot invoke the
+    /// FragmentEngine regardless of include precedence. Cycle does not mount
+    /// this Rust render surface at all.
+    #[serde(default = "default_true")]
+    pub artifact_resolution: bool,
 }
 
 fn default_true() -> bool {
     true
 }
 
+impl Default for SiteOptions {
+    fn default() -> Self {
+        Self {
+            active_tables: false,
+            run_uuid: None,
+            merge: false,
+            engine_first_includes: true,
+            artifact_resolution: true,
+        }
+    }
+}
+
+impl SiteOptions {
+    /// Whether two site mounts have identical inputs to the FragmentEngine.
+    /// Include precedence, artifact callbacks, and merge policy belong to the
+    /// page surface and therefore do not invalidate semantic FHIR state.
+    pub fn same_fragment_semantics(&self, other: &Self) -> bool {
+        self.active_tables == other.active_tables && self.run_uuid == other.run_uuid
+    }
+}
+
+/// The expensive, reusable semantic half of rendering.
+///
+/// `compiled` is snapshot-complete and retained so rebuilding a page tree after
+/// a site-only overlay neither repeats snapshot completion nor reloads the
+/// FragmentEngine's `IgContext`.
+pub struct RenderSemantics {
+    pub engine: Rc<FragmentEngine>,
+    compiled: Vec<(PathBuf, Value)>,
+}
+
 /// The per-generation render state.
 pub struct RenderState {
     engine_first_includes: bool,
-    pub engine: FragmentEngine,
+    artifact_resolution: bool,
+    pub engine: Rc<FragmentEngine>,
     pub site: SiteData,
     pub tree: Rc<dyn TreeSource>,
-    /// The session-shared first-include-miss store.
-    pub frag_cache: Rc<RefCell<HashMap<String, Option<String>>>>,
+    /// The session-shared typed artifact cache.
+    pub frag_cache: SharedArtifactCache,
     /// Page source names available under /site/en (stem -> source path).
     pages: Vec<(String, PathBuf)>,
 }
@@ -121,14 +166,7 @@ pub struct RenderState {
 const OWN_DIR: &str = "/own";
 const SITE_DIR: &str = "/site";
 
-/// Build the render state from session parts.
-pub fn build_render_state(
-    compiled: &[(PathBuf, Value)],
-    bundle: Option<Rc<BundleSource>>,
-    site_files: &HashMap<PathBuf, Vec<u8>>,
-    options: &SiteOptions,
-) -> Result<RenderState, String> {
-    let mut mem = MemTree::new();
+fn insert_compiled(mem: &mut MemTree, compiled: &[(PathBuf, Value)]) -> Result<(), String> {
     // /own: the compiled resources, named {Type}-{id}.json (compile() already
     // produces synthetic paths shaped that way; fall back to the body).
     for (p, v) in compiled {
@@ -145,42 +183,40 @@ pub fn build_render_state(
         let text = serde_json::to_string(v).map_err(|e| e.to_string())?;
         mem.insert_text(Path::new(OWN_DIR).join(fname), &text);
     }
-    // /site: the mounted tree, verbatim. Page sources = every .md/.html not
-    // under the non-page dirs; key = output rel path (.md maps to .html), which
-    // is ALSO the Jekyll page.path (`en/<name>` in multi-language layouts,
-    // `<name>` in flat ones — the tree shape carries it).
-    let mut pages: Vec<(String, PathBuf)> = Vec::new();
-    for (p, bytes) in site_files {
-        mem.insert(p.clone(), bytes.clone());
-        let Ok(rest) = p.strip_prefix(SITE_DIR) else { continue };
-        let rel = rest.to_string_lossy().to_string();
-        if rel.starts_with("_includes/")
-            || rel.starts_with("_data/")
-            || rel.starts_with("_layouts/")
-            || rel.starts_with("txcache/")
-            || rel.starts_with("assets/")
-        {
-            continue;
-        }
-        if rel.ends_with(".md") || rel.ends_with(".html") {
-            let key = if let Some(stem) = rel.strip_suffix(".md") {
-                format!("{}.html", stem)
-            } else {
-                rel
-            };
-            pages.push((key, p.clone()));
-        }
-    }
-    pages.sort();
+    Ok(())
+}
 
-    let has_txcache = site_files
-        .keys()
-        .any(|p| p.starts_with(format!("{}/txcache", SITE_DIR)));
-
-    let pkg_root = bundle
+fn package_root(bundle: &Option<Rc<BundleSource>>) -> PathBuf {
+    bundle
         .as_ref()
         .map(|b| b.cache_root().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("/__no_bundle__"));
+        .unwrap_or_else(|| PathBuf::from("/__no_bundle__"))
+}
+
+/// Build the semantic FHIR core. Its tree intentionally excludes ordinary site
+/// files, making reuse across page/template overlays correct by construction.
+pub fn build_render_semantics(
+    compiled: Vec<(PathBuf, Value)>,
+    bundle: Option<Rc<BundleSource>>,
+    site_files: &HashMap<PathBuf, Vec<u8>>,
+    options: &SiteOptions,
+) -> Result<RenderSemantics, String> {
+    let mut mem = MemTree::new();
+    insert_compiled(&mut mem, &compiled)?;
+
+    // Terminology cache bytes are semantic inputs even though the public mount
+    // surface places them under /site. Copy only this subtree into the semantic
+    // tree; retaining an old semantic core can therefore never retain stale
+    // pages, layouts, includes, data, or assets.
+    let mut has_txcache = false;
+    let txcache_root = Path::new(SITE_DIR).join("txcache");
+    for (path, bytes) in site_files {
+        if path.starts_with(&txcache_root) {
+            has_txcache = true;
+            mem.insert(path.clone(), bytes.clone());
+        }
+    }
+    let pkg_root = package_root(&bundle);
     let tree: Rc<dyn TreeSource> = Rc::new(SessionTree {
         mem,
         pkg: bundle,
@@ -203,7 +239,9 @@ pub fn build_render_state(
     // aggregate kinds needing richer facts fire their documented loud gaps.
     let ig_version = compiled
         .iter()
-        .find(|(_, v)| v.get("resourceType").and_then(|x| x.as_str()) == Some("ImplementationGuide"))
+        .find(|(_, v)| {
+            v.get("resourceType").and_then(|x| x.as_str()) == Some("ImplementationGuide")
+        })
         .and_then(|(_, v)| v.get("version").and_then(|x| x.as_str()))
         .unwrap_or("")
         .to_string();
@@ -216,18 +254,82 @@ pub fn build_render_state(
         .run_uuid
         .clone()
         .unwrap_or_else(|| "00000000-0000-4000-8000-editor000000".to_string());
-    let engine = FragmentEngine::new(ctx, uuid, options.active_tables, facts);
+    let engine = Rc::new(FragmentEngine::new(ctx, uuid, options.active_tables, facts));
+
+    Ok(RenderSemantics { engine, compiled })
+}
+
+/// Build the cheap page/template half over an already-loaded semantic core.
+pub fn build_render_state_from_semantics(
+    semantics: &RenderSemantics,
+    bundle: Option<Rc<BundleSource>>,
+    site_files: &HashMap<PathBuf, Vec<u8>>,
+    options: &SiteOptions,
+) -> Result<RenderState, String> {
+    let mut mem = MemTree::new();
+    insert_compiled(&mut mem, &semantics.compiled)?;
+
+    // /site: the mounted tree, verbatim. Page sources = every .md/.html not
+    // under the non-page dirs; key = output rel path (.md maps to .html), which
+    // is ALSO the Jekyll page.path (`en/<name>` in multi-language layouts,
+    // `<name>` in flat ones — the tree shape carries it).
+    let mut pages: Vec<(String, PathBuf)> = Vec::new();
+    for (p, bytes) in site_files {
+        mem.insert(p.clone(), bytes.clone());
+        let Ok(rest) = p.strip_prefix(SITE_DIR) else {
+            continue;
+        };
+        let rel = rest.to_string_lossy().to_string();
+        if rel.starts_with("_includes/")
+            || rel.starts_with("_data/")
+            || rel.starts_with("_layouts/")
+            || rel.starts_with("txcache/")
+            || rel.starts_with("assets/")
+        {
+            continue;
+        }
+        if rel.ends_with(".md") || rel.ends_with(".html") {
+            let key = if let Some(stem) = rel.strip_suffix(".md") {
+                format!("{}.html", stem)
+            } else {
+                rel
+            };
+            pages.push((key, p.clone()));
+        }
+    }
+    pages.sort();
+
+    let pkg_root = package_root(&bundle);
+    let tree: Rc<dyn TreeSource> = Rc::new(SessionTree {
+        mem,
+        pkg: bundle,
+        pkg_root,
+    });
 
     let site = SiteData::load_with_tree(&*tree, &Path::new(SITE_DIR).join("_data"));
 
     Ok(RenderState {
-        engine,
+        engine: semantics.engine.clone(),
         site,
         tree,
-        frag_cache: Rc::new(RefCell::new(HashMap::new())),
+        frag_cache: Rc::new(RefCell::new(Default::default())),
         pages,
         engine_first_includes: options.engine_first_includes,
+        artifact_resolution: options.artifact_resolution,
     })
+}
+
+/// Convenience constructor for native callers that do not manage semantic and
+/// site lifetimes separately. Session/Engine uses the split constructors above.
+#[cfg(test)]
+pub fn build_render_state(
+    compiled: &[(PathBuf, Value)],
+    bundle: Option<Rc<BundleSource>>,
+    site_files: &HashMap<PathBuf, Vec<u8>>,
+    options: &SiteOptions,
+) -> Result<RenderState, String> {
+    let semantics = build_render_semantics(compiled.to_vec(), bundle.clone(), site_files, options)?;
+    build_render_state_from_semantics(&semantics, bundle, site_files, options)
 }
 
 impl RenderState {
@@ -237,15 +339,16 @@ impl RenderState {
         // hazard when a harvested site tree carries publisher `_includes`
         // dumps. Unregistered/authored content includes still come from the
         // tree.
-        PageProvider::new(
-            &self.site,
-            &Path::new(SITE_DIR).join("_includes"),
-            Some(&self.engine),
-        )
-        .with_engine_first(self.engine_first_includes)
-        .with_pages_root(Path::new(SITE_DIR))
-        .with_tree(self.tree.clone())
-        .with_shared_cache(self.frag_cache.clone())
+        let mut provider = PageProvider::new(&self.site, &Path::new(SITE_DIR).join("_includes"))
+            .with_engine_first(self.engine_first_includes)
+            .with_pages_root(Path::new(SITE_DIR))
+            .with_tree(self.tree.clone())
+            .with_shared_cache(self.frag_cache.clone());
+        if self.artifact_resolution {
+            provider = provider
+                .with_artifact_resolver(FragmentEngineArtifactResolver::new(self.engine.as_ref()));
+        }
+        provider
     }
 
     /// ContentApi: render a Liquid source against the session provider —
@@ -266,8 +369,10 @@ impl RenderState {
             }
         }
         let provider = self.provider();
-        let refs: Vec<(&str, render_liquid::Value)> =
-            globals.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        let refs: Vec<(&str, render_liquid::Value)> = globals
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.clone()))
+            .collect();
         Ok(render_liquid::render_with(
             source,
             &provider,
@@ -279,18 +384,25 @@ impl RenderState {
         ))
     }
 
-    /// Render one fragment through the SHARED first-include-miss store: cache
-    /// key = the include name `{ref}-{kind}.xhtml`, the same key the page
-    /// include loop uses.
+    /// Render one fragment through the SHARED typed artifact cache. Its key is
+    /// the fragment artifact translated from
+    /// `{ref}-{kind}.xhtml`, the same key the page include loop uses.
     pub fn render_fragment(&self, ref_: &str, kind: &str) -> Result<String, FragError> {
-        let key = format!("{}-{}.xhtml", ref_, kind);
-        if let Some(Some(hit)) = self.frag_cache.borrow().get(&key).cloned() {
-            return Ok(hit);
+        let include_name = if ref_.is_empty() {
+            format!("{kind}.xhtml")
+        } else {
+            format!("{ref_}-{kind}.xhtml")
+        };
+        let artifact_key = legacy_include_to_artifact_key(&include_name);
+        if let Some(key) = artifact_key.as_ref() {
+            if let Some(Some(hit)) = self.frag_cache.borrow().get(key).cloned() {
+                return Ok(hit);
+            }
         }
         let out = self.engine.render_fragment(ref_, kind)?;
-        self.frag_cache
-            .borrow_mut()
-            .insert(key, Some(out.clone()));
+        if let Some(key) = artifact_key {
+            self.frag_cache.borrow_mut().insert(key, Some(out.clone()));
+        }
         Ok(out)
     }
 
@@ -323,6 +435,7 @@ impl RenderState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use render_liquid::DataProvider;
     use render_sd::tree::FsTree;
 
     const F0_PLANNET: &str = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/plan-net";
@@ -338,6 +451,59 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn minimal_fragment_state(artifact_resolution: bool) -> RenderState {
+        let compiled = vec![(
+            PathBuf::from("StructureDefinition-test.json"),
+            serde_json::json!({
+                "resourceType": "StructureDefinition",
+                "id": "test",
+                "url": "http://example.org/StructureDefinition/test",
+                "name": "Test",
+                "status": "draft",
+                "fhirVersion": "4.0.1",
+                "kind": "resource",
+                "abstract": false,
+                "type": "Patient",
+                "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+                "derivation": "constraint",
+                "snapshot": { "element": [{ "id": "Patient", "path": "Patient" }] }
+            }),
+        )];
+        build_render_state(
+            &compiled,
+            None,
+            &HashMap::new(),
+            &SiteOptions {
+                artifact_resolution,
+                ..Default::default()
+            },
+        )
+        .expect("minimal render state")
+    }
+
+    #[test]
+    fn artifact_resolution_option_is_explicit_and_can_make_includes_callback_free() {
+        let defaults: SiteOptions = serde_json::from_str("{}").unwrap();
+        assert!(defaults.artifact_resolution);
+        let disabled_wire: SiteOptions =
+            serde_json::from_str(r#"{"artifactResolution":false}"#).unwrap();
+        assert!(!disabled_wire.artifact_resolution);
+
+        let include = "StructureDefinition-test-history.xhtml";
+        let disabled = minimal_fragment_state(false);
+        let disabled_provider = disabled.provider();
+        assert_eq!(disabled_provider.include_source(include), None);
+        assert!(disabled.frag_cache.borrow().is_empty());
+
+        let enabled = minimal_fragment_state(true);
+        let enabled_provider = enabled.provider();
+        assert_eq!(
+            enabled_provider.include_source(include).as_deref(),
+            Some("{% raw %}{% endraw %}")
+        );
+        assert_eq!(enabled.frag_cache.borrow().len(), 1);
     }
 
     /// Session-vs-direct equivalence over the REAL plan-net F0 tree: the same
@@ -385,7 +551,8 @@ mod tests {
         };
         let engine = FragmentEngine::new(ctx, uuid.clone(), true, facts);
         let site = SiteData::load(&b.join("temp/pages/_data"));
-        let provider = PageProvider::new(&site, &b.join("temp/pages/_includes"), Some(&engine))
+        let provider = PageProvider::new(&site, &b.join("temp/pages/_includes"))
+            .with_artifact_resolver(FragmentEngineArtifactResolver::new(&engine))
             .with_engine_first(true)
             .with_pages_root(&b.join("temp/pages"));
 
@@ -414,8 +581,12 @@ mod tests {
             if !isf || !n.ends_with(".json") {
                 continue;
             }
-            let Some(t) = FsTree.read(&own_dir.join(&n)) else { continue };
-            let Ok(v) = serde_json::from_str::<Value>(&t) else { continue };
+            let Some(t) = FsTree.read(&own_dir.join(&n)) else {
+                continue;
+            };
+            let Ok(v) = serde_json::from_str::<Value>(&t) else {
+                continue;
+            };
             if v.get("resourceType").and_then(|x| x.as_str()).is_none() {
                 continue;
             }
@@ -427,7 +598,11 @@ mod tests {
         let mut all = Vec::new();
         walk(&pages_root, &mut all);
         for f in all {
-            let rel = f.strip_prefix(&pages_root).unwrap().to_string_lossy().to_string();
+            let rel = f
+                .strip_prefix(&pages_root)
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
             site_files.insert(
                 PathBuf::from(format!("/site/{}", rel)),
                 std::fs::read(&f).unwrap(),
@@ -436,7 +611,11 @@ mod tests {
         let mut tx = Vec::new();
         walk(&txcache_dir, &mut tx);
         for f in tx {
-            let rel = f.strip_prefix(&txcache_dir).unwrap().to_string_lossy().to_string();
+            let rel = f
+                .strip_prefix(&txcache_dir)
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
             site_files.insert(
                 PathBuf::from(format!("/site/txcache/{}", rel)),
                 std::fs::read(&f).unwrap(),
@@ -447,6 +626,7 @@ mod tests {
             run_uuid: Some(uuid),
             merge: false,
             engine_first_includes: true,
+            artifact_resolution: true,
         };
         let rs = build_render_state(&compiled, Some(Rc::new(bundle)), &site_files, &opts)
             .expect("render state");
@@ -472,16 +652,16 @@ mod tests {
             let ours = rs.render_page_by_name(&key).expect("session render");
             pages += 1;
             if direct != ours {
-                let dump = std::env::temp_dir().join(format!(
-                    "equiv-{}",
-                    key.replace('/', "_")
-                ));
+                let dump = std::env::temp_dir().join(format!("equiv-{}", key.replace('/', "_")));
                 let _ = std::fs::write(dump.with_extension("direct.html"), &direct);
                 let _ = std::fs::write(dump.with_extension("session.html"), &ours);
                 mismatches.push(key);
             }
         }
-        assert!(pages > 500, "expected the full plan-net page set, got {pages}");
+        assert!(
+            pages > 500,
+            "expected the full plan-net page set, got {pages}"
+        );
         assert!(
             mismatches.is_empty(),
             "session/direct divergence on {} of {} pages: {:?}",

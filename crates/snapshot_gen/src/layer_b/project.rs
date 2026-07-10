@@ -430,7 +430,10 @@ fn additional_to_extension(add: &Value) -> Value {
         children.extend(extra.iter().cloned());
     }
     let mut ext = Map::new();
-    ext.insert("url".into(), Value::String(EXT_BINDING_ADDITIONAL_TOOLS.into()));
+    ext.insert(
+        "url".into(),
+        Value::String(EXT_BINDING_ADDITIONAL_TOOLS.into()),
+    );
     if !children.is_empty() {
         ext.insert("extension".into(), Value::Array(children));
     }
@@ -550,23 +553,23 @@ const ED_ORDER: &[&str] = &[
     "id",
     "extension",
     "modifierExtension",
-    "path",             // 0
-    "representation",   // 1
-    "sliceName",        // 2
+    "path",                // 0
+    "representation",      // 1
+    "sliceName",           // 2
     "sliceIsConstraining", // 3
-    "label",            // 4
-    "code",             // 5
-    "slicing",          // 6
-    "short",            // 7
-    "definition",       // 8
-    "comment",          // 9
-    "requirements",     // 10
-    "alias",            // 11
-    "min",              // 12
-    "max",              // 13
-    "base",             // 14
-    "contentReference", // 15
-    "type",             // 16
+    "label",               // 4
+    "code",                // 5
+    "slicing",             // 6
+    "short",               // 7
+    "definition",          // 8
+    "comment",             // 9
+    "requirements",        // 10
+    "alias",               // 11
+    "min",                 // 12
+    "max",                 // 13
+    "base",                // 14
+    "contentReference",    // 15
+    "type",                // 16
     // defaultValue[x] (17), fixed[x] (20), pattern[x] (21), minValue[x] (23),
     // maxValue[x] (24) are polymorphic — matched by prefix below via
     // `reorder_choice`-free path: we place them via explicit prefixes.
@@ -575,18 +578,18 @@ const ED_ORDER: &[&str] = &[
     "orderMeaning",       // 19
     "fixed",
     "pattern",
-    "example",  // 22
+    "example", // 22
     "minValue",
     "maxValue",
-    "maxLength",  // 25
-    "condition",  // 26
-    "constraint", // 27
-    "mustSupport", // 28
-    "isModifier",  // 29
+    "maxLength",        // 25
+    "condition",        // 26
+    "constraint",       // 27
+    "mustSupport",      // 28
+    "isModifier",       // 29
     "isModifierReason", // 30
-    "isSummary",   // 31
-    "binding",     // 32
-    "mapping",     // 33
+    "isSummary",        // 31
+    "binding",          // 32
+    "mapping",          // 33
 ];
 
 /// R4 ElementDefinition.constraint order: Element envelope then @Child 1-7 with

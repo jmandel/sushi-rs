@@ -24,7 +24,10 @@ pub(crate) fn process_path_with_sliced_base(
     type_list: &mut Vec<TypeSlice>,
 ) -> anyhow::Result<()> {
     let path = path_of(current_base).to_string();
-    let diff_matches: Vec<Value> = diff_match_idx.iter().map(|&i| ctx.diff[i].clone()).collect();
+    let diff_matches: Vec<Value> = diff_match_idx
+        .iter()
+        .map(|&i| ctx.diff[i].clone())
+        .collect();
 
     if diff_matches.is_empty() {
         trace::rec(
@@ -34,7 +37,14 @@ pub(crate) fn process_path_with_sliced_base(
             None,
             None,
         );
-        process_path_with_sliced_base_empty(ctx, cur, frame, current_base, current_base_path, &path)?;
+        process_path_with_sliced_base_empty(
+            ctx,
+            cur,
+            frame,
+            current_base,
+            current_base_path,
+            &path,
+        )?;
     } else if types::diffs_constrain_types(ctx, &diff_matches, current_base_path, type_list) {
         trace::rec(
             "processPathWithSlicedBase",
@@ -63,7 +73,15 @@ pub(crate) fn process_path_with_sliced_base(
                 "inheritedSlicing": true,
             })),
         );
-        process_path_with_sliced_base_default(ctx, cur, frame, current_base, current_base_path, &path, diff_match_idx)?;
+        process_path_with_sliced_base_default(
+            ctx,
+            cur,
+            frame,
+            current_base,
+            current_base_path,
+            &path,
+            diff_match_idx,
+        )?;
     }
     Ok(())
 }
@@ -111,7 +129,8 @@ fn process_path_with_sliced_base_empty(
             let mut nframe = frame.clone();
             nframe.slicing = SlicingParams::default();
             super::loop_::process_paths(ctx, &mut ncur, &nframe, None)?;
-            cur.base_cursor = index_of_first_non_child(&cur.base, cur.base_cursor, frame.base_limit);
+            cur.base_cursor =
+                index_of_first_non_child(&cur.base, cur.base_cursor, frame.base_limit);
         } else {
             // PPP:1855-1882 — the diff walks in but the base has no children:
             // unfold from the datatype SD.
@@ -206,7 +225,10 @@ fn process_path_with_sliced_base_default(
         .and_then(|s| s.get("rules"))
         .and_then(Value::as_str)
         == Some("closed");
-    let diff_matches: Vec<Value> = diff_match_idx.iter().map(|&i| ctx.diff[i].clone()).collect();
+    let diff_matches: Vec<Value> = diff_match_idx
+        .iter()
+        .map(|&i| ctx.diff[i].clone())
+        .collect();
     let diff0 = diff_matches[0].clone();
     let diff0_idx = diff_match_idx[0];
     // Java `currentBase` is the slicing anchor; its base index is where the
@@ -258,7 +280,13 @@ fn process_path_with_sliced_base_default(
     }
 
     // Anchor children / BackboneElement copy.
-    if has_inner_diff_matches(&ctx.diff, current_base_path, cur.diff_cursor, frame.diff_limit, false) {
+    if has_inner_diff_matches(
+        &ctx.diff,
+        current_base_path,
+        cur.diff_cursor,
+        frame.diff_limit,
+        false,
+    ) {
         // PPP:1380-1415 — the diff walks into the sliced anchor itself.
         let new_base_limit = find_end_of_element(&cur.base, cur.base_cursor);
         let ndx = diff0_idx;
@@ -366,7 +394,10 @@ fn process_path_with_sliced_base_default(
         if let Some(obj) = outcome.as_object_mut() {
             obj.remove("slicing");
         }
-        let outcome_slice = outcome.get("sliceName").and_then(Value::as_str).map(str::to_string);
+        let outcome_slice = outcome
+            .get("sliceName")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let diff_slice_name = diff_matches
             .get(diffpos)
             .and_then(|d| d.get("sliceName"))
@@ -397,7 +428,11 @@ fn process_path_with_sliced_base_default(
             let mut nframe = frame.clone();
             nframe.base_limit = new_base_limit;
             nframe.diff_limit = new_diff_limit as isize;
-            nframe.profile_name = format!("{}{}", frame.profile_name, path_tail(&diff_matches[diffpos]));
+            nframe.profile_name = format!(
+                "{}{}",
+                frame.profile_name,
+                path_tail(&diff_matches[diffpos])
+            );
             nframe.trim_differential = closed;
             nframe.slicing = SlicingParams::done_with(None, None);
             super::loop_::process_paths(ctx, &mut nc, &nframe, None)?;
@@ -453,7 +488,11 @@ fn process_path_with_sliced_base_default(
         let lid = tail(id);
         let template = if lid.contains('/') {
             super::ids::generate_ids(&mut ctx.output);
-            let base_id = format!("{}{}", &id[..id.len() - lid.len()], &lid[..lid.find('/').unwrap()]);
+            let base_id = format!(
+                "{}{}",
+                &id[..id.len() - lid.len()],
+                &lid[..lid.find('/').unwrap()]
+            );
             ctx.output
                 .iter()
                 .find(|e| e.get("id").and_then(Value::as_str) == Some(base_id.as_str()))
@@ -508,9 +547,17 @@ fn process_path_with_sliced_base_default(
             if let Some(sdt) = super::resolve::resolve_with_snapshot(ctx, &profiles[0])? {
                 if let Some(edt) = super::simple::snapshot_elements(&sdt).first() {
                     let edt_min = edt.get("min").and_then(Value::as_u64).unwrap_or(0);
-                    let edt_max = edt.get("max").and_then(Value::as_str).unwrap_or("*").to_string();
+                    let edt_max = edt
+                        .get("max")
+                        .and_then(Value::as_str)
+                        .unwrap_or("*")
+                        .to_string();
                     let out_min = outcome.get("min").and_then(Value::as_u64).unwrap_or(0);
-                    let out_max = outcome.get("max").and_then(Value::as_str).unwrap_or("*").to_string();
+                    let out_max = outcome
+                        .get("max")
+                        .and_then(Value::as_str)
+                        .unwrap_or("*")
+                        .to_string();
                     if edt_min >= 1 && out_min < 1 {
                         set_field(&mut outcome, "min", Value::from(edt_min));
                     }
@@ -551,9 +598,18 @@ fn process_path_with_sliced_base_default(
                 .and_then(|t| t.get("code"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let type_count = outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            let type_count = outcome
+                .get("type")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
             if type_count > 1 {
-                for tr in outcome.get("type").and_then(Value::as_array).into_iter().flatten() {
+                for tr in outcome
+                    .get("type")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
                     if tr.get("code").and_then(Value::as_str) != Some("Reference") {
                         anyhow::bail!(
                             "_HAS_CHILDREN__AND_MULTIPLE_TYPES__IN_PROFILE_ at {}",
@@ -575,7 +631,8 @@ fn process_path_with_sliced_base_default(
                 let base_start = anchor_base_idx + 1;
                 let mut base_max = base_start + 1;
                 let cb_dot = format!("{}.", path_of(current_base));
-                while base_max < cur.base.len() && path_of(&cur.base[base_max]).starts_with(&cb_dot) {
+                while base_max < cur.base.len() && path_of(&cur.base[base_max]).starts_with(&cb_dot)
+                {
                     base_max += 1;
                 }
                 let mut nc = WalkCursor {

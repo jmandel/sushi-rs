@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-# examples-gate — execute every docs example against the REAL fig binary + wasm
-# module, so the docs in docs/hosting.md and README.md cannot rot. Each example
+# examples-gate — execute every docs example against the real fig binary so the
+# docs in docs/hosting.md and README.md cannot rot. Each example
 # lives in examples/ and is run here; a failure fails CI.
 #
 # Env:
 #   FIG_BIN        fig binary (default: target/release/fig; built if absent)
-#   FIG_WASM_DIR   nodejs-target wasm_api build dir (default: target/wasm-parity/pkg;
-#                  the bun-runner examples SKIP with a note if absent — build via
-#                  demo/wasm-p0/README.md's scratch toolchain)
 #   F0_DIR         F0 build root (default: ../sushi-rs-snapshot-f0-builds); the
 #                  fig-render / fragment examples SKIP with a note if absent
 set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 FIG_BIN="${FIG_BIN:-$REPO/target/release/fig}"
-FIG_WASM_DIR="${FIG_WASM_DIR:-$REPO/target/wasm-parity/pkg}"
 F0_DIR="${F0_DIR:-$REPO/../sushi-rs-snapshot-f0-builds}"
 # Work under target/ (a full render writes thousands of files; keep it off a
 # small/quota-capped /tmp).
@@ -30,9 +26,7 @@ if [ ! -x "$FIG_BIN" ]; then
   echo "[examples-gate] building fig --release"
   ( cd "$REPO" && cargo build --release -p fig >/dev/null ) || { echo "FATAL: fig build failed"; exit 2; }
 fi
-HAVE_BUN=0; command -v bun >/dev/null 2>&1 && HAVE_BUN=1
 HAVE_PY=0; command -v python3 >/dev/null 2>&1 && HAVE_PY=1
-HAVE_WASM=0; [ -f "$FIG_WASM_DIR/wasm_api.js" ] && HAVE_WASM=1
 
 echo "== example: envelope schema =="
 if [ "$HAVE_PY" = 1 ]; then
@@ -70,20 +64,6 @@ if [ -d "$BUILD/temp/pages" ]; then
   if "$FIG_BIN" render "$BUILD" -o "$OUT" >/dev/null 2>&1 && [ -f "$OUT/index.html" ]; then
     ok template-as-data; else bad template-as-data; fi
 else skp template-as-data "no F0 us-core build"; fi
-
-echo "== example: custom generator (bun runner over wasm Session) =="
-if [ "$HAVE_BUN" = 1 ] && [ "$HAVE_WASM" = 1 ]; then
-  echo '{"projectId":"ex","config":"","files":{},"predefined":{},"siteFiles":{},"buildEpochSecs":1700000000}' > "$WORK/project.json"
-  echo '[]' > "$WORK/bundles.json"
-  OUT="$WORK/gen"
-  if "$FIG_BIN" render . -o "$OUT" \
-       --generator "ts:$REPO/examples/custom-generator/generator.mjs" \
-       --wasm-dir "$FIG_WASM_DIR" \
-       --project-json "$WORK/project.json" \
-       --bundles-json "$WORK/bundles.json" >/dev/null 2>&1 \
-     && [ -f "$OUT/index.html" ] && grep -q "custom" "$OUT/index.html"; then
-    ok custom-generator; else bad custom-generator; fi
-else skp custom-generator "need bun + a nodejs wasm build (FIG_WASM_DIR)"; fi
 
 echo
 echo "=== examples-gate: $pass pass, $fail fail, $skip skip ==="

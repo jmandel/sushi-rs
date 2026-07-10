@@ -144,9 +144,7 @@ fn needs_version_resolution(version: &str) -> bool {
     if version.contains('*') {
         return true;
     }
-    version
-        .split('.')
-        .any(|seg| seg.eq_ignore_ascii_case("x"))
+    version.split('.').any(|seg| seg.eq_ignore_ascii_case("x"))
 }
 
 /// Canonicalize a coordinate exactly as `package-deps.cjs` `canonicalVersion`
@@ -191,8 +189,14 @@ fn compare_versions(l: &str, r: &str) -> std::cmp::Ordering {
     for i in 0..len {
         let a = lp.get(i).copied().unwrap_or("0");
         let b = rp.get(i).copied().unwrap_or("0");
-        let an = a.parse::<i64>().ok().filter(|_| a.bytes().all(|c| c.is_ascii_digit()));
-        let bn = b.parse::<i64>().ok().filter(|_| b.bytes().all(|c| c.is_ascii_digit()));
+        let an = a
+            .parse::<i64>()
+            .ok()
+            .filter(|_| a.bytes().all(|c| c.is_ascii_digit()));
+        let bn = b
+            .parse::<i64>()
+            .ok()
+            .filter(|_| b.bytes().all(|c| c.is_ascii_digit()));
         match (an, bn) {
             (Some(x), Some(y)) if x != y => return x.cmp(&y),
             (Some(_), None) => return Ordering::Greater,
@@ -372,8 +376,7 @@ fn resolve_project_from_config(
     // configured deps are the same seed set), walk transitively, R4-compat filter,
     // canonicalize core, prepend r4.core if the project is R4 and it is absent,
     // then core-first sort.
-    let (context_closure, mut ctx_missing) =
-        context_closure(cfg, mounted, cache, index);
+    let (context_closure, mut ctx_missing) = context_closure(cfg, mounted, cache, index);
     missing.append(&mut ctx_missing);
 
     // Dedup missing (a package can be referenced by both sets); keep first.
@@ -565,8 +568,9 @@ pub fn context_closure_for_root(
     root_label: &str,
     index: Option<&VersionIndex>,
 ) -> anyhow::Result<Vec<PackageRequest>> {
-    let root = read_package_json(source, cache, root_label)
-        .ok_or_else(|| anyhow::anyhow!("root package not mounted / no package.json: {root_label}"))?;
+    let root = read_package_json(source, cache, root_label).ok_or_else(|| {
+        anyhow::anyhow!("root package not mounted / no package.json: {root_label}")
+    })?;
 
     let mut out: Vec<(String, String)> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
@@ -645,7 +649,10 @@ pub fn version_index_from_cache(source: &dyn PackageSource, cache: &Path) -> Ver
     let mut by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for ent in entries {
         if let Some((id, ver)) = ent.file_name.split_once('#') {
-            by_id.entry(id.to_string()).or_default().push(ver.to_string());
+            by_id
+                .entry(id.to_string())
+                .or_default()
+                .push(ver.to_string());
         }
     }
     for (id, versions) in by_id {
@@ -687,8 +694,10 @@ mod tests {
         let dir = cache.join(format!("{id}#{ver}")).join("package");
         std::fs::create_dir_all(&dir).unwrap();
         let fhir_versions: Vec<String> = fhir.iter().map(|s| s.to_string()).collect();
-        let deps_map: BTreeMap<String, String> =
-            deps.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let deps_map: BTreeMap<String, String> = deps
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         let json = serde_json::json!({
             "name": id, "version": ver,
             "fhirVersions": fhir_versions,
@@ -710,7 +719,10 @@ mod tests {
         assert_eq!(canonical_version("other", "4.0.0"), "4.0.0");
         assert!(version_matches("4.0.10", "4.0.x"));
         assert!(!version_matches("4.1.0", "4.0.x"));
-        assert_eq!(compare_versions("4.0.10", "4.0.2"), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_versions("4.0.10", "4.0.2"),
+            std::cmp::Ordering::Greater
+        );
         assert_eq!(
             compare_versions("5.3.0", "5.3.0-ballot"),
             std::cmp::Ordering::Greater
@@ -733,7 +745,13 @@ mod tests {
     fn context_closure_transitive_r4_filter_and_core_first() {
         let cache = tmp("closure");
         // root -> a (R4) -> b (R4); root -> c (R5, dropped).
-        write_pkg(&cache, "root", "1.0.0", &["4.0.1"], &[("a", "1.0.0"), ("c", "1.0.0")]);
+        write_pkg(
+            &cache,
+            "root",
+            "1.0.0",
+            &["4.0.1"],
+            &[("a", "1.0.0"), ("c", "1.0.0")],
+        );
         write_pkg(&cache, "a", "1.0.0", &["4.0.1"], &[("b", "1.0.0")]);
         write_pkg(&cache, "b", "1.0.0", &["4.0.1"], &[]);
         write_pkg(&cache, "c", "1.0.0", &["5.0.0"], &[]); // R5 => dropped
@@ -764,8 +782,7 @@ mod tests {
         let index = version_index_from_cache(&DiskSource, &cache);
 
         let config = "fhirVersion: 4.0.1\ndependencies:\n  dep: 1.0.0\n";
-        let step =
-            resolve_project(config, &DiskSource, &cache, Some(&index)).unwrap();
+        let step = resolve_project(config, &DiskSource, &cache, Some(&index)).unwrap();
 
         // compile_set: stock non-transitive. dep + r4.core present; the R4 auto-deps
         // (tools.r4/terminology.r4/extensions.r4) requested at `latest` — the index
@@ -800,7 +817,13 @@ mod tests {
         write_pkg(&cache, "hl7.fhir.r4.core", "4.0.1", &["4.0.1"], &[]);
         write_pkg(&cache, "hl7.fhir.uv.tools.r4", "1.1.2", &["4.0.1"], &[]);
         write_pkg(&cache, "hl7.terminology.r4", "7.2.0", &["4.0.1"], &[]);
-        write_pkg(&cache, "hl7.fhir.uv.extensions.r4", "5.3.0", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "hl7.fhir.uv.extensions.r4",
+            "5.3.0",
+            &["4.0.1"],
+            &[],
+        );
         let index = version_index_from_cache(&DiskSource, &cache);
         // A pure-core project (no configured deps) with all auto-deps cached.
         let config = "fhirVersion: 4.0.1\n";

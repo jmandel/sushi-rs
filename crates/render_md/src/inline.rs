@@ -135,11 +135,7 @@ pub fn normalize_html_block(raw: &str) -> String {
 /// across the raw segments of one block (islands are balanced and never touch
 /// it), and kramdown's end-of-block auto-close runs only when `finalize` is
 /// set (the last segment).
-pub fn normalize_html_block_segment(
-    raw: &str,
-    stack: &mut Vec<String>,
-    finalize: bool,
-) -> String {
+pub fn normalize_html_block_segment(raw: &str, stack: &mut Vec<String>, finalize: bool) -> String {
     let chars: Vec<char> = raw.chars().collect();
     let n = chars.len();
     let mut out = String::new();
@@ -154,7 +150,8 @@ pub fn normalize_html_block_segment(
                 && chars.get(i + 3) == Some(&'-')
             {
                 let mut j = i + 4;
-                while j + 2 < n && !(chars[j] == '-' && chars[j + 1] == '-' && chars[j + 2] == '>') {
+                while j + 2 < n && !(chars[j] == '-' && chars[j + 1] == '-' && chars[j + 2] == '>')
+                {
                     j += 1;
                 }
                 let end = if j + 2 < n { j + 3 } else { n };
@@ -394,8 +391,7 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                                 // RAW content model (code, kbd, script, …):
                                 // content passes through VERBATIM until the
                                 // matching close tag — no markdown processing.
-                                let close_pat: Vec<char> =
-                                    format!("</{name}>").chars().collect();
+                                let close_pat: Vec<char> = format!("</{name}>").chars().collect();
                                 let mut k = ni;
                                 let mut end = None;
                                 'scan: while k < n {
@@ -415,8 +411,7 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
                                     k += 1;
                                 }
                                 if let Some(endp) = end {
-                                    let verbatim: String =
-                                        chars[ni..endp].iter().collect();
+                                    let verbatim: String = chars[ni..endp].iter().collect();
                                     out.push_str(&verbatim);
                                     out.push_str(&format!("</{name}>"));
                                     i = endp + close_pat.len();
@@ -574,7 +569,15 @@ fn render_inline_chars(chars: &[char], out: &mut String) {
 fn is_raw_span_model(name: &str) -> bool {
     matches!(
         name,
-        "script" | "style" | "math" | "option" | "textarea" | "pre" | "code" | "kbd" | "samp"
+        "script"
+            | "style"
+            | "math"
+            | "option"
+            | "textarea"
+            | "pre"
+            | "code"
+            | "kbd"
+            | "samp"
             | "var"
     )
 }
@@ -657,8 +660,27 @@ fn apply_span_ial(chars: &[char], ni: usize, html: String) -> (String, usize) {
 fn is_escapable(c: char) -> bool {
     matches!(
         c,
-        '\\' | '`' | '*' | '_' | '{' | '}' | '[' | ']' | '(' | ')'
-            | '#' | '+' | '-' | '.' | '!' | '<' | '>' | '"' | '\'' | ':' | '|' | '~'
+        '\\' | '`'
+            | '*'
+            | '_'
+            | '{'
+            | '}'
+            | '['
+            | ']'
+            | '('
+            | ')'
+            | '#'
+            | '+'
+            | '-'
+            | '.'
+            | '!'
+            | '<'
+            | '>'
+            | '"'
+            | '\''
+            | ':'
+            | '|'
+            | '~'
     )
 }
 
@@ -768,8 +790,14 @@ fn is_scheme_url(s: &str) -> bool {
     if let Some(idx) = s.find(':') {
         let scheme = &s[..idx];
         !scheme.is_empty()
-            && scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '.' || c == '-')
-            && scheme.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '.' || c == '-')
+            && scheme
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_alphabetic())
+                .unwrap_or(false)
     } else {
         false
     }
@@ -814,7 +842,9 @@ fn try_orphan_block_close(chars: &[char], i: usize) -> Option<(String, usize)> {
 fn try_raw_inline_html(chars: &[char], i: usize) -> Option<(String, usize)> {
     // Pass through an inline HTML tag: <tag ...>, </tag>, <!-- comment -->, <br/>
     let n = chars.len();
-    if chars.get(i + 1) == Some(&'!') && chars.get(i + 2) == Some(&'-') && chars.get(i + 3) == Some(&'-')
+    if chars.get(i + 1) == Some(&'!')
+        && chars.get(i + 2) == Some(&'-')
+        && chars.get(i + 3) == Some(&'-')
     {
         // comment
         let mut j = i + 4;
@@ -900,9 +930,7 @@ fn normalize_inline_tag(raw: &str) -> String {
         (body, false)
     };
     // split off tag name
-    let name_end = body
-        .find(|c: char| c.is_whitespace())
-        .unwrap_or(body.len());
+    let name_end = body.find(|c: char| c.is_whitespace()).unwrap_or(body.len());
     let name = &body[..name_end];
     let rest = &body[name_end..];
     // kramdown drops an `id` attribute whose value is (whitespace-)empty —
@@ -964,7 +992,9 @@ fn inspect_tag(tag: &str) -> Option<(String, bool, bool)> {
     let is_close = inner.starts_with('/');
     let body = if is_close { &inner[1..] } else { inner };
     let is_self = body.trim_end().ends_with('/');
-    let name_end = body.find(|c: char| c.is_whitespace() || c == '/').unwrap_or(body.len());
+    let name_end = body
+        .find(|c: char| c.is_whitespace() || c == '/')
+        .unwrap_or(body.len());
     let name = body[..name_end].to_lowercase();
     if name.is_empty() {
         return None;
@@ -975,8 +1005,22 @@ fn inspect_tag(tag: &str) -> Option<(String, bool, bool)> {
 fn is_void_html(name: &str) -> bool {
     matches!(
         name,
-        "area" | "base" | "br" | "col" | "command" | "embed" | "hr" | "img" | "input" | "keygen"
-            | "link" | "meta" | "param" | "source" | "track" | "wbr"
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "command"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "keygen"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }
 
@@ -986,12 +1030,55 @@ fn is_void_html(name: &str) -> bool {
 fn is_block_html(name: &str) -> bool {
     matches!(
         name,
-        "address" | "article" | "aside" | "applet" | "body" | "blockquote" | "caption" | "col"
-            | "colgroup" | "dd" | "div" | "dl" | "dt" | "fieldset" | "figcaption" | "footer"
-            | "form" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "header" | "hgroup" | "hr"
-            | "html" | "head" | "iframe" | "legend" | "menu" | "li" | "main" | "map" | "nav"
-            | "ol" | "optgroup" | "p" | "pre" | "section" | "summary" | "table" | "tbody" | "td"
-            | "th" | "thead" | "tfoot" | "tr" | "ul"
+        "address"
+            | "article"
+            | "aside"
+            | "applet"
+            | "body"
+            | "blockquote"
+            | "caption"
+            | "col"
+            | "colgroup"
+            | "dd"
+            | "div"
+            | "dl"
+            | "dt"
+            | "fieldset"
+            | "figcaption"
+            | "footer"
+            | "form"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "header"
+            | "hgroup"
+            | "hr"
+            | "html"
+            | "head"
+            | "iframe"
+            | "legend"
+            | "menu"
+            | "li"
+            | "main"
+            | "map"
+            | "nav"
+            | "ol"
+            | "optgroup"
+            | "p"
+            | "pre"
+            | "section"
+            | "summary"
+            | "table"
+            | "tbody"
+            | "td"
+            | "th"
+            | "thead"
+            | "tfoot"
+            | "tr"
+            | "ul"
     )
 }
 
@@ -1083,18 +1170,106 @@ fn is_known_html(name: &str) -> bool {
     // lowercases). Cover the common ones used in the corpus.
     const KNOWN: &[&str] = &[
         // span
-        "a", "abbr", "acronym", "b", "big", "bdo", "br", "button", "cite", "code", "del", "dfn",
-        "em", "i", "img", "input", "ins", "kbd", "label", "mark", "option", "q", "rb", "rbc", "rp",
-        "rt", "rtc", "ruby", "samp", "select", "small", "span", "strong", "sub", "sup", "time",
-        "tt", "u", "var",
+        "a",
+        "abbr",
+        "acronym",
+        "b",
+        "big",
+        "bdo",
+        "br",
+        "button",
+        "cite",
+        "code",
+        "del",
+        "dfn",
+        "em",
+        "i",
+        "img",
+        "input",
+        "ins",
+        "kbd",
+        "label",
+        "mark",
+        "option",
+        "q",
+        "rb",
+        "rbc",
+        "rp",
+        "rt",
+        "rtc",
+        "ruby",
+        "samp",
+        "select",
+        "small",
+        "span",
+        "strong",
+        "sub",
+        "sup",
+        "time",
+        "tt",
+        "u",
+        "var",
         // block
-        "address", "article", "aside", "applet", "body", "blockquote", "caption", "col", "colgroup",
-        "dd", "div", "dl", "dt", "fieldset", "figcaption", "footer", "form", "h1", "h2", "h3", "h4",
-        "h5", "h6", "header", "hgroup", "hr", "html", "head", "iframe", "legend", "menu", "li",
-        "main", "map", "nav", "ol", "optgroup", "p", "pre", "section", "summary", "table", "tbody",
-        "td", "th", "thead", "tfoot", "tr", "ul",
+        "address",
+        "article",
+        "aside",
+        "applet",
+        "body",
+        "blockquote",
+        "caption",
+        "col",
+        "colgroup",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "fieldset",
+        "figcaption",
+        "footer",
+        "form",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "hgroup",
+        "hr",
+        "html",
+        "head",
+        "iframe",
+        "legend",
+        "menu",
+        "li",
+        "main",
+        "map",
+        "nav",
+        "ol",
+        "optgroup",
+        "p",
+        "pre",
+        "section",
+        "summary",
+        "table",
+        "tbody",
+        "td",
+        "th",
+        "thead",
+        "tfoot",
+        "tr",
+        "ul",
         // void
-        "area", "base", "command", "embed", "keygen", "link", "meta", "param", "source", "track",
+        "area",
+        "base",
+        "command",
+        "embed",
+        "keygen",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
         "wbr",
     ];
     KNOWN.contains(&name)
@@ -1715,7 +1890,9 @@ fn link_text(chars: &[char], i: usize) -> Option<(Vec<char>, usize)> {
 }
 
 fn html_unescape(s: &str) -> String {
-    s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
 }
 
 /// Minimal named-entity table for entities that appear in the corpus. kramdown

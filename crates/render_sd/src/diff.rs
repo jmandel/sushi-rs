@@ -73,7 +73,11 @@ pub fn reconstruct_diff_pointers(sd: &Sd) -> HashMap<String, usize> {
 /// path/id fill match SGPP exactly.
 pub fn supplement_missing_diff_elements(sd: &Sd) -> Vec<Value> {
     let type_name = sd.type_name();
-    let mut list: Vec<Value> = sd.differential_elements().iter().map(|e| e.v.clone()).collect();
+    let mut list: Vec<Value> = sd
+        .differential_elements()
+        .iter()
+        .map(|e| e.v.clone())
+        .collect();
 
     if list.is_empty() {
         list.push(json!({ "path": type_name, "id": type_name }));
@@ -98,10 +102,8 @@ fn insert_missing_sparse_elements(list: &mut Vec<Value>, type_name: &str) {
     }
     let mut i = 1usize;
     while i < list.len() {
-        let path_current: Vec<String> =
-            path_of(&list[i]).split('.').map(String::from).collect();
-        let path_last: Vec<String> =
-            path_of(&list[i - 1]).split('.').map(String::from).collect();
+        let path_current: Vec<String> = path_of(&list[i]).split('.').map(String::from).collect();
+        let path_last: Vec<String> = path_of(&list[i - 1]).split('.').map(String::from).collect();
         let mut first_diff = 0usize;
         while first_diff < path_current.len()
             && first_diff < path_last.len()

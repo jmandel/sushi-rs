@@ -1,5 +1,10 @@
 # Simplification Ledger
 
+> **HISTORICAL LEDGER through its dated entries.** It explains consolidation
+> decisions already made, but its open list is not the current roadmap. Current
+> engine seams and remaining cleanup live in the repository
+> [`README.md`](../README.md) and [`hosting.md`](hosting.md).
+
 > Standing directive (Josh, 2026-07-03): complexity-by-accretion is tracked
 > and collapsed with the SAME priority as performance work. Rules: candidates
 > land here as they're spotted (agents flag them in reports; coordinator

@@ -87,9 +87,11 @@ pub fn main_cli() -> anyhow::Result<()> {
     }
     // Trace: enabled via --trace <file> or SNAPSHOT_TRACE=<file>. Zero overhead
     // when unset.
-    if let Some(trace_path) =
-        trace.or_else(|| std::env::var("SNAPSHOT_TRACE").ok().filter(|v| !v.is_empty()))
-    {
+    if let Some(trace_path) = trace.or_else(|| {
+        std::env::var("SNAPSHOT_TRACE")
+            .ok()
+            .filter(|v| !v.is_empty())
+    }) {
         crate::enable_trace(&trace_path)
             .with_context(|| format!("failed to open trace file {trace_path}"))?;
     }
@@ -129,7 +131,11 @@ pub(crate) fn run_batch_list(
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() < 2 {
             failed += 1;
-            eprintln!("FAIL rust malformed batch line {}: {}", line_index + 1, line);
+            eprintln!(
+                "FAIL rust malformed batch line {}: {}",
+                line_index + 1,
+                line
+            );
             continue;
         }
         let input = parts[0];

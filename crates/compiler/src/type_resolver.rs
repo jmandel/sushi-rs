@@ -229,19 +229,27 @@ impl<'a> TypeResolver<'a> {
         if let Some(v) = self.cache.borrow().get(name) {
             return v.clone();
         }
-        let built = (self.fish)(name).and_then(|sd| SdInfo::build(&sd)).map(Rc::new);
-        self.cache.borrow_mut().insert(name.to_string(), built.clone());
+        let built = (self.fish)(name)
+            .and_then(|sd| SdInfo::build(&sd))
+            .map(Rc::new);
+        self.cache
+            .borrow_mut()
+            .insert(name.to_string(), built.clone());
         built
     }
 
     /// `kind == primitive-type` for a fished type name.
     pub fn is_primitive(&self, ty: &str) -> bool {
-        self.info(ty).map(|i| i.kind == "primitive-type").unwrap_or(false)
+        self.info(ty)
+            .map(|i| i.kind == "primitive-type")
+            .unwrap_or(false)
     }
 
     /// `kind == complex-type` for a fished type name.
     pub fn is_complex(&self, ty: &str) -> bool {
-        self.info(ty).map(|i| i.kind == "complex-type").unwrap_or(false)
+        self.info(ty)
+            .map(|i| i.kind == "complex-type")
+            .unwrap_or(false)
     }
 
     /// Resolve a caret path on a starting resource/datatype type into segments +

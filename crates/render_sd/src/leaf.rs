@@ -8,8 +8,8 @@
 //! Every leaf body is composed then wrapped in `{% raw %}..{% endraw %}` by the
 //! caller (`wrap_raw`). Composer selection per method is cited inline.
 
-use render_xhtml::node::XhtmlNode;
 use render_xhtml::node::NodeType;
+use render_xhtml::node::XhtmlNode;
 use render_xhtml::{Config, XhtmlComposer};
 
 use crate::sdmodel::Sd;
@@ -290,11 +290,17 @@ fn push_fmm(sd: &Sd, res: &mut String) {
 /// with `stripAllPara(processMarkdown(description))` + a `<ul>` of value slices.
 fn extension_summary(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) -> String {
     let is_mod = ext_is_modifier(sd);
-    let desc = sd.root.get("description").and_then(|x| x.as_str()).unwrap_or("");
+    let desc = sd
+        .root
+        .get("description")
+        .and_then(|x| x.as_str())
+        .unwrap_or("");
     let snap = sd.snapshot_elements();
     // ProfileUtilities.isSimpleExtension: Extension.value[x] present and not
     // prohibited (max != 0).
-    let value = snap.iter().find(|e| e.path() == "Extension.value" || e.path() == "Extension.value[x]");
+    let value = snap
+        .iter()
+        .find(|e| e.path() == "Extension.value" || e.path() == "Extension.value[x]");
     let is_simple = value.map(|v| v.max() != Some("0")).unwrap_or(false);
 
     if is_simple {
@@ -310,7 +316,10 @@ fn extension_summary(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str
                 type_summary, stripped
             )
         } else {
-            format!("Simple Extension with the type {}: {}", type_summary, stripped)
+            format!(
+                "Simple Extension with the type {}: {}",
+                type_summary, stripped
+            )
         };
         format!("<p>{}</p>", phrase)
     } else {
@@ -326,7 +335,11 @@ fn extension_summary(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str
                 slice_defn = e.definition().map(String::from);
             } else if p.ends_with(".extension.value[x]") {
                 if let Some(sn) = slice_name.take() {
-                    subs.push((Some(sn), type_summary(e), slice_defn.take().unwrap_or_default()));
+                    subs.push((
+                        Some(sn),
+                        type_summary(e),
+                        slice_defn.take().unwrap_or_default(),
+                    ));
                 } else {
                     // no owning slice -> psdr skips (defn==null); we drop it.
                 }
@@ -415,11 +428,7 @@ fn summarise_extension(
     url: &str,
     modifier: bool,
 ) -> Option<String> {
-    let modif = if modifier {
-        " (<b>Modifier</b>) "
-    } else {
-        ""
-    };
+    let modif = if modifier { " (<b>Modifier</b>) " } else { "" };
     match ctx.resolve(url) {
         None => Some(format!(
             "<li>Unable to summarise extension {} (no extension found)</li>",
@@ -470,9 +479,15 @@ fn describe_slice(path: &str, slicing: &serde_json::Value) -> Option<String> {
     let count = discs.len();
     // SD_SUMMARY_SLICE_{one,other}: {0}=count, {1}=path (discriminators arg dropped)
     let phrase = if count == 1 {
-        format!("The element {} is sliced based on the value of {}", count, path)
+        format!(
+            "The element {} is sliced based on the value of {}",
+            count, path
+        )
     } else {
-        format!("The element {} is sliced based on the values of {}", count, path)
+        format!(
+            "The element {} is sliced based on the values of {}",
+            count, path
+        )
     };
     Some(format!("<li>{}{}</li>\r\n", phrase, s))
 }
@@ -574,8 +589,10 @@ fn is_core_resource(ctx: &crate::context::IgContext, tail: &str) -> bool {
 fn igp_is_datatype(ctx: &crate::context::IgContext, tail: &str) -> bool {
     ctx.resolve_type(tail)
         .map(|r| {
-            matches!(r.kind.as_deref(), Some("primitive-type") | Some("complex-type"))
-                && r.derivation.as_deref() == Some("specialization")
+            matches!(
+                r.kind.as_deref(),
+                Some("primitive-type") | Some("complex-type")
+            ) && r.derivation.as_deref() == Some("specialization")
         })
         .unwrap_or(false)
 }
@@ -600,7 +617,10 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) 
         let mut p = el("p");
         let mut b = el("b");
         // SDR_EXT_DEPR
-        tx(&mut b, "This extension is deprecated and should no longer be used");
+        tx(
+            &mut b,
+            "This extension is deprecated and should no longer be used",
+        );
         p.add_child_node(b);
         ddiv.add_child_node(p);
         // reason = standards-status ext's value's nested standards-status-reason ext.
@@ -761,7 +781,8 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) 
         sd,
         "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-version-specific-use",
     ) {
-        crate::loud_gap!((),
+        crate::loud_gap!(
+            (),
             "LOUD GAP: sd-use-context SD-level fhir-version-specific-use (psdr:2966) for {}",
             sd.id()
         );
@@ -771,7 +792,10 @@ pub fn use_context(sd: &Sd, ctx: &crate::context::IgContext, core_path_v: &str) 
 }
 
 fn standards_status(sd: &Sd) -> Option<String> {
-    read_string_extension(sd, "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status")
+    read_string_extension(
+        sd,
+        "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+    )
 }
 
 /// psdr:2882-2883: the standards-status extension's VALUE carries a nested
@@ -819,7 +843,10 @@ fn sd_has_extension(sd: &Sd, url: &str) -> bool {
     sd.root
         .get("extension")
         .and_then(|e| e.as_array())
-        .map(|a| a.iter().any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .map(|a| {
+            a.iter()
+                .any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url))
+        })
         .unwrap_or(false)
 }
 
@@ -873,8 +900,12 @@ impl ConstraintVariation {
     /// psdr:1172 getIds()
     fn ids(&self) -> String {
         match self.source.as_deref() {
-            Some("http://hl7.org/fhir/StructureDefinition/Element") => "**ALL** elements".to_string(),
-            Some("http://hl7.org/fhir/StructureDefinition/Extension") => "**ALL** extensions".to_string(),
+            Some("http://hl7.org/fhir/StructureDefinition/Element") => {
+                "**ALL** elements".to_string()
+            }
+            Some("http://hl7.org/fhir/StructureDefinition/Extension") => {
+                "**ALL** extensions".to_string()
+            }
             _ => self.elements.join(", "),
         }
     }
@@ -936,12 +967,31 @@ fn read_constraints(ed: &serde_json::Value) -> Vec<RawConstraint> {
             })
             .unwrap_or(false);
         out.push(RawConstraint {
-            key: c.get("key").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-            severity: c.get("severity").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-            human: c.get("human").and_then(|x| x.as_str()).unwrap_or("").to_string(),
-            expression: c.get("expression").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+            key: c
+                .get("key")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            severity: c
+                .get("severity")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            human: c
+                .get("human")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
+            expression: c
+                .get("expression")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string(),
             source: c.get("source").and_then(|x| x.as_str()).map(String::from),
-            requirements: c.get("requirements").and_then(|x| x.as_str()).map(String::from),
+            requirements: c
+                .get("requirements")
+                .and_then(|x| x.as_str())
+                .map(String::from),
             best_practice,
         });
     }
@@ -953,8 +1003,9 @@ fn add_variation(ci: &mut ConstraintInfo, c: &RawConstraint, id: &str, sd_url: &
     let is_primary_candidate = match c.source.as_deref() {
         None => true,
         Some(src) if src == sd_url => true,
-        Some(src) if src.starts_with("http://hl7.org/fhir/StructureDefinition/")
-            && !src[41..].contains('/') =>
+        Some(src)
+            if src.starts_with("http://hl7.org/fhir/StructureDefinition/")
+                && !src[41..].contains('/') =>
         {
             true
         }
@@ -1043,7 +1094,10 @@ fn constraint_key_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     fn sort_key(s: &str) -> (&str, i64) {
         if matches_dashnum(s) {
             let pos = s.rfind('-').unwrap();
-            (&s[..pos.saturating_sub(1)], s[pos + 1..].parse().unwrap_or(0))
+            (
+                &s[..pos.saturating_sub(1)],
+                s[pos + 1..].parse().unwrap_or(0),
+            )
         } else {
             (s, i64::MIN)
         }
@@ -1061,11 +1115,7 @@ fn elements_for_mode<'a>(
         GenMode::Diff => crate::diff::supplement_missing_diff_elements(sd),
         GenMode::Key => crate::table::key_elements_pub(sd, ctx),
         GenMode::Ms => crate::table::must_support_elements_pub(sd, ctx),
-        GenMode::Snap => sd
-            .snapshot_elements()
-            .iter()
-            .map(|e| e.v.clone())
-            .collect(),
+        GenMode::Snap => sd.snapshot_elements().iter().map(|e| e.v.clone()).collect(),
     }
 }
 
@@ -1082,7 +1132,8 @@ pub fn inv(
 
     // build constraintMap keyed by key, preserving first-seen key order
     let mut order: Vec<String> = Vec::new();
-    let mut map: std::collections::HashMap<String, ConstraintInfo> = std::collections::HashMap::new();
+    let mut map: std::collections::HashMap<String, ConstraintInfo> =
+        std::collections::HashMap::new();
     for ed in &list {
         let max = ed.get("max").and_then(|m| m.as_str());
         if max == Some("0") {
@@ -1092,7 +1143,11 @@ pub fn inv(
         if cons.is_empty() {
             continue;
         }
-        let id = ed.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let id = ed
+            .get("id")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         for c in &cons {
             let entry = map.entry(c.key.clone()).or_insert_with(|| {
                 order.push(c.key.clone());
@@ -1175,7 +1230,11 @@ pub fn inv(
                 tx(&mut td_d, "Requirements");
                 tx(&mut td_d, ": ");
                 // markdown(requirements) — loud gap: no corpus hit yet
-                crate::loud_gap!((), "LOUD GAP: inv requirements markdown (psdr:1256) req={:?}", req);
+                crate::loud_gap!(
+                    (),
+                    "LOUD GAP: inv requirements markdown (psdr:1256) req={:?}",
+                    req
+                );
             }
             tr.add_child_node(td_d);
             // Expression

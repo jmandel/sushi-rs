@@ -88,11 +88,11 @@ fn read_json_files(dir: &Path) -> Result<Vec<(PathBuf, Value)>> {
     files.sort();
     let mut out = Vec::new();
     for path in files {
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        let v: Value = serde_json::from_str(text)
-            .with_context(|| format!("parse {}", path.display()))?;
+        let v: Value =
+            serde_json::from_str(text).with_context(|| format!("parse {}", path.display()))?;
         out.push((path, v));
     }
     Ok(out)
@@ -264,12 +264,13 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
     // ig first, then IG.definition.resource order, then the rest by typeRank/id.
     let mut ordered: Vec<Value> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let push = |ordered: &mut Vec<Value>, seen: &mut std::collections::HashSet<String>, r: Value| {
-        let reff = resource_ref(&r);
-        if seen.insert(reff) {
-            ordered.push(r);
-        }
-    };
+    let push =
+        |ordered: &mut Vec<Value>, seen: &mut std::collections::HashSet<String>, r: Value| {
+            let reff = resource_ref(&r);
+            if seen.insert(reff) {
+                ordered.push(r);
+            }
+        };
     push(&mut ordered, &mut seen, ig.clone());
     if let Some(Value::Array(list)) = ig.pointer("/definition/resource") {
         for r in list {
@@ -358,7 +359,11 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
     // ---- Ledger nodes for S6 inputs (pages/menu/config/assets). ----
     for p in &db.pages {
         let body = p.body.clone().unwrap_or_default();
-        ledger.record(&format!("page:{}", p.slug), "", &BuildLedger::hash(body.as_bytes()));
+        ledger.record(
+            &format!("page:{}", p.slug),
+            "",
+            &BuildLedger::hash(body.as_bytes()),
+        );
     }
     ledger.record(
         "config:sushi-config",
@@ -366,7 +371,11 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
         &BuildLedger::hash(input.sushi_config_yaml.as_bytes()),
     );
     for a in &db.assets {
-        ledger.record(&format!("asset:{}", a.name), "", &BuildLedger::hash(&a.content));
+        ledger.record(
+            &format!("asset:{}", a.name),
+            "",
+            &BuildLedger::hash(&a.content),
+        );
     }
 
     Ok(db)

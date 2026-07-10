@@ -26,7 +26,11 @@ fn main() {
     } else {
         format!("StructureDefinition-{}-definitions.html", sd.id())
     };
-    let core_path = if args.len() > 4 { args[4].clone() } else { String::new() };
+    let core_path = if args.len() > 4 {
+        args[4].clone()
+    } else {
+        String::new()
+    };
 
     // us-core context hardwired for the debug bins (grid + snapshot).
     let f0 = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds";
@@ -34,7 +38,10 @@ fn main() {
         IgContext::load_with_txcache(
             std::path::Path::new(&format!("{}/us-core/output", f0)),
             std::path::Path::new(&format!("{}/us-core/.home/.fhir/packages", f0)),
-            Some(std::path::Path::new(&format!("{}/us-core/input-cache/txcache", f0))),
+            Some(std::path::Path::new(&format!(
+                "{}/us-core/input-cache/txcache",
+                f0
+            ))),
         )
     };
     let body = match kind.as_str() {
@@ -45,19 +52,30 @@ fn main() {
         "snapshot" => {
             let ctx = dbg_ctx();
             let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot(""));
-            for g in gaps { eprintln!("gap: {}", g); }
+            for g in gaps {
+                eprintln!("gap: {}", g);
+            }
             b
         }
         "snapshot-by-mustsupport" => {
             let ctx = dbg_ctx();
-            let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot_by_mustsupport(""));
-            for g in gaps { eprintln!("gap: {}", g); }
+            let (b, gaps) = render_table(
+                &sd,
+                &ctx,
+                &def_file,
+                &TableConfig::snapshot_by_mustsupport(""),
+            );
+            for g in gaps {
+                eprintln!("gap: {}", g);
+            }
             b
         }
         "snapshot-by-key" => {
             let ctx = dbg_ctx();
             let (b, gaps) = render_table(&sd, &ctx, &def_file, &TableConfig::snapshot_by_key(""));
-            for g in gaps { eprintln!("gap: {}", g); }
+            for g in gaps {
+                eprintln!("gap: {}", g);
+            }
             b
         }
         other => {

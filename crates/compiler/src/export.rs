@@ -104,8 +104,10 @@ fn resolve_caret_value(
             let Some(sys) = &fc.system else {
                 return value.clone();
             };
-            let resolve_cs =
-                |b: &str| tank.cs_url(b).or_else(|| pkg_url(store, b, FishType::CodeSystem));
+            let resolve_cs = |b: &str| {
+                tank.cs_url(b)
+                    .or_else(|| pkg_url(store, b, FishType::CodeSystem))
+            };
             match replace_code_system(sys, resolve_cs) {
                 Some(new_sys) => {
                     let mut fc2 = fc.clone();
@@ -159,7 +161,9 @@ impl TankIndex {
         // matching FSHTank.fish (entities before instances).
         for doc in docs {
             for (_k, inst) in &doc.instances {
-                let Some(instance_of) = inst.instance_of.as_deref() else { continue };
+                let Some(instance_of) = inst.instance_of.as_deref() else {
+                    continue;
+                };
                 let (target, fhir_type) = match instance_of {
                     "ValueSet" => (&mut value_sets, "ValueSet"),
                     "CodeSystem" => (&mut code_systems, "CodeSystem"),
@@ -204,7 +208,12 @@ impl TankIndex {
 /// the declared id (which defaults to the instance name).
 pub(crate) fn instance_effective_id(inst: &fsh_model::Instance) -> String {
     for r in inst.rules.iter().rev() {
-        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+        if let Rule::Assignment {
+            path,
+            value: Some(FshValue::Str(s)),
+            ..
+        } = r
+        {
             if path == "url" {
                 continue;
             }
@@ -220,7 +229,12 @@ pub(crate) fn instance_effective_id(inst: &fsh_model::Instance) -> String {
 /// (mirrors `getNonInstanceValueFromRules(entity, 'url')`).
 pub(crate) fn instance_assigned_url(inst: &fsh_model::Instance) -> Option<String> {
     for r in inst.rules.iter().rev() {
-        if let Rule::Assignment { path, value: Some(FshValue::Str(s)), .. } = r {
+        if let Rule::Assignment {
+            path,
+            value: Some(FshValue::Str(s)),
+            ..
+        } = r
+        {
             if path == "url" {
                 return Some(s.clone());
             }
@@ -241,10 +255,7 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
             ..
         } = r
         {
-            if path.is_empty()
-                && caret_path.as_deref() == Some("id")
-                && !is_instance
-            {
+            if path.is_empty() && caret_path.as_deref() == Some("id") && !is_instance {
                 // An explicit `^id` assignment is stock's `idRule`: it is used
                 // verbatim (no name→id sanitization, `mixins.ts:60-71`).
                 if let Some(FshValue::Str(s)) = value {
@@ -259,7 +270,10 @@ pub(crate) fn effective_id(rules: &[Rule], declared: &str) -> String {
 /// `idRegex` from `primitiveTypes.ts:29`: `^[A-Za-z0-9\-\.]{1,64}$`.
 fn id_regex_ok(s: &str) -> bool {
     let n = s.chars().count();
-    n >= 1 && n <= 64 && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+    n >= 1
+        && n <= 64
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
 }
 
 /// `nameRegex` from `mixins.ts:6`: `^[A-Z]([A-Za-z0-9_]){0,254}$`.
@@ -304,10 +318,7 @@ pub(crate) fn effective_url(rules: &[Rule]) -> Option<String> {
             ..
         } = r
         {
-            if path.is_empty()
-                && caret_path.as_deref() == Some("url")
-                && !is_instance
-            {
+            if path.is_empty() && caret_path.as_deref() == Some("url") && !is_instance {
                 if let Some(FshValue::Str(s)) = value {
                     return Some(s.clone());
                 }
@@ -316,7 +327,6 @@ pub(crate) fn effective_url(rules: &[Rule]) -> Option<String> {
     }
     None
 }
-
 
 // ---------------------------------------------------------------------------
 // Caret path parsing + application.
@@ -365,7 +375,6 @@ pub(crate) fn split_caret_path(path: &str) -> Vec<String> {
     }
     parts
 }
-
 
 /// Port of the `FshCode` branch of `replaceReferences` (`fhirtypes/common.ts`):
 /// fish the system name (the part before any `|version`) as a CodeSystem and, if
@@ -640,9 +649,7 @@ pub(crate) fn apply(obj: &mut Map<String, J>, segs: &[Seg], leaf: J) {
         }
     } else if last {
         match obj.get_mut(&seg.key) {
-            Some(existing) if existing.is_object() && leaf.is_object() => {
-                set_value(existing, leaf)
-            }
+            Some(existing) if existing.is_object() && leaf.is_object() => set_value(existing, leaf),
             _ => {
                 obj.insert(seg.key.clone(), leaf);
             }
@@ -1041,7 +1048,8 @@ fn find_concept(
             }
             let ce_system = ce_get_str(ce, "system");
             let ce_version = ce_get_str(ce, "version");
-            let system_ok = ce_system == Some(base_system) || (system_url.is_some() && ce_system == system_url);
+            let system_ok =
+                ce_system == Some(base_system) || (system_url.is_some() && ce_system == system_url);
             if !system_ok || ce_version != version {
                 continue;
             }
@@ -1085,7 +1093,9 @@ fn from_to_compose_element(
         let mapped: Vec<String> = value_sets
             .iter()
             .map(|vs| {
-                let resolved = tank.vs_url(vs).or_else(|| pkg_url(store, vs, FishType::ValueSet));
+                let resolved = tank
+                    .vs_url(vs)
+                    .or_else(|| pkg_url(store, vs, FishType::ValueSet));
                 match resolved {
                     Some(u) => {
                         let version = vs.split('|').skip(1).collect::<Vec<_>>().join("|");
@@ -1106,10 +1116,7 @@ fn from_to_compose_element(
                 return Err(());
             }
         }
-        let mapped: Vec<J> = mapped
-            .into_iter()
-            .map(J::String)
-            .collect();
+        let mapped: Vec<J> = mapped.into_iter().map(J::String).collect();
         ce.insert("valueSet".into(), J::Array(mapped));
     }
     Ok(ce)
@@ -1126,7 +1133,10 @@ pub(crate) fn is_valid_uri(s: &str) -> bool {
         return false;
     };
     if scheme.is_empty()
-        || !scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        || !scheme
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
         || !scheme
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
@@ -1137,7 +1147,11 @@ pub(crate) fn is_valid_uri(s: &str) -> bool {
         return !rest.is_empty();
     }
     let prefix = format!("{scheme}://");
-    s.starts_with(&prefix) && s[prefix.len()..].split('/').next().is_some_and(|h| !h.is_empty())
+    s.starts_with(&prefix)
+        && s[prefix.len()..]
+            .split('/')
+            .next()
+            .is_some_and(|h| !h.is_empty())
 }
 
 fn compose_concepts(concepts: &[FshCode]) -> Vec<J> {
@@ -1237,7 +1251,11 @@ fn set_compose(
     if components.is_empty() {
         return Ok(());
     }
-    let vs_url = obj.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let vs_url = obj
+        .get("url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let mut include: Vec<J> = Vec::new();
     let mut exclude: Vec<J> = Vec::new();
 
@@ -1253,7 +1271,13 @@ fn set_compose(
                 if !concepts.is_empty() {
                     ce.insert("concept".into(), J::Array(compose_concepts(concepts)));
                 }
-                push_component(*inclusion, ce, concepts.is_empty(), &mut include, &mut exclude);
+                push_component(
+                    *inclusion,
+                    ce,
+                    concepts.is_empty(),
+                    &mut include,
+                    &mut exclude,
+                );
             }
             Rule::VsFilter {
                 inclusion,
@@ -1569,9 +1593,9 @@ fn insert_into_hierarchy(container: &mut Vec<J>, hierarchy: &[String], concept: 
         return true;
     }
     let ancestor = &hierarchy[0];
-    let pos = container.iter().position(|c| {
-        c.get("code").and_then(|v| v.as_str()) == Some(ancestor.as_str())
-    });
+    let pos = container
+        .iter()
+        .position(|c| c.get("code").and_then(|v| v.as_str()) == Some(ancestor.as_str()));
     let Some(pos) = pos else {
         return false;
     };
@@ -1588,7 +1612,11 @@ fn insert_into_hierarchy(container: &mut Vec<J>, hierarchy: &[String], concept: 
 // ---------------------------------------------------------------------------
 
 /// Export every ValueSet and CodeSystem from the (already insert-expanded) tank.
-pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStore>) -> Vec<Exported> {
+pub fn export_all(
+    docs: &[FshDocument],
+    cfg: &Config,
+    store: Option<&PackageStore>,
+) -> Vec<Exported> {
     // Populate the global alias table so caret-path brackets resolve (shared with
     // the SD exporter). Idempotent; safe to call before/after SD export.
     crate::sd_export::set_aliases(docs);
@@ -1597,7 +1625,8 @@ pub fn export_all(docs: &[FshDocument], cfg: &Config, store: Option<&PackageStor
     // every datatype/extension SD on demand). A local extension referenced by url
     // that isn't yet exported falls back to the generic Extension SD inside the
     // resolver, so `value[x]` still types correctly.
-    let fish = |name: &str| store.and_then(|s| s.fish_for_fhir(name, package_store::ALL_FISH_TYPES));
+    let fish =
+        |name: &str| store.and_then(|s| s.fish_for_fhir(name, package_store::ALL_FISH_TYPES));
     let resolver = TypeResolver::new(&fish);
     let mut out = Vec::new();
     // CodeSystems export before ValueSets (FHIRExporter order), though it does

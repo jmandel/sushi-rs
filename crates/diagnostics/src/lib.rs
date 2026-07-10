@@ -18,7 +18,13 @@ pub struct SourceSpan {
 
 impl SourceSpan {
     pub const fn new(file: FileId, sl: u32, sc: u32, el: u32, ec: u32) -> Self {
-        Self { file, start_line: sl, start_col: sc, end_line: el, end_col: ec }
+        Self {
+            file,
+            start_line: sl,
+            start_col: sc,
+            end_line: el,
+            end_col: ec,
+        }
     }
 
     /// A zero-width span at a point.
@@ -77,11 +83,31 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn error(code: DiagnosticCode, message: impl Into<String>, source: Option<SourceSpan>) -> Self {
-        Self { severity: Severity::Error, code, message: message.into(), source, order: 0 }
+    pub fn error(
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        source: Option<SourceSpan>,
+    ) -> Self {
+        Self {
+            severity: Severity::Error,
+            code,
+            message: message.into(),
+            source,
+            order: 0,
+        }
     }
-    pub fn warning(code: DiagnosticCode, message: impl Into<String>, source: Option<SourceSpan>) -> Self {
-        Self { severity: Severity::Warning, code, message: message.into(), source, order: 0 }
+    pub fn warning(
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        source: Option<SourceSpan>,
+    ) -> Self {
+        Self {
+            severity: Severity::Warning,
+            code,
+            message: message.into(),
+            source,
+            order: 0,
+        }
     }
 }
 
@@ -104,20 +130,36 @@ impl DiagnosticSink {
         self.items.push(d);
     }
 
-    pub fn error(&mut self, code: DiagnosticCode, message: impl Into<String>, source: Option<SourceSpan>) {
+    pub fn error(
+        &mut self,
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        source: Option<SourceSpan>,
+    ) {
         self.push(Diagnostic::error(code, message, source));
     }
 
-    pub fn warning(&mut self, code: DiagnosticCode, message: impl Into<String>, source: Option<SourceSpan>) {
+    pub fn warning(
+        &mut self,
+        code: DiagnosticCode,
+        message: impl Into<String>,
+        source: Option<SourceSpan>,
+    ) {
         self.push(Diagnostic::warning(code, message, source));
     }
 
     pub fn errors(&self) -> usize {
-        self.items.iter().filter(|d| d.severity == Severity::Error).count()
+        self.items
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .count()
     }
 
     pub fn warnings(&self) -> usize {
-        self.items.iter().filter(|d| d.severity == Severity::Warning).count()
+        self.items
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .count()
     }
 
     /// Returns diagnostics in stable emission order (by `order`).

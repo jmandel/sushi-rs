@@ -46,7 +46,10 @@ pub fn emit_data(inputs: &ProducerInputs, data: &mut BTreeMap<String, String>) -
         "structuredefinitions.json".to_string(),
         structuredefinitions_model(inputs).to_string(),
     );
-    data.insert("resources.json".to_string(), resources_json(inputs).to_string());
+    data.insert(
+        "resources.json".to_string(),
+        resources_json(inputs).to_string(),
+    );
     data.insert("pages.json".to_string(), pages_json(inputs).to_string());
     data.insert("fhir.json".to_string(), fhir_json(inputs).to_string());
     data.insert("info.json".to_string(), info_json(inputs).to_string());
@@ -130,7 +133,12 @@ fn ext_value_str(res: &Value, url: &str) -> Option<String> {
 /// The first `contact.telecom` with `system == url` — `StatusRenderer.readOwnerLink`.
 fn contact_link(res: &Value) -> Option<String> {
     for cd in res.get("contact").and_then(Value::as_array)?.iter() {
-        for cp in cd.get("telecom").and_then(Value::as_array).into_iter().flatten() {
+        for cp in cd
+            .get("telecom")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             if cp.get("system").and_then(Value::as_str) == Some("url") {
                 if let Some(v) = cp.get("value").and_then(Value::as_str) {
                     return Some(v.to_string());
@@ -234,7 +242,10 @@ fn country_display(code: &str) -> (String, Option<String>) {
     match code {
         "US" => ("United States of America".into(), Some("usa".into())),
         "CA" => ("Canada".into(), Some("ca".into())),
-        "GB" => ("United Kingdom of Great Britain and Northern Ireland".into(), Some("gb".into())),
+        "GB" => (
+            "United Kingdom of Great Britain and Northern Ireland".into(),
+            Some("gb".into()),
+        ),
         "AU" => ("Australia".into(), Some("au".into())),
         "NZ" => ("New Zealand".into(), Some("nz".into())),
         other => (other.to_string(), None),
@@ -293,12 +304,18 @@ pub fn structuredefinitions_model(inputs: &ProducerInputs) -> Value {
         let (basename, basepath) = match base.as_deref() {
             Some(b) => match by_url.get(b) {
                 // Local SD base → its name + its generated page.
-                Some((n, bid)) => ((*n).clone(), Some(format!("StructureDefinition-{bid}.html"))),
+                Some((n, bid)) => (
+                    (*n).clone(),
+                    Some(format!("StructureDefinition-{bid}.html")),
+                ),
                 None => {
                     let tail = b.rsplit('/').next().unwrap_or(b).to_string();
                     if b.starts_with("http://hl7.org/fhir/StructureDefinition/") {
                         // Core FHIR base → the spec page (e.g. R4/patient.html).
-                        (Some(tail.clone()), Some(format!("{spec}{}.html", tail.to_ascii_lowercase())))
+                        (
+                            Some(tail.clone()),
+                            Some(format!("{spec}{}.html", tail.to_ascii_lowercase())),
+                        )
                     } else {
                         // Other external base → best-effort: tail name, base url.
                         (Some(tail), Some(b.to_string()))
@@ -359,7 +376,10 @@ fn resources_json(inputs: &ProducerInputs) -> Value {
         item.insert("testplan".into(), json!(false));
         item.insert("testscript".into(), json!(false));
         item.insert("index".into(), json!(0));
-        item.insert("path".into(), json!(format!("ImplementationGuide-{id}.html")));
+        item.insert(
+            "path".into(),
+            json!(format!("ImplementationGuide-{id}.html")),
+        );
         populate_entry(&mut item, ig, ig);
         out.insert(format!("ImplementationGuide/{id}"), Value::Object(item));
     }
@@ -507,7 +527,13 @@ fn fhir_json(inputs: &ProducerInputs) -> Value {
         }
     }
     ig_block.insert("version".into(), json!(str_field(ig, "version")));
-    ig_block.insert("experimental".into(), json!(ig.get("experimental").and_then(Value::as_bool).unwrap_or(false)));
+    ig_block.insert(
+        "experimental".into(),
+        json!(ig
+            .get("experimental")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)),
+    );
     ig_block.insert("date".into(), json!(str_field(ig, "date")));
     ig_block.insert("fhirVersion".into(), json!(fhir_version(ig)));
     ig_block.insert("titlelang".into(), json!({}));
@@ -549,7 +575,9 @@ fn info_json(inputs: &ProducerInputs) -> Value {
                 p.get("value").and_then(Value::as_str),
             ) {
                 // multi-valued params (path-*, html-exempt) not needed by info.json
-                params.entry(code.to_string()).or_insert_with(|| val.to_string());
+                params
+                    .entry(code.to_string())
+                    .or_insert_with(|| val.to_string());
             }
         }
     }
@@ -641,7 +669,10 @@ fn pages_json(inputs: &ProducerInputs) -> Value {
         entry.insert("titlelang".into(), json!({}));
         entry.insert(
             "breadcrumb".into(),
-            json!(format!("{artifact_crumb}<li><b>{}</b></li>", escape_xml(&title))),
+            json!(format!(
+                "{artifact_crumb}<li><b>{}</b></li>",
+                escape_xml(&title)
+            )),
         );
         // intro/notes — only when the fragment file is actually present.
         let intro = format!("{}-{}-intro.md", r.rt, r.id);
@@ -799,7 +830,9 @@ fn example_groups(ig: &Value) -> BTreeMap<String, Vec<(String, String)>> {
             .and_then(Value::as_str)
             .unwrap_or(id)
             .to_string();
-        map.entry(profile.to_string()).or_default().push((url, title));
+        map.entry(profile.to_string())
+            .or_default()
+            .push((url, title));
     }
     // The publisher renders examples sorted by page url (Set<FetchedResource>
     // ordering); match it so the example list is byte-stable.

@@ -1,5 +1,12 @@
 # fhir-ig-editor — Spec for the Demo Repo
 
+> **SUPERSEDED PRODUCT SPEC.** This preserves the original demo milestones and
+> submodule rationale; it does not describe the current editor, worker protocol,
+> preview Service Worker, renderer handoffs, or deployment gates. Use the
+> editor repository's current
+> [`README.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/README.md) and
+> [`SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md).
+
 > Status: SPEC (2026-07-02). Target: new GitHub repo `jmandel/fhir-ig-editor`.
 > This is the concrete home of the "WASM demo" roadmap item (task #13 → #16);
 > docs/wasm-editor-plan.md remains the engine-side plan (P0-P2 land in

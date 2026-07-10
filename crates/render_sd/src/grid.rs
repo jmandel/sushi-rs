@@ -87,7 +87,11 @@ struct GridCtx<'a> {
 
 impl<'a> GridCtx<'a> {
     fn sd_url(&self) -> &str {
-        self.sd.root.get("url").and_then(|x| x.as_str()).unwrap_or("")
+        self.sd
+            .root
+            .get("url")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
     }
 
     /// `genGridElement` (SDR:2602).
@@ -134,8 +138,11 @@ impl<'a> GridCtx<'a> {
             left.pieces.push(Piece::tag("br"));
             let depth = element.path().split('.').count();
             let indent: String = std::iter::repeat('\u{00A0}').take(1 + 2 * depth).collect();
-            left.pieces
-                .push(Piece::ref_text(None, Some(format!("{}({})", indent, sn)), None));
+            left.pieces.push(Piece::ref_text(
+                None,
+                Some(format!("{}({})", indent, sn)),
+                None,
+            ));
         }
         row.cells.push(left);
 
@@ -212,8 +219,7 @@ impl<'a> GridCtx<'a> {
         // url-fixed short circuit (SDR:3117-3119)
         if definition.path().ends_with("url") && definition.fixed().is_some() {
             let (_, v) = definition.fixed().unwrap();
-            let mut piece =
-                Piece::ref_text(None, Some(format!("\"{}\"", build_json(v))), None);
+            let mut piece = Piece::ref_text(None, Some(format!("\"{}\"", build_json(v))), None);
             piece.add_style("color: darkgreen");
             c.pieces.push(piece);
             return c;
@@ -250,18 +256,23 @@ impl<'a> GridCtx<'a> {
                 let mut lbl = Piece::ref_text(None, Some("Binding:".into()), None);
                 lbl.add_style("font-weight:bold");
                 c.pieces.push(lbl);
-                let vs_ref = binding.get("valueSet").and_then(|x| x.as_str()).unwrap_or("");
+                let vs_ref = binding
+                    .get("valueSet")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
                 let br = self.ctx.resolve_binding(vs_ref);
                 // Piece(br.url==null?null: isAbsoluteUrl(url)||!prependLinks?url:
                 //   corePath+url, br.display, br.uri). prependLinks() is false for
                 //   the IG publisher, so links pass through verbatim.
-                let mut p = Piece::ref_text(br.url.clone(), Some(br.display.clone()), br.uri.clone());
+                let mut p =
+                    Piece::ref_text(br.url.clone(), Some(br.display.clone()), br.uri.clone());
                 if br.external {
                     p.set_tag_img("external.png");
                 }
                 c.pieces.push(p);
                 if let Some(strength) = binding.get("strength").and_then(|x| x.as_str()) {
-                    c.pieces.push(Piece::ref_text(None, Some(" (".into()), None));
+                    c.pieces
+                        .push(Piece::ref_text(None, Some(" (".into()), None));
                     c.pieces.push(Piece::ref_text(
                         Some(format!("{}terminologies.html#{}", self.core_path, strength)),
                         Some(strength.to_string()),
@@ -271,7 +282,8 @@ impl<'a> GridCtx<'a> {
                 }
                 if let Some(desc) = binding.get("description").and_then(|x| x.as_str()) {
                     if is_simple_markdown(desc) {
-                        c.pieces.push(Piece::ref_text(None, Some(": ".into()), None));
+                        c.pieces
+                            .push(Piece::ref_text(None, Some(": ".into()), None));
                         markdown::add_markdown(&mut c, desc);
                     }
                 }
@@ -468,7 +480,8 @@ fn gen_cardinality(e: Ed<'_>) -> Cell {
             Some(min.map(|m| m.to_string()).unwrap_or_default()),
             None,
         ));
-        cell.pieces.push(Piece::ref_text(None, Some("..".to_string()), None));
+        cell.pieces
+            .push(Piece::ref_text(None, Some("..".to_string()), None));
         cell.pieces.push(Piece::ref_text(
             None,
             Some(max.map(|m| m.to_string()).unwrap_or_default()),
@@ -486,7 +499,8 @@ fn get_row_color(_e: Ed<'_>, _is_constraint_mode: bool) -> String {
 }
 
 fn uses_must_support(list: &[Ed<'_>]) -> bool {
-    list.iter().any(|e| e.has_must_support() && e.must_support())
+    list.iter()
+        .any(|e| e.has_must_support() && e.must_support())
 }
 
 /// `getChildren(all, element)` (SDR:3257).

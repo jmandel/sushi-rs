@@ -147,7 +147,12 @@ impl ElementDefinition {
                 }
             }
         }
-        let mut ed = ElementDefinition { map: Rc::new(map), original: None, id, path };
+        let mut ed = ElementDefinition {
+            map: Rc::new(map),
+            original: None,
+            id,
+            path,
+        };
         if capture {
             ed.capture_original();
         }
@@ -678,9 +683,7 @@ impl StructureDefinition {
                         unfolded = self.unfold_choice_element_types(&single, fisher);
                         new_matching = unfolded
                             .iter()
-                            .filter(|id| {
-                                self.path_of_id(id).unwrap_or("").starts_with(&fhir_path)
-                            })
+                            .filter(|id| self.path_of_id(id).unwrap_or("").starts_with(&fhir_path))
                             .cloned()
                             .collect();
                     }
@@ -714,7 +717,9 @@ impl StructureDefinition {
             matching = new_matching;
 
             if !part.brackets.is_empty() {
-                if let Some(slice_id) = self.find_matching_slice(&fhir_path, part, &matching, fisher) {
+                if let Some(slice_id) =
+                    self.find_matching_slice(&fhir_path, part, &matching, fisher)
+                {
                     let mut narrowed = vec![slice_id.clone()];
                     narrowed.extend(self.children_ids(&slice_id));
                     matching = narrowed;
@@ -752,7 +757,11 @@ impl StructureDefinition {
         // x-elements among candidates
         let x_ids: Vec<String> = elements
             .iter()
-            .filter(|id| self.path_of_id(id).map(|p| p.ends_with("[x]")).unwrap_or(false))
+            .filter(|id| {
+                self.path_of_id(id)
+                    .map(|p| p.ends_with("[x]"))
+                    .unwrap_or(false)
+            })
             .cloned()
             .collect();
         // matching x-elements + the matching type for each
@@ -779,7 +788,11 @@ impl StructureDefinition {
         let first_path = self.elements[fi].path().to_string();
         let same_path_count = x_ids
             .iter()
-            .filter(|id| self.path_of_id(id).map(|p| p == first_path).unwrap_or(false))
+            .filter(|id| {
+                self.path_of_id(id)
+                    .map(|p| p == first_path)
+                    .unwrap_or(false)
+            })
             .count();
         let single_type = self.elements[fi]
             .get("type")
@@ -796,10 +809,11 @@ impl StructureDefinition {
         // create a type slice
         let slice_name = fhir_path.rsplit('.').next().unwrap_or("").to_string();
         // existing matching slice?
-        if let Some((id, _)) = matching
-            .iter()
-            .find(|(id, _)| self.index_of_id(id).map(|i| self.elements[i].slice_name() == Some(slice_name.as_str())).unwrap_or(false))
-        {
+        if let Some((id, _)) = matching.iter().find(|(id, _)| {
+            self.index_of_id(id)
+                .map(|i| self.elements[i].slice_name() == Some(slice_name.as_str()))
+                .unwrap_or(false)
+        }) {
             return Some(id.clone());
         }
         // sliceIt(type,$this) on the matching x-element then addSlice
@@ -876,7 +890,9 @@ impl StructureDefinition {
                 let Some(connected) = self.find_connected_slice_element_id(e_id, "") else {
                     continue;
                 };
-                let Some(ci) = self.index_of_id(&connected) else { continue };
+                let Some(ci) = self.index_of_id(&connected) else {
+                    continue;
+                };
                 let slice_idx = self.get_slices(ci).find(|&j| {
                     self.elements[j].path() == fhir_path
                         && self.elements[j].slice_name() == Some(slice_name.as_str())
@@ -1044,7 +1060,11 @@ impl StructureDefinition {
             .and_then(|a| a.first())
             .and_then(|t| t.get("profile"))
             .and_then(|p| p.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         let proceed = codes.len() == 1 && (!is_choice || profiles.len() <= 1);
         if !proceed {
@@ -1080,7 +1100,9 @@ impl StructureDefinition {
                                 .and_then(|t| t.get("profile"))
                                 .and_then(|pr| pr.as_array())
                                 .map(|a| {
-                                    a.iter().filter_map(|v| v.as_str().map(String::from)).collect()
+                                    a.iter()
+                                        .filter_map(|v| v.as_str().map(String::from))
+                                        .collect()
                                 })
                                 .unwrap_or_default();
                             one_type && sliced_profiles.len() == 1 && &sliced_profiles[0] == p
@@ -1141,7 +1163,11 @@ impl StructureDefinition {
                 let profiles: Vec<String> = t
                     .get("profile")
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 if !profiles.is_empty() {
                     all_types.extend(profiles);
@@ -1154,8 +1180,10 @@ impl StructureDefinition {
         // preserving the order of the first type's lineage (lodash intersectionWith
         // with no comparator behaves like intersection). The nearest common ancestor
         // is the first shared url.
-        let all_ancestry: Vec<Vec<String>> =
-            all_types.iter().map(|t| type_lineage_urls(t, fisher)).collect();
+        let all_ancestry: Vec<Vec<String>> = all_types
+            .iter()
+            .map(|t| type_lineage_urls(t, fisher))
+            .collect();
         let shared = intersection_first(&all_ancestry);
         let Some(common_url) = shared.first() else {
             // No common ancestor — stock logs an error and returns [].
@@ -1315,7 +1343,12 @@ impl StructureDefinition {
     }
 
     /// `addSlice(parent_idx, name, type)` — create a slice element, returns its id.
-    pub fn add_slice(&mut self, parent_idx: usize, name: &str, type_: Option<Value>) -> Option<String> {
+    pub fn add_slice(
+        &mut self,
+        parent_idx: usize,
+        name: &str,
+        type_: Option<Value>,
+    ) -> Option<String> {
         let parent = &self.elements[parent_idx];
         if parent.get("slicing").is_none() && parent.slice_name().is_none() {
             return None;

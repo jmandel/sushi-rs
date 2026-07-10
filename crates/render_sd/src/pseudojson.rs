@@ -30,7 +30,10 @@ pub fn pseudo_json(sd: &Sd, ctx: &IgContext, core_path: &str) -> String {
         escape_xml(title)
     ));
     if sd.kind() == "resource" {
-        b.push_str(&format!("   \"resourceType\" : \"{}\",\r\n", sd.type_name()));
+        b.push_str(&format!(
+            "   \"resourceType\" : \"{}\",\r\n",
+            sd.type_name()
+        ));
     }
 
     let root = elements[0];
@@ -54,24 +57,47 @@ pub fn pseudo_json(sd: &Sd, ctx: &IgContext, core_path: &str) -> String {
             if !ext_done {
                 c += 1;
                 ctxr.generate_core_elem_extension(
-                    &mut b, &elements, ci, &children, 2, &rn, false,
-                    child.types().first().copied(), c == l, complex,
+                    &mut b,
+                    &elements,
+                    ci,
+                    &children,
+                    2,
+                    &rn,
+                    false,
+                    child.types().first().copied(),
+                    c == l,
+                    complex,
                 );
             }
             ext_done = true;
         } else if child.has_slicing() {
             c += 1;
             ctxr.generate_core_elem_sliced(
-                &mut b, &elements, ci, &children, 2, &rn, false,
-                child.types().first().copied(), c == l, complex,
+                &mut b,
+                &elements,
+                ci,
+                &children,
+                2,
+                &rn,
+                false,
+                child.types().first().copied(),
+                c == l,
+                complex,
             );
         } else if was_sliced(&elements, &children, ci) {
             // nothing
         } else if child.types().len() <= 1 || all_types_are_reference(&child) {
             c += 1;
             ctxr.generate_core_elem(
-                &mut b, &elements, ci, 2, &rn, false,
-                child.types().first().copied(), c == l, complex,
+                &mut b,
+                &elements,
+                ci,
+                2,
+                &rn,
+                false,
+                child.types().first().copied(),
+                c == l,
+                complex,
             );
         } else {
             if child.max() != Some("0") {
@@ -84,7 +110,15 @@ pub fn pseudo_json(sd: &Sd, ctx: &IgContext, core_path: &str) -> String {
                 for t in child.types() {
                     c += 1;
                     ctxr.generate_core_elem(
-                        &mut b, &elements, ci, 2, &rn, false, Some(t), c == l, false,
+                        &mut b,
+                        &elements,
+                        ci,
+                        2,
+                        &rn,
+                        false,
+                        Some(t),
+                        c == l,
+                        false,
                     );
                 }
             }
@@ -129,9 +163,7 @@ impl<'a> Ctx<'a> {
         let elem = elements[idx];
         let path = elem.path();
         // skip nested .id
-        if path.ends_with(".id")
-            && path.rfind('.').unwrap_or(0) > path.find('.').unwrap_or(0)
-        {
+        if path.ends_with(".id") && path.rfind('.').unwrap_or(0) > path.find('.').unwrap_or(0) {
             return;
         }
         if !complex && path.ends_with(".extension") {
@@ -145,7 +177,11 @@ impl<'a> Ctx<'a> {
 
         let children = get_children(elements, idx);
         let name = tail(path);
-        let mut en = if as_value { "value[x]".to_string() } else { name.to_string() };
+        let mut en = if as_value {
+            "value[x]".to_string()
+        } else {
+            name.to_string()
+        };
         if en.contains("[x]") {
             let wc = type_.map(|t| t.working_code()).unwrap_or("");
             en = en.replace("[x]", &up_first(wc));
@@ -254,7 +290,10 @@ impl<'a> Ctx<'a> {
                         // Java `b.append("(" + type.getTargetProfile() + ")")` on a
                         // List<CanonicalType> emits List.toString() =
                         // `[CanonicalType[url], ...]`.
-                        b.push_str(&format!("({})", canonical_list_to_string(&type_.target_profiles())));
+                        b.push_str(&format!(
+                            "({})",
+                            canonical_list_to_string(&type_.target_profiles())
+                        ));
                     }
                 }
                 b.push('}');
@@ -317,27 +356,47 @@ impl<'a> Ctx<'a> {
                     if !ext_done {
                         c += 1;
                         self.generate_core_elem_extension(
-                            b, elements, ci, &children, indent + 1,
-                            &format!("{}.{}", path_name, name), false,
-                            child.types().first().copied(), c == l, complex,
+                            b,
+                            elements,
+                            ci,
+                            &children,
+                            indent + 1,
+                            &format!("{}.{}", path_name, name),
+                            false,
+                            child.types().first().copied(),
+                            c == l,
+                            complex,
                         );
                     }
                     ext_done = true;
                 } else if child.has_slicing() {
                     c += 1;
                     self.generate_core_elem_sliced(
-                        b, elements, ci, &children, indent + 1,
-                        &format!("{}.{}", path_name, name), false,
-                        child.types().first().copied(), c == l, complex,
+                        b,
+                        elements,
+                        ci,
+                        &children,
+                        indent + 1,
+                        &format!("{}.{}", path_name, name),
+                        false,
+                        child.types().first().copied(),
+                        c == l,
+                        complex,
                     );
                 } else if was_sliced(elements, &children, ci) {
                     // nothing
                 } else if child.types().len() <= 1 || all_types_are_reference(&child) {
                     c += 1;
                     self.generate_core_elem(
-                        b, elements, ci, indent + 1,
-                        &format!("{}.{}", path_name, name), false,
-                        child.types().first().copied(), c == l, false,
+                        b,
+                        elements,
+                        ci,
+                        indent + 1,
+                        &format!("{}.{}", path_name, name),
+                        false,
+                        child.types().first().copied(),
+                        c == l,
+                        false,
                     );
                 } else if child.max() != Some("0") {
                     b.push_str(&format!(
@@ -348,8 +407,15 @@ impl<'a> Ctx<'a> {
                     for t in child.types() {
                         c += 1;
                         self.generate_core_elem(
-                            b, elements, ci, indent + 1,
-                            &format!("{}.{}", path_name, name), false, Some(t), c == l, false,
+                            b,
+                            elements,
+                            ci,
+                            indent + 1,
+                            &format!("{}.{}", path_name, name),
+                            false,
+                            Some(t),
+                            c == l,
+                            false,
                         );
                     }
                 }
@@ -386,7 +452,11 @@ impl<'a> Ctx<'a> {
             return;
         }
         let name = tail(elem.path());
-        let mut en = if as_value { "value[x]".to_string() } else { name.to_string() };
+        let mut en = if as_value {
+            "value[x]".to_string()
+        } else {
+            name.to_string()
+        };
         if en.contains("[x]") {
             let t = type_.expect("Type cannot be unknown for element with [x] in the name");
             en = en.replace("[x]", &up_first(t.working_code()));
@@ -435,9 +505,16 @@ impl<'a> Ctx<'a> {
                 if cchild.has_slicing() {
                     cc += 1;
                     self.generate_core_elem_sliced(
-                        b, elements, cci, children, indent + 2,
-                        &format!("{}.{}", path_name, en), false,
-                        cchild.types().first().copied(), cc == el, extcomplex,
+                        b,
+                        elements,
+                        cci,
+                        children,
+                        indent + 2,
+                        &format!("{}.{}", path_name, en),
+                        false,
+                        cchild.types().first().copied(),
+                        cc == el,
+                        extcomplex,
                     );
                 } else if was_sliced(elements, children, cci) {
                     // nothing
@@ -446,9 +523,15 @@ impl<'a> Ctx<'a> {
                     // generate_core_elem); size==1 -> normal.
                     cc += 1;
                     self.generate_core_elem(
-                        b, elements, cci, indent + 2,
-                        &format!("{}.{}", path_name, en), false,
-                        cchild.types().first().copied(), cc == el, extcomplex,
+                        b,
+                        elements,
+                        cci,
+                        indent + 2,
+                        &format!("{}.{}", path_name, en),
+                        false,
+                        cchild.types().first().copied(),
+                        cc == el,
+                        extcomplex,
                     );
                 } else {
                     b.push_str(&format!(
@@ -459,8 +542,15 @@ impl<'a> Ctx<'a> {
                     for t in cchild.types() {
                         cc += 1;
                         self.generate_core_elem(
-                            b, elements, cci, indent + 2,
-                            &format!("{}.{}", path_name, en), false, Some(t), cc == el, false,
+                            b,
+                            elements,
+                            cci,
+                            indent + 2,
+                            &format!("{}.{}", path_name, en),
+                            false,
+                            Some(t),
+                            cc == el,
+                            false,
                         );
                     }
                 }
@@ -501,7 +591,11 @@ impl<'a> Ctx<'a> {
             return;
         }
         let name = tail(elem.path());
-        let mut en = if as_value { "value[x]".to_string() } else { name.to_string() };
+        let mut en = if as_value {
+            "value[x]".to_string()
+        } else {
+            name.to_string()
+        };
         if en.contains("[x]") {
             let wc = type_.map(|t| t.working_code()).unwrap_or("");
             en = en.replace("[x]", &up_first(wc));
@@ -523,11 +617,17 @@ impl<'a> Ctx<'a> {
             b.push_str(&format!("{}  ", indent_s));
             b.push_str("{ // <span style=\"color: navy; opacity: 0.8\">");
             self.write_cardinality(unbounded, b, &slice);
-            b.push_str(&format!("{}</span>", escape_xml(slice.short().unwrap_or(""))));
+            b.push_str(&format!(
+                "{}</span>",
+                escape_xml(slice.short().unwrap_or(""))
+            ));
             b.push_str("\r\n");
             b.push_str(&format!("{}    ", indent_s));
             match &sd_ext {
-                None => b.push_str(&format!("\"url\": \"{}\",\r\n", url.as_deref().unwrap_or("null"))),
+                None => b.push_str(&format!(
+                    "\"url\": \"{}\",\r\n",
+                    url.as_deref().unwrap_or("null")
+                )),
                 Some(r) => b.push_str(&format!(
                     "\"url\": \"<a href=\"{}\">{}</a>\",\r\n",
                     r.web_path,
@@ -540,7 +640,15 @@ impl<'a> Ctx<'a> {
             let own = get_children(elements, si);
             if !own.is_empty() {
                 let value = get_value(elements, &own);
-                self.emit_ext_value(b, elements, value, indent, path_name, "extension", url.as_deref());
+                self.emit_ext_value(
+                    b,
+                    elements,
+                    value,
+                    indent,
+                    path_name,
+                    "extension",
+                    url.as_deref(),
+                );
             } else {
                 match &sd_ext {
                     None => {
@@ -565,7 +673,15 @@ impl<'a> Ctx<'a> {
                                 // to generateCoreElem, so links still point at the
                                 // PROFILE. We keep `self` (this.sd) and emit from
                                 // ext_elems.
-                                self.emit_ext_value(b, &ext_elems, value, indent, path_name, "extension", url.as_deref());
+                                self.emit_ext_value(
+                                    b,
+                                    &ext_elems,
+                                    value,
+                                    indent,
+                                    path_name,
+                                    "extension",
+                                    url.as_deref(),
+                                );
                             }
                         }
                     }
@@ -614,8 +730,15 @@ impl<'a> Ctx<'a> {
         let types = value.types();
         if types.len() == 1 {
             self.generate_core_elem(
-                b, elements, vi, indent + 2,
-                &format!("{}.{}", path_name, en), false, types.first().copied(), true, false,
+                b,
+                elements,
+                vi,
+                indent + 2,
+                &format!("{}.{}", path_name, en),
+                false,
+                types.first().copied(),
+                true,
+                false,
             );
         } else {
             b.push_str(&format!(
@@ -626,8 +749,15 @@ impl<'a> Ctx<'a> {
             let n = types.len();
             for (i, t) in types.iter().enumerate() {
                 self.generate_core_elem(
-                    b, elements, vi, indent + 2,
-                    &format!("{}.{}", path_name, en), false, Some(*t), i + 1 == n, false,
+                    b,
+                    elements,
+                    vi,
+                    indent + 2,
+                    &format!("{}.{}", path_name, en),
+                    false,
+                    Some(*t),
+                    i + 1 == n,
+                    false,
                 );
             }
         }
@@ -656,7 +786,9 @@ impl<'a> Ctx<'a> {
             ));
         }
         if elem.min().unwrap_or(0) > 0 {
-            b.push_str(" <span style=\"color: brown\" title=\"This element is required\"><b>R!</b></span>");
+            b.push_str(
+                " <span style=\"color: brown\" title=\"This element is required\"><b>R!</b></span>",
+            );
         }
         if unbounded && elem.max() == Some("1") {
             b.push_str(" <span style=\"color: brown\" title=\"This element is an array in the base standard, but the profile only allows one element\"><b>Only One!</b></span> ");
@@ -701,7 +833,12 @@ impl<'a> Ctx<'a> {
         }
         self.ctx
             .resolve_type(code)
-            .map(|r| matches!(r.kind.as_deref(), Some("primitive-type") | Some("complex-type")))
+            .map(|r| {
+                matches!(
+                    r.kind.as_deref(),
+                    Some("primitive-type") | Some("complex-type")
+                )
+            })
             .unwrap_or(false)
     }
 
@@ -775,7 +912,9 @@ fn is_extension(child: &Ed) -> bool {
 
 /// `hasExtensionChild(children)` (psdr:1789).
 fn has_extension_child(elements: &[Ed], children: &[usize]) -> bool {
-    children.iter().any(|&i| elements[i].path().ends_with(".extension"))
+    children
+        .iter()
+        .any(|&i| elements[i].path().ends_with(".extension"))
 }
 
 /// `allTypesAreReference(child)` (psdr:1775).
@@ -824,9 +963,15 @@ fn get_value(elements: &[Ed], children: &[usize]) -> Option<usize> {
 fn get_enhanced_definition(elem: &Ed) -> String {
     let def = remove_period(elem.definition().unwrap_or(""));
     if elem.is_modifier() && elem.must_support() {
-        format!("{} (this element modifies the meaning of other elements, and must be supported)", def)
+        format!(
+            "{} (this element modifies the meaning of other elements, and must be supported)",
+            def
+        )
     } else if elem.is_modifier() {
-        format!("{} (this element modifies the meaning of other elements)", def)
+        format!(
+            "{} (this element modifies the meaning of other elements)",
+            def
+        )
     } else if elem.must_support() {
         format!("{} (this element must be supported)", def)
     } else {
@@ -836,7 +981,9 @@ fn get_enhanced_definition(elem: &Ed) -> String {
 
 /// `describeSlicing(slicing)` (psdr:2226).
 fn describe_slicing(slicing: Option<&Value>) -> String {
-    let Some(sl) = slicing else { return String::new() };
+    let Some(sl) = slicing else {
+        return String::new();
+    };
     let rules = sl.get("rules").and_then(|x| x.as_str()).unwrap_or("");
     if rules == "closed" {
         return String::new();
@@ -942,7 +1089,10 @@ fn primitive_str(v: &Value) -> Option<String> {
 /// The publisher appends this raw for the non-core targetProfile / null-tsd
 /// profile branches.
 fn canonical_list_to_string(items: &[&str]) -> String {
-    let inner: Vec<String> = items.iter().map(|u| format!("CanonicalType[{}]", u)).collect();
+    let inner: Vec<String> = items
+        .iter()
+        .map(|u| format!("CanonicalType[{}]", u))
+        .collect();
     format!("[{}]", inner.join(", "))
 }
 

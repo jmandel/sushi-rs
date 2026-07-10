@@ -36,7 +36,10 @@ pub trait TypesHost<'a> {
     fn must_support_mode(&self) -> bool;
 
     fn sd_url(&self) -> &str {
-        self.sd_root().get("url").and_then(|x| x.as_str()).unwrap_or("")
+        self.sd_root()
+            .get("url")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
     }
 
     /// `genTypes` (SDR:2317). `dim` dims every emitted piece (diff EQUALS).
@@ -57,7 +60,8 @@ pub trait TypesHost<'a> {
                 None => ("", cr),
             };
             if url.is_empty() || url == self.sd_url() {
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
+                c.pieces
+                    .push(Piece::ref_text(None, Some("See ".into()), None));
                 c.pieces.push(Piece::ref_text(
                     Some(format!("#{}", frag)),
                     Some(tail(frag).to_string()),
@@ -65,7 +69,8 @@ pub trait TypesHost<'a> {
                 ));
             } else if let Some(src) = self.ctx().resolve(url) {
                 let type_name = src.name.clone().unwrap_or_else(|| tail(url).to_string());
-                c.pieces.push(Piece::ref_text(None, Some("See ".into()), None));
+                c.pieces
+                    .push(Piece::ref_text(None, Some("See ".into()), None));
                 c.pieces.push(Piece::ref_text(
                     Some(format!("{}#{}", src.web_path, frag)),
                     Some(format!("{} ({})", tail(frag), type_name)),
@@ -93,8 +98,11 @@ pub trait TypesHost<'a> {
                         String::new()
                     };
                     let name = format!("{}{}", bsd.name.clone().unwrap_or_default(), v);
-                    c.pieces
-                        .push(Piece::ref_text(Some(bsd.web_path.clone()), Some(name), None));
+                    c.pieces.push(Piece::ref_text(
+                        Some(bsd.web_path.clone()),
+                        Some(name),
+                        None,
+                    ));
                 }
                 return c;
             }
@@ -120,8 +128,10 @@ pub trait TypesHost<'a> {
             if first {
                 first = false;
             } else {
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
+                c.pieces.push(dim_piece(
+                    Piece::ref_text(None, Some(", ".into()), None),
+                    dim,
+                ));
             }
             if t.has_target() {
                 // Reference/canonical (SDR:2379-2427)
@@ -134,8 +144,11 @@ pub trait TypesHost<'a> {
                         } else {
                             tsd.name.clone()
                         };
-                        c.pieces
-                            .push(Piece::ref_text(Some(tsd.web_path.clone()), name, Some(tsd.present())));
+                        c.pieces.push(Piece::ref_text(
+                            Some(tsd.web_path.clone()),
+                            name,
+                            Some(tsd.present()),
+                        ));
                     } else {
                         c.pieces.push(Piece::ref_text(
                             Some(format!("{}references.html", self.core_path())),
@@ -173,7 +186,8 @@ pub trait TypesHost<'a> {
                     if tfirst {
                         tfirst = false;
                     } else {
-                        c.pieces.push(Piece::ref_text(None, Some(" | ".into()), None));
+                        c.pieces
+                            .push(Piece::ref_text(None, Some(" | ".into()), None));
                     }
                     self.gen_target_link(&mut c, t, u, dim);
                     if !ms_mode && canonical_is_must_support(t, u) && e.must_support() {
@@ -208,8 +222,10 @@ pub trait TypesHost<'a> {
                     if pfirst {
                         pfirst = false;
                     } else {
-                        c.pieces
-                            .push(dim_piece(Piece::ref_text(None, Some(", ".into()), None), dim));
+                        c.pieces.push(dim_piece(
+                            Piece::ref_text(None, Some(", ".into()), None),
+                            dim,
+                        ));
                     }
                     // getLinkForProfile -> webPath|name, name gains "(version)"
                     // when multiple versions of the canonical are loaded
@@ -273,8 +289,10 @@ pub trait TypesHost<'a> {
                         dim,
                     ));
                 } else {
-                    c.pieces
-                        .push(dim_piece(Piece::ref_text(None, Some(tc.to_string()), None), dim));
+                    c.pieces.push(dim_piece(
+                        Piece::ref_text(None, Some(tc.to_string()), None),
+                        dim,
+                    ));
                 }
                 if !ms_mode && type_is_must_support(t) && e.must_support() {
                     c.pieces.push(Piece::ref_text(None, Some(" ".into()), None));
@@ -307,8 +325,10 @@ pub trait TypesHost<'a> {
             } else {
                 let rn = &u[40..];
                 let link = self.ctx().resolve_type(rn).map(|r| r.web_path);
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(link, Some(rn.to_string()), None), dim));
+                c.pieces.push(dim_piece(
+                    Piece::ref_text(link, Some(rn.to_string()), None),
+                    dim,
+                ));
             }
         } else if u.starts_with("http://") || u.starts_with("https://") {
             if let Some(sd) = self.ctx().resolve(u) {
@@ -318,11 +338,15 @@ pub trait TypesHost<'a> {
                 if let Some(i) = href.find('|') {
                     href.truncate(i);
                 }
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(Some(href), Some(disp), None), dim));
+                c.pieces.push(dim_piece(
+                    Piece::ref_text(Some(href), Some(disp), None),
+                    dim,
+                ));
             } else {
-                c.pieces
-                    .push(dim_piece(Piece::ref_text(None, Some(u.to_string()), None), dim));
+                c.pieces.push(dim_piece(
+                    Piece::ref_text(None, Some(u.to_string()), None),
+                    dim,
+                ));
             }
         } else if u.starts_with('#') {
             self.gap("contained target profile link");

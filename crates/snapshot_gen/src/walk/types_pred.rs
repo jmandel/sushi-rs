@@ -8,17 +8,59 @@ use super::context::WalkContext;
 use super::resolve::fetch_sd;
 
 const DATA_TYPES: &[&str] = &[
-    "Address", "Age", "Annotation", "Attachment", "CodeableConcept", "Coding", "ContactPoint",
-    "Count", "Distance", "Duration", "HumanName", "Identifier", "Money", "Period", "Quantity",
-    "Range", "Ratio", "Reference", "SampledData", "Signature", "Timing", "ContactDetail",
-    "Contributor", "DataRequirement", "Expression", "ParameterDefinition", "RelatedArtifact",
-    "TriggerDefinition", "UsageContext", "CodeableReference",
+    "Address",
+    "Age",
+    "Annotation",
+    "Attachment",
+    "CodeableConcept",
+    "Coding",
+    "ContactPoint",
+    "Count",
+    "Distance",
+    "Duration",
+    "HumanName",
+    "Identifier",
+    "Money",
+    "Period",
+    "Quantity",
+    "Range",
+    "Ratio",
+    "Reference",
+    "SampledData",
+    "Signature",
+    "Timing",
+    "ContactDetail",
+    "Contributor",
+    "DataRequirement",
+    "Expression",
+    "ParameterDefinition",
+    "RelatedArtifact",
+    "TriggerDefinition",
+    "UsageContext",
+    "CodeableReference",
 ];
 
 const PRIMITIVES: &[&str] = &[
-    "base64Binary", "boolean", "canonical", "code", "date", "dateTime", "decimal", "id", "instant",
-    "integer", "integer64", "markdown", "oid", "positiveInt", "string", "time", "unsignedInt",
-    "uri", "url", "uuid",
+    "base64Binary",
+    "boolean",
+    "canonical",
+    "code",
+    "date",
+    "dateTime",
+    "decimal",
+    "id",
+    "instant",
+    "integer",
+    "integer64",
+    "markdown",
+    "oid",
+    "positiveInt",
+    "string",
+    "time",
+    "unsignedInt",
+    "uri",
+    "url",
+    "uuid",
 ];
 
 /// ElementDefinition.TypeRefComponent.getWorkingCode(): the fhir-type extension
@@ -35,7 +77,10 @@ pub(crate) fn working_code(type_ref: &Value) -> Option<String> {
             }
         }
     }
-    type_ref.get("code").and_then(Value::as_str).map(str::to_string)
+    type_ref
+        .get("code")
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 /// The list of working codes on an element.

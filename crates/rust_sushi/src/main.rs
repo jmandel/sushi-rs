@@ -320,15 +320,10 @@ fn main() -> anyhow::Result<()> {
                 }
                 print!("{out}");
             } else if let Some(ig) = option_value(&args, "--project") {
-                let cfg_text = std::fs::read_to_string(
-                    std::path::Path::new(ig).join("sushi-config.yaml"),
-                )?;
-                let step = package_store::resolve_project(
-                    &cfg_text,
-                    &source,
-                    cache_path,
-                    Some(&index),
-                )?;
+                let cfg_text =
+                    std::fs::read_to_string(std::path::Path::new(ig).join("sushi-config.yaml"))?;
+                let step =
+                    package_store::resolve_project(&cfg_text, &source, cache_path, Some(&index))?;
                 println!("{}", serde_json::to_string_pretty(&step)?);
             } else {
                 return Err(anyhow::anyhow!(

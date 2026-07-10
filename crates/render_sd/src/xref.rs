@@ -123,7 +123,12 @@ fn own_sds(ctx: &IgContext) -> Vec<(String, String, String, std::rc::Rc<Value>)>
         .into_iter()
         .filter(|r| r.rtype == "StructureDefinition")
         .map(|r: OwnResource| {
-            let url = r.json.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let url = r
+                .json
+                .get("url")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
             (url, r.web_path, r.title, r.json)
         })
         .collect();
@@ -132,7 +137,10 @@ fn own_sds(ctx: &IgContext) -> Vec<(String, String, String, std::rc::Rc<Value>)>
 }
 
 /// `findDerived` (psdr:1550): SDs whose baseDefinition refersToThisSD.
-fn find_derived(all: &[(String, String, String, std::rc::Rc<Value>)], sd_url: &str) -> Vec<(String, String)> {
+fn find_derived(
+    all: &[(String, String, String, std::rc::Rc<Value>)],
+    sd_url: &str,
+) -> Vec<(String, String)> {
     all.iter()
         .filter(|(_url, _wp, _pr, j)| {
             j.get("baseDefinition")
@@ -145,7 +153,10 @@ fn find_derived(all: &[(String, String, String, std::rc::Rc<Value>)], sd_url: &s
 }
 
 /// `findUses` (psdr:1561): SDs with a DIFFERENTIAL type whose profile == this url.
-fn find_uses(all: &[(String, String, String, std::rc::Rc<Value>)], sd_url: &str) -> Vec<(String, String)> {
+fn find_uses(
+    all: &[(String, String, String, std::rc::Rc<Value>)],
+    sd_url: &str,
+) -> Vec<(String, String)> {
     all.iter()
         .filter(|(_url, _wp, _pr, j)| {
             let diff = j
@@ -161,9 +172,8 @@ fn find_uses(all: &[(String, String, String, std::rc::Rc<Value>)], sd_url: &str)
                             tr.get("profile")
                                 .and_then(|p| p.as_array())
                                 .map(|ps| {
-                                    ps.iter().any(|c| {
-                                        c.as_str().map(|s| s == sd_url).unwrap_or(false)
-                                    })
+                                    ps.iter()
+                                        .any(|c| c.as_str().map(|s| s == sd_url).unwrap_or(false))
                                 })
                                 .unwrap_or(false)
                         })
@@ -334,7 +344,13 @@ fn scan_cap_stmt(m: &mut RefMap, cs: &Value, web_path: &str, sd_url: &str) {
 /// MAPPINGS (never hit — every corpus SD has forward mappings -> OTHER non-null).
 /// `getMappingTargets` (the in-IG SD set) is implicit: IN_LIST/NOT_IN_LIST are
 /// empty because no corpus mapping URI resolves to a loaded SD (see scan_mappings).
-pub fn maps(sd: &Sd, ctx: &IgContext, def_file: &str, run_uuid: &str, active_tables: bool) -> String {
+pub fn maps(
+    sd: &Sd,
+    ctx: &IgContext,
+    def_file: &str,
+    run_uuid: &str,
+    active_tables: bool,
+) -> String {
     let one = |mode: MapStructureMode| -> Option<String> {
         let mut cfg = TableConfig::maps(run_uuid, mode);
         cfg.active_tables = active_tables;
@@ -371,8 +387,7 @@ pub fn references(sd: &Sd, ctx: &IgContext) -> String {
     // the extensions/searchparam-expressions never match). See scanExtensions.
 
     for (_url, wp, pr, j) in &all {
-        if j
-            .get("baseDefinition")
+        if j.get("baseDefinition")
             .and_then(|x| x.as_str())
             .map(|b| refers_to(b, &sd_url))
             .unwrap_or(false)

@@ -4,8 +4,8 @@
 use serde_json::Value;
 use std::rc::Rc;
 
-use super::context::WalkContext;
 use super::contentref;
+use super::context::WalkContext;
 use super::emit::*;
 use super::frame::{SlicingParams, WalkCursor, WalkFrame};
 use super::paths::*;
@@ -51,7 +51,10 @@ pub(crate) fn process_simple_path(
     type_list: &mut Vec<TypeSlice>,
     slicer: Option<&Value>,
 ) -> anyhow::Result<Option<usize>> {
-    let diff_matches: Vec<Value> = diff_match_idx.iter().map(|&i| ctx.diff[i].clone()).collect();
+    let diff_matches: Vec<Value> = diff_match_idx
+        .iter()
+        .map(|&i| ctx.diff[i].clone())
+        .collect();
     let mut res = None;
 
     if diff_matches.is_empty() {
@@ -140,11 +143,21 @@ fn process_simple_path_empty(
     if cur.result_path_base.is_none() {
         cur.result_path_base = Some(path_of(&outcome).to_string());
     } else if !path_of(&outcome).starts_with(cur.result_path_base.as_deref().unwrap()) {
-        anyhow::bail!("ADDING_WRONG_PATH: {} not under {:?}", path_of(&outcome), cur.result_path_base);
+        anyhow::bail!(
+            "ADDING_WRONG_PATH: {} not under {:?}",
+            path_of(&outcome),
+            cur.result_path_base
+        );
     }
     ctx.add_to_result(outcome.clone(), None);
 
-    if has_inner_diff_matches(&ctx.diff, current_base_path, cur.diff_cursor, frame.diff_limit, true) {
+    if has_inner_diff_matches(
+        &ctx.diff,
+        current_base_path,
+        cur.diff_cursor,
+        frame.diff_limit,
+        true,
+    ) {
         if base_has_children(&cur.base, cur.base_cursor) {
             trace::rec(
                 "processSimplePathWithEmptyDiffMatches",
@@ -176,7 +189,11 @@ fn process_simple_path_empty(
             cur.diff_cursor = ncur.diff_cursor;
         } else {
             // walk into a new type / contentReference
-            let types_len = outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+            let types_len = outcome
+                .get("type")
+                .and_then(Value::as_array)
+                .map(|a| a.len())
+                .unwrap_or(0);
             if types_len == 0 && !has_content_reference(&outcome) {
                 anyhow::bail!("_HAS_NO_CHILDREN__AND_NO_TYPES at {current_base_path}");
             }
@@ -195,7 +212,13 @@ fn process_simple_path_empty(
             }
             if has_content_reference(&outcome) {
                 contentref::walk_into_content_reference(
-                    ctx, cur, frame, &mut outcome, current_base_path, start, false,
+                    ctx,
+                    cur,
+                    frame,
+                    &mut outcome,
+                    current_base_path,
+                    start,
+                    false,
                 )?;
             } else {
                 unfold_type_empty(ctx, cur, frame, &outcome, current_base_path, start)?;
@@ -283,9 +306,7 @@ pub(crate) fn process_simple_path_one_match(
             .iter()
             .find(|e| e.get("id").and_then(Value::as_str) == Some(base_id.as_str()))
             .cloned();
-    } else if let Some(profile_template) =
-        try_profile_template(ctx, frame, current_base, &diff0)?
-    {
+    } else if let Some(profile_template) = try_profile_template(ctx, frame, current_base, &diff0)? {
         template = Some(profile_template);
     }
 
@@ -395,10 +416,15 @@ pub(crate) fn process_simple_path_one_match(
     let out_path = path_of(&outcome).to_string();
     let walks_in = frame.diff_limit >= cur.diff_cursor as isize
         && out_path.contains('.')
-        && (is_data_type(ctx, &outcome) || is_base_resource(&outcome) || has_content_reference(&outcome));
+        && (is_data_type(ctx, &outcome)
+            || is_base_resource(&outcome)
+            || has_content_reference(&outcome));
     if walks_in
         && cur.diff_cursor < ctx.diff.len()
-        && path_starts_with(path_of(&ctx.diff[cur.diff_cursor]), &format!("{}.", path_of(&diff0)))
+        && path_starts_with(
+            path_of(&ctx.diff[cur.diff_cursor]),
+            &format!("{}.", path_of(&diff0)),
+        )
         && !base_walks_into(&cur.base, cur.base_cursor)
     {
         trace::rec(
@@ -415,11 +441,18 @@ pub(crate) fn process_simple_path_one_match(
         // choice path (e.g. base `component.value[x]`, diff `component.valueQuantity`):
         // narrow the outcome type list to that single concrete type before
         // unfolding, so we recurse into Quantity (not the Element fallback).
-        let type_count = outcome.get("type").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
+        let type_count = outcome
+            .get("type")
+            .and_then(Value::as_array)
+            .map(|a| a.len())
+            .unwrap_or(0);
         if type_count > 1 {
             let out_tail = tail(path_of(&outcome)).to_string();
             let diff_tail = tail(path_of(&diff0)).to_string();
-            if out_tail.ends_with("[x]") && !diff_tail.ends_with("[x]") && diff_tail.len() >= out_tail.len() - 3 {
+            if out_tail.ends_with("[x]")
+                && !diff_tail.ends_with("[x]")
+                && diff_tail.len() >= out_tail.len() - 3
+            {
                 // t = diff_tail.substring(out_tail.len() - 3)
                 let mut t = diff_tail[(out_tail.len() - 3)..].to_string();
                 if super::types_pred::is_primitive_str(ctx, &uncapitalize_local(&t)) {
@@ -455,7 +488,13 @@ pub(crate) fn process_simple_path_one_match(
         }
         if has_content_reference(&outcome) {
             contentref::walk_into_content_reference_onematch(
-                ctx, cur, frame, &mut outcome, current_base_path, &diff0, start,
+                ctx,
+                cur,
+                frame,
+                &mut outcome,
+                current_base_path,
+                &diff0,
+                start,
             )?;
         } else {
             unfold_type_one_match(ctx, cur, frame, &outcome, &diff0, start)?;
@@ -568,7 +607,11 @@ fn try_profile_template(
             obj.remove("constraint");
         }
     }
-    set_field(&mut template, "path", Value::String(path_of(current_base).to_string()));
+    set_field(
+        &mut template,
+        "path",
+        Value::String(path_of(current_base).to_string()),
+    );
     if let Some(obj) = template.as_object_mut() {
         obj.remove("sliceName");
     }
@@ -644,14 +687,30 @@ pub(crate) fn base_walks_into(base: &[Value], cursor: usize) -> bool {
 /// `condition`, `type`, `base`, `slicing`, `mapping`, `id`, `path`).
 fn fill_out_from_base(profile: &Value, usage: &Value) -> Value {
     let mut out = profile.clone();
-    let Some(out_obj) = out.as_object_mut() else { return out };
-    let Some(usage_obj) = usage.as_object() else { return out };
+    let Some(out_obj) = out.as_object_mut() else {
+        return out;
+    };
+    let Some(usage_obj) = usage.as_object() else {
+        return out;
+    };
 
     // scalar fill-if-missing
     for k in [
-        "sliceName", "label", "definition", "short", "comment", "requirements",
-        "min", "max", "maxLength", "mustSupport", "isSummary", "isModifier",
-        "isModifierReason", "mustHaveValue", "binding",
+        "sliceName",
+        "label",
+        "definition",
+        "short",
+        "comment",
+        "requirements",
+        "min",
+        "max",
+        "maxLength",
+        "mustSupport",
+        "isSummary",
+        "isModifier",
+        "isModifierReason",
+        "mustHaveValue",
+        "binding",
     ] {
         if !out_obj.contains_key(k) {
             if let Some(v) = usage_obj.get(k) {
@@ -706,11 +765,17 @@ fn additive_array(
     key: &str,
     same: impl Fn(&Value, &Value) -> bool,
 ) {
-    let Some(src) = usage.get(key).and_then(Value::as_array) else { return };
+    let Some(src) = usage.get(key).and_then(Value::as_array) else {
+        return;
+    };
     if src.is_empty() {
         return;
     }
-    let mut existing = out.get(key).and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut existing = out
+        .get(key)
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     for s in src {
         if !existing.iter().any(|d| same(d, s)) {
             existing.push(s.clone());
@@ -732,7 +797,11 @@ pub(crate) fn resolve_type_sd(
     ctx: &mut WalkContext,
     outcome: &Value,
 ) -> anyhow::Result<(Rc<Value>, String)> {
-    let types = outcome.get("type").and_then(Value::as_array).cloned().unwrap_or_default();
+    let types = outcome
+        .get("type")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let codes: Vec<String> = types.iter().filter_map(working_code).collect();
     let distinct: std::collections::BTreeSet<&String> = codes.iter().collect();
     let (query, profile): (String, Option<String>) = if types.len() > 1 {
@@ -756,7 +825,11 @@ pub(crate) fn resolve_type_sd(
                 .unwrap_or(false)
         {
             if let Some(sd) = resolve_with_snapshot(ctx, &profile_url)? {
-                let url = sd.get("url").and_then(Value::as_str).unwrap_or(&profile_url).to_string();
+                let url = sd
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&profile_url)
+                    .to_string();
                 return Ok((sd, url));
             }
         }
@@ -764,7 +837,11 @@ pub(crate) fn resolve_type_sd(
     let Some(sd) = resolve_with_snapshot(ctx, &query)? else {
         anyhow::bail!("_HAS_CHILDREN__FOR_TYPE__BUT_CANT_FIND_TYPE: {query}");
     };
-    let url = sd.get("url").and_then(Value::as_str).unwrap_or(&query).to_string();
+    let url = sd
+        .get("url")
+        .and_then(Value::as_str)
+        .unwrap_or(&query)
+        .to_string();
     Ok((sd, url))
 }
 

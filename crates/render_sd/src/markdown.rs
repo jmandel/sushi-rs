@@ -49,7 +49,12 @@ pub fn add_markdown_no_para_role(cell: &mut Cell, md: &str, role: &str) {
 /// description is base-derived in the diff view). Java applies the style via
 /// `styleIt` to every addNode piece and block-element piece (HTG:414/441-466);
 /// the `br;br` separators stay unstyled (HTG:401-402).
-pub fn add_markdown_no_para_role_styled(cell: &mut Cell, md: &str, role: &str, style: Option<&str>) {
+pub fn add_markdown_no_para_role_styled(
+    cell: &mut Cell,
+    md: &str,
+    role: &str,
+    style: Option<&str>,
+) {
     let html = commonmark::render_html(md);
     let mut pieces = html_to_paragraph_pieces_styled(&html, style);
     // Trim unwanted trailing line-breaks (HTG:380-381).
@@ -137,7 +142,11 @@ fn add_node_styled(list: &mut Vec<Piece>, c: &XhtmlNode, style: Option<&str>) {
 fn add_node_inner(list: &mut Vec<Piece>, c: &XhtmlNode) {
     match c.node_type() {
         NodeType::Text => {
-            list.push(Piece::ref_text(None, Some(c.content().unwrap_or("").to_string()), None));
+            list.push(Piece::ref_text(
+                None,
+                Some(c.content().unwrap_or("").to_string()),
+                None,
+            ));
         }
         NodeType::Element => {
             let name = c.name().unwrap_or("");

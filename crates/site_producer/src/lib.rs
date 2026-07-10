@@ -6,8 +6,8 @@
 //! (`-stock.json`), and makes `fig render <ig-source-dir>` work from source.
 //!
 //! Fragment BODIES (`_includes/*-snapshot.xhtml` etc.) are NOT produced here —
-//! they fill live via the fragment engine's first-include-miss
-//! (`render_sd::engine::FragmentEngine`). This module produces ONLY the SHELLS
+//! registered generated includes cross the page renderer's typed artifact
+//! resolver into `render_sd::engine::FragmentEngine`. This module produces ONLY the SHELLS
 //! (the `.html` pages that `{% include X-snapshot.xhtml %}` from) and the
 //! `_data` model those shells read via `site.data.*`.
 //!
@@ -181,7 +181,9 @@ pub fn order_resources(resources: &mut [Resource], order: &[(String, String)]) {
         .map(|(i, (rt, id))| ((rt.as_str(), id.as_str()), i))
         .collect();
     resources.sort_by_key(|r| {
-        pos.get(&(r.rt.as_str(), r.id.as_str())).copied().unwrap_or(usize::MAX)
+        pos.get(&(r.rt.as_str(), r.id.as_str()))
+            .copied()
+            .unwrap_or(usize::MAX)
     });
 }
 
@@ -207,7 +209,10 @@ impl IgContext {
             version: s("version"),
             canonical: s("url").map(|u| {
                 // canonical = url up to /ImplementationGuide/
-                u.split("/ImplementationGuide/").next().unwrap_or(&u).to_string()
+                u.split("/ImplementationGuide/")
+                    .next()
+                    .unwrap_or(&u)
+                    .to_string()
             }),
             publisher: s("publisher"),
         }
@@ -238,9 +243,10 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         }
         for r in enumerate_resources(&dir, is_example)? {
             if r.rt == "ImplementationGuide" {
-                if let Ok(v) = std::fs::read(&r.file).map_err(anyhow::Error::from).and_then(|b| {
-                    serde_json::from_slice::<Value>(&b).map_err(anyhow::Error::from)
-                }) {
+                if let Ok(v) = std::fs::read(&r.file)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|b| serde_json::from_slice::<Value>(&b).map_err(anyhow::Error::from))
+                {
                     ig = IgContext::from_ig(&v);
                     ig_order = ig_resource_order(&v);
                     ig_json = v;
@@ -289,7 +295,11 @@ fn ig_resource_order(ig: &Value) -> Option<Vec<(String, String)>> {
     let arr = ig.get("definition")?.get("resource")?.as_array()?;
     let mut out = Vec::with_capacity(arr.len());
     for r in arr {
-        if let Some(ref_) = r.get("reference").and_then(|x| x.get("reference")).and_then(Value::as_str) {
+        if let Some(ref_) = r
+            .get("reference")
+            .and_then(|x| x.get("reference"))
+            .and_then(Value::as_str)
+        {
             if let Some((rt, id)) = ref_.split_once('/') {
                 out.push((rt.to_string(), id.to_string()));
             }

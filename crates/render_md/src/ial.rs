@@ -147,25 +147,26 @@ pub fn parse_ial_body(body: &str) -> Attrs {
                     while i < n && body[i..].chars().next().unwrap().is_whitespace() {
                         i += 1;
                     }
-                    let val = if i < n && (body[i..].starts_with('"') || body[i..].starts_with('\'')) {
-                        let quote = body[i..].chars().next().unwrap();
-                        i += 1;
-                        let vstart = i;
-                        while i < n && !body[i..].starts_with(quote) {
-                            i += body[i..].chars().next().unwrap().len_utf8();
-                        }
-                        let v = &body[vstart..i];
-                        if i < n {
-                            i += 1; // consume closing quote
-                        }
-                        v.to_string()
-                    } else {
-                        let vstart = i;
-                        while i < n && !body[i..].chars().next().unwrap().is_whitespace() {
-                            i += body[i..].chars().next().unwrap().len_utf8();
-                        }
-                        body[vstart..i].to_string()
-                    };
+                    let val =
+                        if i < n && (body[i..].starts_with('"') || body[i..].starts_with('\'')) {
+                            let quote = body[i..].chars().next().unwrap();
+                            i += 1;
+                            let vstart = i;
+                            while i < n && !body[i..].starts_with(quote) {
+                                i += body[i..].chars().next().unwrap().len_utf8();
+                            }
+                            let v = &body[vstart..i];
+                            if i < n {
+                                i += 1; // consume closing quote
+                            }
+                            v.to_string()
+                        } else {
+                            let vstart = i;
+                            while i < n && !body[i..].chars().next().unwrap().is_whitespace() {
+                                i += body[i..].chars().next().unwrap().len_utf8();
+                            }
+                            body[vstart..i].to_string()
+                        };
                     if !key.is_empty() {
                         attrs.set_kv(key, &val);
                     }

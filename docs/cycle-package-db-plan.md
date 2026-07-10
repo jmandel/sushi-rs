@@ -1,5 +1,12 @@
 # Cycle IG: Rust Pipeline as the package.db Producer — Gap Analysis & Plan
 
+> **HISTORICAL ANALYSIS — handoff design superseded.** The Rust producer now
+> exposes canonical Cycle rows as one addressed `compat.site_db` artifact in a
+> verified `ClosedSiteBuild`. `site.db` is complete for that render target, not
+> the universal renderer contract. Current model:
+> [`crates/site_build/README.md`](../crates/site_build/README.md) and
+> [`hosting.md`](hosting.md).
+
 > Status: ANALYSIS (2026-07-02). Source: exhaustive read of
 > `jmandel/cycle@aa10e71` `site-gen/` (inventory by Explore agent; file:line
 > citations live in that repo). Implementation is post-rework roadmap work

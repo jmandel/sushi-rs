@@ -37,7 +37,14 @@ const CONTRACT: &[(&str, &[&str])] = &[
     ),
     (
         "Concepts",
-        &["Key", "ResourceKey", "ParentKey", "Code", "Display", "Definition"],
+        &[
+            "Key",
+            "ResourceKey",
+            "ParentKey",
+            "Code",
+            "Display",
+            "Definition",
+        ],
     ),
     (
         "ValueSet_Codes",
@@ -68,7 +75,14 @@ const CONTRACT: &[(&str, &[&str])] = &[
     ),
     (
         "ValueSetListRefs",
-        &["ValueSetListKey", "Type", "Id", "ResourceKey", "Title", "Web"],
+        &[
+            "ValueSetListKey",
+            "Type",
+            "Id",
+            "ResourceKey",
+            "Title",
+            "Web",
+        ],
     ),
     ("ValueSetListSystems", &["ValueSetListKey", "URL"]),
     (
@@ -87,7 +101,14 @@ const CONTRACT: &[(&str, &[&str])] = &[
     ),
     (
         "CodeSystemListRefs",
-        &["CodeSystemListKey", "Type", "Id", "ResourceKey", "Title", "Web"],
+        &[
+            "CodeSystemListKey",
+            "Type",
+            "Id",
+            "ResourceKey",
+            "Title",
+            "Web",
+        ],
     ),
 ];
 
@@ -103,7 +124,10 @@ fn table_columns(conn: &Connection, table: &str) -> Option<Vec<String>> {
         return None;
     }
     let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info(\"{}\")", table.replace('"', "\"\"")))
+        .prepare(&format!(
+            "PRAGMA table_info(\"{}\")",
+            table.replace('"', "\"\"")
+        ))
         .ok()?;
     let cols: Vec<String> = stmt
         .query_map([], |r| r.get::<_, String>(1))

@@ -1,277 +1,289 @@
-# Hosting the engine — CLI, wasm Session, and custom generators
+# Hosting the engine
 
-> One engine, three skins. This doc is how to **host** it: from a browser
-> Worker, from Bun/Node with a custom TypeScript generator, from a non-JS
-> language, and as a zero-code template renderer. Every code block here has a
-> runnable twin under [`examples/`](../examples/) that CI executes
-> (`scripts/examples-gate.sh`) — the docs can't rot.
+This is the current host guide for `sushi-rs`. The editor's current
+[`SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md) defines
+the cross-repository browser/renderer contract. This guide covers the engine
+host surfaces and explains why native Publisher templates and callback-free
+external builders have different execution patterns.
 
-The engine is the `render_*` + compiler + snapshot_gen + site_db crates. Its
-three skins:
+## Host surfaces
 
-| Skin | Where | Entry |
-|---|---|---|
-| **CLI** (`fig`) | native, fs | `fig <subcommand>` (`crates/fig`) |
-| **Session** (wasm) | browser / Bun / Node | `new Session()` (`crates/wasm_api`) |
-| **library** | native, in-process | the crate APIs directly |
+| Surface | State and data boundary | Result boundary |
+| --- | --- | --- |
+| Rust crates | typed values owned by the caller | Rust return values and errors |
+| WASM `Session` | one isolated in-memory engine per normal `Session::new()` | JSON result/error envelope strings |
+| `fig` | native process and explicit filesystem/CAS inputs | human output, or the shared envelope with `--json` |
 
-All three share the **apiVersion envelope** (§4) — one schema, one implementation
-(`crates/api_envelope`), verified schema-identical by
+The library is not a JSON-envelope skin. `crates/api_envelope` is shared only by
+the WASM boundary and `fig --json`, with schema equivalence pinned by
 `crates/fig/tests/json_envelope.rs`.
 
----
+## Session ownership
 
-## 1. Browser worker (the editor path)
-
-The editor loads the wasm-bindgen **web-target** module in a Worker and calls
-`Session`:
+Construct one `Session` for each independently mutable engine lifetime:
 
 ```js
-// engine.worker.ts
-const mod = await import(`${BASE}pkg/wasm_api.js`);
-await mod.default(`${BASE}pkg/wasm_api_bg.wasm`);   // web target: init with the .wasm
+const mod = await import(`${base}pkg/wasm_api.js`);
+await mod.default(`${base}pkg/wasm_api_bg.wasm`);
 const session = new mod.Session();
-
-function unwrap(json) {                              // the ONE envelope check
-  const e = JSON.parse(json);
-  if (e.apiVersion !== 1) throw new Error(`apiVersion ${e.apiVersion}`);
-  if (!e.ok) throw new Error(`${e.op}: ${e.error.message}`);
-  return e.result;
-}
-
-unwrap(session.init(bundlesJson));                   // mount package bundles
-unwrap(session.mountSite(filesJson, optionsJson));   // mount the staged site tree
-const { pages } = unwrap(session.listPages());
-const { html } = unwrap(session.renderPage('en/index.html'));
 ```
 
-Every `Session` method returns one envelope string the caller `JSON.parse`s.
-Domain failures are `ok:false` envelopes — methods never throw for them.
+`new Session()` maps to `Session::new()` and owns a fresh `Engine` in an
+isolated `RefCell`. `Session.global()` is an explicitly named compatibility
+door onto the old process-global engine. New browser and library hosts should
+not use it.
 
-Build the module with the scratch wasm toolchain (recipe:
-`demo/wasm-p0/README.md`): `cargo build -p wasm_api --target wasm32-unknown-unknown
---release` then `wasm-bindgen --target web` (browser) or `--target nodejs`
-(Bun/Node, §2).
+The engine is mutable within a session. A browser worker should therefore own
+the session, serialize state-changing operations, and prevent a superseded
+request from publishing its result. Separate sessions may proceed
+independently.
 
-## 2. Bun / Node — a ~30-line custom generator
-
-The same wasm module runs under Bun/Node. A **custom site generator** is a
-`SiteGeneratorAdapter` (the SAME contract the editor uses). `fig` hosts it for
-you: `fig render --generator ts:<adapter.mjs>` spawns Bun with a runner that
-builds the adapter context — `{ engine, fragments, content, project }` — over the
-wasm `Session`, exactly as the editor's `App.tsx` does, then drives
-`init → listPages → renderPage`.
-
-Your generator brings the chrome; the engine brings the semantics: `content`
-(Liquid + kramdown via `Session.renderLiquid`/`renderMarkdown`) and `fragments`
-(publisher-grade snapshot/diff/dict tables via first-include-miss). Full runnable
-adapter: [`examples/custom-generator/generator.mjs`](../examples/custom-generator/generator.mjs).
-
-```js
-export default {
-  id: 'my-generator',
-  label: 'Minimal custom generator',
-  ctx: null,
-  async init(ctx) { this.ctx = ctx; },
-  async listPages() { return [{ file: 'index.html' }, { file: 'guidance.html' }]; },
-  async renderPage(file) {
-    const c = this.ctx.content;
-    if (file === 'index.html') {
-      const body = await c.renderMarkdown('# My IG\n\nWelcome to the *custom* site.');
-      return { html: chrome('Home', body) };
-    }
-    const body = await c.renderLiquid('<p>{{ tool }} rendered this.</p>', { tool: 'fig' });
-    return { html: chrome('Guidance', body) };
-  },
-  async assetBytes() { return null; },
-};
-```
-
-Run it:
-
-```
-fig render . -o site/ \
-  --generator ts:generator.mjs \
-  --wasm-dir path/to/nodejs-wasm-build \
-  --project-json project.json \
-  --bundles-json bundles.json
-```
-
-`--wasm-dir` is a **nodejs-target** wasm-bindgen build (`wasm_api.js` +
-`wasm_api_bg.wasm`); `--project-json` is the `AdapterProject`
-(`{ projectId, config, files, predefined, siteFiles, buildEpochSecs }`);
-`--bundles-json` is the `Session.init` bundle set (`[{ label, files:{name:b64} }]`).
-The adapter's output is byte-identical to a direct `Session` call — it IS the
-same wasm module (proven in the examples gate + `crates/fig/src/runner`).
-
-The `fragments` surface exposes publisher-grade fragments to any generator:
-`await ctx.fragments.fragment('StructureDefinition-my-profile', 'snapshot')`
-returns the exact snapshot table the Publisher would emit — embed it in your own
-page chrome without reimplementing it.
-
-## 3. Non-JS hosts — WASI or shell-to-fig
-
-A language with no wasm bindings still drives the engine: **shell out to `fig`**
-and parse its `--json` envelope. No FFI, no wasm. Full runnable example:
-[`examples/shell-to-fig/render.py`](../examples/shell-to-fig/render.py).
-
-```python
-import json, subprocess
-
-def fig_json(fig, *args):
-    out = subprocess.run([fig, *args, "--json"], capture_output=True, text=True)
-    env = json.loads(out.stdout.strip().splitlines()[-1])
-    assert env["apiVersion"] == 1                    # the shared envelope contract
-    if not env["ok"]:
-        raise RuntimeError(f"{env['op']}: {env['error']['message']}")
-    return env["result"]
-
-ver  = fig_json("fig", "version")                    # engine identity
-frag = fig_json("fig", "fragment", build_dir, "StructureDefinition-us-core-patient", "snapshot")
-print(len(frag["html"]), "bytes of publisher-parity snapshot table")
-```
-
-Every `fig` subcommand takes `--json` and emits the §4 envelope, so the contract
-is identical across languages. For an in-process non-JS host (Python, Go via
-wasmtime, …), a **WASI** build of the engine is the other path; the `Session`
-surface is WASI-clean (no browser APIs), and the CLI is the reference for the op
-set. Until a concrete WASI consumer lands, shell-to-`fig` is the supported,
-tested non-JS path.
-
-## 4. The envelope schema (shared with `--json`)
-
-One result/error shape for the CLI and the Session
-([`examples/envelope/schema.json`](../examples/envelope/schema.json)):
+All instance methods return an envelope JSON string:
 
 ```jsonc
-// success
-{ "apiVersion": 1, "ok": true,  "op": "render", "result": { /* payload */ } }
-// failure (domain errors — never thrown/panicked)
-{ "apiVersion": 1, "ok": false, "op": "snapshot", "error": { "message": "…" } }
+{ "apiVersion": 1, "ok": true,  "op": "compileProject", "result": {} }
+{ "apiVersion": 1, "ok": false, "op": "compileProject", "error": { "message": "..." } }
 ```
 
-`apiVersion` bumps only on a breaking change to the envelope **shape**, not to any
-op's payload. One implementation lives in `crates/api_envelope`; both `wasm_api`
-(Session) and `crates/fig` (`--json`) call it, and
-`crates/fig/tests/json_envelope.rs` pins the two schema-identical. Validate your
-host's parsing with [`examples/envelope/check.py`](../examples/envelope/check.py).
+Domain failures are `ok:false`; hosts must unwrap every call. `Session.version()`
+is the one static build-info accessor and is not wrapped in the result/error
+envelope.
 
-## 5. Custom-generator walkthrough (the contract in full)
-
-The `SiteGeneratorAdapter` (from the editor's `app/src/adapters/types.ts`, the
-one contract all three hosts share):
-
-```ts
-interface SiteGeneratorAdapter {
-  id: string; label: string;
-  init(ctx: AdapterContext): Promise<void>;
-  listPages(): Promise<PageInfo[]>;
-  renderPage(file: string): Promise<{ html: string }>;
-  assetBytes(name: string): Promise<{ name; mime; base64 } | null>;
-}
-interface AdapterContext {
-  engine:    EngineClient;   // the full Session op surface (mountSite/renderPage/…)
-  fragments: { fragment(ref, kind): Promise<string> };            // first-include-miss
-  content:   { renderLiquid(src, data?): Promise<string>;          // ContentApi
-               renderMarkdown(md, opts?): Promise<string> };
-  project:   { projectId; config; files; predefined; siteFiles; buildEpochSecs };
+```js
+function unwrap(raw) {
+  const message = JSON.parse(raw);
+  if (message.apiVersion !== 1) throw new Error(`apiVersion ${message.apiVersion}`);
+  if (!message.ok) throw new Error(`${message.op}: ${message.error.message}`);
+  return message.result;
 }
 ```
 
-- `init(ctx)` stashes the context. Stock-template-style adapters call
-  `ctx.engine.mountSite(tree, {activeTables, runUuid})` then
-  `ctx.engine.listSitePages()`; generator-style adapters (like cycle) call
-  `ctx.engine.buildSite(...)` and drive their own page module.
-- `renderPage(file)` returns the HTML. Reach `ctx.fragments`/`ctx.content` for
-  engine-backed tables and content anywhere in your chrome.
-- The fig runner (`crates/fig/src/runner/adapter-runner.mjs`) constructs this
-  exact ctx and loads your adapter's default (or named) export. An adapter that
-  reaches the editor's private React page module (cycle) needs `FIG_EDITOR_APP`
-  set to the editor `app/` dir; a self-contained adapter (the example above)
-  needs nothing beyond the wasm module.
+## Compile one exact project revision
 
-## 6. Template-as-data — the zero-code path
+The normal editor sequence is:
 
-The stock FHIR template (`hl7.fhir.template` / `fhir.base.template`) is **data**,
-not code: `fig render` interprets the template's layouts/includes/`_data` and
-generates fragments on include-miss. No adapter, no TypeScript:
+1. `init` or `mount` exact package bundles.
+2. `resolveProject` until the required exact package closure is mounted.
+3. `compileProject` once with all authored inputs.
+4. Project that installed compile into a specific renderer boundary.
 
-```
-fig render <build-dir> -o site/            # us-core, plan-net, any staged IG
-```
+```js
+unwrap(session.init(JSON.stringify(packageBundles)));
+unwrap(session.resolveProject(configYaml, JSON.stringify(versionIndex)));
 
-`<build-dir>` is a completed build tree (`temp/pages` staged pages + `_data` +
-`_includes`, `output/` snapshot-complete resources, `.home/.fhir/packages`,
-`input-cache/txcache`). One engine yields every stock-style template. This is
-byte-identical to the Publisher's Jekyll output: **plan-net 678/678, us-core
-1332/1334 (+2 classified)** (`crates/render_page/src/bin/pagecorpus.rs` is the
-oracle; `examples/cli-quickstart` byte-checks it in CI).
-
-### 6a. The driven template loader — `--template <id#ver>` (the default story)
-
-Template handling is **truly driven**: pick any `template#version` and the engine
-materializes it — no frozen snapshot. `fig render --template <id#ver>` fetches the
-template package, walks its `base` chain (`package.json.base` +
-`dependencies[base]`), union-copies root→leaf, applies the `_append.` concat and
-the `config.json` deep-merge, and serves the resulting `template/` tree — exactly
-what the IG Publisher's `TemplateManager` stages, in **pure Rust with ZERO
-XSLT/ant/JVM**:
-
-```
-fig render <build-dir> -o site/ --template hl7.fhir.template#1.0.0   # driven (default)
-fig render <build-dir> -o site/ --template-dir path/to/template/     # pre-materialized (escape hatch)
+const compiled = unwrap(session.compileProject(
+  JSON.stringify(fshByPath),
+  configYaml,
+  JSON.stringify(predefinedResourcesByPath),
+  JSON.stringify(siteFilesAsBase64ByPath),
+));
 ```
 
-- `--template <id#ver>` acquires the chain through the **same acquisition
-  machinery regular packages use** (registry → CAS) and materializes on the fly.
-- `--template-dir <dir>` is the explicit escape hatch: use an already-materialized
-  `template/` tree as-is (still accepted, no longer the primary path).
-- `--offline` / `--template-cache <dir>` control acquisition.
+`compileProject` captures FSH, config, predefined resource objects, and the
+authored site-file manifest as one session revision. Site-file names participate
+in IG page export, so they must be present during this compile rather than
+introduced by a later site projection.
 
-The materialization is **byte-exact** vs the Java-Publisher output — the
-`package_store::template_loader` gate proves it against two chains: **us-core**
-(3-package `hl7.fhir → hl7.base → fhir.base` chain) and **plan-net** (4-package
-davinci chain), every staged file accounted for (identical, or a classified ant
-runtime product the site never reads). The Publisher's F0 `template/` trees are
-kept **as the oracle / test fixture** (`crates/package_store/tests/
-template_materialization_gate.rs`), not as the runtime source.
+`buildSiteDbFromCompile` and `buildSiteBuildFromCompile` accept the same authored
+bodies as equality assertions, plus deterministic projection metadata such as
+`build_epoch_secs`. They reject any FSH, config, predefined, or site-file bytes
+that differ from the installed revision and cannot invoke the compiler. The
+legacy `compile` and `buildSiteDb` calls remain migration APIs; new hosts should
+use `compileProject` and an explicit projection.
 
-**Firm line — no ant, ever.** The loader NEVER runs the template's ant/Saxon
-hooks. Every durable site-feeding effect of those hooks is already produced by the
-native fragment generators; the rest is QA/publication tooling the site never
-reads. A template whose hooks would compute site-feeding content outside the known
-set fails loudly (`AntHookError`, "custom-ant templates require server-side
-rendering") rather than materializing a silently-incomplete tree.
+## External builders: require a closed build
 
-### 6b. The editor warm-start artifact — `packages bundle --template`
+The Cycle external-builder boundary is:
 
-The packed template bundle the browser editor warm-starts from is **an artifact
-the loader emits** (same bytes the gate proves), not a hand-curated snapshot:
-
-```
-fig packages bundle --template hl7.fhir.template#1.0.0 -o template-bundle.json
+```js
+const result = unwrap(session.buildSiteBuildFromCompile(JSON.stringify({
+  config: configYaml,
+  fsh: fshByPath,
+  predefined: predefinedResourcesByPath,
+  site_files: siteFilesAsBase64ByPath,
+  build_epoch_secs: buildEpochSecs,
+  liquid_asset_dirs: ['input/includes'],
+})));
 ```
 
-emits a `mountSite`/`mountTemplate`-compatible files-JSON
-(`{ "<rel>": "<text>" | {"b64":"<bytes>"} }`). In the browser, `Session.mountTemplate("id#ver")`
-materializes the same tree directly from the mounted template packages (fetched
-via the SAME JS-managed bundle path as regular packages — Rust decides the chain
-walk + merge, the host fetches).
+The result contains:
 
----
+- `siteBuild`: a `ClosedSiteBuild` for render target `cycle-site/v1`; and
+- `siteDbJson`: canonical bytes addressed by its single required
+  `compat.site_db/rows.json` artifact.
 
-### Building the wasm module (for §1, §2, §5)
+The host must recompute/verify the `SiteBuild` id and verify the addressed
+bytes' digest and length before exposing them to the builder. After that handoff
+the browser Cycle renderer uses a callback-free `SiteBuildView`; it does not use
+the Rust Liquid engine, `renderFragment`, a filesystem, or a live compiler
+callback.
 
-The bun-runner / browser examples need a wasm-bindgen build. The scratch
-toolchain recipe is in `demo/wasm-p0/README.md`. In short:
+This closed pattern is the rule for an external builder that can declare its
+requirements. `SiteBuild` is renderer-neutral and may contain other artifact
+shapes in the future; `site.db` is one compatibility artifact, not the contract
+for every renderer.
 
+## Native Publisher templates: typed late resolution
+
+The native stock-template path deliberately differs because a template can
+name a generated include only while Rust Liquid evaluates a page:
+
+```js
+unwrap(session.mountSite(JSON.stringify(authoredAndRuntimeFiles), JSON.stringify({
+  artifactResolution: true,
+})));
+unwrap(session.mountTemplate('hl7.fhir.template#1.0.0'));
+unwrap(session.produceStockSite());
+
+const { pages } = unwrap(session.listPages());
+const { html } = unwrap(session.renderPage(pages[0]));
 ```
+
+At the native compatibility edge, `render_page` translates a registered legacy
+Publisher include name once into a typed `ArtifactKey`. Its
+`ArtifactResolver` produces the fragment, the generation cache is keyed by the
+typed artifact identity, and `PageArtifactReadSet` records both attempted
+requests and successful reads. Authored/template includes remain ordinary
+files.
+
+`mountSite` can set `artifactResolution:false`. In that mode a missing include
+does not call the fragment engine. This is useful for callback-free consumers,
+but Cycle's current browser architecture goes further: it does not mount a Rust
+Liquid tree at all.
+
+The native resolver currently stores materialized bytes and read sets in the
+session generation. Promoting those results into CAS-backed artifacts in a new
+immutable `SiteBuild` revision is remaining convergence work.
+
+## Liquid implementations
+
+There are two Liquid implementations in the overall stack, one for each
+renderer architecture:
+
+- Rust `render_liquid` serves native Publisher templates in `fig` and the WASM
+  stock renderer. `Session.renderLiquid` is a generic entry to this native
+  surface.
+- Cycle uses LiquidJS behind Cycle's shared content policy. Its native CLI and
+  browser preview use that same implementation over a `SiteBuildView`.
+
+An external builder is not required to call back into Rust content or fragment
+services. The editor's `SiteGeneratorAdapter` is a host-integration interface
+for selecting/building/rendering a generator; it is not the semantic handoff.
+For Cycle, that handoff is the verified `ClosedSiteBuild`. For stock templates,
+the adapter is a thin host over the session's native page surface.
+
+## Other Session operations
+
+| Operation | Purpose |
+| --- | --- |
+| `init`, `mount` | replace or add immutable package bundles |
+| `setLocalResources` | replace the local StructureDefinitions used by later standalone snapshot operations; clears complete-project identity |
+| `snapshot` | snapshot an inline or installed `StructureDefinition` |
+| `expandValueSet` | bounded in-engine enumerable expansion |
+| `mountSite`, `mountTemplate`, `produceStockSite` | assemble native template state |
+| `listPages`, `renderPage`, `renderFragment` | native Publisher output operations |
+| `renderLiquid`, `renderMarkdown` | generic native content operations; not Cycle's content engine |
+
+`mountSite` accepts `activeTables`, `runUuid`, `merge`,
+`engineFirstIncludes`, and `artifactResolution`. The first two are deterministic
+Publisher render context. `merge` overlays a mounted tree instead of replacing
+it. `engineFirstIncludes` chooses whether registered generated artifacts or
+ordinary staged files win, while `artifactResolution:false` removes the resolver
+capability entirely.
+
+The exact method names and argument comments live beside the bindings in
+`crates/wasm_api/src/lib.rs`. The `site_build` wire invariants live in
+[`crates/site_build/README.md`](../crates/site_build/README.md).
+
+## Native CLI and non-JS hosts
+
+`fig` is the supported native host. Its subcommands compose the same compiler,
+snapshot, fragment, page, and package crates:
+
+```sh
+fig build <ig-dir> -o fsh-generated
+fig snapshot <sd.json> --package hl7.fhir.r4.core#4.0.1
+fig sitedb <ig-dir> --sushi-out <dir> --cache <dir> -o site.db
+fig render <build-dir> -o site/
+fig watch <build-dir> --serve :8080
+```
+
+Use `--json` when another process needs a stable result/error envelope. A
+non-JS host can shell out to `fig`; the runnable Python example is
+[`examples/shell-to-fig/render.py`](../examples/shell-to-fig/render.py). A
+future in-process WASI binding may expose another surface, but shell-to-`fig` is
+the tested non-JS route today.
+
+The old `fig render --generator ts:<adapter.mjs>` compatibility runner has been
+removed. It supplied the editor's former callback-oriented adapter context,
+loaded a second Node-target WASM engine, and could compile inputs independently
+of the native build. It was neither the current editor contract nor a safe
+external-builder handoff.
+
+Portable external builders declare a render plan and consume a verified
+`ClosedSiteBuild` plus content-addressed objects. Cycle follows this law in the
+browser, and Fig produces the same closed target for native builders:
+
+```sh
+fig prepare <ig-dir> \
+  --target cycle-site/v1 \
+  --sushi-out <new-compile-dir> \
+  --cache <explicit-package-cache> \
+  --out <new-bundle-dir> \
+  --build-date <unix-epoch-or-RFC3339>
+```
+
+The result contains `<new-bundle-dir>/site-build.json` and one verified object
+for every source, normalized package payload, and ready artifact at
+`objects/sha256/<digest>`. Fig resolves the exact compile/context union, runs one
+native `site_db::build`, derives the project id and FHIR version from the
+produced IG and rows, and uses the shared `site_db_compat::close_projection`.
+After capture, Fig reconstructs a private IG tree and package cache from those
+exact addressed bytes; `site_db::build` receives only the staged paths, never
+the live project/cache. Thus an A→B→A live mutation cannot influence execution
+while retaining A's identity. Fig verifies the staged view before and after the
+build and still compares the live trees afterward as mutation diagnostics.
+Package normalization is the shared browser bundle round trip (`build_bundle`
+then `read_bundle`) followed by the common
+`package_store::normalize_package_material` boundary. Native Fig and WASM both
+validate the mounted label against `package.json`, require string dependency
+coordinates, regenerate the derived-index sidecar, and content-address the same
+canonical compiler-visible top-level bytes. The raw/browser transport also
+retains validated nested files needed by template packages. Current
+`fig prepare --target cycle-site/v1` intentionally excludes that nested
+transport because it is not a Cycle target input; template content must become
+an explicit target artifact when the native-template path is closed into
+`SiteBuild`.
+
+The command never acquires packages or reads a default cache. Both output trees
+must be new and disjoint, authored/nested package symlinks are rejected, a
+package-root symlink may not leave the explicit cache, and the ambient
+`SITE_LIQUID_ASSET_DIRS` override is rejected. The current target intentionally
+records and uses `input/includes` as its only Liquid asset directory.
+
+Cycle consumes the result through its closed-bundle entry point, with no engine
+callback or second WASM instance:
+
+```sh
+SITE_BUILD_DIR=<new-bundle-dir> bun site-gen/build.tsx
+```
+
+## Template packages and WASM builds
+
+`fig render --template <id#version>` resolves and materializes the exact
+template chain as data. `--template-dir` accepts an already materialized tree.
+The browser equivalent fetches exact template packages through the host package
+transport and calls `mountTemplate`.
+
+Build the module with:
+
+```sh
 cargo build -p wasm_api --target wasm32-unknown-unknown --release
 wasm-bindgen target/wasm32-unknown-unknown/release/wasm_api.wasm \
-  --target nodejs --out-dir pkg --out-name wasm_api   # Bun/Node
-#  --target web  … for the browser
+  --target web --out-dir pkg --out-name wasm_api
 ```
 
-`scripts/examples-gate.sh` skips the bun-runner example (with a note) when no
-`FIG_WASM_DIR` is provided, so the gate stays green without the wasm toolchain
-while still executing every fs-only example.
+Use `--target nodejs` for Bun/Node. The repository's runnable examples and
+envelope schema live under [`examples/`](../examples/).
+`scripts/examples-gate.sh` is the local aggregate runner; callers must invoke it
+explicitly and supply optional WASM inputs when an example requires them.

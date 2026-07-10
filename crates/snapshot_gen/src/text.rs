@@ -11,7 +11,11 @@ use std::rc::Rc;
 
 use crate::*;
 
-pub(crate) fn rewrite_markdown_links(element: &mut Value, spec_url: &str, keep_known_relative: bool) {
+pub(crate) fn rewrite_markdown_links(
+    element: &mut Value,
+    spec_url: &str,
+    keep_known_relative: bool,
+) {
     for key in [
         "definition",
         "comment",
@@ -30,7 +34,12 @@ pub(crate) fn rewrite_markdown_links(element: &mut Value, spec_url: &str, keep_k
     }
 }
 
-pub(crate) fn rewrite_string_field(value: &mut Value, key: &str, spec_url: &str, keep_known_relative: bool) {
+pub(crate) fn rewrite_string_field(
+    value: &mut Value,
+    key: &str,
+    spec_url: &str,
+    keep_known_relative: bool,
+) {
     let Some(obj) = value.as_object_mut() else {
         return;
     };

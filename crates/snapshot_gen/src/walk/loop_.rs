@@ -26,7 +26,12 @@ pub(crate) fn process_paths(
             path_of(&current_base),
             &frame.redirector,
         );
-        let diff_matches = get_diff_matches(&ctx.diff, &current_base_path, cur.diff_cursor, frame.diff_limit);
+        let diff_matches = get_diff_matches(
+            &ctx.diff,
+            &current_base_path,
+            cur.diff_cursor,
+            frame.diff_limit,
+        );
 
         let dc = cur.diff_cursor;
 

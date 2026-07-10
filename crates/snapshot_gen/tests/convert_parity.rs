@@ -121,10 +121,7 @@ fn converted_goldens_parity() -> anyhow::Result<()> {
         );
         let r4: Value = serde_json::from_slice(&std::fs::read(&fixture)?)?;
         let expected: Value = serde_json::from_slice(&std::fs::read(golden)?)?;
-        let name = golden
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("<?>");
+        let name = golden.file_name().and_then(|n| n.to_str()).unwrap_or("<?>");
         match snapshot_gen::convert_r4_sd_to_r5(&r4) {
             Ok(actual) => {
                 if let Err(divergence) = order_sensitive_eq(&actual, &expected, name) {

@@ -9,7 +9,9 @@
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() -> anyhow::Result<()> {
-    eprintln!("note: `site_db` is deprecated — use `fig sitedb` (this alias is kept for one release).");
+    eprintln!(
+        "note: `site_db` is deprecated — use `fig sitedb` (this alias is kept for one release)."
+    );
     let args: Vec<String> = std::env::args().collect();
     site_db::run_cli(&args)
 }

@@ -37,7 +37,11 @@ pub fn cas_artifact_name() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DerivedEntry {
     pub filename: String,
-    #[serde(rename = "resourceType", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "resourceType",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub resource_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub id: Option<String>,
@@ -51,7 +55,11 @@ pub struct DerivedEntry {
     pub sd_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub derivation: Option<String>,
-    #[serde(rename = "baseDefinition", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "baseDefinition",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub base_definition: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub name: Option<String>,

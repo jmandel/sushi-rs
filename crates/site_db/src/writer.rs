@@ -203,8 +203,7 @@ pub fn write_site_db(out_path: &std::path::Path, db: &SiteDb) -> Result<()> {
     tx.execute_batch(SCHEMA_SQL)?;
 
     {
-        let mut ins =
-            tx.prepare("INSERT INTO Metadata (Key, Name, Value) VALUES (?,?,?)")?;
+        let mut ins = tx.prepare("INSERT INTO Metadata (Key, Name, Value) VALUES (?,?,?)")?;
         for r in &db.metadata {
             ins.execute(params![r.key, r.name, r.value])?;
         }
@@ -281,7 +280,13 @@ pub fn write_site_db(out_path: &std::path::Path, db: &SiteDb) -> Result<()> {
         )?;
         for r in &db.pages {
             ins.execute(params![
-                r.slug, r.name_url, r.title, r.generation, r.ord, r.depth, r.body
+                r.slug,
+                r.name_url,
+                r.title,
+                r.generation,
+                r.ord,
+                r.depth,
+                r.body
             ])?;
         }
     }
@@ -291,13 +296,19 @@ pub fn write_site_db(out_path: &std::path::Path, db: &SiteDb) -> Result<()> {
         )?;
         for r in &db.menu {
             ins.execute(params![
-                r.id, r.parent_id, r.ord, r.depth, r.path, r.label, r.href, r.kind
+                r.id,
+                r.parent_id,
+                r.ord,
+                r.depth,
+                r.path,
+                r.label,
+                r.href,
+                r.kind
             ])?;
         }
     }
     {
-        let mut ins =
-            tx.prepare("INSERT OR REPLACE INTO SiteConfig (Name, Json) VALUES (?,?)")?;
+        let mut ins = tx.prepare("INSERT OR REPLACE INTO SiteConfig (Name, Json) VALUES (?,?)")?;
         for r in &db.site_config {
             ins.execute(params![r.name, r.json])?;
         }

@@ -179,7 +179,11 @@ fn parse_list(lines: &[&str], start: usize, ordered: bool, first_start: u64) -> 
             while j < lines.len() && lines[j].trim().is_empty() {
                 j += 1;
             }
-            if j < lines.len() && list_marker(lines[j]).map(|(o, _)| o == ordered).unwrap_or(false) {
+            if j < lines.len()
+                && list_marker(lines[j])
+                    .map(|(o, _)| o == ordered)
+                    .unwrap_or(false)
+            {
                 // loose list continues; skip blanks
                 i = j;
                 continue;
@@ -236,7 +240,11 @@ fn strip_marker(line: &str) -> String {
     let after = &rest[marker_len..];
     // Drop exactly one following space/tab (CommonMark: 1-4 spaces of item
     // indent; the corpus uses a single space).
-    after.strip_prefix(' ').or_else(|| after.strip_prefix('\t')).unwrap_or(after).to_string()
+    after
+        .strip_prefix(' ')
+        .or_else(|| after.strip_prefix('\t'))
+        .unwrap_or(after)
+        .to_string()
 }
 
 fn render_block(b: &Block, out: &mut String) {
@@ -313,17 +321,50 @@ enum Inline {
     /// Literal text (NOT yet emphasis-processed nor escaped).
     Text(String),
     Code(String),
-    Link { text_tokens: Vec<Inline>, url: String },
+    Link {
+        text_tokens: Vec<Inline>,
+        url: String,
+    },
     SoftBreak,
     HardBreak,
 }
 
 /// CommonMark "ASCII punctuation" (spec §2.1) — the set escapable by backslash.
 fn is_ascii_punct(c: char) -> bool {
-    matches!(c,
-        '!' | '"' | '#' | '$' | '%' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-' | '.' | '/'
-        | ':' | ';' | '<' | '=' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '_' | '`' | '{' | '|'
-        | '}' | '~')
+    matches!(
+        c,
+        '!' | '"'
+            | '#'
+            | '$'
+            | '%'
+            | '&'
+            | '\''
+            | '('
+            | ')'
+            | '*'
+            | '+'
+            | ','
+            | '-'
+            | '.'
+            | '/'
+            | ':'
+            | ';'
+            | '<'
+            | '='
+            | '>'
+            | '?'
+            | '@'
+            | '['
+            | '\\'
+            | ']'
+            | '^'
+            | '_'
+            | '`'
+            | '{'
+            | '|'
+            | '}'
+            | '~'
+    )
 }
 
 /// First pass: pull out code spans and links (highest precedence after
@@ -430,11 +471,7 @@ fn find_backtick_run(chars: &[char], from: usize, len: usize) -> Option<usize> {
 /// space from each end.
 fn normalize_code(s: &str) -> String {
     let mut t: String = s.chars().map(|c| if c == '\n' { ' ' } else { c }).collect();
-    if t.len() >= 2
-        && t.starts_with(' ')
-        && t.ends_with(' ')
-        && t.chars().any(|c| c != ' ')
-    {
+    if t.len() >= 2 && t.starts_with(' ') && t.ends_with(' ') && t.chars().any(|c| c != ' ') {
         t = t[1..t.len() - 1].to_string();
     }
     t
@@ -608,8 +645,18 @@ fn is_unicode_ws(c: char) -> bool {
 /// CommonMark "punctuation" for flanking: ASCII punctuation + Unicode P*.
 fn is_punct(c: char) -> bool {
     c.is_ascii_punctuation()
-        || matches!(c, '\u{00A1}' | '\u{00BF}' | '\u{2013}' | '\u{2014}' | '\u{2018}'
-            | '\u{2019}' | '\u{201C}' | '\u{201D}' | '\u{2026}')
+        || matches!(
+            c,
+            '\u{00A1}'
+                | '\u{00BF}'
+                | '\u{2013}'
+                | '\u{2014}'
+                | '\u{2018}'
+                | '\u{2019}'
+                | '\u{201C}'
+                | '\u{201D}'
+                | '\u{2026}'
+        )
 }
 
 /// Scan all `*`/`_` delimiter runs with flanking classification
@@ -637,10 +684,8 @@ fn scan_delims(chars: &[char]) -> Vec<Delim> {
         let after_punct = is_punct(after);
         // left-flanking: not followed by ws, and (not followed by punct OR
         // preceded by ws/punct).
-        let left_flanking =
-            !after_ws && (!after_punct || before_ws || before_punct);
-        let right_flanking =
-            !before_ws && (!before_punct || after_ws || after_punct);
+        let left_flanking = !after_ws && (!after_punct || before_ws || before_punct);
+        let right_flanking = !before_ws && (!before_punct || after_ws || after_punct);
         let (can_open, can_close) = if c == '_' {
             (
                 left_flanking && (!right_flanking || before_punct),
@@ -802,7 +847,10 @@ mod tests {
 
     #[test]
     fn strong_and_em() {
-        assert_eq!(render_html("a **SHALL** b"), "<p>a <strong>SHALL</strong> b</p>\n");
+        assert_eq!(
+            render_html("a **SHALL** b"),
+            "<p>a <strong>SHALL</strong> b</p>\n"
+        );
         assert_eq!(render_html("x *All* y"), "<p>x <em>All</em> y</p>\n");
     }
 
@@ -817,7 +865,10 @@ mod tests {
     #[test]
     fn intraword_underscore_is_literal() {
         assert_eq!(render_html("a_b_c"), "<p>a_b_c</p>\n");
-        assert_eq!(render_html(".meta.lastUpdated"), "<p>.meta.lastUpdated</p>\n");
+        assert_eq!(
+            render_html(".meta.lastUpdated"),
+            "<p>.meta.lastUpdated</p>\n"
+        );
     }
 
     #[test]
@@ -844,11 +895,17 @@ mod tests {
 
     #[test]
     fn hard_break_two_trailing_spaces() {
-        assert_eq!(render_html("line one.  \nline two"), "<p>line one.<br />\nline two</p>\n");
+        assert_eq!(
+            render_html("line one.  \nline two"),
+            "<p>line one.<br />\nline two</p>\n"
+        );
     }
 
     #[test]
     fn soft_break_single_newline() {
-        assert_eq!(render_html("line one.\nline two"), "<p>line one.\nline two</p>\n");
+        assert_eq!(
+            render_html("line one.\nline two"),
+            "<p>line one.\nline two</p>\n"
+        );
     }
 }

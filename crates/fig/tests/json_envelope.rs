@@ -56,12 +56,20 @@ fn fig_and_session_envelopes_are_schema_identical() {
         k.sort();
         k
     };
-    assert_eq!(keys(&fig_ok), keys(&sess_ok), "success envelope key sets differ");
+    assert_eq!(
+        keys(&fig_ok),
+        keys(&sess_ok),
+        "success envelope key sets differ"
+    );
 
     let fig_err = fig_json(&["snapshot", "--json"]);
     let sess_err: Value =
         serde_json::from_str(&api_envelope::envelope("snapshot", Err("boom".into()))).unwrap();
-    assert_eq!(keys(&fig_err), keys(&sess_err), "error envelope key sets differ");
+    assert_eq!(
+        keys(&fig_err),
+        keys(&sess_err),
+        "error envelope key sets differ"
+    );
     assert_eq!(
         keys(&fig_err["error"]),
         keys(&sess_err["error"]),

@@ -17,19 +17,24 @@ use std::path::{Path, PathBuf};
 
 pub mod bundle;
 pub mod derived_index;
+pub mod material;
 pub mod resolve;
 pub mod source;
 pub mod template_loader;
 
 pub use bundle::{BundleManifest, BundleManifestEntry, BundleSource, BUNDLE_FORMAT_VERSION};
-pub use template_loader::{
-    materialize as materialize_template, AntHookError, TemplatePaths, TemplateTree,
+pub use material::{
+    encode_normalized_package, normalize_package_material, NormalizedPackageMaterial,
+    NORMALIZED_PACKAGE_MEDIA_TYPE,
 };
 pub use resolve::{
     context_closure_for_root, resolve_project, version_index_from_cache, MissingPackage,
     MissingReason, RequestedSet, ResolutionStep, VersionIndex,
 };
 pub use source::{DirEntry, DiskSource, PackageSource};
+pub use template_loader::{
+    materialize as materialize_template, AntHookError, TemplatePaths, TemplateTree,
+};
 
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -429,7 +434,11 @@ fn version_cmp(a: &str, b: &str) -> Ordering {
 }
 
 /// Resolve `latest` for a package id = the highest-version cached dir.
-fn resolve_latest(source: &dyn PackageSource, cache_dir: &Path, package_id: &str) -> Option<String> {
+fn resolve_latest(
+    source: &dyn PackageSource,
+    cache_dir: &Path,
+    package_id: &str,
+) -> Option<String> {
     let prefix = format!("{package_id}#");
     let mut best: Option<String> = None;
     let rd = source.read_dir(cache_dir).ok()?;
@@ -529,10 +538,7 @@ struct PackageResourceListing {
     source_count: usize,
 }
 
-fn package_resource_listing(
-    source: &dyn PackageSource,
-    pkg_dir: &Path,
-) -> PackageResourceListing {
+fn package_resource_listing(source: &dyn PackageSource, pkg_dir: &Path) -> PackageResourceListing {
     if !source.is_dir(pkg_dir) {
         return PackageResourceListing {
             records: Vec::new(),
@@ -551,13 +557,13 @@ fn package_resource_listing(
     // `.index.json` lacks that this listing needs; ordering / source_count stay
     // driven by the existing index-vs-scan selection so fishing (LIFO seq)
     // precedence is byte-identical. See docs/package-derived-index.md.
-    let derived_name: std::collections::HashMap<String, Option<String>> = derived_index::load(source, pkg_dir)
-        .into_iter()
-        .map(|e| (e.filename, e.name))
-        .collect();
-    let name_for = |filename: &str| -> Option<String> {
-        derived_name.get(filename).cloned().flatten()
-    };
+    let derived_name: std::collections::HashMap<String, Option<String>> =
+        derived_index::load(source, pkg_dir)
+            .into_iter()
+            .map(|e| (e.filename, e.name))
+            .collect();
+    let name_for =
+        |filename: &str| -> Option<String> { derived_name.get(filename).cloned().flatten() };
 
     // HEURISTIC: "index is valid" == `.index.json` exists with a NON-EMPTY
     // `files` array. When valid we trust it as COMPLETE and index straight from
@@ -1135,7 +1141,9 @@ fn resolve_load_order(
     cfg: &ProjectConfig,
     cache: &Path,
 ) -> Vec<(String, String)> {
-    resolve_load_order_with(cfg, &|id, ver| resolve_cached_version(source, cache, id, ver))
+    resolve_load_order_with(cfg, &|id, ver| {
+        resolve_cached_version(source, cache, id, ver)
+    })
 }
 
 /// Build the ordered package load list using the supplied version resolver.

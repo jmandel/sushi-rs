@@ -125,7 +125,8 @@ impl Fisher for FisherView<'_> {
                 return Some(std::rc::Rc::new(e.sd.to_json_snapshot()));
             }
         }
-        self.store.fish_for_fhir(name, package_store::ALL_FISH_TYPES)
+        self.store
+            .fish_for_fhir(name, package_store::ALL_FISH_TYPES)
     }
 
     fn fish_for_structure_definition(
@@ -181,7 +182,9 @@ impl Fisher for FisherView<'_> {
         if let Some(m) = self.tank_sd_meta.get(base) {
             return Some(m.clone());
         }
-        let m = self.store.fish_for_metadata(name, package_store::ALL_FISH_TYPES)?;
+        let m = self
+            .store
+            .fish_for_metadata(name, package_store::ALL_FISH_TYPES)?;
         Some(metadata_from_json(&m))
     }
 
@@ -256,8 +259,16 @@ fn metadata_from_sd(sd: &StructureDefinition) -> Metadata {
 
 fn metadata_from_json(m: &J) -> Metadata {
     Metadata {
-        id: m.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-        name: m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        id: m
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        name: m
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
         sd_type: m.get("sdType").and_then(|v| v.as_str()).map(String::from),
         url: m.get("url").and_then(|v| v.as_str()).map(String::from),
         parent: m.get("parent").and_then(|v| v.as_str()).map(String::from),
@@ -302,16 +313,40 @@ impl<'a> SdContext<'a> {
             }
         };
         for doc in docs {
-            collect(&mut tank, &mut by_name, &mut by_id, &doc.profiles, StructureKind::Profile);
+            collect(
+                &mut tank,
+                &mut by_name,
+                &mut by_id,
+                &doc.profiles,
+                StructureKind::Profile,
+            );
         }
         for doc in docs {
-            collect(&mut tank, &mut by_name, &mut by_id, &doc.extensions, StructureKind::Extension);
+            collect(
+                &mut tank,
+                &mut by_name,
+                &mut by_id,
+                &doc.extensions,
+                StructureKind::Extension,
+            );
         }
         for doc in docs {
-            collect(&mut tank, &mut by_name, &mut by_id, &doc.logicals, StructureKind::Logical);
+            collect(
+                &mut tank,
+                &mut by_name,
+                &mut by_id,
+                &doc.logicals,
+                StructureKind::Logical,
+            );
         }
         for doc in docs {
-            collect(&mut tank, &mut by_name, &mut by_id, &doc.resources, StructureKind::Resource);
+            collect(
+                &mut tank,
+                &mut by_name,
+                &mut by_id,
+                &doc.resources,
+                StructureKind::Resource,
+            );
         }
         let mut tank_sd_meta: std::collections::HashMap<String, Metadata> =
             std::collections::HashMap::new();
@@ -336,7 +371,9 @@ impl<'a> SdContext<'a> {
             // mirroring `FSHTank.fishForMetadata` matching on url. Without the url key,
             // an existence check on a not-yet-exported local extension referenced by
             // url would miss and wrongly skip the slice.
-            tank_sd_meta.entry(ts.def.name.clone()).or_insert_with(|| md.clone());
+            tank_sd_meta
+                .entry(ts.def.name.clone())
+                .or_insert_with(|| md.clone());
             tank_sd_meta.entry(id).or_insert_with(|| md.clone());
             tank_sd_meta.entry(url).or_insert(md);
         }
@@ -410,7 +447,10 @@ impl<'a> SdContext<'a> {
     }
 
     fn tank_index(&self, name: &str) -> Option<usize> {
-        self.by_name.get(name).or_else(|| self.by_id.get(name)).copied()
+        self.by_name
+            .get(name)
+            .or_else(|| self.by_id.get(name))
+            .copied()
     }
 
     /// Export every local SD (in tank order) on demand.
@@ -427,25 +467,33 @@ impl<'a> SdContext<'a> {
 
     /// Port of `MappingExporter` — applied last, mutating already-exported SDs.
     pub fn export_mappings(&mut self, docs: &[FshDocument]) {
-        let mappings: Vec<fsh_model::Mapping> =
-            docs.iter().flat_map(|d| d.mappings.iter().map(|(_, m)| m.clone())).collect();
+        let mappings: Vec<fsh_model::Mapping> = docs
+            .iter()
+            .flat_map(|d| d.mappings.iter().map(|(_, m)| m.clone()))
+            .collect();
         for mapping in &mappings {
             self.export_mapping(mapping);
         }
     }
 
     fn export_mapping(&mut self, mapping: &fsh_model::Mapping) {
-        let Some(source) = &mapping.source else { return };
+        let Some(source) = &mapping.source else {
+            return;
+        };
         let Some(si) = self
             .exported
             .iter()
             .position(|e| &e.name == source || e.sd.get_str("id") == Some(source.as_str()))
         else {
-            self.diag.push(format!("Unable to find mapping source {source}"));
+            self.diag
+                .push(format!("Unable to find mapping source {source}"));
             return;
         };
         // Determine whether the parent already carries a mapping with this identity.
-        let base_def = self.exported[si].sd.get_str("baseDefinition").map(String::from);
+        let base_def = self.exported[si]
+            .sd
+            .get_str("baseDefinition")
+            .map(String::from);
         let parent_match: Option<(Option<String>, Option<String>)> = base_def.and_then(|bd| {
             let parent = self.fisher().fish_for_fhir(&bd)?;
             let maps = parent.get("mapping")?.as_array()?;
@@ -461,8 +509,16 @@ impl<'a> SdContext<'a> {
 
         let sd = &mut self.exported[si].sd;
         if let Some((p_name, p_uri)) = parent_match {
-            let title_ok = mapping.title.as_ref().map(|t| Some(t) == p_name.as_ref()).unwrap_or(true);
-            let target_ok = mapping.target.as_ref().map(|t| Some(t) == p_uri.as_ref()).unwrap_or(true);
+            let title_ok = mapping
+                .title
+                .as_ref()
+                .map(|t| Some(t) == p_name.as_ref())
+                .unwrap_or(true);
+            let target_ok = mapping
+                .target
+                .as_ref()
+                .map(|t| Some(t) == p_uri.as_ref())
+                .unwrap_or(true);
             if !title_ok || !target_ok {
                 self.diag.push(format!(
                     "Unable to add Mapping {} because it conflicts with one already on the parent of {source}.",
@@ -522,7 +578,16 @@ impl<'a> SdContext<'a> {
             sd_template_cache: &self.sd_template_cache,
         };
         for rule in &rules {
-            let Rule::Mapping { path, map, comment, language, .. } = rule else { continue };
+            let Rule::Mapping {
+                path,
+                map,
+                comment,
+                language,
+                ..
+            } = rule
+            else {
+                continue;
+            };
             let Some(ei) = find_element_with_ext_fallback(&mut sd, path, &fisher) else {
                 self.diag.push(format!(
                     "No element found at path {path} for {}, skipping rule",
@@ -598,7 +663,17 @@ impl<'a> SdContext<'a> {
                 sd_template_cache: &self.sd_template_cache,
             };
             let mut local_diag = Vec::new();
-            set_rules(&mut sd, &mut def, kind, &fisher, self.cfg, self.vs_url, self.cs_url, &mut local_diag, &*self);
+            set_rules(
+                &mut sd,
+                &mut def,
+                kind,
+                &fisher,
+                self.cfg,
+                self.vs_url,
+                self.cs_url,
+                &mut local_diag,
+                &*self,
+            );
             if kind == StructureKind::Extension {
                 set_context(&mut sd, &def, &fisher);
             }
@@ -682,8 +757,7 @@ impl<'a> SdContext<'a> {
         } else {
             format!("{}|{}", parent_url, version_parts.join("|"))
         };
-        sd.body
-            .insert("baseDefinition".into(), J::String(base_def));
+        sd.body.insert("baseDefinition".into(), J::String(base_def));
         let id = effective_sd_id(def);
         let url = self.url_from_def(def, &id);
         sd.body.insert("url".into(), J::String(url.clone()));
@@ -696,8 +770,7 @@ impl<'a> SdContext<'a> {
             if let Some(default_ver) = self.cfg.fhir_version() {
                 let cur = sd.body.get("fhirVersion").and_then(|v| v.as_str());
                 if cur != Some(default_ver.as_str()) {
-                    sd.body
-                        .insert("fhirVersion".into(), J::String(default_ver));
+                    sd.body.insert("fhirVersion".into(), J::String(default_ver));
                 }
             }
         }
@@ -710,7 +783,12 @@ impl<'a> SdContext<'a> {
         sd_url_from_def(def, id, &self.cfg.canonical)
     }
 
-    fn set_metadata(&mut self, sd: &mut StructureDefinition, def: &StructureDef, kind: StructureKind) {
+    fn set_metadata(
+        &mut self,
+        sd: &mut StructureDefinition,
+        def: &StructureDef,
+        kind: StructureKind,
+    ) {
         let id = effective_sd_id(def);
         sd.body.insert("id".into(), J::String(id));
         for k in ["meta", "implicitRules", "language", "text", "contained"] {
@@ -735,7 +813,8 @@ impl<'a> SdContext<'a> {
         } else {
             sd.body.remove("title");
         }
-        sd.body.insert("status".into(), J::String(self.cfg.status().into()));
+        sd.body
+            .insert("status".into(), J::String(self.cfg.status().into()));
         if self.cfg.fsh_only {
             if let Some(v) = &self.cfg.version {
                 sd.body.insert("version".into(), J::String(v.clone()));
@@ -760,7 +839,13 @@ impl<'a> SdContext<'a> {
         } else {
             sd.body.remove("description");
         }
-        for k in ["useContext", "jurisdiction", "purpose", "copyright", "keyword"] {
+        for k in [
+            "useContext",
+            "jurisdiction",
+            "purpose",
+            "copyright",
+            "keyword",
+        ] {
             sd.body.remove(k);
         }
         if kind == StructureKind::Logical {
@@ -775,7 +860,8 @@ impl<'a> SdContext<'a> {
             StructureKind::Logical | StructureKind::Resource => "specialization",
             _ => "constraint",
         };
-        sd.body.insert("derivation".into(), J::String(derivation.into()));
+        sd.body
+            .insert("derivation".into(), J::String(derivation.into()));
 
         if kind == StructureKind::Extension {
             let url = sd.url().to_string();
@@ -843,7 +929,11 @@ fn effective_sd_id(def: &StructureDef) -> String {
     crate::export::sanitize_fhir_id(&def.id)
 }
 
-fn type_from_def_or_parent(def: &StructureDef, kind: StructureKind, parent: &StructureDefinition) -> String {
+fn type_from_def_or_parent(
+    def: &StructureDef,
+    kind: StructureKind,
+    parent: &StructureDefinition,
+) -> String {
     if kind == StructureKind::Profile || kind == StructureKind::Extension {
         return parent.type_().to_string();
     }
@@ -1000,7 +1090,11 @@ fn preprocess_structure_definition(def: &mut StructureDef, is_extension: bool) {
     for rule in &def.rules {
         let parts = split_on_path_periods(rule.path());
         for (i, part) in parts.iter().enumerate() {
-            let prev = if i > 0 { Some(parts[i - 1].as_str()) } else { None };
+            let prev = if i > 0 {
+                Some(parts[i - 1].as_str())
+            } else {
+                None
+            };
             let is_on_extension = (is_extension && parts.len() == 1)
                 || prev.map(|p| p.starts_with("extension")).unwrap_or(false);
             if !is_on_extension {
@@ -1195,7 +1289,11 @@ fn set_rules(
                 let target = get_reference_or_canonical_name(path);
                 constrain_type(sd, ei, types, target.as_deref(), fisher, diag);
             }
-            Rule::Binding { value_set, strength, .. } => {
+            Rule::Binding {
+                value_set,
+                strength,
+                ..
+            } => {
                 let base = value_set.split('|').next().unwrap_or(value_set);
                 let vs_meta_url = (vs_url)(value_set).or_else(|| {
                     let m = fisher.fish_for_metadata_vs(base)?;
@@ -1208,7 +1306,8 @@ fn set_rules(
                 });
                 let vs_uri = match &vs_meta_url {
                     Some(u) => {
-                        let ver: String = value_set.split('|').skip(1).collect::<Vec<_>>().join("|");
+                        let ver: String =
+                            value_set.split('|').skip(1).collect::<Vec<_>>().join("|");
                         if ver.is_empty() {
                             u.clone()
                         } else {
@@ -1241,7 +1340,14 @@ fn set_rules(
                 if rpath.is_empty() {
                     // SD-body instance carets (e.g. ^contained) are deferred — skip.
                     if !is_instance {
-                        apply_caret_fhir(&mut sd.body, "StructureDefinition", cp, value, cfg, &resolver);
+                        apply_caret_fhir(
+                            &mut sd.body,
+                            "StructureDefinition",
+                            cp,
+                            value,
+                            cfg,
+                            &resolver,
+                        );
                     }
                 } else {
                     // Element carets: apply literal value (bare-name `valueId`/`valueCode`
@@ -1276,18 +1382,29 @@ fn constrain_cardinality_sd(sd: &mut StructureDefinition, ei: usize, min: Option
     let this_id = sd.elements[ei].id().to_string();
     let this_path = sd.elements[ei].path().to_string();
     let eff_min = sd.elements[ei].get("min").and_then(|v| v.as_i64());
-    let eff_max = sd.elements[ei].get("max").and_then(|v| v.as_str()).map(String::from);
+    let eff_max = sd.elements[ei]
+        .get("max")
+        .and_then(|v| v.as_str())
+        .map(String::from);
     let connected: Vec<String> = find_connected_element_ids(sd, ei)
         .into_iter()
         .filter(|cid| {
             !(cid.starts_with(&this_id)
-                && sd.index_of_id(cid).map(|i| sd.elements[i].path() == this_path).unwrap_or(false))
+                && sd
+                    .index_of_id(cid)
+                    .map(|i| sd.elements[i].path() == this_path)
+                    .unwrap_or(false))
         })
         .collect();
     for cid in connected {
-        let Some(ci) = sd.index_of_id(&cid) else { continue };
+        let Some(ci) = sd.index_of_id(&cid) else {
+            continue;
+        };
         let ce_min = sd.elements[ci].get("min").and_then(|v| v.as_i64());
-        let ce_max = sd.elements[ci].get("max").and_then(|v| v.as_str()).map(String::from);
+        let ce_max = sd.elements[ci]
+            .get("max")
+            .and_then(|v| v.as_str())
+            .map(String::from);
         let new_min = match (eff_min, ce_min) {
             (Some(a), Some(b)) => Some(a.max(b)),
             (a, b) => a.or(b),
@@ -1317,9 +1434,13 @@ fn constrain_cardinality_sd(sd: &mut StructureDefinition, ei: usize, min: Option
     // slicedElement id (strip last slice marker)
     let seg_start = id.rfind('.').map(|i| i + 1).unwrap_or(0);
     let seg = &id[seg_start..];
-    let Some(cut) = seg.rfind([':', '/']) else { return };
+    let Some(cut) = seg.rfind([':', '/']) else {
+        return;
+    };
     let sliced_id = format!("{}{}", &id[..seg_start], &seg[..cut]);
-    let Some(si) = sd.index_of_id(&sliced_id) else { return };
+    let Some(si) = sd.index_of_id(&sliced_id) else {
+        return;
+    };
     // sum mins of all sibling slices (same path, slices of the same sliced element)
     let mut sum = 0i64;
     for e in &sd.elements {
@@ -1335,7 +1456,10 @@ fn constrain_cardinality_sd(sd: &mut StructureDefinition, ei: usize, min: Option
             }
         }
     }
-    let parent_min = sd.elements[si].get("min").and_then(|v| v.as_i64()).unwrap_or(0);
+    let parent_min = sd.elements[si]
+        .get("min")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     if sum > parent_min {
         constrain_cardinality(&mut sd.elements[si], Some(sum), "");
     }
@@ -1374,7 +1498,9 @@ fn apply_flags_sd(
     }
     let this_slice = sd.elements[ei].slice_name().map(String::from);
     for cid in find_connected_element_ids(sd, ei) {
-        let Some(ci) = sd.index_of_id(&cid) else { continue };
+        let Some(ci) = sd.index_of_id(&cid) else {
+            continue;
+        };
         if flags.must_support && !specialization {
             let ce_slice = sd.elements[ci].slice_name().map(String::from);
             if ce_slice.is_none() || ce_slice == this_slice {
@@ -1390,7 +1516,12 @@ fn apply_flags_sd(
     }
 }
 
-fn apply_flags(ed: &mut ElementDefinition, flags: &fsh_model::Flags, specialization: bool, diag: &mut Vec<String>) {
+fn apply_flags(
+    ed: &mut ElementDefinition,
+    flags: &fsh_model::Flags,
+    specialization: bool,
+    diag: &mut Vec<String>,
+) {
     if flags.must_support {
         if specialization {
             diag.push("must support on specialization".to_string());
@@ -1418,10 +1549,16 @@ fn apply_flags(ed: &mut ElementDefinition, flags: &fsh_model::Flags, specializat
             "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
             "valueCode": s
         });
-        let mut exts: Vec<J> = ed.get("extension").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let mut exts: Vec<J> = ed
+            .get("extension")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
         if let Some(pos) = exts.iter().position(|e| {
             e.get("url").and_then(|v| v.as_str())
-                == Some("http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status")
+                == Some(
+                    "http://hl7.org/fhir/StructureDefinition/structuredefinition-standards-status",
+                )
         }) {
             exts[pos] = new_ext;
         } else {
@@ -1465,16 +1602,22 @@ fn enforce_discriminator_min(sd: &mut StructureDefinition, ei: usize) {
     }
     let mut should = false;
     for pid in &chain {
-        let Some(pi) = sd.index_of_id(pid) else { continue };
+        let Some(pi) = sd.index_of_id(pid) else {
+            continue;
+        };
         if sd.elements[pi].slice_name().is_none() {
             continue;
         }
         // slicedElement id = strip trailing slice from pid
         let seg_start = pid.rfind('.').map(|i| i + 1).unwrap_or(0);
         let seg = &pid[seg_start..];
-        let Some(cutpos) = seg.rfind([':', '/']) else { continue };
+        let Some(cutpos) = seg.rfind([':', '/']) else {
+            continue;
+        };
         let sliced_id = format!("{}{}", &pid[..seg_start], &seg[..cutpos]);
-        let Some(si) = sd.index_of_id(&sliced_id) else { continue };
+        let Some(si) = sd.index_of_id(&sliced_id) else {
+            continue;
+        };
         let sliced_path = sd.elements[si].path().to_string();
         let discs = sd.elements[si]
             .get("slicing")
@@ -1494,7 +1637,10 @@ fn enforce_discriminator_min(sd: &mut StructureDefinition, ei: usize) {
         }
     }
     if should {
-        let cur_min = sd.elements[ei].get("min").and_then(|v| v.as_i64()).unwrap_or(0);
+        let cur_min = sd.elements[ei]
+            .get("min")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         if cur_min == 0 {
             constrain_cardinality(&mut sd.elements[ei], Some(1), "");
         }
@@ -1510,7 +1656,12 @@ fn is_quantity_type(t: &str) -> bool {
     )
 }
 
-fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: bool, fisher: &dyn Fisher) {
+fn assign_value_inner(
+    ed: &mut ElementDefinition,
+    value: &FshValue,
+    exactly: bool,
+    fisher: &dyn Fisher,
+) {
     let types = ed.type_codes();
     if types.len() != 1 {
         return;
@@ -1523,7 +1674,9 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
             let n: i64 = s.parse().unwrap_or(0);
             Some((etype.clone(), J::Number(n.into())))
         }
-        FshValue::Float(f) => serde_json::Number::from_f64(*f).map(|n| (etype.clone(), J::Number(n))),
+        FshValue::Float(f) => {
+            serde_json::Number::from_f64(*f).map(|n| (etype.clone(), J::Number(n)))
+        }
         FshValue::Str(s) => Some((etype.clone(), J::String(s.clone()))),
         FshValue::Code(fc) => match etype.as_str() {
             "code" | "string" | "uri" => Some((etype.clone(), J::String(fc.code.clone()))),
@@ -1532,7 +1685,10 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
                     return;
                 }
                 let mut m = Map::new();
-                m.insert("coding".into(), J::Array(vec![crate::export::coding_from(fc)]));
+                m.insert(
+                    "coding".into(),
+                    J::Array(vec![crate::export::coding_from(fc)]),
+                );
                 Some(("CodeableConcept".to_string(), J::Object(m)))
             }
             "Coding" => {
@@ -1602,8 +1758,14 @@ fn assign_value_inner(ed: &mut ElementDefinition, value: &FshValue, exactly: boo
         FshValue::Ratio(r) => {
             // `FshRatio.toFHIRRatio`: numerator then denominator, each a Quantity.
             let mut m = Map::new();
-            m.insert("numerator".into(), J::Object(quantity_to_json(&r.numerator)));
-            m.insert("denominator".into(), J::Object(quantity_to_json(&r.denominator)));
+            m.insert(
+                "numerator".into(),
+                J::Object(quantity_to_json(&r.numerator)),
+            );
+            m.insert(
+                "denominator".into(),
+                J::Object(quantity_to_json(&r.denominator)),
+            );
             Some(("Ratio".to_string(), J::Object(m)))
         }
         _ => None,
@@ -1773,7 +1935,13 @@ fn apply_obeys(
         } = r
         {
             let caret_path = format!("constraint[{cst_idx}].{path}");
-            apply_caret_element(&mut sd.elements[ei], &caret_path, value, &Config::default(), resolver);
+            apply_caret_element(
+                &mut sd.elements[ei],
+                &caret_path,
+                value,
+                &Config::default(),
+                resolver,
+            );
         }
     }
     let _ = def;
@@ -1789,7 +1957,12 @@ thread_local! {
 /// `tank.resolveAlias(item)` — the MasterFisher resolves an alias token to its
 /// target before fishing. Returns the input unchanged when it isn't an alias.
 pub(crate) fn resolve_alias_tl(name: &str) -> String {
-    ALIASES.with(|m| m.borrow().get(name).cloned().unwrap_or_else(|| name.to_string()))
+    ALIASES.with(|m| {
+        m.borrow()
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    })
 }
 
 pub(crate) fn set_aliases(docs: &[FshDocument]) {
@@ -1934,7 +2107,9 @@ fn constrain_type(
     let mut matches_by_code: std::collections::HashMap<String, Vec<Match>> =
         std::collections::HashMap::new();
     for et in &element_types {
-        matches_by_code.entry(type_code(et).to_string()).or_default();
+        matches_by_code
+            .entry(type_code(et).to_string())
+            .or_default();
     }
     for t in &unique_types {
         let lineage = get_type_lineage(&t.type_, fisher);
@@ -1974,7 +2149,11 @@ fn constrain_type(
                     let profiles: Vec<String> = et
                         .get("profile")
                         .and_then(|v| v.as_array())
-                        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(String::from))
+                                .collect()
+                        })
                         .unwrap_or_default();
                     let matches_unprofiled = c == md.id && profiles.is_empty();
                     let anc = get_type_lineage(md.sd_type.as_deref().unwrap_or(""), fisher);
@@ -2002,7 +2181,10 @@ fn constrain_type(
         matches_by_code
             .entry(code.clone())
             .or_default()
-            .push(Match { metadata: meta, code });
+            .push(Match {
+                metadata: meta,
+                code,
+            });
     }
 
     // build new types
@@ -2071,12 +2253,19 @@ fn constrain_type(
                 let new_p: Vec<String> = new_type
                     .get(key)
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let rebuilt: Vec<J> = new_p
                     .iter()
                     .map(|np| {
-                        match orig_p.iter().position(|op| op.as_str() == Some(np.as_str())) {
+                        match orig_p
+                            .iter()
+                            .position(|op| op.as_str() == Some(np.as_str()))
+                        {
                             Some(idx) => orig_u.get(idx).cloned().unwrap_or(J::Null),
                             None => J::Null,
                         }
@@ -2098,7 +2287,9 @@ fn constrain_type(
     if !connected.is_empty() {
         let mut changes: Vec<(usize, Vec<J>)> = Vec::new();
         for cid in &connected {
-            let Some(ci) = sd.index_of_id(cid) else { continue };
+            let Some(ci) = sd.index_of_id(cid) else {
+                continue;
+            };
             let ce_types: Vec<J> = sd.elements[ci]
                 .get("type")
                 .and_then(|v| v.as_array())
@@ -2125,7 +2316,11 @@ fn constrain_type(
 fn slice_ids_of(sd: &StructureDefinition, ei: usize) -> Vec<String> {
     let base_id = sd.elements[ei].id().to_string();
     let base_path = sd.elements[ei].path().to_string();
-    let sep = if sd.elements[ei].slice_name().is_some() { '/' } else { ':' };
+    let sep = if sd.elements[ei].slice_name().is_some() {
+        '/'
+    } else {
+        ':'
+    };
     let prefix = format!("{base_id}{sep}");
     sd.elements
         .iter()
@@ -2190,7 +2385,11 @@ fn find_type_match_plain(
             let profiles: Vec<String> = rt
                 .get("profile")
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
             let matches_unprofiled = c == md.id && profiles.is_empty();
             let anc = get_type_lineage(&md_sdtype, fisher);
@@ -2198,7 +2397,10 @@ fn find_type_match_plain(
                 && (profiles.contains(&md_url) || profiles.contains(&versioned));
             let matches_logical = kind == "logical" && !c.is_empty() && c == md_sdtype;
             if matches_unprofiled || matches_profile || matches_logical {
-                return Some(Match { metadata: lineage[0].clone(), code: c });
+                return Some(Match {
+                    metadata: lineage[0].clone(),
+                    code: c,
+                });
             }
         }
     }
@@ -2250,10 +2452,17 @@ fn find_type_intersection(
         let lprofiles: Vec<String> = left
             .get("profile")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
-        let types_to_try: Vec<String> =
-            if lprofiles.is_empty() { vec![lcode] } else { lprofiles };
+        let types_to_try: Vec<String> = if lprofiles.is_empty() {
+            vec![lcode]
+        } else {
+            lprofiles
+        };
         let mut matches: Vec<Match> = Vec::new();
         for tt in &types_to_try {
             if let Some(m) = find_type_match_plain(tt, right_types, kind, fisher) {
@@ -2350,7 +2559,12 @@ fn initialize_element_type(types: &[OnlyRuleType], fisher: &dyn Fisher) -> Optio
 }
 
 /// `StructureDefinition.newElement` + `ElementDefinition.applyAddElementRule`.
-fn apply_add_element(sd: &mut StructureDefinition, rule: &Rule, fisher: &dyn Fisher, diag: &mut Vec<String>) {
+fn apply_add_element(
+    sd: &mut StructureDefinition,
+    rule: &Rule,
+    fisher: &dyn Fisher,
+    diag: &mut Vec<String>,
+) {
     let Rule::AddElement {
         path,
         min,
@@ -2395,11 +2609,8 @@ fn apply_add_element(sd: &mut StructureDefinition, rule: &Rule, fisher: &dyn Fis
         constrain_type(sd, ei, types, None, fisher, diag);
     }
     constrain_cardinality(&mut sd.elements[ei], *min, max);
-    let specialization = sd
-        .body
-        .get("derivation")
-        .and_then(|v| v.as_str())
-        == Some("specialization");
+    let specialization =
+        sd.body.get("derivation").and_then(|v| v.as_str()) == Some("specialization");
     if flags.must_support && specialization {
         diag.push("must support on specialization".to_string());
         return;
@@ -2429,8 +2640,8 @@ fn handle_contains(
     fisher: &dyn Fisher,
     diag: &mut Vec<String>,
 ) {
-    let is_extension = sd.elements[ei].type_codes() == ["Extension"]
-        && sd.elements[ei].slice_name().is_none();
+    let is_extension =
+        sd.elements[ei].type_codes() == ["Extension"] && sd.elements[ei].slice_name().is_none();
     if is_extension {
         handle_extension_contains(sd, ei, items, fisher, diag);
         return;
@@ -2499,10 +2710,7 @@ fn handle_extension_contains(
                 Some(idx) => format!("{ext_url}{}", &type_name[idx..]),
                 None => ext_url,
             };
-            sd.elements[si].set(
-                "type",
-                json!([{ "code": "Extension", "profile": [url] }]),
-            );
+            sd.elements[si].set("type", json!([{ "code": "Extension", "profile": [url] }]));
         } else {
             let Some(slice_id) = sd.add_slice(ei, &item.name, None) else {
                 diag.push(format!("Could not add extension slice {}", item.name));
@@ -2601,7 +2809,9 @@ fn resolve_code_system_in_value(
     fisher: &dyn Fisher,
     cs_url: &dyn Fn(&str) -> Option<String>,
 ) -> Option<FshValue> {
-    let FshValue::Code(fc) = value else { return None };
+    let FshValue::Code(fc) = value else {
+        return None;
+    };
     let sys = fc.system.as_ref()?;
     let resolve_cs =
         |base: &str| cs_url(base).or_else(|| fisher.fish_for_metadata_cs(base).and_then(|m| m.url));

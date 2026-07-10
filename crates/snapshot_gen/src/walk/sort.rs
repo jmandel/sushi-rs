@@ -64,8 +64,14 @@ fn url_tail(profile: &str) -> &str {
 }
 
 impl Comparer {
-    fn new(src_url: String, snapshot: Rc<Vec<Value>>, base: &str, prefix_length: usize) -> Comparer {
-        let base = if base.contains("://") || base.starts_with("http:") || base.starts_with("urn:") {
+    fn new(
+        src_url: String,
+        snapshot: Rc<Vec<Value>>,
+        base: &str,
+        prefix_length: usize,
+    ) -> Comparer {
+        let base = if base.contains("://") || base.starts_with("http:") || base.starts_with("urn:")
+        {
             url_tail(base).to_string()
         } else {
             base.to_string()
@@ -304,7 +310,10 @@ fn sort_elements(
 }
 
 fn is_abstract(code: &str) -> bool {
-    matches!(code, "Element" | "BackboneElement" | "Resource" | "DomainResource")
+    matches!(
+        code,
+        "Element" | "BackboneElement" | "Resource" | "DomainResource"
+    )
 }
 
 fn child_self_types<'a>(child: &Holder, diff: &'a [Value]) -> Vec<&'a Value> {
@@ -374,7 +383,10 @@ fn get_comparer(
         .unwrap_or_default();
     let ed_code = ed_types.first().and_then(working_code).unwrap_or_default();
     let self_types = child_self_types(child, diff);
-    let self_code = self_types.first().and_then(|t| working_code(t)).unwrap_or_default();
+    let self_code = self_types
+        .first()
+        .and_then(|t| working_code(t))
+        .unwrap_or_default();
 
     if ed_types.is_empty() || is_abstract(&ed_code) || ed_code == path_of(&ed) {
         // running within the same structure (backbone) — or Resource profiled.
@@ -415,8 +427,16 @@ fn get_comparer(
             match profile {
                 None => Ok(None),
                 Some(p) => {
-                    let ptype = p.get("type").and_then(Value::as_str).unwrap_or("").to_string();
-                    let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+                    let ptype = p
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let purl2 = p
+                        .get("url")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
                     Ok(Some(Comparer::new(
                         purl2,
                         snapshot_of(&p),
@@ -442,7 +462,11 @@ fn get_comparer(
             None => Ok(None),
             Some(p) => {
                 let base = resolve_type_name(ctx, &ed_code);
-                let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+                let purl2 = p
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 Ok(Some(Comparer::new(
                     purl2,
                     snapshot_of(&p),
@@ -457,14 +481,27 @@ fn get_comparer(
             anyhow::bail!("UNABLE_TO_RESOLVE_PROFILE {ns} in element {}", path_of(&ed));
         };
         let base = resolve_type_name(ctx, &ed_code);
-        let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
-        Ok(Some(Comparer::new(purl2, snapshot_of(&p), &base, child.path.len())))
+        let purl2 = p
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        Ok(Some(Comparer::new(
+            purl2,
+            snapshot_of(&p),
+            &base,
+            child.path.len(),
+        )))
     } else if self_types.len() == 1 {
         let ns = sd_ns(&self_code);
         let Some(p) = resolve_with_snapshot(ctx, &ns)? else {
             anyhow::bail!("UNABLE_TO_RESOLVE_PROFILE {ns} in element {}", path_of(&ed));
         };
-        let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+        let purl2 = p
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         Ok(Some(Comparer::new(
             purl2,
             snapshot_of(&p),
@@ -474,7 +511,8 @@ fn get_comparer(
     } else if path_of(&ed).ends_with("[x]") && !child.path.ends_with("[x]") {
         let ed_last = path_of(&ed).rsplit('.').next().unwrap_or("");
         let child_last = child.path.rsplit('.').next().unwrap_or("");
-        let mut p_name = child_last[ed_last.len().saturating_sub(3).min(child_last.len())..].to_string();
+        let mut p_name =
+            child_last[ed_last.len().saturating_sub(3).min(child_last.len())..].to_string();
         let uncap = {
             let mut c = p_name.chars();
             match c.next() {
@@ -489,7 +527,11 @@ fn get_comparer(
         let Some(sd) = resolve_with_snapshot(ctx, &ns)? else {
             anyhow::bail!("UNABLE_TO_FIND_PROFILE {p_name} at {}", path_of(&ed));
         };
-        let purl2 = sd.get("url").and_then(Value::as_str).unwrap_or("").to_string();
+        let purl2 = sd
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         Ok(Some(Comparer::new(
             purl2,
             snapshot_of(&sd),
@@ -509,8 +551,17 @@ fn get_comparer(
         let Some(p) = resolve_with_snapshot(ctx, &ns)? else {
             return Ok(None);
         };
-        let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
-        Ok(Some(Comparer::new(purl2, snapshot_of(&p), &ed_code, child.path.len())))
+        let purl2 = p
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        Ok(Some(Comparer::new(
+            purl2,
+            snapshot_of(&p),
+            &ed_code,
+            child.path.len(),
+        )))
     } else if self_types.is_empty() && ed_code == "Reference" {
         for t in &ed_types {
             if working_code(t).as_deref() != Some("Reference") {
@@ -521,16 +572,34 @@ fn get_comparer(
         let Some(p) = resolve_with_snapshot(ctx, &ns)? else {
             return Ok(None);
         };
-        let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
-        Ok(Some(Comparer::new(purl2, snapshot_of(&p), &ed_code, child.path.len())))
+        let purl2 = p
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        Ok(Some(Comparer::new(
+            purl2,
+            snapshot_of(&p),
+            &ed_code,
+            child.path.len(),
+        )))
     } else {
         // only profiling extensions — sort against Element
         let ns = sd_ns("Element");
         let Some(p) = resolve_with_snapshot(ctx, &ns)? else {
             anyhow::bail!("UNABLE_TO_RESOLVE_PROFILE Element");
         };
-        let purl2 = p.get("url").and_then(Value::as_str).unwrap_or("").to_string();
-        Ok(Some(Comparer::new(purl2, snapshot_of(&p), "Element", child.path.len())))
+        let purl2 = p
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        Ok(Some(Comparer::new(
+            purl2,
+            snapshot_of(&p),
+            "Element",
+            child.path.len(),
+        )))
     }
 }
 

@@ -30,14 +30,11 @@ macro_rules! loud_gap {
 pub mod aggregates;
 pub mod commonmark;
 pub mod context;
-pub mod tree;
-pub mod dict;
 pub mod deptable;
+pub mod dict;
 pub mod diff;
 pub mod engine;
 pub mod fstxcache;
-pub mod txcache;
-pub mod vscs;
 pub mod gentypes;
 pub mod grid;
 pub mod ipstmt;
@@ -48,7 +45,10 @@ pub mod publisher_markdown;
 pub mod sdmodel;
 pub mod span;
 pub mod table;
+pub mod tree;
 pub mod tx;
+pub mod txcache;
+pub mod vscs;
 pub mod xref;
 pub mod xreflist;
 

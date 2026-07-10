@@ -33,10 +33,16 @@ pub struct SpanConfig {
 
 impl SpanConfig {
     pub fn span() -> SpanConfig {
-        SpanConfig { prefix: "sp".into(), active_tables: false }
+        SpanConfig {
+            prefix: "sp".into(),
+            active_tables: false,
+        }
     }
     pub fn spanall() -> SpanConfig {
-        SpanConfig { prefix: "spall".into(), active_tables: false }
+        SpanConfig {
+            prefix: "spall".into(),
+            active_tables: false,
+        }
     }
 }
 
@@ -59,7 +65,11 @@ pub fn render_span(sd: &Sd, ctx: &IgContext, cfg: &SpanConfig) -> String {
     // false, true, "", anchorPrefix)` — mode stays null (like grid/custom), so no
     // `no-external` attrs. Gen::new gives mode None already. `anchors.clear()`
     // (SDR:3714) is a no-op for us: genSpanEntry never dedups (see below).
-    let gen = Gen::new(if cfg.prefix.is_empty() { None } else { Some(cfg.prefix.clone()) });
+    let gen = Gen::new(if cfg.prefix.is_empty() {
+        None
+    } else {
+        Some(cfg.prefix.clone())
+    });
 
     let mut model = init_spanning_table(sd.id());
     model.active_tables = cfg.active_tables;
@@ -86,11 +96,25 @@ fn init_spanning_table(id: &str) -> render_tables::TableModel {
     let doco_ref = generate::path_url("", "formats.html#table");
     model.doco_ref = Some(doco_ref.clone());
     // 4 titles (SDR:3683-3686). Text/hint = the rendering phrases.
-    let t = |text: &str, hint: &str| Title::new(None, Some(doco_ref.clone()), Some(text.into()), Some(hint.into()), None, 0);
+    let t = |text: &str, hint: &str| {
+        Title::new(
+            None,
+            Some(doco_ref.clone()),
+            Some(text.into()),
+            Some(hint.into()),
+            None,
+            0,
+        )
+    };
     model.titles.push(t("Property", "A profiled resource"));
-    model.titles.push(t("Card.", "Minimum and Maximum # of times the element can appear in the instance"));
+    model.titles.push(t(
+        "Card.",
+        "Minimum and Maximum # of times the element can appear in the instance",
+    ));
     model.titles.push(t("Content", "What goes here"));
-    model.titles.push(t("Description", "Description of the profile"));
+    model
+        .titles
+        .push(t("Description", "Description of the profile"));
     model
 }
 
@@ -218,10 +242,29 @@ fn gen_span_entry(rows: &mut Vec<Row>, span: &SpanEntry) {
     } else {
         row.set_icon("icon_resource.png", Some("Resource".into()));
     }
-    row.cells.push(Cell::with(None, None, Some(span.name.clone()), None, None));
-    row.cells.push(Cell::with(None, None, Some(span.cardinality.clone()), None, None));
-    row.cells.push(Cell::with(None, span.profile_link.clone(), Some(span.type_text.clone()), None, None));
-    row.cells.push(Cell::with(None, None, Some(span.description.clone()), None, None));
+    row.cells
+        .push(Cell::with(None, None, Some(span.name.clone()), None, None));
+    row.cells.push(Cell::with(
+        None,
+        None,
+        Some(span.cardinality.clone()),
+        None,
+        None,
+    ));
+    row.cells.push(Cell::with(
+        None,
+        span.profile_link.clone(),
+        Some(span.type_text.clone()),
+        None,
+        None,
+    ));
+    row.cells.push(Cell::with(
+        None,
+        None,
+        Some(span.description.clone()),
+        None,
+        None,
+    ));
     rows.push(row);
     let idx = rows.len() - 1;
     for child in &span.children {
@@ -255,7 +298,15 @@ fn get_cardinality(ed: Ed<'_>, list: &[Ed<'_>]) -> String {
             }
         }
     }
-    format!("{}..{}", min, if max == i64::MAX { "*".into() } else { max.to_string() })
+    format!(
+        "{}..{}",
+        min,
+        if max == i64::MAX {
+            "*".into()
+        } else {
+            max.to_string()
+        }
+    )
 }
 
 /// `findParent` (SDR:3771): the nearest preceding element whose path is a strict
@@ -309,7 +360,11 @@ fn summarize(_suffix: &str, value: &serde_json::Value) -> String {
         let code = value.get("code").and_then(|x| x.as_str()).unwrap_or("");
         return format!("{} {}", display_system(system), code);
     }
-    if let Some(coding) = value.get("coding").and_then(|x| x.as_array()).and_then(|a| a.first()) {
+    if let Some(coding) = value
+        .get("coding")
+        .and_then(|x| x.as_array())
+        .and_then(|a| a.first())
+    {
         let system = coding.get("system").and_then(|x| x.as_str()).unwrap_or("");
         let code = coding.get("code").and_then(|x| x.as_str()).unwrap_or("");
         return format!("{} {}", display_system(system), code);
@@ -334,8 +389,16 @@ fn tail(path: &str) -> &str {
 }
 
 fn sd_url(sd: &Sd) -> String {
-    sd.root.get("url").and_then(|x| x.as_str()).unwrap_or("").to_string()
+    sd.root
+        .get("url")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string()
 }
 fn sd_name(sd: &Sd) -> String {
-    sd.root.get("name").and_then(|x| x.as_str()).unwrap_or("").to_string()
+    sd.root
+        .get("name")
+        .and_then(|x| x.as_str())
+        .unwrap_or("")
+        .to_string()
 }

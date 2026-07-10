@@ -18,6 +18,7 @@ render_liquid = { workspace = true }
 render_md = { workspace = true }
 render_sd = { workspace = true }
 render_xhtml = { workspace = true }
+site_build = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 

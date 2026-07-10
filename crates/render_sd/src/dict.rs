@@ -62,7 +62,10 @@ fn hashmap_order_surviving(all_put_keys: &[String], surviving: &[String]) -> Vec
     let mut items: Vec<(u32, usize, String)> = surviving
         .iter()
         .map(|k| {
-            let ins = all_put_keys.iter().position(|p| p == k).unwrap_or(usize::MAX);
+            let ins = all_put_keys
+                .iter()
+                .position(|p| p == k)
+                .unwrap_or(usize::MAX);
             (mask & spread(java_string_hash(k)), ins, k.clone())
         })
         .collect();
@@ -114,7 +117,10 @@ pub fn render_dict(
 
     // x.table("dict", false).markGenerated(true): class="dict" data-fhir="generated".
     let mut t = el("table");
-    set_attrs(&mut t, &[("class", "dict".into()), ("data-fhir", "generated".into())]);
+    set_attrs(
+        &mut t,
+        &[("class", "dict".into()), ("data-fhir", "generated".into())],
+    );
 
     r.render_dict_body(&elements, &mut t, inc_profiled_out);
     x.add_child_node(t);
@@ -176,7 +182,10 @@ impl<'a> DictRenderer<'a> {
                 // tr.td("structure").colspan(2): set class then colspan; HashMap
                 // order emits colspan then class.
                 let mut td = el("td");
-                set_attrs(&mut td, &[("class", "structure".into()), ("colspan", "2".into())]);
+                set_attrs(
+                    &mut td,
+                    &[("class", "structure".into()), ("colspan", "2".into())],
+                );
                 let mut sp = el("span");
                 sp.set_attribute("class", "self-link-parent");
                 for s in &anchors {
@@ -220,8 +229,18 @@ impl<'a> DictRenderer<'a> {
                                 .as_ref()
                                 .map(|v| v.get("max").and_then(|m| m.as_str()) == Some("0"))
                                 .unwrap_or(true);
-                            let vmode = if value_defn.is_none() || prohibited { 2 } else { 3 };
-                            self.generate_element_inner(t, &ec, vmode, value_defn.as_ref(), compare.as_ref());
+                            let vmode = if value_defn.is_none() || prohibited {
+                                2
+                            } else {
+                                3
+                            };
+                            self.generate_element_inner(
+                                t,
+                                &ec,
+                                vmode,
+                                value_defn.as_ref(),
+                                compare.as_ref(),
+                            );
                         }
                     }
                 } else {
@@ -302,7 +321,12 @@ impl<'a> DictRenderer<'a> {
     /// processRelativeUrls(…, false) path). Applied to the base compare element.
     fn update_urls(&self, e: &mut Value) {
         let webroot = self.core_path.trim_end_matches('/');
-        for field in ["definition", "comment", "requirements", "meaningWhenMissing"] {
+        for field in [
+            "definition",
+            "comment",
+            "requirements",
+            "meaningWhenMissing",
+        ] {
             if let Some(s) = e.get(field).and_then(|x| x.as_str()) {
                 let rewritten = crate::publisher_markdown::process_relative_urls_pub(s, webroot);
                 if let Some(obj) = e.as_object_mut() {
@@ -310,7 +334,11 @@ impl<'a> DictRenderer<'a> {
                 }
             }
         }
-        if let Some(desc) = e.get("binding").and_then(|b| b.get("description")).and_then(|x| x.as_str()) {
+        if let Some(desc) = e
+            .get("binding")
+            .and_then(|b| b.get("description"))
+            .and_then(|x| x.as_str())
+        {
             let rewritten = crate::publisher_markdown::process_relative_urls_pub(desc, webroot);
             if let Some(b) = e.get_mut("binding").and_then(|b| b.as_object_mut()) {
                 b.insert("description".to_string(), Value::String(rewritten));
@@ -327,14 +355,21 @@ impl<'a> DictRenderer<'a> {
         // profile's OWN snapshot already carries `|<version>` on its bindings.
         let ver = self.sd.fhir_version().to_string();
         if !ver.is_empty() {
-            pin_core_version(e.get_mut("binding").and_then(|b| b.get_mut("valueSet")), &ver);
+            pin_core_version(
+                e.get_mut("binding").and_then(|b| b.get_mut("valueSet")),
+                &ver,
+            );
             if let Some(types) = e.get_mut("type").and_then(|t| t.as_array_mut()) {
                 for t in types {
                     if let Some(arr) = t.get_mut("targetProfile").and_then(|x| x.as_array_mut()) {
-                        for p in arr { pin_core_version(Some(p), &ver); }
+                        for p in arr {
+                            pin_core_version(Some(p), &ver);
+                        }
                     }
                     if let Some(arr) = t.get_mut("profile").and_then(|x| x.as_array_mut()) {
-                        for p in arr { pin_core_version(Some(p), &ver); }
+                        for p in arr {
+                            pin_core_version(Some(p), &ver);
+                        }
                     }
                 }
             }
@@ -345,23 +380,29 @@ impl<'a> DictRenderer<'a> {
     fn link(&self, x: &mut XhtmlNode, id: &str) {
         let mut ah = el("a");
         // ah(href).attribute("title").attribute("class") — set order href,title,class.
-        set_attrs(&mut ah, &[
-            ("href", format!("#{}{}", self.anchor_prefix, id)),
-            ("title", "link to here".into()),
-            ("class", "self-link".into()),
-        ]);
+        set_attrs(
+            &mut ah,
+            &[
+                ("href", format!("#{}{}", self.anchor_prefix, id)),
+                ("title", "link to here".into()),
+                ("class", "self-link".into()),
+            ],
+        );
         let mut svg = el("svg");
         // svg() sets xmlns + xmlns:xlink, then attribute viewBox/width/height/class
         // in that set order (SDR:4191-4195). svg() sets xmlns first, xmlns:xlink
         // second; then viewBox, width, height, class.
-        set_attrs(&mut svg, &[
-            ("xmlns", "http://www.w3.org/2000/svg".into()),
-            ("xmlns:xlink", "http://www.w3.org/1999/xlink".into()),
-            ("viewBox", "0 0 1792 1792".into()),
-            ("width", "16".into()),
-            ("height", "16".into()),
-            ("class", "self-link".into()),
-        ]);
+        set_attrs(
+            &mut svg,
+            &[
+                ("xmlns", "http://www.w3.org/2000/svg".into()),
+                ("xmlns:xlink", "http://www.w3.org/1999/xlink".into()),
+                ("viewBox", "0 0 1792 1792".into()),
+                ("width", "16".into()),
+                ("height", "16".into()),
+                ("class", "self-link".into()),
+            ],
+        );
         let mut path = el("path");
         path.set_attribute("d", SELF_LINK_PATH);
         svg.add_child_node(path);
@@ -388,15 +429,35 @@ impl<'a> DictRenderer<'a> {
         // Slice name / constraining (SDR:4365).
         if d.has_slice_name() {
             let cmp = compare_ed.and_then(|c| c.slice_name());
-            self.row_cmp_string(tbl, "Slice Name", Some("profiling.html#slicing"), d.slice_name(), cmp, mode, false);
+            self.row_cmp_string(
+                tbl,
+                "Slice Name",
+                Some("profiling.html#slicing"),
+                d.slice_name(),
+                cmp,
+                mode,
+                false,
+            );
             let new_c = encode_bool_opt(d.v.get("sliceIsConstraining"));
             let old_c = compare_ed.and_then(|c| encode_bool_opt(c.v.get("sliceIsConstraining")));
-            self.row_cmp_string(tbl, "Slice is Constraining", Some("profiling.html#slicing"), new_c.as_deref(), old_c.as_deref(), mode, false);
+            self.row_cmp_string(
+                tbl,
+                "Slice is Constraining",
+                Some("profiling.html#slicing"),
+                new_c.as_deref(),
+                old_c.as_deref(),
+                mode,
+                false,
+            );
         }
 
         // Definition (markdown) (SDR:4370). compare passed null when sliced ext.
         let def_present = compare_ed.is_some() && !sliced_extension;
-        let def_cmp = if def_present { compare_ed.and_then(|c| c.definition()) } else { None };
+        let def_cmp = if def_present {
+            compare_ed.and_then(|c| c.definition())
+        } else {
+            None
+        };
         let node = self.compare_markdown_el(d.definition(), def_cmp, def_present, mode);
         self.row_node(tbl, "Definition", None, node);
 
@@ -406,7 +467,11 @@ impl<'a> DictRenderer<'a> {
 
         // Comments (markdown) (SDR:4372).
         let com_present = compare_ed.is_some() && !sliced_extension;
-        let com_cmp = if com_present { compare_ed.and_then(|c| c.comment()) } else { None };
+        let com_cmp = if com_present {
+            compare_ed.and_then(|c| c.comment())
+        } else {
+            None
+        };
         let node = self.compare_markdown_el(d.comment(), com_cmp, com_present, mode);
         self.row_node(tbl, "Comments", None, node);
 
@@ -417,7 +482,12 @@ impl<'a> DictRenderer<'a> {
 
         // Control (cardinality) (SDR:4374).
         let node = self.describe_cardinality(d, compare_ed.as_ref(), mode);
-        self.row_node(tbl, "Control", Some("conformance-rules.html#conformance"), node);
+        self.row_node(
+            tbl,
+            "Control",
+            Some("conformance-rules.html#conformance"),
+            node,
+        );
 
         // Binding (SDR:4375).
         let node = self.describe_binding(d, d.path(), compare_ed.as_ref(), mode);
@@ -451,33 +521,67 @@ impl<'a> DictRenderer<'a> {
 
         // Is Modifier (SDR:4394).
         let node = self.present_modifier(d, mode, compare_ed.as_ref());
-        self.row_node(tbl, "Is Modifier", Some("conformance-rules.html#ismodifier"), node);
+        self.row_node(
+            tbl,
+            "Is Modifier",
+            Some("conformance-rules.html#ismodifier"),
+            node,
+        );
 
         // Primitive value flags (SDR:4395).
         if d.must_have_value() {
             // STRUC_DEF_PRIM_TYPE_VALUE (SDR:4396).
             self.row_text(tbl, "Primitive Value", Some("elementdefinition.html#primitives"),
                 "This primitive type must have a value (the value must be present, and cannot be replaced by an extension)");
-        } else if d.v.get("valueAlternatives").and_then(|v| v.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+        } else if d
+            .v
+            .get("valueAlternatives")
+            .and_then(|v| v.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+        {
             // hasValueAlternatives (SDR:4397): renderCanonicalList(PRIM_TYPE_PRESENT).
-            crate::loud_gap!((), "LOUD GAP: dict primitive value-alternatives (SDR:4398) for {} ({})", self.sd.id(), d.id());
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: dict primitive value-alternatives (SDR:4398) for {} ({})",
+                self.sd.id(),
+                d.id()
+            );
         } else if self.has_primitive_types(d) {
             // STRUC_DEF_PRIM_ELE (SDR:4400).
-            self.row_text(tbl, "Primitive Value", Some("elementdefinition.html#primitives"),
-                "This primitive element may be present, or absent, or replaced by an extension");
+            self.row_text(
+                tbl,
+                "Primitive Value",
+                Some("elementdefinition.html#primitives"),
+                "This primitive element may be present, or absent, or replaced by an extension",
+            );
         }
 
         // Must Support (SDR:4405).
-        let node = self.display_boolean(d.must_support(), d.has_must_support(),
-            compare_ed.and_then(|c| c.v.get("mustSupport").and_then(|x| x.as_bool())), mode);
-        self.row_node(tbl, "Must Support", Some("conformance-rules.html#mustSupport"), node);
+        let node = self.display_boolean(
+            d.must_support(),
+            d.has_must_support(),
+            compare_ed.and_then(|c| c.v.get("mustSupport").and_then(|x| x.as_bool())),
+            mode,
+        );
+        self.row_node(
+            tbl,
+            "Must Support",
+            Some("conformance-rules.html#mustSupport"),
+            node,
+        );
         if d.must_support() {
             if has_must_support_types(&d.types()) {
-                let node = self.describe_types(&d.types(), true, d, compare_ed.as_ref(), mode, None);
+                let node =
+                    self.describe_types(&d.types(), true, d, compare_ed.as_ref(), mode, None);
                 self.row_node(tbl, "Must Support Types", Some("datatypes.html"), node);
             } else if has_choices(&d.types()) {
-                self.row_text(tbl, "Must Support Types", Some("datatypes.html"),
-                    "No must-support rules about the choice of types/profiles");
+                self.row_text(
+                    tbl,
+                    "Must Support Types",
+                    Some("datatypes.html"),
+                    "No must-support rules about the choice of types/profiles",
+                );
             }
         }
 
@@ -487,29 +591,55 @@ impl<'a> DictRenderer<'a> {
 
         // XML Format (SDR:4496) — driven by representation (or xml-namespace/name
         // extensions, which guard_unported_rows flags).
-        if d.v.get("representation").and_then(|r| r.as_array()).map(|a| !a.is_empty()).unwrap_or(false) {
+        if d.v
+            .get("representation")
+            .and_then(|r| r.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+        {
             let node = describe_xml(d);
             self.row_node(tbl, "XML Format", None, node);
         }
 
         // Summary (SDR:4521).
         if mode != GEN_MODE_DIFF && d.v.get("isSummary").is_some() {
-            self.row_text(tbl, "Summary", Some("search.html#summary"), if d.is_summary() { "true" } else { "false" });
+            self.row_text(
+                tbl,
+                "Summary",
+                Some("search.html#summary"),
+                if d.is_summary() { "true" } else { "false" },
+            );
         }
 
         // Requirements (markdown) (SDR:4524).
         let req = d.v.get("requirements").and_then(|x| x.as_str());
         let req_present = compare_ed.is_some() && !sliced_extension;
-        let req_cmp = if req_present { compare_ed.and_then(|c| c.v.get("requirements").and_then(|x| x.as_str())) } else { None };
+        let req_cmp = if req_present {
+            compare_ed.and_then(|c| c.v.get("requirements").and_then(|x| x.as_str()))
+        } else {
+            None
+        };
         let node = self.compare_markdown_el(req, req_cmp, req_present, mode);
         self.row_node(tbl, "Requirements", None, node);
 
         // Label (SDR:4525).
         let label_cmp = compare_ed.and_then(|c| c.v.get("label").and_then(|x| x.as_str()));
-        self.row_cmp_string(tbl, "Label", None, d.v.get("label").and_then(|x| x.as_str()), label_cmp, mode, false);
+        self.row_cmp_string(
+            tbl,
+            "Label",
+            None,
+            d.v.get("label").and_then(|x| x.as_str()),
+            label_cmp,
+            mode,
+            false,
+        );
 
         // Alternate Names / alias (SDR:4526).
-        let alias_cmp = if compare_ed.is_none() || sliced_extension { None } else { compare_ed };
+        let alias_cmp = if compare_ed.is_none() || sliced_extension {
+            None
+        } else {
+            compare_ed
+        };
         let node = self.compare_simple_type_lists(
             str_list(d.v.get("alias")),
             alias_cmp.map(|c| str_list(c.v.get("alias"))),
@@ -519,7 +649,11 @@ impl<'a> DictRenderer<'a> {
         self.row_node(tbl, "Alternate Names", None, node);
 
         // Definitional Codes / code (SDR:4527).
-        let code_cmp = if compare_ed.is_none() || sliced_extension { None } else { compare_ed };
+        let code_cmp = if compare_ed.is_none() || sliced_extension {
+            None
+        } else {
+            compare_ed
+        };
         let node = self.compare_data_type_lists(
             coding_list(d.v.get("code")),
             code_cmp.map(|c| coding_list(c.v.get("code"))),
@@ -528,20 +662,56 @@ impl<'a> DictRenderer<'a> {
         self.row_node(tbl, "Definitional Codes", None, node);
 
         // Min/Max value (SDR:4528).
-        self.encode_value_row(tbl, "Min Value", d.v, "minValue", compare_ed.as_ref().map(|c| c.v), mode);
-        self.encode_value_row(tbl, "Max Value", d.v, "maxValue", compare_ed.as_ref().map(|c| c.v), mode);
+        self.encode_value_row(
+            tbl,
+            "Min Value",
+            d.v,
+            "minValue",
+            compare_ed.as_ref().map(|c| c.v),
+            mode,
+        );
+        self.encode_value_row(
+            tbl,
+            "Max Value",
+            d.v,
+            "maxValue",
+            compare_ed.as_ref().map(|c| c.v),
+            mode,
+        );
 
         // Max Length (SDR:4530).
         let ml = d.max_length().map(|x| x.to_string());
-        let ml_cmp = compare_ed.and_then(|c| c.max_length()).map(|x| x.to_string());
-        self.row_cmp_string(tbl, "Max Length", None, ml.as_deref(), ml_cmp.as_deref(), mode, false);
+        let ml_cmp = compare_ed
+            .and_then(|c| c.max_length())
+            .map(|x| x.to_string());
+        self.row_cmp_string(
+            tbl,
+            "Max Length",
+            None,
+            ml.as_deref(),
+            ml_cmp.as_deref(),
+            mode,
+            false,
+        );
 
         // Min Length ext (SDR:4531) — handled by guard_unported_rows.
         // Value required / alternatives (SDR:4532-4533).
         let vr_new = encode_bool_opt(d.v.get("mustHaveValue"));
         let vr_old = compare_ed.and_then(|c| encode_bool_opt(c.v.get("mustHaveValue")));
-        self.row_cmp_string(tbl, "Value Required", None, vr_new.as_deref(), vr_old.as_deref(), mode, false);
-        let va_cmp = if compare_ed.is_none() || sliced_extension { None } else { compare_ed };
+        self.row_cmp_string(
+            tbl,
+            "Value Required",
+            None,
+            vr_new.as_deref(),
+            vr_old.as_deref(),
+            mode,
+            false,
+        );
+        let va_cmp = if compare_ed.is_none() || sliced_extension {
+            None
+        } else {
+            compare_ed
+        };
         let node = self.compare_simple_type_lists(
             str_list(d.v.get("valueAlternatives")),
             va_cmp.map(|c| str_list(c.v.get("valueAlternatives"))),
@@ -551,13 +721,39 @@ impl<'a> DictRenderer<'a> {
         self.row_node(tbl, "Value Alternatives", None, node);
 
         // Default Value (SDR:4534).
-        self.encode_value_named_row(tbl, "Default Value", d.v, "defaultValue", compare_ed.as_ref().map(|c| c.v), mode);
+        self.encode_value_named_row(
+            tbl,
+            "Default Value",
+            d.v,
+            "defaultValue",
+            compare_ed.as_ref().map(|c| c.v),
+            mode,
+        );
         // Meaning if Missing (SDR:4535).
-        self.row_text_opt(tbl, "Meaning if Missing", None, d.v.get("meaningWhenMissing").and_then(|x| x.as_str()));
+        self.row_text_opt(
+            tbl,
+            "Meaning if Missing",
+            None,
+            d.v.get("meaningWhenMissing").and_then(|x| x.as_str()),
+        );
         // Fixed Value (SDR:4536).
-        self.encode_value_named_row(tbl, "Fixed Value", d.v, "fixed", compare_ed.as_ref().map(|c| c.v), mode);
+        self.encode_value_named_row(
+            tbl,
+            "Fixed Value",
+            d.v,
+            "fixed",
+            compare_ed.as_ref().map(|c| c.v),
+            mode,
+        );
         // Pattern Value (SDR:4537).
-        self.encode_value_named_row(tbl, "Pattern Value", d.v, "pattern", compare_ed.as_ref().map(|c| c.v), mode);
+        self.encode_value_named_row(
+            tbl,
+            "Pattern Value",
+            d.v,
+            "pattern",
+            compare_ed.as_ref().map(|c| c.v),
+            mode,
+        );
         // Example (SDR:4538).
         let node = self.encode_values(d.example());
         self.row_node(tbl, "Example", None, node);
@@ -582,28 +778,70 @@ impl<'a> DictRenderer<'a> {
     /// row in generateElementInner (SDR:4381-4520). Corpus dict SDs hit none.
     fn guard_unported_rows(&self, d: &Ed, _root: bool) {
         const UNPORTED: &[(&str, &str)] = &[
-            ("http://hl7.org/fhir/tools/StructureDefinition/type-specifier", "STRUC_DEF_TYPE_SPEC"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-defaulttype", "DEFAULT_TYPE"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-allowedUnits", "ALLOWED_UNITS"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-date-format", "DATE_FORMAT"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-idExpectation", "ID_EXPECTATION"),
-            ("http://hl7.org/fhir/tools/StructureDefinition/id-choice-group", "ID_CHOICE_GROUP"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-standards-status", "STANDARDS_STATUS"),
-            ("http://hl7.org/fhir/StructureDefinition/elementdefinition-minLength", "MIN_LENGTH"),
+            (
+                "http://hl7.org/fhir/tools/StructureDefinition/type-specifier",
+                "STRUC_DEF_TYPE_SPEC",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-defaulttype",
+                "DEFAULT_TYPE",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-allowedUnits",
+                "ALLOWED_UNITS",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-date-format",
+                "DATE_FORMAT",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-idExpectation",
+                "ID_EXPECTATION",
+            ),
+            (
+                "http://hl7.org/fhir/tools/StructureDefinition/id-choice-group",
+                "ID_CHOICE_GROUP",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-standards-status",
+                "STANDARDS_STATUS",
+            ),
+            (
+                "http://hl7.org/fhir/StructureDefinition/elementdefinition-minLength",
+                "MIN_LENGTH",
+            ),
         ];
         for (url, tag) in UNPORTED {
             if d.has_extension(url) {
-                crate::loud_gap!((), "LOUD GAP: dict un-ported row {} ({}) for {} ({})", tag, url, self.sd.id(), d.id());
+                crate::loud_gap!(
+                    (),
+                    "LOUD GAP: dict un-ported row {} ({}) for {} ({})",
+                    tag,
+                    url,
+                    self.sd.id(),
+                    d.id()
+                );
             }
         }
         // JSON/XML tooling-format extensions (SDR:4492-4503) except XML-representation.
         for e in d.extensions() {
             let u = e.get("url").and_then(|x| x.as_str()).unwrap_or("");
-            if u.contains("elementdefinition-json") || u.contains("json-name") || u.contains("json-empty")
-                || u.contains("implied-string-prefix") || u.contains("binding-style") || u.contains("extension-style")
-                || u.contains("xml-namespace") || u.contains("xml-name")
+            if u.contains("elementdefinition-json")
+                || u.contains("json-name")
+                || u.contains("json-empty")
+                || u.contains("implied-string-prefix")
+                || u.contains("binding-style")
+                || u.contains("extension-style")
+                || u.contains("xml-namespace")
+                || u.contains("xml-name")
             {
-                crate::loud_gap!((), "LOUD GAP: dict tooling-format row for {} ({}) ext {}", self.sd.id(), d.id(), u);
+                crate::loud_gap!(
+                    (),
+                    "LOUD GAP: dict tooling-format row for {} ({}) ext {}",
+                    self.sd.id(),
+                    d.id(),
+                    u
+                );
             }
         }
     }
@@ -614,7 +852,13 @@ impl<'a> DictRenderer<'a> {
 
     /// tableRow(name, defRef, strike, XhtmlNode) (SDR:4831) — emit iff node
     /// non-null AND non-empty; copies the div's children into the td.
-    fn row_node(&self, tbl: &mut XhtmlNode, name: &str, def_ref: Option<&str>, node: Option<XhtmlNode>) {
+    fn row_node(
+        &self,
+        tbl: &mut XhtmlNode,
+        name: &str,
+        def_ref: Option<&str>,
+        node: Option<XhtmlNode>,
+    ) {
         let Some(node) = node else { return };
         if !node.has_children() && !node.has_content() {
             return;
@@ -642,7 +886,13 @@ impl<'a> DictRenderer<'a> {
         tbl.add_child_node(tr);
     }
 
-    fn row_text_opt(&self, tbl: &mut XhtmlNode, name: &str, def_ref: Option<&str>, text: Option<&str>) {
+    fn row_text_opt(
+        &self,
+        tbl: &mut XhtmlNode,
+        name: &str,
+        def_ref: Option<&str>,
+        text: Option<&str>,
+    ) {
         if let Some(t) = text {
             self.row_text(tbl, name, def_ref, t);
         }
@@ -659,7 +909,17 @@ impl<'a> DictRenderer<'a> {
         mode: i32,
         code: bool,
     ) {
-        let node = compare_string(new_str, None, name_slot(), old_str, None, mode, false, false, code);
+        let node = compare_string(
+            new_str,
+            None,
+            name_slot(),
+            old_str,
+            None,
+            mode,
+            false,
+            false,
+            code,
+        );
         self.row_node(tbl, name, def_ref, node);
     }
 
@@ -707,7 +967,13 @@ impl<'a> DictRenderer<'a> {
     /// markdown field is absent" (KEY/DIFF; Java's lazy getXxxElement() yields a
     /// non-null empty PrimitiveType, so areEqual is evaluated and, being false,
     /// the not-equal branch renders the new markdown WITHOUT fixFontSizes).
-    fn compare_markdown_el(&self, md: Option<&str>, compare: Option<&str>, compare_element_present: bool, mode: i32) -> Option<XhtmlNode> {
+    fn compare_markdown_el(
+        &self,
+        md: Option<&str>,
+        compare: Option<&str>,
+        compare_element_present: bool,
+        mode: i32,
+    ) -> Option<XhtmlNode> {
         // In Java the `compare` arg is a PrimitiveType, null only when the whole
         // compare element is null. When the element exists but the field is
         // absent, compare is a non-null empty value.
@@ -719,14 +985,20 @@ impl<'a> DictRenderer<'a> {
         self.compare_markdown(md, compare_arg, mode)
     }
 
-    fn compare_markdown(&self, md: Option<&str>, compare: Option<&str>, mode: i32) -> Option<XhtmlNode> {
+    fn compare_markdown(
+        &self,
+        md: Option<&str>,
+        compare: Option<&str>,
+        mode: i32,
+    ) -> Option<XhtmlNode> {
         let md_present = md.map(|s| !s.is_empty()).unwrap_or(false);
         if compare.is_none() || mode == GEN_MODE_DIFF {
             // compare==null || DIFF: process + fixFontSizes(11) (SDR:4213-4225).
             if !md_present {
                 return None;
             }
-            let xhtml = crate::publisher_markdown::process_markdown(self.ctx, md.unwrap(), &self.core_path);
+            let xhtml =
+                crate::publisher_markdown::process_markdown(self.ctx, md.unwrap(), &self.core_path);
             if xhtml.is_empty() {
                 return None;
             }
@@ -745,7 +1017,8 @@ impl<'a> DictRenderer<'a> {
             if !md_present {
                 return None;
             }
-            let xhtml = crate::publisher_markdown::process_markdown(self.ctx, md.unwrap(), &self.core_path);
+            let xhtml =
+                crate::publisher_markdown::process_markdown(self.ctx, md.unwrap(), &self.core_path);
             let mut ndiv = el("div");
             let mut parser = render_xhtml::XhtmlParser::new();
             if let Ok(nodes) = parser.parse_fragment_children(&xhtml) {
@@ -763,13 +1036,23 @@ impl<'a> DictRenderer<'a> {
             let mut ndiv = el("div");
             let mut parser = render_xhtml::XhtmlParser::new();
             if md_present {
-                let xhtml = crate::publisher_markdown::process_markdown(self.ctx, md.unwrap(), &self.core_path);
+                let xhtml = crate::publisher_markdown::process_markdown(
+                    self.ctx,
+                    md.unwrap(),
+                    &self.core_path,
+                );
                 if let Ok(nodes) = parser.parse_fragment_children(&xhtml) {
-                    for n in nodes { ndiv.add_child_node(n); }
+                    for n in nodes {
+                        ndiv.add_child_node(n);
+                    }
                 }
             }
             if compare.map(|s| !s.is_empty()).unwrap_or(false) {
-                let inner = crate::publisher_markdown::process_markdown(self.ctx, compare.unwrap(), &self.core_path);
+                let inner = crate::publisher_markdown::process_markdown(
+                    self.ctx,
+                    compare.unwrap(),
+                    &self.core_path,
+                );
                 // "<div>"+html+"</div>" parsed -> a single <div>; style it removed.
                 let wrapped = format!("<div>{}</div>", inner);
                 let mut p2 = render_xhtml::XhtmlParser::new();
@@ -783,7 +1066,11 @@ impl<'a> DictRenderer<'a> {
                     }
                 }
             }
-            if ndiv.has_children() { Some(ndiv) } else { None }
+            if ndiv.has_children() {
+                Some(ndiv)
+            } else {
+                None
+            }
         }
     }
 
@@ -812,18 +1099,44 @@ impl<'a> DictRenderer<'a> {
             let cmp = compare.unwrap();
             // (mode==DIFF && (min==cmp.min || min==0)) suppresses min. mode!=DIFF
             // here so the guard is false -> always render min.
-            if let Some(node) = compare_string(Some(&to_str_min(d)), None, name_slot(), Some(&to_str_min(cmp)), None, mode, false, false, false) {
+            if let Some(node) = compare_string(
+                Some(&to_str_min(d)),
+                None,
+                name_slot(),
+                Some(&to_str_min(cmp)),
+                None,
+                mode,
+                false,
+                false,
+                false,
+            ) {
                 copy_children(&mut x, &node);
             }
             tx(&mut x, "..");
-            if let Some(node) = compare_string(d.max(), None, name_slot(), cmp.max(), None, mode, false, false, false) {
+            if let Some(node) = compare_string(
+                d.max(),
+                None,
+                name_slot(),
+                cmp.max(),
+                None,
+                mode,
+                false,
+                false,
+                false,
+            ) {
                 copy_children(&mut x, &node);
             }
         }
         self.cardinality_condition(x, d, compare, mode)
     }
 
-    fn cardinality_condition(&self, mut x: XhtmlNode, d: &Ed, compare: Option<&Ed>, mode: i32) -> Option<XhtmlNode> {
+    fn cardinality_condition(
+        &self,
+        mut x: XhtmlNode,
+        d: &Ed,
+        compare: Option<&Ed>,
+        mode: i32,
+    ) -> Option<XhtmlNode> {
         let t = self.compare_simple_type_lists(
             str_vec(&d.conditions()),
             compare.map(|c| str_vec(&c.conditions())),
@@ -832,7 +1145,10 @@ impl<'a> DictRenderer<'a> {
         );
         if let Some(t) = t {
             x.add_child_node(el("br"));
-            tx(&mut x, "This element is affected by the following invariants: ");
+            tx(
+                &mut x,
+                "This element is affected by the following invariants: ",
+            );
             copy_children(&mut x, &t);
         }
         if !x.has_children() {
@@ -848,11 +1164,31 @@ impl<'a> DictRenderer<'a> {
     fn present_modifier(&self, d: &Ed, mode: i32, compare: Option<&Ed>) -> Option<XhtmlNode> {
         let new_im = encode_bool_opt(d.v.get("isModifier"));
         let old_im = compare.and_then(|c| encode_bool_opt(c.v.get("isModifier")));
-        let x1 = compare_string(new_im.as_deref(), None, name_slot(), old_im.as_deref(), None, mode, false, false, false);
+        let x1 = compare_string(
+            new_im.as_deref(),
+            None,
+            name_slot(),
+            old_im.as_deref(),
+            None,
+            mode,
+            false,
+            false,
+            false,
+        );
         if let Some(mut x1) = x1 {
             let new_r = d.v.get("isModifierReason").and_then(|x| x.as_str());
             let old_r = compare.and_then(|c| c.v.get("isModifierReason").and_then(|x| x.as_str()));
-            if let Some(x2) = compare_string(new_r, None, name_slot(), old_r, None, mode, false, false, false) {
+            if let Some(x2) = compare_string(
+                new_r,
+                None,
+                name_slot(),
+                old_r,
+                None,
+                mode,
+                false,
+                false,
+                false,
+            ) {
                 tx(&mut x1, " because ");
                 copy_children(&mut x1, &x2);
             }
@@ -862,7 +1198,13 @@ impl<'a> DictRenderer<'a> {
         }
     }
 
-    fn display_boolean(&self, value: bool, has_value: bool, compare: Option<bool>, mode: i32) -> Option<XhtmlNode> {
+    fn display_boolean(
+        &self,
+        value: bool,
+        has_value: bool,
+        compare: Option<bool>,
+        mode: i32,
+    ) -> Option<XhtmlNode> {
         // newValue = value?"true": hasValue?"false":null.
         let new_value = if value {
             Some("true".to_string())
@@ -876,7 +1218,17 @@ impl<'a> DictRenderer<'a> {
             Some(true) => Some("true".to_string()),
             _ => None,
         };
-        compare_string(new_value.as_deref(), None, name_slot(), old_value.as_deref(), None, mode, false, false, false)
+        compare_string(
+            new_value.as_deref(),
+            None,
+            name_slot(),
+            old_value.as_deref(),
+            None,
+            mode,
+            false,
+            false,
+            false,
+        )
     }
 
     fn business_id_warning(&self, name: &str) -> Option<XhtmlNode> {
@@ -925,7 +1277,11 @@ impl<'a> DictRenderer<'a> {
             || (must_support_only && ms_count(types) == 1);
         if single {
             if !must_support_only || is_must_support_type(&types[0]) {
-                let ct = if compare_types.is_empty() { None } else { Some(&compare_types[0]) };
+                let ct = if compare_types.is_empty() {
+                    None
+                } else {
+                    Some(&compare_types[0])
+                };
                 self.describe_type(&mut ret, &types[0], must_support_only, ct, mode);
             }
         } else {
@@ -1006,7 +1362,9 @@ impl<'a> DictRenderer<'a> {
                 let mut x = el("div");
                 tx(&mut x, " (Extension Type: ");
                 let vtypes = Ed::new(value).types();
-                if let Some(inner) = self.describe_types(&vtypes, false, &Ed::new(value), None, mode, None) {
+                if let Some(inner) =
+                    self.describe_types(&vtypes, false, &Ed::new(value), None, mode, None)
+                {
                     copy_children(&mut x, &inner);
                 }
                 tx(&mut x, ")");
@@ -1030,21 +1388,57 @@ impl<'a> DictRenderer<'a> {
         }
         let mut ts;
         if wc.starts_with("xs:") {
-            ts = self.append_compare_string(x, Some(wc), None, compare.map(|c| c.working_code()), None, mode);
+            ts = self.append_compare_string(
+                x,
+                Some(wc),
+                None,
+                compare.map(|c| c.working_code()),
+                None,
+                mode,
+            );
         } else {
             let nlink = self.get_type_link(t);
             let olink = compare.and_then(|c| self.get_type_link(c));
-            ts = self.append_compare_string(x, Some(wc), nlink.as_deref(), compare.map(|c| c.working_code()), olink.as_deref(), mode);
+            ts = self.append_compare_string(
+                x,
+                Some(wc),
+                nlink.as_deref(),
+                compare.map(|c| c.working_code()),
+                olink.as_deref(),
+                mode,
+            );
         }
         // type parameter extension (SDR:5047) — loud gap.
-        if t.v.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|e| e.get("url").and_then(|u| u.as_str()) == Some("http://hl7.org/fhir/tools/StructureDefinition/type-parameter"))).unwrap_or(false) {
-            crate::loud_gap!((), "LOUD GAP: describeType type-parameter (SDR:5047) for {}", self.sd.id());
+        if t.v
+            .get("extension")
+            .and_then(|e| e.as_array())
+            .map(|a| {
+                a.iter().any(|e| {
+                    e.get("url").and_then(|u| u.as_str())
+                        == Some("http://hl7.org/fhir/tools/StructureDefinition/type-parameter")
+                })
+            })
+            .unwrap_or(false)
+        {
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: describeType type-parameter (SDR:5047) for {}",
+                self.sd.id()
+            );
         }
         // profiles (SDR:5069).
         let has_profile = !t.profiles().is_empty();
         let cmp_has_profile = compare.map(|c| !c.profiles().is_empty()).unwrap_or(false);
-        if (!must_support_only && (has_profile || cmp_has_profile)) || (must_support_only && is_ms_canonical_list(t.v.get("_profile"))) {
-            let profiles = self.analyse_profiles(&t.profiles(), t.v.get("_profile"), compare.map(|c| c.profiles()), must_support_only, mode);
+        if (!must_support_only && (has_profile || cmp_has_profile))
+            || (must_support_only && is_ms_canonical_list(t.v.get("_profile")))
+        {
+            let profiles = self.analyse_profiles(
+                &t.profiles(),
+                t.v.get("_profile"),
+                compare.map(|c| c.profiles()),
+                must_support_only,
+                mode,
+            );
             if !profiles.is_empty() {
                 if !ts {
                     let mut un = el("span");
@@ -1056,7 +1450,11 @@ impl<'a> DictRenderer<'a> {
                 tx(x, "(");
                 let mut first = true;
                 for rc in &profiles {
-                    if first { first = false; } else { tx(x, ", "); }
+                    if first {
+                        first = false;
+                    } else {
+                        tx(x, ", ");
+                    }
                     rc.render(x);
                 }
                 tx(x, ")");
@@ -1064,9 +1462,19 @@ impl<'a> DictRenderer<'a> {
         }
         // target profiles (SDR:5086).
         let has_tp = !t.target_profiles().is_empty();
-        let cmp_has_tp = compare.map(|c| !c.target_profiles().is_empty()).unwrap_or(false);
-        if (!must_support_only && (has_tp || cmp_has_tp)) || (must_support_only && is_ms_canonical_list(t.v.get("_targetProfile"))) {
-            let profiles = self.analyse_profiles(&t.target_profiles(), t.v.get("_targetProfile"), compare.map(|c| c.target_profiles()), must_support_only, mode);
+        let cmp_has_tp = compare
+            .map(|c| !c.target_profiles().is_empty())
+            .unwrap_or(false);
+        if (!must_support_only && (has_tp || cmp_has_tp))
+            || (must_support_only && is_ms_canonical_list(t.v.get("_targetProfile")))
+        {
+            let profiles = self.analyse_profiles(
+                &t.target_profiles(),
+                t.v.get("_targetProfile"),
+                compare.map(|c| c.target_profiles()),
+                must_support_only,
+                mode,
+            );
             if !profiles.is_empty() {
                 if !ts {
                     let mut un = el("span");
@@ -1077,15 +1485,27 @@ impl<'a> DictRenderer<'a> {
                 tx(x, "(");
                 let mut first = true;
                 for rc in &profiles {
-                    if first { first = false; } else { tx(x, ", "); }
+                    if first {
+                        first = false;
+                    } else {
+                        tx(x, ", ");
+                    }
                     rc.render(x);
                 }
                 tx(x, ")");
             }
             // aggregation (SDR:5101) — loud gap if present.
-            let agg = t.v.get("aggregation").and_then(|a| a.as_array()).map(|a| !a.is_empty()).unwrap_or(false);
+            let agg =
+                t.v.get("aggregation")
+                    .and_then(|a| a.as_array())
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false);
             if agg {
-                crate::loud_gap!((), "LOUD GAP: describeType aggregation (SDR:5101) for {}", self.sd.id());
+                crate::loud_gap!(
+                    (),
+                    "LOUD GAP: describeType aggregation (SDR:5101) for {}",
+                    self.sd.id()
+                );
             }
         }
     }
@@ -1120,7 +1540,10 @@ impl<'a> DictRenderer<'a> {
                     // merge: mark ALL matching unchanged, else add as removed.
                     let mut found = false;
                     for e in out.iter_mut() {
-                        if e.url == rc.url { found = true; e.status = ListItemStatus::Unchanged; }
+                        if e.url == rc.url {
+                            found = true;
+                            e.status = ListItemStatus::Unchanged;
+                        }
                     }
                     if !found {
                         let mut r = rc;
@@ -1135,7 +1558,12 @@ impl<'a> DictRenderer<'a> {
 
     /// fetchProfile (SDR:5133): `if !mustSupportOnly || isMustSupport(pt)` resolve
     /// the profile canonical; else None. `pt_is_ms` = isMustSupport(pt).
-    fn fetch_profile(&self, pt: &str, must_support_only: bool, pt_is_ms: bool) -> Option<ResolvedCanonical> {
+    fn fetch_profile(
+        &self,
+        pt: &str,
+        must_support_only: bool,
+        pt_is_ms: bool,
+    ) -> Option<ResolvedCanonical> {
         if pt.is_empty() {
             return None;
         }
@@ -1145,7 +1573,13 @@ impl<'a> DictRenderer<'a> {
         let resolved = self.ctx.resolve(pt);
         Some(ResolvedCanonical {
             url: pt.to_string(),
-            web_path: resolved.as_ref().and_then(|r| if r.web_path.is_empty() { None } else { Some(r.web_path.clone()) }),
+            web_path: resolved.as_ref().and_then(|r| {
+                if r.web_path.is_empty() {
+                    None
+                } else {
+                    Some(r.web_path.clone())
+                }
+            }),
             present: resolved.as_ref().map(|r| r.present()),
             status: ListItemStatus::New,
         })
@@ -1198,7 +1632,17 @@ impl<'a> DictRenderer<'a> {
         olink: Option<&str>,
         mode: i32,
     ) -> bool {
-        match compare_string(new_str, nlink, name_slot(), old_str, olink, mode, false, false, false) {
+        match compare_string(
+            new_str,
+            nlink,
+            name_slot(),
+            old_str,
+            olink,
+            mode,
+            false,
+            false,
+            false,
+        ) {
             Some(node) => {
                 copy_children(x, &node);
                 true
@@ -1210,7 +1654,13 @@ impl<'a> DictRenderer<'a> {
     // -----------------------------------------------------------------------
     // describeBinding / renderBinding (SDR:5212 / 5277).
     // -----------------------------------------------------------------------
-    fn describe_binding(&self, d: &Ed, path: &str, compare: Option<&Ed>, mode: i32) -> Option<XhtmlNode> {
+    fn describe_binding(
+        &self,
+        d: &Ed,
+        path: &str,
+        compare: Option<&Ed>,
+        mode: i32,
+    ) -> Option<XhtmlNode> {
         let binding = d.binding()?;
         // Java `compare.getBinding()` lazily creates a non-null (empty) binding, so
         // when a compare element is present its binding is never null — an absent
@@ -1223,7 +1673,8 @@ impl<'a> DictRenderer<'a> {
             let fixed = fix_binding_descriptions(desc);
             if mode == GEN_MODE_SNAP || mode == GEN_MODE_MS {
                 let mut bd = el("div");
-                let xhtml = crate::publisher_markdown::process_markdown(self.ctx, &fixed, &self.core_path);
+                let xhtml =
+                    crate::publisher_markdown::process_markdown(self.ctx, &fixed, &self.core_path);
                 let mut parser = render_xhtml::XhtmlParser::new();
                 if let Ok(nodes) = parser.parse_fragment_children(&xhtml) {
                     for nd in nodes {
@@ -1238,7 +1689,11 @@ impl<'a> DictRenderer<'a> {
                 binding_desc = self.compare_markdown(Some(&fixed), old.as_deref(), mode);
             }
         }
-        let has_vs = binding.get("valueSet").and_then(|x| x.as_str()).map(|s| !s.is_empty()).unwrap_or(false);
+        let has_vs = binding
+            .get("valueSet")
+            .and_then(|x| x.as_str())
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
         if !has_vs {
             return binding_desc;
         }
@@ -1260,18 +1715,42 @@ impl<'a> DictRenderer<'a> {
             }
         }
         // concept-domain extension (SDR:5246) -> loud gap (renderCoding).
-        if binding_has_ext(binding, "http://hl7.org/fhir/tools/StructureDefinition/binding-conceptDomain") {
-            crate::loud_gap!((), "LOUD GAP: describeBinding concept-domain (SDR:5246) for {} ({})", self.sd.id(), d.id());
+        if binding_has_ext(
+            binding,
+            "http://hl7.org/fhir/tools/StructureDefinition/binding-conceptDomain",
+        ) {
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: describeBinding concept-domain (SDR:5246) for {} ({})",
+                self.sd.id(),
+                d.id()
+            );
         }
         // Additional bindings (SDR:5253-5268): max/min ValueSet + additional-binding.
         let show_compare = mode != GEN_MODE_SNAP && mode != GEN_MODE_MS;
         let mut abr = AdditionalBindings::default();
-        if let Some(ext) = binding_ext(binding, "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet") {
-            let comp = comp_binding.and_then(|c| binding_ext(c, "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet"));
+        if let Some(ext) = binding_ext(
+            binding,
+            "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+        ) {
+            let comp = comp_binding.and_then(|c| {
+                binding_ext(
+                    c,
+                    "http://hl7.org/fhir/StructureDefinition/elementdefinition-maxValueSet",
+                )
+            });
             abr.see_binding(ext, comp, show_compare, "maximum");
         }
-        if let Some(ext) = binding_ext(binding, "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet") {
-            let comp = comp_binding.and_then(|c| binding_ext(c, "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet"));
+        if let Some(ext) = binding_ext(
+            binding,
+            "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet",
+        ) {
+            let comp = comp_binding.and_then(|c| {
+                binding_ext(
+                    c,
+                    "http://hl7.org/fhir/StructureDefinition/elementdefinition-minValueSet",
+                )
+            });
             abr.see_binding(ext, comp, show_compare, "minimum");
         }
         // NOTE: the `additional-binding` (EXT_BINDING_ADDITIONAL) extension is
@@ -1290,17 +1769,35 @@ impl<'a> DictRenderer<'a> {
     }
 
     /// renderBinding (SDR:5277).
-    fn render_binding(&self, span: &mut XhtmlNode, binding: &Value, compare: Option<&Value>, path: &str, mode: i32) {
+    fn render_binding(
+        &self,
+        span: &mut XhtmlNode,
+        binding: &Value,
+        compare: Option<&Value>,
+        path: &str,
+        mode: i32,
+    ) {
         let strength = binding.get("strength").and_then(|x| x.as_str());
         let new_conf = conf(strength);
         let old_conf = compare.map(|c| conf(c.get("strength").and_then(|x| x.as_str())));
         self.append_compare_string(span, Some(&new_conf), None, old_conf.as_deref(), None, mode);
         tx(span, " ");
-        let vs_ref = binding.get("valueSet").and_then(|x| x.as_str()).unwrap_or("");
+        let vs_ref = binding
+            .get("valueSet")
+            .and_then(|x| x.as_str())
+            .unwrap_or("");
         let br = self.ctx.resolve_binding(vs_ref);
         let old_vs = compare.and_then(|c| c.get("valueSet").and_then(|x| x.as_str()));
         // compareString(span, br.display, ..., br.url, ..., externalN=br.external)
-        self.append_compare_string_link(span, Some(&br.display), br.url.as_deref(), old_vs, None, mode, br.external);
+        self.append_compare_string_link(
+            span,
+            Some(&br.display),
+            br.url.as_deref(),
+            old_vs,
+            None,
+            mode,
+            br.external,
+        );
         let _ = path;
         let has_strength = strength.is_some();
         let has_vs = !vs_ref.is_empty();
@@ -1309,7 +1806,13 @@ impl<'a> DictRenderer<'a> {
             tx(span, "(");
             if let Some(st) = strength {
                 let mut ah = el("a");
-                ah.set_attribute("href", crate::context::join_url(self.core_path.trim_end_matches('/'), &format!("terminologies.html#{}", st)));
+                ah.set_attribute(
+                    "href",
+                    crate::context::join_url(
+                        self.core_path.trim_end_matches('/'),
+                        &format!("terminologies.html#{}", st),
+                    ),
+                );
                 tx(&mut ah, st);
                 span.add_child_node(ah);
             }
@@ -1327,11 +1830,14 @@ impl<'a> DictRenderer<'a> {
                 // button("btn-copy", COPY_URL): set class, title; then attribute
                 // data-clipboard-text (SDR:5295). STRUC_DEF_COPY_URL = "Click to
                 // Copy URL". HashMap order emits data-clipboard-text, title, class.
-                set_attrs(&mut btn, &[
-                    ("class", "btn-copy".into()),
-                    ("title", "Click to Copy URL".into()),
-                    ("data-clipboard-text", vs_ref.to_string()),
-                ]);
+                set_attrs(
+                    &mut btn,
+                    &[
+                        ("class", "btn-copy".into()),
+                        ("title", "Click to Copy URL".into()),
+                        ("data-clipboard-text", vs_ref.to_string()),
+                    ],
+                );
                 ispan.add_child_node(btn);
                 span.add_child_node(ispan);
             }
@@ -1351,7 +1857,17 @@ impl<'a> DictRenderer<'a> {
         mode: i32,
         external_n: bool,
     ) -> bool {
-        match compare_string(new_str, nlink, name_slot(), old_str, olink, mode, external_n, false, false) {
+        match compare_string(
+            new_str,
+            nlink,
+            name_slot(),
+            old_str,
+            olink,
+            mode,
+            external_n,
+            false,
+            false,
+        ) {
             Some(node) => {
                 copy_children(x, &node);
                 true
@@ -1367,16 +1883,25 @@ impl<'a> DictRenderer<'a> {
         let mut list: Vec<InvariantItem> = Vec::new();
         for c in d.constraint_values() {
             if !c.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-                list.push(InvariantItem { v: c.clone(), status: ListItemStatus::New });
+                list.push(InvariantItem {
+                    v: c.clone(),
+                    status: ListItemStatus::New,
+                });
             }
         }
         if let Some(cmp) = compare {
             if mode != GEN_MODE_DIFF {
                 for c in cmp.constraint_values() {
-                    let item = InvariantItem { v: c.clone(), status: ListItemStatus::New };
+                    let item = InvariantItem {
+                        v: c.clone(),
+                        status: ListItemStatus::New,
+                    };
                     let mut found = false;
                     for e in list.iter_mut() {
-                        if constraints_equal(&e.v, &item.v) { found = true; e.status = ListItemStatus::Unchanged; }
+                        if constraints_equal(&e.v, &item.v) {
+                            found = true;
+                            e.status = ListItemStatus::Unchanged;
+                        }
                     }
                     if !found {
                         let mut r = item;
@@ -1392,7 +1917,11 @@ impl<'a> DictRenderer<'a> {
         let mut x = el("div");
         let mut first = true;
         for item in &list {
-            if first { first = false; } else { x.add_child_node(el("br")); }
+            if first {
+                first = false;
+            } else {
+                x.add_child_node(el("br"));
+            }
             item.render(&mut x);
         }
         Some(x)
@@ -1433,7 +1962,17 @@ impl<'a> DictRenderer<'a> {
         // Patient.birthDate LOINC, where the diff dropped a base mapping).
         let n = escape_xml(new_map.as_deref().unwrap_or(""));
         let o = escape_xml(old_map.as_deref().unwrap_or(""));
-        compare_string(Some(&n), None, name_slot(), Some(&o), None, mode, false, false, false)
+        compare_string(
+            Some(&n),
+            None,
+            name_slot(),
+            Some(&o),
+            None,
+            mode,
+            false,
+            false,
+            false,
+        )
     }
 
     // -----------------------------------------------------------------------
@@ -1454,11 +1993,16 @@ impl<'a> DictRenderer<'a> {
         }
         if let (Some(cmp), true) = (compare, mode != GEN_MODE_DIFF) {
             for v in cmp {
-                if v.is_empty() { continue; }
+                if v.is_empty() {
+                    continue;
+                }
                 // StatusList.merge (SDR:208): mark ALL matching entries Unchanged.
                 let mut found = false;
                 for (s, st) in list.iter_mut() {
-                    if *s == v { found = true; *st = ListItemStatus::Unchanged; }
+                    if *s == v {
+                        found = true;
+                        *st = ListItemStatus::Unchanged;
+                    }
                 }
                 if !found {
                     list.push((v, ListItemStatus::Removed));
@@ -1471,7 +2015,11 @@ impl<'a> DictRenderer<'a> {
         let mut x = el("div");
         let mut first = true;
         for (v, status) in &list {
-            if first { first = false; } else { tx(&mut x, separator); }
+            if first {
+                first = false;
+            } else {
+                tx(&mut x, separator);
+            }
             match status {
                 ListItemStatus::Unchanged => {
                     let mut s = el("span");
@@ -1508,10 +2056,15 @@ impl<'a> DictRenderer<'a> {
         }
         if let (Some(cmp), true) = (compare, mode != GEN_MODE_DIFF) {
             for v in cmp {
-                if v.as_object().map(|o| o.is_empty()).unwrap_or(true) { continue; }
+                if v.as_object().map(|o| o.is_empty()).unwrap_or(true) {
+                    continue;
+                }
                 let mut found = false;
                 for (e, st) in list.iter_mut() {
-                    if *e == v { found = true; *st = ListItemStatus::Unchanged; }
+                    if *e == v {
+                        found = true;
+                        *st = ListItemStatus::Unchanged;
+                    }
                 }
                 if !found {
                     list.push((v, ListItemStatus::Removed));
@@ -1524,7 +2077,11 @@ impl<'a> DictRenderer<'a> {
         let mut x = el("div");
         let mut first = true;
         for (v, status) in &list {
-            if first { first = false; } else { tx(&mut x, ", "); }
+            if first {
+                first = false;
+            } else {
+                tx(&mut x, ", ");
+            }
             let mut target = match status {
                 ListItemStatus::New => None,
                 ListItemStatus::Unchanged => {
@@ -1582,7 +2139,11 @@ impl<'a> DictRenderer<'a> {
             tx(x, ")");
         }
         if version.is_some() {
-            crate::loud_gap!((), "LOUD GAP: renderCodingWithDetails version note (DataRenderer:1362) for {}", self.sd.id());
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: renderCodingWithDetails version note (DataRenderer:1362) for {}",
+                self.sd.id()
+            );
         }
     }
 
@@ -1608,16 +2169,28 @@ impl<'a> DictRenderer<'a> {
 
     /// getLinkForCode (DataRenderer:1254) — corpus systems (loinc/snomed) + the
     /// CodeSystem webPath fallback.
-    fn get_link_for_code(&self, system: Option<&str>, version: Option<&str>, code: &str) -> Option<String> {
+    fn get_link_for_code(
+        &self,
+        system: Option<&str>,
+        version: Option<&str>,
+        code: &str,
+    ) -> Option<String> {
         match system {
             Some("http://loinc.org") => {
-                if code.is_empty() { Some("https://loinc.org/".to_string()) }
-                else { Some(format!("https://loinc.org/{}", code)) }
+                if code.is_empty() {
+                    Some("https://loinc.org/".to_string())
+                } else {
+                    Some(format!("https://loinc.org/{}", code))
+                }
             }
             Some("http://snomed.info/sct") => {
                 // SnomedUtilities.getSctLink — corpus has snomed codes; fire a
                 // loud gap if hit (the sct link format needs the edition logic).
-                return crate::loud_gap!(None, "LOUD GAP: getLinkForCode snomed sct link for {}", self.sd.id());
+                return crate::loud_gap!(
+                    None,
+                    "LOUD GAP: getLinkForCode snomed sct link for {}",
+                    self.sd.id()
+                );
             }
             Some(s) => {
                 // getLinkForSystem: CodeSystem webPath (renderCoding uses cs.webPath
@@ -1636,26 +2209,66 @@ impl<'a> DictRenderer<'a> {
     // encodeValue rows (SDR:4528-4538).
     // -----------------------------------------------------------------------
     /// minValue/maxValue: compareString(encodeValue(...), code=false).
-    fn encode_value_row(&self, tbl: &mut XhtmlNode, name: &str, d: &Value, prefix: &str, compare: Option<&Value>, mode: i32) {
+    fn encode_value_row(
+        &self,
+        tbl: &mut XhtmlNode,
+        name: &str,
+        d: &Value,
+        prefix: &str,
+        compare: Option<&Value>,
+        mode: i32,
+    ) {
         let new_v = encode_value_prefixed(d, prefix, None);
         let old_v = compare.and_then(|c| encode_value_prefixed(c, prefix, None));
         if new_v.is_none() && old_v.is_none() {
             return;
         }
-        let node = compare_string(new_v.as_deref(), None, name_slot(), old_v.as_deref(), None, mode, false, false, false);
+        let node = compare_string(
+            new_v.as_deref(),
+            None,
+            name_slot(),
+            old_v.as_deref(),
+            None,
+            mode,
+            false,
+            false,
+            false,
+        );
         self.row_node(tbl, name, None, node);
     }
 
     /// fixed/pattern/defaultValue: encodeValue(value, name, ...) with code=true
     /// and elementName = d.getName() (the element's tail name).
-    fn encode_value_named_row(&self, tbl: &mut XhtmlNode, name: &str, d: &Value, prefix: &str, compare: Option<&Value>, mode: i32) {
-        let element_name = d.get("path").and_then(|x| x.as_str()).map(tail).map(String::from);
+    fn encode_value_named_row(
+        &self,
+        tbl: &mut XhtmlNode,
+        name: &str,
+        d: &Value,
+        prefix: &str,
+        compare: Option<&Value>,
+        mode: i32,
+    ) {
+        let element_name = d
+            .get("path")
+            .and_then(|x| x.as_str())
+            .map(tail)
+            .map(String::from);
         let new_v = encode_value_prefixed(d, prefix, element_name.as_deref());
         let old_v = compare.and_then(|c| encode_value_prefixed(c, prefix, element_name.as_deref()));
         if new_v.is_none() && old_v.is_none() {
             return;
         }
-        let node = compare_string(new_v.as_deref(), None, name_slot(), old_v.as_deref(), None, mode, false, false, true);
+        let node = compare_string(
+            new_v.as_deref(),
+            None,
+            name_slot(),
+            old_v.as_deref(),
+            None,
+            mode,
+            false,
+            false,
+            true,
+        );
         self.row_node(tbl, name, None, node);
     }
 
@@ -1667,7 +2280,11 @@ impl<'a> DictRenderer<'a> {
         let mut x = el("div");
         let mut first = true;
         for ex in examples {
-            if first { first = false; } else { x.add_child_node(el("br")); }
+            if first {
+                first = false;
+            } else {
+                x.add_child_node(el("br"));
+            }
             let mut b = el("b");
             let label = ex.get("label").and_then(|x| x.as_str()).unwrap_or("");
             tx(&mut b, label);
@@ -1684,7 +2301,13 @@ impl<'a> DictRenderer<'a> {
     // -----------------------------------------------------------------------
     // generateSlicing (SDR:4789).
     // -----------------------------------------------------------------------
-    fn generate_slicing(&self, tbl: &mut XhtmlNode, ed: &Ed, slicing: &Value, compare: Option<&Value>) {
+    fn generate_slicing(
+        &self,
+        tbl: &mut XhtmlNode,
+        ed: &Ed,
+        slicing: &Value,
+        compare: Option<&Value>,
+    ) {
         let mode = self.mode;
         let mut x = el("div");
         // x.codeWithText(SET_SLICES+" ", ed.path, SET_ARE) (SDR:4792). SET_ARE has
@@ -1700,20 +2323,40 @@ impl<'a> DictRenderer<'a> {
             .and_then(|c| c.get("slicing"))
             .filter(|s| !s.is_null())
             .map(slice_order_string);
-        self.append_compare_string(&mut x, Some(&new_ordered), None, old_ordered.as_deref(), None, mode);
+        self.append_compare_string(
+            &mut x,
+            Some(&new_ordered),
+            None,
+            old_ordered.as_deref(),
+            None,
+            mode,
+        );
         tx(&mut x, " and "); // " "+AND+" "
-        // compareString(rules.getDisplay()) — "Open"/"Closed"/"Open at End".
-        let new_rules = slicing.get("rules").and_then(|x| x.as_str()).map(rules_display);
+                             // compareString(rules.getDisplay()) — "Open"/"Closed"/"Open at End".
+        let new_rules = slicing
+            .get("rules")
+            .and_then(|x| x.as_str())
+            .map(rules_display);
         let old_rules = compare
             .and_then(|c| c.get("slicing"))
             .and_then(|s| s.get("rules"))
             .and_then(|x| x.as_str())
             .map(rules_display);
-        self.append_compare_string(&mut x, new_rules.as_deref(), None, old_rules.as_deref(), None, mode);
+        self.append_compare_string(
+            &mut x,
+            new_rules.as_deref(),
+            None,
+            old_rules.as_deref(),
+            None,
+            mode,
+        );
         let discs = slicing.get("discriminator").and_then(|d| d.as_array());
         if let Some(discs) = discs.filter(|a| !a.is_empty()) {
             // STRUC_DEF_DESCRIM (no trailing space).
-            tx(&mut x, ", and can be differentiated using the following discriminators:");
+            tx(
+                &mut x,
+                ", and can be differentiated using the following discriminators:",
+            );
             // `var ul = x.ul();` — an empty <ul> is appended to x, THEN each
             // discriminator's <li> is appended to x (not ul) (SDR:4810-4813).
             x.add_child_node(el("ul"));
@@ -1740,7 +2383,10 @@ impl<'a> DictRenderer<'a> {
             }
         } else {
             // STRUC_DEF_NO_DESCRIM.
-            tx(&mut x, ", and defines no disciminators to differentiate the slices");
+            tx(
+                &mut x,
+                ", and defines no disciminators to differentiate the slices",
+            );
         }
         // tableRow(tbl, "Slicing", "profiling.html#slicing", strike, x)
         self.row_node(tbl, "Slicing", Some("profiling.html#slicing"), Some(x));
@@ -1748,7 +2394,9 @@ impl<'a> DictRenderer<'a> {
     }
 
     fn has_primitive_types(&self, d: &Ed) -> bool {
-        d.types().iter().any(|t| self.ctx.is_primitive_type(t.code()))
+        d.types()
+            .iter()
+            .any(|t| self.ctx.is_primitive_type(t.code()))
     }
 
     fn sd_has_ext(&self, url: &str) -> bool {
@@ -1756,7 +2404,10 @@ impl<'a> DictRenderer<'a> {
             .root
             .get("extension")
             .and_then(|e| e.as_array())
-            .map(|a| a.iter().any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url)))
+            .map(|a| {
+                a.iter()
+                    .any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url))
+            })
             .unwrap_or(false)
     }
 }
@@ -1819,8 +2470,14 @@ impl AdditionalBindings {
         let mut tbl = el("table");
         // x.table("grid", false).markGenerated(true): class="grid" data-fhir=
         // "generated"; HashMap order for {class, data-fhir}.
-        set_attrs(&mut tbl, &[("class", "grid".into()), ("data-fhir", "generated".into())]);
-        let doco = self.bindings.iter().any(|b| b.doco.is_some() || b.compare_doco.is_some());
+        set_attrs(
+            &mut tbl,
+            &[("class", "grid".into()), ("data-fhir", "generated".into())],
+        );
+        let doco = self
+            .bindings
+            .iter()
+            .any(|b| b.doco.is_some() || b.compare_doco.is_some());
         let usage = self.bindings.iter().any(|b| b.has_usage);
         let any = self.bindings.iter().any(|b| b.any);
         if usage {
@@ -1919,7 +2576,9 @@ impl AdditionalBindings {
                     let html = crate::publisher_markdown::process_markdown(ctx, dv, core_path);
                     let mut parser = render_xhtml::XhtmlParser::new();
                     if let Ok(nodes) = parser.parse_fragment_children(&html) {
-                        for n in nodes { d_td.add_child_node(n); }
+                        for n in nodes {
+                            d_td.add_child_node(n);
+                        }
                     }
                 }
                 tr.add_child_node(d_td);
@@ -2019,7 +2678,11 @@ fn ext_value_primitive(ext: &Value) -> Option<String> {
 }
 
 fn binding_ext<'a>(binding: &'a Value, url: &str) -> Option<&'a Value> {
-    binding.get("extension")?.as_array()?.iter().find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url))
+    binding
+        .get("extension")?
+        .as_array()?
+        .iter()
+        .find(|e| e.get("url").and_then(|u| u.as_str()) == Some(url))
 }
 
 const STYLE_UNCHANGED: &str = "opacity: 0.5;";
@@ -2212,7 +2875,13 @@ fn compare_string(
 
 /// `.ah(nlink).txOrCode(code, str)` or `.txOrCode(code, str)` (when nlink null),
 /// plus the `.iff(external).txN(" ").img("external.png")` tail.
-fn append_link_or_text(parent: &mut XhtmlNode, link: Option<&str>, s: &str, code: bool, external: bool) {
+fn append_link_or_text(
+    parent: &mut XhtmlNode,
+    link: Option<&str>,
+    s: &str,
+    code: bool,
+    external: bool,
+) {
     let target: &mut XhtmlNode = if let Some(l) = link {
         let mut ah = el("a");
         ah.set_attribute("href", l.to_string());
@@ -2227,7 +2896,10 @@ fn append_link_or_text(parent: &mut XhtmlNode, link: Option<&str>, s: &str, code
         // added to `target` (the <a>) when external.
         tx(target, " ");
         let mut img = el("img");
-        set_attrs(&mut img, &[("src", "external.png".into()), ("alt", ".".into())]);
+        set_attrs(
+            &mut img,
+            &[("src", "external.png".into()), ("alt", ".".into())],
+        );
         target.add_child_node(img);
     }
 }
@@ -2255,7 +2927,11 @@ fn tx_or_code(parent: &mut XhtmlNode, code: bool, cnt: &str) {
 /// Java `String.split("\\r?\\n")` semantics: split on \r?\n, trailing empties
 /// removed.
 fn split_lines(s: &str) -> Vec<String> {
-    let mut parts: Vec<String> = s.replace("\r\n", "\n").split('\n').map(String::from).collect();
+    let mut parts: Vec<String> = s
+        .replace("\r\n", "\n")
+        .split('\n')
+        .map(String::from)
+        .collect();
     while parts.len() > 1 && parts.last().map(|s| s.is_empty()).unwrap_or(false) {
         parts.pop();
     }
@@ -2391,35 +3067,53 @@ fn make_anchors(ed: &Ed, prefix: &str, anchor_list: &[String]) -> Vec<String> {
 /// in FHIR order: xmlAttr, xmlText, typeAttr, cdaText, xhtml. Namespace/name
 /// extensions are flagged by guard_unported_rows (corpus has representation only).
 fn describe_xml(d: &Ed) -> Option<XhtmlNode> {
-    let reps: Vec<&str> = d
-        .v
-        .get("representation")
-        .and_then(|r| r.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
-        .unwrap_or_default();
+    let reps: Vec<&str> =
+        d.v.get("representation")
+            .and_then(|r| r.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
     let mut ret = el("div");
     // Iterate in PropertyRepresentation.values() order (SDR:4577).
     for pr in ["xmlAttr", "xmlText", "typeAttr", "cdaText", "xhtml"] {
         if reps.contains(&pr) {
             match pr {
-                "cdaText" => tx(&mut ret, "This property is represented as CDA Text in the XML."),
+                "cdaText" => tx(
+                    &mut ret,
+                    "This property is represented as CDA Text in the XML.",
+                ),
                 "typeAttr" => {
                     // codeWithText("The type of this property is determined using the ",
                     //   "xsi:type", "attribute.")
-                    tx(&mut ret, "The type of this property is determined using the ");
+                    tx(
+                        &mut ret,
+                        "The type of this property is determined using the ",
+                    );
                     let mut code = el("code");
                     tx(&mut code, "xsi:type");
                     ret.add_child_node(code);
                     tx(&mut ret, "attribute.");
                 }
-                "xhtml" => tx(&mut ret, "This property is represented as XHTML Text in the XML."),
-                "xmlAttr" => tx(&mut ret, "In the XML format, this property is represented as an attribute."),
-                "xmlText" => tx(&mut ret, "In the XML format, this property is represented as unadorned text."),
+                "xhtml" => tx(
+                    &mut ret,
+                    "This property is represented as XHTML Text in the XML.",
+                ),
+                "xmlAttr" => tx(
+                    &mut ret,
+                    "In the XML format, this property is represented as an attribute.",
+                ),
+                "xmlText" => tx(
+                    &mut ret,
+                    "In the XML format, this property is represented as unadorned text.",
+                ),
                 _ => {}
             }
         }
     }
-    if ret.has_children() { Some(ret) } else { None }
+    if ret.has_children() {
+        Some(ret)
+    } else {
+        None
+    }
 }
 
 /// getExtensionValueDefinition (SDR:4203): first snapshot element whose path
@@ -2427,7 +3121,12 @@ fn describe_xml(d: &Ed) -> Option<XhtmlNode> {
 fn extension_value_definition(ext_sd: &Value) -> Option<Value> {
     let els = ext_sd.get("snapshot")?.get("element")?.as_array()?;
     els.iter()
-        .find(|e| e.get("path").and_then(|p| p.as_str()).map(|p| p.starts_with("Extension.value")).unwrap_or(false))
+        .find(|e| {
+            e.get("path")
+                .and_then(|p| p.as_str())
+                .map(|p| p.starts_with("Extension.value"))
+                .unwrap_or(false)
+        })
         .cloned()
 }
 
@@ -2463,7 +3162,11 @@ fn capitalize(s: &str) -> String {
 
 fn str_list(v: Option<&Value>) -> Vec<String> {
     v.and_then(|x| x.as_array())
-        .map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|s| s.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default()
 }
 fn str_vec(v: &[&str]) -> Vec<String> {
@@ -2490,7 +3193,10 @@ fn ms_count(types: &[crate::sdmodel::TypeRef]) -> usize {
 fn is_must_support_type(t: &crate::sdmodel::TypeRef) -> bool {
     type_has_ms_ext(t.v)
         || t.v.get("_profile").map(ms_ext_in_array).unwrap_or(false)
-        || t.v.get("_targetProfile").map(ms_ext_in_array).unwrap_or(false)
+        || t.v
+            .get("_targetProfile")
+            .map(ms_ext_in_array)
+            .unwrap_or(false)
 }
 
 /// readStringExtension(tr, EXT_MUST_SUPPORT)=="true": the type-must-support
@@ -2519,9 +3225,8 @@ fn is_ms_canonical_list(sidecar: Option<&Value>) -> bool {
 fn ms_ext_in_array(v: &Value) -> bool {
     v.as_array()
         .map(|a| {
-            a.iter().any(|x| {
-                x.as_object().is_some() && type_has_ms_ext(x)
-            })
+            a.iter()
+                .any(|x| x.as_object().is_some() && type_has_ms_ext(x))
         })
         .unwrap_or(false)
 }
@@ -2572,15 +3277,17 @@ fn rules_display(code: &str) -> String {
 }
 
 fn is_simple_content(binding_desc: &XhtmlNode) -> bool {
-    binding_desc.child_nodes().len() == 1
-        && binding_desc.child_nodes()[0].name() == Some("p")
+    binding_desc.child_nodes().len() == 1 && binding_desc.child_nodes()[0].name() == Some("p")
 }
 
 fn binding_has_ext(binding: &Value, url: &str) -> bool {
     binding
         .get("extension")
         .and_then(|e| e.as_array())
-        .map(|a| a.iter().any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url)))
+        .map(|a| {
+            a.iter()
+                .any(|x| x.get("url").and_then(|u| u.as_str()) == Some(url))
+        })
         .unwrap_or(false)
 }
 
@@ -2614,7 +3321,12 @@ fn encode_value_prefixed(ed: &Value, prefix: &str, element_name: Option<&str>) -
     let obj = ed.as_object()?;
     for (k, val) in obj {
         if let Some(rest) = k.strip_prefix(prefix) {
-            if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            if rest
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_uppercase())
+                .unwrap_or(false)
+            {
                 return Some(encode_value_json(rest, val, element_name));
             }
         }
@@ -2652,7 +3364,12 @@ fn pretty_json(val: &Value, indent: usize) -> String {
             }
             let mut parts = Vec::new();
             for (k, v) in map {
-                parts.push(format!("{}\"{}\" : {}", pad1, k, pretty_json(v, indent + 1)));
+                parts.push(format!(
+                    "{}\"{}\" : {}",
+                    pad1,
+                    k,
+                    pretty_json(v, indent + 1)
+                ));
             }
             format!("{{\n{}\n{}}}", parts.join(",\n"), pad)
         }
@@ -2695,7 +3412,12 @@ fn encode_example_value(ex: &Value) -> Option<String> {
     let obj = ex.as_object()?;
     for (k, val) in obj {
         if let Some(rest) = k.strip_prefix("value") {
-            if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            if rest
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_uppercase())
+                .unwrap_or(false)
+            {
                 if !val.is_object() && !val.is_array() {
                     // encodeValue with elementName=null: primitive asStringValue
                     // (no quotes).

@@ -46,7 +46,9 @@ impl<'p> Renderer<'p> {
         Renderer {
             provider,
             opts,
-            scopes: vec![Scope { vars: OrderedMap::new() }],
+            scopes: vec![Scope {
+                vars: OrderedMap::new(),
+            }],
             counters: OrderedMap::new(),
             include_depth: 0,
         }
@@ -112,7 +114,10 @@ impl<'p> Renderer<'p> {
                 out.push_str(&cur.to_string());
                 self.counters.insert(name.clone(), Value::Int(cur));
             }
-            Node::If { branches, else_body } => {
+            Node::If {
+                branches,
+                else_body,
+            } => {
                 // Liquid: a Block whose entire body is blank (only whitespace +
                 // blank tags like assign/capture/comment) emits NOTHING — the
                 // block is rendered with skip_output (block_body.rb:82,
@@ -138,7 +143,11 @@ impl<'p> Renderer<'p> {
                 }
                 return self.render_for(node, out);
             }
-            Node::Case { subject, whens, else_body } => {
+            Node::Case {
+                subject,
+                whens,
+                else_body,
+            } => {
                 let blank = node_is_blank(node);
                 let mut buf = String::new();
                 let target = if blank { &mut buf } else { out };
@@ -162,9 +171,11 @@ impl<'p> Renderer<'p> {
             }
             Node::Break => return Flow::Break,
             Node::Continue => return Flow::Continue,
-            Node::Include { name, params, relative } => {
-                self.render_include(name, params, *relative, out)
-            }
+            Node::Include {
+                name,
+                params,
+                relative,
+            } => self.render_include(name, params, *relative, out),
             Node::UnknownTag { .. } => { /* passthrough: emit nothing */ }
         }
         Flow::Normal
@@ -297,7 +308,9 @@ impl<'p> Renderer<'p> {
     // ------------------------------------------------------------- scoping
 
     fn push_scope(&mut self) {
-        self.scopes.push(Scope { vars: OrderedMap::new() });
+        self.scopes.push(Scope {
+            vars: OrderedMap::new(),
+        });
     }
     fn pop_scope(&mut self) {
         self.scopes.pop();
@@ -376,8 +389,11 @@ impl<'p> Renderer<'p> {
                 _ => {}
             }
             let args: Vec<Value> = f.args.iter().map(|t| self.eval_term(t)).collect();
-            let named: Vec<(String, Value)> =
-                f.named.iter().map(|(k, t)| (k.clone(), self.eval_term(t))).collect();
+            let named: Vec<(String, Value)> = f
+                .named
+                .iter()
+                .map(|(k, t)| (k.clone(), self.eval_term(t)))
+                .collect();
             val = filters::apply(&f.name, val, &args, &named);
         }
         val
@@ -483,13 +499,19 @@ impl<'p> Renderer<'p> {
         if let Some(Segment::Field(first)) = segments.first() {
             if first == "data" {
                 if let Some(Segment::Field(key)) = segments.get(1) {
-                    let base = self.provider.site_data(&[key.as_str()]).unwrap_or(Value::Nil);
+                    let base = self
+                        .provider
+                        .site_data(&[key.as_str()])
+                        .unwrap_or(Value::Nil);
                     return self.walk_segments(base, &segments[2..]);
                 }
                 // `site.data` with a dynamic key: `site.data.[expr]`
                 if let Some(Segment::Index(e)) = segments.get(1) {
                     let key = self.eval_expr(e).to_str();
-                    let base = self.provider.site_data(&[key.as_str()]).unwrap_or(Value::Nil);
+                    let base = self
+                        .provider
+                        .site_data(&[key.as_str()])
+                        .unwrap_or(Value::Nil);
                     return self.walk_segments(base, &segments[2..]);
                 }
                 return Value::Nil;
@@ -621,18 +643,20 @@ fn value_is_empty(v: &Value) -> bool {
 fn node_is_blank(node: &Node) -> bool {
     match node {
         Node::Raw(s) => s.trim().is_empty(),
-        Node::Assign { .. }
-        | Node::Capture { .. }
-        | Node::Comment
-        | Node::Raw2(_) => true,
-        Node::If { branches, else_body } => {
+        Node::Assign { .. } | Node::Capture { .. } | Node::Comment | Node::Raw2(_) => true,
+        Node::If {
+            branches,
+            else_body,
+        } => {
             branches.iter().all(|(_, b)| block_is_blank(b))
                 && else_body.as_ref().map_or(true, |b| block_is_blank(b))
         }
-        Node::For { body, else_body, .. } => {
-            block_is_blank(body) && else_body.as_ref().map_or(true, |b| block_is_blank(b))
-        }
-        Node::Case { whens, else_body, .. } => {
+        Node::For {
+            body, else_body, ..
+        } => block_is_blank(body) && else_body.as_ref().map_or(true, |b| block_is_blank(b)),
+        Node::Case {
+            whens, else_body, ..
+        } => {
             whens.iter().all(|(_, b)| block_is_blank(b))
                 && else_body.as_ref().map_or(true, |b| block_is_blank(b))
         }

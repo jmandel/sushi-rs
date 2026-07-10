@@ -190,7 +190,10 @@ fn count_codes(list: &[&Value]) -> usize {
 
 /// csr:139-200. Returns whether a properties table was rendered.
 fn gen_properties(div: &mut XhtmlNode, cs: &Value) -> bool {
-    let Some(props) = cs.get("property").and_then(|x| x.as_array()).filter(|a| !a.is_empty())
+    let Some(props) = cs
+        .get("property")
+        .and_then(|x| x.as_array())
+        .filter(|a| !a.is_empty())
     else {
         return false;
     };
@@ -215,7 +218,14 @@ fn gen_properties(div: &mut XhtmlNode, cs: &Value) -> bool {
         }
         if p.get("extension")
             .and_then(|e| e.as_array())
-            .map(|a| a.iter().any(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/codesystem-property-valueSet")))
+            .map(|a| {
+                a.iter().any(|x| {
+                    get_str(x, "url")
+                        == Some(
+                            "http://hl7.org/fhir/StructureDefinition/codesystem-property-valueSet",
+                        )
+                })
+            })
             .unwrap_or(false)
         {
             has_valueset = true;
@@ -224,7 +234,10 @@ fn gen_properties(div: &mut XhtmlNode, cs: &Value) -> bool {
 
     // <p><b>Properties</b></p>  <p><b>This code system defines the following properties for its concepts</b></p>
     push_p_b(div, "Properties");
-    push_p_b(div, "This code system defines the following properties for its concepts");
+    push_p_b(
+        div,
+        "This code system defines the following properties for its concepts",
+    );
 
     let mut tbl = el("table");
     tbl.set_attribute("class", "grid");
@@ -306,7 +319,10 @@ fn push_p_b(div: &mut XhtmlNode, label: &str) {
 
 /// csr:118-137.
 fn gen_filters(div: &mut XhtmlNode, cs: &Value) {
-    let Some(filters) = cs.get("filter").and_then(|x| x.as_array()).filter(|a| !a.is_empty())
+    let Some(filters) = cs
+        .get("filter")
+        .and_then(|x| x.as_array())
+        .filter(|a| !a.is_empty())
     else {
         return;
     };
@@ -372,7 +388,10 @@ fn gen_cs_content(div: &mut XhtmlNode, cs: &Value, props: bool) {
     // on some concept; a "status" prop sets ignoreStatus.
     let mut is_manual = false;
     let empty: Vec<Value> = Vec::new();
-    let all_props = cs.get("property").and_then(|x| x.as_array()).unwrap_or(&empty);
+    let all_props = cs
+        .get("property")
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
     for cp in all_props {
         if has_display_hint(cp) {
             is_manual = true;
@@ -428,7 +447,19 @@ fn gen_cs_content(div: &mut XhtmlNode, cs: &Value, props: bool) {
     let cs_id = get_str(cs, "id").unwrap_or("");
     let cs_url = get_str(cs, "url").unwrap_or("");
     for c in &cs_concepts {
-        add_define_row(&mut tbl, c, 0, hierarchy, display, definitions, deprecated, &prop_list, cs, cs_id, cs_url);
+        add_define_row(
+            &mut tbl,
+            c,
+            0,
+            hierarchy,
+            display,
+            definitions,
+            deprecated,
+            &prop_list,
+            cs,
+            cs_id,
+            cs_url,
+        );
     }
     div.add_child_node(tbl);
 }
@@ -441,7 +472,12 @@ fn prop_header(cp: &Value) -> &str {
 fn has_display_hint(cp: &Value) -> bool {
     cp.get("extension")
         .and_then(|e| e.as_array())
-        .map(|a| a.iter().any(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/codesystem-concept-comments") ))
+        .map(|a| {
+            a.iter().any(|x| {
+                get_str(x, "url")
+                    == Some("http://hl7.org/fhir/StructureDefinition/codesystem-concept-comments")
+            })
+        })
         .unwrap_or(false)
         && false // no display-hint ext in corpus
 }
@@ -456,14 +492,23 @@ fn show_property_in_table(cp: &Value, is_manual: bool) -> bool {
 }
 
 fn concepts_have_property(c: &Value, code: &str) -> bool {
-    if c.get("property").and_then(|x| x.as_array()).map(|a| a.iter().any(|p| get_str(p, "code") == Some(code))).unwrap_or(false) {
+    if c.get("property")
+        .and_then(|x| x.as_array())
+        .map(|a| a.iter().any(|p| get_str(p, "code") == Some(code)))
+        .unwrap_or(false)
+    {
         return true;
     }
-    children_of(c).iter().any(|g| concepts_have_property(g, code))
+    children_of(c)
+        .iter()
+        .any(|g| concepts_have_property(g, code))
 }
 
 fn concepts_have_definition(c: &Value) -> bool {
-    if get_str(c, "definition").map(|s| !s.is_empty()).unwrap_or(false) {
+    if get_str(c, "definition")
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
         return true;
     }
     children_of(c).iter().any(|g| concepts_have_definition(g))
@@ -484,7 +529,9 @@ fn concepts_have_deprecated(cs: &Value, c: &Value, ignore_status: bool) -> bool 
     if is_deprecated(cs, c, ignore_status) {
         return true;
     }
-    children_of(c).iter().any(|g| concepts_have_deprecated(cs, g, ignore_status))
+    children_of(c)
+        .iter()
+        .any(|g| concepts_have_deprecated(cs, g, ignore_status))
 }
 
 /// CodeSystemUtilities.isDeprecated(cs, c, ignoreStatus). The concept's `status`
@@ -497,7 +544,9 @@ fn is_deprecated(_cs: &Value, c: &Value, ignore_status: bool) -> bool {
         // ignores the status property → no separate Deprecated column.
         return false;
     }
-    concept_status(c).map(|s| s == "deprecated" || s == "retired").unwrap_or(false)
+    concept_status(c)
+        .map(|s| s == "deprecated" || s == "retired")
+        .unwrap_or(false)
 }
 
 /// The concept's `status` property value (property code == "status").
@@ -597,7 +646,10 @@ fn add_define_row(
     // Deprecated cell (csr:519-544).
     if deprecated {
         let mut td = el("td");
-        if concept_status(c).map(|s| s == "deprecated").unwrap_or(false) {
+        if concept_status(c)
+            .map(|s| s == "deprecated")
+            .unwrap_or(false)
+        {
             // CODESYSTEM_DEPRECATED text (+ replaced-by, none in corpus).
             tx(&mut td, "Deprecated");
         }
@@ -633,7 +685,19 @@ fn add_define_row(
 
     // recurse children at level+1 (csr:646-649).
     for cc in children_of(c) {
-        add_define_row(tbl, cc, level + 1, hierarchy, display, definitions, deprecated, prop_list, cs, cs_id, _cs_url);
+        add_define_row(
+            tbl,
+            cc,
+            level + 1,
+            hierarchy,
+            display,
+            definitions,
+            deprecated,
+            prop_list,
+            cs,
+            cs_id,
+            _cs_url,
+        );
     }
 }
 
@@ -641,7 +705,12 @@ fn property_value_str(pcv: &Value) -> Option<String> {
     if let Some(obj) = pcv.as_object() {
         for (k, v) in obj {
             if let Some(rest) = k.strip_prefix("value") {
-                if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+                if rest
+                    .chars()
+                    .next()
+                    .map(|c| c.is_ascii_uppercase())
+                    .unwrap_or(false)
+                {
                     // Coding handled elsewhere; corpus uses code/string/boolean/integer.
                     if rest == "Coding" {
                         return v.get("code").and_then(|x| x.as_str()).map(String::from);
@@ -665,7 +734,9 @@ fn property_value_str(pcv: &Value) -> Option<String> {
 fn has_markdown_in_definitions(cs: &Value) -> bool {
     if let Some(exts) = cs.get("extension").and_then(|e| e.as_array()) {
         for x in exts {
-            if get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/codesystem-use-markdown") {
+            if get_str(x, "url")
+                == Some("http://hl7.org/fhir/StructureDefinition/codesystem-use-markdown")
+            {
                 return x.get("valueBoolean").and_then(|b| b.as_bool()) == Some(true);
             }
         }
@@ -685,7 +756,10 @@ fn has_markdown_in_definitions(cs: &Value) -> bool {
         }
         false
     }
-    cs.get("concept").and_then(|x| x.as_array()).map(|a| scan(a)).unwrap_or(false)
+    cs.get("concept")
+        .and_then(|x| x.as_array())
+        .map(|a| scan(a))
+        .unwrap_or(false)
 }
 
 /// MarkDownProcessor.isProbablyMarkdown(content, mdIfParagraphs=true) (MDP:96).
@@ -694,7 +768,8 @@ fn is_probably_markdown(content: &str) -> bool {
         return true;
     }
     for s in content.split('\n') {
-        if s.starts_with("* ") || is_md_heading(s) || s.starts_with("1. ") || s.starts_with("    ") {
+        if s.starts_with("* ") || is_md_heading(s) || s.starts_with("1. ") || s.starts_with("    ")
+        {
             return true;
         }
         if s.contains("```") || s.contains("~~~") || s.contains("[[[") {
@@ -711,7 +786,13 @@ fn is_probably_markdown(content: &str) -> bool {
 }
 
 fn is_md_heading(s: &str) -> bool {
-    for (pfx, n) in [("###### ", 7), ("##### ", 6), ("#### ", 5), ("### ", 4), ("## ", 3)] {
+    for (pfx, n) in [
+        ("###### ", 7),
+        ("##### ", 6),
+        ("#### ", 5),
+        ("### ", 4),
+        ("## ", 3),
+    ] {
         if s.len() > n && s.starts_with(pfx) && !s.as_bytes()[n].is_ascii_whitespace() {
             return true;
         }
@@ -729,7 +810,11 @@ fn has_md_link(s: &str) -> bool {
         if c == '[' {
             mid = -1;
             left = i;
-        } else if left > -1 && (i as usize) < bytes.len() - 1 && c == ']' && bytes[(i + 1) as usize] == '(' {
+        } else if left > -1
+            && (i as usize) < bytes.len() - 1
+            && c == ']'
+            && bytes[(i + 1) as usize] == '('
+        {
             mid = i;
         } else if left > -1 && c == ']' {
             left = -1;
@@ -751,7 +836,11 @@ fn has_text_special(s: &str, ch: char) -> bool {
     let mut second = false;
     for i in 0..chars.len() {
         let prev = if i == 0 { ' ' } else { chars[i - 1] };
-        let next = if i < chars.len() - 1 { chars[i + 1] } else { ' ' };
+        let next = if i < chars.len() - 1 {
+            chars[i + 1]
+        } else {
+            ' '
+        };
         if chars[i] != ch {
             // nothing
         } else if second {
@@ -788,7 +877,10 @@ fn push_content_intro(div: &mut XhtmlNode, cs: &Value) {
             // "This {cased} code system {cs} defines codes{h}, but no codes are represented here"
             tx(&mut p, &format!("This {} code system ", cased));
             push_code(&mut p, url);
-            tx(&mut p, &format!(" defines codes{}, but no codes are represented here", hpart));
+            tx(
+                &mut p,
+                &format!(" defines codes{}, but no codes are represented here", hpart),
+            );
         }
         "example" => {
             tx(&mut p, &format!("This {} code system ", cased));
@@ -807,16 +899,26 @@ fn push_content_intro(div: &mut XhtmlNode, cs: &Value) {
             let mut b = el("b");
             tx(&mut b, "a fragment");
             p.add_child_node(b);
-            tx(&mut p, &format!(" that includes following code{}{}:", plural, hpart));
+            tx(
+                &mut p,
+                &format!(" that includes following code{}{}:", plural, hpart),
+            );
         }
         "supplement" => {
-            crate::loud_gap!((), "LOUD GAP: CS content supplement mode (csr:224) url={}", url);
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: CS content supplement mode (csr:224) url={}",
+                url
+            );
         }
         _ => {
             // complete
             tx(&mut p, &format!("This {} code system ", cased));
             push_code(&mut p, url);
-            tx(&mut p, &format!(" defines the following code{}{}:", plural, hpart));
+            tx(
+                &mut p,
+                &format!(" defines the following code{}{}:", plural, hpart),
+            );
         }
     }
     div.add_child_node(p);
@@ -877,8 +979,14 @@ pub fn render_vs_cld(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSource) 
 
     let compose = vs.get("compose");
     let empty: Vec<Value> = Vec::new();
-    let includes = compose.and_then(|c| c.get("include")).and_then(|x| x.as_array()).unwrap_or(&empty);
-    let excludes = compose.and_then(|c| c.get("exclude")).and_then(|x| x.as_array()).unwrap_or(&empty);
+    let includes = compose
+        .and_then(|c| c.get("include"))
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
+    let excludes = compose
+        .and_then(|c| c.get("exclude"))
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
 
     if includes.len() == 1 && excludes.is_empty() {
         let mut ul = el("ul");
@@ -886,7 +994,10 @@ pub fn render_vs_cld(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSource) 
         div.add_child_node(ul);
     } else {
         let mut p = el("p");
-        tx(&mut p, "This value set includes codes based on the following rules:");
+        tx(
+            &mut p,
+            "This value set includes codes based on the following rules:",
+        );
         div.add_child_node(p);
         let mut ul = el("ul");
         for inc in includes {
@@ -895,7 +1006,10 @@ pub fn render_vs_cld(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSource) 
         div.add_child_node(ul);
         if !excludes.is_empty() {
             let mut p = el("p");
-            tx(&mut p, "This value set excludes codes based on the following rules:");
+            tx(
+                &mut p,
+                "This value set excludes codes based on the following rules:",
+            );
             div.add_child_node(p);
             let mut ul = el("ul");
             for exc in excludes {
@@ -905,7 +1019,10 @@ pub fn render_vs_cld(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSource) 
         }
     }
 
-    let body = format!("<h3>Logical Definition (CLD)</h3>\r\n{}", compose_html(&div));
+    let body = format!(
+        "<h3>Logical Definition (CLD)</h3>\r\n{}",
+        compose_html(&div)
+    );
     crate::wrap_raw(&body)
 }
 
@@ -997,9 +1114,18 @@ fn gen_include(
     let mut li = el("li");
     let system = get_str(inc, "system");
     let empty: Vec<Value> = Vec::new();
-    let inc_concepts = inc.get("concept").and_then(|x| x.as_array()).unwrap_or(&empty);
-    let inc_filters = inc.get("filter").and_then(|x| x.as_array()).unwrap_or(&empty);
-    let inc_valuesets = inc.get("valueSet").and_then(|x| x.as_array()).unwrap_or(&empty);
+    let inc_concepts = inc
+        .get("concept")
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
+    let inc_filters = inc
+        .get("filter")
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
+    let inc_valuesets = inc
+        .get("valueSet")
+        .and_then(|x| x.as_array())
+        .unwrap_or(&empty);
 
     if let Some(system) = system {
         let ver = get_str(inc, "version");
@@ -1011,9 +1137,21 @@ fn gen_include(
             add_cs_ref(&mut li, system, ver, &cs_res);
         } else {
             if !inc_concepts.is_empty() {
-                tx(&mut li, &format!("{} these codes as defined in ", type_label));
+                tx(
+                    &mut li,
+                    &format!("{} these codes as defined in ", type_label),
+                );
                 add_cs_ref(&mut li, system, ver, &cs_res);
-                render_concept_table(&mut li, inc, inc_concepts, system, ver, &cs_res, ctx, tx_cache);
+                render_concept_table(
+                    &mut li,
+                    inc,
+                    inc_concepts,
+                    system,
+                    ver,
+                    &cs_res,
+                    ctx,
+                    tx_cache,
+                );
             }
             if !inc_filters.is_empty() {
                 // "Include codes from" — the VALUE_SET_CODES_FROM phrase is
@@ -1040,10 +1178,25 @@ fn gen_include(
                 }
             }
         }
-        if inc.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|x| {
-            matches!(get_str(x, "url"), Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-rules") | Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-group"))
-        })).unwrap_or(false) {
-            crate::loud_gap!((), "LOUD GAP: cld expand-rules/group (vsr:1565) vs={}", get_str(vs, "id").unwrap_or(""));
+        if inc
+            .get("extension")
+            .and_then(|e| e.as_array())
+            .map(|a| {
+                a.iter().any(|x| {
+                    matches!(
+                        get_str(x, "url"),
+                        Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-rules")
+                            | Some("http://hl7.org/fhir/StructureDefinition/valueset-expand-group")
+                    )
+                })
+            })
+            .unwrap_or(false)
+        {
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: cld expand-rules/group (vsr:1565) vs={}",
+                get_str(vs, "id").unwrap_or("")
+            );
         }
     } else {
         // pure import (vsr:1569-1593).
@@ -1134,13 +1287,26 @@ fn resolve_cs(ctx: &IgContext, system: &str, ver: Option<&str>) -> Option<CsRes>
     if r.rtype != "CodeSystem" {
         return None;
     }
-    let json = ctx.load_resource(&canonical).or_else(|| ctx.load_resource(system));
-    let content = json.as_ref().and_then(|j| get_str(j, "content").map(String::from));
+    let json = ctx
+        .load_resource(&canonical)
+        .or_else(|| ctx.load_resource(system));
+    let content = json
+        .as_ref()
+        .and_then(|j| get_str(j, "content").map(String::from));
     // Business version: the resolved `version` (from packages), else the CS
     // resource's own `version` (own-IG resources have r.version=="").
-    let json_version = json.as_ref().and_then(|j| get_str(j, "version").map(String::from));
-    let version = if !r.version.is_empty() { Some(r.version.clone()) } else { json_version };
-    let cs_id = json.as_ref().and_then(|j| get_str(j, "id").map(String::from)).unwrap_or_default();
+    let json_version = json
+        .as_ref()
+        .and_then(|j| get_str(j, "version").map(String::from));
+    let version = if !r.version.is_empty() {
+        Some(r.version.clone())
+    } else {
+        json_version
+    };
+    let cs_id = json
+        .as_ref()
+        .and_then(|j| get_str(j, "id").map(String::from))
+        .unwrap_or_default();
     let web = r.web_path.clone();
     let from_this_package = !(web.starts_with("http://") || web.starts_with("https://"));
     Some(CsRes {
@@ -1151,7 +1317,11 @@ fn resolve_cs(ctx: &IgContext, system: &str, ver: Option<&str>) -> Option<CsRes>
         from_packages: r.pkg.is_some(),
         content,
         json,
-        external_link: if r.external { r.tx_server.clone() } else { None },
+        external_link: if r.external {
+            r.tx_server.clone()
+        } else {
+            None
+        },
     })
 }
 
@@ -1229,19 +1399,28 @@ fn special_reference(system: &str) -> Option<String> {
 
 /// rr:1597-1644 renderVersionReference. Sets the span's `title` attr + emits the
 /// char/version text. `none_phrase` = CS_VERSION_NOTHING_TEXT.
-fn push_version_ref(span: &mut XhtmlNode, cs: &Option<CsRes>, stated: Option<&str>, type_name: &str) {
+fn push_version_ref(
+    span: &mut XhtmlNode,
+    cs: &Option<CsRes>,
+    stated: Option<&str>,
+    type_name: &str,
+) {
     let stated = stated.filter(|s| !s.is_empty());
     let actual = cs.as_ref().and_then(|c| c.version.clone());
     let from_packages = cs.as_ref().map(|c| c.from_packages).unwrap_or(false);
     let from_this_package = cs.as_ref().map(|c| c.from_this_package).unwrap_or(false);
     // NOTPRESENT content → cs treated as null (tr:184-186).
-    let cs_null = cs.is_none() || cs.as_ref().and_then(|c| c.content.as_deref()) == Some("not-present");
+    let cs_null =
+        cs.is_none() || cs.as_ref().and_then(|c| c.content.as_deref()) == Some("not-present");
     let actual = if cs_null { None } else { actual };
     let from_packages = if cs_null { false } else { from_packages };
     let from_this_package = if cs_null { false } else { from_this_package };
 
     if let Some(sv) = stated {
-        span.set_attribute("title", format!("Version is explicitly stated to be {}", sv));
+        span.set_attribute(
+            "title",
+            format!("Version is explicitly stated to be {}", sv),
+        );
         tx(span, "\u{1F4CD}");
         tx(span, sv);
     } else if from_this_package {
@@ -1262,10 +1441,22 @@ fn push_version_ref(span: &mut XhtmlNode, cs: &Option<CsRes>, stated: Option<&st
         tx(span, "\u{23FF}");
         tx(span, &av);
     } else if cs.is_some() && !cs_null {
-        span.set_attribute("title", format!("Version is not explicitly stated, and the target {} has no stated version either", type_name));
+        span.set_attribute(
+            "title",
+            format!(
+                "Version is not explicitly stated, and the target {} has no stated version either",
+                type_name
+            ),
+        );
         tx(span, "\u{2205}");
     } else {
-        span.set_attribute("title", format!("Version is not explicitly stated. No matching {} found", type_name));
+        span.set_attribute(
+            "title",
+            format!(
+                "Version is not explicitly stated. No matching {} found",
+                type_name
+            ),
+        );
         tx(span, "Not Stated (use latest from terminology server)");
     }
 }
@@ -1288,12 +1479,29 @@ fn render_concept_table(
     let mut has_comments = false;
     for c in concepts {
         let code = get_str(c, "code").unwrap_or("");
-        if c.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/valueset-concept-comments"))).unwrap_or(false) {
+        if c.get("extension")
+            .and_then(|e| e.as_array())
+            .map(|a| {
+                a.iter().any(|x| {
+                    get_str(x, "url")
+                        == Some("http://hl7.org/fhir/StructureDefinition/valueset-concept-comments")
+                })
+            })
+            .unwrap_or(false)
+        {
             has_comments = true;
         }
         let cc_defn = cs_concept_definition(cs, code);
         if cc_defn.map(|d| !d.is_empty()).unwrap_or(false)
-            || c.get("extension").and_then(|e| e.as_array()).map(|a| a.iter().any(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/valueset-definition"))).unwrap_or(false)
+            || c.get("extension")
+                .and_then(|e| e.as_array())
+                .map(|a| {
+                    a.iter().any(|x| {
+                        get_str(x, "url")
+                            == Some("http://hl7.org/fhir/StructureDefinition/valueset-definition")
+                    })
+                })
+                .unwrap_or(false)
         {
             has_definition = true;
         }
@@ -1315,7 +1523,16 @@ fn render_concept_table(
     t.add_child_node(tr);
 
     for c in concepts {
-        render_concept_row(&mut t, c, system, ver, cs, has_definition, has_comments, tx_cache);
+        render_concept_row(
+            &mut t,
+            c,
+            system,
+            ver,
+            cs,
+            has_definition,
+            has_comments,
+            tx_cache,
+        );
     }
     li.add_child_node(t);
 }
@@ -1342,7 +1559,9 @@ fn render_concept_row(
     let mut td = el("td");
     if let Some(d) = get_str(c, "display") {
         tx(&mut td, d);
-    } else if let Some(ccd) = cs_concept_display(cs, code).or_else(|| tx_cache.lookup_display(system, code, ver.unwrap_or(""))) {
+    } else if let Some(ccd) = cs_concept_display(cs, code)
+        .or_else(|| tx_cache.lookup_display(system, code, ver.unwrap_or("")))
+    {
         // grey fallback (vsr:1610-1611).
         td.set_attribute("style", "color: #cccccc");
         tx(&mut td, &ccd);
@@ -1352,7 +1571,14 @@ fn render_concept_row(
     // (newlines become <br/>); else the fetched CS concept definition (plain).
     if has_definition {
         let mut td = el("td");
-        let ext_def = c.get("extension").and_then(|e| e.as_array()).and_then(|a| a.iter().find(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/valueset-definition")).and_then(|x| get_str(x, "valueString").or_else(|| get_str(x, "valueMarkdown"))));
+        let ext_def = c.get("extension").and_then(|e| e.as_array()).and_then(|a| {
+            a.iter()
+                .find(|x| {
+                    get_str(x, "url")
+                        == Some("http://hl7.org/fhir/StructureDefinition/valueset-definition")
+                })
+                .and_then(|x| get_str(x, "valueString").or_else(|| get_str(x, "valueMarkdown")))
+        });
         if let Some(d) = ext_def {
             add_text_with_line_breaks(&mut td, d);
         } else if let Some(d) = cs_concept_definition(cs, code) {
@@ -1363,7 +1589,14 @@ fn render_concept_row(
     }
     if has_comments {
         let mut td = el("td");
-        if let Some(cmt) = c.get("extension").and_then(|e| e.as_array()).and_then(|a| a.iter().find(|x| get_str(x, "url") == Some("http://hl7.org/fhir/StructureDefinition/valueset-concept-comments")).and_then(|x| get_str(x, "valueString"))) {
+        if let Some(cmt) = c.get("extension").and_then(|e| e.as_array()).and_then(|a| {
+            a.iter()
+                .find(|x| {
+                    get_str(x, "url")
+                        == Some("http://hl7.org/fhir/StructureDefinition/valueset-concept-comments")
+                })
+                .and_then(|x| get_str(x, "valueString"))
+        }) {
             tx(&mut td, &format!("Note: {}", cmt));
         }
         tr.add_child_node(td);
@@ -1372,7 +1605,13 @@ fn render_concept_row(
 }
 
 /// vsr:1184-1210 addCodeToTable (the code cell link).
-fn add_code_to_table(td: &mut XhtmlNode, system: &str, _ver: Option<&str>, code: &str, cs: &Option<CsRes>) {
+fn add_code_to_table(
+    td: &mut XhtmlNode,
+    system: &str,
+    _ver: Option<&str>,
+    code: &str,
+    cs: &Option<CsRes>,
+) {
     let content = cs.as_ref().and_then(|c| c.content.as_deref());
     let complete = matches!(content, Some("complete") | Some("fragment"));
     if !complete {
@@ -1437,7 +1676,8 @@ fn cs_concept_display(cs: &Option<CsRes>, code: &str) -> Option<String> {
 fn cs_concept_definition(cs: &Option<CsRes>, code: &str) -> Option<String> {
     let cs = cs.as_ref()?;
     let json = cs.json.as_ref()?;
-    find_concept(json.get("concept")?, code).and_then(|c| get_str(c, "definition").map(String::from))
+    find_concept(json.get("concept")?, code)
+        .and_then(|c| get_str(c, "definition").map(String::from))
 }
 
 fn find_concept<'a>(list: &'a Value, code: &str) -> Option<&'a Value> {
@@ -1455,7 +1695,14 @@ fn find_concept<'a>(list: &'a Value, code: &str) -> Option<&'a Value> {
 }
 
 /// vsr:1496-1551 filter rendering.
-fn render_filters(li: &mut XhtmlNode, filters: &[Value], system: &str, ver: Option<&str>, cs: &Option<CsRes>, tx_cache: &dyn TxCacheSource) {
+fn render_filters(
+    li: &mut XhtmlNode,
+    filters: &[Value],
+    system: &str,
+    ver: Option<&str>,
+    cs: &Option<CsRes>,
+    tx_cache: &dyn TxCacheSource,
+) {
     let n = filters.len();
     for (i, f) in filters.iter().enumerate() {
         if i > 0 {
@@ -1480,7 +1727,10 @@ fn render_filters(li: &mut XhtmlNode, filters: &[Value], system: &str, ver: Opti
             // between property and operator: `concept  is-a `.
             tx(li, &format!("{} {} ", prop, describe_op(op)));
             // value + optional (display)
-            if let Some(_c) = cs.as_ref().filter(|c| matches!(c.content.as_deref(), Some("complete") | Some("fragment"))) {
+            if let Some(_c) = cs
+                .as_ref()
+                .filter(|c| matches!(c.content.as_deref(), Some("complete") | Some("fragment")))
+            {
                 // code exists in CS → link. (corpus filter systems are external
                 // SNOMED with not-present content, so this branch is unused.)
                 tx(li, value);
@@ -1568,10 +1818,16 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
     match exp.total {
         Some(total) if total as usize != count => {
             pc.set_attribute("style", "border: maroon 1px solid; background-color: #FFCCCC; font-weight: bold; padding: 8px");
-            tx(&mut pc, &format!("This value set contains {} concepts", total));
+            tx(
+                &mut pc,
+                &format!("This value set contains {} concepts", total),
+            );
         }
         Some(total) => {
-            tx(&mut pc, &format!("This value set contains {} concepts", total));
+            tx(
+                &mut pc,
+                &format!("This value set contains {} concepts", total),
+            );
         }
         None if count == 1000 => {
             // vsr:277-281: exactly 1000 (the default $expand count) means the
@@ -1580,17 +1836,30 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
             tx(&mut pc, "This value set has >1000 codes in it. In order to keep the publication size manageable, only a selection (1000 codes) of the whole set of codes is shown");
         }
         None => {
-            tx(&mut pc, &format!("This value set expansion contains {} concepts.", count));
+            tx(
+                &mut pc,
+                &format!("This value set expansion contains {} concepts.", count),
+            );
         }
     }
     div.add_child_node(pc);
 
     // column flags.
-    let do_level = exp.contains.iter().any(|c| c.get("contains").and_then(|x| x.as_array()).map(|a| !a.is_empty()).unwrap_or(false));
+    let do_level = exp.contains.iter().any(|c| {
+        c.get("contains")
+            .and_then(|x| x.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false)
+    });
     let do_version = exp.contains.iter().any(|c| get_str(c, "version").is_some());
     let do_definition = expansion_has_definition(&exp.contains, ctx);
-    let do_inactive = exp.contains.iter().any(|c| c.get("inactive").and_then(|x| x.as_bool()) == Some(true));
-    let displang = get_str(vs, "language").map(String::from).or_else(|| param_value(&exp.parameters, "displayLanguage"));
+    let do_inactive = exp
+        .contains
+        .iter()
+        .any(|c| c.get("inactive").and_then(|x| x.as_bool()) == Some(true));
+    let displang = get_str(vs, "language")
+        .map(String::from)
+        .or_else(|| param_value(&exp.parameters, "displayLanguage"));
 
     // Table.
     let mut t = el("table");
@@ -1656,7 +1925,18 @@ pub fn render_vs_expansion(vs: &Value, ctx: &IgContext, tx_cache: &dyn TxCacheSo
 
     let prop_codes: Vec<String> = props.iter().map(|(c, _)| c.clone()).collect();
     for c in &exp.contains {
-        add_expansion_row(&mut t, c, 1, do_level, do_version, do_inactive, do_definition, &prop_codes, &exp.parameters, ctx);
+        add_expansion_row(
+            &mut t,
+            c,
+            1,
+            do_level,
+            do_version,
+            do_inactive,
+            do_definition,
+            &prop_codes,
+            &exp.parameters,
+            ctx,
+        );
     }
     div.add_child_node(t);
 
@@ -1700,9 +1980,14 @@ fn expansion_has_definition(contains: &[Value], ctx: &IgContext) -> bool {
         let system = get_str(c, "system").unwrap_or("");
         let code = get_str(c, "code").unwrap_or("");
         if let Some(j) = fetched_cs(ctx, system) {
-            if get_str(&j, "content") == Some("complete") || get_str(&j, "content") == Some("fragment") {
+            if get_str(&j, "content") == Some("complete")
+                || get_str(&j, "content") == Some("fragment")
+            {
                 if let Some(concepts) = j.get("concept") {
-                    if find_concept(concepts, code).and_then(|c| get_str(c, "definition")).is_some() {
+                    if find_concept(concepts, code)
+                        .and_then(|c| get_str(c, "definition"))
+                        .is_some()
+                    {
                         return true;
                     }
                 }
@@ -1792,7 +2077,9 @@ fn add_expansion_row(
         let mut td = el("td");
         if let Some(j) = fetched_cs(ctx, system) {
             if let Some(concepts) = j.get("concept") {
-                if let Some(defn) = find_concept(concepts, code).and_then(|c| get_str(c, "definition")) {
+                if let Some(defn) =
+                    find_concept(concepts, code).and_then(|c| get_str(c, "definition"))
+                {
                     // vsr:1039-1043: markdown-in-definitions → addMarkdown (a
                     // <div><p>..); else plain text. addMarkdown pre-processes so
                     // core links resolve against the CS's corePath (R4 core CS
@@ -1832,7 +2119,9 @@ fn add_expansion_row(
     }
 
     // JSON / XML copy cells.
-    let ver = get_str(c, "version").map(String::from).or_else(|| version_for_system(params, system));
+    let ver = get_str(c, "version")
+        .map(String::from)
+        .or_else(|| version_for_system(params, system));
     let json = make_json(c, ver.as_deref());
     let xml = make_xml(c, ver.as_deref());
     tr.add_child_node(copy_cell(&json, "Click to Copy as Coding"));
@@ -1840,8 +2129,24 @@ fn add_expansion_row(
 
     t.add_child_node(tr);
 
-    for cc in c.get("contains").and_then(|x| x.as_array()).map(|a| a.as_slice()).unwrap_or(&[]) {
-        add_expansion_row(t, cc, i + 1, do_level, do_version, do_inactive, do_definition, prop_codes, params, ctx);
+    for cc in c
+        .get("contains")
+        .and_then(|x| x.as_array())
+        .map(|a| a.as_slice())
+        .unwrap_or(&[])
+    {
+        add_expansion_row(
+            t,
+            cc,
+            i + 1,
+            do_level,
+            do_version,
+            do_inactive,
+            do_definition,
+            prop_codes,
+            params,
+            ctx,
+        );
     }
 }
 
@@ -1855,7 +2160,12 @@ fn concept_property_value(c: &Value, code: &str) -> Option<String> {
             if let Some(obj) = p.as_object() {
                 for (k, v) in obj {
                     if let Some(rest) = k.strip_prefix("value") {
-                        if rest.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+                        if rest
+                            .chars()
+                            .next()
+                            .map(|c| c.is_ascii_uppercase())
+                            .unwrap_or(false)
+                        {
                             return match v {
                                 Value::String(s) => Some(s.clone()),
                                 Value::Bool(b) => Some(b.to_string()),
@@ -1913,11 +2223,16 @@ fn add_expansion_code_link(td: &mut XhtmlNode, system: &str, code: &str, ctx: &I
     }
     // fetched CS content complete/fragment → local link; else snomed/loinc/plain.
     let cs_json = ctx.load_resource(system);
-    let content = cs_json.as_ref().and_then(|j| get_str(j, "content").map(String::from));
+    let content = cs_json
+        .as_ref()
+        .and_then(|j| get_str(j, "content").map(String::from));
     if matches!(content.as_deref(), Some("complete") | Some("fragment")) {
         if let Some(r) = ctx.resolve(system) {
             let web = &r.web_path;
-            let cs_id = cs_json.as_ref().and_then(|j| get_str(j, "id")).unwrap_or("");
+            let cs_id = cs_json
+                .as_ref()
+                .and_then(|j| get_str(j, "id"))
+                .unwrap_or("");
             let anchor = if web.contains('#') {
                 format!("{}-{}", web, nmtokenize(code))
             } else {
@@ -1966,7 +2281,10 @@ fn version_for_system(params: &[Value], system: &str) -> Option<String> {
 /// vsr:1097-1114 makeJson.
 fn make_json(c: &Value, version: Option<&str>) -> String {
     let mut b = String::from("{");
-    b.push_str(&format!("\"system\": \"{}\"", escape_json(get_str(c, "system").unwrap_or(""))));
+    b.push_str(&format!(
+        "\"system\": \"{}\"",
+        escape_json(get_str(c, "system").unwrap_or(""))
+    ));
     if let Some(v) = get_str(c, "version") {
         b.push_str(&format!(", \"version\": \"{}\"", escape_json(v)));
     } else if let Some(v) = version {
@@ -1985,7 +2303,10 @@ fn make_json(c: &Value, version: Option<&str>) -> String {
 /// vsr:1116-1133 makeXml (pseudo-coding, `>`-terminated not self-closed).
 fn make_xml(c: &Value, version: Option<&str>) -> String {
     let mut b = String::from("<coding>");
-    b.push_str(&format!("<system value=\"{}\">", escape_xml(get_str(c, "system").unwrap_or(""))));
+    b.push_str(&format!(
+        "<system value=\"{}\">",
+        escape_xml(get_str(c, "system").unwrap_or(""))
+    ));
     if let Some(v) = get_str(c, "version") {
         b.push_str(&format!("<version value=\"{}\">", escape_xml(v)));
     } else if let Some(v) = version {
@@ -2032,13 +2353,21 @@ fn push_expansion_header(div: &mut XhtmlNode, ctx: &IgContext, exp: &ExpandedVal
         }
         let val = p
             .as_object()
-            .and_then(|o| o.iter().find(|(k, _)| k.starts_with("value")).and_then(|(_, v)| v.as_str()))
+            .and_then(|o| {
+                o.iter()
+                    .find(|(k, _)| k.starts_with("value"))
+                    .and_then(|(_, v)| v.as_str())
+            })
             .unwrap_or("");
         if seen.contains(&val.to_string()) {
             continue;
         }
         seen.push(val.to_string());
-        let logical = if name == "version" { "system".to_string() } else { name[5..].to_string() };
+        let logical = if name == "version" {
+            "system".to_string()
+        } else {
+            name[5..].to_string()
+        };
         if let Some((sys, ver)) = val.split_once('|') {
             if !sys.is_empty() {
                 versions.push((logical, sys.to_string(), ver.to_string()));
@@ -2054,7 +2383,10 @@ fn push_expansion_header(div: &mut XhtmlNode, ctx: &IgContext, exp: &ExpandedVal
     if versions.len() == 1 {
         let (name, sys, ver) = &versions[0];
         let mut p = el("p");
-        p.set_attribute("style", "border: black 1px dotted; background-color: #EEEEEE; padding: 8px; margin-bottom: 8px");
+        p.set_attribute(
+            "style",
+            "border: black 1px dotted; background-color: #EEEEEE; padding: 8px; margin-bottom: 8px",
+        );
         match &exp.source {
             None => tx(&mut p, "Expansion based on "),
             Some(s) if s == "internal" => tx(&mut p, "Expansion performed internally based on "),
@@ -2064,7 +2396,10 @@ fn push_expansion_header(div: &mut XhtmlNode, ctx: &IgContext, exp: &ExpandedVal
         div.add_child_node(p);
     } else {
         let mut vdiv = el("div");
-        vdiv.set_attribute("style", "border: black 1px dotted; background-color: #EEEEEE; padding: 8px; margin-bottom: 8px");
+        vdiv.set_attribute(
+            "style",
+            "border: black 1px dotted; background-color: #EEEEEE; padding: 8px; margin-bottom: 8px",
+        );
         let mut p = el("p");
         match &exp.source {
             None => tx(&mut p, "Expansion based on:"),
@@ -2092,7 +2427,10 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
         if parts.len() >= 5 {
             let m = describe_module(parts[4]);
             if parts.len() == 7 {
-                tx(x, &format!("SNOMED CT {} edition {}", m, format_sct_date(parts[6])));
+                tx(
+                    x,
+                    &format!("SNOMED CT {} edition {}", m, format_sct_date(parts[6])),
+                );
             } else {
                 tx(x, &format!("SNOMED CT {} edition", m));
             }
@@ -2109,28 +2447,43 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
         // tx-fetched external CS: webPath = {server}/ValueSet/{id}; present() =
         // title||name; fhirType = CodeSystem.
         let id = get_str(&json, "id").unwrap_or("");
-        let present = get_str(&json, "title").or_else(|| get_str(&json, "name")).unwrap_or("");
+        let present = get_str(&json, "title")
+            .or_else(|| get_str(&json, "name"))
+            .unwrap_or("");
         let web = format!("{}/ValueSet/{}", server.trim_end_matches('/'), id);
         let mut a = el("a");
         a.set_attribute("href", web);
         if v.is_empty() {
-            tx(&mut a, &format!("{} {} (no version) (CodeSystem)", t, present));
+            tx(
+                &mut a,
+                &format!("{} {} (no version) (CodeSystem)", t, present),
+            );
         } else {
             tx(&mut a, &format!("{} {} v{} (CodeSystem)", t, present, v));
         }
         x.add_child_node(a);
     } else {
         // resolve the CS by canonical.
-        let canonical = if v.is_empty() { u.to_string() } else { format!("{}|{}", u, v) };
+        let canonical = if v.is_empty() {
+            u.to_string()
+        } else {
+            format!("{}|{}", u, v)
+        };
         let r = ctx.resolve(&canonical).or_else(|| ctx.resolve(u));
         match r {
             Some(rr) if !rr.web_path.is_empty() => {
                 let mut a = el("a");
                 a.set_attribute("href", rr.web_path.clone());
                 if v.is_empty() {
-                    tx(&mut a, &format!("{} {} (no version) ({})", t, rr.present(), rr.rtype));
+                    tx(
+                        &mut a,
+                        &format!("{} {} (no version) ({})", t, rr.present(), rr.rtype),
+                    );
                 } else {
-                    tx(&mut a, &format!("{} {} v{} ({})", t, rr.present(), v, rr.rtype));
+                    tx(
+                        &mut a,
+                        &format!("{} {} v{} ({})", t, rr.present(), v, rr.rtype),
+                    );
                 }
                 x.add_child_node(a);
             }
@@ -2140,7 +2493,11 @@ fn exp_ref(x: &mut XhtmlNode, t: &str, u: &str, v: &str, ctx: &IgContext) {
         }
     }
     // copy-url button.
-    let copy_url = if v.is_empty() { u.to_string() } else { format!("{}|{}", u, v) };
+    let copy_url = if v.is_empty() {
+        u.to_string()
+    } else {
+        format!("{}|{}", u, v)
+    };
     let mut span = el("span");
     span.set_attribute("class", "copy-text-inline");
     let mut btn = el("button");
@@ -2199,7 +2556,9 @@ fn data_process_relative_urls(markdown: &str, path: &str) -> String {
             }
             if j < bytes.len() {
                 let url: String = bytes[i + 2..j].iter().collect();
-                let absolute = url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:");
+                let absolute = url.starts_with("http://")
+                    || url.starts_with("https://")
+                    || url.starts_with("mailto:");
                 out.push_str("](");
                 if !absolute && !url.starts_with("..") {
                     out.push_str(base_path);
@@ -2241,7 +2600,9 @@ fn format_sct_date(ds: &str) -> String {
     if ds.len() != 8 {
         return ds.to_string();
     }
-    let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ];
     let y = &ds[0..4];
     let mo: usize = ds[4..6].parse().unwrap_or(1);
     let d = &ds[6..8];

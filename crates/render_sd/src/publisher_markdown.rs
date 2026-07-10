@@ -255,7 +255,7 @@ const BASE_FILENAMES: &[&str] = &[
     "workflow-management",
     "workflow-module",
     "workflow-extensions",
-    "xml"
+    "xml",
 ];
 
 /// `MarkDownProcessor.preProcess` (MDP:222-237): backslash-escape raw HTML tags so
@@ -289,7 +289,11 @@ fn pre_process(source: &str) -> String {
                 if has_slash {
                     j += 1;
                 }
-                if chars.get(j).map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+                if chars
+                    .get(j)
+                    .map(|c| c.is_ascii_alphabetic())
+                    .unwrap_or(false)
+                {
                     // name: [A-Za-z][A-Za-z0-9-]*
                     let mut k = j + 1;
                     while chars
@@ -300,7 +304,11 @@ fn pre_process(source: &str) -> String {
                         k += 1;
                     }
                     // then a [\s>] (whitespace or '>') — consumed as $2's last char.
-                    if chars.get(k).map(|c| c.is_whitespace() || *c == '>').unwrap_or(false) {
+                    if chars
+                        .get(k)
+                        .map(|c| c.is_whitespace() || *c == '>')
+                        .unwrap_or(false)
+                    {
                         // match: emit \ then the '<', then (/)?, then name, then the trailing char.
                         out.push('\\');
                         out.push('<');
@@ -335,7 +343,10 @@ pub fn md_process(source: &str) -> String {
     // `|` followed by a `---|---` delimiter row) would need the extension — fire a
     // loud gap so it's never silently mis-rendered.
     if has_gfm_table(&pre) {
-        crate::loud_gap!((), "LOUD GAP: publisher_markdown TablesExtension (MDP:240) — GFM table in markdown source");
+        crate::loud_gap!(
+            (),
+            "LOUD GAP: publisher_markdown TablesExtension (MDP:240) — GFM table in markdown source"
+        );
     }
     let html = commonmark::render_html(&pre);
     html.replace("<table>", "<table class=\"grid\">")
@@ -349,7 +360,10 @@ fn has_gfm_table(s: &str) -> bool {
     for w in lines.windows(2) {
         if w[0].contains('|') {
             let d = w[1].trim();
-            if !d.is_empty() && d.contains('-') && d.chars().all(|c| matches!(c, '-' | ':' | '|' | ' ')) {
+            if !d.is_empty()
+                && d.contains('-')
+                && d.chars().all(|c| matches!(c, '-' | ':' | '|' | ' '))
+            {
                 return true;
             }
         }
@@ -479,7 +493,9 @@ fn is_absolute_url(url: &str) -> bool {
         let scheme = &url[..colon];
         if !scheme.is_empty()
             && scheme.chars().next().unwrap().is_ascii_alphabetic()
-            && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-'))
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-'))
             && url[colon + 1..].starts_with("//")
         {
             return true;
@@ -526,36 +542,153 @@ fn is_likely_source_url_reference(url: &str, base_url: &str, resource_names: boo
 /// / `bundle.html` link in an element definition's markdown is thus recognised as
 /// a spec source page and corePath-prefixed — matching the goldens.
 const R4_RESOURCE_NAMES: &[&str] = &[
-    "account", "activitydefinition", "adverseevent", "allergyintolerance", "appointment",
-    "appointmentresponse", "auditevent", "basic", "binary", "biologicallyderivedproduct",
-    "bodystructure", "bundle", "capabilitystatement", "careplan", "careteam", "catalogentry",
-    "chargeitem", "chargeitemdefinition", "claim", "claimresponse", "clinicalimpression",
-    "codesystem", "communication", "communicationrequest", "compartmentdefinition", "composition",
-    "conceptmap", "condition", "consent", "contract", "coverage", "coverageeligibilityrequest",
-    "coverageeligibilityresponse", "detectedissue", "device", "devicedefinition", "devicemetric",
-    "devicerequest", "deviceusestatement", "diagnosticreport", "documentmanifest",
-    "documentreference", "domainresource", "effectevidencesynthesis", "encounter", "endpoint",
-    "enrollmentrequest", "enrollmentresponse", "episodeofcare", "eventdefinition", "evidence",
-    "evidencevariable", "examplescenario", "explanationofbenefit", "familymemberhistory", "flag",
-    "goal", "graphdefinition", "group", "guidanceresponse", "healthcareservice", "imagingstudy",
-    "immunization", "immunizationevaluation", "immunizationrecommendation", "implementationguide",
-    "insuranceplan", "invoice", "library", "linkage", "list", "location", "measure", "measurereport",
-    "media", "medication", "medicationadministration", "medicationdispense", "medicationknowledge",
-    "medicationrequest", "medicationstatement", "medicinalproduct", "medicinalproductauthorization",
-    "medicinalproductcontraindication", "medicinalproductindication", "medicinalproductingredient",
-    "medicinalproductinteraction", "medicinalproductmanufactured", "medicinalproductpackaged",
-    "medicinalproductpharmaceutical", "medicinalproductundesirableeffect", "messagedefinition",
-    "messageheader", "molecularsequence", "namingsystem", "nutritionorder", "observation",
-    "observationdefinition", "operationdefinition", "operationoutcome", "organization",
-    "organizationaffiliation", "parameters", "patient", "paymentnotice", "paymentreconciliation",
-    "person", "plandefinition", "practitioner", "practitionerrole", "procedure", "provenance",
-    "questionnaire", "questionnaireresponse", "relatedperson", "requestgroup", "researchdefinition",
-    "researchelementdefinition", "researchstudy", "researchsubject", "resource", "riskassessment",
-    "riskevidencesynthesis", "schedule", "searchparameter", "servicerequest", "slot", "specimen",
-    "specimendefinition", "structuredefinition", "structuremap", "subscription", "substance",
-    "substancenucleicacid", "substancepolymer", "substanceprotein", "substancereferenceinformation",
-    "substancesourcematerial", "substancespecification", "supplydelivery", "supplyrequest", "task",
-    "terminologycapabilities", "testreport", "testscript", "valueset", "verificationresult",
+    "account",
+    "activitydefinition",
+    "adverseevent",
+    "allergyintolerance",
+    "appointment",
+    "appointmentresponse",
+    "auditevent",
+    "basic",
+    "binary",
+    "biologicallyderivedproduct",
+    "bodystructure",
+    "bundle",
+    "capabilitystatement",
+    "careplan",
+    "careteam",
+    "catalogentry",
+    "chargeitem",
+    "chargeitemdefinition",
+    "claim",
+    "claimresponse",
+    "clinicalimpression",
+    "codesystem",
+    "communication",
+    "communicationrequest",
+    "compartmentdefinition",
+    "composition",
+    "conceptmap",
+    "condition",
+    "consent",
+    "contract",
+    "coverage",
+    "coverageeligibilityrequest",
+    "coverageeligibilityresponse",
+    "detectedissue",
+    "device",
+    "devicedefinition",
+    "devicemetric",
+    "devicerequest",
+    "deviceusestatement",
+    "diagnosticreport",
+    "documentmanifest",
+    "documentreference",
+    "domainresource",
+    "effectevidencesynthesis",
+    "encounter",
+    "endpoint",
+    "enrollmentrequest",
+    "enrollmentresponse",
+    "episodeofcare",
+    "eventdefinition",
+    "evidence",
+    "evidencevariable",
+    "examplescenario",
+    "explanationofbenefit",
+    "familymemberhistory",
+    "flag",
+    "goal",
+    "graphdefinition",
+    "group",
+    "guidanceresponse",
+    "healthcareservice",
+    "imagingstudy",
+    "immunization",
+    "immunizationevaluation",
+    "immunizationrecommendation",
+    "implementationguide",
+    "insuranceplan",
+    "invoice",
+    "library",
+    "linkage",
+    "list",
+    "location",
+    "measure",
+    "measurereport",
+    "media",
+    "medication",
+    "medicationadministration",
+    "medicationdispense",
+    "medicationknowledge",
+    "medicationrequest",
+    "medicationstatement",
+    "medicinalproduct",
+    "medicinalproductauthorization",
+    "medicinalproductcontraindication",
+    "medicinalproductindication",
+    "medicinalproductingredient",
+    "medicinalproductinteraction",
+    "medicinalproductmanufactured",
+    "medicinalproductpackaged",
+    "medicinalproductpharmaceutical",
+    "medicinalproductundesirableeffect",
+    "messagedefinition",
+    "messageheader",
+    "molecularsequence",
+    "namingsystem",
+    "nutritionorder",
+    "observation",
+    "observationdefinition",
+    "operationdefinition",
+    "operationoutcome",
+    "organization",
+    "organizationaffiliation",
+    "parameters",
+    "patient",
+    "paymentnotice",
+    "paymentreconciliation",
+    "person",
+    "plandefinition",
+    "practitioner",
+    "practitionerrole",
+    "procedure",
+    "provenance",
+    "questionnaire",
+    "questionnaireresponse",
+    "relatedperson",
+    "requestgroup",
+    "researchdefinition",
+    "researchelementdefinition",
+    "researchstudy",
+    "researchsubject",
+    "resource",
+    "riskassessment",
+    "riskevidencesynthesis",
+    "schedule",
+    "searchparameter",
+    "servicerequest",
+    "slot",
+    "specimen",
+    "specimendefinition",
+    "structuredefinition",
+    "structuremap",
+    "subscription",
+    "substance",
+    "substancenucleicacid",
+    "substancepolymer",
+    "substanceprotein",
+    "substancereferenceinformation",
+    "substancesourcematerial",
+    "substancespecification",
+    "supplydelivery",
+    "supplyrequest",
+    "task",
+    "terminologycapabilities",
+    "testreport",
+    "testscript",
+    "valueset",
+    "verificationresult",
     "visionprescription",
 ];
 

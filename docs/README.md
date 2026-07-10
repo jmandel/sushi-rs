@@ -1,55 +1,70 @@
-# docs/ — current-state map
+# Engine documentation map
 
-What each doc is, and whether it drives current work or is history. Written
-2026-07-03 (Consolidation Pass 1). When plans supersede each other, the newer one
-wins and the older carries an inline SUPERSEDED marker.
+Documentation in this directory spans several implementation phases. Use the
+following precedence when statements conflict:
 
-## Start here (active plans + specs)
+1. the editor's current
+   [`SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md) for
+   the cross-repository browser/renderer contract;
+2. the engine [`README.md`](../README.md),
+   [`crates/site_build/README.md`](../crates/site_build/README.md), and current
+   guides below for engine-specific contracts; then
+3. dated plans, audits, surveys, and worklogs as historical evidence.
 
-| Doc | Kind | State | What it governs |
-|---|---|---|---|
-| `hosting.md` | **GUIDE** | **ACTIVE** | How to host the engine: browser worker, Bun/Node custom generators, non-JS shell-to-fig, the envelope schema, the adapter contract, template-as-data. Every example is CI-executed (`scripts/examples-gate.sh` over `examples/`). |
-| `unified-cli-plan.md` | **PLAN** | **SHIPPED** | The `fig` unified CLI (Consolidation Pass 2): one binary, subcommands = the Session op surface, `--json` = the shared envelope, render/watch/runner. Folds in snapshot_gen/site_db binaries. |
-| `stock-template-renderer-plan.md` | **COMMITTED PLAN** | **ACTIVE** | The F0–F6 plan: in-browser Publisher-parity page rendering (xhtml/tables/sd/md/liquid/page substrates → editor integration at F6). The current center of gravity. |
-| `fhir-ig-editor-spec.md` | SPEC | ACTIVE | The editor demo repo (`jmandel/fhir-ig-editor`) — M1/M2 milestones, worker protocol, UI scope. |
-| `simplification-ledger.md` | LEDGER | ACTIVE | Complexity-by-accretion candidates + consolidation-pass results. Runs at phase boundaries with gate discipline. |
-| `render-worklog.md` | WORKLOG | ACTIVE | Per-increment derivation log for the F2–F5 render port (byte-parity scorecards, quirk case-law). |
+## Current guides and contracts
 
-## Feasibility + design notes (reference; not schedules)
+| Document | Authority |
+| --- | --- |
+| [`hosting.md`](hosting.md) | Current guide to isolated `Session` ownership, compile/projection sequencing, closed external builds, native typed resolution, CLI hosting, and envelopes. |
+| [`site-producer.md`](site-producer.md) | Current implementation note for source-driven Publisher page shells and `_data`, including the landed WASM path and known model gaps. |
+| [`package-derived-index.md`](package-derived-index.md) | Implemented native CAS derived-index design and invariants. |
+| [`designs/package-acquisition-plan.md`](designs/package-acquisition-plan.md) | Historical design for the now-implemented CAS/acquisition/materialization subsystem; current commands live in the root README. |
 
-| Doc | State | Notes |
-|---|---|---|
-| `rust-fragment-generator-feasibility.md` | REFERENCE | Task #23 study the renderer plan operationalizes — read for the evidence behind F-phases. |
-| `ig-jekyll-surface-survey.md` | REFERENCE | Empirical Jekyll/Liquid feature survey (the F1c cutline). |
-| `publisher-fragments-notes.md` | REFERENCE | How the Java Publisher decides which xhtml fragments to emit (the F2–F4 spec source). |
-| `cycle-package-db-plan.md` | REFERENCE | Gap analysis: Rust pipeline as cycle's package.db producer (site_db lineage). |
-| `package-derived-index.md` | REFERENCE | Design note for the CAS derived-index (clarity pass #12b). |
-| `layer-b-audit.md` | REFERENCE | Canonical version pinning + the R4-artifact projection (resolver lineage). |
+The API definitions themselves remain authoritative: `crates/site_build`,
+`crates/wasm_api`, `crates/render_page`, and `crates/fig`.
 
-## Superseded / historical
+## Reference evidence
 
-| Doc | State | Pointer |
-|---|---|---|
-| `wasm-editor-plan.md` | **PARTLY SUPERSEDED** | P0/P1/P2 DONE (keep for rationale + DONE evidence); P3/P4 → `stock-template-renderer-plan.md` F5/F6 + `fhir-ig-editor-spec.md`. |
+These are still useful inputs, but they describe a pinned corpus, tool version,
+or investigated surface rather than today's architecture:
 
-## Performance dossier (Phase-9 perf week + ongoing)
+| Document | What it preserves |
+| --- | --- |
+| [`ig-jekyll-surface-survey.md`](ig-jekyll-surface-survey.md) | Empirical Liquid/Jekyll feature distribution. |
+| [`publisher-fragments-notes.md`](publisher-fragments-notes.md) | Pinned Java Publisher fragment-generation behavior. |
+| [`rust-fragment-generator-feasibility.md`](rust-fragment-generator-feasibility.md) | Pre-implementation feasibility study. |
+| [`template-machinery-notes.md`](template-machinery-notes.md) | Investigation that led to the driven template loader. |
+| [`layer-b-audit.md`](layer-b-audit.md) | Pinned Publisher/core versioning and projection audit. |
+| [`perf31.md`](perf31.md), [`perf-snapshot-gen.md`](perf-snapshot-gen.md) | Performance methodology and measured findings. |
 
-| Doc | State | Notes |
-|---|---|---|
-| `perf-protocol.md` | HISTORICAL | The perf-week agent/curator protocol. |
-| `perf-map.md` | HISTORICAL | Perf opportunity map by area (lane assignment). |
-| `perf-notes.md` | HISTORICAL | Phase-9 perf findings (DONE 2026-06-30). |
-| `perf31.md` | REFERENCE | The 31-IG two-phase performance harness writeup. |
-| `perf-snapshot-gen.md` | REFERENCE | Perf log for the snapshot_gen walk engine (#12a); "future levers" still cited. |
+## Historical plans and ledgers
 
-## Corpus / validation findings (point-in-time, 2026-06-30)
+These explain how the current code was derived. They are not active API or
+product specifications:
 
-Snapshots of parity-sweep results — evidence, not plans. `harvest-findings.md`,
-`holdout-findings.md`, `mining-findings.md`, `top20-findings.md`,
-`next20-findings.md`.
+- [`stock-template-renderer-plan.md`](stock-template-renderer-plan.md)
+- [`unified-cli-plan.md`](unified-cli-plan.md)
+- [`cycle-package-db-plan.md`](cycle-package-db-plan.md)
+- [`wasm-editor-plan.md`](wasm-editor-plan.md)
+- [`fhir-ig-editor-spec.md`](fhir-ig-editor-spec.md)
+- [`render-worklog.md`](render-worklog.md)
+- [`simplification-ledger.md`](simplification-ledger.md)
+- [`opfs-cas-design.md`](opfs-cas-design.md)
 
----
+Their shipped findings may still be correct, but terms such as “all adapters
+consume site.db,” “first include miss,” “global engine,” or milestone/branch
+status must not be treated as the current contract. In particular, `SiteBuild`
+is now renderer-neutral, Cycle receives a verified `ClosedSiteBuild`, and native
+Publisher pages use a typed `ArtifactResolver`.
 
-For scripts (gates, oracles, harvest, dashboards) see **`scripts/README.md`**.
-For the snapshot walk engine's own notes see **`snapshot/AGENTS.md`** +
-**`snapshot/REWORK-PLAN.md`**.
+## Point-in-time corpus and performance records
+
+`harvest-findings.md`, `holdout-findings.md`, `mining-findings.md`,
+`top20-findings.md`, `next20-findings.md`, `perf-map.md`, `perf-notes.md`, and
+`perf-protocol.md` are dated validation/performance records. The JSON files in
+this directory are corresponding fixture/configuration data, not narrative
+contracts.
+
+For gate and oracle scripts, see [`scripts/README.md`](../scripts/README.md).
+For snapshot-specific history, see `snapshot/AGENTS.md` and
+`snapshot/REWORK-PLAN.md`.

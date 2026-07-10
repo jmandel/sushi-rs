@@ -140,14 +140,62 @@ fn render(
             let (b, _gaps) = render_table(sd, ctx?, &def_file, &cfg);
             b
         }
-        "snapshot-bindings" => cfg_render(TableConfig::snapshot_bindings(run_uuid), active_tables, sd, ctx?, &def_file),
-        "snapshot-bindings-all" => cfg_render(TableConfig::snapshot_bindings_all(run_uuid), active_tables, sd, ctx?, &def_file),
-        "snapshot-obligations" => cfg_render(TableConfig::snapshot_obligations(run_uuid), active_tables, sd, ctx?, &def_file),
-        "snapshot-obligations-all" => cfg_render(TableConfig::snapshot_obligations_all(run_uuid), active_tables, sd, ctx?, &def_file),
-        "diff-bindings" => cfg_render(TableConfig::diff_bindings(run_uuid), active_tables, sd, ctx?, &def_file),
-        "diff-bindings-all" => cfg_render(TableConfig::diff_bindings_all(run_uuid), active_tables, sd, ctx?, &def_file),
-        "diff-obligations" => cfg_render(TableConfig::diff_obligations(run_uuid), active_tables, sd, ctx?, &def_file),
-        "diff-obligations-all" => cfg_render(TableConfig::diff_obligations_all(run_uuid), active_tables, sd, ctx?, &def_file),
+        "snapshot-bindings" => cfg_render(
+            TableConfig::snapshot_bindings(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "snapshot-bindings-all" => cfg_render(
+            TableConfig::snapshot_bindings_all(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "snapshot-obligations" => cfg_render(
+            TableConfig::snapshot_obligations(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "snapshot-obligations-all" => cfg_render(
+            TableConfig::snapshot_obligations_all(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "diff-bindings" => cfg_render(
+            TableConfig::diff_bindings(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "diff-bindings-all" => cfg_render(
+            TableConfig::diff_bindings_all(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "diff-obligations" => cfg_render(
+            TableConfig::diff_obligations(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
+        "diff-obligations-all" => cfg_render(
+            TableConfig::diff_obligations_all(run_uuid),
+            active_tables,
+            sd,
+            ctx?,
+            &def_file,
+        ),
         // ---- F4 leaf kinds ----
         "contained-index" | "history" => render_sd::leaf::empty_body(),
         "pseudo-ttl" => render_sd::leaf::pseudo_ttl(),
@@ -158,16 +206,71 @@ fn render(
         "inv-diff" => render_sd::leaf::inv(sd, ctx?, true, render_sd::leaf::GenMode::Diff, true),
         "sd-use-context" => render_sd::leaf::use_context(sd, ctx?, &core_path_for(sd)),
         "tx" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx()),
-        "tx-must-support" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_must_support()),
-        "tx-key" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_key()),
-        "tx-diff" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_diff()),
-        "tx-diff-must-support" => render_sd::tx::render_tx(sd, ctx?, &core_path_for(sd), render_sd::tx::TxOpts::tx_diff_must_support()),
+        "tx-must-support" => render_sd::tx::render_tx(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            render_sd::tx::TxOpts::tx_must_support(),
+        ),
+        "tx-key" => render_sd::tx::render_tx(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            render_sd::tx::TxOpts::tx_key(),
+        ),
+        "tx-diff" => render_sd::tx::render_tx(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            render_sd::tx::TxOpts::tx_diff(),
+        ),
+        "tx-diff-must-support" => render_sd::tx::render_tx(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            render_sd::tx::TxOpts::tx_diff_must_support(),
+        ),
         // ---- dict fragment family ----
-        "dict" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_SNAP, ""),
-        "dict-active" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), false, render_sd::dict::GEN_MODE_SNAP, ""),
-        "dict-diff" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_DIFF, "diff_"),
-        "dict-ms" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_MS, "ms_"),
-        "dict-key" => render_sd::dict::render_dict(sd, ctx?, &core_path_for(sd), true, render_sd::dict::GEN_MODE_KEY, "key_"),
+        "dict" => render_sd::dict::render_dict(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            true,
+            render_sd::dict::GEN_MODE_SNAP,
+            "",
+        ),
+        "dict-active" => render_sd::dict::render_dict(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            false,
+            render_sd::dict::GEN_MODE_SNAP,
+            "",
+        ),
+        "dict-diff" => render_sd::dict::render_dict(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            true,
+            render_sd::dict::GEN_MODE_DIFF,
+            "diff_",
+        ),
+        "dict-ms" => render_sd::dict::render_dict(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            true,
+            render_sd::dict::GEN_MODE_MS,
+            "ms_",
+        ),
+        "dict-key" => render_sd::dict::render_dict(
+            sd,
+            ctx?,
+            &core_path_for(sd),
+            true,
+            render_sd::dict::GEN_MODE_KEY,
+            "key_",
+        ),
         "summary" => render_sd::leaf::summary(sd, ctx?, false, &core_path_for(sd)),
         "summary-all" => render_sd::leaf::summary(sd, ctx?, true, &core_path_for(sd)),
         "uses" => render_sd::xref::uses(sd, ctx?),
@@ -182,7 +285,9 @@ fn render(
 /// (documented quirk: HierarchicalTableGenerator.uuid is a per-JVM random).
 fn harvest_uuid(ig: &str) -> String {
     let dir = format!("{}/render-goldens/{}/fragments", REPO, ig);
-    let Ok(rd) = std::fs::read_dir(&dir) else { return String::new() };
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return String::new();
+    };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
         if name.ends_with("-snapshot.xhtml") {
@@ -207,14 +312,27 @@ fn harvest_uuid(ig: &str) -> String {
 /// the base/davinci templates default true (verified in F0 template dirs).
 fn ig_active_tables(ig: &str) -> bool {
     let candidates = match ig {
-        "us-core" => vec![format!("{}/us-core/template/onGenerate-ig-working.json", F0), format!("{}/us-core/template/onLoad-ig-working.json", F0)],
-        "plan-net" => vec![format!("{}/plan-net/template/onGenerate-ig-working.json", F0), format!("{}/plan-net/template/onLoad-ig-working.json", F0)],
-        "cycle" => vec!["/home/jmandel/hobby/periodicity-impl/cycle/template/onGenerate-ig-working.json".to_string()],
+        "us-core" => vec![
+            format!("{}/us-core/template/onGenerate-ig-working.json", F0),
+            format!("{}/us-core/template/onLoad-ig-working.json", F0),
+        ],
+        "plan-net" => vec![
+            format!("{}/plan-net/template/onGenerate-ig-working.json", F0),
+            format!("{}/plan-net/template/onLoad-ig-working.json", F0),
+        ],
+        "cycle" => vec![
+            "/home/jmandel/hobby/periodicity-impl/cycle/template/onGenerate-ig-working.json"
+                .to_string(),
+        ],
         _ => vec![],
     };
     for c in candidates {
-        let Ok(text) = std::fs::read_to_string(&c) else { continue };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { continue };
+        let Ok(text) = std::fs::read_to_string(&c) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
         if let Some(params) = v
             .get("definition")
             .and_then(|d| d.get("parameter"))
@@ -251,7 +369,10 @@ fn build_ctx(ig: &str) -> Option<IgContext> {
             "/home/jmandel/hobby/periodicity-impl/cycle/temp/pages".to_string(),
             // cycle's build used the user's global package cache (no isolated
             // HOME — see render-goldens/cycle/PIN.md).
-            format!("{}/.fhir/packages", std::env::var("HOME").unwrap_or_default()),
+            format!(
+                "{}/.fhir/packages",
+                std::env::var("HOME").unwrap_or_default()
+            ),
             Some("/home/jmandel/hobby/periodicity-impl/cycle/input-cache/txcache".to_string()),
         ),
         _ => return None,
@@ -350,7 +471,11 @@ fn ig_resource(ig: &str) -> Option<(String, String, String)> {
             let v: serde_json::Value = serde_json::from_str(&t).ok()?;
             let id = v.get("id").and_then(|x| x.as_str())?.to_string();
             let url = v.get("url").and_then(|x| x.as_str())?.to_string();
-            let ver = v.get("version").and_then(|x| x.as_str()).unwrap_or("").to_string();
+            let ver = v
+                .get("version")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string();
             return Some((id, url, ver));
         }
     }
@@ -421,7 +546,12 @@ fn singleton_core_path(ig: &str) -> String {
             if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
                 if let Ok(t) = std::fs::read_to_string(e.path()) {
                     if let Ok(j) = serde_json::from_str::<serde_json::Value>(&t) {
-                        if let Some(fv) = j.get("fhirVersion").and_then(|x| x.as_array()).and_then(|a| a.first()).and_then(|x| x.as_str()) {
+                        if let Some(fv) = j
+                            .get("fhirVersion")
+                            .and_then(|x| x.as_array())
+                            .and_then(|a| a.first())
+                            .and_then(|x| x.as_str())
+                        {
                             v = fv.to_string();
                         }
                     }
@@ -459,7 +589,10 @@ fn dep_cache_dir(ig: &str) -> PathBuf {
     match ig {
         "us-core" => PathBuf::from(format!("{}/us-core/.home/.fhir/packages", F0)),
         "plan-net" => PathBuf::from(format!("{}/plan-net/.home/.fhir/packages", F0)),
-        "cycle" => PathBuf::from(format!("{}/.fhir/packages", std::env::var("HOME").unwrap_or_default())),
+        "cycle" => PathBuf::from(format!(
+            "{}/.fhir/packages",
+            std::env::var("HOME").unwrap_or_default()
+        )),
         _ => PathBuf::new(),
     }
 }
@@ -495,7 +628,10 @@ fn dep_ig_json(ig: &str) -> serde_json::Value {
 /// HTG run-uuid. (The nontech table this feeds is a DIFFERENT fragment/traversal,
 /// so this is a cross-fragment oracle input, not circular for nontech.)
 fn dep_loaded_set(ig: &str) -> std::collections::HashSet<String> {
-    let golden = format!("{}/render-goldens/{}/fragments/dependency-table.xhtml", REPO, ig);
+    let golden = format!(
+        "{}/render-goldens/{}/fragments/dependency-table.xhtml",
+        REPO, ig
+    );
     let mut set = std::collections::HashSet::new();
     if let Ok(text) = std::fs::read_to_string(&golden) {
         // simplifier.net/packages/{id}/{version} -> {id}#{version}
@@ -556,7 +692,9 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         "obligation-summary" => agg::obligation_summary(ctx),
         "deleted-extensions" => agg::deleted_extensions(ig_has_previous(ig)),
         "cross-version-analysis" => agg::cross_version_analysis(&npm, ig_new_format(ig), false),
-        "cross-version-analysis-inline" => agg::cross_version_analysis(&npm, ig_new_format(ig), true),
+        "cross-version-analysis-inline" => {
+            agg::cross_version_analysis(&npm, ig_new_format(ig), true)
+        }
         "valueset-list" => agg::valueset_list(ctx, &ig_version(ig)),
         "codesystem-list" => {
             let versions = agg::codesystem_list_versions_flag(ctx, &ig_version(ig));
@@ -578,18 +716,43 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
         }
         "ip-statements" => {
             // trackedFragment "1" (pg:2896): the whole-IG IPStatementsRenderer.
-            format!("{}<!--$$1$$-->", render_sd::ipstmt::ip_statements(ctx, &dep_ig_json(ig)))
+            format!(
+                "{}<!--$$1$$-->",
+                render_sd::ipstmt::ip_statements(ctx, &dep_ig_json(ig))
+            )
         }
         "dependency-table" => format!(
             "{}<!--$$3$$-->",
-            render_sd::deptable::dependency_table(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig), &dep_dst_folder(ig), true, harvest_uuid(ig).as_str())
+            render_sd::deptable::dependency_table(
+                &dep_cache_dir(ig),
+                &dep_ig_json(ig),
+                &dep_loaded_set(ig),
+                &dep_dst_folder(ig),
+                true,
+                harvest_uuid(ig).as_str()
+            )
         ),
         "dependency-table-short" => format!(
             "{}<!--$$3$$-->",
-            render_sd::deptable::dependency_table(&dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig), &dep_dst_folder(ig), false, harvest_uuid(ig).as_str())
+            render_sd::deptable::dependency_table(
+                &dep_cache_dir(ig),
+                &dep_ig_json(ig),
+                &dep_loaded_set(ig),
+                &dep_dst_folder(ig),
+                false,
+                harvest_uuid(ig).as_str()
+            )
         ),
         "dependency-table-nontech" => {
-            format!("{}<!--$$3$$-->", render_sd::deptable::dependency_table_nontech(&render_sd::tree::FsTree, &dep_cache_dir(ig), &dep_ig_json(ig), &dep_loaded_set(ig)))
+            format!(
+                "{}<!--$$3$$-->",
+                render_sd::deptable::dependency_table_nontech(
+                    &render_sd::tree::FsTree,
+                    &dep_cache_dir(ig),
+                    &dep_ig_json(ig),
+                    &dep_loaded_set(ig)
+                )
+            )
         }
         // *-ref(-all)-list: renderVSList/renderCSList(used=true), pg:2789-2809.
         // The CS ref Version flag is needVersionReferences over the used-VS list
@@ -616,8 +779,8 @@ fn render_singleton(kind: &str, ig: &str, ctx: &IgContext) -> String {
 fn run_singleton(kind: &str, ig: &str, verbose: bool) {
     let ctx = build_ctx(ig).unwrap_or_else(|| panic!("no ctx for {}", ig));
     let gp = singleton_golden(ig, kind);
-    let golden = std::fs::read_to_string(&gp)
-        .unwrap_or_else(|_| panic!("no golden {}", gp.display()));
+    let golden =
+        std::fs::read_to_string(&gp).unwrap_or_else(|_| panic!("no golden {}", gp.display()));
     let ours = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         render_singleton(kind, ig, &ctx)
     })) {
@@ -653,7 +816,10 @@ fn run_singleton(kind: &str, ig: &str, verbose: bool) {
 fn txcache_dir(ig: &str) -> Option<PathBuf> {
     match ig {
         "us-core" => Some(PathBuf::from(format!("{}/us-core/input-cache/txcache", F0))),
-        "plan-net" => Some(PathBuf::from(format!("{}/plan-net/input-cache/txcache", F0))),
+        "plan-net" => Some(PathBuf::from(format!(
+            "{}/plan-net/input-cache/txcache",
+            F0
+        ))),
         "cycle" => Some(PathBuf::from(
             "/home/jmandel/hobby/periodicity-impl/cycle/input-cache/txcache",
         )),
@@ -699,12 +865,20 @@ fn run_vscs(kind: &str, ig: &str, verbose: bool) {
     let mut gaps = 0;
     let mut fails: Vec<(String, usize, usize)> = Vec::new();
     for path in entries {
-        let Ok(json) = std::fs::read_to_string(&path) else { continue };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) else { continue };
+        let Ok(json) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) else {
+            continue;
+        };
         if v.get("resourceType").and_then(|x| x.as_str()) != Some(rtype) {
             continue;
         }
-        let id = v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let id = v
+            .get("id")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         let gp = PathBuf::from(format!(
             "{}/render-goldens/{}/fragments/{}-{}-{}.xhtml",
             REPO, ig, prefix, id, golden_suffix
@@ -744,7 +918,11 @@ fn run_vscs(kind: &str, ig: &str, verbose: bool) {
         ig,
         pass,
         total,
-        if gaps > 0 { format!(" ({} gaps)", gaps) } else { String::new() }
+        if gaps > 0 {
+            format!(" ({} gaps)", gaps)
+        } else {
+            String::new()
+        }
     );
     for (id, d, len) in fails.iter().take(20) {
         println!("    {} @ {} / {}", id, d, len);
@@ -797,7 +975,12 @@ fn classify_reflist(ig: &str) {
         tot_res += resolution;
         println!(
             "{} {}: rows ours/gold {}/{}  order-only(unstable)={}  resolution(residual)={}",
-            kind, ig, ro.len(), rg.len(), order_only, resolution
+            kind,
+            ig,
+            ro.len(),
+            rg.len(),
+            order_only,
+            resolution
         );
     }
     println!(
@@ -808,16 +991,27 @@ fn classify_reflist(ig: &str) {
 
 /// Parse a ref-list fragment into url -> (pre-References cells, References SET,
 /// References cell bytes). The References column is the LAST th named "References".
-fn parse_ref_rows(body: &str) -> std::collections::HashMap<String, (String, std::collections::BTreeSet<(String, String)>, String)> {
+fn parse_ref_rows(
+    body: &str,
+) -> std::collections::HashMap<String, (String, std::collections::BTreeSet<(String, String)>, String)>
+{
     let b = body.replace("{% raw %}", "").replace("{% endraw %}", "");
     let mut out = std::collections::HashMap::new();
-    let rows: Vec<&str> = b.split("<tr>").skip(1).map(|s| s.split("</tr>").next().unwrap_or("")).collect();
+    let rows: Vec<&str> = b
+        .split("<tr>")
+        .skip(1)
+        .map(|s| s.split("</tr>").next().unwrap_or(""))
+        .collect();
     if rows.is_empty() {
         return out;
     }
     // header: count th; find References index.
     let header = rows[0];
-    let ths: Vec<&str> = header.split("<th").skip(1).map(|s| s.split("</th>").next().unwrap_or("")).collect();
+    let ths: Vec<&str> = header
+        .split("<th")
+        .skip(1)
+        .map(|s| s.split("</th>").next().unwrap_or(""))
+        .collect();
     let ridx = ths.iter().position(|t| t.contains("References"));
     let Some(ridx) = ridx else { return out };
     for r in &rows[1..] {
@@ -838,10 +1032,13 @@ fn parse_ref_rows(body: &str) -> std::collections::HashMap<String, (String, std:
             .to_string();
         let pre: String = tds[..ridx.min(tds.len())].concat();
         let cell = tds.get(ridx).cloned().unwrap_or_default();
-        let mut set: std::collections::BTreeSet<(String, String)> = std::collections::BTreeSet::new();
+        let mut set: std::collections::BTreeSet<(String, String)> =
+            std::collections::BTreeSet::new();
         // parse <a href="L">T</a> pairs; if "N references" leave the set as a
         // single marker so >=10 collapses compare deterministically.
-        if cell.contains(" references</td>") || cell.contains(" references") && !cell.contains("<a ") {
+        if cell.contains(" references</td>")
+            || cell.contains(" references") && !cell.contains("<a ")
+        {
             set.insert(("__N__".to_string(), cell.clone()));
         } else {
             let mut rest = cell.as_str();
@@ -981,7 +1178,10 @@ fn main() {
         // error writing PNG file!" spans) are invalid oracles — the publisher
         // itself failed on them. Skip with a note (2 plan-net snapshots).
         if golden.contains("<span style=\"color:red\">") && golden.len() < 120 {
-            eprintln!("  skip {} ({}): golden is a publisher error artifact", id, kind);
+            eprintln!(
+                "  skip {} ({}): golden is a publisher error artifact",
+                id, kind
+            );
             continue;
         }
         // Render under catch_unwind so a single SD hitting a documented LOUD
@@ -1027,9 +1227,23 @@ fn main() {
         let _ = missing_golden;
     }
 
-    println!("{} {}: {}/{} byte-identical{}", kind, ig, pass, total, if gaps>0 {format!(" ({} gaps)", gaps)} else {String::new()});
+    println!(
+        "{} {}: {}/{} byte-identical{}",
+        kind,
+        ig,
+        pass,
+        total,
+        if gaps > 0 {
+            format!(" ({} gaps)", gaps)
+        } else {
+            String::new()
+        }
+    );
     if !fails.is_empty() {
-        println!("  {} failures (id, first-divergence-byte, golden-len):", fails.len());
+        println!(
+            "  {} failures (id, first-divergence-byte, golden-len):",
+            fails.len()
+        );
         for (id, d, len) in fails.iter().take(20) {
             println!("    {} @ {} / {}", id, d, len);
         }

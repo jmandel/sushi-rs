@@ -162,8 +162,13 @@ in `package_acquisition`:
   (`package_store::BundleManifest`: `{bundle-format-version, packages:[{id,
   version, bundle, sha256}]}`) — the editor's pin of the exact package set.
 - **Mounting**: `read_bundle(blob)` inflates a bundle to its `filename -> bytes`
-  entries; `BundleSource::mount_package(label, entries)` places them under a
-  synthetic cache root at `<root>/<id>#<ver>/package/...`. Pass
+  entries. Hosts first call `normalize_package_material(label, entries)`, the
+  shared native/WASM trust boundary: it verifies `package.json` identity and
+  dependency shape, validates and retains safe nested template transport,
+  regenerates `.derived-index.json`, and returns canonical compiler-visible
+  top-level bytes for the semantic package lock.
+  `BundleSource::mount_package(label, material.files)` places
+  them under a synthetic cache root at `<root>/<id>#<ver>/package/...`. Pass
   `source.cache_root()` as the `cache_dir` to `new_with`/`for_project_with`. Cold
   start = one fetch + one inflate + map lookups thereafter; no `std::fs`
   (flate2/tar are wasm-clean).
@@ -172,6 +177,6 @@ in `package_acquisition`:
 
 **Gate**: `crates/snapshot_gen/tests/bundle_ladder.rs` builds the r4/r5 core
 bundles from the isolated cache, round-trips them through
-`build_bundle`→`read_bundle`→`mount_package`, and runs the full fixture ladder
+`build_bundle`→`read_normalized_bundle`→`mount_package`, and runs the full fixture ladder
 through a `BundleSource`-backed `PackageContext` — proving the bundle path
 end-to-end, natively, to the same goldens as the disk cache.

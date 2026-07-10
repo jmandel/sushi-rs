@@ -49,7 +49,11 @@ pub fn tokenize(src: &str) -> Vec<Token> {
                 tokens.push(Token::Raw(src[raw_start..i].to_string()));
             }
             let is_output = bytes[i + 1] == b'{';
-            let (close_a, close_b) = if is_output { (b'}', b'}') } else { (b'%', b'}') };
+            let (close_a, close_b) = if is_output {
+                (b'}', b'}')
+            } else {
+                (b'%', b'}')
+            };
             let open_end = i + 2;
             let trim_left = open_end < bytes.len() && bytes[open_end] == b'-';
             let content_start = if trim_left { open_end + 1 } else { open_end };
@@ -81,7 +85,11 @@ pub fn tokenize(src: &str) -> Vec<Token> {
             let trim_right = bytes[close_pos] == b'-';
             let content_end = close_pos;
             let inner = src[content_start..content_end].trim().to_string();
-            let after = if trim_right { close_pos + 3 } else { close_pos + 2 };
+            let after = if trim_right {
+                close_pos + 3
+            } else {
+                close_pos + 2
+            };
 
             // Special-case `{% raw %}`: capture its body VERBATIM from source up
             // to `{% endraw %}` (matching Liquid's raw, which does not re-tokenize
@@ -145,7 +153,11 @@ fn scan_raw_body(src: &str, start: usize) -> Option<(String, bool, usize)> {
                     close = Some((m, false));
                     break;
                 }
-                if bytes[m] == b'-' && m + 2 < bytes.len() && bytes[m + 1] == b'%' && bytes[m + 2] == b'}' {
+                if bytes[m] == b'-'
+                    && m + 2 < bytes.len()
+                    && bytes[m + 1] == b'%'
+                    && bytes[m + 2] == b'}'
+                {
                     close = Some((m, true));
                     break;
                 }

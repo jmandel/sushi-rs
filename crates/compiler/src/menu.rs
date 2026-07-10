@@ -24,7 +24,9 @@ const HEADER: &str = "<!-- menu.xml {% comment %}\n\
 {% endcomment %} -->\n\n";
 
 fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Generate `menu.xml` from a sushi-config YAML string. Returns `None` when the
@@ -36,7 +38,9 @@ pub fn menu_xml(cfg_yaml: &str) -> Option<String> {
     let mut out = String::from(HEADER);
     out.push_str("<ul xmlns=\"http://www.w3.org/1999/xhtml\" class=\"nav navbar-nav\">\n");
     for (label, value) in menu {
-        let Some(label) = label.as_str() else { continue };
+        let Some(label) = label.as_str() else {
+            continue;
+        };
         match value {
             // Dropdown: nested map of child links.
             Value::Mapping(children) => {

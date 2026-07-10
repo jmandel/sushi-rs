@@ -50,12 +50,22 @@ fn build_vfs(ig_dir: &Path, ig_root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     let mut vfs = BTreeMap::new();
     for sub in ["pagecontent", "images", "includes", "resources"] {
         let dir = ig_dir.join("input").join(sub);
-        collect_into(&dir, &ig_dir.join("input"), ig_root.join("input").as_path(), &mut vfs);
+        collect_into(
+            &dir,
+            &ig_dir.join("input"),
+            ig_root.join("input").as_path(),
+            &mut vfs,
+        );
     }
     vfs
 }
 
-fn collect_into(dir: &Path, strip_base: &Path, dest_base: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
+fn collect_into(
+    dir: &Path,
+    strip_base: &Path,
+    dest_base: &Path,
+    out: &mut BTreeMap<PathBuf, Vec<u8>>,
+) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
     };
@@ -139,7 +149,16 @@ fn inmem_rows_match_disk_rows_on_cycle() {
     // construction — same injected epoch).
     if disk_json != mem_json {
         // Pinpoint the first differing top-level table for a useful failure.
-        for key in ["metadata", "resources", "concepts", "valueSetCodes", "pages", "menu", "siteConfig", "assets"] {
+        for key in [
+            "metadata",
+            "resources",
+            "concepts",
+            "valueSetCodes",
+            "pages",
+            "menu",
+            "siteConfig",
+            "assets",
+        ] {
             let d = disk_json.get(key);
             let m = mem_json.get(key);
             assert_eq!(d, m, "site.db table `{key}` differs (disk vs in-memory)");

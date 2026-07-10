@@ -39,9 +39,7 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
         "remove" => Value::str(input.to_str().replace(&arg_str(&a0), "")),
         "remove_first" => Value::str(replace_first(&input.to_str(), &arg_str(&a0), "")),
         "replace" => Value::str(input.to_str().replace(&arg_str(&a0), &arg_str(&a1))),
-        "replace_first" => {
-            Value::str(replace_first(&input.to_str(), &arg_str(&a0), &arg_str(&a1)))
-        }
+        "replace_first" => Value::str(replace_first(&input.to_str(), &arg_str(&a0), &arg_str(&a1))),
         "truncate" => Value::str(truncate(&input.to_str(), &a0, &a1)),
         "truncatewords" => Value::str(truncatewords(&input.to_str(), &a0, &a1)),
         "slice" => slice(&input, &a0, &a1),
@@ -71,8 +69,14 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
             Some(n) => number_value(n.abs()),
             None => Value::Int(0),
         },
-        "ceil" => input.to_number().map(|n| Value::Int(n.ceil() as i64)).unwrap_or(Value::Int(0)),
-        "floor" => input.to_number().map(|n| Value::Int(n.floor() as i64)).unwrap_or(Value::Int(0)),
+        "ceil" => input
+            .to_number()
+            .map(|n| Value::Int(n.ceil() as i64))
+            .unwrap_or(Value::Int(0)),
+        "floor" => input
+            .to_number()
+            .map(|n| Value::Int(n.floor() as i64))
+            .unwrap_or(Value::Int(0)),
         "round" => round(&input, &a0),
         "at_least" => at_least(&input, &a0),
         "at_most" => at_most(&input, &a0),
@@ -89,7 +93,10 @@ pub fn apply(name: &str, input: Value, args: &[Value], named: &[(String, Value)]
         }
         "uniq" => uniq(&input),
         "compact" => {
-            let v: Vec<Value> = to_array(&input).into_iter().filter(|x| !x.is_nil()).collect();
+            let v: Vec<Value> = to_array(&input)
+                .into_iter()
+                .filter(|x| !x.is_nil())
+                .collect();
             Value::array(v)
         }
         "concat" => {
@@ -179,7 +186,15 @@ fn parse_date(input: &str) -> Option<DateParts> {
                 tz = "+0000".to_string();
             }
         }
-        return Some(DateParts { year, month, day, hour, min, sec, tz });
+        return Some(DateParts {
+            year,
+            month,
+            day,
+            hour,
+            min,
+            sec,
+            tz,
+        });
     }
     // genDate: `Fri, Jul 3, 2026 11:10-0500`
     // Drop the weekday prefix up to the first ", ".
@@ -209,7 +224,15 @@ fn parse_date(input: &str) -> Option<DateParts> {
         sec = hp.next().unwrap_or("0").parse().unwrap_or(0);
         tz = tzs.replace(':', "");
     }
-    Some(DateParts { year, month, day, hour, min, sec, tz })
+    Some(DateParts {
+        year,
+        month,
+        day,
+        hour,
+        min,
+        sec,
+        tz,
+    })
 }
 
 /// Apply a strftime format to parsed parts. Supports the corpus tokens
@@ -290,7 +313,10 @@ fn split(input: &Value, sep: &str) -> Value {
 }
 
 fn join(input: &Value, sep: &Option<Value>) -> Value {
-    let sep = sep.as_ref().map(|v| v.to_str()).unwrap_or_else(|| " ".to_string());
+    let sep = sep
+        .as_ref()
+        .map(|v| v.to_str())
+        .unwrap_or_else(|| " ".to_string());
     let parts: Vec<String> = to_array(input).iter().map(|v| v.to_str()).collect();
     Value::str(parts.join(&sep))
 }
@@ -324,7 +350,10 @@ fn uniq(input: &Value) -> Value {
 
 /// Jekyll `map`: pluck a property from each element (item_property).
 fn map_filter(input: &Value, prop: &str) -> Value {
-    let out: Vec<Value> = to_array(input).iter().map(|v| item_property(v, prop)).collect();
+    let out: Vec<Value> = to_array(input)
+        .iter()
+        .map(|v| item_property(v, prop))
+        .collect();
     Value::array(out)
 }
 
@@ -385,7 +414,9 @@ fn parse_sort_input(v: &Value) -> Value {
                 return Value::Int(i);
             }
             if let Ok(f) = t.parse::<f64>() {
-                if t.chars().all(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+')) {
+                if t.chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, '.' | '-' | '+'))
+                {
                     return Value::Float(f);
                 }
             }
@@ -458,7 +489,8 @@ fn natural_cmp(a: &Value, b: &Value) -> std::cmp::Ordering {
 fn group_by(input: &Value, prop: &str) -> Value {
     let items = to_array(input);
     let mut order: Vec<String> = Vec::new();
-    let mut groups: std::collections::HashMap<String, Vec<Value>> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<String, Vec<Value>> =
+        std::collections::HashMap::new();
     for item in items {
         let key = item_property(&item, prop).to_str();
         if !groups.contains_key(&key) {
@@ -576,7 +608,10 @@ fn slice_bounds(len: usize, start: &Option<Value>, l: &Option<Value>) -> (usize,
 
 fn truncate(s: &str, len: &Option<Value>, tail: &Option<Value>) -> String {
     let l = len.as_ref().map(|v| v.to_integer()).unwrap_or(50).max(0) as usize;
-    let tail = tail.as_ref().map(|v| v.to_str()).unwrap_or_else(|| "...".to_string());
+    let tail = tail
+        .as_ref()
+        .map(|v| v.to_str())
+        .unwrap_or_else(|| "...".to_string());
     let chars: Vec<char> = s.chars().collect();
     if chars.len() <= l {
         return s.to_string();
@@ -588,7 +623,10 @@ fn truncate(s: &str, len: &Option<Value>, tail: &Option<Value>) -> String {
 
 fn truncatewords(s: &str, n: &Option<Value>, tail: &Option<Value>) -> String {
     let n = n.as_ref().map(|v| v.to_integer()).unwrap_or(15).max(1) as usize;
-    let tail = tail.as_ref().map(|v| v.to_str()).unwrap_or_else(|| "...".to_string());
+    let tail = tail
+        .as_ref()
+        .map(|v| v.to_str())
+        .unwrap_or_else(|| "...".to_string());
     let words: Vec<&str> = s.split_whitespace().collect();
     if words.len() <= n {
         return s.to_string();
@@ -690,14 +728,33 @@ fn strip_html(s: &str) -> String {
 /// Jekyll `slugify` (default mode "default"): downcase, replace runs of
 /// non-alphanumeric with '-', strip leading/trailing '-'.
 fn slugify(s: &str, mode: Option<&Value>) -> String {
-    let mode = mode.map(|v| v.to_str()).unwrap_or_else(|| "default".to_string());
+    let mode = mode
+        .map(|v| v.to_str())
+        .unwrap_or_else(|| "default".to_string());
     let lower = s.to_lowercase();
     let replaced: String = lower
         .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() {
                 c
-            } else if mode == "pretty" && matches!(c, '.' | '_' | '~' | '!' | '$' | '&' | '\'' | '(' | ')' | '+' | ',' | ';' | '=' | '@') {
+            } else if mode == "pretty"
+                && matches!(
+                    c,
+                    '.' | '_'
+                        | '~'
+                        | '!'
+                        | '$'
+                        | '&'
+                        | '\''
+                        | '('
+                        | ')'
+                        | '+'
+                        | ','
+                        | ';'
+                        | '='
+                        | '@'
+                )
+            {
                 c
             } else {
                 ' '

@@ -1,9 +1,15 @@
 # Self-Reliant Package Acquisition: Content-Addressed Store + Materialize
 
+> **Historical design plan.** Package acquisition, the CAS, locks, and explicit
+> materialization are implemented. See the repository [`README.md`](../../README.md)
+> for the current CLI and invariants; this document preserves the design and
+> rollout rationale.
+
 ## Motivation
-Today `package_store` only **reads** a `.fhir/packages`-shaped directory; the
-packages get there via **stock SUSHI / fhir-package-loader**. That's a self-reliance
-gap — our runtime depends on another tool to acquire dependencies. We want to:
+At the time of this plan, `package_store` only **read** a
+`.fhir/packages`-shaped directory; packages got there via **stock SUSHI /
+fhir-package-loader**. That was a self-reliance gap: the runtime depended on
+another tool to acquire dependencies. The plan was to:
 
 1. **Acquire packages ourselves** from FHIR registries (no stock SUSHI).
 2. Keep an **immutable, content-addressed store (CAS)** of downloaded packages

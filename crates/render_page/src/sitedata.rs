@@ -55,29 +55,41 @@ impl SiteData {
         names.sort();
         for n in names {
             let path = data_dir.join(&n);
-            let Some(text) = tree.read(&path) else { continue };
+            let Some(text) = tree.read(&path) else {
+                continue;
+            };
             let (key, parsed) = if n.ends_with(".json") {
                 (
                     n.trim_end_matches(".json").to_string(),
                     serde_json::from_str::<serde_json::Value>(&text).ok(),
                 )
             } else if n.ends_with(".csv") {
-                (n.trim_end_matches(".csv").to_string(), Some(csv_to_json(&text)))
+                (
+                    n.trim_end_matches(".csv").to_string(),
+                    Some(csv_to_json(&text)),
+                )
             } else {
-                let key = n.trim_end_matches(".yaml").trim_end_matches(".yml").to_string();
+                let key = n
+                    .trim_end_matches(".yaml")
+                    .trim_end_matches(".yml")
+                    .to_string();
                 (key, serde_yaml::from_str::<serde_json::Value>(&text).ok())
             };
             if let Some(v) = parsed {
                 root.insert(key, json_to_value(&v));
             }
         }
-        SiteData { data: Value::Hash(std::rc::Rc::new(root)) }
+        SiteData {
+            data: Value::Hash(std::rc::Rc::new(root)),
+        }
     }
 
     /// From an already-built serde_json object mapping data-key -> json (for the
     /// editor path / tests where _data files aren't on disk).
     pub fn from_map(map: &serde_json::Value) -> SiteData {
-        SiteData { data: json_to_value(map) }
+        SiteData {
+            data: json_to_value(map),
+        }
     }
 
     pub fn site_data(&self, path: &[&str]) -> Option<Value> {

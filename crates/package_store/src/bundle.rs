@@ -272,7 +272,10 @@ mod tests {
             .map(|e| e.file_name)
             .collect();
         names.sort();
-        assert_eq!(names, vec![".index.json", "StructureDefinition-Patient.json"]);
+        assert_eq!(
+            names,
+            vec![".index.json", "StructureDefinition-Patient.json"]
+        );
         // The package dir shows up as a subdir of its `<id>#<ver>` parent.
         let ver_dir = src.cache_root().join("hl7.fhir.r4.core#4.0.1");
         let sub: Vec<String> = src
@@ -291,6 +294,8 @@ mod tests {
             .collect();
         assert_eq!(roots, vec!["hl7.fhir.r4.core#4.0.1"]);
         // A read-only source: write_new is unsupported (fail-soft for sidecars).
-        assert!(src.write_new(&pkg.join(".derived-index.json"), b"{}").is_err());
+        assert!(src
+            .write_new(&pkg.join(".derived-index.json"), b"{}")
+            .is_err());
     }
 }

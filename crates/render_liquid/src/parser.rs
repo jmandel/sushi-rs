@@ -9,10 +9,7 @@ pub struct ParseError(pub String);
 
 pub fn parse(src: &str) -> Result<Template, ParseError> {
     let tokens = tokenize(src);
-    let mut p = Parser {
-        tokens,
-        pos: 0,
-    };
+    let mut p = Parser { tokens, pos: 0 };
     let body = p.parse_block(&[])?;
     Ok(body)
 }
@@ -200,8 +197,8 @@ impl Parser {
 
     fn parse_for(&mut self, src: &str) -> Result<Node, ParseError> {
         // syntax: VAR in ITERABLE [reversed] [offset:N] [limit:N]
-        let (var, after) = split_once_word(src, "in")
-            .ok_or_else(|| ParseError("for missing 'in'".into()))?;
+        let (var, after) =
+            split_once_word(src, "in").ok_or_else(|| ParseError("for missing 'in'".into()))?;
         let var = var.trim().to_string();
         // split iterable expr from trailing attributes (reversed/offset/limit)
         let mut reversed = false;
@@ -276,7 +273,11 @@ impl Parser {
             IncludeName::Literal(name_part.to_string())
         };
         let params = parse_include_params(params_part)?;
-        Ok(Node::Include { name, params, relative })
+        Ok(Node::Include {
+            name,
+            params,
+            relative,
+        })
     }
 
     fn expect_end(&mut self, _tag: &str) -> Result<(), ParseError> {
@@ -299,7 +300,6 @@ impl Parser {
             self.pos += 1;
         }
     }
-
 }
 
 // ------------------------------------------------------------------ helpers
@@ -323,9 +323,10 @@ fn negate_condition(c: Condition) -> Condition {
     match c {
         // `contains` has no inverse comparison operator, so wrap the whole
         // comparison in NotTruthy rather than mis-inverting it.
-        Condition::Comparison { op: CompareOp::Contains, .. } => {
-            Condition::NotTruthy(Box::new(c))
-        }
+        Condition::Comparison {
+            op: CompareOp::Contains,
+            ..
+        } => Condition::NotTruthy(Box::new(c)),
         Condition::Comparison { left, op, right } => Condition::Comparison {
             left,
             op: invert_op(op),
@@ -368,9 +369,7 @@ fn split_once_char(s: &str, ch: char) -> Option<(&str, &str)> {
                 '\'' | '"' => in_str = Some(c),
                 '(' | '[' => depth += 1,
                 ')' | ']' => depth -= 1,
-                _ if c == ch && depth == 0 => {
-                    return Some((&s[..i], &s[i + c.len_utf8()..]))
-                }
+                _ if c == ch && depth == 0 => return Some((&s[..i], &s[i + c.len_utf8()..])),
                 _ => {}
             },
         }
@@ -420,10 +419,7 @@ fn split_for_attrs(s: &str) -> (String, Vec<(String, String)>) {
         let trimmed = rest.trim_end();
         // match trailing `reversed`
         if let Some(stripped) = trimmed.strip_suffix("reversed") {
-            let boundary_ok = stripped
-                .chars()
-                .last()
-                .map_or(true, |c| c.is_whitespace());
+            let boundary_ok = stripped.chars().last().map_or(true, |c| c.is_whitespace());
             if boundary_ok {
                 attrs.push(("reversed".to_string(), String::new()));
                 rest = stripped.to_string();
@@ -431,7 +427,8 @@ fn split_for_attrs(s: &str) -> (String, Vec<(String, String)>) {
             }
         }
         // match trailing `offset:EXPR` / `limit:EXPR`
-        if let Some((k, v)) = trailing_kv(trimmed, "offset").or_else(|| trailing_kv(trimmed, "limit"))
+        if let Some((k, v)) =
+            trailing_kv(trimmed, "offset").or_else(|| trailing_kv(trimmed, "limit"))
         {
             attrs.push((k.clone(), v.1));
             rest = trimmed[..v.0].to_string();
@@ -642,7 +639,9 @@ fn parse_term(src: &str) -> Result<Term, ParseError> {
     }
     if let Ok(f) = s.parse::<f64>() {
         // ensure it's really numeric (not "1.2.3")
-        if s.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e') {
+        if s.chars()
+            .all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+' || c == 'e')
+        {
             return Ok(Term::Literal(Value::Float(f)));
         }
     }
@@ -651,8 +650,18 @@ fn parse_term(src: &str) -> Result<Term, ParseError> {
         "true" => return Ok(Term::Literal(Value::Bool(true))),
         "false" => return Ok(Term::Literal(Value::Bool(false))),
         "nil" | "null" => return Ok(Term::Literal(Value::Nil)),
-        "empty" => return Ok(Term::Var(VarPath { root: "empty".into(), segments: vec![] })),
-        "blank" => return Ok(Term::Var(VarPath { root: "blank".into(), segments: vec![] })),
+        "empty" => {
+            return Ok(Term::Var(VarPath {
+                root: "empty".into(),
+                segments: vec![],
+            }))
+        }
+        "blank" => {
+            return Ok(Term::Var(VarPath {
+                root: "blank".into(),
+                segments: vec![],
+            }))
+        }
         _ => {}
     }
     // variable path
@@ -664,7 +673,9 @@ fn parse_var_path(s: &str) -> Result<VarPath, ParseError> {
     let mut i = 0;
     // root ident
     let rs = i;
-    while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'-') {
+    while i < bytes.len()
+        && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'-')
+    {
         i += 1;
     }
     let root = s[rs..i].to_string();
@@ -706,8 +717,8 @@ fn parse_var_path(s: &str) -> Result<VarPath, ParseError> {
                 }
                 let inner = &s[es..i];
                 i += 1; // skip ]
-                // The bracket may contain a full filtered expression
-                // (e.g. `item["title" | trim]`). Parse it as an Expr.
+                        // The bracket may contain a full filtered expression
+                        // (e.g. `item["title" | trim]`). Parse it as an Expr.
                 let expr = parse_expr(inner.trim())?;
                 // Fast path: a bare string literal with no filters is a static
                 // field access.

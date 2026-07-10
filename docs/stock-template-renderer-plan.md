@@ -1,5 +1,13 @@
 # Stock-Template Renderer — COMMITTED PLAN
 
+> **HISTORICAL PLAN — superseded as an architecture contract.** This document
+> records the F0–F6 implementation sequence and its evidence. Current execution
+> uses renderer-neutral `SiteBuild`, a closed external Cycle handoff, and a typed
+> native `ArtifactResolver`; it does not require every adapter to consume
+> `site.db` or a shared callback context. Start with the repository
+> [`README.md`](../README.md), [`hosting.md`](hosting.md), and
+> [`crates/site_build/README.md`](../crates/site_build/README.md).
+
 > Status: COMMITTED (Josh, 2026-07-03). Goal: **US Core editing in the browser,
 > the standard FHIR template selectable, pages rendered at Publisher parity,
 > near-instant.** This operationalizes docs/rust-fragment-generator-feasibility.md

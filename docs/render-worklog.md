@@ -1,5 +1,12 @@
 # Render worklog — F2 (C2 tables) + F3 (C1 generateTable / SD table fragments)
 
+> **HISTORICAL DERIVATION LOG.** The parity findings and pinned-oracle case law
+> remain useful evidence; phase status, crate topology, include-miss language,
+> and architecture statements are not current contracts. See the repository
+> [`README.md`](../README.md) and [`hosting.md`](hosting.md).
+> The `fig::runner`/`render --generator ts:*` path recorded later in this log was
+> subsequently retired because it targeted a removed callback API.
+
 Branch `snapshot-gen`. Ports fhir-core **6.9.10-SNAPSHOT** (the renderer version
 that produced the golden corpus — checked out as a detached worktree at commit
 `6c04914e4` under the scratchpad; the repo's default fhir-core checkout is 8.4.0

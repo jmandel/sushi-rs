@@ -38,7 +38,13 @@ pub(crate) fn disable() {
 
 /// Emit one trace record. `base`/`diff` are element ids (falling back to path).
 /// `x` is an optional extras object. No-op when disabled.
-pub(crate) fn rec(func: &str, branch: &str, base: Option<&str>, diff: Option<&str>, x: Option<Value>) {
+pub(crate) fn rec(
+    func: &str,
+    branch: &str,
+    base: Option<&str>,
+    diff: Option<&str>,
+    x: Option<Value>,
+) {
     SINK.with(|s| {
         let mut guard = s.borrow_mut();
         let Some(sink) = guard.as_mut() else {

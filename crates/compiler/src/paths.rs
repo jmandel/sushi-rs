@@ -15,7 +15,10 @@ pub struct PathPart {
 
 /// `splitOnPathPeriods`: split on '.' not inside `[...]`.
 pub fn split_on_path_periods(path: &str) -> Vec<String> {
-    split_on_path_periods_borrowed(path).iter().map(|s| s.to_string()).collect()
+    split_on_path_periods_borrowed(path)
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// Allocation-free `splitOnPathPeriods`: yields `&str` slices borrowing `path`.
@@ -146,7 +149,12 @@ pub fn assemble_fsh_path(parts: &[PathPart]) -> String {
 
 /// `convertSoftIndices` (non-strict).
 fn convert_soft_indices(element: &mut PathPart, path_map: &mut HashMap<String, i64>) {
-    let map_name = format!("{}.{}|{}", element.prefix, element.base, element.slices.join("|"));
+    let map_name = format!(
+        "{}.{}|{}",
+        element.prefix,
+        element.base,
+        element.slices.join("|")
+    );
     if !path_map.contains_key(&map_name) {
         if let Some(num) = element.brackets.iter().find(|b| is_numeric(b)) {
             path_map.insert(map_name, num.parse().unwrap_or(0));
@@ -185,7 +193,12 @@ fn convert_soft_indices_strict(
     path_map: &mut HashMap<String, i64>,
     max_path_map: &mut HashMap<String, i64>,
 ) {
-    let map_name = format!("{}.{}|{}", element.prefix, element.base, element.slices.join("|"));
+    let map_name = format!(
+        "{}.{}|{}",
+        element.prefix,
+        element.base,
+        element.slices.join("|")
+    );
     // Track how many indices we need to add to the base (less-sliced) element.
     let mut add_to_base_element: Option<i64> = None;
     if !path_map.contains_key(&map_name) {
@@ -281,7 +294,12 @@ pub fn resolve_soft_indexing(rules: &mut [Rule], strict: bool) {
         let new_path = assemble_fsh_path(&parsed);
         rule.set_path(new_path.clone());
 
-        if let Rule::CaretValue { caret_path, path_array, .. } = rule {
+        if let Rule::CaretValue {
+            caret_path,
+            path_array,
+            ..
+        } = rule
+        {
             if let Some(cp) = caret_path.clone() {
                 // Key the caret soft-index map by the rule path AND the concept
                 // path-array. `path_array` is non-empty only for CodeSystem

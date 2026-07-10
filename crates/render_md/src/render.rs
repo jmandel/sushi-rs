@@ -4,8 +4,7 @@
 use crate::block::{parse_doc, Align, Block, BlockNode, ListItem};
 use crate::ial::Attrs;
 use crate::inline::{
-    normalize_open_tag,
-    collect_footnote_refs, normalize_html_block, raw_text, render_inline,
+    collect_footnote_refs, normalize_html_block, normalize_open_tag, raw_text, render_inline,
 };
 use crate::util::{escape_html_attr, IdGen};
 
@@ -37,7 +36,10 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_ids: true, rouge_wrappers: false }
+        Options {
+            auto_ids: true,
+            rouge_wrappers: false,
+        }
     }
 }
 
@@ -151,10 +153,9 @@ impl Renderer {
                     // `no_toc` marker — kramdown accepts it as a class
                     // (`{:.no_toc}`) or a bare ref (`{:no_toc}`).
                     let no_toc = attrs.has_ref("no_toc")
-                        || attrs
-                            .ordered
-                            .iter()
-                            .any(|(k, v)| k == "class" && v.split_whitespace().any(|c| c == "no_toc"));
+                        || attrs.ordered.iter().any(|(k, v)| {
+                            k == "class" && v.split_whitespace().any(|c| c == "no_toc")
+                        });
                     if !no_toc && !id.is_empty() {
                         let inner = render_inline(text);
                         self.toc_headings.push((*level, id, inner));
@@ -475,7 +476,10 @@ impl Renderer {
         if lang.is_empty() {
             out.push_str("<pre><code>");
         } else {
-            out.push_str(&format!("<pre><code class=\"language-{}\">", escape_html_attr(lang)));
+            out.push_str(&format!(
+                "<pre><code class=\"language-{}\">",
+                escape_html_attr(lang)
+            ));
         }
         out.push_str(&escaped);
         out.push_str("</code></pre>");
@@ -667,7 +671,13 @@ impl Renderer {
         out.push_str(&format!("</{tag}>"));
     }
 
-    fn render_list_item(&mut self, item: &ListItem, transparent: bool, out: &mut String, indent: usize) {
+    fn render_list_item(
+        &mut self,
+        item: &ListItem,
+        transparent: bool,
+        out: &mut String,
+        indent: usize,
+    ) {
         let pad = " ".repeat(indent);
         out.push_str(&pad);
         out.push_str("<li");
@@ -677,7 +687,9 @@ impl Renderer {
         out.push_str(&attr_string(&item.attrs, false));
         out.push('>');
         if let Some(checked) = item.task {
-            out.push_str("<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled=\"disabled\"");
+            out.push_str(
+                "<input type=\"checkbox\" class=\"task-list-item-checkbox\" disabled=\"disabled\"",
+            );
             if checked {
                 out.push_str(" checked=\"checked\"");
             }
@@ -892,7 +904,12 @@ pub(crate) fn strip_markdown_attr_pub(open_tag: &str) -> String {
 
 fn strip_markdown_attr(open_tag: &str) -> String {
     let mut s = open_tag.to_string();
-    for pat in [" markdown=\"1\"", " markdown='1'", "markdown=\"1\"", "markdown='1'"] {
+    for pat in [
+        " markdown=\"1\"",
+        " markdown='1'",
+        "markdown=\"1\"",
+        "markdown='1'",
+    ] {
         s = s.replace(pat, "");
     }
     s
@@ -907,7 +924,12 @@ fn collect_footnote_refs_in_blocks(nodes: &[BlockNode], order: &mut Vec<String>)
             Block::Paragraph { text, .. } | Block::Heading { text, .. } => {
                 collect_footnote_refs(text, order);
             }
-            Block::Table { header, body, footer, .. } => {
+            Block::Table {
+                header,
+                body,
+                footer,
+                ..
+            } => {
                 for cell in header.iter().flatten() {
                     collect_footnote_refs(cell, order);
                 }
@@ -950,4 +972,3 @@ fn attr_string(attrs: &Attrs, _is_heading: bool) -> String {
     }
     s
 }
-

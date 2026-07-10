@@ -47,26 +47,49 @@ pub struct TxOpts {
 
 impl TxOpts {
     pub fn tx() -> TxOpts {
-        TxOpts { diff: false, must_support_only: false, key_only: false }
+        TxOpts {
+            diff: false,
+            must_support_only: false,
+            key_only: false,
+        }
     }
     pub fn tx_must_support() -> TxOpts {
-        TxOpts { diff: false, must_support_only: true, key_only: false }
+        TxOpts {
+            diff: false,
+            must_support_only: true,
+            key_only: false,
+        }
     }
     pub fn tx_key() -> TxOpts {
-        TxOpts { diff: false, must_support_only: false, key_only: true }
+        TxOpts {
+            diff: false,
+            must_support_only: false,
+            key_only: true,
+        }
     }
     pub fn tx_diff() -> TxOpts {
-        TxOpts { diff: true, must_support_only: false, key_only: false }
+        TxOpts {
+            diff: true,
+            must_support_only: false,
+            key_only: false,
+        }
     }
     pub fn tx_diff_must_support() -> TxOpts {
-        TxOpts { diff: true, must_support_only: true, key_only: false }
+        TxOpts {
+            diff: true,
+            must_support_only: true,
+            key_only: false,
+        }
     }
 }
 
 pub fn render_tx(sd: &Sd, ctx: &IgContext, core_path: &str, opts: TxOpts) -> String {
     // Element list (psdr:856/803): snapshot / getKeyElements / differential.
     let elements: Vec<Value> = if opts.diff {
-        sd.differential_elements().iter().map(|e| e.v.clone()).collect()
+        sd.differential_elements()
+            .iter()
+            .map(|e| e.v.clone())
+            .collect()
     } else if opts.key_only {
         crate::table::key_elements_pub(sd, ctx)
     } else {
@@ -98,7 +121,8 @@ pub fn render_tx(sd: &Sd, ctx: &IgContext, core_path: &str, opts: TxOpts) -> Str
         // zero corpus hits; fire loud rather than silently mis-shape the path.
         let types = ed.types();
         if types.len() == 1 && types[0].working_code() == "Extension" {
-            crate::loud_gap!((),
+            crate::loud_gap!(
+                (),
                 "LOUD GAP: tx Extension-typed binding element id append (psdr:872) at {}",
                 ed.id()
             );
@@ -142,7 +166,16 @@ pub fn render_tx(sd: &Sd, ctx: &IgContext, core_path: &str, opts: TxOpts) -> Str
     }
 
     for edv in rows {
-        tx_item(&mut tbl, Ed::new(edv), sd, ctx, core_path, opts.diff, &pointers, &snap);
+        tx_item(
+            &mut tbl,
+            Ed::new(edv),
+            sd,
+            ctx,
+            core_path,
+            opts.diff,
+            &pointers,
+            &snap,
+        );
     }
     div.add_child_node(tbl);
     compose_children_html_pretty(&div)
@@ -176,7 +209,11 @@ fn tx_item(
         })
         .unwrap_or(false)
     {
-        crate::loud_gap!((), "LOUD GAP: tx version-resolution-method extension (RR:1598 LATEST branch) at {}", id);
+        crate::loud_gap!(
+            (),
+            "LOUD GAP: tx version-resolution-method extension (RR:1598 LATEST branch) at {}",
+            id
+        );
     }
 
     // strength + strengthInh (psdr:914-922).
@@ -312,7 +349,10 @@ fn tx_item(
             let mut btn = el("button");
             btn.set_attribute(
                 "data-clipboard-text",
-                binding.get("valueSet").and_then(|v| v.as_str()).unwrap_or(""),
+                binding
+                    .get("valueSet")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
             );
             btn.set_attribute("title", "Click to copy URL");
             btn.set_attribute("class", "btn-copy");
@@ -411,9 +451,11 @@ fn show_version_resolved(
     let stated: Option<String> = uri.and_then(|u| u.split_once('|').map(|(_, v)| v.to_string()));
     match (&stated, actual) {
         (Some(s), Some(a)) if s != a && from_packages => {
-            crate::loud_gap!((),
+            crate::loud_gap!(
+                (),
                 "LOUD GAP: tx version WILDCARD_BY_PACKAGE branch (RR:1605) stated={} actual={}",
-                s, a
+                s,
+                a
             );
         }
         (Some(s), _) => {
@@ -452,7 +494,10 @@ fn show_version_resolved(
         }
         (None, None) => {
             // tgt != null -> VS_VERSION_NONE (∅ + null text) — zero corpus hits.
-            crate::loud_gap!((), "LOUD GAP: tx version NONE branch (RR:1637) — resolved VS without version");
+            crate::loud_gap!(
+                (),
+                "LOUD GAP: tx version NONE branch (RR:1637) — resolved VS without version"
+            );
         }
     }
 }
@@ -519,7 +564,9 @@ fn is_absolute_url_linkable(url: &str) -> bool {
 
 /// `new URL(src).getHost()`.
 fn url_host(url: &str) -> Option<String> {
-    let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
     let end = rest.find(['/', ':', '?']).unwrap_or(rest.len());
     Some(rest[..end].to_string())
 }
