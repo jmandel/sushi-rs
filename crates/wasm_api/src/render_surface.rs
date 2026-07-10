@@ -32,6 +32,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+#[cfg(test)]
 use package_store::bundle::BundleSource;
 use package_store::source::PackageSource;
 use render_page::{
@@ -39,16 +40,18 @@ use render_page::{
     FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider, SharedArtifactCache,
     SiteData,
 };
-use render_sd::context::IgContext;
+use render_sd::context::{IgContext, ResourceIdentity};
 use render_sd::engine::{FragError, FragmentEngine, IgFacts};
 use render_sd::tree::{DirEntry, MemTree, TreeSource};
 use serde_json::Value;
+
+use crate::SharedBundle;
 
 /// TreeSource over the session state: package paths (under the bundle cache
 /// root) go to the BundleSource; everything else to the MemTree.
 struct SessionTree {
     mem: MemTree,
-    pkg: Option<Rc<BundleSource>>,
+    pkg: Option<SharedBundle>,
     pkg_root: PathBuf,
 }
 
@@ -149,6 +152,7 @@ impl SiteOptions {
 pub struct RenderSemantics {
     pub engine: Rc<FragmentEngine>,
     compiled: Vec<(PathBuf, Value)>,
+    packages: Option<SharedBundle>,
 }
 
 /// The per-generation render state.
@@ -187,10 +191,10 @@ fn insert_compiled(mem: &mut MemTree, compiled: &[(PathBuf, Value)]) -> Result<(
     Ok(())
 }
 
-fn package_root(bundle: &Option<Rc<BundleSource>>) -> PathBuf {
+fn package_root(bundle: &Option<SharedBundle>) -> PathBuf {
     bundle
         .as_ref()
-        .map(|b| b.cache_root().to_path_buf())
+        .map(|b| b.root.clone())
         .unwrap_or_else(|| PathBuf::from("/__no_bundle__"))
 }
 
@@ -198,10 +202,30 @@ fn package_root(bundle: &Option<Rc<BundleSource>>) -> PathBuf {
 /// files, making reuse across page/template overlays correct by construction.
 pub fn build_render_semantics(
     compiled: Vec<(PathBuf, Value)>,
-    bundle: Option<Rc<BundleSource>>,
+    bundle: Option<SharedBundle>,
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderSemantics, String> {
+    let explicit_guides: Vec<ResourceIdentity> = compiled
+        .iter()
+        .filter(|(path, value)| {
+            path.starts_with("/__ig__")
+                && value.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
+        })
+        .filter_map(|(_, value)| {
+            value
+                .get("id")
+                .and_then(Value::as_str)
+                .map(|id| ResourceIdentity {
+                    resource_type: "ImplementationGuide".into(),
+                    id: id.to_string(),
+                })
+        })
+        .collect();
+    if explicit_guides.len() > 1 {
+        return Err("render semantics has multiple explicit primary ImplementationGuides".into());
+    }
+    let primary_guide = explicit_guides.first();
     let mut mem = MemTree::new();
     insert_compiled(&mut mem, &compiled)?;
 
@@ -220,7 +244,7 @@ pub fn build_render_semantics(
     let pkg_root = package_root(&bundle);
     let tree: Rc<dyn TreeSource> = Rc::new(SessionTree {
         mem,
-        pkg: bundle,
+        pkg: bundle.clone(),
         pkg_root: pkg_root.clone(),
     });
 
@@ -229,21 +253,33 @@ pub fn build_render_semantics(
     } else {
         None
     };
-    let ctx = IgContext::load_with_tree(
+    let ctx = IgContext::load_with_tree_and_primary(
         tree.clone(),
         Path::new(OWN_DIR),
         &pkg_root,
         txcache_dir.as_deref(),
+        primary_guide,
     );
 
     // Facts mirror pagecorpus's page-pass set: version + txcache. Whole-IG
     // aggregate kinds needing richer facts fire their documented loud gaps.
-    let ig_version = compiled
+    let ig_candidates: Vec<&Value> = compiled
         .iter()
-        .find(|(_, v)| {
-            v.get("resourceType").and_then(|x| x.as_str()) == Some("ImplementationGuide")
+        .filter(|(_, value)| {
+            value.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
         })
-        .and_then(|(_, v)| v.get("version").and_then(|x| x.as_str()))
+        .map(|(_, value)| value)
+        .collect();
+    let ig = match primary_guide {
+        Some(primary) => ig_candidates
+            .iter()
+            .copied()
+            .find(|value| value.get("id").and_then(Value::as_str) == Some(primary.id.as_str())),
+        None if ig_candidates.len() == 1 => ig_candidates.first().copied(),
+        _ => None,
+    };
+    let ig_version = ig
+        .and_then(|v| v.get("version").and_then(|x| x.as_str()))
         .unwrap_or("")
         .to_string();
     let facts = IgFacts {
@@ -257,13 +293,16 @@ pub fn build_render_semantics(
         .unwrap_or_else(|| "00000000-0000-4000-8000-editor000000".to_string());
     let engine = Rc::new(FragmentEngine::new(ctx, uuid, options.active_tables, facts));
 
-    Ok(RenderSemantics { engine, compiled })
+    Ok(RenderSemantics {
+        engine,
+        compiled,
+        packages: bundle,
+    })
 }
 
 /// Build the cheap page/template half over an already-loaded semantic core.
 pub fn build_render_state_from_semantics(
     semantics: &RenderSemantics,
-    bundle: Option<Rc<BundleSource>>,
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderState, String> {
@@ -300,10 +339,10 @@ pub fn build_render_state_from_semantics(
     }
     pages.sort();
 
-    let pkg_root = package_root(&bundle);
+    let pkg_root = package_root(&semantics.packages);
     let tree: Rc<dyn TreeSource> = Rc::new(SessionTree {
         mem,
-        pkg: bundle,
+        pkg: semantics.packages.clone(),
         pkg_root,
     });
 
@@ -329,8 +368,13 @@ pub fn build_render_state(
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderState, String> {
-    let semantics = build_render_semantics(compiled.to_vec(), bundle.clone(), site_files, options)?;
-    build_render_state_from_semantics(&semantics, bundle, site_files, options)
+    let bundle = bundle.map(|source| SharedBundle {
+        root: source.cache_root().to_path_buf(),
+        source,
+        allowed_labels: None,
+    });
+    let semantics = build_render_semantics(compiled.to_vec(), bundle, site_files, options)?;
+    build_render_state_from_semantics(&semantics, site_files, options)
 }
 
 impl RenderState {
@@ -496,6 +540,50 @@ mod tests {
             },
         )
         .expect("minimal render state")
+    }
+
+    #[test]
+    fn explicit_primary_guide_controls_render_context_and_additional_guides_remain_own() {
+        let compiled = vec![
+            (
+                PathBuf::from("/__compiled__/ImplementationGuide-aaa-example.json"),
+                serde_json::json!({
+                    "resourceType": "ImplementationGuide",
+                    "id": "aaa-example",
+                    "packageId": "wrong.example",
+                    "url": "https://wrong.example/ImplementationGuide/aaa-example",
+                    "version": "9.0.0",
+                    "fhirVersion": ["5.0.0"]
+                }),
+            ),
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
+                serde_json::json!({
+                    "resourceType": "ImplementationGuide",
+                    "id": "primary",
+                    "packageId": "example.primary",
+                    "url": "https://example.org/ImplementationGuide/primary",
+                    "version": "1.0.0",
+                    "fhirVersion": ["4.0.1"]
+                }),
+            ),
+        ];
+        let semantics =
+            build_render_semantics(compiled, None, &HashMap::new(), &SiteOptions::default())
+                .unwrap();
+        let context = semantics.engine.ctx();
+        assert_eq!(context.own_package_id(), Some("example.primary"));
+        assert_eq!(
+            context.own_canonical_prefix().as_deref(),
+            Some("https://example.org")
+        );
+        let own = context.own_resources();
+        assert!(own.iter().any(
+            |resource| resource.rtype == "ImplementationGuide" && resource.id == "aaa-example"
+        ));
+        assert!(!own
+            .iter()
+            .any(|resource| resource.rtype == "ImplementationGuide" && resource.id == "primary"));
     }
 
     #[test]

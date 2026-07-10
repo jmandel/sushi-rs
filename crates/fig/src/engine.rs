@@ -27,7 +27,7 @@ use render_page::{
     STOCK_PAGE_SOURCE_NAMESPACE, STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
     STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
 };
-use render_sd::context::IgContext;
+use render_sd::context::{IgContext, ResourceIdentity};
 use render_sd::engine::{FragmentEngine, IgFacts};
 use serde::Serialize;
 
@@ -48,6 +48,9 @@ pub struct RenderRoot {
     pub packages_dir: PathBuf,
     /// optional tx cache.
     pub txcache_dir: Option<PathBuf>,
+    /// Explicit project ImplementationGuide. Additional IG resources in
+    /// `own_dir` remain ordinary artifacts and cannot control render context.
+    pub primary_implementation_guide: Option<ResourceIdentity>,
     /// Optional materialized template `includes/` dir (the driven `fig render
     /// --template` path). When set, the page pass consults it as a fallback
     /// include source after the staged `_includes/`. `None` = the frozen/staged
@@ -77,6 +80,8 @@ impl RenderRoot {
         let own_dir = build_dir.join("output");
         let packages_dir = build_dir.join(".home/.fhir/packages");
         let txcache = build_dir.join("input-cache/txcache");
+        let primary_implementation_guide =
+            detect_primary_implementation_guide(build_dir, &own_dir)?;
         Ok(RenderRoot {
             data_dir: pages_root.join("_data"),
             includes_dir: pages_root.join("_includes"),
@@ -85,6 +90,7 @@ impl RenderRoot {
             own_dir,
             packages_dir,
             txcache_dir: txcache.is_dir().then_some(txcache),
+            primary_implementation_guide,
             template_includes_dir: None,
             flat,
         })
@@ -262,14 +268,15 @@ pub fn harvest_release_header(golden_dir: &Path) -> Option<String> {
 
 /// Build the FragmentEngine for a render root (the pagecorpus `build_engine`).
 pub fn build_engine(root: &RenderRoot, opts: &RenderOptions) -> FragmentEngine {
-    let ctx = IgContext::load_with_txcache(
+    let ctx = IgContext::load_with_txcache_and_primary(
         &root.own_dir,
         &root.packages_dir,
         root.txcache_dir.as_deref(),
+        root.primary_implementation_guide.as_ref(),
     );
     let facts = IgFacts {
         txcache_dir: root.txcache_dir.clone(),
-        ig_version: ig_version(&root.own_dir),
+        ig_version: ig_version(&root.own_dir, root.primary_implementation_guide.as_ref()),
         ..Default::default()
     };
     FragmentEngine::new(ctx, opts.run_uuid.clone(), opts.active_tables, facts)
@@ -768,7 +775,7 @@ fn media_type_for(path: &str) -> String {
 }
 
 /// The ImplementationGuide.version from the own resource dir (facts input).
-fn ig_version(own_dir: &Path) -> String {
+fn ig_version(own_dir: &Path, primary: Option<&ResourceIdentity>) -> String {
     let Ok(rd) = std::fs::read_dir(own_dir) else {
         return String::new();
     };
@@ -777,6 +784,15 @@ fn ig_version(own_dir: &Path) -> String {
         if n.starts_with("ImplementationGuide-") && n.ends_with(".json") {
             if let Ok(t) = std::fs::read_to_string(e.path()) {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&t) {
+                    if let Some(primary) = primary {
+                        if v.get("resourceType").and_then(serde_json::Value::as_str)
+                            != Some(primary.resource_type.as_str())
+                            || v.get("id").and_then(serde_json::Value::as_str)
+                                != Some(primary.id.as_str())
+                        {
+                            continue;
+                        }
+                    }
                     if let Some(ver) = v.get("version").and_then(|x| x.as_str()) {
                         return ver.to_string();
                     }
@@ -785,6 +801,104 @@ fn ig_version(own_dir: &Path) -> String {
         }
     }
     String::new()
+}
+
+fn detect_primary_implementation_guide(
+    build_dir: &Path,
+    own_dir: &Path,
+) -> Result<Option<ResourceIdentity>> {
+    let configured_id = ["sushi-config.yaml", "sushi-config.yml"]
+        .into_iter()
+        .map(|name| build_dir.join(name))
+        .find(|path| path.is_file())
+        .map(|path| -> Result<Option<String>> {
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("read {}", path.display()))?;
+            let yaml: serde_yaml::Value =
+                serde_yaml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+            Ok(yaml
+                .get("id")
+                .and_then(serde_yaml::Value::as_str)
+                .map(str::to_string)
+                .filter(|id| !id.trim().is_empty()))
+        })
+        .transpose()?
+        .flatten();
+
+    let mut candidates: Vec<(String, String)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(own_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(&path) else {
+                continue;
+            };
+            let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+                continue;
+            };
+            if value
+                .get("resourceType")
+                .and_then(serde_json::Value::as_str)
+                != Some("ImplementationGuide")
+            {
+                continue;
+            }
+            if let Some(id) = value.get("id").and_then(serde_json::Value::as_str) {
+                candidates.push((
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    id.to_string(),
+                ));
+            }
+        }
+    }
+    candidates.sort();
+    candidates.dedup();
+    let selected = match configured_id {
+        Some(config_id) => {
+            let filename = format!("ImplementationGuide-{config_id}.json");
+            let mut matches = candidates
+                .iter()
+                .filter(|(candidate, _)| candidate == &filename)
+                .map(|(_, id)| id.clone());
+            let first = matches.next();
+            if matches.next().is_some() {
+                bail!(
+                    "multiple {filename} primary candidates in {}",
+                    own_dir.display()
+                );
+            }
+            match first {
+                Some(id) => Some(id),
+                None if candidates.is_empty() => None,
+                None => bail!(
+                    "configured primary {filename} is absent from {}",
+                    own_dir.display()
+                ),
+            }
+        }
+        None => {
+            let mut ids: Vec<String> = candidates.into_iter().map(|(_, id)| id).collect();
+            ids.sort();
+            ids.dedup();
+            match ids.as_slice() {
+                [id] => Some(id.clone()),
+                [] => None,
+                _ => bail!(
+                    "multiple ImplementationGuides in {} without a sushi-config id",
+                    own_dir.display()
+                ),
+            }
+        }
+    };
+    Ok(selected.map(|id| ResourceIdentity {
+        resource_type: "ImplementationGuide".into(),
+        id,
+    }))
 }
 
 /// Render ONE fragment through a fresh engine over a render root (the `fig
@@ -909,6 +1023,7 @@ mod tests {
             own_dir: temp.path().join("output"),
             packages_dir: temp.path().join("packages"),
             txcache_dir: None,
+            primary_implementation_guide: None,
             template_includes_dir: None,
             flat: true,
         }

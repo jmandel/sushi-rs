@@ -12,7 +12,7 @@
 
 use serde_json::{json, Map, Value};
 
-use crate::model::{ConceptRow, MetadataRow, ResourceRow, SiteDb};
+use crate::model::{ConceptRow, MetadataRow, ResourceIdentity, ResourceRow, SiteDb};
 
 fn scalar_string(v: &Value) -> Option<String> {
     match v {
@@ -52,8 +52,8 @@ fn has_canonical_url(r: &Value) -> bool {
 }
 
 /// rows.ts:133 — pageFor.
-fn page_for(type_: &str, id: &str) -> String {
-    if type_ == "ImplementationGuide" {
+fn page_for(type_: &str, id: &str, primary_guide: bool) -> String {
+    if primary_guide {
         "index.html".to_string()
     } else {
         format!("{type_}-{id}.html")
@@ -436,8 +436,8 @@ fn configured_package_id(cfg: &Value, ig: Option<&Value>) -> String {
         .unwrap_or_default()
 }
 
-fn resource_row_id(r: &Value, cfg: &Value) -> String {
-    if resource_type(r) == "ImplementationGuide" {
+fn resource_row_id(r: &Value, cfg: &Value, primary_guide: bool) -> String {
+    if primary_guide {
         let pkg = configured_package_id(cfg, Some(r));
         if !pkg.is_empty() {
             return pkg;
@@ -454,8 +454,8 @@ fn resource_row_id(r: &Value, cfg: &Value) -> String {
         .to_string()
 }
 
-fn resource_row_url(r: &Value, cfg: &Value, id: &str) -> Option<String> {
-    if resource_type(r) == "ImplementationGuide" {
+fn resource_row_url(r: &Value, cfg: &Value, id: &str, primary_guide: bool) -> Option<String> {
+    if primary_guide {
         if let Some(canonical) = cfg.get("canonical").and_then(Value::as_str) {
             if !id.is_empty() {
                 return Some(format!(
@@ -598,10 +598,12 @@ pub fn derive_resource_rows(
     resource_meta: &std::collections::HashMap<String, Value>,
     cfg: &Value,
     json_by_index: &[String],
+    primary_implementation_guide: &ResourceIdentity,
 ) -> (Vec<ResourceRow>, std::collections::HashMap<String, i64>) {
-    let ig = resources
-        .iter()
-        .find(|r| resource_type(r) == "ImplementationGuide");
+    let ig = resources.iter().find(|r| {
+        resource_type(r) == primary_implementation_guide.resource_type
+            && r.get("id").and_then(Value::as_str) == Some(primary_implementation_guide.id.as_str())
+    });
     let ig_standard_status = ig.and_then(|ig| standard_status(ig));
     let ig_canonical = ig_canonical_base(ig);
     let mut rows = Vec::with_capacity(resources.len());
@@ -611,12 +613,15 @@ pub fn derive_resource_rows(
         key_by_ref.insert(resource_ref(r), key);
         let meta = resource_meta.get(&resource_ref(r));
         let canonical_resource = has_canonical_url(r);
-        let row_id = resource_row_id(r, cfg);
         let rt = resource_type(r).to_string();
+        let primary_guide = rt == primary_implementation_guide.resource_type
+            && r.get("id").and_then(Value::as_str)
+                == Some(primary_implementation_guide.id.as_str());
+        let row_id = resource_row_id(r, cfg, primary_guide);
         rows.push(ResourceRow {
             key,
-            web: page_for(&rt, &row_id),
-            url: resource_row_url(r, cfg, &row_id),
+            web: page_for(&rt, &row_id, primary_guide),
+            url: resource_row_url(r, cfg, &row_id, primary_guide),
             version: if canonical_resource {
                 get_scalar_string(r, "version")
             } else {

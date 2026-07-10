@@ -42,7 +42,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde_json::Value;
 
 pub mod config;
@@ -229,6 +229,7 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         .with_context(|| format!("load template config {}", cfg_path.display()))?;
 
     let mut resources = Vec::new();
+    let mut implementation_guides = Vec::new();
     let mut ig = IgContext::default();
     let mut ig_json = Value::Null;
     let mut ig_order: Option<Vec<(String, String)>> = None;
@@ -243,19 +244,58 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         }
         for r in enumerate_resources(&dir, is_example)? {
             if r.rt == "ImplementationGuide" {
-                if let Ok(v) = std::fs::read(&r.file)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|b| serde_json::from_slice::<Value>(&b).map_err(anyhow::Error::from))
-                {
-                    ig = IgContext::from_ig(&v);
-                    ig_order = ig_resource_order(&v);
-                    ig_json = v;
-                }
-                continue; // IG has no generated shell (base=index.html, template-base="")
+                implementation_guides.push(r);
+                continue;
             }
             resources.push(r);
         }
     }
+
+    let configured_id = configured_implementation_guide_id(build_dir)?;
+    let primary_index = if implementation_guides.is_empty() {
+        None
+    } else if let Some(id) = configured_id.as_deref() {
+        let filename = format!("ImplementationGuide-{id}.json");
+        let mut matches: Vec<usize> = implementation_guides
+            .iter()
+            .enumerate()
+            .filter(|(_, guide)| {
+                guide.file.file_name().and_then(|name| name.to_str()) == Some(filename.as_str())
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if matches.len() > 1 {
+            let generated_root = build_dir.join("fsh-generated/resources");
+            matches.retain(|index| {
+                implementation_guides[*index]
+                    .file
+                    .starts_with(&generated_root)
+            });
+        }
+        match matches.as_slice() {
+            [index] => Some(*index),
+            [] if implementation_guides.len() == 1 => Some(0),
+            [] => bail!("no ImplementationGuide-{id}.json matches sushi-config id"),
+            _ => bail!("multiple ImplementationGuide-{id}.json primary candidates"),
+        }
+    } else if implementation_guides.len() == 1 {
+        Some(0)
+    } else {
+        bail!("multiple ImplementationGuides without a sushi-config id primary marker")
+    };
+    if let Some(index) = primary_index {
+        let primary = implementation_guides.remove(index);
+        let primary_id = primary.id.clone();
+        ig = IgContext::from_ig(&primary.json);
+        ig_order = ig_resource_order(&primary.json);
+        ig_json = primary.json;
+        // The same primary may be visible through both generated and authored
+        // trees. It is one identity, not an additional IG resource.
+        implementation_guides.retain(|guide| guide.id != primary_id);
+    }
+    // Only the selected primary guide owns index.html. Additional IG instances
+    // are ordinary resources and receive their normal resource pages/data rows.
+    resources.extend(implementation_guides);
 
     // The publisher processes resources in the ImplementationGuide's
     // `definition.resource[]` order; artifacts.json key order and the
@@ -286,6 +326,23 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         page_includes,
         page_prefix: String::new(),
     })
+}
+
+fn configured_implementation_guide_id(build_dir: &Path) -> Result<Option<String>> {
+    let path = ["sushi-config.yaml", "sushi-config.yml"]
+        .into_iter()
+        .map(|name| build_dir.join(name))
+        .find(|path| path.is_file());
+    let Some(path) = path else { return Ok(None) };
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let yaml: serde_yaml::Value =
+        serde_yaml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+    Ok(yaml
+        .get("id")
+        .and_then(serde_yaml::Value::as_str)
+        .map(str::to_string)
+        .filter(|id| !id.trim().is_empty()))
 }
 
 /// The canonical resource processing order = the IG `definition.resource[]`

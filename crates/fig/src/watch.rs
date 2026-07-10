@@ -20,8 +20,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use anyhow::{Context as _, Result};
 use render_page::{publisher_reference_to_resource_key, PageArtifactReadSet, SiteData};
-use render_sd::context::IgContext;
-use render_sd::engine::{FragmentEngine, IgFacts};
+use render_sd::engine::FragmentEngine;
 use site_build::{ArtifactKey, FragmentScope, ResourceKey};
 
 use crate::engine::{RenderOptions, RenderRoot};
@@ -59,21 +58,7 @@ impl WatchState {
     }
 
     fn build_engine(&self) -> FragmentEngine {
-        let ctx = IgContext::load_with_txcache(
-            &self.root.own_dir,
-            &self.root.packages_dir,
-            self.root.txcache_dir.as_deref(),
-        );
-        let facts = IgFacts {
-            txcache_dir: self.root.txcache_dir.clone(),
-            ..Default::default()
-        };
-        FragmentEngine::new(
-            ctx,
-            self.opts.run_uuid.clone(),
-            self.opts.active_tables,
-            facts,
-        )
+        crate::engine::build_engine(&self.root, &self.opts)
     }
 
     fn page_inputs(&self) -> Result<Vec<PathBuf>> {

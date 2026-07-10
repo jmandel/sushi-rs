@@ -11,6 +11,12 @@
 > [`crates/site_build/README.md`](../crates/site_build/README.md) for the current
 > execution contracts.
 
+The producer selects the project ImplementationGuide explicitly. In memory it
+receives the compiler's `/__ig__/` artifact; on disk it matches the
+`sushi-config.yaml` `id` to `ImplementationGuide-<id>.json`. Additional
+ImplementationGuide instances are ordinary resources with their own pages and
+never overwrite project metadata through scan order.
+
 Crate: `crates/site_producer`. Gate:
 `crates/site_producer/tests/producer_gate.rs`.
 

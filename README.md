@@ -62,9 +62,14 @@ semantic data artifacts plus one raw artifact per authored asset. The current
 projector still consumes the prepared `SiteDb` model internally as migration
 scaffolding, while v1 retains `compat.site_db/rows.json` for existing consumers.
 The prepared model carries the compiler-selected primary ImplementationGuide
-identity separately from its sorted resource rows. In WASM, a fresh package
+identity separately from its sorted resource rows. Its v1 row projection marks
+that same guide as the sole ImplementationGuide whose `Web` is `index.html`;
+additional guides retain ordinary resource ids and pages. In WASM, a fresh package
 mount invalidates resolution; `compileProject` runs only over the exact selected
-labels, and SiteDb snapshot completion uses that full closure. Raw
+labels. On-demand snapshots, stock snapshot completion, and the native render
+tree continue to use the closure captured by that compiled revision even if a
+deferred/template/other-version package is mounted later; the next compile must
+resolve again. SiteDb snapshot completion uses the same full closure. Raw
 `input/resources` bytes and parsed predefined objects must have identical paths
 and values.
 Native Publisher templates may discover generated includes while evaluating

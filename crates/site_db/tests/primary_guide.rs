@@ -58,4 +58,27 @@ fn explicit_primary_guide_survives_additional_generated_ig_instances() {
             .count(),
         2
     );
+    let primary_row = outcome
+        .db
+        .resources
+        .iter()
+        .find(|row| row.type_ == "ImplementationGuide" && row.web == "index.html")
+        .unwrap();
+    assert_eq!(primary_row.id, "example.primary");
+    assert_eq!(
+        primary_row.url.as_deref(),
+        Some("https://example.org/ig/ImplementationGuide/example.primary")
+    );
+    let example_row = outcome
+        .db
+        .resources
+        .iter()
+        .find(|row| row.type_ == "ImplementationGuide" && row.web != "index.html")
+        .unwrap();
+    assert_eq!(example_row.id, "aaa-example");
+    assert_eq!(example_row.web, "ImplementationGuide-aaa-example.html");
+    assert_eq!(
+        example_row.url.as_deref(),
+        Some("https://example.org/ig/ImplementationGuide/aaa-example")
+    );
 }

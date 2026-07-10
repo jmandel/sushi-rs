@@ -417,6 +417,22 @@ impl Engine {
         ))
     }
 
+    /// Package view for operations derived from the current compile. A complete
+    /// `compileProject` revision remains bound to its captured resolver closure
+    /// even if unrelated/template/other-version packages are mounted later.
+    /// Legacy `compile`/`setLocalResources` revisions have no such certificate
+    /// and retain the historical all-mounted behavior.
+    fn source_for_current_revision(&self) -> Result<(SharedBundle, PathBuf, Vec<String>), String> {
+        match self
+            .last_project
+            .as_ref()
+            .and_then(|project| project.resolved_packages.as_ref())
+        {
+            Some(resolved) => self.source_for_resolved(resolved),
+            None => self.source(),
+        }
+    }
+
     /// Compile a project in memory. Returns the [`CompileResult`] payload and
     /// stashes the compiled resources as snapshot-resolution locals.
     fn compile(
@@ -654,10 +670,11 @@ impl Engine {
         Ok(n)
     }
 
-    /// Build a fresh `PackageContext` over the mounted packages + the last
-    /// compile's local resources.
+    /// Build a fresh `PackageContext` over the last complete project's exact
+    /// resolved closure plus its local resources. Explicit legacy compile/local
+    /// modes retain the historical all-mounted context.
     fn build_context(&self) -> Result<snapshot_gen::PackageContext, String> {
-        let (source, cache_root, packages) = self.source()?;
+        let (source, cache_root, packages) = self.source_for_current_revision()?;
         let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &packages)
             .map_err(|e| format!("package context: {e:#}"))?;
         ctx.load_local_resources(self.last_compiled.clone());
@@ -2504,14 +2521,39 @@ impl Engine {
         // (definition.resource[] for ordering/titles/example flags + canonical/version
         // for the IG context). The native/disk path is unaffected (it reads the real
         // IG from the built tree); this fallback lives only in the wasm surface.
-        let ig_json = self
+        let ig_candidates: Vec<&(PathBuf, Value)> = self
             .last_compiled
             .iter()
-            .find(|(_, v)| {
+            .filter(|(_, v)| {
                 v.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
             })
-            .map(|(_, v)| v.clone())
+            .collect();
+        let explicit: Vec<&(PathBuf, Value)> = ig_candidates
+            .iter()
+            .copied()
+            .filter(|(path, _)| path.starts_with("/__ig__"))
+            .collect();
+        let primary_ig =
+            match explicit.as_slice() {
+                [primary] => Some(*primary),
+                [] if ig_candidates.len() == 1 => Some(ig_candidates[0]),
+                [] if ig_candidates.is_empty() => None,
+                [] => return Err(
+                    "produceStockSite: multiple ImplementationGuides without an explicit primary"
+                        .into(),
+                ),
+                _ => {
+                    return Err(
+                        "produceStockSite: multiple explicit primary ImplementationGuides".into(),
+                    )
+                }
+            };
+        let ig_json = primary_ig
+            .map(|(_, body)| body.clone())
             .unwrap_or_else(|| synthesize_ig(&self.last_compiled));
+        let primary_ig_id = primary_ig
+            .and_then(|(_, body)| body.get("id"))
+            .and_then(Value::as_str);
         let example_refs = example_reference_set(&ig_json);
 
         let mut resources = Vec::new();
@@ -2520,7 +2562,10 @@ impl Engine {
                 .get("resourceType")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            if rt == "ImplementationGuide" {
+            if rt == "ImplementationGuide"
+                && primary_ig_id.is_some()
+                && body.get("id").and_then(Value::as_str) == primary_ig_id
+            {
                 continue;
             }
             let id = body.get("id").and_then(Value::as_str).unwrap_or("");
@@ -2593,9 +2638,21 @@ impl Engine {
             semantics.clone()
         } else {
             let compiled = self.snapshot_complete_own()?;
+            // ContentApi is intentionally usable over a mounted site tree with
+            // no package store at all.  Project compiles still receive the
+            // exact resolver closure captured for their revision; the `None`
+            // branch is only the package-free standalone content surface.
+            let packages = self
+                .bundle
+                .as_ref()
+                .map(|_| {
+                    self.source_for_current_revision()
+                        .map(|(source, _, _)| source)
+                })
+                .transpose()?;
             let semantics = Rc::new(build_render_semantics(
                 compiled,
-                self.bundle.clone(),
+                packages,
                 &self.site_files,
                 &self.site_options,
             )?);
@@ -2604,7 +2661,6 @@ impl Engine {
         };
         let rs = Rc::new(build_render_state_from_semantics(
             &semantics,
-            self.bundle.clone(),
             &self.site_files,
             &self.site_options,
         )?);
@@ -2615,11 +2671,11 @@ impl Engine {
     /// Snapshot-complete the differential-only StructureDefinitions in the
     /// render set for the render surface's `/own` dir — the render layer walks
     /// `snapshot.element`. Resolves `baseDefinition` (and the type/extension/
-    /// contentReference canonicals the walk touches) against the FULL mounted
-    /// package closure + the render set as locals — i.e. the SAME context the
-    /// on-demand `snapshot` op uses (`build_context`), the publisher-faithful
+    /// contentReference canonicals the walk touches) against the compile-bound
+    /// exact package closure + the render set as locals — i.e. the SAME context
+    /// the on-demand `snapshot` op uses (`build_context`), the publisher-faithful
     /// model the wasm-parity corpus gates (ips/mcode/sdc, full per-IG closure)
-    /// prove byte-correct. SiteDb projection now follows the same exact-closure
+    /// prove byte-correct. SiteDb projection follows the same exact-closure
     /// rule: a predefined-resource IG may have profiles based on EXTERNAL bases
     /// (e.g. US Core's us-core-questionnaireresponse →
     /// sdc-questionnaireresponse), which a core-only context cannot resolve.
@@ -2871,6 +2927,60 @@ mod render_invalidation_tests {
     }
 
     #[test]
+    fn stock_producer_uses_explicit_primary_and_keeps_additional_guides() {
+        let mut engine = Engine {
+            last_compiled: vec![
+                (
+                    PathBuf::from("/__compiled__/ImplementationGuide-aaa-example.json"),
+                    serde_json::json!({
+                        "resourceType": "ImplementationGuide",
+                        "id": "aaa-example",
+                        "packageId": "wrong.example",
+                        "url": "https://wrong.example/ImplementationGuide/aaa-example",
+                        "version": "9.0.0",
+                        "fhirVersion": ["5.0.0"]
+                    }),
+                ),
+                (
+                    PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
+                    serde_json::json!({
+                        "resourceType": "ImplementationGuide",
+                        "id": "primary",
+                        "packageId": "example.primary",
+                        "url": "https://example.org/ImplementationGuide/primary",
+                        "name": "Primary",
+                        "version": "1.0.0",
+                        "fhirVersion": ["4.0.1"],
+                        "definition": { "resource": [] }
+                    }),
+                ),
+            ],
+            site_files: std::collections::HashMap::from([
+                (
+                    PathBuf::from("/site/template/config.json"),
+                    br#"{"defaults":{}}"#.to_vec(),
+                ),
+                (
+                    PathBuf::from("/site/template/layouts/unused.html"),
+                    b"unused".to_vec(),
+                ),
+            ]),
+            ..Default::default()
+        };
+
+        engine.produce_stock_site().unwrap();
+        let fhir: Value =
+            serde_json::from_slice(&engine.site_files[&PathBuf::from("/site/_data/fhir.json")])
+                .unwrap();
+        assert_eq!(fhir["ig"]["id"], "primary");
+        let resources: Value = serde_json::from_slice(
+            &engine.site_files[&PathBuf::from("/site/_data/resources.json")],
+        )
+        .unwrap();
+        assert!(resources.get("ImplementationGuide/aaa-example").is_some());
+    }
+
+    #[test]
     fn package_context_replacement_invalidates_semantic_core() {
         let mut engine = Engine {
             render_semantics: Some(semantics()),
@@ -2905,6 +3015,51 @@ mod site_build_handoff_tests {
                 "marker.txt": base64_encode(marker.as_bytes()),
             }
         })
+    }
+
+    fn package_bundle_with_sd(label: &str, marker: &str, resource_version: &str) -> Value {
+        let mut bundle = package_bundle(label, marker);
+        let files = bundle["files"].as_object_mut().unwrap();
+        let sd = serde_json::json!({
+            "resourceType": "StructureDefinition",
+            "id": "conflict",
+            "url": "https://example.org/StructureDefinition/conflict",
+            "version": resource_version,
+            "name": "Conflict",
+            "status": "draft",
+            "kind": "resource",
+            "abstract": false,
+            "type": "Patient",
+            "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+            "derivation": "constraint",
+            "differential": { "element": [{ "id": "Patient", "path": "Patient" }] }
+        });
+        files.insert(
+            "StructureDefinition-conflict.json".into(),
+            Value::String(base64_encode(
+                serde_json::to_string(&sd).unwrap().as_bytes(),
+            )),
+        );
+        files.insert(
+            ".index.json".into(),
+            Value::String(base64_encode(
+                serde_json::to_string(&serde_json::json!({
+                    "index-version": 2,
+                    "files": [{
+                        "filename": "StructureDefinition-conflict.json",
+                        "resourceType": "StructureDefinition",
+                        "id": "conflict",
+                        "url": "https://example.org/StructureDefinition/conflict",
+                        "version": resource_version,
+                        "kind": "resource",
+                        "type": "Patient"
+                    }]
+                }))
+                .unwrap()
+                .as_bytes(),
+            )),
+        );
+        bundle
     }
 
     #[test]
@@ -2986,27 +3141,50 @@ mod site_build_handoff_tests {
     }
 
     #[test]
-    fn fresh_mount_invalidates_resolution_and_scoped_sources_hide_other_versions() {
+    fn post_compile_mount_invalidates_next_resolution_but_current_revision_stays_scoped() {
         let first = "example.pkg#1.0.0";
         let second = "example.pkg#2.0.0";
         let mut engine = Engine::default();
         engine
-            .init(&serde_json::to_string(&vec![package_bundle(first, "first")]).unwrap())
+            .init(
+                &serde_json::to_string(&vec![package_bundle_with_sd(first, "first", "1.0.0")])
+                    .unwrap(),
+            )
             .unwrap();
-        engine.resolved_packages = Some(ResolvedPackages {
-            config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
-            labels: vec![first.into()],
-        });
-        engine
-            .mount(&serde_json::to_string(&vec![package_bundle(second, "second")]).unwrap())
-            .unwrap();
-        assert!(engine.resolved_packages.is_none());
-
         let selected = ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
             labels: vec![first.into()],
         };
-        let (source, root, labels) = engine.source_for_resolved(&selected).unwrap();
+        engine.resolved_packages = Some(selected.clone());
+        engine.last_project = Some(CompiledProjectRevision {
+            config: "config".into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            resolved_packages: Some(selected),
+        });
+        engine.last_compiled = vec![(
+            PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
+            serde_json::json!({
+                "resourceType": "ImplementationGuide",
+                "id": "primary",
+                "packageId": "example.primary",
+                "url": "https://example.org/ImplementationGuide/primary",
+                "version": "1.0.0",
+                "fhirVersion": ["4.0.1"]
+            }),
+        )];
+        engine
+            .mount(
+                &serde_json::to_string(&vec![package_bundle_with_sd(second, "second", "2.0.0")])
+                    .unwrap(),
+            )
+            .unwrap();
+        assert!(engine.resolved_packages.is_none());
+
+        // Snapshot completion, on-demand snapshots, and RenderSemantics all use
+        // this current-revision view rather than the newly enlarged cache.
+        let (source, root, labels) = engine.source_for_current_revision().unwrap();
         assert_eq!(labels, vec![first]);
         let listed = source.read_dir(&root).unwrap();
         assert_eq!(
@@ -3025,6 +3203,25 @@ mod site_build_handoff_tests {
         assert!(source
             .read(&root.join(second).join("package/marker.txt"))
             .is_err());
+
+        let context = engine.build_context().unwrap();
+        let resolved = context
+            .fetch("https://example.org/StructureDefinition/conflict")
+            .unwrap();
+        assert_eq!(resolved["version"], "1.0.0");
+
+        let state = engine.render_state().unwrap();
+        assert_eq!(
+            state
+                .tree
+                .read(&root.join(first).join("package/marker.txt"))
+                .as_deref(),
+            Some("first")
+        );
+        assert!(state
+            .tree
+            .read(&root.join(second).join("package/marker.txt"))
+            .is_none());
     }
 
     #[test]

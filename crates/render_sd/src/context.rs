@@ -115,6 +115,12 @@ struct PkgEntry {
     spec_paths: Option<HashMap<String, String>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourceIdentity {
+    pub resource_type: String,
+    pub id: String,
+}
+
 pub struct IgContext {
     /// own IG resources: canonical -> Resolved (local page).
     own: HashMap<String, Resolved>,
@@ -177,6 +183,21 @@ impl IgContext {
         Self::load_with_tree(crate::tree::fs_tree(), own_dir, packages_dir, txcache_dir)
     }
 
+    pub fn load_with_txcache_and_primary(
+        own_dir: &Path,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+        primary_implementation_guide: Option<&ResourceIdentity>,
+    ) -> IgContext {
+        Self::load_with_tree_and_primary(
+            crate::tree::fs_tree(),
+            own_dir,
+            packages_dir,
+            txcache_dir,
+            primary_implementation_guide,
+        )
+    }
+
     /// `txcache_dir` = the build's `input-cache/txcache` (holds
     /// vs-externals.json + the tx-fetched VS bodies) — the same cache the
     /// publisher's BaseWorkerContext used (BaseWorkerContext.java:3499-3511).
@@ -186,6 +207,21 @@ impl IgContext {
         packages_dir: &Path,
         txcache_dir: Option<&Path>,
     ) -> IgContext {
+        Self::load_with_tree_and_primary(tree, own_dir, packages_dir, txcache_dir, None)
+    }
+
+    /// Load an IG context while explicitly identifying the project guide.
+    /// Additional ImplementationGuide resources remain ordinary own resources
+    /// and cannot overwrite canonical, package, FHIR-version, or dependency
+    /// context through directory order. The legacy wrapper above selects an IG
+    /// only when exactly one is present.
+    pub fn load_with_tree_and_primary(
+        tree: crate::tree::Tree,
+        own_dir: &Path,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+        primary_implementation_guide: Option<&ResourceIdentity>,
+    ) -> IgContext {
         let mut own = HashMap::new();
         // Every resource-shaped own file (incl. url-less example instances), for
         // the whole-IG scans (uses/references/aggregates). (rtype, id, path).
@@ -194,6 +230,7 @@ impl IgContext {
         let mut ig_fhir_version: Option<String> = None;
         let mut own_canonical: Option<String> = None;
         let mut own_package_id: Option<String> = None;
+        let mut ig_candidates: Vec<(String, Value)> = Vec::new();
         if let Some(rd) = tree.read_dir(own_dir) {
             for (fname, _is_file) in rd {
                 let p = own_dir.join(&fname);
@@ -223,44 +260,14 @@ impl IgContext {
                         .to_string(),
                 };
                 let id: &str = &id_owned;
-                // Record every own resource file (incl. url-less examples). The
-                // ImplementationGuide itself is excluded (skipped by callers, but
-                // faithful: references() skips r.fhirType()==ImplementationGuide).
-                if rtype != "ImplementationGuide" && !id.is_empty() {
+                // Record every own resource file (incl. url-less examples).
+                // Once the explicit primary guide is known below, only that one
+                // is removed; additional IG instances remain ordinary resources.
+                if !id.is_empty() {
                     own_files.push((rtype.to_string(), id.to_string(), p.clone()));
                 }
                 if rtype == "ImplementationGuide" {
-                    if let Some(fv) = v
-                        .get("fhirVersion")
-                        .and_then(|x| x.as_array())
-                        .and_then(|a| a.first())
-                        .and_then(|x| x.as_str())
-                    {
-                        ig_fhir_version = Some(fv.to_string());
-                    }
-                    // igpkp.getCanonical(): the IG url minus /ImplementationGuide/<id>.
-                    if let Some(u) = v.get("url").and_then(|x| x.as_str()) {
-                        own_canonical = Some(match u.find("/ImplementationGuide/") {
-                            Some(i) => u[..i].to_string(),
-                            None => u.to_string(),
-                        });
-                    }
-                    if let Some(pid) = v.get("packageId").and_then(|x| x.as_str()) {
-                        own_package_id = Some(pid.to_string());
-                    }
-                    for d in v
-                        .get("dependsOn")
-                        .and_then(|x| x.as_array())
-                        .map(|a| a.as_slice())
-                        .unwrap_or(&[])
-                    {
-                        if let (Some(pid), Some(ver)) = (
-                            d.get("packageId").and_then(|x| x.as_str()),
-                            d.get("version").and_then(|x| x.as_str()),
-                        ) {
-                            deps.push((pid.to_string(), ver.to_string()));
-                        }
-                    }
+                    ig_candidates.push((id_owned.clone(), v.clone()));
                 }
                 let Some(url) = v.get("url").and_then(|x| x.as_str()) else {
                     continue;
@@ -284,6 +291,48 @@ impl IgContext {
                         tx_server: None,
                     },
                 );
+            }
+        }
+
+        let selected_ig = match primary_implementation_guide {
+            Some(primary) if primary.resource_type == "ImplementationGuide" => {
+                ig_candidates.iter().find(|(id, _)| id == &primary.id)
+            }
+            None if ig_candidates.len() == 1 => ig_candidates.first(),
+            _ => None,
+        };
+        if let Some((primary_id, v)) = selected_ig {
+            own_files.retain(|(rtype, id, _)| rtype != "ImplementationGuide" || id != primary_id);
+            if let Some(fv) = v
+                .get("fhirVersion")
+                .and_then(|x| x.as_array())
+                .and_then(|a| a.first())
+                .and_then(|x| x.as_str())
+            {
+                ig_fhir_version = Some(fv.to_string());
+            }
+            // igpkp.getCanonical(): the IG url minus /ImplementationGuide/<id>.
+            if let Some(u) = v.get("url").and_then(|x| x.as_str()) {
+                own_canonical = Some(match u.find("/ImplementationGuide/") {
+                    Some(i) => u[..i].to_string(),
+                    None => u.to_string(),
+                });
+            }
+            if let Some(pid) = v.get("packageId").and_then(|x| x.as_str()) {
+                own_package_id = Some(pid.to_string());
+            }
+            for d in v
+                .get("dependsOn")
+                .and_then(|x| x.as_array())
+                .map(|a| a.as_slice())
+                .unwrap_or(&[])
+            {
+                if let (Some(pid), Some(ver)) = (
+                    d.get("packageId").and_then(|x| x.as_str()),
+                    d.get("version").and_then(|x| x.as_str()),
+                ) {
+                    deps.push((pid.to_string(), ver.to_string()));
+                }
             }
         }
 

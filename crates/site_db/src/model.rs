@@ -208,8 +208,9 @@ pub struct ResourceIdentity {
 #[serde(rename_all = "camelCase")]
 pub struct SiteDb {
     /// The generated guide selected before examples are merged and rows are
-    /// sorted. This semantic identity is intentionally not part of the legacy
-    /// row/SQLite serialization; typed projections consume it in memory.
+    /// sorted. This semantic key is intentionally not an extra field in the
+    /// legacy row/SQLite serialization; that projection marks the same guide as
+    /// the sole ImplementationGuide row whose `Web` is `index.html`.
     #[serde(skip)]
     pub primary_implementation_guide: Option<ResourceIdentity>,
     pub metadata: Vec<MetadataRow>,

@@ -103,6 +103,9 @@ This producer accepts `SiteDb` only because that is today's prepared-site model.
 selected by the compiler before examples are merged and rows sorted. Snapshot
 completion uses the complete exact resolved dependency closure, with core only
 as a validated distinguished member.
+The optional legacy row projection carries the same choice without a new wire
+field: exactly one ImplementationGuide row has `Web = index.html`; additional
+guides keep their resource ids, canonicals, and ordinary pages.
 That dependency is scaffolding, not an architectural claim that the database is
 the handoff. The intended next refactor extracts a renderer-neutral
 `PreparedSite`; typed Cycle artifacts and optional SQLite output will both be

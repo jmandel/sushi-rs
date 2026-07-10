@@ -409,8 +409,13 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
         branch: input.branch.clone(),
         revision: input.revision.clone(),
     });
-    let (resource_rows, key_by_ref) =
-        derive_resource_rows(&resources, &resource_meta, &cfg, &json_by_index);
+    let (resource_rows, key_by_ref) = derive_resource_rows(
+        &resources,
+        &resource_meta,
+        &cfg,
+        &json_by_index,
+        &primary_implementation_guide,
+    );
     let concept_rows = derive_concept_rows(&resources, &key_by_ref);
 
     let mut db = SiteDb::default();

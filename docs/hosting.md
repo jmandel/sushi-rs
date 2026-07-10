@@ -138,10 +138,21 @@ resources, terminology, recursive navigation, parsed config, and raw assets.
 The prepared model carries the compiler-selected primary ImplementationGuide
 key explicitly, so other authored ImplementationGuide examples remain ordinary
 resources and cannot become the site identity through row ordering.
+The same explicit key drives stock page production and the render engine's IG
+context; only the primary supplies canonical/package/FHIR-version/dependency
+fields, while additional guides remain ordinary own resources.
 Omitting `target` still produces the readable `cycle-site/v1`
 `compat.site_db/rows.json` aggregate during migration, with `siteDbJson` retained
-as a temporary compatibility field beside the generic CAS map. It is not the
+as a temporary compatibility field beside the generic CAS map. The v1 rows
+encode the explicit primary as the sole ImplementationGuide whose `Web` is
+`index.html`; additional guides remain ordinary resource pages. It is not the
 contract for new renderers.
+
+`compileProject` also captures the exact resolved labels used by snapshot and
+render semantics. Later mounts enlarge the session cache and invalidate the
+next resolver fixpoint, but they do not enlarge an already compiled revision's
+`PackageContext` or `SessionTree`. Legacy `compile`/`setLocalResources`, which do
+not claim a complete project revision, retain their explicit all-mounted mode.
 
 ## Native Publisher templates: typed late resolution
 
