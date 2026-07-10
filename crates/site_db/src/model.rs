@@ -197,9 +197,21 @@ fn base64_encode(bytes: &[u8]) -> String {
 }
 
 /// The complete row set for a site.db. Produced entirely without sqlite.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourceIdentity {
+    pub resource_type: String,
+    pub id: String,
+}
+
+/// The complete row set for a site.db. Produced entirely without sqlite.
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SiteDb {
+    /// The generated guide selected before examples are merged and rows are
+    /// sorted. This semantic identity is intentionally not part of the legacy
+    /// row/SQLite serialization; typed projections consume it in memory.
+    #[serde(skip)]
+    pub primary_implementation_guide: Option<ResourceIdentity>,
     pub metadata: Vec<MetadataRow>,
     pub resources: Vec<ResourceRow>,
     pub concepts: Vec<ConceptRow>,

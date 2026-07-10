@@ -17,10 +17,14 @@
 mod canonical;
 mod content;
 mod model;
+mod revision;
 
+#[cfg(feature = "site-db-projections")]
+pub mod cycle_semantic;
 #[cfg(feature = "site-db-compat")]
 pub mod site_db_compat;
 
 pub use canonical::{canonical_json_bytes, sha256_canonical, CanonicalError};
 pub use content::{BuildId, ContentRef, Sha256Digest};
 pub use model::*;
+pub use revision::*;

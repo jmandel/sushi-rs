@@ -10,13 +10,55 @@
 //! Hashes — `serde_json` is built with `preserve_order`, so key order is the
 //! file's order, matching Ruby's `site.data` load).
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use render_liquid::{OrderedMap, Value};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum SiteDataLoadError {
+    #[error("read site data directory {path}: {source}")]
+    ReadDirectory {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("inspect site data entry {path}: {source}")]
+    Inspect {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("site data entry is not a regular file: {0}")]
+    NotRegular(String),
+    #[error("site data filename is not UTF-8: {0}")]
+    NonUtf8Name(String),
+    #[error("read site data file {path}: {source}")]
+    ReadFile {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("site data file {path} is not UTF-8: {source}")]
+    NonUtf8Body {
+        path: String,
+        source: std::string::FromUtf8Error,
+    },
+    #[error("parse site data file {path}: {message}")]
+    Parse { path: String, message: String },
+    #[error("site data key {key} is declared by both {first} and {second}")]
+    DuplicateKey {
+        key: String,
+        first: String,
+        second: String,
+    },
+}
 
 /// The whole `site.data` namespace as one render_liquid Hash.
 pub struct SiteData {
     data: Value,
+    /// Liquid top-level key -> exact `_data` filename. This lets the page
+    /// collector retain the file-level SiteBuild dependency despite values
+    /// being parsed into one in-memory object.
+    sources: BTreeMap<String, (String, Vec<u8>)>,
 }
 
 impl SiteData {
@@ -36,9 +78,105 @@ impl SiteData {
         Self::load_with_tree(&render_sd::tree::FsTree, data_dir)
     }
 
+    /// Fail-closed native loader used by revision-producing hosts. Unlike the
+    /// compatibility loader, it propagates directory/read/parse errors, rejects
+    /// symlinks/nested entries the current flat model cannot represent, and
+    /// rejects two extensions that collapse to the same Liquid key.
+    pub fn load_strict(data_dir: &Path) -> Result<SiteData, SiteDataLoadError> {
+        let directory =
+            std::fs::read_dir(data_dir).map_err(|source| SiteDataLoadError::ReadDirectory {
+                path: data_dir.display().to_string(),
+                source,
+            })?;
+        let mut entries = directory
+            .collect::<std::io::Result<Vec<_>>>()
+            .map_err(|source| SiteDataLoadError::ReadDirectory {
+                path: data_dir.display().to_string(),
+                source,
+            })?;
+        entries.sort_by_key(|entry| entry.file_name());
+
+        let mut root = OrderedMap::new();
+        let mut sources = BTreeMap::new();
+        let mut key_sources = BTreeMap::<String, String>::new();
+        for entry in entries {
+            let path = entry.path();
+            let file_type = entry
+                .file_type()
+                .map_err(|source| SiteDataLoadError::Inspect {
+                    path: path.display().to_string(),
+                    source,
+                })?;
+            if file_type.is_symlink() || file_type.is_dir() || !file_type.is_file() {
+                return Err(SiteDataLoadError::NotRegular(path.display().to_string()));
+            }
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|name| SiteDataLoadError::NonUtf8Name(name.to_string_lossy().into()))?;
+            let extension = Path::new(&name)
+                .extension()
+                .and_then(|value| value.to_str());
+            if !matches!(extension, Some("json" | "yml" | "yaml" | "csv")) {
+                continue;
+            }
+            let key = Path::new(&name)
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .expect("UTF-8 filename has UTF-8 stem")
+                .to_string();
+            if let Some(first) = key_sources.insert(key.clone(), name.clone()) {
+                return Err(SiteDataLoadError::DuplicateKey {
+                    key,
+                    first,
+                    second: name,
+                });
+            }
+            let bytes = std::fs::read(&path).map_err(|source| SiteDataLoadError::ReadFile {
+                path: path.display().to_string(),
+                source,
+            })?;
+            let text =
+                String::from_utf8(bytes).map_err(|source| SiteDataLoadError::NonUtf8Body {
+                    path: path.display().to_string(),
+                    source,
+                })?;
+            let parsed = match extension {
+                Some("json") => {
+                    serde_json::from_str::<serde_json::Value>(&text).map_err(|error| {
+                        SiteDataLoadError::Parse {
+                            path: path.display().to_string(),
+                            message: error.to_string(),
+                        }
+                    })?
+                }
+                Some("csv") => csv_to_json(&text).map_err(|message| SiteDataLoadError::Parse {
+                    path: path.display().to_string(),
+                    message,
+                })?,
+                Some("yml" | "yaml") => {
+                    serde_yaml::from_str::<serde_json::Value>(&text).map_err(|error| {
+                        SiteDataLoadError::Parse {
+                            path: path.display().to_string(),
+                            message: error.to_string(),
+                        }
+                    })?
+                }
+                _ => unreachable!(),
+            };
+            sources.insert(key.clone(), (name, text.into_bytes()));
+            root.insert(key, json_to_value(&parsed));
+        }
+        Ok(SiteData {
+            data: Value::Hash(std::rc::Rc::new(root)),
+            sources,
+        })
+    }
+
     /// Tree-parameterized load (MemTree in the wasm session).
     pub fn load_with_tree(tree: &dyn render_sd::tree::TreeSource, data_dir: &Path) -> SiteData {
         let mut root = OrderedMap::new();
+        let mut sources = BTreeMap::new();
         let mut names: Vec<String> = tree
             .read_dir(data_dir)
             .into_iter()
@@ -66,7 +204,7 @@ impl SiteData {
             } else if n.ends_with(".csv") {
                 (
                     n.trim_end_matches(".csv").to_string(),
-                    Some(csv_to_json(&text)),
+                    csv_to_json(&text).ok(),
                 )
             } else {
                 let key = n
@@ -76,20 +214,45 @@ impl SiteData {
                 (key, serde_yaml::from_str::<serde_json::Value>(&text).ok())
             };
             if let Some(v) = parsed {
+                sources.insert(key.clone(), (n, text.into_bytes()));
                 root.insert(key, json_to_value(&v));
             }
         }
         SiteData {
             data: Value::Hash(std::rc::Rc::new(root)),
+            sources,
         }
     }
 
     /// From an already-built serde_json object mapping data-key -> json (for the
     /// editor path / tests where _data files aren't on disk).
     pub fn from_map(map: &serde_json::Value) -> SiteData {
+        let sources = map
+            .as_object()
+            .into_iter()
+            .flat_map(|object| object.keys())
+            .map(|key| {
+                let bytes = map
+                    .get(key)
+                    .and_then(|value| serde_json::to_vec(value).ok())
+                    .unwrap_or_default();
+                (key.clone(), (key.clone(), bytes))
+            })
+            .collect();
         SiteData {
             data: json_to_value(map),
+            sources,
         }
+    }
+
+    pub fn source_name(&self, data_key: &str) -> Option<&str> {
+        self.sources.get(data_key).map(|(name, _)| name.as_str())
+    }
+
+    pub fn source_bytes(&self, data_key: &str) -> Option<&[u8]> {
+        self.sources
+            .get(data_key)
+            .map(|(_, bytes)| bytes.as_slice())
     }
 
     pub fn site_data(&self, path: &[&str]) -> Option<Value> {
@@ -124,11 +287,11 @@ impl SiteData {
 /// RFC-4180 quoting: a field wrapped in `"…"` may contain commas, CRLF and
 /// doubled `""` (→ a literal `"`). Record separators are CRLF or LF. A trailing
 /// newline does NOT produce an empty final record.
-fn csv_to_json(text: &str) -> serde_json::Value {
-    let records = parse_csv(text);
+fn csv_to_json(text: &str) -> Result<serde_json::Value, String> {
+    let records = parse_csv(text)?;
     let mut rows = Vec::new();
     let Some(header) = records.first() else {
-        return serde_json::Value::Array(rows);
+        return Ok(serde_json::Value::Array(rows));
     };
     for rec in records.iter().skip(1) {
         // Skip a wholly-empty trailing record (Ruby CSV skips a bare final CRLF,
@@ -155,70 +318,140 @@ fn csv_to_json(text: &str) -> serde_json::Value {
         }
         rows.push(serde_json::Value::Object(obj));
     }
-    serde_json::Value::Array(rows)
+    Ok(serde_json::Value::Array(rows))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CsvState {
+    Start,
+    Unquoted,
+    Quoted,
+    AfterQuote,
 }
 
 /// RFC-4180 tokenizer: returns a Vec of records, each a Vec of field strings.
-fn parse_csv(text: &str) -> Vec<Vec<String>> {
+fn parse_csv(text: &str) -> Result<Vec<Vec<String>>, String> {
     let mut records = Vec::new();
     let mut record: Vec<String> = Vec::new();
     let mut field = String::new();
-    let mut in_quotes = false;
+    let mut state = CsvState::Start;
     let chars: Vec<char> = text.chars().collect();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
-        if in_quotes {
-            if c == '"' {
-                if chars.get(i + 1) == Some(&'"') {
-                    field.push('"');
-                    i += 2;
-                    continue;
-                }
-                in_quotes = false;
-                i += 1;
-                continue;
-            }
-            field.push(c);
-            i += 1;
-            continue;
-        }
-        match c {
-            '"' => {
-                in_quotes = true;
-                i += 1;
-            }
-            ',' => {
-                record.push(std::mem::take(&mut field));
-                i += 1;
-            }
-            '\r' => {
-                // CRLF or lone CR → record boundary.
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
-                if chars.get(i + 1) == Some(&'\n') {
-                    i += 2;
+        match state {
+            CsvState::Quoted => {
+                if c == '"' {
+                    if chars.get(i + 1) == Some(&'"') {
+                        field.push('"');
+                        i += 2;
+                    } else {
+                        state = CsvState::AfterQuote;
+                        i += 1;
+                    }
                 } else {
+                    field.push(c);
                     i += 1;
                 }
             }
-            '\n' => {
-                record.push(std::mem::take(&mut field));
-                records.push(std::mem::take(&mut record));
-                i += 1;
-            }
-            _ => {
-                field.push(c);
-                i += 1;
-            }
+            CsvState::AfterQuote => match c {
+                ',' => {
+                    record.push(std::mem::take(&mut field));
+                    state = CsvState::Start;
+                    i += 1;
+                }
+                '\r' | '\n' => finish_csv_record(
+                    &chars,
+                    &mut i,
+                    &mut state,
+                    &mut field,
+                    &mut record,
+                    &mut records,
+                ),
+                _ => {
+                    return Err(format!(
+                        "illegal character after closing quote at character {}",
+                        i + 1
+                    ));
+                }
+            },
+            CsvState::Start => match c {
+                '"' => {
+                    state = CsvState::Quoted;
+                    i += 1;
+                }
+                ',' => {
+                    record.push(String::new());
+                    i += 1;
+                }
+                '\r' | '\n' => finish_csv_record(
+                    &chars,
+                    &mut i,
+                    &mut state,
+                    &mut field,
+                    &mut record,
+                    &mut records,
+                ),
+                _ => {
+                    field.push(c);
+                    state = CsvState::Unquoted;
+                    i += 1;
+                }
+            },
+            CsvState::Unquoted => match c {
+                '"' => {
+                    return Err(format!(
+                        "illegal quote in unquoted field at character {}",
+                        i + 1
+                    ));
+                }
+                ',' => {
+                    record.push(std::mem::take(&mut field));
+                    state = CsvState::Start;
+                    i += 1;
+                }
+                '\r' | '\n' => finish_csv_record(
+                    &chars,
+                    &mut i,
+                    &mut state,
+                    &mut field,
+                    &mut record,
+                    &mut records,
+                ),
+                _ => {
+                    field.push(c);
+                    i += 1;
+                }
+            },
         }
     }
+    if state == CsvState::Quoted {
+        return Err("unclosed quoted field at end of file".into());
+    }
     // Flush a final field/record if the file did not end with a newline.
-    if !field.is_empty() || !record.is_empty() {
+    if state != CsvState::Start || !record.is_empty() {
         record.push(field);
         records.push(record);
     }
-    records
+    Ok(records)
+}
+
+fn finish_csv_record(
+    chars: &[char],
+    index: &mut usize,
+    state: &mut CsvState,
+    field: &mut String,
+    record: &mut Vec<String>,
+    records: &mut Vec<Vec<String>>,
+) {
+    record.push(std::mem::take(field));
+    records.push(std::mem::take(record));
+    if chars[*index] == '\r' && chars.get(*index + 1) == Some(&'\n') {
+        *index += 2;
+    } else {
+        *index += 1;
+    }
+    *state = CsvState::Start;
 }
 
 /// serde_json -> render_liquid Value. Integers stay Int; non-integer numbers
@@ -260,7 +493,7 @@ mod tests {
             CONF-0001,\"To support a Profile, a Server:\",SHALL\r\n\
             CONF-0002,\"He said \"\"hi\"\"\",MAY\n\
             CONF-0003,short\n";
-        let v = csv_to_json(text);
+        let v = csv_to_json(text).unwrap();
         let arr = v.as_array().unwrap();
         assert_eq!(arr.len(), 3);
         assert_eq!(arr[0]["key"], serde_json::json!("CONF-0001"));
@@ -281,11 +514,36 @@ mod tests {
         // empty-string keys; a data row can be shorter than the header list. An
         // empty cell becomes JSON null (Ruby CSV nil), NOT "".
         let text = "a,b,\r\n1,,\r\n";
-        let v = csv_to_json(text);
+        let v = csv_to_json(text).unwrap();
         let arr = v.as_array().unwrap();
         assert_eq!(arr.len(), 1);
         assert_eq!(arr[0]["a"], serde_json::json!("1"));
         assert_eq!(arr[0]["b"], serde_json::Value::Null); // empty cell -> nil
         assert_eq!(arr[0][""], serde_json::Value::Null); // padding column -> nil
+    }
+
+    #[test]
+    fn strict_csv_rejects_unclosed_and_illegal_quotes() {
+        for (name, body, expected) in [
+            (
+                "unclosed.csv",
+                "key,value\na,\"open",
+                "unclosed quoted field",
+            ),
+            ("illegal.csv", "key,value\na,b\"ad", "illegal quote"),
+            (
+                "after.csv",
+                "key,value\na,\"closed\"suffix",
+                "after closing quote",
+            ),
+        ] {
+            let temp = tempfile::tempdir().unwrap();
+            std::fs::write(temp.path().join(name), body).unwrap();
+            let error = SiteData::load_strict(temp.path())
+                .err()
+                .expect("malformed CSV must fail")
+                .to_string();
+            assert!(error.contains(expected), "{error}");
+        }
     }
 }

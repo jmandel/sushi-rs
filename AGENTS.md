@@ -49,7 +49,7 @@ pattern/fixed values are cleaned at final SD serialization rather than during ru
 longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
 `reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
-**SITEBUILD V1 CONTRACT — FOUNDATION ADDED (2026-07-09).** The new renderer-neutral
+**SITEBUILD V1 CONTRACT + NATIVE REVISIONS — LANDED (2026-07-10).** The renderer-neutral
 `site_build` crate defines the immutable/versioned compile→render handoff: exact
 content-addressed project sources and package lock, render target, typed artifact keys,
 explicit ready/deferred/unsupported/failed states, provenance/read dependencies, and
@@ -58,33 +58,52 @@ canonical JSON; deserialization rechecks both referential integrity and the id. 
 carry whole-IG or resource scope, and assets are namespaced by authored/template/Publisher-
 runtime/generated/extension ownership. `RenderPlan` declares required roots;
 `ClosedSiteBuild` is created only when those roots and their transitive artifact-read closure
-are all ready, giving callback-free builders a proof-bearing input. The optional
-`site-db-compat` feature projects the existing Cycle-shaped `SiteDb` as one explicitly
-legacy content-addressed artifact (dependency direction stays SiteBuild → optional adapter,
-never SiteDb → core contract). Focused gates: `cargo test -p site_build` and
+are all ready, giving callback-free builders a proof-bearing input. Preferred
+`cycle-site/v2` projects four typed semantic data roots plus raw authored asset roots;
+numeric row keys, JSON strings, and base64 bodies do not cross the wire. The current
+projector consumes `SiteDb` only as transitional prepared-model scaffolding. The optional
+`site-db-compat` feature retains the v1 aggregate for migration (dependency direction stays
+SiteBuild → optional projection, never SiteDb → core contract). Focused gates:
+`cargo test -p site_build` and
 `cargo test -p site_build --features site-db-compat`. The wasm API now emits a sealed
 Cycle handoff from the exact prior `compileProject` revision, ordinary `Session` handles
 are isolated, and `render_page` translates legacy fragment include names once into a typed
-resolver/read-set boundary. Remaining work is to promote demand-resolved native artifacts
-into new immutable SiteBuild/CAS revisions and to give the stock target a complete render
-plan; do not bypass those steps with ambient session state.
+resolver/read-set boundary. `SiteBuild::successor` is now the pure, order-independent
+revision transition: an explicit predecessor + resolution batch produces a validated new
+build and its new CAS objects while leaving the predecessor untouched. The stock collector
+makes every rendered page and assembled static asset a plan root, records page/data/staged-
+include/template-include/fragment reads transitively, preserves typed failed attempts, and
+can close only when all successful dependencies are ready.
+`fig::engine::render_site_for_revision` recursively captures the complete public tree and
+binds its complete HTML/read-set/fragment/asset payload, predecessor, render root/options, and
+output inventory behind a canonical seal;
+only that opaque outcome can be promoted by `collect_site_build_revision`. Plain `render_site`
+is a direct-write path and is deliberately not promotable. Strict public-tree and `_data`
+loading fail closed on unreadable entries, symlinks, unsupported Markdown, and concurrent
+inventory changes. The initial predecessor/F0-root association remains an explicit trusted-producer
+assertion until native inputs are reconstructed from a closed build/CAS. `ClosedBuildArtifactResolver` replays only the sealed plan closure and verifies CAS
+digest/length/UTF-8 without callbacks. No v1 wire field changed. Focused gates now also
+include `cargo test -p render_page --lib` and `cargo test -p fig`.
 
-**NATIVE CLOSED CYCLE BUNDLE — DONE (2026-07-09).** `fig prepare <ig>
---target cycle-site/v1 --sushi-out <new> --cache <explicit> --out <new>
+**NATIVE CLOSED CYCLE BUNDLE — DONE (2026-07-10).** `fig prepare <ig>
+--target cycle-site/v2 --sushi-out <new> --cache <explicit> --out <new>
 --build-date ...` is the native producer for the same callback-free external-builder
-contract. Library composition lives in `fig::prepare`: it captures config plus every
+contract (`cycle-site/v1` remains an explicit migration target). Library composition lives
+in `fig::prepare`: it captures config plus every
 regular `input/**` byte, resolves the satisfied compile/context package union, normalizes
 package material through the shared browser `build_bundle -> read_bundle` path, reconstructs
 a private IG/cache tree from those captured objects, and passes only that staged filesystem
 to the one `site_db::build` (so A→B→A live mutation cannot split identity from execution).
 It verifies staged and live values after the build, derives project/FHIR identity from the
-produced IG/rows, calls shared `close_projection`, verifies all content refs, and atomically
+produced IG/prepared model, calls the typed semantic projection, verifies all content refs, and atomically
 publishes `site-build.json` + `objects/sha256/*`. It never acquires packages or
 uses a default cache; source/nested-package symlinks, cache escapes, stale/existing SUSHI
 outputs, overlapping outputs, and ambient `SITE_LIQUID_ASSET_DIRS` fail closed. Real Cycle
-gate after its canonical example preprocessor: 23 sources, 4 packages, 28 objects, closed
-build produced successfully from the explicit workspace cache. Focused gate:
-`cargo test -p fig`.
+gate after its canonical example preprocessor: 23 sources, 4 packages, 31
+objects in v2, closed build produced successfully from the explicit workspace
+cache. The corresponding v1/v2 Cycle renders have 90 files with byte-identical
+non-receipt output; their receipt ids differ because each binds its own input
+SiteBuild id. Focused gate: `cargo test -p fig`.
 
 **COMPAT-BREAK MECHANISM (2026-06-30):** intentional divergences where STOCK emits invalid/
 buggy output are tracked in `docs/compat-breaks.json` + `tests/compat-golden/<ig>/<file>.diff`,

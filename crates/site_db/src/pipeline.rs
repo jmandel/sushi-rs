@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use crate::augment::{augment, AugmentInputs};
 use crate::ledger::{BuildLedger, LedgerReport};
-use crate::model::SiteDb;
+use crate::model::{ResourceIdentity, SiteDb};
 use crate::rows::{
     apply_global_resource_metadata, derive_concept_rows, derive_metadata_rows,
     derive_resource_rows, populate_core_rows, resource_ref, MetadataInputs,
@@ -41,8 +41,9 @@ pub struct BuildConfig {
     /// Run rust_sushi (compiler) before reading resources. False = consume an
     /// existing fsh-generated dir.
     pub run_sushi: bool,
-    /// FHIR core package coordinate for snapshot base resolution (e.g.
-    /// "hl7.fhir.r4.core#4.0.1").
+    /// Distinguished FHIR core coordinate (e.g. `hl7.fhir.r4.core#4.0.1`).
+    /// Snapshot base resolution uses the complete exact config/cache closure;
+    /// this member controls FHIR-version validation and Layer-B behavior.
     pub core_package: String,
     /// OPT-IN Layer B (task #17): canonical version pinning (B1) + R4-artifact
     /// projection (B0) over the walk snapshots, matching the IG Publisher's
@@ -118,19 +119,30 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
         );
     }
 
+    // Resolve once from the same config and explicit cache the compiler used.
+    // S3 must see the complete exact closure: a profile may derive from an
+    // external dependency, while `core_package` remains only the distinguished
+    // Layer-B/FHIR-version member rather than the whole snapshot context.
+    let sushi_config_path = config.ig_dir.join("sushi-config.yaml");
+    let sushi_config_yaml = std::fs::read_to_string(&sushi_config_path)
+        .with_context(|| format!("read {}", sushi_config_path.display()))?;
+    let package_context = resolve_snapshot_package_context(
+        &sushi_config_yaml,
+        &config.cache_dir,
+        &config.core_package,
+    )?;
+
     // ---- S3: snapshot-complete the StructureDefinitions in place. ----
     // Feed local SDs so cross-profile bases (fact <- bleeding <- flow) resolve.
-    let ctx = snapshot_gen::PackageContext::new(
-        &config.cache_dir,
-        std::slice::from_ref(&config.core_package),
-    )
-    .with_context(|| {
-        format!(
-            "open package cache {} with {}",
-            config.cache_dir.display(),
-            config.core_package
-        )
-    })?;
+    let ctx = snapshot_gen::PackageContext::new(&config.cache_dir, &package_context).with_context(
+        || {
+            format!(
+                "open package cache {} with {}",
+                config.cache_dir.display(),
+                config.core_package
+            )
+        },
+    )?;
     let mut ctx = ctx;
     ctx.load_local_dir(&resources_dir)
         .context("load local SD dir for snapshot base resolution")?;
@@ -169,19 +181,27 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
     // ---- Load the snapshot-complete resource set (generated + examples). ----
     let examples_dir = config.ig_dir.join("input").join("resources");
     let generated = read_json_files(&resources_dir)?; // re-read: SDs now snapshot-complete
+    let primary_ig_filename = primary_implementation_guide_filename(&sushi_config_yaml)?;
+    let primary_implementation_guide = generated
+        .iter()
+        .find(|(path, _)| {
+            path.file_name().and_then(|name| name.to_str()) == Some(primary_ig_filename.as_str())
+        })
+        .map(|(_, resource)| resource.clone())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "generated primary ImplementationGuide file {primary_ig_filename} is absent"
+            )
+        })?;
     let examples = read_json_files(&examples_dir)?;
     let generated: Vec<Value> = generated.into_iter().map(|(_, v)| v).collect();
     let examples: Vec<Value> = examples.into_iter().map(|(_, v)| v).collect();
-
-    // ---- Config (parsed sushi-config.yaml, for row derivation only). ----
-    let sushi_config_path = config.ig_dir.join("sushi-config.yaml");
-    let sushi_config_yaml = std::fs::read_to_string(&sushi_config_path)
-        .with_context(|| format!("read {}", sushi_config_path.display()))?;
 
     // ---- S5 + S6 assembly (shared with the in-memory path). ----
     let db = assemble_rows(
         &AssembleInputs {
             generated: &generated,
+            primary_implementation_guide: &primary_implementation_guide,
             examples: &examples,
             sushi_config_yaml: &sushi_config_yaml,
             build_epoch_secs: config.build_epoch_secs,
@@ -203,12 +223,59 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
     })
 }
 
+fn primary_implementation_guide_filename(config_text: &str) -> Result<String> {
+    let config: serde_yaml::Value = serde_yaml::from_str(config_text)?;
+    let id = config
+        .get("id")
+        .and_then(serde_yaml::Value::as_str)
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("sushi-config.yaml has no primary IG id"))?;
+    if id.contains('/') || id.contains('\\') || id.contains('\0') {
+        bail!("sushi-config.yaml has an unsafe primary IG id {id:?}");
+    }
+    Ok(format!("ImplementationGuide-{id}.json"))
+}
+
+fn resolve_snapshot_package_context(
+    config_text: &str,
+    cache_dir: &Path,
+    expected_core: &str,
+) -> Result<Vec<String>> {
+    let source = package_store::DiskSource;
+    let index = package_store::version_index_from_cache(&source, cache_dir);
+    let step = package_store::resolve_project(config_text, &source, cache_dir, Some(&index))
+        .context("resolve exact package closure for snapshot completion")?;
+    if !step.satisfied {
+        bail!(
+            "package cache does not satisfy snapshot closure: {}",
+            serde_json::to_string(&step.missing)?
+        );
+    }
+    let mut labels = Vec::new();
+    for request in step.compile_set.iter().chain(&step.context_closure) {
+        let label = format!("{}#{}", request.package_id, request.version);
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    if !labels.iter().any(|label| label == expected_core) {
+        bail!(
+            "resolved snapshot closure does not contain distinguished core package {expected_core}"
+        );
+    }
+    Ok(labels)
+}
+
 /// Inputs to the shared S5+S6 assembly (used by both the disk `build()` and the
 /// in-memory `build_from_inputs()`). Every value is already in memory — no file
 /// reads happen here except through `files` (S6's `FileSource`).
 pub struct AssembleInputs<'a> {
     /// The generated/conformance resources, snapshot-complete, INCLUDING the IG.
     pub generated: &'a [Value],
+    /// The compiler's separately identified generated primary guide. Other
+    /// authored/generated ImplementationGuide instances remain ordinary
+    /// resources and never compete for this role.
+    pub primary_implementation_guide: &'a Value,
     /// Example resources (input/resources/**), if any.
     pub examples: &'a [Value],
     /// Raw sushi-config.yaml text (consumed twice: row derivation + verbatim S6).
@@ -232,12 +299,19 @@ pub struct AssembleInputs<'a> {
 /// the resource load or config read (only S6 reads, through `input.files`). The
 /// `ledger` is populated with resource/page/config/asset nodes as before.
 pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result<SiteDb> {
-    let ig = input
-        .generated
-        .iter()
-        .find(|r| resource_type(r) == "ImplementationGuide")
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("no ImplementationGuide in the resource set"))?;
+    let ig = input.primary_implementation_guide.clone();
+    if resource_type(&ig) != "ImplementationGuide" {
+        bail!("primary guide input is not an ImplementationGuide resource");
+    }
+    let primary_implementation_guide = ResourceIdentity {
+        resource_type: "ImplementationGuide".into(),
+        id: ig
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("generated ImplementationGuide has no id"))?
+            .to_string(),
+    };
 
     // build.ts:167 igResourceMetadata: reference -> IG definition.resource entry.
     let mut resource_meta: HashMap<String, Value> = HashMap::new();
@@ -340,6 +414,7 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
     let concept_rows = derive_concept_rows(&resources, &key_by_ref);
 
     let mut db = SiteDb::default();
+    db.primary_implementation_guide = Some(primary_implementation_guide);
     populate_core_rows(&mut db, metadata_rows, resource_rows, concept_rows);
 
     // ---- S6: augment (Pages/Menu/SiteConfig/Assets). ----
@@ -388,6 +463,8 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
 pub struct InMemoryInputs<'a> {
     /// Snapshot-complete generated/conformance resources INCLUDING the IG.
     pub generated: &'a [Value],
+    /// The compiler's separately identified primary generated guide.
+    pub primary_implementation_guide: &'a Value,
     /// Example resources (input/resources/**), if any.
     pub examples: &'a [Value],
     /// Raw sushi-config.yaml text.
@@ -416,6 +493,7 @@ pub fn build_from_inputs(input: &InMemoryInputs) -> Result<BuildOutcome> {
     let db = assemble_rows(
         &AssembleInputs {
             generated: input.generated,
+            primary_implementation_guide: input.primary_implementation_guide,
             examples: input.examples,
             sushi_config_yaml: input.sushi_config_yaml,
             build_epoch_secs: input.build_epoch_secs,

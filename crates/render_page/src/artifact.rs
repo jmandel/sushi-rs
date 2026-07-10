@@ -10,7 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use render_sd::engine::{FragmentEngine, PER_RESOURCE_KINDS, SINGLETON_KINDS};
-use site_build::{ArtifactKey, FragmentKind, FragmentScope, ResourceKey};
+use site_build::{
+    ArtifactKey, ArtifactState, BuildDiagnostic, ClosedSiteBuild, ContentRef, DiagnosticSeverity,
+    FragmentKind, FragmentScope, ResourceKey, SourcePath,
+};
 
 /// Parameter containing the exact HL7 Publisher fragment kind understood by
 /// `FragmentEngine` (`snapshot`, `dict-ms`, `dependency-table`, ...).
@@ -22,6 +25,23 @@ pub const PUBLISHER_KIND_PARAMETER: &str = "publisher_kind";
 pub const PUBLISHER_REFERENCE_PARAMETER: &str = "publisher_reference";
 
 const PUBLISHER_FRAGMENT_FAMILY: &str = "hl7.fhir.publisher";
+
+pub const STOCK_PAGE_SOURCE_NAMESPACE: &str = "stock.page_source";
+pub const STOCK_SITE_DATA_NAMESPACE: &str = "stock.site_data";
+pub const STOCK_STAGED_INCLUDE_NAMESPACE: &str = "stock.include.staged";
+pub const STOCK_TEMPLATE_INCLUDE_NAMESPACE: &str = "stock.include.template";
+pub const STOCK_RUNTIME_INPUT_NAMESPACE: &str = "stock.publisher_runtime";
+
+pub fn stock_input_artifact(namespace: &str, name: impl Into<String>) -> ArtifactKey {
+    ArtifactKey::Data {
+        namespace: namespace.to_string(),
+        name: name.into(),
+    }
+}
+
+pub fn is_safe_stock_relative_path(name: &str) -> bool {
+    SourcePath::parse(name.to_string()).is_ok()
+}
 
 /// Parse the Publisher filename prefix (`Type-id`) into the renderer-neutral
 /// resource identity used by `SiteBuild`.
@@ -96,21 +116,88 @@ pub trait ArtifactResolver {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArtifactResolveFailure {
+    Deferred { reason: String },
+    Unsupported { capability: String, reason: String },
+    Failed { code: String, message: String },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ArtifactResolveError {
-    message: String,
+    failure: ArtifactResolveFailure,
 }
 
 impl ArtifactResolveError {
+    /// A concrete resolution failure. Existing resolvers use this constructor;
+    /// demand-driven collectors preserve it as a typed failed artifact.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
-            message: message.into(),
+            failure: ArtifactResolveFailure::Failed {
+                code: "artifact.resolve".into(),
+                message: message.into(),
+            },
+        }
+    }
+
+    pub fn deferred(reason: impl Into<String>) -> Self {
+        Self {
+            failure: ArtifactResolveFailure::Deferred {
+                reason: reason.into(),
+            },
+        }
+    }
+
+    pub fn unsupported(capability: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            failure: ArtifactResolveFailure::Unsupported {
+                capability: capability.into(),
+                reason: reason.into(),
+            },
+        }
+    }
+
+    pub fn failed(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            failure: ArtifactResolveFailure::Failed {
+                code: code.into(),
+                message: message.into(),
+            },
+        }
+    }
+
+    pub fn failure(&self) -> &ArtifactResolveFailure {
+        &self.failure
+    }
+
+    pub fn artifact_state(&self) -> ArtifactState {
+        match &self.failure {
+            ArtifactResolveFailure::Deferred { reason } => ArtifactState::Deferred {
+                reason: reason.clone(),
+            },
+            ArtifactResolveFailure::Unsupported { capability, reason } => {
+                ArtifactState::Unsupported {
+                    capability: capability.clone(),
+                    reason: reason.clone(),
+                }
+            }
+            ArtifactResolveFailure::Failed { code, message } => ArtifactState::Failed {
+                diagnostics: BTreeSet::from([BuildDiagnostic::new(
+                    DiagnosticSeverity::Error,
+                    code.clone(),
+                    message.clone(),
+                )]),
+            },
         }
     }
 }
 
 impl std::fmt::Display for ArtifactResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        match &self.failure {
+            ArtifactResolveFailure::Deferred { reason }
+            | ArtifactResolveFailure::Unsupported { reason, .. } => f.write_str(reason),
+            ArtifactResolveFailure::Failed { message, .. } => f.write_str(message),
+        }
     }
 }
 
@@ -198,14 +285,51 @@ impl ArtifactResolver for FragmentEngineArtifactResolver<'_> {
         let (reference, kind) = Self::request_parts(key)?;
         self.engine
             .render_fragment(&reference, &kind)
-            .map_err(|error| ArtifactResolveError::new(error.to_string()))
+            .map_err(|error| match error {
+                render_sd::engine::FragError::UnknownKind(kind) => {
+                    ArtifactResolveError::unsupported(
+                        format!("publisher.fragment.{kind}"),
+                        format!("unknown fragment kind: {kind}"),
+                    )
+                }
+                render_sd::engine::FragError::Gap { kind, refname, msg } => {
+                    ArtifactResolveError::unsupported(
+                        format!("publisher.fragment.{kind}"),
+                        format!("fragment gap [{kind} / {refname}]: {msg}"),
+                    )
+                }
+                render_sd::engine::FragError::NoSuchResource(resource) => {
+                    ArtifactResolveError::failed(
+                        "publisher.fragment.missing_resource",
+                        format!("no such resource: {resource}"),
+                    )
+                }
+            })
     }
 }
 
+/// The cached outcome of one typed resolution attempt. Failures remain typed;
+/// they are not collapsed to `None`, so a SiteBuild revision can preserve why a
+/// requested artifact did not become a successful page read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArtifactCacheEntry {
+    Ready(String),
+    NotReady(ArtifactResolveError),
+}
+
 /// A build-generation-scoped cache. The key is semantic identity, not the
-/// legacy filename. `None` records a failed/deferred attempt so repeated Liquid
-/// lookups in the same generation preserve the old first-miss behavior.
-pub type SharedArtifactCache = Rc<RefCell<BTreeMap<ArtifactKey, Option<String>>>>;
+/// legacy filename. A typed non-ready entry records a failed/deferred attempt
+/// so repeated Liquid lookups in the same generation preserve the old
+/// first-miss behavior without discarding closure diagnostics.
+pub type SharedArtifactCache = Rc<RefCell<BTreeMap<ArtifactKey, ArtifactCacheEntry>>>;
+
+/// Resolution outcomes observed while rendering a page. Ready bytes are kept
+/// so the revision collector can publish them to the CAS exactly once.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArtifactObservation {
+    Ready { bytes: Vec<u8> },
+    NotReady { error: ArtifactResolveError },
+}
 
 /// Typed requests attempted and artifacts successfully read while rendering
 /// one page. Cached successes are reads too; failed requests appear only in
@@ -214,6 +338,9 @@ pub type SharedArtifactCache = Rc<RefCell<BTreeMap<ArtifactKey, Option<String>>>
 pub struct PageArtifactReadSet {
     requested: BTreeSet<ArtifactKey>,
     read: BTreeSet<ArtifactKey>,
+    input_reads: BTreeSet<ArtifactKey>,
+    input_objects: BTreeMap<ArtifactKey, BTreeSet<Vec<u8>>>,
+    observations: BTreeMap<ArtifactKey, ArtifactObservation>,
 }
 
 impl PageArtifactReadSet {
@@ -225,6 +352,30 @@ impl PageArtifactReadSet {
         &self.read
     }
 
+    /// Non-generated page inputs actually read: the page source, `_data`
+    /// entries, staged/template includes, and include-relative sources.
+    pub fn input_reads(&self) -> &BTreeSet<ArtifactKey> {
+        &self.input_reads
+    }
+
+    /// Exact bytes observed for every non-generated page input. A set is used
+    /// so a changing backing tree cannot collapse A→B reads into one identity;
+    /// revision collection rejects keys with more than one observed value.
+    pub fn input_objects(&self) -> &BTreeMap<ArtifactKey, BTreeSet<Vec<u8>>> {
+        &self.input_objects
+    }
+
+    /// Every successful typed dependency of the rendered page. Failed requests
+    /// are deliberately absent; their typed outcomes remain in
+    /// [`observations`](Self::observations).
+    pub fn dependencies(&self) -> BTreeSet<ArtifactKey> {
+        self.read.union(&self.input_reads).cloned().collect()
+    }
+
+    pub fn observations(&self) -> &BTreeMap<ArtifactKey, ArtifactObservation> {
+        &self.observations
+    }
+
     pub(crate) fn request(&mut self, key: ArtifactKey) {
         self.requested.insert(key);
     }
@@ -232,10 +383,131 @@ impl PageArtifactReadSet {
     pub(crate) fn record_read(&mut self, key: ArtifactKey) {
         self.read.insert(key);
     }
+
+    pub(crate) fn record_input(&mut self, key: ArtifactKey, bytes: impl Into<Vec<u8>>) {
+        self.input_reads.insert(key.clone());
+        self.input_objects
+            .entry(key)
+            .or_default()
+            .insert(bytes.into());
+    }
+
+    /// Add a non-generated input discovered by a renderer post-pass (for
+    /// example the Publisher release-header substitution). Ordinary Liquid
+    /// reads are recorded automatically by [`crate::PageProvider`].
+    pub fn add_input_object(&mut self, key: ArtifactKey, bytes: impl Into<Vec<u8>>) {
+        self.record_input(key, bytes);
+    }
+
+    pub(crate) fn observe(&mut self, key: ArtifactKey, outcome: ArtifactObservation) {
+        self.observations.insert(key, outcome);
+    }
+}
+
+/// Callback-free artifact replay over a sealed build and an explicit CAS read
+/// function. Only artifacts reachable from the sealed render plan are served;
+/// a ready but unrelated catalog entry is not covered by that closure proof.
+/// The loader receives the complete `ContentRef`; bytes are checked for digest,
+/// length, and UTF-8 before use. Media type remains manifest metadata.
+pub struct ClosedBuildArtifactResolver<'a, F> {
+    build: &'a ClosedSiteBuild,
+    reachable: BTreeSet<ArtifactKey>,
+    load: F,
+}
+
+impl<'a, F> ClosedBuildArtifactResolver<'a, F> {
+    pub fn new(build: &'a ClosedSiteBuild, load: F) -> Self {
+        let mut pending = build
+            .site_build()
+            .render_plan()
+            .required_artifacts()
+            .clone();
+        let mut reachable = BTreeSet::new();
+        while let Some(key) = pending.pop_first() {
+            if !reachable.insert(key.clone()) {
+                continue;
+            }
+            if let Some(record) = build.site_build().artifacts().get(&key) {
+                for dependency in &record.reads {
+                    if let site_build::ReadDependency::Artifact { key } = dependency {
+                        pending.insert(key.clone());
+                    }
+                }
+            }
+        }
+        Self {
+            build,
+            reachable,
+            load,
+        }
+    }
+}
+
+impl<F> ArtifactResolver for ClosedBuildArtifactResolver<'_, F>
+where
+    F: Fn(&ContentRef) -> Option<Vec<u8>>,
+{
+    fn resolve(&self, key: &ArtifactKey) -> Result<String, ArtifactResolveError> {
+        if !self.reachable.contains(key) {
+            return Err(ArtifactResolveError::failed(
+                "site_build.artifact_outside_plan",
+                format!("artifact {key:?} is outside the sealed render-plan closure"),
+            ));
+        }
+        let record = self
+            .build
+            .site_build()
+            .artifacts()
+            .get(key)
+            .ok_or_else(|| {
+                ArtifactResolveError::failed(
+                    "site_build.artifact_missing",
+                    format!("sealed build has no artifact {key:?}"),
+                )
+            })?;
+        let ArtifactState::Ready { content } = &record.state else {
+            // Unreachable for records in the sealed plan closure, but a caller
+            // may ask this resolver for an unrelated catalog entry.
+            return Err(match &record.state {
+                ArtifactState::Deferred { reason } => ArtifactResolveError::deferred(reason),
+                ArtifactState::Unsupported { capability, reason } => {
+                    ArtifactResolveError::unsupported(capability, reason)
+                }
+                ArtifactState::Failed { diagnostics } => {
+                    let diagnostic = diagnostics.iter().next().expect("validated failed state");
+                    ArtifactResolveError::failed(&diagnostic.code, &diagnostic.message)
+                }
+                ArtifactState::Ready { .. } => unreachable!(),
+            });
+        };
+        let bytes = (self.load)(content).ok_or_else(|| {
+            ArtifactResolveError::failed(
+                "site_build.content_missing",
+                format!("CAS is missing {}", content.sha256),
+            )
+        })?;
+        let actual = ContentRef::of_bytes(&bytes, content.media_type.clone());
+        if actual != *content {
+            return Err(ArtifactResolveError::failed(
+                "site_build.content_mismatch",
+                format!(
+                    "CAS bytes for {} do not match length/digest",
+                    content.sha256
+                ),
+            ));
+        }
+        String::from_utf8(bytes).map_err(|error| {
+            ArtifactResolveError::failed(
+                "site_build.content_not_utf8",
+                format!("artifact {key:?} is not UTF-8: {error}"),
+            )
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
     use std::path::Path;
 
     use render_sd::context::IgContext;
@@ -335,5 +607,91 @@ mod tests {
         };
         *scope = FragmentScope::WholeIg;
         assert!(resolver.resolve(&invalid).is_err());
+    }
+
+    fn closed_fragment(bytes: &[u8]) -> (ClosedSiteBuild, ArtifactKey, ArtifactKey) {
+        let key = legacy_include_to_artifact_key("StructureDefinition-test-history.xhtml")
+            .expect("registered fragment");
+        let unrelated = legacy_include_to_artifact_key("StructureDefinition-other-history.xhtml")
+            .expect("registered fragment");
+        let provenance = site_build::ArtifactProvenance {
+            producer: site_build::ProducerRef::new("test", "1"),
+            recipe: "fixture".into(),
+            attributes: BTreeMap::new(),
+        };
+        let records = [
+            site_build::ArtifactRecord {
+                key: key.clone(),
+                state: ArtifactState::Ready {
+                    content: ContentRef::of_bytes(bytes, Some("text/html")),
+                },
+                provenance: provenance.clone(),
+                reads: BTreeSet::new(),
+            },
+            site_build::ArtifactRecord {
+                key: unrelated.clone(),
+                state: ArtifactState::Ready {
+                    content: ContentRef::of_bytes(b"unrelated", Some("text/html")),
+                },
+                provenance,
+                reads: BTreeSet::new(),
+            },
+        ];
+        let build = site_build::SiteBuild::new(
+            site_build::ProjectRevision {
+                project_id: "test".into(),
+                revision: "rev".into(),
+                sources: site_build::SourceManifest::default(),
+            },
+            site_build::PackageLock::default(),
+            site_build::RenderTarget {
+                renderer: site_build::ProducerRef::new("test", "1"),
+                mode: site_build::RenderMode::ExternalBuilder,
+                fhir_version: "4.0.1".into(),
+                template: None,
+                parameters: BTreeMap::new(),
+            },
+            site_build::RenderPlan::new([key.clone()]),
+            site_build::ArtifactCatalog::from_records(records).unwrap(),
+            BTreeSet::new(),
+        )
+        .unwrap();
+        (build.close().unwrap(), key, unrelated)
+    }
+
+    #[test]
+    fn sealed_cas_replay_rejects_missing_tampered_non_utf8_and_outside_plan_content() {
+        let (closed, key, unrelated) = closed_fragment(b"good");
+        let missing = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| None);
+        assert!(matches!(
+            missing.resolve(&key).unwrap_err().failure(),
+            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_missing"
+        ));
+
+        let tampered = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| {
+            Some(b"bad".to_vec())
+        });
+        assert!(matches!(
+            tampered.resolve(&key).unwrap_err().failure(),
+            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_mismatch"
+        ));
+
+        let outside = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| {
+            Some(b"unrelated".to_vec())
+        });
+        assert!(matches!(
+            outside.resolve(&unrelated).unwrap_err().failure(),
+            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.artifact_outside_plan"
+        ));
+
+        let non_utf8_bytes = [0xff, 0xfe];
+        let (closed, key, _) = closed_fragment(&non_utf8_bytes);
+        let non_utf8 = ClosedBuildArtifactResolver::new(&closed, move |_content: &ContentRef| {
+            Some(non_utf8_bytes.to_vec())
+        });
+        assert!(matches!(
+            non_utf8.resolve(&key).unwrap_err().failure(),
+            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_not_utf8"
+        ));
     }
 }

@@ -67,7 +67,7 @@ pub fn ledger_sidecar_path(out_db: &Path) -> std::path::PathBuf {
 /// code — byte-identical output. `args` is the full process argv.
 #[cfg(feature = "sqlite")]
 pub fn run_cli(args: &[String]) -> Result<()> {
-    use anyhow::{bail, Context};
+    use anyhow::bail;
     match args.get(1).map(String::as_str) {
         Some("build") => run_build(args),
         Some("--version") | Some("version") => {

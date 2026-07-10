@@ -170,9 +170,18 @@ invalidates the render state. If a generated ImplementationGuide resource is
 absent on the WASM path, the wrapper synthesizes the minimal IG context needed
 for page ordering and metadata.
 
-This producer integration is native-render state, not yet a complete stock
-`SiteBuild` target. Promoting stock pages, assets, and typed resolver results to
-addressed artifacts in an immutable manifest remains architecture work.
+The producer itself still emits intermediate shells and `_data`, not a manifest.
+The downstream render layer now closes that gap:
+`render_page::collect_stock_revision` promotes every advertised final page and
+assembled asset plus its actual data/include/fragment reads into an immutable
+SiteBuild successor. Native `fig::engine::render_site_for_revision` recursively
+captures the public tree and seals its full read sets, fragment observations,
+HTML, asset bytes, root/options, inventory, and explicit predecessor; only that opaque outcome can be passed to
+`collect_site_build_revision`. Plain `render_site` remains a direct-write API.
+A host still makes a trusted assertion that the initial ambient F0 root belongs
+to the predecessor; the seal prevents mutation or relabeling after capture.
+A failed fragment attempt remains a typed diagnostic artifact and is not
+presented as a successful read when a staged include was used instead.
 
 ## 7. Quirks registered
 

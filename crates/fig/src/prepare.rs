@@ -29,14 +29,16 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use site_build::{
-    site_db_compat, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage, PackageCoordinate,
-    PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderTarget, Sha256Digest, SourceEntry,
-    SourceKind, SourceManifest, SourcePath,
+    cycle_semantic, site_db_compat, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage,
+    PackageCoordinate, PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderTarget,
+    Sha256Digest, SourceEntry, SourceKind, SourceManifest, SourcePath,
 };
 use walkdir::WalkDir;
 
-/// The only external-builder contract currently materialized by Fig.
-pub const CYCLE_SITE_TARGET: &str = "cycle-site/v1";
+/// Preferred typed external-builder contract. V1 remains available only as a
+/// migration producer/reader and can still be selected explicitly.
+pub const CYCLE_SITE_TARGET: &str = cycle_semantic::TARGET;
+pub const CYCLE_SITE_TARGET_V1: &str = "cycle-site/v1";
 
 /// All host inputs for one closed bundle. Every path is explicit; this API never
 /// consults a default package cache and never performs package acquisition.
@@ -110,9 +112,12 @@ impl Drop for StagedBuildInputs {
 /// not relied on for correctness: even an A→B→A live mutation cannot influence
 /// the rows while retaining A's manifest.
 pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
-    if config.target != CYCLE_SITE_TARGET {
+    if !matches!(
+        config.target.as_str(),
+        CYCLE_SITE_TARGET | CYCLE_SITE_TARGET_V1
+    ) {
         bail!(
-            "unsupported prepare target {:?}; the only supported target is {CYCLE_SITE_TARGET}",
+            "unsupported prepare target {:?}; supported targets are {CYCLE_SITE_TARGET} (preferred) and {CYCLE_SITE_TARGET_V1}",
             config.target
         );
     }
@@ -210,57 +215,78 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
         sources: source_before.manifest.clone(),
     };
     let render_target = RenderTarget {
-        renderer: ProducerRef::new("cycle-site", "1"),
+        renderer: ProducerRef::new(
+            "cycle-site",
+            if config.target == CYCLE_SITE_TARGET {
+                "2"
+            } else {
+                "1"
+            },
+        ),
         mode: RenderMode::ExternalBuilder,
         fhir_version: fhir_version.clone(),
         template: None,
         parameters: BTreeMap::from([
             ("buildEpochSecs".into(), config.build_epoch_secs.to_string()),
-            ("contract".into(), CYCLE_SITE_TARGET.into()),
+            ("contract".into(), config.target.clone()),
             ("liquidAssetDirs".into(), "input/includes".into()),
         ]),
     };
-    let projection = site_db_compat::close_projection(
-        &built.db,
-        site_db_compat::CloseProjectionInput {
-            project,
-            package_lock: packages_before.lock.clone(),
-            render_target,
-            diagnostics: BTreeSet::new(),
-        },
-    )
-    .context("close Cycle site.db projection")?;
+    let (site_build, projected_objects) = if config.target == CYCLE_SITE_TARGET {
+        let projection = cycle_semantic::close_projection(
+            &built.db,
+            cycle_semantic::CycleProjectionInput {
+                project,
+                package_lock: packages_before.lock.clone(),
+                render_target,
+                diagnostics: BTreeSet::new(),
+            },
+        )
+        .context("close typed Cycle semantic projection")?;
+        (projection.site_build, projection.objects)
+    } else {
+        let projection = site_db_compat::close_projection(
+            &built.db,
+            site_db_compat::CloseProjectionInput {
+                project,
+                package_lock: packages_before.lock.clone(),
+                render_target,
+                diagnostics: BTreeSet::new(),
+            },
+        )
+        .context("close legacy Cycle site.db projection")?;
+        let content = ContentRef::of_bytes(&projection.bytes, Some("application/json"));
+        (
+            projection.site_build,
+            BTreeMap::from([(content.sha256, projection.bytes)]),
+        )
+    };
 
     let mut objects = source_before.objects;
     merge_objects(&mut objects, packages_before.objects)?;
-    insert_object(
-        &mut objects,
-        ContentRef::of_bytes(&projection.bytes, Some("application/json")),
-        projection.bytes,
-    )?;
-    verify_bundle_objects(&projection.site_build, &objects)?;
-    let site_build_bytes = projection.site_build.site_build().canonical_bytes()?;
+    for (digest, bytes) in projected_objects {
+        insert_object(
+            &mut objects,
+            ContentRef {
+                sha256: digest,
+                byte_length: bytes.len() as u64,
+                media_type: None,
+            },
+            bytes,
+        )?;
+    }
+    verify_bundle_objects(&site_build, &objects)?;
+    let site_build_bytes = site_build.site_build().canonical_bytes()?;
     emit_bundle(&output, &site_build_bytes, &objects)?;
 
     Ok(PrepareOutcome {
-        target: CYCLE_SITE_TARGET.into(),
+        target: config.target.clone(),
         out: output.display().to_string(),
-        build_id: projection.site_build.site_build().build_id().to_string(),
+        build_id: site_build.site_build().build_id().to_string(),
         project_id,
         fhir_version,
-        sources: projection
-            .site_build
-            .site_build()
-            .project()
-            .sources
-            .iter()
-            .count(),
-        packages: projection
-            .site_build
-            .site_build()
-            .package_lock()
-            .iter()
-            .count(),
+        sources: site_build.site_build().project().sources.iter().count(),
+        packages: site_build.site_build().package_lock().iter().count(),
         objects: objects.len(),
         object_bytes: objects.values().map(|bytes| bytes.len() as u64).sum(),
     })
@@ -937,11 +963,35 @@ fn verify_staged_inputs(
 }
 
 fn produced_identity(db: &site_db::SiteDb) -> Result<(String, String)> {
+    let primary = db
+        .primary_implementation_guide
+        .as_ref()
+        .ok_or_else(|| anyhow!("site_db build did not identify its primary ImplementationGuide"))?;
     let ig_row = db
         .resources
         .iter()
-        .find(|row| row.type_ == "ImplementationGuide")
-        .ok_or_else(|| anyhow!("site_db build produced no ImplementationGuide row"))?;
+        .find(|row| {
+            if row.type_ != primary.resource_type {
+                return false;
+            }
+            serde_json::from_str::<Value>(&row.json)
+                .ok()
+                .and_then(|resource| {
+                    resource
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .as_deref()
+                == Some(primary.id.as_str())
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "site_db primary ImplementationGuide {}/{} is absent from rows",
+                primary.resource_type,
+                primary.id
+            )
+        })?;
     let ig: Value =
         serde_json::from_str(&ig_row.json).context("parse produced ImplementationGuide row")?;
     let project_id = ig
@@ -1166,9 +1216,76 @@ fn emit_bundle(
             output.display()
         );
     }
-    fs::rename(temp.path(), output)
+    rename_no_replace(temp.path(), output)
         .with_context(|| format!("publish bundle atomically at {}", output.display()))?;
     Ok(())
+}
+
+/// Atomically publish without replacing a destination that appeared after the
+/// last userspace check. Linux and macOS use their exclusive rename primitives;
+/// Windows rename already refuses an existing destination. Unknown platforms
+/// fail closed instead of weakening the no-clobber guarantee.
+#[cfg(target_os = "linux")]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    // SAFETY: both pointers are live NUL-terminated path strings for the call;
+    // AT_FDCWD makes them process-relative exactly like std::fs::rename.
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    // SAFETY: both pointers remain live NUL-terminated path strings throughout
+    // the call; RENAME_EXCL makes destination creation atomic and no-clobber.
+    let result =
+        unsafe { libc::renamex_np(source.as_ptr(), destination.as_ptr(), libc::RENAME_EXCL) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    if fs::symlink_metadata(destination).is_ok() {
+        return Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists));
+    }
+    fs::rename(source, destination)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn rename_no_replace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace directory publication is unsupported on this platform",
+    ))
 }
 
 #[cfg(test)]
@@ -1426,6 +1543,28 @@ mod tests {
         assert!(output.join("site-build.json").is_file());
         let error = emit_bundle(&output, b"different", &objects).unwrap_err();
         assert!(error.to_string().contains("output already exists"));
+    }
+
+    #[test]
+    fn atomic_publication_never_replaces_a_destination_that_appeared() {
+        let temp = tempfile::tempdir().unwrap();
+        let staging = temp.path().join("staging");
+        let destination = temp.path().join("destination");
+        fs::create_dir(&staging).unwrap();
+        fs::write(staging.join("new"), b"new").unwrap();
+        fs::create_dir(&destination).unwrap();
+        fs::write(destination.join("prior"), b"prior").unwrap();
+
+        let error = rename_no_replace(&staging, &destination).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            std::io::ErrorKind::AlreadyExists
+                | std::io::ErrorKind::DirectoryNotEmpty
+                | std::io::ErrorKind::PermissionDenied
+                | std::io::ErrorKind::Other
+        ));
+        assert_eq!(fs::read(destination.join("prior")).unwrap(), b"prior");
+        assert_eq!(fs::read(staging.join("new")).unwrap(), b"new");
     }
 
     #[cfg(unix)]

@@ -16,6 +16,9 @@ site_db = { workspace = true, optional = true }
 
 [features]
 default = []
-# Deliberately one-way: SiteBuild is the core contract; site.db is only a
-# compatibility serialization that can be projected into an artifact.
-site-db-compat = ["dep:site_db"]
+# Deliberately one-way: SiteBuild is the core contract. The current prepared
+# site row model may be projected into typed artifacts during migration, but it
+# never enters the core wire contract.
+site-db-projections = ["dep:site_db"]
+# Keep the aggregate v1 reader/producer available during the v2 migration.
+site-db-compat = ["site-db-projections"]

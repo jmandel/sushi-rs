@@ -357,9 +357,9 @@ fn cmd_sitedb(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_prepare(args: &[String]) -> Result<Value> {
     let ig = positional(args, 2).context(
-        "usage: fig prepare <ig-dir> --target cycle-site/v1 --sushi-out <new-dir> --cache <dir> --out <new-dir> --build-date <epoch|RFC3339>",
+        "usage: fig prepare <ig-dir> --target cycle-site/v2 --sushi-out <new-dir> --cache <dir> --out <new-dir> --build-date <epoch|RFC3339>",
     )?;
-    let target = opt(args, "--target").context("--target cycle-site/v1 is required")?;
+    let target = opt(args, "--target").context("--target cycle-site/v2 is required")?;
     let sushi_out = opt(args, "--sushi-out").context("--sushi-out <new-dir> is required")?;
     let cache = opt(args, "--cache").context("--cache <dir> is required")?;
     let out = opt(args, "--out")
@@ -475,7 +475,7 @@ fn cmd_render(args: &[String]) -> Result<Value> {
 
     if has(args, "--generator") {
         bail!(
-            "fig render --generator was removed: it loaded a stale editor callback API and could recompile different inputs. Run `fig prepare <ig> --target cycle-site/v1 --sushi-out <new> --cache <dir> --out <bundle> --build-date <time>`, then invoke the generator's closed-bundle entry (for Cycle: `SITE_BUILD_DIR=<bundle> bun site-gen/build.tsx`)"
+            "fig render --generator was removed: it loaded a stale editor callback API and could recompile different inputs. Run `fig prepare <ig> --target cycle-site/v2 --sushi-out <new> --cache <dir> --out <bundle> --build-date <time>`, then invoke the generator's closed-bundle entry (for Cycle: `SITE_BUILD_DIR=<bundle> bun site-gen/build.tsx`)"
         );
     }
 
@@ -669,7 +669,7 @@ fn print_usage() {
          \x20 packages fetch <i#v> | bundle --cache -o <dir>   Acquire / CDN bundle\n\
          \x20 expand <vs.json> [--resources <r.json>]          Tier-1 VS expansion\n\
          \x20 sitedb <ig> --sushi-out <d> --cache <d> -o <db>  S1-S7 site.db producer\n\
-         \x20 prepare <ig> --target cycle-site/v1              Closed external-build bundle\n\
+         \x20 prepare <ig> --target cycle-site/v2              Closed external-build bundle\n\
          \x20         --sushi-out <new> --cache <d> --out <new>\n\
          \x20         --build-date <epoch|RFC3339>\n\
          \x20 fragment <build-dir> <ref> <kind>                Render ONE fragment\n\

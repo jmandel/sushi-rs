@@ -1,5 +1,13 @@
 # Rust Fragment Generator + Minimal-Jekyll: Feasibility Study
 
+> **HISTORICAL FEASIBILITY STUDY — not a current handoff design.** Its renderer
+> inventory and oracle analysis remain useful, but its `site.db`-centered
+> proposals predate renderer-neutral `SiteBuild`, the typed native
+> `ArtifactResolver`, and Cycle's closed v2 contract. Use the repository
+> [`README.md`](../README.md), [`hosting.md`](hosting.md), and
+> [`crates/site_build/README.md`](../crates/site_build/README.md) for current
+> APIs.
+>
 > Status: FEASIBILITY STUDY (task #23, 2026-07-03). READ-ONLY analysis, no code.
 > Question: can a Rust fragment generator + a minimal-Jekyll layer, built around
 > the `site.db` abstraction, produce **fully equivalent builds** for existing IGs

@@ -124,6 +124,13 @@ fn inmem_rows_match_disk_rows_on_cycle() {
     // ---- In-memory producer: SAME snapshot-complete resources + examples + VFS. ----
     let resources_dir = disk_outcome.resources_dir.clone();
     let generated = read_json_dir(&resources_dir);
+    let primary_implementation_guide = generated
+        .iter()
+        .find(|resource| {
+            resource.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
+                && resource.get("packageId").and_then(Value::as_str).is_some()
+        })
+        .expect("generated primary guide");
     let examples = read_json_dir(&cycle.join("input").join("resources"));
     let cfg_text = std::fs::read_to_string(cycle.join("sushi-config.yaml")).unwrap();
     let ig_root = PathBuf::from("/ig");
@@ -131,6 +138,7 @@ fn inmem_rows_match_disk_rows_on_cycle() {
 
     let mem_outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
         generated: &generated,
+        primary_implementation_guide,
         examples: &examples,
         sushi_config_yaml: &cfg_text,
         build_epoch_secs: epoch,

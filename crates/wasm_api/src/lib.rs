@@ -71,20 +71,67 @@ use api_envelope::{envelope, envelope_ser, API_VERSION};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-struct SharedBundle(Rc<BundleSource>);
+struct SharedBundle {
+    source: Rc<BundleSource>,
+    root: PathBuf,
+    /// When present, hide every package directory outside this exact resolver
+    /// fixpoint. This lets a compile use immutable selected coordinates even if
+    /// additional versions are mounted in the session cache.
+    allowed_labels: Option<BTreeSet<String>>,
+}
+
+impl SharedBundle {
+    fn permits(&self, path: &std::path::Path) -> bool {
+        let Some(allowed) = &self.allowed_labels else {
+            return true;
+        };
+        if path == self.root {
+            return true;
+        }
+        let Ok(relative) = path.strip_prefix(&self.root) else {
+            return false;
+        };
+        let Some(label) = relative
+            .components()
+            .next()
+            .and_then(|component| component.as_os_str().to_str())
+        else {
+            return false;
+        };
+        allowed.contains(label)
+    }
+}
 
 impl PackageSource for SharedBundle {
     fn read(&self, path: &std::path::Path) -> std::io::Result<Vec<u8>> {
-        self.0.read(path)
+        if !self.permits(path) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "package is outside the compile resolver fixpoint",
+            ));
+        }
+        self.source.read(path)
     }
     fn read_dir(&self, path: &std::path::Path) -> std::io::Result<Vec<package_store::DirEntry>> {
-        self.0.read_dir(path)
+        if !self.permits(path) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "package is outside the compile resolver fixpoint",
+            ));
+        }
+        let mut entries = self.source.read_dir(path)?;
+        if path == self.root {
+            if let Some(allowed) = &self.allowed_labels {
+                entries.retain(|entry| allowed.contains(&entry.file_name));
+            }
+        }
+        Ok(entries)
     }
     fn exists(&self, path: &std::path::Path) -> bool {
-        self.0.exists(path)
+        self.permits(path) && self.source.exists(path)
     }
     fn is_dir(&self, path: &std::path::Path) -> bool {
-        self.0.is_dir(path)
+        self.permits(path) && self.source.is_dir(path)
     }
     // write_new: default (read-only) — bundles ship the `.derived-index.json`.
 }
@@ -170,6 +217,10 @@ struct CompiledProjectRevision {
     fsh: BTreeMap<String, String>,
     predefined: BTreeMap<String, Value>,
     site_files: BTreeMap<String, String>,
+    /// Exact resolver fixpoint installed when this compile ran. A later
+    /// resolveProject call, even for the same config/range, cannot silently
+    /// change the package lock or snapshot context of this revision.
+    resolved_packages: Option<ResolvedPackages>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -307,6 +358,10 @@ impl Engine {
         self.packages = labels;
         self.package_materials = package_materials;
         if package_set_changed {
+            // A resolver fixpoint is a statement about the mounted candidate
+            // set. Even if a new package looks unrelated, mutable/range
+            // requests must be resolved again before another compileProject.
+            self.resolved_packages = None;
             self.invalidate_render_semantics();
         }
         Ok(total)
@@ -320,9 +375,45 @@ impl Engine {
             .clone()
             .ok_or("engine not initialized: call init(bundles) first")?;
         Ok((
-            SharedBundle(bundle),
+            SharedBundle {
+                source: bundle,
+                root: self.cache_root.clone(),
+                allowed_labels: None,
+            },
             self.cache_root.clone(),
             self.packages.clone(),
+        ))
+    }
+
+    /// A read-only package view containing exactly one previously resolved
+    /// fixpoint. The bytes remain shared; only directory visibility is scoped.
+    fn source_for_resolved(
+        &self,
+        resolved: &ResolvedPackages,
+    ) -> Result<(SharedBundle, PathBuf, Vec<String>), String> {
+        let bundle = self
+            .bundle
+            .clone()
+            .ok_or("engine not initialized: call init(bundles) first")?;
+        let mut allowed_labels = BTreeSet::new();
+        for label in &resolved.labels {
+            if !self.packages.contains(label) || !self.package_materials.contains_key(label) {
+                return Err(format!(
+                    "resolved package {label} is not present in the mounted package store"
+                ));
+            }
+            if !allowed_labels.insert(label.clone()) {
+                return Err(format!("resolved package closure repeats {label}"));
+            }
+        }
+        Ok((
+            SharedBundle {
+                source: bundle,
+                root: self.cache_root.clone(),
+                allowed_labels: Some(allowed_labels),
+            },
+            self.cache_root.clone(),
+            resolved.labels.clone(),
         ))
     }
 
@@ -334,7 +425,20 @@ impl Engine {
         config: &str,
         predefined_json: &str,
     ) -> Result<CompileResult, String> {
-        let (source, cache_root, _packages) = self.source()?;
+        self.compile_with_resolved(files_json, config, predefined_json, None)
+    }
+
+    fn compile_with_resolved(
+        &mut self,
+        files_json: &str,
+        config: &str,
+        predefined_json: &str,
+        resolved: Option<&ResolvedPackages>,
+    ) -> Result<CompileResult, String> {
+        let (source, cache_root, _packages) = match resolved {
+            Some(resolved) => self.source_for_resolved(resolved)?,
+            None => self.source()?,
+        };
 
         // FSH files: object -> Vec sorted by path (matches the disk walk order).
         let files_map: std::collections::BTreeMap<String, String> =
@@ -505,13 +609,30 @@ impl Engine {
         };
         let site_files: BTreeMap<String, String> = serde_json::from_str(site_files_json)
             .map_err(|e| format!("compileProject: bad site-files JSON: {e}"))?;
+        validate_predefined_site_overlap(&predefined, &site_files, "compileProject")?;
+        let config_digest = site_build::Sha256Digest::of_bytes(config.as_bytes());
+        let resolved_packages = self
+            .resolved_packages
+            .as_ref()
+            .filter(|resolved| resolved.config_sha256 == config_digest)
+            .cloned()
+            .ok_or_else(|| {
+                "compileProject: no satisfied package resolver fixpoint for these config bytes; call resolveProject after the latest mount"
+                    .to_string()
+            })?;
         self.page_listing = page_listing_from_site_files(&site_files);
-        let result = self.compile(files_json, config, predefined_json)?;
+        let result = self.compile_with_resolved(
+            files_json,
+            config,
+            predefined_json,
+            Some(&resolved_packages),
+        )?;
         self.last_project = Some(CompiledProjectRevision {
             config: config.to_string(),
             fsh,
             predefined,
             site_files,
+            resolved_packages: Some(resolved_packages),
         });
         Ok(result)
     }
@@ -682,8 +803,25 @@ impl Engine {
     fn build_site_db(&self, input_json: &str) -> Result<Value, String> {
         let input: SiteDbInput = serde_json::from_str(input_json)
             .map_err(|e| format!("build_site_db: bad input JSON: {e}"))?;
+        validate_predefined_site_overlap(&input.predefined, &input.site_files, "build_site_db")?;
 
-        let (source, cache_root, _packages) = self.source()?;
+        let (candidate_source, candidate_root, _packages) = self.source()?;
+        let index = package_store::version_index_from_cache(&candidate_source, &candidate_root);
+        let step = package_store::resolve_project(
+            &input.config,
+            &candidate_source,
+            &candidate_root,
+            Some(&index),
+        )
+        .map_err(|error| format!("build_site_db: resolve package closure: {error:#}"))?;
+        if !step.satisfied {
+            return Err(format!(
+                "build_site_db: mounted packages do not satisfy the project closure: {}",
+                serde_json::to_string(&step.missing).unwrap_or_else(|_| "[]".into())
+            ));
+        }
+        let resolved = resolved_packages_from_step(&input.config, &step)?;
+        let (source, cache_root, package_context) = self.source_for_resolved(&resolved)?;
         let cache = cache_root.to_string_lossy().into_owned();
 
         // ---- S1/S2 (+ IG export): compile in memory, producing the IG resource. ----
@@ -702,26 +840,21 @@ impl Engine {
             &input.config,
             &fsh_files,
             predefined,
-            source,
+            source.clone(),
             &cache,
             page_dir_listing,
         )
         .map_err(|e| format!("build_site_db: compile failed: {e:#}"))?;
 
-        // ---- S3: snapshot-complete each StructureDefinition against the compile. ----
-        // Build the snapshot context EXACTLY as the native `site_db` pipeline does:
-        // a `PackageContext` over ONLY the FHIR CORE package (r4/r5 core), plus the
-        // just-compiled conformance SDs as locals so cross-profile bases resolve.
-        // Loading the whole mounted closure here would pull extra type/extension
-        // profiles into base resolution and inflate the snapshot vs the native
-        // oracle — the native pipeline pins snapshotting to the single core package.
-        let (source, cache_root, _packages) = self.source()?;
+        // ---- S3: snapshot-complete each StructureDefinition against the same
+        // exact package fixpoint used by the compile. Core remains a validated
+        // distinguished member; external dependency bases remain resolvable.
         let fhir_version = ig_resource
             .as_ref()
             .and_then(|resource| implementation_guide_fhir_version(&resource.body))
             .ok_or("build_site_db: compiled ImplementationGuide has no fhirVersion")?;
-        let core_package = self.mounted_core_package(&fhir_version, "build_site_db")?;
-        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
+        self.resolved_core_package(&resolved, &input.config, &fhir_version, "build_site_db")?;
+        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
             .map_err(|e| format!("build_site_db: package context: {e:#}"))?;
         let locals: Vec<(PathBuf, Value)> = conformance
             .iter()
@@ -745,21 +878,18 @@ impl Engine {
                 generated.push(r.body.clone());
             }
         }
-        if let Some(ig) = &ig_resource {
-            generated.push(ig.body.clone());
-        } else {
-            return Err(
-                "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)"
-                    .into(),
-            );
-        }
+        let primary_implementation_guide = ig_resource.as_ref().map(|ig| ig.body.clone()).ok_or(
+            "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)",
+        )?;
+        generated.push(primary_implementation_guide.clone());
 
         // Predefined `input/resources/**` bodies are the examples (S5 loadResources).
-        let examples: Vec<Value> = collect_example_resources(&input.site_files);
+        let examples: Vec<Value> = collect_example_resources(&input.site_files, "build_site_db")?;
 
         assemble_site_db_value(
             "build_site_db",
             &generated,
+            &primary_implementation_guide,
             &examples,
             &input.config,
             &input.site_files,
@@ -782,10 +912,11 @@ impl Engine {
             .map_err(|e| format!("build_site_db_from_compile: serialize rows: {e}"))
     }
 
-    /// Build the callback-free Cycle handoff: one closed SiteBuild whose render
-    /// plan requires the canonical site.db compatibility artifact, plus the exact
-    /// canonical JSON bytes addressed by that artifact. Cycle consumes this value
-    /// and never calls back into the compiler or a fragment generator.
+    /// Build a callback-free Cycle handoff from the exact preceding compile.
+    /// `cycle-site/v2` returns four typed semantic objects plus raw asset objects;
+    /// omitted `target` retains the aggregate v1 compatibility contract. Both
+    /// use the same digest-indexed CAS transport and neither can invoke a second
+    /// compile or a request-time fragment callback.
     fn build_site_build_from_compile(
         &self,
         input_json: &str,
@@ -797,7 +928,7 @@ impl Engine {
         let db = self.site_db_from_compile_model(&input, "build_site_build_from_compile")?;
         let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
         let project_revision = self.site_build_project_revision(project, &project_id)?;
-        let package_lock = self.site_build_package_lock(&project.config)?;
+        let package_lock = self.site_build_package_lock(project)?;
 
         let diagnostics = self
             .last_compile_diagnostics
@@ -828,8 +959,14 @@ impl Engine {
             })
             .collect::<BTreeSet<_>>();
 
+        let target = input.target.as_deref().unwrap_or("cycle-site/v1");
+        if !matches!(target, "cycle-site/v1" | "cycle-site/v2") {
+            return Err(format!(
+                "build_site_build_from_compile: unsupported target {target:?}"
+            ));
+        }
         let mut parameters = BTreeMap::from([
-            ("contract".into(), "cycle-site/v1".into()),
+            ("contract".into(), target.into()),
             ("buildEpochSecs".into(), input.build_epoch_secs.to_string()),
             (
                 "liquidAssetDirs".into(),
@@ -847,28 +984,59 @@ impl Engine {
             parameters.insert("revision".into(), revision.clone());
         }
 
-        let projection = site_build::site_db_compat::close_projection(
-            &db,
-            site_build::site_db_compat::CloseProjectionInput {
-                project: project_revision,
-                package_lock,
-                render_target: site_build::RenderTarget {
-                    renderer: site_build::ProducerRef::new("cycle-site", "1"),
-                    mode: site_build::RenderMode::ExternalBuilder,
-                    fhir_version,
-                    template: None,
-                    parameters,
+        let render_target = site_build::RenderTarget {
+            renderer: site_build::ProducerRef::new(
+                "cycle-site",
+                if target == "cycle-site/v2" { "2" } else { "1" },
+            ),
+            mode: site_build::RenderMode::ExternalBuilder,
+            fhir_version,
+            template: None,
+            parameters,
+        };
+
+        if target == "cycle-site/v2" {
+            let projection = site_build::cycle_semantic::close_projection(
+                &db,
+                site_build::cycle_semantic::CycleProjectionInput {
+                    project: project_revision,
+                    package_lock,
+                    render_target,
+                    diagnostics,
                 },
-                diagnostics,
-            },
-        )
-        .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
-        let site_db_json = String::from_utf8(projection.bytes)
-            .map_err(|e| format!("build_site_build_from_compile: site.db UTF-8: {e}"))?;
-        Ok(SiteBuildFromCompileResult {
-            site_build: projection.site_build,
-            site_db_json,
-        })
+            )
+            .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
+            Ok(SiteBuildFromCompileResult {
+                transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
+                site_build: projection.site_build,
+                objects: encode_cas_objects(projection.objects),
+                site_db_json: None,
+            })
+        } else {
+            let projection = site_build::site_db_compat::close_projection(
+                &db,
+                site_build::site_db_compat::CloseProjectionInput {
+                    project: project_revision,
+                    package_lock,
+                    render_target,
+                    diagnostics,
+                },
+            )
+            .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
+            let site_db_json = String::from_utf8(projection.bytes.clone())
+                .map_err(|e| format!("build_site_build_from_compile: site.db UTF-8: {e}"))?;
+            let content =
+                site_build::ContentRef::of_bytes(&projection.bytes, Some("application/json"));
+            Ok(SiteBuildFromCompileResult {
+                transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
+                site_build: projection.site_build,
+                objects: BTreeMap::from([(
+                    content.sha256.to_string(),
+                    base64_encode(&projection.bytes),
+                )]),
+                site_db_json: Some(site_db_json),
+            })
+        }
     }
 
     fn validate_project_projection<'a>(
@@ -915,10 +1083,17 @@ impl Engine {
             ));
         }
 
-        let (source, cache_root, _packages) = self.source()?;
+        let project = self.validate_project_projection(input, operation)?;
         let (_, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
-        let core_package = self.resolved_core_package(&input.config, &fhir_version, operation)?;
-        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &[core_package])
+        let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
+            format!("{operation}: compiled revision has no bound package resolver fixpoint")
+        })?;
+        // Validate the distinguished core, but snapshot against the complete
+        // exact closure used by compileProject so profiles may derive from
+        // external dependencies without consulting unrelated mounted versions.
+        self.resolved_core_package(resolved, &input.config, &fhir_version, operation)?;
+        let (source, cache_root, package_context) = self.source_for_resolved(resolved)?;
+        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
             .map_err(|e| format!("{operation}: package context: {e:#}"))?;
         let compiled_locals: Vec<(PathBuf, Value)> = self
             .last_compiled
@@ -929,7 +1104,7 @@ impl Engine {
         ctx.load_local_resources(compiled_locals);
 
         let mut generated = Vec::new();
-        let mut has_ig = false;
+        let mut primary_implementation_guide = None;
         for (path, body) in &self.last_compiled {
             if path.starts_with("/__compiled__") {
                 if body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
@@ -946,19 +1121,22 @@ impl Engine {
                 }
             } else if path.starts_with("/__ig__") {
                 generated.push(body.clone());
-                has_ig = true;
+                if primary_implementation_guide.replace(body.clone()).is_some() {
+                    return Err(format!(
+                        "{operation}: compiled revision has multiple primary ImplementationGuide artifacts"
+                    ));
+                }
             }
         }
-        if !has_ig {
-            return Err(format!(
-                "{operation}: compiled revision has no ImplementationGuide"
-            ));
-        }
+        let primary_implementation_guide = primary_implementation_guide.ok_or_else(|| {
+            format!("{operation}: compiled revision has no primary ImplementationGuide")
+        })?;
 
-        let examples = collect_example_resources(&input.site_files);
+        let examples = collect_example_resources(&input.site_files, operation)?;
         assemble_site_db_model(
             operation,
             &generated,
+            &primary_implementation_guide,
             &examples,
             &input.config,
             &input.site_files,
@@ -974,6 +1152,11 @@ impl Engine {
         project: &CompiledProjectRevision,
         project_id: &str,
     ) -> Result<site_build::ProjectRevision, String> {
+        validate_predefined_site_overlap(
+            &project.predefined,
+            &project.site_files,
+            "build_site_build_from_compile",
+        )?;
         let mut entries: BTreeMap<site_build::SourcePath, site_build::SourceEntry> =
             BTreeMap::new();
         let mut insert = |path: &str,
@@ -983,13 +1166,15 @@ impl Engine {
          -> Result<(), String> {
             let path = site_build::SourcePath::parse(path.to_string())
                 .map_err(|e| format!("build_site_build_from_compile: source path {path}: {e}"))?;
-            entries.insert(
-                path,
-                site_build::SourceEntry {
-                    kind,
-                    content: site_build::ContentRef::of_bytes(bytes, Some(media_type)),
-                },
-            );
+            let entry = site_build::SourceEntry {
+                kind,
+                content: site_build::ContentRef::of_bytes(bytes, Some(media_type)),
+            };
+            if entries.insert(path.clone(), entry).is_some() {
+                return Err(format!(
+                    "build_site_build_from_compile: source path {path} is declared by more than one input channel"
+                ));
+            }
             Ok(())
         };
 
@@ -1046,13 +1231,16 @@ impl Engine {
         })
     }
 
-    fn site_build_package_lock(&self, config: &str) -> Result<site_build::PackageLock, String> {
-        let resolved = self.resolved_packages.as_ref().ok_or(
-            "build_site_build_from_compile: no resolved package fixpoint for this project",
+    fn site_build_package_lock(
+        &self,
+        project: &CompiledProjectRevision,
+    ) -> Result<site_build::PackageLock, String> {
+        let resolved = project.resolved_packages.as_ref().ok_or(
+            "build_site_build_from_compile: compiled revision has no bound package resolver fixpoint",
         )?;
-        if resolved.config_sha256 != site_build::Sha256Digest::of_bytes(config.as_bytes()) {
+        if resolved.config_sha256 != site_build::Sha256Digest::of_bytes(project.config.as_bytes()) {
             return Err(
-                "build_site_build_from_compile: resolved package closure belongs to different config bytes"
+                "build_site_build_from_compile: compiled package closure belongs to different config bytes"
                     .into(),
             );
         }
@@ -1101,14 +1289,11 @@ impl Engine {
     /// core that is absent from the SiteBuild package lock.
     fn resolved_core_package(
         &self,
+        resolved: &ResolvedPackages,
         config: &str,
         fhir_version: &str,
         operation: &str,
     ) -> Result<String, String> {
-        let resolved = self
-            .resolved_packages
-            .as_ref()
-            .ok_or_else(|| format!("{operation}: no resolved package fixpoint for this project"))?;
         if resolved.config_sha256 != site_build::Sha256Digest::of_bytes(config.as_bytes()) {
             return Err(format!(
                 "{operation}: resolved package closure belongs to different config bytes"
@@ -1146,23 +1331,6 @@ impl Engine {
         }
     }
 
-    /// Legacy `buildSiteDb` has no lock-bearing handoff, but it must still use
-    /// the one exact core coordinate implied by the compiled IG instead of the
-    /// first mounted `*.core` package.
-    fn mounted_core_package(&self, fhir_version: &str, operation: &str) -> Result<String, String> {
-        let (expected_id, expected_version) = core_coordinate_for_fhir_version(fhir_version)
-            .map_err(|error| format!("{operation}: {error}"))?;
-        let expected = format!("{expected_id}#{expected_version}");
-        if !self.packages.iter().any(|label| label == &expected)
-            || !self.package_materials.contains_key(&expected)
-        {
-            return Err(format!(
-                "{operation}: required core package {expected} is not mounted"
-            ));
-        }
-        Ok(expected)
-    }
-
     /// Resolve a project's two package sets against the CURRENTLY MOUNTED bundles.
     /// Returns the [`package_store::ResolutionStep`]'s canonical JSON STRING (the
     /// exact `ResolutionStep::to_json()` bytes the legacy wrapper hands back
@@ -1186,17 +1354,7 @@ impl Engine {
         let step = package_store::resolve_project(config, &source, &cache_root, index.as_ref())
             .map_err(|e| format!("resolve_project: {e:#}"))?;
         self.resolved_packages = if step.satisfied {
-            let mut labels = Vec::new();
-            for request in step.compile_set.iter().chain(&step.context_closure) {
-                let label = format!("{}#{}", request.package_id, request.version);
-                if !labels.contains(&label) {
-                    labels.push(label);
-                }
-            }
-            Some(ResolvedPackages {
-                config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
-                labels,
-            })
+            Some(resolved_packages_from_step(config, &step)?)
         } else {
             None
         };
@@ -1204,10 +1362,34 @@ impl Engine {
     }
 }
 
+fn resolved_packages_from_step(
+    config: &str,
+    step: &package_store::ResolutionStep,
+) -> Result<ResolvedPackages, String> {
+    if !step.satisfied {
+        return Err("package resolver step is not satisfied".into());
+    }
+    let mut labels = Vec::new();
+    for request in step.compile_set.iter().chain(&step.context_closure) {
+        let label = format!("{}#{}", request.package_id, request.version);
+        if !labels.contains(&label) {
+            labels.push(label);
+        }
+    }
+    if labels.is_empty() {
+        return Err("package resolver produced an empty satisfied closure".into());
+    }
+    Ok(ResolvedPackages {
+        config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+        labels,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assemble_site_db_value(
     operation: &str,
     generated: &[Value],
+    primary_implementation_guide: &Value,
     examples: &[Value],
     config: &str,
     site_files: &std::collections::BTreeMap<String, String>,
@@ -1219,6 +1401,7 @@ fn assemble_site_db_value(
     let db = assemble_site_db_model(
         operation,
         generated,
+        primary_implementation_guide,
         examples,
         config,
         site_files,
@@ -1234,6 +1417,7 @@ fn assemble_site_db_value(
 fn assemble_site_db_model(
     operation: &str,
     generated: &[Value],
+    primary_implementation_guide: &Value,
     examples: &[Value],
     config: &str,
     site_files: &BTreeMap<String, String>,
@@ -1256,6 +1440,7 @@ fn assemble_site_db_model(
     };
     let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
         generated,
+        primary_implementation_guide,
         examples,
         sushi_config_yaml: config,
         build_epoch_secs,
@@ -1377,15 +1562,35 @@ struct SiteDbFromCompileInput {
     branch: Option<String>,
     #[serde(default)]
     revision: Option<String>,
+    /// External-builder contract. Omitted means the readable v1 compatibility
+    /// projection; new editor callers request `cycle-site/v2` explicitly.
+    #[serde(default)]
+    target: Option<String>,
 }
+
+const SITE_BUILD_CAS_TRANSPORT: &str = "site-build-cas/v1";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SiteBuildFromCompileResult {
+    transport_version: String,
     site_build: site_build::ClosedSiteBuild,
-    /// Canonical JSON bytes addressed by the ready compat.site_db artifact.
-    /// Kept separate from the manifest so hosts can place/verify them in a CAS.
-    site_db_json: String,
+    /// Digest -> base64 raw artifact bytes. This is transport only; semantic v2
+    /// asset artifacts themselves contain raw bytes, never base64 JSON fields.
+    objects: BTreeMap<String, String>,
+    /// Temporary source compatibility for consumers that have not adopted the
+    /// generic CAS map. Present only when the caller selects/omits v1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    site_db_json: Option<String>,
+}
+
+fn encode_cas_objects(
+    objects: BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+) -> BTreeMap<String, String> {
+    objects
+        .into_iter()
+        .map(|(digest, bytes)| (digest.to_string(), base64_encode(&bytes)))
+        .collect()
 }
 
 // The result/error envelope helpers now live in the shared `api_envelope` crate
@@ -1534,9 +1739,10 @@ impl Session {
         )
     }
 
-    /// Produce the closed, callback-free Cycle SiteBuild plus the canonical
-    /// site.db compatibility bytes it addresses. This is the preferred external
-    /// builder boundary; `buildSiteDbFromCompile` remains a migration adapter.
+    /// Produce a closed, callback-free Cycle SiteBuild plus its generic CAS
+    /// transport. `cycle-site/v2` returns typed semantic roots and raw assets;
+    /// v1 optionally retains `siteDbJson` for old consumers.
+    /// `buildSiteDbFromCompile` remains a migration adapter.
     #[wasm_bindgen(js_name = buildSiteBuildFromCompile)]
     pub fn build_site_build_from_compile(&self, input_json: &str) -> String {
         set_panic_hook();
@@ -1707,6 +1913,32 @@ fn version_json() -> String {
     v.to_string()
 }
 
+/// Standard-alphabet base64 with `=` padding for the generic in-memory CAS
+/// transport. Kept dependency-free beside the matching decoder below.
+fn base64_encode(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let first = chunk[0] as u32;
+        let second = *chunk.get(1).unwrap_or(&0) as u32;
+        let third = *chunk.get(2).unwrap_or(&0) as u32;
+        let value = (first << 16) | (second << 8) | third;
+        output.push(ALPHABET[((value >> 18) & 63) as usize] as char);
+        output.push(ALPHABET[((value >> 12) & 63) as usize] as char);
+        output.push(if chunk.len() > 1 {
+            ALPHABET[((value >> 6) & 63) as usize] as char
+        } else {
+            '='
+        });
+        output.push(if chunk.len() > 2 {
+            ALPHABET[(value & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    output
+}
+
 /// Decode + mount each bundle's base64 files under its label. Appends newly
 /// mounted labels to `labels`.
 fn mount_into(
@@ -1753,23 +1985,63 @@ fn mount_into(
 /// into resource `Value`s — the example set the site.db orders after conformance.
 fn collect_example_resources(
     site_files: &std::collections::BTreeMap<String, String>,
-) -> Vec<Value> {
+    operation: &str,
+) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     for (path, b64) in site_files {
         if !(path.starts_with("input/resources/") && path.ends_with(".json")) {
             continue;
         }
-        let Ok(bytes) = base64_decode(b64) else {
-            continue;
-        };
-        let Ok(text) = String::from_utf8(bytes) else {
-            continue;
-        };
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            out.push(v);
+        let bytes = base64_decode(b64)
+            .map_err(|error| format!("{operation}: invalid base64 in {path}: {error}"))?;
+        let text = String::from_utf8(bytes)
+            .map_err(|error| format!("{operation}: {path} is not UTF-8: {error}"))?;
+        let value = serde_json::from_str::<Value>(&text)
+            .map_err(|error| format!("{operation}: invalid JSON in {path}: {error}"))?;
+        out.push(value);
+    }
+    Ok(out)
+}
+
+fn validate_predefined_site_overlap(
+    predefined: &BTreeMap<String, Value>,
+    site_files: &BTreeMap<String, String>,
+    operation: &str,
+) -> Result<(), String> {
+    let predefined_paths: BTreeSet<&str> = predefined.keys().map(String::as_str).collect();
+    let raw_paths: BTreeSet<&str> = site_files
+        .keys()
+        .filter(|path| path.starts_with("input/resources/") && path.ends_with(".json"))
+        .map(String::as_str)
+        .collect();
+    if predefined_paths != raw_paths {
+        let only_predefined = predefined_paths
+            .difference(&raw_paths)
+            .copied()
+            .collect::<Vec<_>>();
+        let only_raw = raw_paths
+            .difference(&predefined_paths)
+            .copied()
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "{operation}: predefined and raw input/resources JSON paths differ (only predefined: {only_predefined:?}; only raw: {only_raw:?})"
+        ));
+    }
+    for (path, compiled_value) in predefined {
+        let encoded = site_files
+            .get(path)
+            .expect("equal resource path sets were checked above");
+        let bytes = base64_decode(encoded)
+            .map_err(|error| format!("{operation}: invalid base64 in {path}: {error}"))?;
+        let authored_value = serde_json::from_slice::<Value>(&bytes)
+            .map_err(|error| format!("{operation}: invalid JSON in {path}: {error}"))?;
+        if &authored_value != compiled_value {
+            return Err(format!(
+                "{operation}: predefined resource {path} differs from the raw authored site file at the same path"
+            ));
         }
     }
-    out
+    Ok(())
 }
 
 fn source_kind_and_media_type(path: &str) -> (site_build::SourceKind, &'static str) {
@@ -2347,11 +2619,10 @@ impl Engine {
     /// package closure + the render set as locals — i.e. the SAME context the
     /// on-demand `snapshot` op uses (`build_context`), the publisher-faithful
     /// model the wasm-parity corpus gates (ips/mcode/sdc, full per-IG closure)
-    /// prove byte-correct. This is deliberately NOT the core-only pinning
-    /// build_site_db uses: that matches the native `site_db` oracle, but a
-    /// predefined-resource IG has profiles based on EXTERNAL bases (e.g. US
-    /// Core's us-core-questionnaireresponse → sdc-questionnaireresponse), which
-    /// core-only cannot resolve ("base not found: .../sdc/...").
+    /// prove byte-correct. SiteDb projection now follows the same exact-closure
+    /// rule: a predefined-resource IG may have profiles based on EXTERNAL bases
+    /// (e.g. US Core's us-core-questionnaireresponse →
+    /// sdc-questionnaireresponse), which a core-only context cannot resolve.
     ///
     /// SDs that already carry a snapshot pass through untouched. A per-SD
     /// snapshot failure is non-fatal: the differential body is left in place so
@@ -2528,6 +2799,7 @@ mod render_invalidation_tests {
                 fsh: inputs.fsh.clone(),
                 predefined: inputs.predefined.clone(),
                 site_files: BTreeMap::from([("input/pagecontent/index.md".into(), "old".into())]),
+                resolved_packages: None,
             }),
             ..Default::default()
         };
@@ -2617,6 +2889,24 @@ mod render_invalidation_tests {
 mod site_build_handoff_tests {
     use super::*;
 
+    fn package_bundle(label: &str, marker: &str) -> serde_json::Value {
+        let (name, version) = label.split_once('#').unwrap();
+        serde_json::json!({
+            "label": label,
+            "files": {
+                "package.json": base64_encode(
+                    serde_json::to_string(&serde_json::json!({
+                        "name": name,
+                        "version": version,
+                    }))
+                    .unwrap()
+                    .as_bytes()
+                ),
+                "marker.txt": base64_encode(marker.as_bytes()),
+            }
+        })
+    }
+
     #[test]
     fn wasm_mount_rejects_package_identity_and_dependency_shape_mismatches() {
         let mut engine = Engine::default();
@@ -2696,6 +2986,48 @@ mod site_build_handoff_tests {
     }
 
     #[test]
+    fn fresh_mount_invalidates_resolution_and_scoped_sources_hide_other_versions() {
+        let first = "example.pkg#1.0.0";
+        let second = "example.pkg#2.0.0";
+        let mut engine = Engine::default();
+        engine
+            .init(&serde_json::to_string(&vec![package_bundle(first, "first")]).unwrap())
+            .unwrap();
+        engine.resolved_packages = Some(ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
+            labels: vec![first.into()],
+        });
+        engine
+            .mount(&serde_json::to_string(&vec![package_bundle(second, "second")]).unwrap())
+            .unwrap();
+        assert!(engine.resolved_packages.is_none());
+
+        let selected = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
+            labels: vec![first.into()],
+        };
+        let (source, root, labels) = engine.source_for_resolved(&selected).unwrap();
+        assert_eq!(labels, vec![first]);
+        let listed = source.read_dir(&root).unwrap();
+        assert_eq!(
+            listed
+                .iter()
+                .map(|entry| entry.file_name.as_str())
+                .collect::<Vec<_>>(),
+            vec![first]
+        );
+        assert_eq!(
+            source
+                .read(&root.join(first).join("package/marker.txt"))
+                .unwrap(),
+            b"first"
+        );
+        assert!(source
+            .read(&root.join(second).join("package/marker.txt"))
+            .is_err());
+    }
+
+    #[test]
     fn wasm_package_boundary_retains_safe_nested_template_content() {
         let mut engine = Engine::default();
         engine
@@ -2731,6 +3063,7 @@ mod site_build_handoff_tests {
             fsh: BTreeMap::from([("input/fsh/demo.fsh".into(), "Profile: Demo".into())]),
             predefined: BTreeMap::new(),
             site_files: BTreeMap::from([("input/images/x.txt".into(), "eA==".into())]),
+            resolved_packages: None,
         };
         let first = engine
             .site_build_project_revision(&project, "demo.ig")
@@ -2741,6 +3074,75 @@ mod site_build_handoff_tests {
         assert_eq!(first, second);
         assert_eq!(first.sources.iter().count(), 3);
         assert!(first.revision.starts_with("sources-sha256:"));
+
+        let mut config_collision = project.clone();
+        config_collision
+            .fsh
+            .insert("sushi-config.yaml".into(), "Alias: Bad".into());
+        assert!(engine
+            .site_build_project_revision(&config_collision, "demo.ig")
+            .unwrap_err()
+            .contains("more than one input channel"));
+
+        let mut channel_collision = project;
+        channel_collision
+            .fsh
+            .insert("input/images/x.txt".into(), "Profile: AlsoBad".into());
+        assert!(engine
+            .site_build_project_revision(&channel_collision, "demo.ig")
+            .unwrap_err()
+            .contains("more than one input channel"));
+
+        let resource_path = "input/resources/Patient-p.json";
+        let parsed = serde_json::json!({"resourceType": "Patient", "id": "p"});
+        let equivalent = CompiledProjectRevision {
+            config: "id: demo".into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::from([(resource_path.into(), parsed.clone())]),
+            site_files: BTreeMap::from([(
+                resource_path.into(),
+                base64_encode(b"{ \"id\": \"p\", \"resourceType\": \"Patient\" }"),
+            )]),
+            resolved_packages: None,
+        };
+        engine
+            .site_build_project_revision(&equivalent, "demo.ig")
+            .unwrap();
+        let mut different = equivalent;
+        different.site_files.insert(
+            resource_path.into(),
+            base64_encode(br#"{"resourceType":"Patient","id":"other"}"#),
+        );
+        assert!(engine
+            .site_build_project_revision(&different, "demo.ig")
+            .unwrap_err()
+            .contains("differs from the raw authored site file"));
+
+        let mut only_predefined = different.clone();
+        only_predefined.site_files.clear();
+        assert!(engine
+            .site_build_project_revision(&only_predefined, "demo.ig")
+            .unwrap_err()
+            .contains("only predefined"));
+        let mut only_raw = different;
+        only_raw.predefined.clear();
+        assert!(engine
+            .site_build_project_revision(&only_raw, "demo.ig")
+            .unwrap_err()
+            .contains("only raw"));
+    }
+
+    #[test]
+    fn malformed_authored_resource_files_fail_loudly() {
+        for (encoded, expected) in [
+            ("not-base64".to_string(), "invalid base64"),
+            ("/w==".to_string(), "not UTF-8"),
+            (base64_encode(b"{"), "invalid JSON"),
+        ] {
+            let files = BTreeMap::from([("input/resources/Patient-p.json".into(), encoded)]);
+            let error = collect_example_resources(&files, "test").unwrap_err();
+            assert!(error.contains(expected), "{error}");
+        }
     }
 
     #[test]
@@ -2748,6 +3150,10 @@ mod site_build_handoff_tests {
         let config = "id: demo\nfhirVersion: 4.0.1\n";
         let core = "hl7.fhir.r4.core#4.0.1";
         let dep = "example.dep#1.0.0";
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            labels: vec![core.into(), dep.into()],
+        };
         let engine = Engine {
             package_materials: BTreeMap::from([
                 (
@@ -2770,19 +3176,30 @@ mod site_build_handoff_tests {
                     },
                 ),
             ]),
+            // A later same-config resolution must not replace the closure that
+            // was captured by the compiled project below.
             resolved_packages: Some(ResolvedPackages {
                 config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
-                labels: vec![core.into(), dep.into()],
+                labels: vec![core.into(), "example.dep#2.0.0".into()],
             }),
             ..Default::default()
         };
-        let lock = engine.site_build_package_lock(config).unwrap();
+        let project = CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            resolved_packages: Some(resolved.clone()),
+        };
+        let lock = engine.site_build_package_lock(&project).unwrap();
         let dependency = lock
             .get(&site_build::PackageCoordinate::parse(dep).unwrap())
             .unwrap();
         assert_eq!(dependency.dependencies.len(), 1);
+        let mut wrong = project;
+        wrong.config = "id: different".into();
         assert!(engine
-            .site_build_package_lock("id: different")
+            .site_build_package_lock(&wrong)
             .unwrap_err()
             .contains("different config"));
     }
@@ -2797,6 +3214,10 @@ mod site_build_handoff_tests {
             content: site_build::ContentRef::of_bytes(b"core", None::<String>),
             declared_dependencies: BTreeMap::new(),
         };
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            labels: vec![selected.into()],
+        };
         let engine = Engine {
             packages: vec![unrelated_r4.into(), unrelated_r5.into(), selected.into()],
             package_materials: BTreeMap::from([
@@ -2804,25 +3225,21 @@ mod site_build_handoff_tests {
                 (unrelated_r5.into(), material()),
                 (selected.into(), material()),
             ]),
-            resolved_packages: Some(ResolvedPackages {
-                config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
-                labels: vec![selected.into()],
-            }),
             ..Default::default()
         };
 
         assert_eq!(
             engine
-                .resolved_core_package(config, "4.0.1", "test")
+                .resolved_core_package(&resolved, config, "4.0.1", "test")
                 .unwrap(),
             selected
         );
         assert!(engine
-            .resolved_core_package(config, "5.0.0", "test")
+            .resolved_core_package(&resolved, config, "5.0.0", "test")
             .unwrap_err()
             .contains("resolved closure has no required core package"));
         assert!(engine
-            .resolved_core_package("id: other", "4.0.1", "test")
+            .resolved_core_package(&resolved, "id: other", "4.0.1", "test")
             .unwrap_err()
             .contains("different config"));
     }
@@ -2837,6 +3254,7 @@ mod site_build_handoff_tests {
                 serde_json::json!({"resourceType": "Patient", "id": "p"}),
             )]),
             site_files: BTreeMap::new(),
+            resolved_packages: None,
         };
         let engine = Engine {
             last_project: Some(project.clone()),
@@ -2852,6 +3270,7 @@ mod site_build_handoff_tests {
                 liquid_asset_dirs: Vec::new(),
                 branch: None,
                 revision: None,
+                target: None,
             }
         };
 

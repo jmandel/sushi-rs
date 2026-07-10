@@ -21,13 +21,18 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use render_page::{
-    render_page, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider, SiteData,
+    all_compile_inputs, collect_stock_revision, render_page, stock_input_artifact,
+    ArtifactObservation, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider,
+    SiteData, StockAsset, StockFragmentPolicy, StockInput, StockPage, StockPageOutcome,
+    STOCK_PAGE_SOURCE_NAMESPACE, STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
+    STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
 };
 use render_sd::context::IgContext;
 use render_sd::engine::{FragmentEngine, IgFacts};
+use serde::Serialize;
 
 /// A resolved render root — the four input trees the page pass composes over.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderRoot {
     /// Jekyll source root (`temp/pages`).
     pub pages_root: PathBuf,
@@ -96,7 +101,7 @@ impl RenderRoot {
 }
 
 /// Options for a render pass.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderOptions {
     /// The HierarchicalTableGenerator run uuid (quirk #1). The editor mints one
     /// per build; a native render uses a fixed deterministic value unless the
@@ -127,6 +132,7 @@ impl Default for RenderOptions {
 }
 
 /// A single rendered page result.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenderedPage {
     /// Output rel path / Jekyll page.path (`en/index.html` or `index.html`).
     pub page_path: String,
@@ -134,15 +140,89 @@ pub struct RenderedPage {
     pub html: String,
     /// True if this source had no front matter (a verbatim static copy).
     pub is_static: bool,
+    /// Exact typed inputs and generated artifacts used by this page.
+    pub reads: PageArtifactReadSet,
+}
+
+/// One non-page file in the exact assembled output namespace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderedAsset {
+    pub output_path: String,
+    pub bytes: Vec<u8>,
 }
 
 /// The full render outcome.
+#[derive(Debug)]
 pub struct RenderOutcome {
     pub pages: Vec<RenderedPage>,
+    /// Static output files captured at render time. `write_site` writes these
+    /// exact bytes instead of rescanning a mutable input tree.
+    pub assets: Vec<RenderedAsset>,
     /// Fragment materializations (engine misses) across the whole pass.
     pub fragment_misses: usize,
     /// Static asset files copied (name -> byte length), see [`copy_assets`].
     pub assets_copied: usize,
+    /// Present only when [`render_site_for_revision`] bound this capture to an
+    /// explicit predecessor, root, options, and complete output inventory. The
+    /// private field prevents callers from fabricating a promotable outcome.
+    revision_capture: Option<RevisionCapture>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RevisionCapture {
+    predecessor: site_build::BuildId,
+    root: RenderRoot,
+    options: RenderOptions,
+    outcome_seal: site_build::Sha256Digest,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RevisionOutcomeSeal {
+    pages: Vec<RevisionPageSeal>,
+    assets: Vec<RevisionAssetSeal>,
+    fragment_misses: usize,
+    assets_copied: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RevisionPageSeal {
+    page_path: String,
+    html: site_build::ContentRef,
+    is_static: bool,
+    requested: std::collections::BTreeSet<site_build::ArtifactKey>,
+    read: std::collections::BTreeSet<site_build::ArtifactKey>,
+    input_reads: std::collections::BTreeSet<site_build::ArtifactKey>,
+    input_objects: Vec<(site_build::ArtifactKey, Vec<site_build::ContentRef>)>,
+    observations: Vec<(site_build::ArtifactKey, RevisionObservationSeal)>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RevisionAssetSeal {
+    output_path: String,
+    content: site_build::ContentRef,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+enum RevisionObservationSeal {
+    Ready { content: site_build::ContentRef },
+    NotReady { state: site_build::ArtifactState },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CapturedPageSource {
+    source_path: PathBuf,
+    page_path: String,
+    source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CapturedPublicTree {
+    pages: Vec<CapturedPageSource>,
+    assets: Vec<RenderedAsset>,
 }
 
 /// Harvest the STATIC per-IG `<!--ReleaseHeader-->…<!--EndReleaseHeader-->`
@@ -199,7 +279,8 @@ pub fn build_engine(root: &RenderRoot, opts: &RenderOptions) -> FragmentEngine {
 /// the exact pagecorpus assembly (SiteData + FragmentEngine + PageProvider +
 /// render_page per page), so byte-identical to that gate by construction.
 pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutcome> {
-    let site = SiteData::load(&root.data_dir);
+    let captured_tree = capture_public_tree(root)?;
+    let site = SiteData::load_strict(&root.data_dir)?;
     let engine = opts.engine.then(|| build_engine(root, opts));
     let mut provider = PageProvider::new(&site, &root.includes_dir)
         .with_engine_first(opts.engine_first)
@@ -211,61 +292,184 @@ pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutc
         provider = provider.with_template_includes(tinc);
     }
 
-    let mut inputs: Vec<PathBuf> = std::fs::read_dir(&root.input_dir)
-        .with_context(|| format!("read page input dir {}", root.input_dir.display()))?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|f| f.is_file() && f.extension().and_then(|x| x.to_str()) == Some("html"))
-        .collect();
-    inputs.sort();
-
     // Post-Jekyll ReleaseHeader substitution: applied when the build's output/
     // reflects that later pipeline stage (us-core), a no-op otherwise (plan-net).
     let release_header = harvest_release_header(&root.own_dir);
 
     let mut pages = Vec::new();
-    for inp in &inputs {
-        let name = inp.file_name().unwrap().to_string_lossy().to_string();
+    for input in &captured_tree.pages {
+        let name = input
+            .source_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("page path is not UTF-8: {}", input.source_path.display())
+            })?
+            .to_string();
         let is_dump = name.ends_with(".json.html")
             || name.ends_with(".xml.html")
             || name.ends_with(".ttl.html");
         if is_dump && !opts.include_dumps {
             continue;
         }
-        let src =
-            std::fs::read_to_string(inp).with_context(|| format!("read page {}", inp.display()))?;
-        let page_path = if root.flat {
-            name.clone()
-        } else {
-            format!("en/{}", name)
-        };
-        let is_static = !render_page::has_front_matter(&src);
+        let src = &input.source;
+        let page_path = input.page_path.clone();
+        let is_static = !render_page::has_front_matter(src);
         let mut html = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            render_page(&src, &page_path, &provider)
+            render_page(src, &page_path, &provider)
         }))
         .map_err(|_| anyhow::anyhow!("page render panicked: {}", name))?;
+        let mut reads = provider.page_artifact_reads();
         if let Some(rh) = &release_header {
-            html = render_page::apply_release_header(&html, rh);
+            let replaced = render_page::apply_release_header(&html, rh);
+            if replaced != html {
+                reads.add_input_object(
+                    stock_input_artifact(STOCK_RUNTIME_INPUT_NAMESPACE, "release-header.html"),
+                    rh.as_bytes(),
+                );
+            }
+            html = replaced;
         }
         pages.push(RenderedPage {
             page_path,
             html,
             is_static,
+            reads,
         });
     }
 
     let fragment_misses = *provider.miss_count.borrow();
+    // A second complete capture makes additions/removals/content changes during
+    // the render fail closed. A transient A→B→A mutation cannot corrupt the
+    // revision because rendering and publication use only the first captured
+    // bytes.
+    if capture_public_tree(root)? != captured_tree {
+        bail!("public staged page/asset tree changed while rendering");
+    }
+    let assets = captured_tree.assets;
+    let assets_copied = assets.len();
     Ok(RenderOutcome {
         pages,
+        assets,
         fragment_misses,
-        assets_copied: 0,
+        assets_copied,
+        revision_capture: None,
     })
+}
+
+/// Render and bind the immutable capture to the explicit predecessor that may
+/// later be passed to [`collect_site_build_revision`]. Ordinary `render_site`
+/// remains useful for direct writes but cannot be promoted accidentally.
+pub fn render_site_for_revision(
+    predecessor: &site_build::SiteBuild,
+    root: &RenderRoot,
+    opts: &RenderOptions,
+) -> Result<RenderOutcome> {
+    if predecessor.render_target().mode != site_build::RenderMode::NativeTemplate {
+        bail!("stock revision capture requires a native-template predecessor");
+    }
+    let mut outcome = render_site(root, opts)?;
+    let page_paths = outcome
+        .pages
+        .iter()
+        .map(|page| page.page_path.clone())
+        .collect::<Vec<_>>();
+    let asset_paths = outcome
+        .assets
+        .iter()
+        .map(|asset| asset.output_path.clone())
+        .collect::<Vec<_>>();
+    assert_unique_inventory("page", &page_paths)?;
+    assert_unique_inventory("asset", &asset_paths)?;
+    let outcome_seal = seal_revision_outcome(&outcome)?;
+    outcome.revision_capture = Some(RevisionCapture {
+        predecessor: predecessor.build_id().clone(),
+        root: root.clone(),
+        options: opts.clone(),
+        outcome_seal,
+    });
+    Ok(outcome)
+}
+
+fn seal_revision_outcome(outcome: &RenderOutcome) -> Result<site_build::Sha256Digest> {
+    let pages = outcome
+        .pages
+        .iter()
+        .map(|page| {
+            let input_objects = page
+                .reads
+                .input_objects()
+                .iter()
+                .map(|(key, values)| {
+                    (
+                        key.clone(),
+                        values
+                            .iter()
+                            .map(|bytes| site_build::ContentRef::of_bytes(bytes, None::<String>))
+                            .collect(),
+                    )
+                })
+                .collect();
+            let observations = page
+                .reads
+                .observations()
+                .iter()
+                .map(|(key, observation)| {
+                    let sealed = match observation {
+                        ArtifactObservation::Ready { bytes } => RevisionObservationSeal::Ready {
+                            content: site_build::ContentRef::of_bytes(bytes, Some("text/html")),
+                        },
+                        ArtifactObservation::NotReady { error } => {
+                            RevisionObservationSeal::NotReady {
+                                state: error.artifact_state(),
+                            }
+                        }
+                    };
+                    (key.clone(), sealed)
+                })
+                .collect();
+            RevisionPageSeal {
+                page_path: page.page_path.clone(),
+                html: site_build::ContentRef::of_bytes(page.html.as_bytes(), Some("text/html")),
+                is_static: page.is_static,
+                requested: page.reads.requested().clone(),
+                read: page.reads.read().clone(),
+                input_reads: page.reads.input_reads().clone(),
+                input_objects,
+                observations,
+            }
+        })
+        .collect();
+    let assets = outcome
+        .assets
+        .iter()
+        .map(|asset| RevisionAssetSeal {
+            output_path: asset.output_path.clone(),
+            content: site_build::ContentRef::of_bytes(&asset.bytes, None::<String>),
+        })
+        .collect();
+    Ok(site_build::sha256_canonical(&RevisionOutcomeSeal {
+        pages,
+        assets,
+        fragment_misses: outcome.fragment_misses,
+        assets_copied: outcome.assets_copied,
+    })?)
+}
+
+fn assert_unique_inventory(kind: &str, paths: &[String]) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    for path in paths {
+        if !seen.insert(path) {
+            bail!("stock {kind} inventory repeats {path}");
+        }
+    }
+    Ok(())
 }
 
 /// Write a render outcome to `out_dir`, preserving the page.path layout
 /// (`en/…` subdir when multi-language), then copy the static assets the Jekyll
 /// step consumed. Returns the total files written (pages + assets).
-pub fn write_site(root: &RenderRoot, out: &RenderOutcome, out_dir: &Path) -> Result<usize> {
+pub fn write_site(_root: &RenderRoot, out: &RenderOutcome, out_dir: &Path) -> Result<usize> {
     let mut written = 0usize;
     for page in &out.pages {
         let dest = out_dir.join(&page.page_path);
@@ -275,7 +479,14 @@ pub fn write_site(root: &RenderRoot, out: &RenderOutcome, out_dir: &Path) -> Res
         std::fs::write(&dest, &page.html).with_context(|| format!("write {}", dest.display()))?;
         written += 1;
     }
-    written += copy_assets(root, out_dir)?;
+    for asset in &out.assets {
+        let dest = out_dir.join(&asset.output_path);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&dest, &asset.bytes).with_context(|| format!("write {}", dest.display()))?;
+        written += 1;
+    }
     Ok(written)
 }
 
@@ -284,19 +495,53 @@ pub fn write_site(root: &RenderRoot, out: &RenderOutcome, out_dir: &Path) -> Res
 /// (`_data`, `_includes`, `_layouts`). This is the `assets/`, images, css/js the
 /// template ships; the pages already went through the page pass.
 pub fn copy_assets(root: &RenderRoot, out_dir: &Path) -> Result<usize> {
-    let mut copied = 0usize;
-    // The staged pages tree's non-page, non-input files are the static asset set
-    // Jekyll copies verbatim (assets/, images, favicon, etc.). Page sources
-    // (.html/.md at a page location) and the page-pass control dirs are skipped.
+    let assets = advertised_assets(root)?;
+    for asset in &assets {
+        let dest = out_dir.join(&asset.output_path);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&dest, &asset.bytes)?;
+    }
+    Ok(assets.len())
+}
+
+/// Capture the complete static output set using the same assembly policy as
+/// `write_site`. The returned paths are sorted and bytes are immutable inside
+/// the render outcome, closing the render/manifest TOCTOU window.
+pub fn advertised_assets(root: &RenderRoot) -> Result<Vec<RenderedAsset>> {
+    Ok(capture_public_tree(root)?.assets)
+}
+
+/// Capture and partition every public staged-tree file exactly once. Control
+/// directories are renderer inputs, not outputs. HTML is rendered (front-matter
+/// or verbatim); Markdown page sources are rejected until their full Jekyll
+/// page semantics are implemented, rather than silently omitted.
+fn capture_public_tree(root: &RenderRoot) -> Result<CapturedPublicTree> {
+    let mut pages = Vec::new();
+    let mut assets = Vec::new();
     let base = &root.pages_root;
     let mut stack = vec![base.clone()];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for e in rd.flatten() {
+        let rd = std::fs::read_dir(&dir)
+            .with_context(|| format!("read staged output directory {}", dir.display()))?;
+        let mut entries = rd
+            .collect::<std::io::Result<Vec<_>>>()
+            .with_context(|| format!("enumerate staged output directory {}", dir.display()))?;
+        entries.sort_by_key(|entry| entry.file_name());
+        for e in entries {
             let p = e.path();
-            let rel = p.strip_prefix(base).unwrap().to_string_lossy().to_string();
+            let file_type = e
+                .file_type()
+                .with_context(|| format!("inspect staged output {}", p.display()))?;
+            if file_type.is_symlink() {
+                bail!(
+                    "staged public tree may not contain symlinks: {}",
+                    p.display()
+                );
+            }
+            let rel_path = p.strip_prefix(base).expect("walk remains under pages_root");
+            let rel = relative_path(rel_path)?;
             // Skip the page-pass control dirs (consumed, not copied) and Jekyll
             // internal / underscore-prefixed dirs (Jekyll excludes them from
             // output — `_data`, `_includes`, `_layouts`, `.jekyll-cache`, …).
@@ -304,29 +549,222 @@ pub fn copy_assets(root: &RenderRoot, out_dir: &Path) -> Result<usize> {
             if top.starts_with('_') || top.starts_with('.') {
                 continue;
             }
-            if p.is_dir() {
+            if file_type.is_dir() {
                 stack.push(p);
                 continue;
             }
-            // Page sources are rendered, not copied. A page source is an .html/.md
-            // file at a page location (top level or under en/). Non-page static
-            // files (css/js/png/…) are copied.
-            let is_page_source = matches!(
-                p.extension().and_then(|x| x.to_str()),
-                Some("html") | Some("md")
-            );
-            if is_page_source {
-                continue;
+            if !file_type.is_file() {
+                bail!(
+                    "staged public tree member is not a regular file: {}",
+                    p.display()
+                );
             }
-            let dest = out_dir.join(&rel);
-            if let Some(parent) = dest.parent() {
-                std::fs::create_dir_all(parent)?;
+            let bytes = std::fs::read(&p)
+                .with_context(|| format!("capture staged output {}", p.display()))?;
+            match p.extension().and_then(|value| value.to_str()) {
+                Some("html") => pages.push(CapturedPageSource {
+                    source_path: p,
+                    page_path: rel,
+                    source: String::from_utf8(bytes).map_err(|error| {
+                        anyhow::anyhow!("HTML page source is not UTF-8: {error}")
+                    })?,
+                }),
+                Some("md" | "markdown") => bail!(
+                    "Markdown staged page source is not yet supported by fig render: {}",
+                    p.display()
+                ),
+                _ => assets.push(RenderedAsset {
+                    output_path: rel,
+                    bytes,
+                }),
             }
-            std::fs::copy(&p, &dest)?;
-            copied += 1;
         }
     }
-    Ok(copied)
+    pages.sort_by(|left, right| left.page_path.as_bytes().cmp(right.page_path.as_bytes()));
+    assets.sort_by(|left, right| {
+        left.output_path
+            .as_bytes()
+            .cmp(right.output_path.as_bytes())
+    });
+    Ok(CapturedPublicTree { pages, assets })
+}
+
+fn relative_path(path: &Path) -> Result<String> {
+    let mut parts = Vec::new();
+    for component in path.components() {
+        let std::path::Component::Normal(value) = component else {
+            bail!("staged output path is not normalized: {}", path.display());
+        };
+        parts.push(value.to_str().ok_or_else(|| {
+            anyhow::anyhow!("staged output path is not UTF-8: {}", path.display())
+        })?);
+    }
+    Ok(parts.join("/"))
+}
+
+/// Promote an already-captured native render outcome into a complete immutable
+/// SiteBuild revision. The predecessor is explicit; this function has no
+/// process-global or "last session" identity.
+pub fn collect_site_build_revision(
+    predecessor: &site_build::SiteBuild,
+    root: &RenderRoot,
+    outcome: &RenderOutcome,
+) -> Result<site_build::SiteBuildSuccessor> {
+    let capture = outcome.revision_capture.as_ref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "render outcome is not predecessor-bound; use render_site_for_revision before promotion"
+        )
+    })?;
+    if capture.predecessor != *predecessor.build_id() {
+        bail!(
+            "render outcome belongs to predecessor {}, not {}",
+            capture.predecessor,
+            predecessor.build_id()
+        );
+    }
+    if &capture.root != root {
+        bail!("render outcome was captured from a different RenderRoot");
+    }
+    if seal_revision_outcome(outcome)? != capture.outcome_seal {
+        bail!("render outcome payload changed after its predecessor-bound capture");
+    }
+    let producer = site_build::ProducerRef::new("fig.stock-template", env!("CARGO_PKG_VERSION"));
+    let render_attributes = std::collections::BTreeMap::from([
+        (
+            "activeTables".into(),
+            capture.options.active_tables.to_string(),
+        ),
+        ("engine".into(), capture.options.engine.to_string()),
+        (
+            "engineFirst".into(),
+            capture.options.engine_first.to_string(),
+        ),
+        (
+            "includeDumps".into(),
+            capture.options.include_dumps.to_string(),
+        ),
+        ("runUuid".into(), capture.options.run_uuid.clone()),
+    ]);
+    let provenance = |recipe: &str| site_build::ArtifactProvenance {
+        producer: producer.clone(),
+        recipe: recipe.to_string(),
+        attributes: render_attributes.clone(),
+    };
+    let semantic_reads = all_compile_inputs(predecessor);
+
+    // Resolve every non-generated key observed by pages to the exact captured
+    // bytes. Only actual reads enter the manifest; an unused mounted template
+    // file is not a hidden dependency.
+    let mut captured_inputs: std::collections::BTreeMap<site_build::ArtifactKey, Vec<u8>> =
+        std::collections::BTreeMap::new();
+    for page in &outcome.pages {
+        for (key, values) in page.reads.input_objects() {
+            if values.len() != 1 {
+                bail!("stock input {key:?} changed while one page was rendering");
+            }
+            let bytes = values.iter().next().expect("one captured value");
+            if let Some(existing) = captured_inputs.get(key) {
+                if existing != bytes {
+                    bail!("stock input {key:?} changed between rendered pages");
+                }
+            } else {
+                captured_inputs.insert(key.clone(), bytes.clone());
+            }
+        }
+        for key in page.reads.input_reads() {
+            if !page.reads.input_objects().contains_key(key) {
+                bail!("stock input {key:?} was read without captured bytes");
+            }
+        }
+    }
+    let mut inputs = Vec::new();
+    for (key, bytes) in captured_inputs {
+        let site_build::ArtifactKey::Data { namespace, name } = &key else {
+            bail!("stock page recorded non-Data input key {key:?}");
+        };
+        let media_type = match namespace.as_str() {
+            STOCK_PAGE_SOURCE_NAMESPACE
+            | STOCK_SITE_DATA_NAMESPACE
+            | STOCK_STAGED_INCLUDE_NAMESPACE
+            | STOCK_TEMPLATE_INCLUDE_NAMESPACE => media_type_for(name),
+            STOCK_RUNTIME_INPUT_NAMESPACE if name == "release-header.html" => {
+                "text/html".to_string()
+            }
+            _ => bail!("unknown stock input namespace {namespace} for {name}"),
+        };
+        inputs.push(StockInput {
+            key,
+            bytes,
+            media_type,
+            provenance: provenance("capture-page-input"),
+            reads: semantic_reads.clone(),
+        });
+    }
+
+    let pages = outcome
+        .pages
+        .iter()
+        .map(|page| {
+            Ok(StockPage {
+                path: site_build::SourcePath::parse(page.page_path.clone())?,
+                outcome: StockPageOutcome::Ready {
+                    bytes: page.html.as_bytes().to_vec(),
+                    reads: page.reads.clone(),
+                },
+                provenance: provenance("render-page"),
+            })
+        })
+        .collect::<std::result::Result<Vec<_>, site_build::SourcePathError>>()?;
+
+    let assets = outcome
+        .assets
+        .iter()
+        .map(|asset| {
+            Ok(StockAsset {
+                path: site_build::SourcePath::parse(asset.output_path.clone())?,
+                bytes: asset.bytes.clone(),
+                media_type: media_type_for(&asset.output_path),
+                provenance: provenance("assemble-static-asset"),
+                reads: semantic_reads.clone(),
+            })
+        })
+        .collect::<std::result::Result<Vec<_>, site_build::SourcePathError>>()?;
+
+    collect_stock_revision(
+        predecessor,
+        inputs,
+        pages,
+        assets,
+        StockFragmentPolicy {
+            provenance: provenance("render-publisher-fragment"),
+            reads: semantic_reads,
+        },
+    )
+    .map_err(anyhow::Error::from)
+}
+
+fn media_type_for(path: &str) -> String {
+    match Path::new(path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+    {
+        Some("html" | "xhtml") => "text/html",
+        Some("md") => "text/markdown",
+        Some("json") => "application/json",
+        Some("xml") => "application/xml",
+        Some("yaml" | "yml") => "application/yaml",
+        Some("csv") => "text/csv",
+        Some("css") => "text/css",
+        Some("js") => "text/javascript",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("gif") => "image/gif",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        _ => "application/octet-stream",
+    }
+    .to_string()
 }
 
 /// The ImplementationGuide.version from the own resource dir (facts input).
@@ -440,4 +878,154 @@ pub fn render_page_tracked(
     .map_err(|_| anyhow::anyhow!("page render panicked: {}", name))?;
     let read_set = provider.page_artifact_reads();
     Ok((html, read_set))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use site_build::{
+        ArtifactCatalog, PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderPlan,
+        RenderTarget, SiteBuild, SourceManifest,
+    };
+
+    use super::*;
+
+    fn root(temp: &tempfile::TempDir) -> RenderRoot {
+        let pages_root = temp.path().join("temp/pages");
+        for directory in [
+            pages_root.join("_data"),
+            pages_root.join("_includes"),
+            temp.path().join("output"),
+            temp.path().join("packages"),
+        ] {
+            std::fs::create_dir_all(directory).unwrap();
+        }
+        RenderRoot {
+            input_dir: pages_root.clone(),
+            data_dir: pages_root.join("_data"),
+            includes_dir: pages_root.join("_includes"),
+            pages_root,
+            own_dir: temp.path().join("output"),
+            packages_dir: temp.path().join("packages"),
+            txcache_dir: None,
+            template_includes_dir: None,
+            flat: true,
+        }
+    }
+
+    fn predecessor_build(project_id: &str) -> SiteBuild {
+        SiteBuild::new(
+            ProjectRevision {
+                project_id: project_id.into(),
+                revision: "fixture".into(),
+                sources: SourceManifest::from_entries(Vec::new()).unwrap(),
+            },
+            PackageLock::default(),
+            RenderTarget {
+                renderer: ProducerRef::new("stock-template", "1"),
+                mode: RenderMode::NativeTemplate,
+                fhir_version: "4.0.1".into(),
+                template: None,
+                parameters: BTreeMap::new(),
+            },
+            RenderPlan::default(),
+            ArtifactCatalog::from_records(Vec::new()).unwrap(),
+            BTreeSet::new(),
+        )
+        .unwrap()
+    }
+
+    fn options() -> RenderOptions {
+        RenderOptions {
+            engine: false,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn public_tree_capture_is_recursive_complete_and_rejects_markdown() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = root(&temp);
+        std::fs::create_dir_all(root.pages_root.join("nested")).unwrap();
+        std::fs::create_dir_all(root.pages_root.join("images")).unwrap();
+        std::fs::write(root.pages_root.join("index.html"), b"<p>home</p>").unwrap();
+        std::fs::write(root.pages_root.join("nested/detail.html"), b"<p>detail</p>").unwrap();
+        std::fs::write(root.pages_root.join("images/icon.png"), b"png").unwrap();
+
+        let outcome = render_site(&root, &options()).unwrap();
+        assert_eq!(
+            outcome
+                .pages
+                .iter()
+                .map(|page| page.page_path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["index.html", "nested/detail.html"]
+        );
+        assert_eq!(outcome.assets[0].output_path, "images/icon.png");
+
+        std::fs::write(root.pages_root.join("unsupported.md"), b"# Markdown").unwrap();
+        assert!(render_site(&root, &options())
+            .unwrap_err()
+            .to_string()
+            .contains("Markdown staged page source"));
+    }
+
+    #[test]
+    fn revision_promotion_requires_the_bound_predecessor_root_and_inventory() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = root(&temp);
+        std::fs::write(root.pages_root.join("index.html"), b"<p>home</p>").unwrap();
+        std::fs::write(root.pages_root.join("site.css"), b"body{}").unwrap();
+        let predecessor = predecessor_build("fixture.ig");
+
+        let mut outcome = render_site_for_revision(&predecessor, &root, &options()).unwrap();
+        let successor = collect_site_build_revision(&predecessor, &root, &outcome).unwrap();
+        successor.site_build().clone().close().unwrap();
+
+        let other = predecessor_build("other.ig");
+        assert!(collect_site_build_revision(&other, &root, &outcome)
+            .unwrap_err()
+            .to_string()
+            .contains("belongs to predecessor"));
+
+        let mut other_root = root.clone();
+        other_root.input_dir = temp.path().join("other-pages");
+        assert!(
+            collect_site_build_revision(&predecessor, &other_root, &outcome)
+                .unwrap_err()
+                .to_string()
+                .contains("different RenderRoot")
+        );
+
+        outcome.pages[0].html.push_str("changed");
+        assert!(collect_site_build_revision(&predecessor, &root, &outcome)
+            .unwrap_err()
+            .to_string()
+            .contains("payload changed"));
+
+        let mut changed_reads = render_site_for_revision(&predecessor, &root, &options()).unwrap();
+        changed_reads.pages[0].reads = PageArtifactReadSet::default();
+        assert!(
+            collect_site_build_revision(&predecessor, &root, &changed_reads)
+                .unwrap_err()
+                .to_string()
+                .contains("payload changed")
+        );
+
+        let mut changed_asset = render_site_for_revision(&predecessor, &root, &options()).unwrap();
+        changed_asset.assets[0].bytes.push(b'!');
+        assert!(
+            collect_site_build_revision(&predecessor, &root, &changed_asset)
+                .unwrap_err()
+                .to_string()
+                .contains("payload changed")
+        );
+
+        let unbound = render_site(&root, &options()).unwrap();
+        assert!(collect_site_build_revision(&predecessor, &root, &unbound)
+            .unwrap_err()
+            .to_string()
+            .contains("not predecessor-bound"));
+    }
 }

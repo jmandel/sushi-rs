@@ -26,10 +26,9 @@ library API. A normal `Session::new()` owns isolated mutable engine state;
 `Session::global()` is an explicitly named compatibility door for legacy native
 callers.
 
-Compilation has two current renderer branches. The closed value contract is
-landed end to end for external builders; the native branch already uses its
-typed artifact vocabulary but has not yet persisted discovered results as new
-CAS-backed builds:
+Compilation has two renderer branches. External builders close their plan
+before execution. The native branch may discover fragments while evaluating
+Liquid, then promotes the captured result through the same immutable contract:
 
 ```text
 exact authored bytes + exact resolved packages
@@ -43,8 +42,10 @@ native session/template      external target projection
 typed ArtifactResolver              |
 + page read sets                  SiteBuild
          |                          |
- future CAS SiteBuild          ClosedSiteBuild
- revisions                     + pure builder
+ SiteBuild::successor          ClosedSiteBuild
+ + stock RenderPlan            + pure builder
+         |
+ ClosedSiteBuild or typed blockers
 ```
 
 [`site_build`](crates/site_build/) defines an immutable manifest over the exact
@@ -52,16 +53,43 @@ source and package closure, render target, typed artifacts, provenance,
 diagnostics, and artifact read dependencies. Artifact bytes are addressed by
 digest and live outside the manifest. `ClosedSiteBuild` proves that a render
 plan's roots and transitive reads are all ready; callback-free external builders
-should accept this closed wrapper. Persisting native demand-resolved fragment
-bytes/read sets as new `SiteBuild` revisions remains explicit convergence work.
+should accept this closed wrapper. `SiteBuild::successor` atomically replaces
+resolved records and returns the new build plus the exact new CAS objects,
+without mutating or implicitly selecting a predecessor.
 
-`site.db` is not the universal handoff. It is one compatibility artifact for the
-Cycle target (`compat.site_db/rows.json`) inside a closed build. Native Publisher
-templates may discover generated includes while evaluating Rust Liquid. At that
-one compatibility edge, `render_page` translates the legacy include filename to
-an `ArtifactKey`, calls an explicit `ArtifactResolver`, caches by the typed key,
-and records attempted and successful reads in `PageArtifactReadSet`. Ordinary
-authored and template includes remain files.
+`site.db` is not the universal handoff. Preferred Cycle builds use four typed
+semantic data artifacts plus one raw artifact per authored asset. The current
+projector still consumes the prepared `SiteDb` model internally as migration
+scaffolding, while v1 retains `compat.site_db/rows.json` for existing consumers.
+The prepared model carries the compiler-selected primary ImplementationGuide
+identity separately from its sorted resource rows. In WASM, a fresh package
+mount invalidates resolution; `compileProject` runs only over the exact selected
+labels, and SiteDb snapshot completion uses that full closure. Raw
+`input/resources` bytes and parsed predefined objects must have identical paths
+and values.
+Native Publisher templates may discover generated includes while evaluating
+Rust Liquid. At that compatibility edge, `render_page` translates the legacy
+include filename to an `ArtifactKey`, calls an explicit `ArtifactResolver`,
+caches by the typed key, and records attempted and successful reads in
+`PageArtifactReadSet`. Ordinary authored and template includes remain files.
+
+For a complete native render, `render_page::collect_stock_revision` makes every
+advertised page and assembled static asset a plan root. The page source,
+`site.data` file, staged/template includes, and successful generated fragments
+become transitive typed reads. Failed fragment attempts remain typed catalog
+records but are not misreported as successful page reads. Native Fig recursively
+captures the complete public staged tree, renders from those bytes, and rejects
+symlinks, unreadable entries, unsupported Markdown pages, strict `_data`
+failures, or any tree change observed by a second capture. The
+`render_site_for_revision(predecessor, root, options)` entry point returns an
+opaque capture bound to that predecessor and root/options, with a seal over the
+complete HTML/read-set/fragment/asset payload and inventory; only that capture can be passed to
+`collect_site_build_revision`. The ordinary `render_site`/`fig render` path
+still writes the site directly and cannot accidentally be promoted. A host
+publishing revisions must persist the returned objects in its CAS before the
+successor manifest. Constructing the initial predecessor/root pair is an
+explicit trusted-producer assertion until native rendering consumes a fully
+reconstructed closed input rather than an ambient F0 tree.
 
 The overall toolchain intentionally has two Liquid implementations:
 
@@ -117,7 +145,7 @@ fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
 fig packages bundle --template id#v -o t.json  # editor warm-start template artifact (loader-emitted)
 fig expand <valueset.json>                 # tier-1 enumerable expansion
 fig sitedb <ig> --sushi-out <d> --cache <d> -o site.db   # S1-S7 producer
-fig prepare <ig> --target cycle-site/v1 --sushi-out <new> \
+fig prepare <ig> --target cycle-site/v2 --sushi-out <new> \
   --cache <d> --out <new> --build-date <epoch>  # sealed external-builder bundle
 fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment
 fig fragments <build-dir> -o _includes/    # materialize fragment files (escape hatch)
@@ -128,11 +156,14 @@ The former `fig render --generator ts:<adapter.mjs>` runner has been removed.
 It loaded a stale editor callback API, required a second Node-target WASM host,
 and could compile inputs independently of the native build. Portable external
 builders instead consume a verified `ClosedSiteBuild` and addressed objects.
-Cycle uses that boundary in the browser, and `fig prepare` now emits the same
-`cycle-site/v1` contract natively as `site-build.json` plus
-`objects/sha256/<digest>`. It compiles once through `site_db::build`, derives
-identity from the produced IG, and gives the build only a private filesystem
-reconstructed from the captured source objects and normalized package objects.
+Cycle uses that boundary in the browser, and `fig prepare` emits the preferred
+`cycle-site/v2` contract natively as `site-build.json` plus
+`objects/sha256/<digest>` (`cycle-site/v1` remains an explicit migration
+target). V2 roots are prepared FHIR resources, terminology, recursive
+navigation, parsed config, and raw authored assets. Fig compiles once through
+the current prepared-site pipeline, derives identity from the produced IG, and
+gives the build only a private filesystem reconstructed from captured source
+objects and normalized package objects.
 The live authored tree/cache are never compile inputs after capture, so even an
 A→B→A mutation cannot pair rows for B with A's manifest. Post-build live and
 staged comparisons remain fail-closed diagnostics.

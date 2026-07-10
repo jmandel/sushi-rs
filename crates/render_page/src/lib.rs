@@ -24,12 +24,22 @@ use render_liquid::{DataProvider, Options, Value};
 
 pub mod artifact;
 pub mod sitedata;
+pub mod stock;
 pub use artifact::{
-    legacy_include_to_artifact_key, publisher_reference_to_resource_key, ArtifactResolveError,
-    ArtifactResolver, FragmentEngineArtifactResolver, PageArtifactReadSet, SharedArtifactCache,
-    PUBLISHER_KIND_PARAMETER, PUBLISHER_REFERENCE_PARAMETER,
+    is_safe_stock_relative_path, legacy_include_to_artifact_key,
+    publisher_reference_to_resource_key, stock_input_artifact, ArtifactCacheEntry,
+    ArtifactObservation, ArtifactResolveError, ArtifactResolveFailure, ArtifactResolver,
+    ClosedBuildArtifactResolver, FragmentEngineArtifactResolver, PageArtifactReadSet,
+    SharedArtifactCache, PUBLISHER_KIND_PARAMETER, PUBLISHER_REFERENCE_PARAMETER,
+    STOCK_PAGE_SOURCE_NAMESPACE, STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
+    STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
 };
-pub use sitedata::SiteData;
+pub use sitedata::{SiteData, SiteDataLoadError};
+pub use stock::{
+    all_compile_inputs, assembled_asset_key, collect_stock_revision, StockAsset,
+    StockFragmentPolicy, StockInput, StockPage, StockPageOutcome, StockPlanError,
+    STOCK_ASSEMBLED_ASSET_NAMESPACE,
+};
 
 /// The kramdown hook for `markdownify`. Uses render_md (the F1b kramdown engine)
 /// with `rouge_wrappers` ON — reproducing Jekyll's markdownify, which post-
@@ -135,13 +145,17 @@ impl<'a> PageProvider<'a> {
     /// Set the directory of the page about to render (relative to
     /// pages_root). Called by [`render_page`]; interior-mutable because the
     /// provider is shared across the page loop.
-    fn begin_page(&self, page_path: &str) {
+    fn begin_page(&self, page_path: &str, source: &[u8]) {
         let dir = match page_path.rsplit_once('/') {
             Some((d, _)) => d.to_string(),
             None => String::new(),
         };
         *self.current_page_dir.borrow_mut() = dir;
         *self.page_artifacts.borrow_mut() = PageArtifactReadSet::default();
+        self.page_artifacts.borrow_mut().record_input(
+            stock_input_artifact(STOCK_PAGE_SOURCE_NAMESPACE, page_path),
+            source,
+        );
     }
 
     /// Use a non-fs read seam (the wasm session's MemTree).
@@ -167,23 +181,71 @@ impl<'a> PageProvider<'a> {
     /// resolver for its typed artifact; cache by artifact identity.
     fn try_artifact(&self, name: &str) -> Option<String> {
         let key = legacy_include_to_artifact_key(name)?;
-        let resolver = self.resolver.as_ref()?;
         self.page_artifacts.borrow_mut().request(key.clone());
         if let Some(hit) = self.artifact_cache.borrow().get(&key).cloned() {
-            if hit.is_some() {
-                self.page_artifacts.borrow_mut().record_read(key);
+            return match hit {
+                ArtifactCacheEntry::Ready(body) => {
+                    self.page_artifacts.borrow_mut().record_read(key.clone());
+                    self.page_artifacts.borrow_mut().observe(
+                        key,
+                        ArtifactObservation::Ready {
+                            bytes: body.as_bytes().to_vec(),
+                        },
+                    );
+                    Some(body)
+                }
+                ArtifactCacheEntry::NotReady(error) => {
+                    self.page_artifacts
+                        .borrow_mut()
+                        .observe(key, ArtifactObservation::NotReady { error });
+                    None
+                }
+            };
+        }
+        let Some(resolver) = self.resolver.as_ref() else {
+            let error = ArtifactResolveError::unsupported(
+                "publisher.fragment.resolve",
+                "typed fragment resolution is disabled for this render surface",
+            );
+            self.page_artifacts.borrow_mut().observe(
+                key.clone(),
+                ArtifactObservation::NotReady {
+                    error: error.clone(),
+                },
+            );
+            self.artifact_cache
+                .borrow_mut()
+                .insert(key, ArtifactCacheEntry::NotReady(error));
+            return None;
+        };
+        match resolver.resolve(&key) {
+            Ok(body) => {
+                *self.miss_count.borrow_mut() += 1;
+                self.page_artifacts.borrow_mut().record_read(key.clone());
+                self.page_artifacts.borrow_mut().observe(
+                    key.clone(),
+                    ArtifactObservation::Ready {
+                        bytes: body.as_bytes().to_vec(),
+                    },
+                );
+                self.artifact_cache
+                    .borrow_mut()
+                    .insert(key, ArtifactCacheEntry::Ready(body.clone()));
+                Some(body)
             }
-            return hit;
+            Err(error) => {
+                self.page_artifacts.borrow_mut().observe(
+                    key.clone(),
+                    ArtifactObservation::NotReady {
+                        error: error.clone(),
+                    },
+                );
+                self.artifact_cache
+                    .borrow_mut()
+                    .insert(key, ArtifactCacheEntry::NotReady(error));
+                None
+            }
         }
-        let produced = resolver.resolve(&key).ok();
-        if produced.is_some() {
-            *self.miss_count.borrow_mut() += 1;
-            self.page_artifacts.borrow_mut().record_read(key.clone());
-        }
-        self.artifact_cache
-            .borrow_mut()
-            .insert(key, produced.clone());
-        produced
     }
 
     /// Resolve an include body: `_includes/{name}` first (the publisher
@@ -191,6 +253,9 @@ impl<'a> PageProvider<'a> {
     /// `resolver_first`, a registered fragment artifact is requested before
     /// `_includes/` is consulted.
     fn resolve_include(&self, name: &str) -> Option<String> {
+        if !is_safe_stock_relative_path(name) {
+            return None;
+        }
         if self.resolver_first {
             if let Some(s) = self.try_artifact(name) {
                 return Some(s);
@@ -199,12 +264,20 @@ impl<'a> PageProvider<'a> {
         // 1. pre-generated file in _includes/ (possibly under en/).
         let p = self.includes_dir.join(name);
         if let Some(s) = self.tree.read(&p) {
+            self.page_artifacts.borrow_mut().record_input(
+                stock_input_artifact(STOCK_STAGED_INCLUDE_NAMESPACE, name),
+                s.as_bytes(),
+            );
             return Some(s);
         }
         // 1b. materialized template `includes/` (driven `--template` path). The
         // template's fragment stubs / template-page live here when not pre-staged.
         if let Some(tinc) = &self.template_includes {
             if let Some(s) = self.tree.read(&tinc.join(name)) {
+                self.page_artifacts.borrow_mut().record_input(
+                    stock_input_artifact(STOCK_TEMPLATE_INCLUDE_NAMESPACE, name),
+                    s.as_bytes(),
+                );
                 return Some(s);
             }
         }
@@ -220,7 +293,19 @@ impl<'a> PageProvider<'a> {
 
 impl<'a> DataProvider for PageProvider<'a> {
     fn site_data(&self, path: &[&str]) -> Option<Value> {
-        self.site.site_data(path)
+        let value = self.site.site_data(path);
+        if value.is_some() {
+            if let Some(key) = path.first() {
+                let source = self.site.source_name(key).unwrap_or(key);
+                if let Some(bytes) = self.site.source_bytes(key) {
+                    self.page_artifacts.borrow_mut().record_input(
+                        stock_input_artifact(STOCK_SITE_DATA_NAMESPACE, source),
+                        bytes,
+                    );
+                }
+            }
+        }
+        value
     }
     fn site(&self, path: &[&str]) -> Option<Value> {
         self.site.site(path)
@@ -229,6 +314,9 @@ impl<'a> DataProvider for PageProvider<'a> {
         self.resolve_include(name)
     }
     fn include_source_relative(&self, name: &str) -> Option<String> {
+        if !is_safe_stock_relative_path(name) {
+            return None;
+        }
         let root = self.pages_root.as_ref()?;
         let dir = self.current_page_dir.borrow();
         let p = if dir.is_empty() {
@@ -236,7 +324,19 @@ impl<'a> DataProvider for PageProvider<'a> {
         } else {
             root.join(&*dir).join(name)
         };
-        self.tree.read(&p)
+        let value = self.tree.read(&p);
+        if let Some(body) = value.as_ref() {
+            let rel = p
+                .strip_prefix(root)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
+            self.page_artifacts.borrow_mut().record_input(
+                stock_input_artifact(STOCK_PAGE_SOURCE_NAMESPACE, rel),
+                body.as_bytes(),
+            );
+        }
+        value
     }
 }
 
@@ -294,7 +394,7 @@ pub fn strip_front_matter(src: &str) -> &str {
 /// HTML. `page_path` is the Jekyll-relative path (e.g. `en/toc.html`), exposed
 /// to Liquid as `page.path`.
 pub fn render_page(src: &str, page_path: &str, provider: &PageProvider) -> String {
-    provider.begin_page(page_path);
+    provider.begin_page(page_path, src.as_bytes());
     // Jekyll semantics: only files with YAML front-matter are Liquid-processed;
     // a file WITHOUT a leading `---` line is a static asset, copied VERBATIM
     // (verified: `searchform.html` has no front-matter and its golden is a

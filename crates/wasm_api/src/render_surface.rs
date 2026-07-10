@@ -35,8 +35,9 @@ use std::rc::Rc;
 use package_store::bundle::BundleSource;
 use package_store::source::PackageSource;
 use render_page::{
-    legacy_include_to_artifact_key, render_page, FragmentEngineArtifactResolver, PageProvider,
-    SharedArtifactCache, SiteData,
+    legacy_include_to_artifact_key, render_page, ArtifactCacheEntry,
+    FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider, SharedArtifactCache,
+    SiteData,
 };
 use render_sd::context::IgContext;
 use render_sd::engine::{FragError, FragmentEngine, IgFacts};
@@ -395,13 +396,16 @@ impl RenderState {
         };
         let artifact_key = legacy_include_to_artifact_key(&include_name);
         if let Some(key) = artifact_key.as_ref() {
-            if let Some(Some(hit)) = self.frag_cache.borrow().get(key).cloned() {
+            if let Some(ArtifactCacheEntry::Ready(hit)) = self.frag_cache.borrow().get(key).cloned()
+            {
                 return Ok(hit);
             }
         }
         let out = self.engine.render_fragment(ref_, kind)?;
         if let Some(key) = artifact_key {
-            self.frag_cache.borrow_mut().insert(key, Some(out.clone()));
+            self.frag_cache
+                .borrow_mut()
+                .insert(key, ArtifactCacheEntry::Ready(out.clone()));
         }
         Ok(out)
     }
@@ -411,6 +415,16 @@ impl RenderState {
     /// without front matter is a static file: returned verbatim (the
     /// publisher's Jekyll copies those unrendered).
     pub fn render_page_by_name(&self, name: &str) -> Result<String, String> {
+        self.render_page_tracked_by_name(name).map(|(html, _)| html)
+    }
+
+    /// Render one page and retain the same typed read set the native Fig path
+    /// promotes into a SiteBuild successor. The JS compatibility surface still
+    /// returns HTML only; Rust hosts use this method when publishing revisions.
+    pub fn render_page_tracked_by_name(
+        &self,
+        name: &str,
+    ) -> Result<(String, PageArtifactReadSet), String> {
         let (key, src_path) = self
             .pages
             .iter()
@@ -423,7 +437,8 @@ impl RenderState {
         // render_page applies Jekyll's front-matter gate itself (no front
         // matter -> verbatim static copy); pass the FULL source.
         let provider = self.provider();
-        Ok(render_page(&src, key, &provider))
+        let html = render_page(&src, key, &provider);
+        Ok((html, provider.page_artifact_reads()))
     }
 
     /// Output page rel paths, sorted.
@@ -495,7 +510,11 @@ mod tests {
         let disabled = minimal_fragment_state(false);
         let disabled_provider = disabled.provider();
         assert_eq!(disabled_provider.include_source(include), None);
-        assert!(disabled.frag_cache.borrow().is_empty());
+        assert!(matches!(
+            disabled.frag_cache.borrow().values().next(),
+            Some(ArtifactCacheEntry::NotReady(error))
+                if matches!(error.failure(), render_page::ArtifactResolveFailure::Unsupported { .. })
+        ));
 
         let enabled = minimal_fragment_state(true);
         let enabled_provider = enabled.provider();

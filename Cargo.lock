@@ -228,6 +228,7 @@ dependencies = [
  "api_envelope",
  "compiler",
  "json_emit",
+ "libc",
  "mimalloc",
  "package_acquisition",
  "package_store",
@@ -673,6 +674,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "site_build",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -924,6 +927,7 @@ dependencies = [
  "compiler",
  "hex",
  "json_emit",
+ "package_store",
  "rusqlite",
  "serde",
  "serde_json",

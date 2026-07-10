@@ -62,6 +62,9 @@ tiny_http = "0.12"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc = { workspace = true }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 # The shared-schema test compares fig --json envelopes to Session envelopes.
 wasm_api = { path = "../wasm_api" }

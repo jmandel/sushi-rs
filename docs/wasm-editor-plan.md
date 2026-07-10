@@ -1,5 +1,12 @@
 # WASM / In-Browser FSH Editor — Plan
 
+> **HISTORICAL DELIVERY PLAN — not the current product contract.** The delivered
+> browser/editor architecture has continued past these milestones. Current
+> cross-repository behavior is specified by the editor's
+> [`README.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/README.md) and
+> [`SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md); current
+> engine hosting and handoffs are in [`hosting.md`](hosting.md).
+>
 > Status: PLANNED (post-rework). Written 2026-07-02, while the snapshot-generator
 > rework (snapshot/REWORK-PLAN.md) is in wave 3. Nothing here starts before that
 > rework's wave-4 cutover completes — the walk engine is the snapshot generator
