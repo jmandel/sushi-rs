@@ -5,7 +5,7 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
-## 0. HANDOFF — current state (read FIRST, updated 2026-07-09)
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-10)
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
 13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
@@ -49,7 +49,7 @@ pattern/fixed values are cleaned at final SD serialization rather than during ru
 longer depend on stock SUSHI to manage artifacts. See §3 env facts + README. CAS guard:
 `reject_real_fhir_path` in `package_acquisition` `ensure_layout` + materialize/source paths.
 
-**SITEBUILD V1 CONTRACT + NATIVE REVISIONS — LANDED (2026-07-10).** The renderer-neutral
+**SITEBUILD CONTRACT + NATIVE REVISIONS — LANDED (2026-07-10).** The renderer-neutral
 `site_build` crate defines the immutable/versioned compile→render handoff: exact
 content-addressed project sources and package lock, render target, typed artifact keys,
 explicit ready/deferred/unsupported/failed states, provenance/read dependencies, and
@@ -68,7 +68,12 @@ SiteBuild → optional projection, never SiteDb → core contract). Focused gate
 `cargo test -p site_build --features site-db-compat`. The wasm API now emits a sealed
 Cycle handoff from the exact prior `compileProject` revision, ordinary `Session` handles
 are isolated, and `render_page` translates legacy fragment include names once into a typed
-resolver/read-set boundary. `SiteBuild::successor` is now the pure, order-independent
+resolver/read-set boundary. The compiler-selected primary ImplementationGuide identity is
+explicit across SiteDb, v1/v2 Cycle, stock production, native Fig, and render context;
+additional guides remain ordinary resources. A compiled revision retains the exact resolved
+package-label allow-list used for compilation, snapshot completion, and fragment rendering
+even after later mounts; a fresh mount invalidates resolution for the next compile.
+`SiteBuild::successor` is now the pure, order-independent
 revision transition: an explicit predecessor + resolution batch produces a validated new
 build and its new CAS objects while leaving the predecessor untouched. The stock collector
 makes every rendered page and assembled static asset a plan root, records page/data/staged-
@@ -101,7 +106,7 @@ uses a default cache; source/nested-package symlinks, cache escapes, stale/exist
 outputs, overlapping outputs, and ambient `SITE_LIQUID_ASSET_DIRS` fail closed. Real Cycle
 gate after its canonical example preprocessor: 23 sources, 4 packages, 31
 objects in v2, closed build produced successfully from the explicit workspace
-cache. The corresponding v1/v2 Cycle renders have 90 files with byte-identical
+cache. The corresponding v1/v2 Cycle renders have 91 ordinary files with byte-identical
 non-receipt output; their receipt ids differ because each binds its own input
 SiteBuild id. Focused gate: `cargo test -p fig`.
 
