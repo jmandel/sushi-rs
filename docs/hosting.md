@@ -165,9 +165,11 @@ unwrap(session.mountSite(JSON.stringify(authoredAndRuntimeFiles), JSON.stringify
 })));
 unwrap(session.mountTemplate('hl7.fhir.template#1.0.0'));
 unwrap(session.produceStockSite());
+// Apply the final authored overlay before freezing the generation.
 
-const { pages } = unwrap(session.listPages());
-const { html } = unwrap(session.renderPage(pages[0]));
+let stock = unwrap(session.openStockBuild('hl7.fhir.template#1.0.0'));
+const page = unwrap(session.renderStockPage(stock.handle, stock.pages[0]));
+stock = { ...stock, handle: page.handle, buildId: page.buildId };
 ```
 
 At the native compatibility edge, `render_page` translates a registered legacy
@@ -199,12 +201,23 @@ captured recursively before rendering and checked again afterwards, and
 revision collection never re-reads mutable inputs. There is no implicit "last
 SiteBuild".
 
+The browser uses the same revision law lazily. `openStockBuild` snapshots an
+immutable `RenderState` and constructs a native-template predecessor whose id
+binds the exact authored revision, package lock, renderer options, template
+coordinate, and mounted-tree digest. `renderStockPage(handle, path)` evaluates
+only that frozen state, exposes the typed `requested` Need set, and applies the
+captured input/fragment/page resolution batch through
+`collect_stock_revision`/`SiteBuild::successor`. It returns the closed successor,
+new CAS objects, and a new content-derived handle. Later `mountSite`, package
+mounts, or compiles cannot change an existing handle. `Session.renderPage`
+remains an HTML-only compatibility operation and is not used by the editor's
+stock adapter.
+
 `ClosedBuildArtifactResolver` provides callback-free replay from a
 `ClosedSiteBuild` plus an explicit CAS loader. It limits reads to the sealed
 render-plan closure and rejects missing, tampered, or non-UTF-8 content. The
-current JS `Session.renderPage` compatibility method still returns HTML only;
-the revision collector is a typed Rust/`fig` library seam rather than a second
-JSON state machine.
+stock successor's resolution batch is therefore also a persistable replay
+boundary rather than an implicit mutable fragment-cache state.
 
 ## Liquid implementations
 
@@ -221,13 +234,21 @@ An external builder is not required to call back into Rust content or fragment
 services. The editor's `SiteGeneratorAdapter` is a host-integration interface
 for selecting/building/rendering a generator; it is not the semantic handoff.
 For Cycle, that handoff is the verified `ClosedSiteBuild`. For stock templates,
-the adapter is a thin host over the session's native page surface.
+the adapter opens an explicit predecessor and advances through immutable closed
+successor handles as pages discover generated fragments.
 
 ## Other Session operations
 
 | Operation | Purpose |
 | --- | --- |
-| `init`, `mount` | replace or add immutable package bundles |
+| `init`, `mount` | replace or add legacy JSON/base64 package bundles |
+| `mountPrepared(bytes, expectedKey)` | validate and add one versioned binary package without JSON/base64 transport or derived-index reconstruction |
+| `beginPreparedMount(count)`, `stagePreparedMount(bytes, expectedKey)`, `commitPreparedMount()`, `abortPreparedMount()` | preferred warm path: validate compact artifacts one at a time, then publish all package layers atomically without a closure-sized host batch |
+| `mountPreparedBatch(bytes, manifest)` | compatibility warm path: atomically validate/mount one contiguous binary batch; reports decode/validate and mount timings |
+| `packageStorageMetrics()` | report compact retained/declared-raw bytes and lazy chunk-inflate/cache counters without changing package authority |
+| `prepareAndMount(bundles)`, `takePrepared(label)` | cold-path normalization/mount once, then transfer each generated `.fpp` to JS as a direct `Uint8Array` for OPFS persistence |
+| `openStockBuild(templateCoord)` | freeze the completed stock generation behind an explicit native-template SiteBuild predecessor |
+| `renderStockPage(handle, path)` | discover typed fragment needs in the frozen state and return a closed successor plus its CAS resolution batch |
 | `setLocalResources` | replace the local StructureDefinitions used by later standalone snapshot operations; clears complete-project identity |
 | `snapshot` | snapshot an inline or installed `StructureDefinition` |
 | `expandValueSet` | bounded in-engine enumerable expansion |

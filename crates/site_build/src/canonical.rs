@@ -1,5 +1,4 @@
 use serde::Serialize;
-use sha2::Digest;
 use thiserror::Error;
 
 use crate::Sha256Digest;
@@ -24,7 +23,7 @@ pub fn canonical_json_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, Canonica
 /// SHA-256 of [`canonical_json_bytes`].
 pub fn sha256_canonical<T: Serialize>(value: &T) -> Result<Sha256Digest, CanonicalError> {
     let bytes = canonical_json_bytes(value)?;
-    Ok(Sha256Digest::from_hash(sha2::Sha256::digest(bytes).into()))
+    Ok(Sha256Digest::of_bytes(&bytes))
 }
 
 fn sort_json(value: serde_json::Value) -> serde_json::Value {

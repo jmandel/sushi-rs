@@ -9,9 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use site_build::{
-    ArtifactKey, ArtifactProvenance, ArtifactResolution, ArtifactState, AssetNamespace,
-    ReadDependency, RenderMode, RenderPlan, RevisionError, SiteBuild, SiteBuildSuccessor,
-    SourcePath,
+    ArtifactKey, ArtifactProvenance, ArtifactResolution, ArtifactState, AssetNamespace, Need,
+    ReadDependency, RenderMode, RenderPlan, ResolutionBatch, RevisionError, SiteBuild,
+    SiteBuildSuccessor, SourcePath,
 };
 use thiserror::Error;
 
@@ -147,6 +147,7 @@ pub fn collect_stock_revision(
 
     let mut pending: BTreeMap<ArtifactKey, ArtifactResolution> = BTreeMap::new();
     let mut required = BTreeSet::new();
+    let mut needs = BTreeSet::new();
 
     for input in inputs {
         if !matches!(input.key, ArtifactKey::Data { .. }) {
@@ -176,6 +177,7 @@ pub fn collect_stock_revision(
         required.insert(page_key.clone());
         let resolution = match page.outcome {
             StockPageOutcome::Ready { bytes, reads } => {
+                needs.extend(reads.requested().iter().cloned());
                 for key in reads.input_reads() {
                     let values = reads
                         .input_objects()
@@ -268,8 +270,13 @@ pub fn collect_stock_revision(
         )?;
     }
 
+    let batch = ResolutionBatch::new(
+        Need::new(needs),
+        Some(RenderPlan::new(required)),
+        pending.into_values(),
+    )?;
     predecessor
-        .successor(Some(RenderPlan::new(required)), pending.into_values())
+        .successor_batch(batch)
         .map_err(StockPlanError::from)
 }
 

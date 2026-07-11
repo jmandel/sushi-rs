@@ -150,6 +150,10 @@ fn inmem_rows_match_disk_rows_on_cycle() {
     })
     .expect("in-memory build");
     let mem_json = db_json(&mem_outcome.db);
+    assert_eq!(
+        disk_outcome.prepared_guide, mem_outcome.prepared_guide,
+        "renderer-neutral PreparedGuide differs (disk vs in-memory)"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 

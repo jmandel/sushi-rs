@@ -266,3 +266,38 @@ fn successor_returns_only_objects_absent_from_the_predecessor_cas() {
         .unwrap();
     assert!(second_successor.objects().is_empty());
 }
+
+#[test]
+fn typed_need_batch_requires_an_answer_and_applies_atomically() {
+    let predecessor = open_build();
+    let needed = ArtifactKey::Fragment {
+        scope: FragmentScope::WholeIg,
+        fragment: FragmentKind::Summary,
+        parameters: BTreeMap::new(),
+    };
+    let missing = ResolutionBatch::new(Need::new([needed.clone()]), None, []).unwrap();
+    assert!(matches!(
+        predecessor.successor_batch(missing),
+        Err(RevisionError::MissingNeedResolution(key)) if key == needed
+    ));
+
+    let resolution = ArtifactResolution::ready(
+        needed.clone(),
+        b"summary".to_vec(),
+        Some("text/html"),
+        provenance("fragment"),
+        BTreeSet::new(),
+    );
+    let batch = ResolutionBatch::new(Need::new([needed.clone()]), None, [resolution]).unwrap();
+    assert_eq!(batch.needs().iter().collect::<Vec<_>>(), vec![&needed]);
+    let successor = predecessor.successor_batch(batch).unwrap();
+    assert!(matches!(
+        successor
+            .site_build()
+            .artifacts()
+            .get(&needed)
+            .unwrap()
+            .state,
+        ArtifactState::Ready { .. }
+    ));
+}

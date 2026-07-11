@@ -26,7 +26,9 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use content_store::{ContentStore, FileContentStore};
 use serde::Serialize;
+#[cfg(test)]
 use serde_json::Value;
 use site_build::{
     cycle_semantic, site_db_compat, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage,
@@ -176,7 +178,14 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
         core_package: closure_before.core.to_string(),
         layer_b: snapshot_gen::LayerBOptions::default(),
     };
-    let built = site_db::build(&build_config, None).context("native site_db build")?;
+    let (prepared_guide, site_db) = if config.target == CYCLE_SITE_TARGET {
+        let built = site_db::prepare_build(&build_config, None)
+            .context("native renderer-neutral guide preparation")?;
+        (built.prepared_guide, None)
+    } else {
+        let built = site_db::build(&build_config, None).context("native site_db build")?;
+        (built.prepared_guide, Some(built.db))
+    };
 
     // Detect any unexpected mutation by the pipeline itself. This is not a live
     // ABA defense (the staged paths already provide that); it asserts the staged
@@ -203,7 +212,8 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     }
     drop(packages_after);
 
-    let (project_id, fhir_version) = produced_identity(&built.db)?;
+    let project_id = prepared_guide.guide.package_id.clone();
+    let fhir_version = prepared_guide.guide.fhir_version.clone();
     validate_core_for_fhir_version(&closure_before.core, &fhir_version)?;
     let revision = format!(
         "sources-sha256:{}",
@@ -233,20 +243,18 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
         ]),
     };
     let (site_build, projected_objects) = if config.target == CYCLE_SITE_TARGET {
-        let projection = cycle_semantic::close_projection(
-            &built.db,
-            cycle_semantic::CycleProjectionInput {
-                project,
-                package_lock: packages_before.lock.clone(),
-                render_target,
-                diagnostics: BTreeSet::new(),
-            },
-        )
-        .context("close typed Cycle semantic projection")?;
+        let input = cycle_semantic::CycleProjectionInput {
+            project,
+            package_lock: packages_before.lock.clone(),
+            render_target,
+            diagnostics: BTreeSet::new(),
+        };
+        let projection = cycle_semantic::close_prepared(&prepared_guide, input)
+            .context("close typed Cycle semantic projection")?;
         (projection.site_build, projection.objects)
     } else {
         let projection = site_db_compat::close_projection(
-            &built.db,
+            site_db.as_ref().expect("v1 requests SiteDb projection"),
             site_db_compat::CloseProjectionInput {
                 project,
                 package_lock: packages_before.lock.clone(),
@@ -277,7 +285,12 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     }
     verify_bundle_objects(&site_build, &objects)?;
     let site_build_bytes = site_build.site_build().canonical_bytes()?;
-    emit_bundle(&output, &site_build_bytes, &objects)?;
+    emit_bundle(
+        &output,
+        &site_build_bytes,
+        &objects,
+        &bundle_content_refs(&site_build),
+    )?;
 
     Ok(PrepareOutcome {
         target: config.target.clone(),
@@ -962,73 +975,6 @@ fn verify_staged_inputs(
     Ok(())
 }
 
-fn produced_identity(db: &site_db::SiteDb) -> Result<(String, String)> {
-    let primary = db
-        .primary_implementation_guide
-        .as_ref()
-        .ok_or_else(|| anyhow!("site_db build did not identify its primary ImplementationGuide"))?;
-    let ig_row = db
-        .resources
-        .iter()
-        .find(|row| {
-            if row.type_ != primary.resource_type {
-                return false;
-            }
-            serde_json::from_str::<Value>(&row.json)
-                .ok()
-                .and_then(|resource| {
-                    resource
-                        .get("id")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                })
-                .as_deref()
-                == Some(primary.id.as_str())
-        })
-        .ok_or_else(|| {
-            anyhow!(
-                "site_db primary ImplementationGuide {}/{} is absent from rows",
-                primary.resource_type,
-                primary.id
-            )
-        })?;
-    let ig: Value =
-        serde_json::from_str(&ig_row.json).context("parse produced ImplementationGuide row")?;
-    let project_id = ig
-        .get("packageId")
-        .or_else(|| ig.get("id"))
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| anyhow!("produced ImplementationGuide has no packageId/id"))?
-        .to_string();
-    let fhir_version = match ig.get("fhirVersion") {
-        Some(Value::String(value)) => Some(value.as_str()),
-        Some(Value::Array(values)) => values.first().and_then(Value::as_str),
-        _ => None,
-    }
-    .filter(|value| !value.trim().is_empty())
-    .ok_or_else(|| anyhow!("produced ImplementationGuide has no fhirVersion"))?
-    .to_string();
-
-    for (name, expected) in [
-        ("packageId", project_id.as_str()),
-        ("version", fhir_version.as_str()),
-    ] {
-        let row_value = db
-            .metadata
-            .iter()
-            .find(|row| row.name == name)
-            .map(|row| row.value.as_str())
-            .ok_or_else(|| anyhow!("site_db build produced no {name} metadata row"))?;
-        if row_value != expected {
-            bail!(
-                "produced ImplementationGuide {name} {expected:?} disagrees with site_db metadata {row_value:?}"
-            );
-        }
-    }
-    Ok((project_id, fhir_version))
-}
-
 fn validate_core_for_fhir_version(core: &PackageCoordinate, fhir_version: &str) -> Result<()> {
     let expected_id = core_package_id(fhir_version)?;
     let expected_version = if expected_id == "hl7.fhir.r4.core" && fhir_version == "4.0.0" {
@@ -1190,10 +1136,35 @@ fn verify_bundle_objects(
     Ok(())
 }
 
+fn bundle_content_refs(closed: &ClosedSiteBuild) -> Vec<ContentRef> {
+    let build = closed.site_build();
+    let mut refs: Vec<_> = build
+        .project()
+        .sources
+        .iter()
+        .map(|(_, source)| source.content.clone())
+        .collect();
+    refs.extend(
+        build
+            .package_lock()
+            .iter()
+            .map(|(_, package)| package.content.clone()),
+    );
+    refs.extend(build.artifacts().iter().filter_map(|(_, artifact)| {
+        if let ArtifactState::Ready { content } = &artifact.state {
+            Some(content.clone())
+        } else {
+            None
+        }
+    }));
+    refs
+}
+
 fn emit_bundle(
     output: &Path,
     site_build_bytes: &[u8],
     objects: &BTreeMap<Sha256Digest, Vec<u8>>,
+    expected_refs: &[ContentRef],
 ) -> Result<()> {
     if fs::symlink_metadata(output).is_ok() {
         bail!("output already exists: {}", output.display());
@@ -1203,12 +1174,26 @@ fn emit_bundle(
         .prefix(".fig-prepare-")
         .tempdir_in(parent)
         .with_context(|| format!("create temporary bundle beside {}", output.display()))?;
-    let object_dir = temp.path().join("objects/sha256");
-    fs::create_dir_all(&object_dir)?;
+    let store = FileContentStore::create(temp.path().join("objects/sha256"))
+        .context("create bundle content store")?;
     fs::write(temp.path().join("site-build.json"), site_build_bytes)?;
     for (digest, bytes) in objects {
-        fs::write(object_dir.join(digest.as_str()), bytes)
-            .with_context(|| format!("write bundle object {digest}"))?;
+        let content = ContentRef {
+            sha256: digest.clone(),
+            byte_length: bytes.len() as u64,
+            media_type: None,
+        };
+        store
+            .put(&content, bytes)
+            .with_context(|| format!("publish bundle object {digest}"))?;
+    }
+    // Re-read every reference carried by the closed handoff. This verifies the
+    // filesystem view consumers will observe, including each producer-declared
+    // media type, rather than trusting only the in-memory assembly above.
+    for content in expected_refs {
+        store
+            .read(content)
+            .with_context(|| format!("verify closed-build object {}", content.sha256))?;
     }
     if fs::symlink_metadata(output).is_ok() {
         bail!(
@@ -1488,6 +1473,7 @@ mod tests {
         assert_eq!(closure.core.to_string(), "hl7.fhir.r4.core#4.0.1");
 
         let conflict = ResolutionStep {
+            resolver_schema: package_store::RESOLVER_SCHEMA,
             compile_set: vec![PackageRequest {
                 package_id: "same".into(),
                 version: "1.0.0".into(),
@@ -1496,8 +1482,10 @@ mod tests {
                 package_id: "same".into(),
                 version: "2.0.0".into(),
             }],
+            resolution_support: Vec::new(),
             missing: Vec::new(),
             satisfied: true,
+            mutable_requests: Vec::new(),
         };
         let error = closure_from_step("fhirVersion: 4.0.1\n", &conflict).unwrap_err();
         assert!(error.to_string().contains("conflicting versions"));
@@ -1535,13 +1523,24 @@ mod tests {
         let body = b"object".to_vec();
         let digest = Sha256Digest::of_bytes(&body);
         let objects = BTreeMap::from([(digest.clone(), body.clone())]);
-        emit_bundle(&output, b"{\"schemaVersion\":\"site-build/v1\"}", &objects).unwrap();
+        let expected = ContentRef {
+            sha256: digest.clone(),
+            byte_length: body.len() as u64,
+            media_type: Some("application/octet-stream".into()),
+        };
+        emit_bundle(
+            &output,
+            b"{\"schemaVersion\":\"site-build/v1\"}",
+            &objects,
+            &[expected],
+        )
+        .unwrap();
         assert_eq!(
             fs::read(output.join("objects/sha256").join(digest.as_str())).unwrap(),
             body
         );
         assert!(output.join("site-build.json").is_file());
-        let error = emit_bundle(&output, b"different", &objects).unwrap_err();
+        let error = emit_bundle(&output, b"different", &objects, &[]).unwrap_err();
         assert!(error.to_string().contains("output already exists"));
     }
 

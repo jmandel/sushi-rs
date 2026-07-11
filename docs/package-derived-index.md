@@ -180,3 +180,62 @@ bundles from the isolated cache, round-trips them through
 `build_bundle`→`read_normalized_bundle`→`mount_package`, and runs the full fixture ladder
 through a `BundleSource`-backed `PackageContext` — proving the bundle path
 end-to-end, natively, to the same goldens as the disk cache.
+
+### PreparedPackage format (v2)
+
+`package_store::PreparedPackage` is the warm-start successor to both the
+JSON/base64 envelope and the expanded v1 artifact. Its deterministic compact
+container carries a canonical member directory plus independently compressed
+1 MiB raw-DEFLATE chunks. Every member and chunk has an exact raw length and
+SHA-256; the source key is a domain-separated digest of canonical member
+metadata. The exact normalized top-level semantic payload identity remains
+equal across native and browser hosts.
+
+Decode checks the format tuple, host-selected key, outer checksum, dependency
+and member order, safe paths, metadata digest, exact chunk partition, bounds,
+and required `package.json`/current-sidecar members without inflating a chunk.
+`PackageSource::read` later bounded-inflates one chunk and verifies its chunk and
+member digests before exposing bytes. An 8 MiB per-artifact LRU is the only
+optional expanded retention; oversized chunks are never cached.
+
+Native production uses the same API exposed to WASM:
+
+```sh
+fig packages prepare --cache <cache> --out <dir> <id#ver>...
+# equivalent lower-level compatibility command:
+rust_sushi packages prepare --cache <cache> --out <dir> <id#ver>...
+```
+
+Both commands emit `<id>#<ver>.fpp` files and
+`prepared-package-manifest.json`. `Session.mountPrepared(bytes, expectedKey)`
+consumes one artifact. Hosts must also verify the manifest's artifact SHA-256
+before calling the engine; the engine independently verifies the embedded
+checksum and prepared-package key.
+
+For a warm multi-package start, call `Session.beginPreparedMount(count)`, then
+read/authenticate and `stagePreparedMount(bytes, cacheKey)` one artifact at a
+time. `commitPreparedMount()` installs the complete set only after every artifact
+and conflict validates; `abortPreparedMount()` drops staged state on failure.
+This bounds JavaScript peak memory by the largest artifact instead of allocating
+a closure-sized concatenation. The compatibility `mountPreparedBatch` remains
+available and shares one compact backing/cache. Results report
+`decodeValidateMs`, `mountMs`, artifact bytes, requested packages, and newly
+added/total package counts, compressed retained/declared raw bytes, lazy-inflate
+counters, `indexedMembers`, and `memberBodyCopies` (zero at mount).
+
+For a cold registry bundle, `Session.prepareAndMount(legacyBundlesJson)` performs
+base64 decode, normalization, derived-index construction, binary encoding, and
+mounting in one transaction. Its metadata envelope identifies every artifact
+and reports `decodeValidatePrepareMs` separately from `mountMs`; the host then
+calls `takePrepared(label)` once per package to receive a direct `Uint8Array` for
+OPFS. PreparedPackage v1 pointers are rejected as misses and rebuilt from the
+authenticated tgz/registry source; the browser never expands v1 merely to
+migrate it.
+
+`BundleSource` stores each mounted package in an immutable `Rc` layer keyed by
+package label. Transactional mounts shallow-clone that small label map; they do
+not clone previously mounted file bodies. Each compact layer stores compressed
+backing bytes plus validated chunk/member ranges and
+shares that allocation. `PackageSource::read` copies only the specific body a
+compiler/renderer requests. Lookups select the package layer by the first cache-
+path component, avoiding a linear scan across packages.

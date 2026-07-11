@@ -50,6 +50,11 @@ fn explicit_primary_guide_survives_additional_generated_ig_instances() {
         })
     );
     assert_eq!(
+        outcome.prepared_guide.guide.implementation_guide.id,
+        "primary"
+    );
+    assert_eq!(outcome.prepared_guide.resources.len(), 2);
+    assert_eq!(
         outcome
             .db
             .resources

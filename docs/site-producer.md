@@ -176,6 +176,15 @@ invalidates the render state. If a generated ImplementationGuide resource is
 absent on the WASM path, the wrapper synthesizes the minimal IG context needed
 for page ordering and metadata.
 
+After the final authored overlay, the editor calls
+`Session.openStockBuild(templateCoord)`. That operation freezes the exact
+render tree/semantic state and returns an explicit native-template predecessor
+handle. Every preview request then calls `renderStockPage(handle, path)`, which
+promotes discovered page inputs and typed fragment outcomes through
+`collect_stock_revision` and returns a closed successor plus its new CAS
+objects. The adapter advances to the returned handle; it does not use the
+ambient HTML-only `renderPage` compatibility call.
+
 The producer itself still emits intermediate shells and `_data`, not a manifest.
 The downstream render layer now closes that gap:
 `render_page::collect_stock_revision` promotes every advertised final page and
@@ -188,6 +197,9 @@ A host still makes a trusted assertion that the initial ambient F0 root belongs
 to the predecessor; the seal prevents mutation or relabeling after capture.
 A failed fragment attempt remains a typed diagnostic artifact and is not
 presented as a successful read when a staged include was used instead.
+The WASM predecessor additionally binds a canonical digest of the complete
+mounted tree, and its frozen `RenderState` remains usable even if the mutable
+Session later mounts another project or template.
 
 ## 7. Quirks registered
 

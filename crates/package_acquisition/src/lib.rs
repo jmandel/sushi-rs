@@ -1508,18 +1508,254 @@ fn now_unix() -> u64 {
 }
 
 // ---------------------------------------------------------------------------
-// Editor package bundles (P1) — the browser-mountable delivery shape.
+// Editor package bundles (P1) — authenticated cold/compatibility transport.
 // ---------------------------------------------------------------------------
 //
 // A *bundle* is one blob per package: the gzipped tar of the materialized
 // `package/` directory's top-level files (resource JSONs + `.index.json` +
 // `.derived-index.json`), tar entries named by the package-relative filename. A
-// set of bundles is pinned by a `BundleManifest` lockfile. The browser fetches
-// one blob per package, inflates it (via [`read_bundle`]), and mounts it into a
-// `package_store::BundleSource`. See `docs/package-derived-index.md` (Bundle
-// format section) and `package_store::bundle`.
+// set of bundles is pinned by a `BundleManifest` lockfile. On a cache miss the
+// browser fetches one blob per package, authenticates/inflates it in the host,
+// and passes the entries through shared Rust normalization into a compact
+// PreparedPackage v2-backed `package_store::BundleSource`; direct owned-file
+// mounting remains a supported compatibility path. See
+// `docs/package-derived-index.md` (Bundle format section) and
+// `package_store::bundle`.
 
 use package_store::{BundleManifest, BundleManifestEntry};
+
+/// Version of the small manifest emitted beside a prepared-package set.
+pub const PREPARED_PACKAGE_MANIFEST_VERSION: u32 = 2;
+
+/// One exact prepared package artifact in a [`PreparedPackageManifest`].
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedPackageManifestEntry {
+    pub id: String,
+    pub version: String,
+    pub artifact: String,
+    pub key: package_store::PreparedPackageKey,
+    pub cache_key: String,
+    pub artifact_sha256: String,
+    pub bytes: u64,
+}
+
+/// Native/browser-neutral inventory for a set of `.fpp` artifacts.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedPackageManifest {
+    pub manifest_version: u32,
+    pub packages: Vec<PreparedPackageManifestEntry>,
+}
+
+impl PreparedPackageManifest {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec_pretty(self).expect("PreparedPackageManifest serializes")
+    }
+}
+
+/// Canonical argument contract shared by `fig packages prepare` and
+/// `rust_sushi packages prepare`. The two binaries deliberately keep their
+/// own output skins (`fig --json` uses an API envelope), but option parsing,
+/// validation, and package preparation must not drift.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreparedPackageSetRequest {
+    pub cache_dir: PathBuf,
+    pub out_dir: PathBuf,
+    pub labels: Vec<String>,
+}
+
+impl PreparedPackageSetRequest {
+    /// Parse arguments following the `prepare` token.
+    ///
+    /// Accepted form:
+    /// `--cache <dir> (--out <dir> | -o <dir>) [--json] <id#version>...`
+    /// Unknown options, duplicate singleton options, missing values, and
+    /// unsafe/non-exact labels fail before any filesystem access.
+    pub fn parse_cli(args: &[String]) -> anyhow::Result<Self> {
+        let mut cache_dir = None;
+        let mut out_dir = None;
+        let mut labels = Vec::new();
+        let mut positional_only = false;
+        let mut index = 0usize;
+        while index < args.len() {
+            let arg = args[index].as_str();
+            if positional_only {
+                package_store::parse_exact_package_label(arg)?;
+                labels.push(arg.to_string());
+                index += 1;
+                continue;
+            }
+            match arg {
+                "--" => {
+                    positional_only = true;
+                    index += 1;
+                }
+                "--cache" => {
+                    let value = args
+                        .get(index + 1)
+                        .filter(|value| !value.starts_with('-'))
+                        .ok_or_else(|| anyhow!("packages prepare needs --cache <dir>"))?;
+                    if cache_dir.replace(PathBuf::from(value)).is_some() {
+                        bail!("packages prepare accepts --cache exactly once");
+                    }
+                    index += 2;
+                }
+                "--out" | "-o" => {
+                    let value = args
+                        .get(index + 1)
+                        .filter(|value| !value.starts_with('-'))
+                        .ok_or_else(|| anyhow!("packages prepare needs --out <dir>"))?;
+                    if out_dir.replace(PathBuf::from(value)).is_some() {
+                        bail!("packages prepare accepts --out/-o exactly once");
+                    }
+                    index += 2;
+                }
+                // `--json` belongs to the outer CLI skin, but accepting it here
+                // keeps both binaries on the identical preparation grammar.
+                "--json" => index += 1,
+                value if value.starts_with('-') => {
+                    bail!("packages prepare does not recognize option {value}")
+                }
+                value => {
+                    package_store::parse_exact_package_label(value)?;
+                    labels.push(value.to_string());
+                    index += 1;
+                }
+            }
+        }
+        let cache_dir = cache_dir.ok_or_else(|| anyhow!("packages prepare needs --cache <dir>"))?;
+        let out_dir = out_dir.ok_or_else(|| anyhow!("packages prepare needs --out <dir>"))?;
+        if labels.is_empty() {
+            bail!("packages prepare needs at least one exact <id#version>");
+        }
+        let mut unique = BTreeSet::new();
+        for label in &labels {
+            if !unique.insert(label.clone()) {
+                bail!("duplicate prepared package label {label}");
+            }
+        }
+        Ok(Self {
+            cache_dir,
+            out_dir,
+            labels,
+        })
+    }
+
+    pub fn execute(&self) -> anyhow::Result<PreparedPackageManifest> {
+        build_prepared_package_set(&self.cache_dir, &self.labels, &self.out_dir)
+    }
+}
+
+/// Prepare one exact package from a materialized package directory. Safe nested
+/// files are retained for templates; nested symlinks and non-files fail closed.
+pub fn build_prepared_package(
+    label: &str,
+    package_dir: &Path,
+) -> anyhow::Result<package_store::PreparedPackage> {
+    if !package_dir.is_dir() {
+        bail!(
+            "prepare package: package dir does not exist: {}",
+            package_dir.display()
+        );
+    }
+    // A materialized package root is commonly a symlink into the immutable CAS.
+    // Resolve that one explicit root, but never follow links inside it.
+    let root = package_dir
+        .canonicalize()
+        .with_context(|| format!("resolve package directory {}", package_dir.display()))?;
+    let mut entries = BTreeMap::new();
+    for entry in walkdir::WalkDir::new(&root).follow_links(false) {
+        let entry = entry.with_context(|| format!("walk package directory {}", root.display()))?;
+        if entry.path() == root {
+            continue;
+        }
+        if entry.file_type().is_symlink() {
+            bail!(
+                "prepare package rejects nested symlink {}",
+                entry.path().display()
+            );
+        }
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        if !entry.file_type().is_file() {
+            bail!(
+                "prepare package rejects non-file member {}",
+                entry.path().display()
+            );
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(&root)
+            .expect("walked member is below package root");
+        let name = relative
+            .components()
+            .map(|component| component.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| anyhow!("package member path is not UTF-8: {}", relative.display()))?
+            .join("/");
+        if entries
+            .insert(name.clone(), fs::read(entry.path())?)
+            .is_some()
+        {
+            bail!("duplicate package member {name:?}");
+        }
+    }
+    package_store::PreparedPackage::prepare(label, entries)
+        .with_context(|| format!("prepare package {label}"))
+}
+
+/// Decode a prepared artifact and require the exact cache key selected by its
+/// caller. This is the shared API used by native verification and WASM mounting.
+pub fn read_prepared_package(
+    bytes: &[u8],
+    expected: &package_store::PreparedPackageKey,
+) -> anyhow::Result<package_store::PreparedPackage> {
+    package_store::PreparedPackage::decode_expected(bytes, expected)
+}
+
+/// Build one `.fpp` per exact label plus `prepared-package-manifest.json`.
+pub fn build_prepared_package_set(
+    cache_dir: &Path,
+    labels: &[String],
+    out_dir: &Path,
+) -> anyhow::Result<PreparedPackageManifest> {
+    fs::create_dir_all(out_dir)?;
+    let mut manifest = PreparedPackageManifest {
+        manifest_version: PREPARED_PACKAGE_MANIFEST_VERSION,
+        packages: Vec::with_capacity(labels.len()),
+    };
+    let mut seen = BTreeSet::new();
+    for label in labels {
+        // Validate before either cache or output path construction. Without
+        // this boundary a malicious label could escape those roots before the
+        // package.json identity check ran.
+        let (id, version) = package_store::parse_exact_package_label(label)?;
+        if !seen.insert(label.clone()) {
+            bail!("duplicate prepared package label {label}");
+        }
+        let prepared = build_prepared_package(label, &cache_dir.join(label).join("package"))?;
+        let bytes = prepared.encode();
+        let artifact = format!("{label}.fpp");
+        write_bytes_atomically(&out_dir.join(&artifact), &bytes)?;
+        let cache_key = prepared.key.cache_key();
+        manifest.packages.push(PreparedPackageManifestEntry {
+            id: id.to_string(),
+            version: version.to_string(),
+            artifact,
+            key: prepared.key,
+            cache_key,
+            artifact_sha256: sha256_hex(&bytes),
+            bytes: bytes.len() as u64,
+        });
+    }
+    write_bytes_atomically(
+        &out_dir.join("prepared-package-manifest.json"),
+        &manifest.to_bytes(),
+    )?;
+    Ok(manifest)
+}
 
 /// Build one package bundle: the gzipped tar of every top-level file in a
 /// materialized `package/` directory, tar entries named by the file's name (no
@@ -1680,6 +1916,77 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
     use std::thread;
+
+    #[test]
+    fn prepared_package_set_uses_shared_decoder_and_keeps_nested_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().join("cache");
+        let package = cache.join("example.pkg#1.0.0/package");
+        fs::create_dir_all(package.join("template")).unwrap();
+        fs::write(
+            package.join("package.json"),
+            br#"{"name":"example.pkg","version":"1.0.0"}"#,
+        )
+        .unwrap();
+        fs::write(
+            package.join("Patient-p.json"),
+            br#"{"resourceType":"Patient","id":"p"}"#,
+        )
+        .unwrap();
+        fs::write(package.join("template/config.json"), br#"{"name":"x"}"#).unwrap();
+
+        let out = temp.path().join("prepared");
+        let manifest =
+            build_prepared_package_set(&cache, &["example.pkg#1.0.0".into()], &out).unwrap();
+        let entry = &manifest.packages[0];
+        let bytes = fs::read(out.join(&entry.artifact)).unwrap();
+        let decoded = read_prepared_package(&bytes, &entry.key).unwrap();
+        assert!(decoded.files.contains_key("template/config.json"));
+        assert!(decoded.files.contains_key(derived_index::SIDECAR_NAME));
+        assert_eq!(entry.artifact_sha256, sha256_hex(&bytes));
+        assert!(out.join("prepared-package-manifest.json").is_file());
+    }
+
+    #[test]
+    fn prepared_package_cli_contract_is_shared_strict_and_path_safe() {
+        let request = PreparedPackageSetRequest::parse_cli(&[
+            "--cache".into(),
+            "cache".into(),
+            "example.pkg#1.0.0".into(),
+            "-o".into(),
+            "prepared".into(),
+            "--json".into(),
+        ])
+        .unwrap();
+        assert_eq!(request.cache_dir, PathBuf::from("cache"));
+        assert_eq!(request.out_dir, PathBuf::from("prepared"));
+        assert_eq!(request.labels, ["example.pkg#1.0.0"]);
+
+        for args in [
+            vec!["--cache", "cache", "--out", "prepared", "../x#1"],
+            vec!["--cache", "cache", "--out", "prepared", "x@1"],
+            vec!["--cache", "cache", "--out", "prepared", "x#1#2"],
+            vec!["--cache", "cache", "--out", "prepared", "--wat"],
+            vec!["--cache", "a", "--cache", "b", "--out", "prepared", "x#1"],
+            vec!["--cache", "cache", "--out", "a", "-o", "b", "x#1"],
+        ] {
+            let args = args.into_iter().map(str::to_string).collect::<Vec<_>>();
+            assert!(
+                PreparedPackageSetRequest::parse_cli(&args).is_err(),
+                "{args:?}"
+            );
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let err = build_prepared_package_set(
+            temp.path(),
+            &["../escape#1".into()],
+            &temp.path().join("out"),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("unsafe package label"));
+        assert!(!temp.path().join("escape#1.fpp").exists());
+    }
 
     #[test]
     fn coordinate_parse_accepts_hash_and_at() {

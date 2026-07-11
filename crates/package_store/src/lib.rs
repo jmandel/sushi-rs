@@ -18,18 +18,28 @@ use std::path::{Path, PathBuf};
 pub mod bundle;
 pub mod derived_index;
 pub mod material;
+pub mod prepared;
 pub mod resolve;
 pub mod source;
 pub mod template_loader;
 
-pub use bundle::{BundleManifest, BundleManifestEntry, BundleSource, BUNDLE_FORMAT_VERSION};
+pub use bundle::{
+    BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
+    BUNDLE_FORMAT_VERSION,
+};
 pub use material::{
-    encode_normalized_package, normalize_package_material, NormalizedPackageMaterial,
-    NORMALIZED_PACKAGE_MEDIA_TYPE,
+    encode_normalized_package, normalize_package_material, parse_exact_package_label,
+    NormalizedPackageMaterial, NORMALIZED_PACKAGE_MEDIA_TYPE,
+};
+pub use prepared::{
+    PreparedArtifactBacking, PreparedFiles, PreparedPackage, PreparedPackageBuilder,
+    PreparedPackageKey, PreparedPackageMount, PACKAGE_ENGINE_ABI_VERSION,
+    PACKAGE_NORMALIZATION_VERSION, PREPARED_PACKAGE_FORMAT_VERSION, PREPARED_PACKAGE_MEDIA_TYPE,
 };
 pub use resolve::{
     context_closure_for_root, resolve_project, version_index_from_cache, MissingPackage,
-    MissingReason, RequestedSet, ResolutionStep, VersionIndex,
+    MissingReason, MutableVersionRequest, RequestedSet, ResolutionStep, VersionIndex,
+    RESOLVER_SCHEMA,
 };
 pub use source::{DirEntry, DiskSource, PackageSource};
 pub use template_loader::{

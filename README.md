@@ -77,6 +77,11 @@ Rust Liquid. At that compatibility edge, `render_page` translates the legacy
 include filename to an `ArtifactKey`, calls an explicit `ArtifactResolver`,
 caches by the typed key, and records attempted and successful reads in
 `PageArtifactReadSet`. Ordinary authored and template includes remain files.
+The browser calls `openStockBuild` after its final overlay to freeze that exact
+tree and semantic state behind a content-derived predecessor. Each
+`renderStockPage(handle, path)` call applies the typed need/result batch through
+`SiteBuild::successor` and returns a closed successor handle plus new CAS
+objects; the editor does not render stock pages from ambient Session state.
 
 For a complete native render, `render_page::collect_stock_revision` makes every
 advertised page and assembled static asset a plan root. The page source,
@@ -147,6 +152,7 @@ fig build <ig-dir> -o fsh-generated       # FSH -> resources (SUSHI)
 fig snapshot <sd.json> --package p#v       # walk-engine snapshot
 fig resolve --cache <dir> --project <ig>   # dependency closure
 fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
+fig packages prepare --cache <d> -o <d> id#v  # versioned binary warm-mount artifacts
 fig packages bundle --template id#v -o t.json  # editor warm-start template artifact (loader-emitted)
 fig expand <valueset.json>                 # tier-1 enumerable expansion
 fig sitedb <ig> --sushi-out <d> --cache <d> -o site.db   # S1-S7 producer
@@ -191,7 +197,7 @@ serve with live-reload. Warm page edits re-render in ~270 ms on us-core.
 | Cross-repository editor/renderer contract | [`fhir-ig-editor/SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md) |
 | `SiteBuild`, artifact states, hashing, render plans, and closure | [`crates/site_build/README.md`](crates/site_build/README.md) |
 | Native exact compile → closed external-builder bundle | [`crates/fig/src/prepare.rs`](crates/fig/src/prepare.rs) |
-| Canonical package identity, derived index, and lock bytes shared by native/WASM | [`crates/package_store/src/material.rs`](crates/package_store/src/material.rs) |
+| Canonical package identity, binary warm artifacts, and derived index shared by native/WASM | [`crates/package_store/src/material.rs`](crates/package_store/src/material.rs), [`prepared.rs`](crates/package_store/src/prepared.rs) |
 | Hosting `Session`, `fig`, native templates, or external builders | [`docs/hosting.md`](docs/hosting.md) |
 | Source-driven page-shell and `_data` production | [`docs/site-producer.md`](docs/site-producer.md) |
 | Current versus historical engine documents | [`docs/README.md`](docs/README.md) |

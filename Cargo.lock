@@ -119,6 +119,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "content_store"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -227,6 +239,7 @@ dependencies = [
  "anyhow",
  "api_envelope",
  "compiler",
+ "content_store",
  "json_emit",
  "libc",
  "mimalloc",
@@ -601,10 +614,13 @@ name = "package_store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hex",
+ "miniz_oxide",
  "rustc-hash",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2",
 ]
 
 [[package]]
@@ -626,6 +642,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0103b1cef7ec0cf76490e969665504990193874ea05c85ff9bab8b911d0a0564"
 dependencies = [
  "zerovec",
+]
+
+[[package]]
+name = "prepared_guide"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -911,11 +936,12 @@ checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 name = "site_build"
 version = "0.1.0"
 dependencies = [
- "hex",
+ "content_store",
+ "prepared_guide",
  "serde",
  "serde_json",
- "sha2",
  "site_db",
+ "tempfile",
  "thiserror",
 ]
 
@@ -928,6 +954,7 @@ dependencies = [
  "hex",
  "json_emit",
  "package_store",
+ "prepared_guide",
  "rusqlite",
  "serde",
  "serde_json",

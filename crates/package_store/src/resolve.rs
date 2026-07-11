@@ -107,6 +107,10 @@ pub enum MissingReason {
 /// whether the closure is complete.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResolutionStep {
+    /// Schema for the resolver semantics represented by this result. Hosts may
+    /// persist an exact closure as an optimization, but must discard it when
+    /// this value changes and must still re-run this resolver before use.
+    pub resolver_schema: u32,
     /// Stock-SUSHI COMPILE load set (non-transitive), in stock load order. Every
     /// entry is a concrete `pkg#ver` the compile needs mounted.
     pub compile_set: Vec<PackageRequest>,
@@ -114,13 +118,35 @@ pub struct ResolutionStep {
     /// (R4-compat filtered, core-canonicalized), in the `.cjs` output order
     /// (core first, then discovery order).
     pub context_closure: Vec<PackageRequest>,
+    /// Mounted package manifests read while proving `context_closure`, including
+    /// packages later excluded by compatibility rules. Replaying a cached
+    /// resolution must mount these witnesses too; the final closure alone is
+    /// not sufficient to prove that an excluded dependency remains excluded.
+    pub resolution_support: Vec<PackageRequest>,
     /// Packages referenced by either set that are not yet mounted (or whose version
     /// could not be resolved). Fetch these, mount, and resolve again.
     pub missing: Vec<MissingPackage>,
     /// True iff nothing is missing — the mounted set fully satisfies both closures
     /// and the host loop has reached its fixpoint.
     pub satisfied: bool,
+    /// Every non-concrete version request which influenced this step. A cached
+    /// closure is not fresh merely because its concrete packages still exist:
+    /// the host must refresh the candidate universe for these requests before
+    /// asking Rust to verify the closure again.
+    pub mutable_requests: Vec<MutableVersionRequest>,
 }
+
+/// A version request whose answer can change without the project config
+/// changing (`latest`, `current`, `dev`, `x`, or `*`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MutableVersionRequest {
+    pub package_id: String,
+    pub requested: String,
+    pub resolved_version: Option<String>,
+    pub set: RequestedSet,
+}
+
+pub const RESOLVER_SCHEMA: u32 = 2;
 
 impl ResolutionStep {
     /// Serialize to the JSON string the wasm surface returns.
@@ -329,6 +355,39 @@ fn resolve_project_from_config(
     index: Option<&VersionIndex>,
 ) -> ResolutionStep {
     let mut missing: Vec<MissingPackage> = Vec::new();
+    let mut mutable_requests: Vec<MutableVersionRequest> = Vec::new();
+
+    // Record the mutable inputs independently of whether this particular round
+    // can resolve them. This is freshness metadata for hosts which cache the
+    // concrete closure; it is not an alternate source of resolver decisions.
+    for dep in cfg.dependencies() {
+        let Some(requested) = dep.version() else {
+            continue;
+        };
+        let canonical = canonical_version(dep.package_id(), requested);
+        if needs_version_resolution(&canonical) {
+            push_mutable_request(
+                &mut mutable_requests,
+                MutableVersionRequest {
+                    package_id: dep.package_id().to_string(),
+                    requested: canonical.clone(),
+                    resolved_version: resolve_version(index, dep.package_id(), &canonical).ok(),
+                    set: RequestedSet::Compile,
+                },
+            );
+        }
+    }
+    for (package_id, requested) in cfg.auto_dep_coordinates() {
+        push_mutable_request(
+            &mut mutable_requests,
+            MutableVersionRequest {
+                resolved_version: resolve_version(index, &package_id, &requested).ok(),
+                package_id,
+                requested,
+                set: RequestedSet::Compile,
+            },
+        );
+    }
 
     // ---- compile_set: stock non-transitive load order (reuse, do not fork). ----
     // The version resolver is the SHARED `resolve_version` over the host index; a
@@ -376,18 +435,31 @@ fn resolve_project_from_config(
     // configured deps are the same seed set), walk transitively, R4-compat filter,
     // canonicalize core, prepend r4.core if the project is R4 and it is absent,
     // then core-first sort.
-    let (context_closure, mut ctx_missing) = context_closure(cfg, mounted, cache, index);
+    let (context_closure, resolution_support, mut ctx_missing, ctx_mutable) =
+        context_closure(cfg, mounted, cache, index);
     missing.append(&mut ctx_missing);
+    for request in ctx_mutable {
+        push_mutable_request(&mut mutable_requests, request);
+    }
 
     // Dedup missing (a package can be referenced by both sets); keep first.
     dedup_missing(&mut missing);
 
     let satisfied = missing.is_empty();
     ResolutionStep {
+        resolver_schema: RESOLVER_SCHEMA,
         compile_set,
         context_closure,
+        resolution_support,
         missing,
         satisfied,
+        mutable_requests,
+    }
+}
+
+fn push_mutable_request(requests: &mut Vec<MutableVersionRequest>, request: MutableVersionRequest) {
+    if !requests.iter().any(|existing| existing == &request) {
+        requests.push(request);
     }
 }
 
@@ -444,10 +516,17 @@ fn context_closure(
     mounted: &dyn PackageSource,
     cache: &Path,
     index: Option<&VersionIndex>,
-) -> (Vec<PackageRequest>, Vec<MissingPackage>) {
+) -> (
+    Vec<PackageRequest>,
+    Vec<PackageRequest>,
+    Vec<MissingPackage>,
+    Vec<MutableVersionRequest>,
+) {
     let mut out: Vec<(String, String)> = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut missing: Vec<MissingPackage> = Vec::new();
+    let mut mutable_requests: Vec<MutableVersionRequest> = Vec::new();
+    let mut resolution_support: Vec<PackageRequest> = Vec::new();
 
     // `add(spec)` — `package-deps.cjs` lines 104-113: skip if seen, read
     // package.json, R4-compat filter, push, recurse over its dependencies.
@@ -459,6 +538,18 @@ fn context_closure(
     // Resolve each seed's version (canonicalize + index) before pushing.
     for dep in cfg.dependencies() {
         let Some(v) = dep.version() else { continue };
+        let canonical = canonical_version(dep.package_id(), v);
+        if needs_version_resolution(&canonical) {
+            push_mutable_request(
+                &mut mutable_requests,
+                MutableVersionRequest {
+                    package_id: dep.package_id().to_string(),
+                    requested: canonical,
+                    resolved_version: resolve_version(index, dep.package_id(), v).ok(),
+                    set: RequestedSet::Context,
+                },
+            );
+        }
         match resolve_version(index, dep.package_id(), v) {
             Ok(ver) => stack.push((dep.package_id().to_string(), ver)),
             Err(requested) => push_missing(
@@ -492,6 +583,10 @@ fn context_closure(
             );
             continue;
         };
+        resolution_support.push(PackageRequest {
+            package_id: id.clone(),
+            version: version.clone(),
+        });
         // R4-compat filter (`.cjs` line 108): drop non-R4 packages (do NOT recurse).
         if !is_r4_compatible(&pkg) {
             continue;
@@ -501,6 +596,18 @@ fn context_closure(
         // order (the `.cjs` uses Object.entries insertion order; we push in reverse
         // so the pop order matches insertion order).
         for (dep_id, dep_ver) in pkg.dependencies.iter().rev() {
+            let canonical = canonical_version(dep_id, dep_ver);
+            if needs_version_resolution(&canonical) {
+                push_mutable_request(
+                    &mut mutable_requests,
+                    MutableVersionRequest {
+                        package_id: dep_id.clone(),
+                        requested: canonical,
+                        resolved_version: resolve_version(index, dep_id, dep_ver).ok(),
+                        set: RequestedSet::Context,
+                    },
+                );
+            }
             match resolve_version(index, dep_id, dep_ver) {
                 Ok(ver) => stack.push((dep_id.clone(), ver)),
                 Err(requested) => push_missing(
@@ -543,7 +650,7 @@ fn context_closure(
             version,
         })
         .collect();
-    (closure, missing)
+    (closure, resolution_support, missing, mutable_requests)
 }
 
 /// The transitive R4 context closure for a SINGLE root package `id#ver` mounted in
@@ -784,6 +891,13 @@ mod tests {
         let config = "fhirVersion: 4.0.1\ndependencies:\n  dep: 1.0.0\n";
         let step = resolve_project(config, &DiskSource, &cache, Some(&index)).unwrap();
 
+        assert_eq!(step.resolver_schema, RESOLVER_SCHEMA);
+        assert!(step.mutable_requests.iter().any(|request| {
+            request.package_id == "hl7.fhir.uv.tools.r4"
+                && request.requested == "latest"
+                && request.set == RequestedSet::Compile
+        }));
+
         // compile_set: stock non-transitive. dep + r4.core present; the R4 auto-deps
         // (tools.r4/terminology.r4/extensions.r4) requested at `latest` — the index
         // has no such dirs, so they land in `missing` as UnresolvedVersion.
@@ -833,6 +947,79 @@ mod tests {
             "all auto-deps + core mounted => satisfied; missing={:?}",
             step.missing
         );
+        assert!(step
+            .mutable_requests
+            .iter()
+            .all(|request| request.resolved_version.is_some()));
+        std::fs::remove_dir_all(&cache).ok();
+    }
+
+    #[test]
+    fn resolution_step_exposes_mutable_inputs_and_their_exact_answers() {
+        let cache = tmp("mutable-metadata");
+        write_pkg(&cache, "hl7.fhir.r4.core", "4.0.1", &["4.0.1"], &[]);
+        write_pkg(&cache, "hl7.fhir.uv.tools.r4", "1.1.2", &["4.0.1"], &[]);
+        write_pkg(&cache, "hl7.terminology.r4", "7.2.0", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "hl7.fhir.uv.extensions.r4",
+            "5.3.0",
+            &["4.0.1"],
+            &[],
+        );
+        write_pkg(&cache, "example", "1.0.0", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "example",
+            "2.0.0",
+            &["4.0.1"],
+            &[("filtered-r5", "1.0.0")],
+        );
+        write_pkg(&cache, "filtered-r5", "1.0.0", &["5.0.0"], &[]);
+        let index = version_index_from_cache(&DiskSource, &cache);
+        let step = resolve_project(
+            "fhirVersion: 4.0.1\ndependencies:\n  example: latest\n",
+            &DiskSource,
+            &cache,
+            Some(&index),
+        )
+        .unwrap();
+        assert!(step.satisfied);
+        assert!(step.mutable_requests.iter().any(|request| {
+            request.package_id == "example"
+                && request.requested == "latest"
+                && request.resolved_version.as_deref() == Some("2.0.0")
+                && request.set == RequestedSet::Compile
+        }));
+        assert!(!step
+            .context_closure
+            .iter()
+            .any(|request| request.package_id == "filtered-r5"));
+        assert!(step
+            .resolution_support
+            .iter()
+            .any(|request| request.package_id == "filtered-r5"));
+        assert!(step.mutable_requests.iter().any(|request| {
+            request.package_id == "example"
+                && request.resolved_version.as_deref() == Some("2.0.0")
+                && request.set == RequestedSet::Context
+        }));
+        // Replaying only the final closure cannot prove why filtered-r5 was
+        // excluded. The explicit resolution-support witness is therefore part
+        // of the persistent acquisition plan.
+        std::fs::remove_dir_all(cache.join("filtered-r5#1.0.0")).unwrap();
+        let closure_only = resolve_project(
+            "fhirVersion: 4.0.1\ndependencies:\n  example: latest\n",
+            &DiskSource,
+            &cache,
+            Some(&index),
+        )
+        .unwrap();
+        assert!(!closure_only.satisfied);
+        assert!(closure_only
+            .missing
+            .iter()
+            .any(|request| request.package_id == "filtered-r5"));
         std::fs::remove_dir_all(&cache).ok();
     }
 }

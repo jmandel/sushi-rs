@@ -1,6 +1,7 @@
 #![cfg(feature = "site-db-projections")]
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use serde_json::Value;
 use site_build::{cycle_semantic as cycle, *};
@@ -316,6 +317,56 @@ fn v2_projection_is_closed_typed_and_asset_complete() {
     let config =
         String::from_utf8(artifact_bytes(&projection, &cycle::config_key()).to_vec()).unwrap();
     assert!(config.contains(r#""sushiConfig":{"id":"example.ig","z":1,"a":2}"#));
+}
+
+#[test]
+fn site_db_adapter_and_direct_prepared_projection_are_identical() {
+    let input = projection_input();
+    let prepared = cycle::prepare_from_site_db(&database(), &input).unwrap();
+    let direct = cycle::close_prepared(&prepared, input.clone()).unwrap();
+    let adapted = cycle::close_projection(&database(), input).unwrap();
+    assert_eq!(direct.site_build, adapted.site_build);
+    assert_eq!(direct.objects, adapted.objects);
+}
+
+#[test]
+fn shared_preparation_and_site_db_adapter_produce_identical_cycle_objects() {
+    let primary = serde_json::json!({
+        "resourceType":"ImplementationGuide",
+        "id":"example-source",
+        "url":"https://example.org/ig/ImplementationGuide/example-source",
+        "packageId":"example.ig",
+        "name":"ExampleIG",
+        "version":"1.0.0",
+        "status":"draft",
+        "fhirVersion":["4.0.1"],
+        "definition":{"resource":[]}
+    });
+    let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
+        generated: std::slice::from_ref(&primary),
+        primary_implementation_guide: &primary,
+        examples: &[],
+        sushi_config_yaml: concat!(
+            "id: example-source\n",
+            "packageId: example.ig\n",
+            "canonical: https://example.org/ig\n",
+            "name: ExampleIG\n",
+            "version: 1.0.0\n",
+            "fhirVersion: 4.0.1\n",
+        ),
+        build_epoch_secs: 1_700_000_000,
+        branch: Some("main".into()),
+        revision: Some("abc123".into()),
+        vfs: BTreeMap::new(),
+        ig_root: PathBuf::from("/ig"),
+        liquid_asset_rel_dirs: Vec::new(),
+    })
+    .unwrap();
+    let input = projection_input();
+    let direct = cycle::close_prepared(&outcome.prepared_guide, input.clone()).unwrap();
+    let adapted = cycle::close_projection(&outcome.db, input).unwrap();
+    assert_eq!(direct.site_build, adapted.site_build);
+    assert_eq!(direct.objects, adapted.objects);
 }
 
 #[test]

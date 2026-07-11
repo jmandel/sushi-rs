@@ -61,7 +61,13 @@ runtime/generated/extension ownership. `RenderPlan` declares required roots;
 are all ready, giving callback-free builders a proof-bearing input. Preferred
 `cycle-site/v2` projects four typed semantic data roots plus raw authored asset roots;
 numeric row keys, JSON strings, and base64 bodies do not cross the wire. The current
-projector consumes `SiteDb` only as transitional prepared-model scaffolding. The optional
+renderer-neutral `PreparedGuide` owns guide identity, resources/publication metadata,
+terminology expansions, navigation, config, and authored assets with source reads. The
+model now lives in an independent crate upstream of both SiteBuild and SiteDb. Shared native
+and in-memory preparation constructs it directly before optional relational rows, retaining
+each asset's exact winning source path; Cycle v2 in Fig and wasm constructs no SiteDb. The
+Cycle v2 projector consumes it directly and compiles without `site_db`; the reverse
+`prepare_from_site_db` adapter remains only for migration/equality gates. The optional
 `site-db-compat` feature retains the v1 aggregate for migration (dependency direction stays
 SiteBuild → optional projection, never SiteDb → core contract). Focused gates:
 `cargo test -p site_build` and
@@ -89,6 +95,14 @@ inventory changes. The initial predecessor/F0-root association remains an explic
 assertion until native inputs are reconstructed from a closed build/CAS. `ClosedBuildArtifactResolver` replays only the sealed plan closure and verifies CAS
 digest/length/UTF-8 without callbacks. No v1 wire field changed. Focused gates now also
 include `cargo test -p render_page --lib` and `cargo test -p fig`.
+The browser stock adapter follows the same identity law: `openStockBuild`
+freezes an exact `RenderState` behind a native-template predecessor, and
+`renderStockPage(handle, path)` promotes typed needs/reads through
+`collect_stock_revision` into a verified closed successor plus CAS batch. The
+adapter no longer calls ambient `renderPage`/`renderFragment`. Package locks may
+contain multiple exact versions of one package id (US Core legitimately resolves
+`hl7.terminology.r4#7.1.0` and `#7.2.0`); declared edges select the matching exact
+coordinate instead of rejecting the closure.
 
 **NATIVE CLOSED CYCLE BUNDLE — DONE (2026-07-10).** `fig prepare <ig>
 --target cycle-site/v2 --sushi-out <new> --cache <explicit> --out <new>
@@ -109,6 +123,54 @@ objects in v2, closed build produced successfully from the explicit workspace
 cache. The corresponding v1/v2 Cycle renders have 91 ordinary files with byte-identical
 non-receipt output; their receipt ids differ because each binds its own input
 SiteBuild id. Focused gate: `cargo test -p fig`.
+
+**UNIFIED CONTENT + EXACT SITE OUTPUT IDENTITY — LANDED (2026-07-10).**
+The renderer/package-neutral `content_store` crate owns `ContentRef`, verified
+reads, and atomic no-clobber native CAS publication; `site_build` re-exports the
+same wire values. `SiteOutput` adds an `sok1-sha256:` pre-render lookup key over
+the exact input build + renderer implementation/version/recipe digest + output
+schema/options, and an `so1-sha256:` identity over the complete validated
+path/content/provenance inventory. Cache hits require input and ContentStore
+verification. Cycle native and browser hosts share the canonical
+`site-output/v1` serialization and a fixed Rust/JavaScript identity fixture;
+native publication writes `site-output.json` only after full-tree verification.
+Focused gates: `cargo test -p content_store -p site_build --no-default-features`,
+`cargo test -p site_build --features site-db-compat`, and Cycle renderer tests.
+
+**COMPACT PREPARED PACKAGES V2 — LANDED (2026-07-10).**
+`package_store::PreparedPackage` defines a deterministic compact `.fpp`
+artifact keyed by canonical member-digest root plus binary/normalization/
+derived-index/engine-ABI versions. Its canonical directory addresses complete
+package contents in independent 1 MiB raw-DEFLATE chunks. Decode validates the
+outer checksum, host-selected key, paths/order, metadata root, and exact chunk
+partition without inflating bodies. First read bounded-inflates one chunk and
+checks chunk/member SHA-256 behind an 8 MiB per-artifact LRU. Native/browser
+semantic payload SHA/length remain identical. Shared builders emit `.fpp` via both
+`fig packages prepare` and `rust_sushi packages prepare`; both commands use the
+same strict `PreparedPackageSetRequest` parser/executor and reject unsafe labels
+before constructing cache/output paths. Their ordinary manifest output and `.fpp`
+bytes are identical; `fig --json` adds only its standard API envelope. WASM
+exposes `Session.mountPrepared(bytes, expectedKey)`. The editor Worker uses the
+batch/cold APIs below and stores artifacts through its verified OPFS ContentStore.
+Focused gates: `cargo test -p package_store -p package_acquisition`, the prepared
+mount tests in `wasm_api`, and a real two-binary artifact `cmp`.
+Cold hosts can call `Session.prepareAndMount` once then drain direct binary
+artifacts with `takePrepared`; warm hosts can atomically call
+`beginPreparedMount` / per-artifact `stagePreparedMount` /
+`commitPreparedMount`; failure aborts without package mutation. The compatibility
+batch API remains. Both return phase and compressed/lazy-storage metrics.
+Cold metrics separate JSON parsing, base64 decoding, normalization, derived-index
+construction, artifact encoding, and mount time with input/base64/decoded/
+normalized/artifact byte counts; warm metrics separate manifest parsing,
+checksum/key/source/index validation, and shallow mount time.
+`BundleSource` is now an immutable per-package `Rc` layer map, so transactional
+mounts clone only labels/references rather than every existing package byte.
+Warm mounting retains only compact bytes and member/chunk indexes; no body is
+inflated at mount and member bodies materialize only on `PackageSource::read`.
+Browser staging removes the closure-sized JS concatenation. PreparedPackage v1
+pointers are misses rebuilt from authenticated source. Current US Core evidence:
+retained bytes 932 MB -> 140 MB, package mount 12.1 s -> 1.12 s, full warm reload
+15.8 s -> 5.13 s; browser gate remains green.
 
 **COMPAT-BREAK MECHANISM (2026-06-30):** intentional divergences where STOCK emits invalid/
 buggy output are tracked in `docs/compat-breaks.json` + `tests/compat-golden/<ig>/<file>.diff`,

@@ -15,6 +15,40 @@ use crate::{
     ContentRef, ReadDependency, RenderPlan, Sha256Digest, SiteBuild, SiteBuildError,
 };
 
+/// Typed, deterministic set of artifacts a demand-driven renderer asked its
+/// host to produce. The wrapper prevents the discovery phase from being
+/// confused with an untyped list of include filenames or ambient callbacks.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Need<T: Ord>(BTreeSet<T>);
+
+impl<T: Ord> Need<T> {
+    pub fn new(values: impl IntoIterator<Item = T>) -> Self {
+        Self(values.into_iter().collect())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.0.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn into_inner(self) -> BTreeSet<T> {
+        self.0
+    }
+}
+
+impl<T: Ord> FromIterator<T> for Need<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self::new(iter)
+    }
+}
+
 /// Immutable bytes to publish at `objects/sha256/<digest>`.
 ///
 /// Construction derives digest and length from the bytes. [`verify`](Self::verify)
@@ -85,6 +119,53 @@ impl ContentObject {
 pub struct ArtifactResolution {
     record: ArtifactRecord,
     object: Option<ContentObject>,
+}
+
+/// One atomic response to a typed artifact-discovery pass.
+///
+/// `needs` records what renderer evaluation discovered. `resolutions` may also
+/// contain declared page/asset outputs and frozen non-generated inputs, but
+/// every newly needed artifact must either be resolved in this batch or already
+/// be Ready in the explicit predecessor. Applying the batch always creates a
+/// new immutable SiteBuild; it cannot mutate an ambient session build.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolutionBatch {
+    needs: Need<ArtifactKey>,
+    render_plan: Option<RenderPlan>,
+    resolutions: BTreeMap<ArtifactKey, ArtifactResolution>,
+}
+
+impl ResolutionBatch {
+    pub fn new(
+        needs: Need<ArtifactKey>,
+        render_plan: Option<RenderPlan>,
+        resolutions: impl IntoIterator<Item = ArtifactResolution>,
+    ) -> Result<Self, RevisionError> {
+        let mut indexed = BTreeMap::new();
+        for resolution in resolutions {
+            let key = resolution.record().key.clone();
+            if indexed.insert(key.clone(), resolution).is_some() {
+                return Err(RevisionError::DuplicateResolution(key));
+            }
+        }
+        Ok(Self {
+            needs,
+            render_plan,
+            resolutions: indexed,
+        })
+    }
+
+    pub fn needs(&self) -> &Need<ArtifactKey> {
+        &self.needs
+    }
+
+    pub fn render_plan(&self) -> Option<&RenderPlan> {
+        self.render_plan.as_ref()
+    }
+
+    pub fn resolutions(&self) -> impl Iterator<Item = &ArtifactResolution> {
+        self.resolutions.values()
+    }
 }
 
 impl ArtifactResolution {
@@ -212,6 +293,8 @@ impl SiteBuildSuccessor {
 pub enum RevisionError {
     #[error("resolution batch contains duplicate artifact {0:?}")]
     DuplicateResolution(ArtifactKey),
+    #[error("resolution batch does not resolve newly needed artifact {0:?}")]
+    MissingNeedResolution(ArtifactKey),
     #[error("ready resolution for {0:?} has no content object")]
     ReadyWithoutObject(ArtifactKey),
     #[error("non-ready resolution for {0:?} unexpectedly carries a content object")]
@@ -250,6 +333,27 @@ pub enum RevisionError {
 }
 
 impl SiteBuild {
+    /// Apply the explicit `Need<ArtifactKey> -> ResolutionBatch` protocol.
+    /// Every need must be answered unless the predecessor already contains the
+    /// exact Ready artifact, after which the ordinary immutable successor
+    /// transition performs content and referential-integrity validation.
+    pub fn successor_batch(
+        &self,
+        batch: ResolutionBatch,
+    ) -> Result<SiteBuildSuccessor, RevisionError> {
+        for key in batch.needs.iter() {
+            let answered = batch.resolutions.contains_key(key)
+                || self
+                    .artifacts()
+                    .get(key)
+                    .is_some_and(|record| matches!(record.state, ArtifactState::Ready { .. }));
+            if !answered {
+                return Err(RevisionError::MissingNeedResolution(key.clone()));
+            }
+        }
+        self.successor(batch.render_plan, batch.resolutions.into_values())
+    }
+
     /// Apply a deterministic, atomic resolution batch to this explicit build.
     ///
     /// Existing records with the same keys are replaced; all other fields are

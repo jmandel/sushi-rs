@@ -18,6 +18,7 @@ following precedence when statements conflict:
 | [`hosting.md`](hosting.md) | Current guide to isolated `Session` ownership, compile/projection sequencing, closed external builds, native typed resolution, CLI hosting, and envelopes. |
 | [`site-producer.md`](site-producer.md) | Current implementation note for source-driven Publisher page shells and `_data`, including the landed WASM path and known model gaps. |
 | [`package-derived-index.md`](package-derived-index.md) | Implemented native CAS derived-index design and invariants. |
+| [`opfs-cas-design.md`](opfs-cas-design.md) | Implemented cross-host `ContentStore`, binary `PreparedPackage`, OPFS warm path, resolution-lock rules, and benchmark commands. |
 | [`designs/package-acquisition-plan.md`](designs/package-acquisition-plan.md) | Historical design for the now-implemented CAS/acquisition/materialization subsystem; current commands live in the root README. |
 
 The API definitions themselves remain authoritative: `crates/site_build`,
@@ -49,7 +50,6 @@ product specifications:
 - [`fhir-ig-editor-spec.md`](fhir-ig-editor-spec.md)
 - [`render-worklog.md`](render-worklog.md)
 - [`simplification-ledger.md`](simplification-ledger.md)
-- [`opfs-cas-design.md`](opfs-cas-design.md)
 
 Their shipped findings may still be correct, but terms such as “all adapters
 consume site.db,” “first include miss,” “global engine,” or milestone/branch

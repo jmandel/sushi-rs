@@ -10,6 +10,10 @@
 //! key order; new keys append in assignment order). serde_json's `preserve_order`
 //! (IndexMap) replicates this exactly when we apply the same assignment order.
 
+use prepared_guide::{
+    GeneratedIdentity, GuideIdentity, PublisherCompatibility, ResourcePublication,
+    SemanticResource, SemanticResourceKey, SourceControlIdentity,
+};
 use serde_json::{json, Map, Value};
 
 use crate::model::{ConceptRow, MetadataRow, ResourceIdentity, ResourceRow, SiteDb};
@@ -488,12 +492,12 @@ pub struct MetadataInputs<'a> {
     pub ig: &'a Value,
     pub gen_date: String,
     pub gen_day: String,
+    pub build_epoch_secs: i64,
     pub branch: Option<String>,
     pub revision: Option<String>,
 }
 
-/// rows.ts:269 — deriveMetadataRows. Values are order-preserving.
-pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
+fn metadata_pairs(input: &MetadataInputs) -> Vec<(&'static str, String)> {
     let cfg = input.cfg;
     let ig = input.ig;
     let fhir_version = match cfg.get("fhirVersion") {
@@ -529,7 +533,7 @@ pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
     } else {
         format!("{fhir_version}-{revision}")
     };
-    let pairs: Vec<(&str, String)> = vec![
+    vec![
         ("path", path),
         ("canonical", canonical),
         ("igId", package_id.clone()),
@@ -550,8 +554,12 @@ pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
             "gitstatus",
             input.branch.clone().unwrap_or_else(|| "unknown".into()),
         ),
-    ];
-    pairs
+    ]
+}
+
+/// rows.ts:269 — deriveMetadataRows. Values are order-preserving.
+pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
+    metadata_pairs(input)
         .into_iter()
         .enumerate()
         .map(|(i, (name, value))| MetadataRow {
@@ -560,6 +568,50 @@ pub fn derive_metadata_rows(input: &MetadataInputs) -> Vec<MetadataRow> {
             value,
         })
         .collect()
+}
+
+/// Renderer-neutral identity derived from the same semantic values as the
+/// compatibility Metadata rows, before those rows enter a SiteDb.
+pub fn derive_prepared_identity(
+    input: &MetadataInputs,
+    primary_implementation_guide: SemanticResourceKey,
+) -> (GuideIdentity, PublisherCompatibility) {
+    let values: std::collections::HashMap<_, _> = metadata_pairs(input).into_iter().collect();
+    let optional = |name: &str| {
+        values
+            .get(name)
+            .filter(|value| !value.trim().is_empty() && value.as_str() != "unknown")
+            .cloned()
+    };
+    let required = |name: &str| values.get(name).cloned().unwrap_or_default();
+    let branch = optional("gitstatus");
+    let revision = optional("revision");
+    let source_control = (branch.is_some() || revision.is_some())
+        .then_some(SourceControlIdentity { branch, revision });
+    (
+        GuideIdentity {
+            implementation_guide: primary_implementation_guide,
+            package_id: required("packageId"),
+            canonical: optional("canonical"),
+            name: optional("igName"),
+            version: optional("igVer"),
+            fhir_version: required("version"),
+            release_label: optional("releaseLabel"),
+            fhir_publication_base: required("path"),
+            generated: GeneratedIdentity {
+                epoch_seconds: input.build_epoch_secs,
+                date: required("genDate"),
+                day: required("genDay"),
+            },
+            source_control,
+        },
+        PublisherCompatibility {
+            error_count: required("errorCount"),
+            tooling_version: required("toolingVersion"),
+            tooling_revision: required("toolingRevision"),
+            tooling_version_full: required("toolingVersionFull"),
+        },
+    )
 }
 
 fn strip_ig_dotfull_suffix(url: &str) -> String {
@@ -589,6 +641,70 @@ fn fhir_publication_base_for_version(v: &str) -> String {
 }
 
 // ---- Resource rows ----
+
+/// Renderer-neutral resource semantics derived directly from prepared resource
+/// values. Compatibility row ids and JSON-string columns never enter this path.
+pub fn derive_prepared_resources(
+    resources: &[Value],
+    resource_meta: &std::collections::HashMap<String, Value>,
+    cfg: &Value,
+    primary_implementation_guide: &ResourceIdentity,
+) -> Vec<SemanticResource> {
+    let ig = resources.iter().find(|resource| {
+        resource_type(resource) == primary_implementation_guide.resource_type
+            && resource.get("id").and_then(Value::as_str)
+                == Some(primary_implementation_guide.id.as_str())
+    });
+    let ig_standard_status = ig.and_then(standard_status);
+    let ig_canonical = ig_canonical_base(ig);
+    resources
+        .iter()
+        .map(|resource| {
+            let reference = resource_ref(resource);
+            let meta = resource_meta.get(&reference);
+            let canonical = has_canonical_url(resource);
+            let resource_type = resource_type(resource).to_string();
+            let publication = ResourcePublication {
+                display_name: if canonical {
+                    get_scalar_string(resource, "name")
+                } else {
+                    display_name(resource, meta)
+                },
+                description: if canonical {
+                    get_scalar_string(resource, "description")
+                } else {
+                    meta.and_then(|value| get_scalar_string(value, "description"))
+                        .or_else(|| get_scalar_string(resource, "description"))
+                },
+                standard_status: canonical
+                    .then(|| {
+                        propagated_standard_status(
+                            resource,
+                            meta,
+                            ig_standard_status.as_deref(),
+                            ig_canonical.as_deref(),
+                        )
+                    })
+                    .flatten(),
+                base_definition: (resource_type == "StructureDefinition")
+                    .then(|| base_definition_for_db(resource, cfg))
+                    .flatten(),
+            };
+            SemanticResource {
+                key: SemanticResourceKey {
+                    resource_type,
+                    id: resource
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                },
+                resource: resource.clone(),
+                publication: (!publication.is_empty()).then_some(publication),
+            }
+        })
+        .collect()
+}
 
 /// rows.ts:301 — deriveResourceRows. Returns rows + keyByRef map for concept
 /// linkage. `resources` is the ordered, metadata-applied resource list; `json`

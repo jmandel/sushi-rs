@@ -292,6 +292,23 @@ fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", String::from_utf8_lossy(&manifest.to_bytes()));
         }
+        Some("packages") => match args.get(2).map(String::as_str) {
+            Some("prepare") => {
+                // rust_sushi packages prepare --cache <cache-dir> --out <prepared-dir>
+                //   <id#ver> [<id#ver> ...]
+                // Parsing and execution are the exact shared implementation
+                // used by `fig packages prepare`.
+                let request =
+                    package_acquisition::PreparedPackageSetRequest::parse_cli(&args[3..])?;
+                let manifest = request.execute()?;
+                println!("{}", String::from_utf8_lossy(&manifest.to_bytes()));
+            }
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "usage: rust_sushi packages prepare --cache <dir> --out <dir> <id#ver>..."
+                ));
+            }
+        },
         Some("resolve") => {
             // rust_sushi resolve --cache <cache-dir> --root <id#ver>
             //   -> the transitive R4 context closure (snapshot/package-deps.cjs
@@ -300,8 +317,11 @@ fn main() -> anyhow::Result<()> {
             //      candidate index (matching the .cjs readdirSync).
             //
             // rust_sushi resolve --cache <cache-dir> --project <ig-dir> [--json]
-            //   -> the full ResolutionStep {compile_set, context_closure, missing,
-            //      satisfied} as JSON, over the packages currently in the cache.
+            //   -> the full versioned ResolutionStep {resolver_schema,
+            //      compile_set, context_closure, resolution_support, missing, satisfied,
+            //      mutable_requests} as JSON, over the packages currently in the
+            //      cache. Browser and CLI consumers therefore share freshness
+            //      metadata for mutable version requests.
             let cache = option_value(&args, "--cache")
                 .ok_or_else(|| anyhow::anyhow!("resolve needs --cache <cache-dir>"))?;
             let cache_path = std::path::Path::new(cache);
@@ -364,7 +384,7 @@ fn main() -> anyhow::Result<()> {
                 env!("CARGO_PKG_VERSION")
             );
             eprintln!(
-                "usage: rust_sushi <lex|ast|expand|build|cas|materialize|pkg-fish|--version> ..."
+                "usage: rust_sushi <lex|ast|expand|build|cas|materialize|packages|pkg-fish|--version> ..."
             );
         }
     }

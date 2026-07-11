@@ -23,8 +23,11 @@ recomputes that id and rejects tampering or accidental partial rewrites.
 
 Artifact content is addressed but not embedded. A host is responsible for
 putting referenced bytes in a CAS and verifying their digest and length. A
-demand-driven renderer uses the pure `SiteBuild::successor` transition with an
-explicit predecessor and a batch of `ArtifactResolution` values. Ready
+demand-driven renderer records a typed `Need<ArtifactKey>` and answers it with
+an atomic `ResolutionBatch`; `SiteBuild::successor_batch` applies that batch to
+an explicit predecessor. The lower-level `SiteBuild::successor` transition
+remains available for producers that already have a complete set of
+`ArtifactResolution` values. Ready
 resolutions carry their exact bytes; the result contains the re-hashed successor
 and a digest-keyed set of newly introduced `ContentObject`s for CAS publication.
 Non-ready resolutions carry no stale object. Batch order cannot change the
@@ -75,9 +78,14 @@ predecessor and CAS, eliminating this remaining trust edge.
 
 ## Cycle typed projection
 
-The optional `site-db-projections` feature currently exposes the transitional
-`cycle_semantic::close_projection` producer for `cycle-site/v2`. It emits a
-closed plan rooted in:
+`PreparedGuide` is the renderer-neutral semantic preparation result: guide
+identity, FHIR resources and publication metadata, terminology expansions,
+navigation, parsed config, and authored assets with their source reads. It has
+no database row keys and no Cycle artifact names or schemas.
+
+`cycle_semantic::close_prepared` consumes that value directly; this API is
+available without `site_db` or the `site-db-projections` feature. It emits a
+closed `cycle-site/v2` plan rooted in:
 
 - `cycle.semantic/v1/resources.json` — prepared FHIR objects and only the
   publication facets not safely recoverable from them;
@@ -98,7 +106,20 @@ may begin at a positive depth after a synthetic structural page such as
 semantic depth zero while preserving every relative parent/child edge. The
 offset is compatibility bookkeeping and is not part of v2 identity.
 
-This producer accepts `SiteDb` only because that is today's prepared-site model.
+The optional `site-db-projections` feature adds the one migration adapter,
+`cycle_semantic::prepare_from_site_db`. `close_projection` remains a convenience
+wrapper around that adapter plus `close_prepared`. Native Fig and WASM spell the
+direct path explicitly, so their renderer-facing seam is
+`PreparedGuide -> ClosedSiteBuild`; neither constructs SiteDb rows for v2.
+Equality tests prove that shared preparation and the compatibility adapter
+produce the same semantic objects for common inputs.
+
+The `prepared_guide` crate is upstream of both `site_build` and `site_db`.
+Shared disk and in-memory preparation constructs it directly from compiled
+resources, navigation/config inputs, and authored bytes. Authored assets retain
+the exact winning source path after de-duplication. `site_db::project_prepared`
+is the single one-way compatibility projection used only by v1/SQLite callers;
+the semantic preparation path never constructs rows in parallel.
 `SiteDb` retains an in-memory, non-legacy-row primary ImplementationGuide key
 selected by the compiler before examples are merged and rows sorted. Snapshot
 completion uses the complete exact resolved dependency closure, with core only
@@ -106,10 +127,9 @@ as a validated distinguished member.
 The optional legacy row projection carries the same choice without a new wire
 field: exactly one ImplementationGuide row has `Web = index.html`; additional
 guides keep their resource ids, canonicals, and ordinary pages.
-That dependency is scaffolding, not an architectural claim that the database is
-the handoff. The intended next refactor extracts a renderer-neutral
-`PreparedSite`; typed Cycle artifacts and optional SQLite output will both be
-projections of that value.
+The reverse `prepare_from_site_db` adapter is retained only for migration gates
+and legacy callers; it can be removed once those callers move to shared
+preparation.
 
 ## V1 `site.db` compatibility
 
@@ -135,6 +155,29 @@ in a private staged filesystem, and
 deriving identity from the same native `site_db::build` whose rows are
 projected. No post-capture live-tree read can influence semantic inputs,
 execution, or identity; later live comparisons are mutation diagnostics only.
+
+## Exact rendered-output caching
+
+`SiteOutput` is the renderer-neutral, browser-serializable receipt for a
+complete materialized site. Its two identities have different jobs:
+
+- `OutputCacheKey` (`sok1-sha256:`) is computable before rendering. It binds the
+  closed `SiteBuild` id to renderer id/version, an exact renderer recipe digest,
+  output schema, and normalized options. Hosts may use this only as a cache
+  lookup key.
+- `SiteOutputId` (`so1-sha256:`) additionally binds the canonical sorted output
+  inventory: each safe relative path, content digest/length/media type,
+  producer, source recipe, and owner.
+
+`SiteOutput::verify_for` rejects a receipt from another closed build, while
+`verify_store` reads and verifies every addressed object through the shared
+`ContentStore`. Paths and mutable project names are never cache keys. A hit is
+usable only after both manifest identities and every referenced byte verify.
+`FileSiteOutputCache` provides the native implementation: canonical manifests
+are atomically published under `OutputCacheKey`, hits re-read every object, and
+different outputs under the same derivation key are rejected as renderer
+nondeterminism rather than overwritten. Browser hosts implement the same
+`SiteOutputCache` contract over OPFS.
 
 ```sh
 cargo test -p site_build

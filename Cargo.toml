@@ -11,6 +11,8 @@ members = [
     "crates/json_emit",
     "crates/rust_sushi",
     "crates/snapshot_gen",
+    "crates/prepared_guide",
+    "crates/content_store",
     "crates/site_build",
     "crates/site_db",
     "crates/wasm_api",
@@ -42,6 +44,8 @@ compiler = { path = "crates/compiler" }
 diagnostics = { path = "crates/diagnostics" }
 json_emit = { path = "crates/json_emit" }
 snapshot_gen = { path = "crates/snapshot_gen" }
+prepared_guide = { path = "crates/prepared_guide" }
+content_store = { path = "crates/content_store" }
 site_build = { path = "crates/site_build" }
 site_db = { path = "crates/site_db", default-features = false }
 render_xhtml = { path = "crates/render_xhtml" }
@@ -64,6 +68,7 @@ mimalloc = { version = "0.1", default-features = false }
 anyhow = "1"
 thiserror = "2"
 flate2 = "1"
+miniz_oxide = "=0.8.9"
 hex = "0.4"
 sha1 = "0.10"
 sha2 = "0.10"

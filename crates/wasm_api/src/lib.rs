@@ -12,6 +12,11 @@
 //! ```js
 //! const s = new Session();               // or Session.global() for the shared one
 //! s.mount(bundlesJson);                  // -> { ok, apiVersion, result: { mounted } }
+//! s.prepareAndMount(bundlesJson);        // cold normalize/mount + artifact metadata
+//! const artifact = s.takePrepared(label); // direct Uint8Array, intentionally not JSON
+//! s.beginPreparedMount(count);           // warm all-or-nothing compact transaction
+//! s.stagePreparedMount(bytes, key);      // one checked artifact at a time
+//! s.commitPreparedMount();               // publish only after all stages validate
 //! s.compile(filesJson, config, predefinedJson);
 //! s.snapshot(urlOrInlineSd);
 //! s.buildSiteDb(inputJson);
@@ -20,12 +25,13 @@
 //! Session.version();                     // static
 //! ```
 //!
-//! Every method returns a JSON string the Worker `JSON.parse`s. The envelope is
-//! uniform:
+//! Every metadata/content method returns a JSON string the Worker `JSON.parse`s.
+//! The envelope is uniform:
 //!   - success: `{ "apiVersion": 1, "ok": true,  "op": "<name>", "result": <payload> }`
 //!   - failure: `{ "apiVersion": 1, "ok": false, "op": "<name>", "error": { "message": "…" } }`
-//! Methods never throw for domain errors — they return `ok:false`; only a
-//! genuinely unusable argument (non-string) surfaces as a JS exception.
+//! Methods never throw for domain errors — they return `ok:false`. The one
+//! deliberate exception is `takePrepared`: it moves a pending binary artifact
+//! directly into a `Uint8Array`, and throws if the label is absent/already taken.
 //!
 //! # Legacy global compatibility
 //!
@@ -48,6 +54,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use package_store::{BundleSource, PackageSource};
+use render_page::{
+    all_compile_inputs, collect_stock_revision, ArtifactObservation, PageArtifactReadSet,
+    StockFragmentPolicy, StockInput, StockPage, StockPageOutcome, STOCK_PAGE_SOURCE_NAMESPACE,
+    STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE, STOCK_STAGED_INCLUDE_NAMESPACE,
+    STOCK_TEMPLATE_INCLUDE_NAMESPACE,
+};
 
 mod render_surface;
 #[cfg(test)]
@@ -161,6 +173,16 @@ struct Engine {
     /// each package label. The mutable BundleSource is an execution cache; this
     /// map is the immutable package material used to construct a SiteBuild lock.
     package_materials: BTreeMap<String, MountedPackage>,
+    /// Short-lived direct-binary exports produced by `prepareAndMount`. The JS
+    /// host removes each with `takePrepared` immediately after persisting it.
+    prepared_exports: BTreeMap<String, Vec<u8>>,
+    /// A multi-call warm mount validates compact artifacts one at a time and
+    /// commits them together. This avoids constructing a second whole-closure
+    /// JavaScript batch while retaining the existing all-or-nothing law.
+    prepared_mount: Option<PreparedMountTransaction>,
+    /// Invalidates an in-flight staged transaction if another package mutation
+    /// somehow interleaves through a non-browser host.
+    package_generation: u64,
     /// The last package resolver fixpoint, bound to the config bytes it resolved.
     /// A SiteBuild may only claim this closure when its compile used those same
     /// config bytes.
@@ -197,6 +219,68 @@ struct Engine {
     render_semantics: Option<Rc<RenderSemantics>>,
     /// Cheap page/template surface for the current mounted site generation.
     render_state: Option<Rc<RenderState>>,
+    /// Frozen native-template executions keyed by their content-derived
+    /// SiteBuild id. Unlike `render_state`, these survive later mounts/compiles:
+    /// a handle always renders the exact tree and semantic context it opened.
+    stock_builds: BTreeMap<String, StockBuildRuntime>,
+    /// Renderer-neutral semantics derived from the current (or an earlier)
+    /// exact compile revision. The entry is reusable only when its canonical
+    /// key matches every authored byte, locked package, compiled value,
+    /// preparation option, and preparation recipe below.
+    prepared_guide_cache: Option<PreparedGuideCacheEntry>,
+    /// Complete external-builder handoff derived from one exact prepared-guide
+    /// key plus target/diagnostics/projection recipe. Keeping the result (CAS
+    /// objects included) avoids both semantic preparation and reprojection on a
+    /// repeated request while never relying on a mutable "latest build" alias.
+    closed_site_build_cache: Option<ClosedSiteBuildCacheEntry>,
+    #[cfg(test)]
+    derived_cache_hits: DerivedCacheHits,
+}
+
+struct PreparedMountTransaction {
+    expected_packages: u32,
+    base_generation: u64,
+    packages: Vec<package_store::PreparedPackage>,
+    artifact_bytes: u64,
+    indexed_members: u64,
+    decode_validate_ms: f64,
+    base_compression: package_store::BundleCompressionMetrics,
+}
+
+#[derive(Clone)]
+struct PreparedGuideCacheEntry {
+    key: site_build::Sha256Digest,
+    guide: site_build::PreparedGuide,
+    /// Populated only when a compatibility caller explicitly asks for rows.
+    /// Cycle v2 never constructs this value.
+    site_db: Option<site_db::SiteDb>,
+}
+
+#[derive(Clone)]
+struct ClosedSiteBuildCacheEntry {
+    key: site_build::Sha256Digest,
+    result: SiteBuildFromCompileResult,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct DerivedCacheHits {
+    prepared_guide: u64,
+    closed_site_build: u64,
+}
+
+#[derive(Clone)]
+struct StockBuildRuntime {
+    state: Rc<RenderState>,
+    build: site_build::SiteBuild,
+    pages: BTreeMap<String, StockRenderedPage>,
+    provenance_attributes: BTreeMap<String, String>,
+}
+
+#[derive(Clone)]
+struct StockRenderedPage {
+    html: String,
+    reads: PageArtifactReadSet,
 }
 
 #[derive(Clone, Debug)]
@@ -272,6 +356,8 @@ impl Engine {
         if same_semantics {
             self.invalidate_render_surface();
         } else {
+            self.prepared_guide_cache = None;
+            self.closed_site_build_cache = None;
             self.invalidate_render_semantics();
         }
     }
@@ -279,6 +365,8 @@ impl Engine {
     fn replace_local_render_set(&mut self, compiled: Vec<(PathBuf, Value)>) {
         self.last_compiled = compiled;
         self.last_render_semantic_inputs = None;
+        self.prepared_guide_cache = None;
+        self.closed_site_build_cache = None;
         self.invalidate_render_semantics();
     }
 
@@ -301,11 +389,16 @@ impl Engine {
         self.bundle = Some(Rc::new(src));
         self.packages = labels;
         self.package_materials = package_materials;
+        self.prepared_exports.clear();
+        self.prepared_mount = None;
+        self.package_generation = self.package_generation.wrapping_add(1);
         self.resolved_packages = None;
         self.last_compiled.clear();
         self.last_render_semantic_inputs = None;
         self.last_project = None;
         self.last_compile_diagnostics.clear();
+        self.prepared_guide_cache = None;
+        self.closed_site_build_cache = None;
         self.invalidate_render_semantics();
         Ok(parsed.len() as u32)
     }
@@ -358,6 +451,7 @@ impl Engine {
         self.packages = labels;
         self.package_materials = package_materials;
         if package_set_changed {
+            self.package_generation = self.package_generation.wrapping_add(1);
             // A resolver fixpoint is a statement about the mounted candidate
             // set. Even if a new package looks unrelated, mutable/range
             // requests must be resolved again before another compileProject.
@@ -365,6 +459,405 @@ impl Engine {
             self.invalidate_render_semantics();
         }
         Ok(total)
+    }
+
+    /// Mount one versioned binary PreparedPackage. Validation happens before
+    /// any engine mutation; the artifact's current derived-index sidecar is
+    /// mounted directly, so this path performs no resource-index rebuild.
+    fn mount_prepared(&mut self, bytes: Vec<u8>, expected_key: &str) -> Result<u32, String> {
+        let expected: package_store::PreparedPackageKey = expected_key
+            .parse()
+            .map_err(|error| format!("mountPrepared: invalid expected key: {error:#}"))?;
+        let prepared = package_store::PreparedPackage::decode_owned(bytes, &expected)
+            .map_err(|error| format!("mountPrepared: invalid artifact: {error:#}"))?;
+        self.commit_prepared(vec![prepared], "mountPrepared")?;
+        Ok(self.packages.len() as u32)
+    }
+
+    /// Compatibility entry point for validating artifacts carried in one
+    /// contiguous binary batch before appending any immutable package layer.
+    /// The browser warm path uses staged per-artifact transactions instead, so
+    /// it never constructs a closure-sized JavaScript batch.
+    fn mount_prepared_batch(
+        &mut self,
+        bytes: Vec<u8>,
+        manifest_json: &str,
+    ) -> Result<PackageMountResult, String> {
+        if self.bundle.is_none() {
+            return Err("mountPreparedBatch: engine not initialized; call init() first".into());
+        }
+        let started = clock_ms();
+        let compression_before = self
+            .bundle
+            .as_ref()
+            .map(|source| source.compression_metrics())
+            .unwrap_or_default();
+        let entries: Vec<PreparedBatchEntry> = serde_json::from_str(manifest_json)
+            .map_err(|error| format!("mountPreparedBatch: bad manifest JSON: {error}"))?;
+        let parsed_at = clock_ms();
+        if entries.is_empty() {
+            return Err("mountPreparedBatch: manifest has no packages".into());
+        }
+        let requested = entries.len() as u32;
+        let artifact_bytes = bytes.len() as u64;
+        let backing = package_store::PreparedArtifactBacking::new(bytes);
+        let mut cursor = 0usize;
+        let mut prepared = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let offset: usize = entry
+                .offset
+                .try_into()
+                .map_err(|_| "mountPreparedBatch: offset exceeds host size")?;
+            let length: usize = entry
+                .byte_length
+                .try_into()
+                .map_err(|_| "mountPreparedBatch: byteLength exceeds host size")?;
+            if offset != cursor {
+                return Err(format!(
+                    "mountPreparedBatch: artifacts must be contiguous and ordered; expected offset {cursor}, got {offset}"
+                ));
+            }
+            let end = offset
+                .checked_add(length)
+                .ok_or("mountPreparedBatch: artifact range overflow")?;
+            if end > backing.len() {
+                return Err("mountPreparedBatch: artifact range exceeds binary batch".into());
+            }
+            let key: package_store::PreparedPackageKey = entry
+                .cache_key
+                .parse()
+                .map_err(|error| format!("mountPreparedBatch: invalid cache key: {error:#}"))?;
+            prepared.push(
+                package_store::PreparedPackage::decode_backing_range(
+                    backing.clone(),
+                    offset..end,
+                    &key,
+                )
+                .map_err(|error| format!("mountPreparedBatch: invalid artifact: {error:#}"))?,
+            );
+            cursor = end;
+        }
+        if cursor != backing.len() {
+            return Err("mountPreparedBatch: binary batch has unreferenced trailing bytes".into());
+        }
+        let indexed_members = prepared
+            .iter()
+            .map(|package| package.files.len() as u64)
+            .sum();
+        let decoded = clock_ms();
+        let mounted = self.commit_prepared(prepared, "mountPreparedBatch")?;
+        let compression = compression_delta(
+            compression_before,
+            self.bundle
+                .as_ref()
+                .map(|source| source.compression_metrics())
+                .unwrap_or_default(),
+        );
+        let finished = clock_ms();
+        Ok(PackageMountResult {
+            mounted: self.packages.len() as u32,
+            added: mounted,
+            packages: requested,
+            manifest_json_bytes: manifest_json.len() as u64,
+            artifact_bytes,
+            retained_blob_bytes: artifact_bytes,
+            indexed_members,
+            member_body_copies: 0,
+            manifest_parse_ms: (parsed_at - started).max(0.0),
+            decode_validate_ms: (decoded - parsed_at).max(0.0),
+            mount_ms: (finished - decoded).max(0.0),
+            compression,
+        })
+    }
+
+    fn begin_prepared_mount(&mut self, expected_packages: u32) -> Result<(), String> {
+        if self.bundle.is_none() {
+            return Err("beginPreparedMount: engine not initialized; call init() first".into());
+        }
+        if expected_packages == 0 {
+            return Err("beginPreparedMount: expected package count must be positive".into());
+        }
+        if self.prepared_mount.is_some() {
+            return Err("beginPreparedMount: another prepared mount is already active".into());
+        }
+        self.prepared_mount = Some(PreparedMountTransaction {
+            expected_packages,
+            base_generation: self.package_generation,
+            // `expected_packages` crosses the public WASM boundary. Grow only
+            // as validated artifacts arrive instead of trusting it as an eager
+            // allocation size (a forged u32::MAX must not trap the worker).
+            packages: Vec::new(),
+            artifact_bytes: 0,
+            indexed_members: 0,
+            decode_validate_ms: 0.0,
+            base_compression: self
+                .bundle
+                .as_ref()
+                .map(|source| source.compression_metrics())
+                .unwrap_or_default(),
+        });
+        Ok(())
+    }
+
+    fn stage_prepared_mount(
+        &mut self,
+        bytes: Vec<u8>,
+        expected_key: &str,
+    ) -> Result<PreparedStageResult, String> {
+        let transaction = self
+            .prepared_mount
+            .as_mut()
+            .ok_or("stagePreparedMount: no prepared mount is active")?;
+        if transaction.packages.len() >= transaction.expected_packages as usize {
+            return Err("stagePreparedMount: received more packages than declared".into());
+        }
+        let expected: package_store::PreparedPackageKey = expected_key
+            .parse()
+            .map_err(|error| format!("stagePreparedMount: invalid expected key: {error:#}"))?;
+        let artifact_bytes = bytes.len() as u64;
+        let started = clock_ms();
+        let package = package_store::PreparedPackage::decode_owned(bytes, &expected)
+            .map_err(|error| format!("stagePreparedMount: invalid artifact: {error:#}"))?;
+        let decode_validate_ms = (clock_ms() - started).max(0.0);
+        if transaction
+            .packages
+            .iter()
+            .any(|prior| prior.label == package.label)
+        {
+            return Err(format!(
+                "stagePreparedMount: duplicate package label {}",
+                package.label
+            ));
+        }
+        let indexed_members = package.files.len() as u64;
+        let label = package.label.clone();
+        transaction.artifact_bytes = transaction.artifact_bytes.saturating_add(artifact_bytes);
+        transaction.indexed_members = transaction.indexed_members.saturating_add(indexed_members);
+        transaction.decode_validate_ms += decode_validate_ms;
+        transaction.packages.push(package);
+        Ok(PreparedStageResult {
+            label,
+            staged: transaction.packages.len() as u32,
+            artifact_bytes,
+            indexed_members,
+            decode_validate_ms,
+        })
+    }
+
+    fn commit_prepared_mount(&mut self) -> Result<PackageMountResult, String> {
+        let transaction = self
+            .prepared_mount
+            .take()
+            .ok_or("commitPreparedMount: no prepared mount is active")?;
+        if transaction.base_generation != self.package_generation {
+            return Err(
+                "commitPreparedMount: mounted package state changed during transaction".into(),
+            );
+        }
+        if transaction.packages.len() != transaction.expected_packages as usize {
+            return Err(format!(
+                "commitPreparedMount: expected {} packages, staged {}",
+                transaction.expected_packages,
+                transaction.packages.len()
+            ));
+        }
+        let started = clock_ms();
+        let added = self.commit_prepared(transaction.packages, "commitPreparedMount")?;
+        let compression = compression_delta(
+            transaction.base_compression,
+            self.bundle
+                .as_ref()
+                .map(|source| source.compression_metrics())
+                .unwrap_or_default(),
+        );
+        let mount_ms = (clock_ms() - started).max(0.0);
+        Ok(PackageMountResult {
+            mounted: self.packages.len() as u32,
+            added,
+            packages: transaction.expected_packages,
+            manifest_json_bytes: 0,
+            artifact_bytes: transaction.artifact_bytes,
+            retained_blob_bytes: transaction.artifact_bytes,
+            indexed_members: transaction.indexed_members,
+            member_body_copies: 0,
+            manifest_parse_ms: 0.0,
+            decode_validate_ms: transaction.decode_validate_ms,
+            mount_ms,
+            compression,
+        })
+    }
+
+    fn abort_prepared_mount(&mut self) -> bool {
+        self.prepared_mount.take().is_some()
+    }
+
+    fn package_storage_metrics(&self) -> package_store::BundleCompressionMetrics {
+        self.bundle
+            .as_ref()
+            .map(|source| source.compression_metrics())
+            .unwrap_or_default()
+    }
+
+    /// Cold path: turn the existing inflated JSON/base64 input into the exact
+    /// binary cache artifact while mounting the same prepared material once.
+    /// `takePrepared(label)` transfers each artifact to JS without base64.
+    fn prepare_and_mount(&mut self, bundles_json: &str) -> Result<PrepareMountResult, String> {
+        if self.bundle.is_none() {
+            return Err("prepareAndMount: engine not initialized; call init() first".into());
+        }
+        let started = clock_ms();
+        let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
+            .map_err(|error| format!("prepareAndMount: bad bundles JSON: {error}"))?;
+        let parsed_at = clock_ms();
+        if parsed.is_empty() {
+            return Err("prepareAndMount: no packages supplied".into());
+        }
+        let mut transaction = BTreeSet::new();
+        let mut artifacts = Vec::with_capacity(parsed.len());
+        let mut prepared = Vec::with_capacity(parsed.len());
+        let mut pending = BTreeMap::new();
+        let mut prepared_members = 0u64;
+        let mut base64_bytes = 0u64;
+        let mut decoded_source_bytes = 0u64;
+        let mut normalized_bytes = 0u64;
+        let mut artifact_bytes = 0u64;
+        let mut base64_decode_ms = 0.0f64;
+        let mut normalization_ms = 0.0f64;
+        let mut indexing_ms = 0.0f64;
+        let mut artifact_encode_ms = 0.0f64;
+        for package in parsed {
+            if !transaction.insert(package.label.clone()) {
+                return Err(format!(
+                    "prepareAndMount: duplicate package label in one transaction: {}",
+                    package.label
+                ));
+            }
+            let mut entries = BTreeMap::new();
+            for (name, b64) in package.files {
+                base64_bytes = base64_bytes.saturating_add(b64.len() as u64);
+                let decode_started = clock_ms();
+                let body = base64_decode(&b64)
+                    .map_err(|error| format!("prepareAndMount: bad base64 for {name}: {error}"))?;
+                base64_decode_ms += (clock_ms() - decode_started).max(0.0);
+                decoded_source_bytes = decoded_source_bytes.saturating_add(body.len() as u64);
+                entries.insert(name, body);
+            }
+            let normalize_started = clock_ms();
+            let builder = package_store::PreparedPackage::normalize(&package.label, entries)
+                .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+            normalization_ms += (clock_ms() - normalize_started).max(0.0);
+            let index_started = clock_ms();
+            let package = builder
+                .build()
+                .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+            indexing_ms += (clock_ms() - index_started).max(0.0);
+            normalized_bytes = normalized_bytes.saturating_add(package.files.raw_bytes());
+            let encode_started = clock_ms();
+            let bytes = package.encode();
+            artifact_encode_ms += (clock_ms() - encode_started).max(0.0);
+            prepared_members += package.files.len() as u64;
+            artifact_bytes += bytes.len() as u64;
+            artifacts.push(PreparedExport {
+                label: package.label.clone(),
+                cache_key: package.key.cache_key(),
+                artifact_sha256: site_build::Sha256Digest::of_bytes(&bytes).to_string(),
+                bytes: bytes.len() as u64,
+            });
+            prepared.push(package);
+            pending.insert(artifacts.last().unwrap().label.clone(), bytes);
+        }
+        let decoded = clock_ms();
+        // Do not expose artifacts from a transaction whose mount fails.
+        let added = self.commit_prepared(prepared, "prepareAndMount")?;
+        self.prepared_exports.extend(pending);
+        let finished = clock_ms();
+        Ok(PrepareMountResult {
+            mounted: self.packages.len() as u32,
+            added,
+            artifacts,
+            artifact_bytes,
+            prepared_members,
+            input_json_bytes: bundles_json.len() as u64,
+            base64_bytes,
+            decoded_source_bytes,
+            normalized_bytes,
+            mount_member_body_copies: 0,
+            json_parse_ms: (parsed_at - started).max(0.0),
+            base64_decode_ms,
+            normalization_ms,
+            indexing_ms,
+            artifact_encode_ms,
+            decode_validate_prepare_ms: (decoded - started).max(0.0),
+            mount_ms: (finished - decoded).max(0.0),
+        })
+    }
+
+    fn take_prepared(&mut self, label: &str) -> Result<Vec<u8>, String> {
+        self.prepared_exports
+            .remove(label)
+            .ok_or_else(|| format!("takePrepared: no pending artifact for {label}"))
+    }
+
+    /// Append decoded packages as immutable layers. All fallible validation and
+    /// conflict checks precede the shallow BundleSource clone and infallible
+    /// layer appends, preserving all-or-nothing mount semantics.
+    fn commit_prepared(
+        &mut self,
+        prepared: Vec<package_store::PreparedPackage>,
+        operation: &str,
+    ) -> Result<u32, String> {
+        let base = self
+            .bundle
+            .as_ref()
+            .ok_or_else(|| format!("{operation}: engine not initialized; call init() first"))?;
+        let mut transaction = BTreeSet::new();
+        let mut contents = Vec::with_capacity(prepared.len());
+        for package in &prepared {
+            if !transaction.insert(package.label.clone()) {
+                return Err(format!(
+                    "{operation}: duplicate package label in one transaction: {}",
+                    package.label
+                ));
+            }
+            let content = prepared_content(package, operation)?;
+            if let Some(existing) = self.package_materials.get(&package.label) {
+                if existing.content != content
+                    || existing.declared_dependencies != package.declared_dependencies
+                {
+                    return Err(format!(
+                        "{operation}: package label {} is already mounted with different content",
+                        package.label
+                    ));
+                }
+            }
+            contents.push(content);
+        }
+
+        let mut source = (**base).clone(); // shallow: immutable layer Rc clones only
+        let mut added = 0u32;
+        for (package, content) in prepared.into_iter().zip(contents) {
+            if self.package_materials.contains_key(&package.label) {
+                continue;
+            }
+            let mounted = package.mount_into(&mut source);
+            self.packages.push(mounted.label.clone());
+            self.package_materials.insert(
+                mounted.label,
+                MountedPackage {
+                    content,
+                    declared_dependencies: mounted.declared_dependencies,
+                },
+            );
+            added += 1;
+        }
+        if added > 0 {
+            self.package_generation = self.package_generation.wrapping_add(1);
+            self.cache_root = source.cache_root().to_path_buf();
+            self.bundle = Some(Rc::new(source));
+            self.resolved_packages = None;
+            self.invalidate_render_semantics();
+        }
+        Ok(added)
     }
 
     /// The shared package source + cache root + package labels for a call. Cheap:
@@ -920,12 +1413,24 @@ impl Engine {
     /// Project the exact most recent `compileProject` revision into site.db rows.
     /// Unlike the legacy `build_site_db`, this path has no FSH inputs and therefore
     /// cannot accidentally perform a second semantic compile.
-    fn build_site_db_from_compile(&self, input_json: &str) -> Result<Value, String> {
+    fn build_site_db_from_compile(&mut self, input_json: &str) -> Result<Value, String> {
         let input: SiteDbFromCompileInput = serde_json::from_str(input_json)
             .map_err(|e| format!("build_site_db_from_compile: bad input JSON: {e}"))?;
-        self.validate_project_projection(&input, "build_site_db_from_compile")?;
-        let db = self.site_db_from_compile_model(&input, "build_site_db_from_compile")?;
-        serde_json::to_value(db)
+        let project = self
+            .validate_project_projection(&input, "build_site_db_from_compile")?
+            .clone();
+        let (project_id, _) = compiled_ig_identity(&self.last_compiled)?;
+        let project_revision = self.site_build_project_revision(&project, &project_id)?;
+        let package_lock = self.site_build_package_lock(&project)?;
+        let prepared_key = self.prepared_guide_cache_key(
+            &input,
+            &project_revision,
+            &package_lock,
+            "build_site_db_from_compile",
+        )?;
+        let (_, db) =
+            self.site_model_from_compile(&input, "build_site_db_from_compile", true, prepared_key)?;
+        serde_json::to_value(db.expect("row projection requested"))
             .map_err(|e| format!("build_site_db_from_compile: serialize rows: {e}"))
     }
 
@@ -935,53 +1440,32 @@ impl Engine {
     /// use the same digest-indexed CAS transport and neither can invoke a second
     /// compile or a request-time fragment callback.
     fn build_site_build_from_compile(
-        &self,
+        &mut self,
         input_json: &str,
     ) -> Result<SiteBuildFromCompileResult, String> {
         let input: SiteDbFromCompileInput = serde_json::from_str(input_json)
             .map_err(|e| format!("build_site_build_from_compile: bad input JSON: {e}"))?;
-        let project = self.validate_project_projection(&input, "build_site_build_from_compile")?;
-
-        let db = self.site_db_from_compile_model(&input, "build_site_build_from_compile")?;
-        let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
-        let project_revision = self.site_build_project_revision(project, &project_id)?;
-        let package_lock = self.site_build_package_lock(project)?;
-
-        let diagnostics = self
-            .last_compile_diagnostics
-            .iter()
-            .enumerate()
-            .map(|(sequence, diagnostic)| {
-                let severity = match diagnostic.severity.to_ascii_lowercase().as_str() {
-                    "error" => site_build::DiagnosticSeverity::Error,
-                    "warning" => site_build::DiagnosticSeverity::Warning,
-                    _ => site_build::DiagnosticSeverity::Information,
-                };
-                let mut out = site_build::BuildDiagnostic::new(
-                    severity,
-                    "sushi.compile",
-                    diagnostic.message.clone(),
-                )
-                .with_sequence(sequence as u64);
-                if let (Some(file), Some(line)) = (&diagnostic.file, diagnostic.line) {
-                    if let Ok(path) = site_build::SourcePath::parse(file.clone()) {
-                        out.location = Some(site_build::SourceLocation {
-                            path,
-                            line,
-                            column: 0,
-                        });
-                    }
-                }
-                out
-            })
-            .collect::<BTreeSet<_>>();
-
+        let project = self
+            .validate_project_projection(&input, "build_site_build_from_compile")?
+            .clone();
         let target = input.target.as_deref().unwrap_or("cycle-site/v1");
         if !matches!(target, "cycle-site/v1" | "cycle-site/v2") {
             return Err(format!(
                 "build_site_build_from_compile: unsupported target {target:?}"
             ));
         }
+        let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
+        let project_revision = self.site_build_project_revision(&project, &project_id)?;
+        let package_lock = self.site_build_package_lock(&project)?;
+        let prepared_key = self.prepared_guide_cache_key(
+            &input,
+            &project_revision,
+            &package_lock,
+            "build_site_build_from_compile",
+        )?;
+
+        let diagnostics = site_build_diagnostics(&self.last_compile_diagnostics);
+
         let mut parameters = BTreeMap::from([
             ("contract".into(), target.into()),
             ("buildEpochSecs".into(), input.build_epoch_secs.to_string()),
@@ -1012,26 +1496,44 @@ impl Engine {
             parameters,
         };
 
-        if target == "cycle-site/v2" {
-            let projection = site_build::cycle_semantic::close_projection(
-                &db,
-                site_build::cycle_semantic::CycleProjectionInput {
-                    project: project_revision,
-                    package_lock,
-                    render_target,
-                    diagnostics,
-                },
-            )
-            .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
-            Ok(SiteBuildFromCompileResult {
+        let closed_key =
+            closed_site_build_cache_key(&prepared_key, &render_target, &diagnostics, target)
+                .map_err(|error| format!("build_site_build_from_compile: cache key: {error}"))?;
+        if let Some(entry) = &self.closed_site_build_cache {
+            if entry.key == closed_key {
+                #[cfg(test)]
+                {
+                    self.derived_cache_hits.closed_site_build += 1;
+                }
+                return Ok(entry.result.clone());
+            }
+        }
+
+        let (prepared_guide, db) = self.site_model_from_compile(
+            &input,
+            "build_site_build_from_compile",
+            target == "cycle-site/v1",
+            prepared_key,
+        )?;
+
+        let result = if target == "cycle-site/v2" {
+            let input = site_build::cycle_semantic::CycleProjectionInput {
+                project: project_revision,
+                package_lock,
+                render_target,
+                diagnostics,
+            };
+            let projection = site_build::cycle_semantic::close_prepared(&prepared_guide, input)
+                .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
+            SiteBuildFromCompileResult {
                 transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
                 site_build: projection.site_build,
                 objects: encode_cas_objects(projection.objects),
                 site_db_json: None,
-            })
+            }
         } else {
             let projection = site_build::site_db_compat::close_projection(
-                &db,
+                db.as_ref().expect("v1 requests SiteDb projection"),
                 site_build::site_db_compat::CloseProjectionInput {
                     project: project_revision,
                     package_lock,
@@ -1044,7 +1546,7 @@ impl Engine {
                 .map_err(|e| format!("build_site_build_from_compile: site.db UTF-8: {e}"))?;
             let content =
                 site_build::ContentRef::of_bytes(&projection.bytes, Some("application/json"));
-            Ok(SiteBuildFromCompileResult {
+            SiteBuildFromCompileResult {
                 transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
                 site_build: projection.site_build,
                 objects: BTreeMap::from([(
@@ -1052,8 +1554,13 @@ impl Engine {
                     base64_encode(&projection.bytes),
                 )]),
                 site_db_json: Some(site_db_json),
-            })
-        }
+            }
+        };
+        self.closed_site_build_cache = Some(ClosedSiteBuildCacheEntry {
+            key: closed_key,
+            result: result.clone(),
+        });
+        Ok(result)
     }
 
     fn validate_project_projection<'a>(
@@ -1089,15 +1596,73 @@ impl Engine {
         Ok(project)
     }
 
-    fn site_db_from_compile_model(
+    /// Canonical lookup identity for the expensive snapshot + semantic
+    /// preparation phase. This is intentionally independent of Cycle v1/v2:
+    /// both projections consume the same PreparedGuide. The key includes the
+    /// actual compiled values as a defensive binding in addition to exact
+    /// source/package identities, so a caller can never turn a hidden compiler
+    /// state difference into a false cache hit.
+    fn prepared_guide_cache_key(
         &self,
         input: &SiteDbFromCompileInput,
+        project: &site_build::ProjectRevision,
+        package_lock: &site_build::PackageLock,
         operation: &str,
-    ) -> Result<site_db::SiteDb, String> {
+    ) -> Result<site_build::Sha256Digest, String> {
+        let compiled: BTreeMap<String, &Value> = self
+            .last_compiled
+            .iter()
+            .map(|(path, body)| {
+                path.to_str()
+                    .map(|path| (path.to_string(), body))
+                    .ok_or_else(|| format!("{operation}: compiled path is not UTF-8: {path:?}"))
+            })
+            .collect::<Result<_, _>>()?;
+        if compiled.len() != self.last_compiled.len() {
+            return Err(format!(
+                "{operation}: compiled revision contains duplicate paths"
+            ));
+        }
+        let compiled_sha256 = site_build::sha256_canonical(&compiled)
+            .map_err(|error| format!("{operation}: hash compiled revision: {error}"))?;
+        let payload = PreparedGuideCachePayload {
+            schema: PREPARED_GUIDE_CACHE_SCHEMA,
+            recipe: PREPARED_GUIDE_RECIPE,
+            engine_api: API_VERSION,
+            project,
+            package_lock,
+            compiled_sha256: &compiled_sha256,
+            build_epoch_secs: input.build_epoch_secs,
+            liquid_asset_dirs: &input.liquid_asset_dirs,
+            branch: input.branch.as_deref(),
+            revision: input.revision.as_deref(),
+        };
+        site_build::sha256_canonical(&payload)
+            .map_err(|error| format!("{operation}: hash PreparedGuide cache key: {error}"))
+    }
+
+    fn site_model_from_compile(
+        &mut self,
+        input: &SiteDbFromCompileInput,
+        operation: &str,
+        with_rows: bool,
+        cache_key: site_build::Sha256Digest,
+    ) -> Result<(site_build::PreparedGuide, Option<site_db::SiteDb>), String> {
         if self.last_compiled.is_empty() {
             return Err(format!(
                 "{operation}: no compiled revision; call compileProject first"
             ));
+        }
+
+        self.validate_project_projection(input, operation)?;
+        if let Some(entry) = &self.prepared_guide_cache {
+            if entry.key == cache_key && (!with_rows || entry.site_db.is_some()) {
+                #[cfg(test)]
+                {
+                    self.derived_cache_hits.prepared_guide += 1;
+                }
+                return Ok((entry.guide.clone(), entry.site_db.clone()));
+            }
         }
 
         let project = self.validate_project_projection(input, operation)?;
@@ -1150,18 +1715,48 @@ impl Engine {
         })?;
 
         let examples = collect_example_resources(&input.site_files, operation)?;
-        assemble_site_db_model(
-            operation,
-            &generated,
-            &primary_implementation_guide,
-            &examples,
-            &input.config,
-            &input.site_files,
-            input.build_epoch_secs,
-            &input.liquid_asset_dirs,
-            input.branch.clone(),
-            input.revision.clone(),
-        )
+        if with_rows {
+            let outcome = assemble_site_db_model(
+                operation,
+                &generated,
+                &primary_implementation_guide,
+                &examples,
+                &input.config,
+                &input.site_files,
+                input.build_epoch_secs,
+                &input.liquid_asset_dirs,
+                input.branch.clone(),
+                input.revision.clone(),
+            )?;
+            let guide = outcome.prepared_guide;
+            let db = outcome.db;
+            self.prepared_guide_cache = Some(PreparedGuideCacheEntry {
+                key: cache_key,
+                guide: guide.clone(),
+                site_db: Some(db.clone()),
+            });
+            Ok((guide, Some(db)))
+        } else {
+            let outcome = assemble_prepared_model(
+                operation,
+                &generated,
+                &primary_implementation_guide,
+                &examples,
+                &input.config,
+                &input.site_files,
+                input.build_epoch_secs,
+                &input.liquid_asset_dirs,
+                input.branch.clone(),
+                input.revision.clone(),
+            )?;
+            let guide = outcome.prepared_guide;
+            self.prepared_guide_cache = Some(PreparedGuideCacheEntry {
+                key: cache_key,
+                guide: guide.clone(),
+                site_db: None,
+            });
+            Ok((guide, None))
+        }
     }
 
     fn site_build_project_revision(
@@ -1262,22 +1857,17 @@ impl Engine {
             );
         }
 
-        let mut coordinates_by_id = BTreeMap::new();
+        let mut coordinates_by_id: BTreeMap<String, Vec<site_build::PackageCoordinate>> =
+            BTreeMap::new();
         let mut ordered = Vec::new();
         for label in &resolved.labels {
             let coordinate = site_build::PackageCoordinate::parse(label).map_err(|e| {
                 format!("build_site_build_from_compile: non-exact resolved package {label}: {e}")
             })?;
-            if let Some(prior) =
-                coordinates_by_id.insert(coordinate.package_id().to_string(), coordinate.clone())
-            {
-                if prior != coordinate {
-                    return Err(format!(
-                        "build_site_build_from_compile: resolved closure contains two versions for {}: {prior} and {coordinate}",
-                        coordinate.package_id(),
-                    ));
-                }
-            }
+            coordinates_by_id
+                .entry(coordinate.package_id().to_string())
+                .or_default()
+                .push(coordinate.clone());
             ordered.push((label, coordinate));
         }
 
@@ -1288,9 +1878,16 @@ impl Engine {
             })?;
             let dependencies = material
                 .declared_dependencies
-                .keys()
-                .filter_map(|package_id| coordinates_by_id.get(package_id).cloned())
-                .collect();
+                .iter()
+                .filter_map(|(package_id, requested)| {
+                    coordinates_by_id
+                        .get(package_id)
+                        .map(|candidates| (package_id, requested, candidates))
+                })
+                .map(|(package_id, requested, candidates)| {
+                    select_locked_dependency(package_id, requested, candidates)
+                })
+                .collect::<Result<BTreeSet<_>, _>>()?;
             packages.push(site_build::LockedPackage {
                 coordinate,
                 content: material.content.clone(),
@@ -1415,7 +2012,7 @@ fn assemble_site_db_value(
     branch: Option<String>,
     revision: Option<String>,
 ) -> Result<Value, String> {
-    let db = assemble_site_db_model(
+    let models = assemble_site_db_model(
         operation,
         generated,
         primary_implementation_guide,
@@ -1427,7 +2024,7 @@ fn assemble_site_db_value(
         branch,
         revision,
     )?;
-    serde_json::to_value(db).map_err(|e| format!("{operation}: serialize rows: {e}"))
+    serde_json::to_value(models.db).map_err(|e| format!("{operation}: serialize rows: {e}"))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1442,7 +2039,7 @@ fn assemble_site_db_model(
     liquid_asset_dirs: &[String],
     branch: Option<String>,
     revision: Option<String>,
-) -> Result<site_db::SiteDb, String> {
+) -> Result<site_db::BuildOutcome, String> {
     let ig_root = PathBuf::from("/ig");
     let mut vfs: BTreeMap<PathBuf, Vec<u8>> = BTreeMap::new();
     for (path, b64) in site_files {
@@ -1468,7 +2065,47 @@ fn assemble_site_db_model(
         liquid_asset_rel_dirs,
     })
     .map_err(|e| format!("{operation}: assemble rows: {e:#}"))?;
-    Ok(outcome.db)
+    Ok(outcome)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn assemble_prepared_model(
+    operation: &str,
+    generated: &[Value],
+    primary_implementation_guide: &Value,
+    examples: &[Value],
+    config: &str,
+    site_files: &BTreeMap<String, String>,
+    build_epoch_secs: i64,
+    liquid_asset_dirs: &[String],
+    branch: Option<String>,
+    revision: Option<String>,
+) -> Result<site_db::PreparedBuildOutcome, String> {
+    let ig_root = PathBuf::from("/ig");
+    let mut vfs: BTreeMap<PathBuf, Vec<u8>> = BTreeMap::new();
+    for (path, b64) in site_files {
+        let bytes =
+            base64_decode(b64).map_err(|e| format!("{operation}: bad base64 for {path}: {e}"))?;
+        vfs.insert(ig_root.join(path), bytes);
+    }
+    let liquid_asset_rel_dirs = if liquid_asset_dirs.is_empty() {
+        vec!["input/includes".to_string()]
+    } else {
+        liquid_asset_dirs.to_vec()
+    };
+    site_db::prepare_from_inputs(&site_db::InMemoryInputs {
+        generated,
+        primary_implementation_guide,
+        examples,
+        sushi_config_yaml: config,
+        build_epoch_secs,
+        branch,
+        revision,
+        vfs,
+        ig_root,
+        liquid_asset_rel_dirs,
+    })
+    .map_err(|e| format!("{operation}: prepare guide: {e:#}"))
 }
 
 /// Run `f` against the process-global engine.
@@ -1532,6 +2169,74 @@ struct BundleInput {
     files: std::collections::BTreeMap<String, String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedBatchEntry {
+    offset: u64,
+    byte_length: u64,
+    cache_key: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PackageMountResult {
+    mounted: u32,
+    added: u32,
+    packages: u32,
+    manifest_json_bytes: u64,
+    artifact_bytes: u64,
+    retained_blob_bytes: u64,
+    indexed_members: u64,
+    member_body_copies: u64,
+    manifest_parse_ms: f64,
+    decode_validate_ms: f64,
+    mount_ms: f64,
+    #[serde(flatten)]
+    compression: package_store::BundleCompressionMetrics,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedStageResult {
+    label: String,
+    staged: u32,
+    artifact_bytes: u64,
+    indexed_members: u64,
+    decode_validate_ms: f64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedExport {
+    label: String,
+    cache_key: String,
+    artifact_sha256: String,
+    bytes: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrepareMountResult {
+    mounted: u32,
+    added: u32,
+    artifacts: Vec<PreparedExport>,
+    artifact_bytes: u64,
+    prepared_members: u64,
+    input_json_bytes: u64,
+    base64_bytes: u64,
+    decoded_source_bytes: u64,
+    normalized_bytes: u64,
+    mount_member_body_copies: u64,
+    json_parse_ms: f64,
+    base64_decode_ms: f64,
+    normalization_ms: f64,
+    indexing_ms: f64,
+    artifact_encode_ms: f64,
+    /// Compatibility aggregate for hosts that consumed the initial API.
+    decode_validate_prepare_ms: f64,
+    mount_ms: f64,
+}
+
 /// The JS input for `build_site_db`: the whole IG working set, in memory.
 #[derive(Deserialize)]
 struct SiteDbInput {
@@ -1563,7 +2268,7 @@ struct SiteDbInput {
 /// SiteBuild/site.db projection inputs after `compileProject` has established an
 /// immutable compile revision in the session. Authored bodies are equality
 /// assertions only: this operation remains deliberately unable to compile.
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct SiteDbFromCompileInput {
     config: String,
     #[serde(default)]
@@ -1585,9 +2290,56 @@ struct SiteDbFromCompileInput {
     target: Option<String>,
 }
 
-const SITE_BUILD_CAS_TRANSPORT: &str = "site-build-cas/v1";
+const PREPARED_GUIDE_CACHE_SCHEMA: &str = "prepared-guide-cache-key/v1";
+const PREPARED_GUIDE_RECIPE: &str = "sushi.snapshot+site-semantics/v1";
+const CLOSED_SITE_BUILD_CACHE_SCHEMA: &str = "closed-site-build-cache-key/v1";
+const CYCLE_PROJECTION_RECIPE: &str = "site-build.cycle-projection/v2";
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedGuideCachePayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    engine_api: u32,
+    project: &'a site_build::ProjectRevision,
+    package_lock: &'a site_build::PackageLock,
+    compiled_sha256: &'a site_build::Sha256Digest,
+    build_epoch_secs: i64,
+    liquid_asset_dirs: &'a [String],
+    branch: Option<&'a str>,
+    revision: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClosedSiteBuildCachePayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    prepared_guide_key: &'a site_build::Sha256Digest,
+    render_target: &'a site_build::RenderTarget,
+    diagnostics: &'a BTreeSet<site_build::BuildDiagnostic>,
+    contract: &'a str,
+}
+
+fn closed_site_build_cache_key(
+    prepared_guide_key: &site_build::Sha256Digest,
+    render_target: &site_build::RenderTarget,
+    diagnostics: &BTreeSet<site_build::BuildDiagnostic>,
+    contract: &str,
+) -> Result<site_build::Sha256Digest, site_build::CanonicalError> {
+    site_build::sha256_canonical(&ClosedSiteBuildCachePayload {
+        schema: CLOSED_SITE_BUILD_CACHE_SCHEMA,
+        recipe: CYCLE_PROJECTION_RECIPE,
+        prepared_guide_key,
+        render_target,
+        diagnostics,
+        contract,
+    })
+}
+
+const SITE_BUILD_CAS_TRANSPORT: &str = "site-build-cas/v1";
+
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SiteBuildFromCompileResult {
     transport_version: String,
@@ -1601,12 +2353,247 @@ struct SiteBuildFromCompileResult {
     site_db_json: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenStockBuildResult {
+    handle: String,
+    build_id: String,
+    site_build: site_build::SiteBuild,
+    pages: Vec<String>,
+}
+
+/// One explicit demand-discovery/result transition. `requested` is the typed
+/// Need<ArtifactKey> set encountered by Liquid; `resolved` is the immutable
+/// resolution batch installed in the successor. Failed/deferred observations
+/// remain typed records and are never represented as successful page reads.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StockArtifactTransition {
+    requested: Vec<site_build::ArtifactKey>,
+    read: Vec<site_build::ArtifactKey>,
+    resolved: Vec<site_build::ArtifactRecord>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderStockPageResult {
+    html: String,
+    handle: String,
+    predecessor_build_id: String,
+    build_id: String,
+    site_build: site_build::ClosedSiteBuild,
+    objects: BTreeMap<String, String>,
+    transition: StockArtifactTransition,
+    non_ready_fragments: usize,
+}
+
 fn encode_cas_objects(
     objects: BTreeMap<site_build::Sha256Digest, Vec<u8>>,
 ) -> BTreeMap<String, String> {
     objects
         .into_iter()
         .map(|(digest, bytes)| (digest.to_string(), base64_encode(&bytes)))
+        .collect()
+}
+
+fn site_build_diagnostics(diagnostics: &[DiagnosticJs]) -> BTreeSet<site_build::BuildDiagnostic> {
+    diagnostics
+        .iter()
+        .enumerate()
+        .map(|(sequence, diagnostic)| {
+            let severity = match diagnostic.severity.to_ascii_lowercase().as_str() {
+                "error" => site_build::DiagnosticSeverity::Error,
+                "warning" => site_build::DiagnosticSeverity::Warning,
+                _ => site_build::DiagnosticSeverity::Information,
+            };
+            let mut out = site_build::BuildDiagnostic::new(
+                severity,
+                "sushi.compile",
+                diagnostic.message.clone(),
+            )
+            .with_sequence(sequence as u64);
+            if let (Some(file), Some(line)) = (&diagnostic.file, diagnostic.line) {
+                if let Ok(path) = site_build::SourcePath::parse(file.clone()) {
+                    out.location = Some(site_build::SourceLocation {
+                        path,
+                        line,
+                        column: 0,
+                    });
+                }
+            }
+            out
+        })
+        .collect()
+}
+
+fn select_locked_dependency(
+    package_id: &str,
+    requested: &str,
+    candidates: &[site_build::PackageCoordinate],
+) -> Result<site_build::PackageCoordinate, String> {
+    if candidates.len() == 1 {
+        return Ok(candidates[0].clone());
+    }
+    let requested = if package_id.starts_with("hl7.fhir.")
+        && package_id.ends_with(".core")
+        && requested == "4.0.0"
+    {
+        "4.0.1"
+    } else {
+        requested
+    };
+    let mut matches = candidates
+        .iter()
+        .filter(|candidate| package_version_matches(candidate.version(), requested))
+        .cloned()
+        .collect::<Vec<_>>();
+    matches.sort_by(|left, right| package_version_cmp(left.version(), right.version()));
+    matches.pop().ok_or_else(|| {
+        format!(
+            "build_site_build_from_compile: dependency {package_id}#{requested} matches none of the resolved coordinates: {}",
+            candidates
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+fn package_version_matches(version: &str, pattern: &str) -> bool {
+    if matches!(
+        pattern.to_ascii_lowercase().as_str(),
+        "latest" | "current" | "dev"
+    ) {
+        return true;
+    }
+    let pattern_parts = pattern.split('.').collect::<Vec<_>>();
+    let version_parts = version.split('.').collect::<Vec<_>>();
+    for (index, part) in pattern_parts.iter().enumerate() {
+        if matches!(part.to_ascii_lowercase().as_str(), "x" | "*") {
+            return true;
+        }
+        if version_parts.get(index) != Some(part) {
+            return false;
+        }
+    }
+    true
+}
+
+fn package_version_cmp(left: &str, right: &str) -> std::cmp::Ordering {
+    let parts = |value: &str| {
+        value
+            .split(['.', '-'])
+            .map(|part| {
+                part.parse::<u64>()
+                    .map(|number| (true, number, String::new()))
+                    .unwrap_or_else(|_| (false, 0, part.to_string()))
+            })
+            .collect::<Vec<_>>()
+    };
+    let left = parts(left);
+    let right = parts(right);
+    for index in 0..left.len().max(right.len()) {
+        match (left.get(index), right.get(index)) {
+            (
+                Some((left_numeric, left_number, left_text)),
+                Some((right_numeric, right_number, right_text)),
+            ) => {
+                let ordering = left_numeric
+                    .cmp(right_numeric)
+                    .then_with(|| left_number.cmp(right_number))
+                    .then_with(|| left_text.cmp(right_text));
+                if ordering != std::cmp::Ordering::Equal {
+                    return ordering;
+                }
+            }
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (None, None) => break,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+fn stock_input_media_type(namespace: &str, name: &str) -> Result<String, String> {
+    let media_type = match namespace {
+        STOCK_RUNTIME_INPUT_NAMESPACE if name == "release-header.html" => "text/html",
+        STOCK_PAGE_SOURCE_NAMESPACE
+        | STOCK_SITE_DATA_NAMESPACE
+        | STOCK_STAGED_INCLUDE_NAMESPACE
+        | STOCK_TEMPLATE_INCLUDE_NAMESPACE => match std::path::Path::new(name)
+            .extension()
+            .and_then(|extension| extension.to_str())
+        {
+            Some("html" | "xhtml") => "text/html",
+            Some("md") => "text/markdown",
+            Some("json") => "application/json",
+            Some("xml") => "application/xml",
+            Some("yaml" | "yml") => "application/yaml",
+            Some("csv") => "text/csv",
+            Some("css") => "text/css",
+            Some("js") => "text/javascript",
+            Some("svg") => "image/svg+xml",
+            Some("png") => "image/png",
+            Some("gif") => "image/gif",
+            Some("jpg" | "jpeg") => "image/jpeg",
+            Some("woff") => "font/woff",
+            _ => "application/octet-stream",
+        },
+        _ => {
+            return Err(format!(
+                "renderStockPage: unknown stock input namespace {namespace} for {name}"
+            ))
+        }
+    };
+    Ok(media_type.to_string())
+}
+
+fn stock_inputs_from_pages<'a>(
+    pages: impl IntoIterator<Item = &'a PageArtifactReadSet>,
+    provenance: &site_build::ArtifactProvenance,
+    semantic_reads: &BTreeSet<site_build::ReadDependency>,
+) -> Result<Vec<StockInput>, String> {
+    let mut captured = BTreeMap::<site_build::ArtifactKey, Vec<u8>>::new();
+    for reads in pages {
+        for key in reads.input_reads() {
+            let values = reads.input_objects().get(key).ok_or_else(|| {
+                format!("renderStockPage: input {key:?} was read without captured bytes")
+            })?;
+            if values.len() != 1 {
+                return Err(format!(
+                    "renderStockPage: input {key:?} changed during rendering"
+                ));
+            }
+            let bytes = values.iter().next().expect("one captured input");
+            if let Some(existing) = captured.get(key) {
+                if existing != bytes {
+                    return Err(format!(
+                        "renderStockPage: input {key:?} changed between rendered pages"
+                    ));
+                }
+            } else {
+                captured.insert(key.clone(), bytes.clone());
+            }
+        }
+    }
+    captured
+        .into_iter()
+        .map(|(key, bytes)| {
+            let site_build::ArtifactKey::Data { namespace, name } = &key else {
+                return Err(format!(
+                    "renderStockPage: page recorded non-Data input key {key:?}"
+                ));
+            };
+            let media_type = stock_input_media_type(namespace, name)?;
+            Ok(StockInput {
+                key,
+                bytes,
+                media_type,
+                provenance: provenance.clone(),
+                reads: semantic_reads.clone(),
+            })
+        })
         .collect()
 }
 
@@ -1682,6 +2669,102 @@ impl Session {
             self.with_engine(|e| e.mount(bundles_json))
                 .map(|n| serde_json::json!({ "mounted": n })),
         )
+    }
+
+    /// Mount one binary PreparedPackage without JSON/base64 transport or a
+    /// derived-index rebuild. `expected_key` is the exact manifest/cache key.
+    #[wasm_bindgen(js_name = mountPrepared)]
+    pub fn mount_prepared(&self, bytes: Vec<u8>, expected_key: &str) -> String {
+        set_panic_hook();
+        envelope(
+            "mountPrepared",
+            self.with_engine(|engine| engine.mount_prepared(bytes, expected_key))
+                .map(|mounted| serde_json::json!({ "mounted": mounted })),
+        )
+    }
+
+    /// Atomically validate and mount a contiguous binary batch. `manifest_json`
+    /// is `[{offset,byteLength,cacheKey}]`; ranges must cover `bytes` exactly.
+    /// The envelope reports decode/validation and immutable-layer mount timings.
+    #[wasm_bindgen(js_name = mountPreparedBatch)]
+    pub fn mount_prepared_batch(&self, bytes: Vec<u8>, manifest_json: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "mountPreparedBatch",
+            self.with_engine(|engine| engine.mount_prepared_batch(bytes, manifest_json)),
+        )
+    }
+
+    /// Begin an all-or-nothing compact prepared-package transaction. Artifacts
+    /// are staged individually to bound host peak memory, then committed once.
+    #[wasm_bindgen(js_name = beginPreparedMount)]
+    pub fn begin_prepared_mount(&self, expected_packages: u32) -> String {
+        set_panic_hook();
+        envelope(
+            "beginPreparedMount",
+            self.with_engine(|engine| engine.begin_prepared_mount(expected_packages))
+                .map(|()| serde_json::json!({ "expectedPackages": expected_packages })),
+        )
+    }
+
+    #[wasm_bindgen(js_name = stagePreparedMount)]
+    pub fn stage_prepared_mount(&self, bytes: Vec<u8>, expected_key: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "stagePreparedMount",
+            self.with_engine(|engine| engine.stage_prepared_mount(bytes, expected_key)),
+        )
+    }
+
+    #[wasm_bindgen(js_name = commitPreparedMount)]
+    pub fn commit_prepared_mount(&self) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "commitPreparedMount",
+            self.with_engine(Engine::commit_prepared_mount),
+        )
+    }
+
+    #[wasm_bindgen(js_name = abortPreparedMount)]
+    pub fn abort_prepared_mount(&self) -> String {
+        set_panic_hook();
+        envelope(
+            "abortPreparedMount",
+            self.with_engine(|engine| Ok(engine.abort_prepared_mount()))
+                .map(|aborted| serde_json::json!({ "aborted": aborted })),
+        )
+    }
+
+    /// Current compact-package retention and lazy-inflate counters. This is a
+    /// read-only diagnostic surface; it is not part of package authority.
+    #[wasm_bindgen(js_name = packageStorageMetrics)]
+    pub fn package_storage_metrics(&self) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "packageStorageMetrics",
+            self.with_engine(|engine| Ok::<_, String>(engine.package_storage_metrics())),
+        )
+    }
+
+    /// Cold-path bridge for the current inflated JSON/base64 package shape.
+    /// Normalizes each package once, mounts it transactionally, and stages the
+    /// exact `.fpp` artifact for zero-base64 transfer through `takePrepared`.
+    #[wasm_bindgen(js_name = prepareAndMount)]
+    pub fn prepare_and_mount(&self, bundles_json: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "prepareAndMount",
+            self.with_engine(|engine| engine.prepare_and_mount(bundles_json)),
+        )
+    }
+
+    /// Move one artifact staged by `prepareAndMount` into a JS `Uint8Array`.
+    /// Metadata and errors for preparation remain in the uniform JSON envelope;
+    /// a missing/twice-taken binary is surfaced as a JS exception.
+    #[wasm_bindgen(js_name = takePrepared)]
+    pub fn take_prepared(&self, label: &str) -> Result<Vec<u8>, wasm_bindgen::JsValue> {
+        self.with_engine(|engine| engine.take_prepared(label))
+            .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
 
     /// Compile a project in memory. Envelope result: `{ resources, diagnostics,
@@ -1781,7 +2864,10 @@ impl Session {
     }
 
     /// Resolve a project's package sets against the mounted bundles. Envelope
-    /// result: `{ compile_set, context_closure, missing, satisfied }`.
+    /// result: `{ resolver_schema, compile_set, context_closure,
+    /// resolution_support, missing, satisfied, mutable_requests }`. Support
+    /// packages are manifests needed to prove exclusions and must accompany a
+    /// replayed closure, though they are not compile/render inputs.
     #[wasm_bindgen(js_name = resolveProject)]
     pub fn resolve_project(&self, config: &str, version_index_json: &str) -> String {
         set_panic_hook();
@@ -1838,6 +2924,32 @@ impl Session {
             "produceStockSite",
             self.with_engine(|e| e.produce_stock_site())
                 .map(|(pages, data)| serde_json::json!({ "pages": pages, "data": data })),
+        )
+    }
+
+    /// Freeze the current compiled/template/site generation behind an explicit
+    /// native-template SiteBuild handle. Later session mounts or compiles cannot
+    /// change what this handle renders. Call after `produceStockSite` and the
+    /// final authored overlay mount.
+    #[wasm_bindgen(js_name = openStockBuild)]
+    pub fn open_stock_build(&self, template_coord: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "openStockBuild",
+            self.with_engine(|e| e.open_stock_build(template_coord)),
+        )
+    }
+
+    /// Render one page from an explicit frozen stock-build handle and promote
+    /// all newly discovered typed artifact needs through SiteBuild::successor.
+    /// The returned handle names the immutable successor; callers never rely on
+    /// an ambient "last site" or mutable fragment cache as an identity boundary.
+    #[wasm_bindgen(js_name = renderStockPage)]
+    pub fn render_stock_page(&self, handle: &str, name: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "renderStockPage",
+            self.with_engine(|e| e.render_stock_page(handle, name)),
         )
     }
 
@@ -1996,6 +3108,60 @@ fn mount_into(
         );
     }
     Ok(())
+}
+
+fn prepared_content(
+    package: &package_store::PreparedPackage,
+    operation: &str,
+) -> Result<site_build::ContentRef, String> {
+    Ok(site_build::ContentRef {
+        sha256: site_build::Sha256Digest::parse(&package.semantic_payload_sha256)
+            .map_err(|error| format!("{operation}: invalid semantic digest: {error}"))?,
+        byte_length: package.semantic_payload_bytes,
+        media_type: Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE.to_string()),
+    })
+}
+
+fn compression_delta(
+    before: package_store::BundleCompressionMetrics,
+    after: package_store::BundleCompressionMetrics,
+) -> package_store::BundleCompressionMetrics {
+    package_store::BundleCompressionMetrics {
+        compressed_retained_bytes: after
+            .compressed_retained_bytes
+            .saturating_sub(before.compressed_retained_bytes),
+        declared_raw_bytes: after
+            .declared_raw_bytes
+            .saturating_sub(before.declared_raw_bytes),
+        chunks_inflated: after.chunks_inflated.saturating_sub(before.chunks_inflated),
+        raw_inflated_bytes: after
+            .raw_inflated_bytes
+            .saturating_sub(before.raw_inflated_bytes),
+        cache_hits: after.cache_hits.saturating_sub(before.cache_hits),
+        cached_raw_bytes: after
+            .cached_raw_bytes
+            .saturating_sub(before.cached_raw_bytes),
+    }
+}
+
+#[cfg(target_family = "wasm")]
+fn clock_ms() -> f64 {
+    date_now()
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = Date, js_name = now)]
+    fn date_now() -> f64;
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn clock_ms() -> f64 {
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
 /// Parse `input/resources/**` JSON files out of the site_files map (base64 text)
@@ -2629,6 +3795,226 @@ impl Engine {
         Ok((np, nd))
     }
 
+    /// Establish the immutable predecessor and freeze the exact render surface
+    /// that belongs to it. The mounted tree digest is part of the predecessor
+    /// identity because warm template trees are host-provided bytes rather than
+    /// members of the compile resolver closure.
+    fn open_stock_build(&mut self, template_coord: &str) -> Result<OpenStockBuildResult, String> {
+        if template_coord.trim().is_empty() {
+            return Err("openStockBuild: template coordinate is empty".into());
+        }
+        let project = self.last_project.clone().ok_or(
+            "openStockBuild: compileProject has not established a complete source revision",
+        )?;
+        let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)
+            .map_err(|e| format!("openStockBuild: {e}"))?;
+        let project_revision = self
+            .site_build_project_revision(&project, &project_id)
+            .map_err(|e| e.replace("build_site_build_from_compile", "openStockBuild"))?;
+        let package_lock = self
+            .site_build_package_lock(&project)
+            .map_err(|e| e.replace("build_site_build_from_compile", "openStockBuild"))?;
+
+        let tree_manifest = self
+            .site_files
+            .iter()
+            .map(|(path, bytes)| {
+                (
+                    path.to_string_lossy().into_owned(),
+                    site_build::ContentRef::of_bytes(bytes, None::<String>),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let tree_digest = site_build::sha256_canonical(&tree_manifest)
+            .map_err(|e| format!("openStockBuild: hash mounted tree: {e}"))?;
+        let mut parameters = BTreeMap::from([
+            ("contract".into(), "stock-site/v1".into()),
+            ("templateCoordinate".into(), template_coord.to_string()),
+            ("mountedTreeSha256".into(), tree_digest.to_string()),
+            (
+                "activeTables".into(),
+                self.site_options.active_tables.to_string(),
+            ),
+            (
+                "artifactResolution".into(),
+                self.site_options.artifact_resolution.to_string(),
+            ),
+            (
+                "engineFirstIncludes".into(),
+                self.site_options.engine_first_includes.to_string(),
+            ),
+        ]);
+        if let Some(run_uuid) = &self.site_options.run_uuid {
+            parameters.insert("runUuid".into(), run_uuid.clone());
+        }
+        let provenance_attributes = parameters.clone();
+        let build = site_build::SiteBuild::new(
+            project_revision,
+            package_lock,
+            site_build::RenderTarget {
+                renderer: site_build::ProducerRef::new(
+                    "stock-template-wasm",
+                    env!("CARGO_PKG_VERSION"),
+                ),
+                mode: site_build::RenderMode::NativeTemplate,
+                fhir_version,
+                // The warm browser template tree is authenticated by the exact
+                // mounted-tree digest above. It may not have a mounted package
+                // coordinate, so claiming one in PackageLock would be false.
+                template: None,
+                parameters,
+            },
+            site_build::RenderPlan::default(),
+            site_build::ArtifactCatalog::from_records(Vec::new())
+                .map_err(|e| format!("openStockBuild: artifact catalog: {e}"))?,
+            site_build_diagnostics(&self.last_compile_diagnostics),
+        )
+        .map_err(|e| format!("openStockBuild: predecessor: {e}"))?;
+        let state = self.render_state()?;
+        let pages = state.list_pages();
+        let handle = build.build_id().to_string();
+        // The browser adapter has one active stock generation. Opening the next
+        // generation explicitly retires its prior affine handle chain so large
+        // frozen trees/page objects do not accumulate across live edits.
+        self.stock_builds.clear();
+        self.stock_builds.insert(
+            handle.clone(),
+            StockBuildRuntime {
+                state,
+                build: build.clone(),
+                pages: BTreeMap::new(),
+                provenance_attributes,
+            },
+        );
+        Ok(OpenStockBuildResult {
+            handle,
+            build_id: build.build_id().to_string(),
+            site_build: build,
+            pages,
+        })
+    }
+
+    fn render_stock_page(
+        &mut self,
+        handle: &str,
+        name: &str,
+    ) -> Result<RenderStockPageResult, String> {
+        let runtime = self.stock_builds.get(handle).cloned().ok_or_else(|| {
+            format!("renderStockPage: unknown or released stock build handle {handle}")
+        })?;
+        let (html, reads) = runtime
+            .state
+            .render_page_tracked_by_name(name)
+            .map_err(|e| format!("renderStockPage {name}: {e}"))?;
+        let mut rendered_pages = runtime.pages.clone();
+        rendered_pages.insert(
+            name.to_string(),
+            StockRenderedPage {
+                html: html.clone(),
+                reads: reads.clone(),
+            },
+        );
+
+        let producer =
+            site_build::ProducerRef::new("stock-template-wasm", env!("CARGO_PKG_VERSION"));
+        let provenance = |recipe: &str| site_build::ArtifactProvenance {
+            producer: producer.clone(),
+            recipe: recipe.to_string(),
+            attributes: runtime.provenance_attributes.clone(),
+        };
+        let semantic_reads = all_compile_inputs(&runtime.build);
+        let inputs = stock_inputs_from_pages(
+            rendered_pages.values().map(|page| &page.reads),
+            &provenance("capture-page-input"),
+            &semantic_reads,
+        )?;
+        let pages = rendered_pages
+            .iter()
+            .map(|(path, page)| {
+                Ok(StockPage {
+                    path: site_build::SourcePath::parse(path.clone())
+                        .map_err(|e| format!("renderStockPage: invalid page path {path}: {e}"))?,
+                    outcome: StockPageOutcome::Ready {
+                        bytes: page.html.as_bytes().to_vec(),
+                        reads: page.reads.clone(),
+                    },
+                    provenance: provenance("render-page"),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let successor = collect_stock_revision(
+            &runtime.build,
+            inputs,
+            pages,
+            Vec::new(),
+            StockFragmentPolicy {
+                provenance: provenance("render-publisher-fragment"),
+                reads: semantic_reads,
+            },
+        )
+        .map_err(|e| format!("renderStockPage: successor: {e}"))?;
+        successor
+            .verify()
+            .map_err(|e| format!("renderStockPage: verify successor: {e}"))?;
+        let closed = successor
+            .site_build()
+            .clone()
+            .close()
+            .map_err(|e| format!("renderStockPage: close successor: {e}"))?;
+        let build_id = successor.site_build().build_id().to_string();
+        let predecessor_build_id = successor.predecessor().to_string();
+        let objects = successor
+            .objects()
+            .iter()
+            .map(|(digest, object)| (digest.to_string(), base64_encode(object.bytes())))
+            .collect();
+
+        let mut resolution_keys = reads.input_reads().clone();
+        resolution_keys.extend(reads.requested().iter().cloned());
+        resolution_keys.insert(site_build::ArtifactKey::Page {
+            path: site_build::SourcePath::parse(name.to_string())
+                .map_err(|e| format!("renderStockPage: invalid page path {name}: {e}"))?,
+        });
+        let resolved = resolution_keys
+            .iter()
+            .filter_map(|key| successor.site_build().artifacts().get(key).cloned())
+            .collect();
+        let transition = StockArtifactTransition {
+            requested: reads.requested().iter().cloned().collect(),
+            read: reads.read().iter().cloned().collect(),
+            resolved,
+        };
+        let non_ready_fragments = reads
+            .observations()
+            .values()
+            .filter(|observation| matches!(observation, ArtifactObservation::NotReady { .. }))
+            .count();
+
+        // Successful transitions consume the predecessor handle and install
+        // its immutable successor atomically. A failed render leaves the prior
+        // handle available for retry.
+        self.stock_builds.remove(handle);
+        self.stock_builds.insert(
+            build_id.clone(),
+            StockBuildRuntime {
+                state: runtime.state,
+                build: successor.site_build().clone(),
+                pages: rendered_pages,
+                provenance_attributes: runtime.provenance_attributes,
+            },
+        );
+        Ok(RenderStockPageResult {
+            html,
+            handle: build_id.clone(),
+            predecessor_build_id,
+            build_id,
+            site_build: closed,
+            objects,
+            transition,
+            non_ready_fragments,
+        })
+    }
+
     /// The lazily-(re)built render surface for the current generation.
     fn render_state(&mut self) -> Result<Rc<RenderState>, String> {
         if let Some(rs) = &self.render_state {
@@ -2993,6 +4379,93 @@ mod render_invalidation_tests {
             .unwrap();
         assert!(engine.render_semantics.is_none());
     }
+
+    #[test]
+    fn stock_handle_renders_frozen_tree_and_returns_closed_successor() {
+        let config = "id: test\nfhirVersion: 4.0.1\n";
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            labels: Vec::new(),
+        };
+        let mut engine = Engine {
+            last_compiled: vec![
+                (
+                    PathBuf::from("/__ig__/ImplementationGuide-test.json"),
+                    serde_json::json!({
+                        "resourceType": "ImplementationGuide",
+                        "id": "test",
+                        "packageId": "example.test",
+                        "version": "1.0.0",
+                        "fhirVersion": ["4.0.1"]
+                    }),
+                ),
+                (
+                    PathBuf::from("/__compiled__/StructureDefinition-test.json"),
+                    serde_json::json!({
+                        "resourceType": "StructureDefinition",
+                        "id": "test",
+                        "url": "http://example.org/StructureDefinition/test",
+                        "name": "Test",
+                        "status": "draft",
+                        "fhirVersion": "4.0.1",
+                        "kind": "resource",
+                        "abstract": false,
+                        "type": "Patient",
+                        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+                        "derivation": "constraint",
+                        "snapshot": { "element": [{ "id": "Patient", "path": "Patient" }] }
+                    }),
+                ),
+            ],
+            last_project: Some(CompiledProjectRevision {
+                config: config.into(),
+                fsh: BTreeMap::new(),
+                predefined: BTreeMap::new(),
+                site_files: BTreeMap::new(),
+                resolved_packages: Some(resolved),
+            }),
+            site_files: std::collections::HashMap::from([(
+                PathBuf::from("/site/en/index.html"),
+                b"---\ntitle: Test\n---\n<p>frozen</p>{% include StructureDefinition-test-snapshot.xhtml %}".to_vec(),
+            )]),
+            ..Default::default()
+        };
+
+        let opened = engine.open_stock_build("hl7.fhir.template#1.0.0").unwrap();
+        assert_eq!(opened.pages, vec!["en/index.html"]);
+        engine
+            .mount_site(
+                r#"{"en/index.html":"---\ntitle: Test\n---\n<p>mutated</p>"}"#,
+                "",
+            )
+            .unwrap();
+
+        let rendered = engine
+            .render_stock_page(&opened.handle, "en/index.html")
+            .unwrap();
+        assert!(rendered.html.contains("frozen"));
+        assert!(!rendered.html.contains("mutated"));
+        assert_eq!(rendered.predecessor_build_id, opened.build_id);
+        assert_ne!(rendered.build_id, opened.build_id);
+        rendered.site_build.site_build().verify().unwrap();
+        assert_eq!(rendered.transition.requested.len(), 1);
+        assert_eq!(rendered.transition.read.len(), 1);
+        assert_eq!(rendered.non_ready_fragments, 0);
+        assert!(rendered
+            .transition
+            .resolved
+            .iter()
+            .any(|record| matches!(record.key, site_build::ArtifactKey::Page { .. })));
+        assert!(!rendered.objects.is_empty());
+        let released = match engine.render_stock_page(&opened.handle, "en/index.html") {
+            Err(error) => error,
+            Ok(_) => panic!("consumed stock handle unexpectedly remained live"),
+        };
+        assert!(released.contains("unknown or released"));
+        engine
+            .render_stock_page(&rendered.handle, "en/index.html")
+            .unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -3080,6 +4553,209 @@ mod site_build_handoff_tests {
             .init(malformed_dependencies)
             .unwrap_err()
             .contains("dependencies must map ids to strings"));
+    }
+
+    #[test]
+    fn prepared_mount_is_validated_idempotent_and_uses_shipped_index() {
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        let prepared = package_store::PreparedPackage::prepare(
+            "example.pkg#1.0.0",
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"example.pkg","version":"1.0.0"}"#.to_vec(),
+                ),
+                (
+                    "StructureDefinition-p.json".into(),
+                    br#"{"resourceType":"StructureDefinition","id":"p","name":"P"}"#.to_vec(),
+                ),
+            ]),
+        )
+        .unwrap();
+        let bytes = prepared.encode();
+        let key = prepared.key.to_string();
+        assert_eq!(engine.mount_prepared(bytes.clone(), &key).unwrap(), 1);
+        assert_eq!(engine.mount_prepared(bytes.clone(), &key).unwrap(), 1);
+        let source = engine.bundle.as_ref().unwrap();
+        let sidecar = source
+            .read(
+                &source
+                    .cache_root()
+                    .join("example.pkg#1.0.0/package/.derived-index.json"),
+            )
+            .unwrap();
+        assert!(package_store::derived_index::parse(&sidecar).is_some());
+
+        let mut corrupted = bytes;
+        corrupted[10] ^= 1;
+        assert!(engine
+            .mount_prepared(corrupted, &key)
+            .unwrap_err()
+            .contains("checksum"));
+        assert_eq!(engine.packages, vec!["example.pkg#1.0.0"]);
+    }
+
+    #[test]
+    fn prepared_batch_is_one_transaction_with_phase_metrics() {
+        let package = |label: &str, marker: &str| {
+            let (name, version) = label.split_once('#').unwrap();
+            package_store::PreparedPackage::prepare(
+                label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        serde_json::to_vec(&serde_json::json!({
+                            "name": name,
+                            "version": version,
+                        }))
+                        .unwrap(),
+                    ),
+                    ("marker.txt".into(), marker.as_bytes().to_vec()),
+                ]),
+            )
+            .unwrap()
+        };
+        let a = package("a.pkg#1.0.0", "a");
+        let b = package("b.pkg#1.0.0", "b");
+        let a_bytes = a.encode();
+        let b_bytes = b.encode();
+        let mut bytes = a_bytes.clone();
+        bytes.extend_from_slice(&b_bytes);
+        let manifest = serde_json::json!([
+            {"offset": 0, "byteLength": a_bytes.len(), "cacheKey": a.key.cache_key()},
+            {"offset": a_bytes.len(), "byteLength": b_bytes.len(), "cacheKey": b.key.cache_key()},
+        ]);
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        let outcome = engine
+            .mount_prepared_batch(bytes.clone(), &manifest.to_string())
+            .unwrap();
+        assert_eq!(outcome.added, 2);
+        assert_eq!(outcome.mounted, 2);
+        assert_eq!(outcome.artifact_bytes, bytes.len() as u64);
+        assert_eq!(
+            outcome.manifest_json_bytes,
+            manifest.to_string().len() as u64
+        );
+        assert_eq!(outcome.retained_blob_bytes, bytes.len() as u64);
+        assert_eq!(outcome.member_body_copies, 0);
+        assert!(outcome.indexed_members >= 4);
+        assert!(
+            outcome.manifest_parse_ms >= 0.0
+                && outcome.decode_validate_ms >= 0.0
+                && outcome.mount_ms >= 0.0
+        );
+
+        let conflict = package("a.pkg#1.0.0", "different");
+        let fresh = package("c.pkg#1.0.0", "c");
+        let conflict_bytes = conflict.encode();
+        let fresh_bytes = fresh.encode();
+        let mut failed_bytes = conflict_bytes.clone();
+        failed_bytes.extend_from_slice(&fresh_bytes);
+        let failed_manifest = serde_json::json!([
+            {"offset": 0, "byteLength": conflict_bytes.len(), "cacheKey": conflict.key.cache_key()},
+            {"offset": conflict_bytes.len(), "byteLength": fresh_bytes.len(), "cacheKey": fresh.key.cache_key()},
+        ]);
+        assert!(engine
+            .mount_prepared_batch(failed_bytes, &failed_manifest.to_string())
+            .unwrap_err()
+            .contains("different content"));
+        assert_eq!(engine.packages, vec!["a.pkg#1.0.0", "b.pkg#1.0.0"]);
+    }
+
+    #[test]
+    fn staged_prepared_mount_bounds_host_batches_and_commits_atomically() {
+        let package = |label: &str| {
+            let (name, version) = label.split_once('#').unwrap();
+            package_store::PreparedPackage::prepare(
+                label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        serde_json::to_vec(&serde_json::json!({
+                            "name": name,
+                            "version": version,
+                        }))
+                        .unwrap(),
+                    ),
+                    ("marker.txt".into(), label.as_bytes().to_vec()),
+                ]),
+            )
+            .unwrap()
+        };
+        let a = package("a.pkg#1.0.0");
+        let b = package("b.pkg#1.0.0");
+        let a_bytes = a.encode();
+        let b_bytes = b.encode();
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+
+        engine.begin_prepared_mount(2).unwrap();
+        let staged = engine
+            .stage_prepared_mount(a_bytes.clone(), &a.key.cache_key())
+            .unwrap();
+        assert_eq!(staged.staged, 1);
+        assert!(
+            engine.packages.is_empty(),
+            "staging must not mutate the engine"
+        );
+        let mut corrupt = b_bytes.clone();
+        corrupt[10] ^= 1;
+        assert!(engine
+            .stage_prepared_mount(corrupt, &b.key.cache_key())
+            .is_err());
+        assert!(engine.abort_prepared_mount());
+        assert!(engine.packages.is_empty());
+
+        engine.begin_prepared_mount(2).unwrap();
+        engine
+            .stage_prepared_mount(a_bytes.clone(), &a.key.cache_key())
+            .unwrap();
+        engine
+            .stage_prepared_mount(b_bytes.clone(), &b.key.cache_key())
+            .unwrap();
+        let outcome = engine.commit_prepared_mount().unwrap();
+        assert_eq!(outcome.added, 2);
+        assert_eq!(outcome.packages, 2);
+        assert_eq!(
+            outcome.artifact_bytes,
+            (a_bytes.len() + b_bytes.len()) as u64
+        );
+        assert_eq!(outcome.retained_blob_bytes, outcome.artifact_bytes);
+        assert_eq!(outcome.member_body_copies, 0);
+        assert_eq!(engine.packages, vec!["a.pkg#1.0.0", "b.pkg#1.0.0"]);
+    }
+
+    #[test]
+    fn cold_prepare_mount_exports_direct_binary_once() {
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        let input =
+            serde_json::to_string(&vec![package_bundle("example.pkg#1.0.0", "cold")]).unwrap();
+        let outcome = engine.prepare_and_mount(&input).unwrap();
+        assert_eq!(outcome.added, 1);
+        assert_eq!(outcome.artifacts.len(), 1);
+        assert_eq!(outcome.mount_member_body_copies, 0);
+        assert!(outcome.prepared_members >= 2);
+        assert_eq!(outcome.input_json_bytes, input.len() as u64);
+        assert!(outcome.base64_bytes > outcome.decoded_source_bytes);
+        assert!(outcome.normalized_bytes >= outcome.decoded_source_bytes);
+        assert!(outcome.json_parse_ms >= 0.0);
+        assert!(outcome.base64_decode_ms >= 0.0);
+        assert!(outcome.normalization_ms >= 0.0);
+        assert!(outcome.indexing_ms >= 0.0);
+        assert!(outcome.artifact_encode_ms >= 0.0);
+        let export = &outcome.artifacts[0];
+        let bytes = engine.take_prepared(&export.label).unwrap();
+        assert_eq!(bytes.len() as u64, export.bytes);
+        assert_eq!(
+            site_build::Sha256Digest::of_bytes(&bytes).to_string(),
+            export.artifact_sha256
+        );
+        let key: package_store::PreparedPackageKey = export.cache_key.parse().unwrap();
+        package_store::PreparedPackage::decode_expected(&bytes, &key).unwrap();
+        assert!(engine.take_prepared(&export.label).is_err());
     }
 
     #[test]
@@ -3402,6 +5078,58 @@ mod site_build_handoff_tests {
     }
 
     #[test]
+    fn package_lock_preserves_two_resolved_versions_and_exact_dependency_edges() {
+        let config = "id: demo\nfhirVersion: 4.0.1\n";
+        let old = "hl7.terminology.r4#7.1.0";
+        let new = "hl7.terminology.r4#7.2.0";
+        let consumer = "example.consumer#1.0.0";
+        let material = |bytes: &'static [u8], dependencies| MountedPackage {
+            content: site_build::ContentRef::of_bytes(bytes, None::<String>),
+            declared_dependencies: dependencies,
+        };
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            labels: vec![old.into(), new.into(), consumer.into()],
+        };
+        let engine = Engine {
+            package_materials: BTreeMap::from([
+                (old.into(), material(b"old", BTreeMap::new())),
+                (new.into(), material(b"new", BTreeMap::new())),
+                (
+                    consumer.into(),
+                    material(
+                        b"consumer",
+                        BTreeMap::from([("hl7.terminology.r4".into(), "7.1.0".into())]),
+                    ),
+                ),
+            ]),
+            ..Default::default()
+        };
+        let project = CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            resolved_packages: Some(resolved),
+        };
+
+        let lock = engine.site_build_package_lock(&project).unwrap();
+        assert!(lock
+            .get(&site_build::PackageCoordinate::parse(old).unwrap())
+            .is_some());
+        assert!(lock
+            .get(&site_build::PackageCoordinate::parse(new).unwrap())
+            .is_some());
+        let dependency = lock
+            .get(&site_build::PackageCoordinate::parse(consumer).unwrap())
+            .unwrap();
+        assert_eq!(
+            dependency.dependencies,
+            BTreeSet::from([site_build::PackageCoordinate::parse(old).unwrap()])
+        );
+    }
+
+    #[test]
     fn core_selection_uses_the_exact_resolved_closure_not_mount_order() {
         let config = "id: demo\nfhirVersion: 4.0.1\n";
         let selected = "hl7.fhir.r4.core#4.0.1";
@@ -3488,6 +5216,152 @@ mod site_build_handoff_tests {
             .validate_project_projection(&input(project.fsh, BTreeMap::new()), "test")
             .unwrap_err()
             .contains("predefined resources differ"));
+    }
+
+    fn minimal_prepared_guide() -> site_build::PreparedGuide {
+        let key = site_build::SemanticResourceKey {
+            resource_type: "ImplementationGuide".into(),
+            id: "demo".into(),
+        };
+        site_build::PreparedGuide {
+            guide: site_build::GuideIdentity {
+                implementation_guide: key.clone(),
+                package_id: "demo.ig".into(),
+                canonical: Some("https://example.org/demo".into()),
+                name: Some("Demo".into()),
+                version: Some("1.0.0".into()),
+                fhir_version: "4.0.1".into(),
+                release_label: None,
+                fhir_publication_base: "http://hl7.org/fhir/R4/".into(),
+                generated: site_build::GeneratedIdentity {
+                    epoch_seconds: 1,
+                    date: "1970-01-01T00:00:01Z".into(),
+                    day: "19700101".into(),
+                },
+                source_control: None,
+            },
+            resources: vec![site_build::SemanticResource {
+                key,
+                resource: serde_json::json!({
+                    "resourceType": "ImplementationGuide",
+                    "id": "demo"
+                }),
+                publication: None,
+            }],
+            publisher_compatibility: None,
+            expansions: Vec::new(),
+            pages: Vec::new(),
+            menu: Vec::new(),
+            sushi_config: serde_json::json!({"id":"demo.ig"}),
+            assets: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn prepared_guide_cache_is_an_exact_recipe_bound_gate() {
+        let config = "id: demo.ig\nfhirVersion: 4.0.1\n";
+        let project = CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            resolved_packages: Some(ResolvedPackages {
+                config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+                labels: Vec::new(),
+            }),
+        };
+        let ig = serde_json::json!({
+            "resourceType": "ImplementationGuide",
+            "id": "demo",
+            "packageId": "demo.ig",
+            "fhirVersion": ["4.0.1"]
+        });
+        let mut engine = Engine {
+            last_project: Some(project.clone()),
+            last_compiled: vec![(PathBuf::from("/__ig__/ImplementationGuide-demo.json"), ig)],
+            ..Default::default()
+        };
+        let input = SiteDbFromCompileInput {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            build_epoch_secs: 1,
+            liquid_asset_dirs: Vec::new(),
+            branch: None,
+            revision: None,
+            target: Some("cycle-site/v2".into()),
+        };
+        let revision = engine
+            .site_build_project_revision(&project, "demo.ig")
+            .unwrap();
+        let lock = engine.site_build_package_lock(&project).unwrap();
+        let key = engine
+            .prepared_guide_cache_key(&input, &revision, &lock, "test")
+            .unwrap();
+        let prepared = minimal_prepared_guide();
+        engine.prepared_guide_cache = Some(PreparedGuideCacheEntry {
+            key: key.clone(),
+            guide: prepared.clone(),
+            site_db: None,
+        });
+
+        let (actual, db) = engine
+            .site_model_from_compile(&input, "test", false, key.clone())
+            .unwrap();
+        assert_eq!(actual, prepared);
+        assert!(db.is_none());
+        assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
+
+        let mut changed = input.clone();
+        changed.build_epoch_secs = 2;
+        let changed_key = engine
+            .prepared_guide_cache_key(&changed, &revision, &lock, "test")
+            .unwrap();
+        assert_ne!(changed_key, key);
+        assert!(engine
+            .site_model_from_compile(&changed, "test", false, changed_key)
+            .unwrap_err()
+            .contains("resolved closure has no required core package"));
+        assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
+    }
+
+    #[test]
+    fn closed_build_cache_key_binds_target_diagnostics_and_contract() {
+        let prepared = site_build::Sha256Digest::of_bytes(b"prepared");
+        let target = site_build::RenderTarget {
+            renderer: site_build::ProducerRef::new("cycle-site", "2"),
+            mode: site_build::RenderMode::ExternalBuilder,
+            fhir_version: "4.0.1".into(),
+            template: None,
+            parameters: BTreeMap::from([("contract".into(), "cycle-site/v2".into())]),
+        };
+        let diagnostics = BTreeSet::new();
+        let baseline =
+            closed_site_build_cache_key(&prepared, &target, &diagnostics, "cycle-site/v2").unwrap();
+        let mut changed_target = target.clone();
+        changed_target
+            .parameters
+            .insert("buildEpochSecs".into(), "2".into());
+        assert_ne!(
+            baseline,
+            closed_site_build_cache_key(&prepared, &changed_target, &diagnostics, "cycle-site/v2")
+                .unwrap()
+        );
+        let changed_diagnostics = BTreeSet::from([site_build::BuildDiagnostic::new(
+            site_build::DiagnosticSeverity::Warning,
+            "fixture",
+            "warning",
+        )]);
+        assert_ne!(
+            baseline,
+            closed_site_build_cache_key(&prepared, &target, &changed_diagnostics, "cycle-site/v2")
+                .unwrap()
+        );
+        assert_ne!(
+            baseline,
+            closed_site_build_cache_key(&prepared, &target, &diagnostics, "cycle-site/v1").unwrap()
+        );
     }
 }
 

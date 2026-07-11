@@ -8,14 +8,15 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use prepared_guide::{PreparedGuide, SemanticResourceKey};
 use serde_json::Value;
 
-use crate::augment::{augment, AugmentInputs};
+use crate::augment::{prepare, AugmentInputs};
 use crate::ledger::{BuildLedger, LedgerReport};
 use crate::model::{ResourceIdentity, SiteDb};
 use crate::rows::{
-    apply_global_resource_metadata, derive_concept_rows, derive_metadata_rows,
-    derive_resource_rows, populate_core_rows, resource_ref, MetadataInputs,
+    apply_global_resource_metadata, derive_prepared_identity, derive_prepared_resources,
+    resource_ref, MetadataInputs,
 };
 
 /// Everything needed to produce a site.db.
@@ -54,11 +55,35 @@ pub struct BuildConfig {
 }
 
 pub struct BuildOutcome {
+    pub prepared_guide: PreparedGuide,
     pub db: SiteDb,
     pub ledger: LedgerReport,
     /// The snapshot-complete resources dir written for downstream consumers
     /// (the TS oracle reads the same files → row parity).
     pub resources_dir: PathBuf,
+}
+
+pub struct AssembleOutcome {
+    pub prepared_guide: PreparedGuide,
+    pub db: SiteDb,
+}
+
+pub struct PreparedBuildOutcome {
+    pub prepared_guide: PreparedGuide,
+    pub ledger: LedgerReport,
+}
+
+pub struct PreparedDiskBuildOutcome {
+    pub prepared_guide: PreparedGuide,
+    pub ledger: LedgerReport,
+    pub resources_dir: PathBuf,
+}
+
+struct DiskBuildParts {
+    prepared_guide: PreparedGuide,
+    db: Option<SiteDb>,
+    ledger: LedgerReport,
+    resources_dir: PathBuf,
 }
 
 fn resource_type(r: &Value) -> &str {
@@ -100,7 +125,11 @@ fn read_json_files(dir: &Path) -> Result<Vec<(PathBuf, Value)>> {
 }
 
 /// The full pipeline. Returns the row model + ledger + resources dir.
-pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result<BuildOutcome> {
+fn build_internal(
+    config: &BuildConfig,
+    prior_ledger: Option<&BuildLedger>,
+    with_rows: bool,
+) -> Result<DiskBuildParts> {
     let resources_dir = config.sushi_out.join("fsh-generated").join("resources");
 
     // ---- S1/S2: compile FSH -> resource JSONs (differential SDs + IG). ----
@@ -198,28 +227,56 @@ pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result
     let examples: Vec<Value> = examples.into_iter().map(|(_, v)| v).collect();
 
     // ---- S5 + S6 assembly (shared with the in-memory path). ----
-    let db = assemble_rows(
-        &AssembleInputs {
-            generated: &generated,
-            primary_implementation_guide: &primary_implementation_guide,
-            examples: &examples,
-            sushi_config_yaml: &sushi_config_yaml,
-            build_epoch_secs: config.build_epoch_secs,
-            branch: config.branch.clone(),
-            revision: config.revision.clone(),
-            pagecontent_dir: config.ig_dir.join("input").join("pagecontent"),
-            image_dir: config.ig_dir.join("input").join("images"),
-            liquid_asset_dirs: liquid_asset_dirs(&config.ig_dir),
-            files: &crate::augment::DiskFiles,
-        },
-        &mut ledger,
-    )?;
+    let assembly_input = AssembleInputs {
+        generated: &generated,
+        primary_implementation_guide: &primary_implementation_guide,
+        examples: &examples,
+        sushi_config_yaml: &sushi_config_yaml,
+        build_epoch_secs: config.build_epoch_secs,
+        branch: config.branch.clone(),
+        revision: config.revision.clone(),
+        project_root: config.ig_dir.clone(),
+        pagecontent_dir: config.ig_dir.join("input").join("pagecontent"),
+        image_dir: config.ig_dir.join("input").join("images"),
+        liquid_asset_dirs: liquid_asset_dirs(&config.ig_dir),
+        files: &crate::augment::DiskFiles,
+    };
+    let (prepared_guide, db) = if with_rows {
+        let assembled = assemble_prepared_and_rows(&assembly_input, &mut ledger)?;
+        (assembled.prepared_guide, Some(assembled.db))
+    } else {
+        (assemble_prepared(&assembly_input, &mut ledger)?, None)
+    };
 
     let report = ledger.finish(prior_ledger);
-    Ok(BuildOutcome {
+    Ok(DiskBuildParts {
+        prepared_guide,
         db,
         ledger: report,
         resources_dir,
+    })
+}
+
+pub fn build(config: &BuildConfig, prior_ledger: Option<&BuildLedger>) -> Result<BuildOutcome> {
+    let parts = build_internal(config, prior_ledger, true)?;
+    Ok(BuildOutcome {
+        prepared_guide: parts.prepared_guide,
+        db: parts.db.expect("row projection requested"),
+        ledger: parts.ledger,
+        resources_dir: parts.resources_dir,
+    })
+}
+
+/// Native preparation without constructing SiteDb rows.
+pub fn prepare_build(
+    config: &BuildConfig,
+    prior_ledger: Option<&BuildLedger>,
+) -> Result<PreparedDiskBuildOutcome> {
+    let parts = build_internal(config, prior_ledger, false)?;
+    Ok(PreparedDiskBuildOutcome {
+        prepared_guide: parts.prepared_guide,
+        ledger: parts.ledger,
+        resources_dir: parts.resources_dir,
     })
 }
 
@@ -283,6 +340,8 @@ pub struct AssembleInputs<'a> {
     pub build_epoch_secs: i64,
     pub branch: Option<String>,
     pub revision: Option<String>,
+    /// Root against which prepared source provenance is normalized.
+    pub project_root: PathBuf,
     /// input/pagecontent dir (a base path `files` joins slugs under).
     pub pagecontent_dir: PathBuf,
     /// input/images dir.
@@ -298,7 +357,11 @@ pub struct AssembleInputs<'a> {
 /// the wasm/editor path produce identical rows without touching the filesystem for
 /// the resource load or config read (only S6 reads, through `input.files`). The
 /// `ledger` is populated with resource/page/config/asset nodes as before.
-pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result<SiteDb> {
+fn assemble_internal(
+    input: &AssembleInputs,
+    ledger: &mut BuildLedger,
+    with_rows: bool,
+) -> Result<(PreparedGuide, Option<SiteDb>)> {
     let ig = input.primary_implementation_guide.clone();
     if resource_type(&ig) != "ImplementationGuide" {
         bail!("primary guide input is not an ImplementationGuide resource");
@@ -401,64 +464,108 @@ pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result
 
     let gen_date = crate::timefmt::gen_date(input.build_epoch_secs);
     let gen_day = crate::timefmt::gen_day(input.build_epoch_secs);
-    let metadata_rows = derive_metadata_rows(&MetadataInputs {
+    let metadata_input = MetadataInputs {
         cfg: &cfg,
         ig: &ig,
         gen_date,
         gen_day,
+        build_epoch_secs: input.build_epoch_secs,
         branch: input.branch.clone(),
         revision: input.revision.clone(),
-    });
-    let (resource_rows, key_by_ref) = derive_resource_rows(
+    };
+    let primary_key = SemanticResourceKey {
+        resource_type: primary_implementation_guide.resource_type.clone(),
+        id: primary_implementation_guide.id.clone(),
+    };
+    let (guide, publisher_compatibility) = derive_prepared_identity(&metadata_input, primary_key);
+    let prepared_resources = derive_prepared_resources(
         &resources,
         &resource_meta,
         &cfg,
-        &json_by_index,
         &primary_implementation_guide,
     );
-    let concept_rows = derive_concept_rows(&resources, &key_by_ref);
-
-    let mut db = SiteDb::default();
-    db.primary_implementation_guide = Some(primary_implementation_guide);
-    populate_core_rows(&mut db, metadata_rows, resource_rows, concept_rows);
 
     // ---- S6: augment (Pages/Menu/SiteConfig/Assets). ----
-    augment(
-        &mut db,
-        &AugmentInputs {
-            ig: &ig,
-            sushi_config_yaml: input.sushi_config_yaml,
-            pagecontent_dir: input.pagecontent_dir.clone(),
-            image_dir: input.image_dir.clone(),
-            liquid_asset_dirs: input.liquid_asset_dirs.clone(),
-            files: input.files,
-        },
-    )
-    .context("S6 augmentation")?;
+    let augmentation_input = AugmentInputs {
+        ig: &ig,
+        sushi_config_yaml: input.sushi_config_yaml,
+        project_root: input.project_root.clone(),
+        pagecontent_dir: input.pagecontent_dir.clone(),
+        image_dir: input.image_dir.clone(),
+        liquid_asset_dirs: input.liquid_asset_dirs.clone(),
+        files: input.files,
+    };
+    let prepared_augmentation = prepare(&augmentation_input).context("S6 semantic preparation")?;
 
     // ---- Ledger nodes for S6 inputs (pages/menu/config/assets). ----
-    for p in &db.pages {
-        let body = p.body.clone().unwrap_or_default();
-        ledger.record(
-            &format!("page:{}", p.slug),
-            "",
-            &BuildLedger::hash(body.as_bytes()),
-        );
+    fn record_pages(pages: &[prepared_guide::PageNode], ledger: &mut BuildLedger) {
+        for page in pages {
+            let slug = page
+                .name_url
+                .strip_suffix(".html")
+                .unwrap_or(&page.name_url);
+            ledger.record(
+                &format!("page:{slug}"),
+                "",
+                &BuildLedger::hash(page.body.as_deref().unwrap_or_default().as_bytes()),
+            );
+            record_pages(&page.children, ledger);
+        }
     }
+    record_pages(&prepared_augmentation.pages, ledger);
     ledger.record(
         "config:sushi-config",
         "",
         &BuildLedger::hash(input.sushi_config_yaml.as_bytes()),
     );
-    for a in &db.assets {
+    for a in &prepared_augmentation.assets {
         ledger.record(
-            &format!("asset:{}", a.name),
+            &format!("asset:{}", a.path),
             "",
             &BuildLedger::hash(&a.content),
         );
     }
 
-    Ok(db)
+    let prepared_guide = PreparedGuide {
+        guide,
+        resources: prepared_resources,
+        publisher_compatibility: Some(publisher_compatibility),
+        // S4 expansion remains explicitly empty in the current producer.
+        expansions: Vec::new(),
+        pages: prepared_augmentation.pages,
+        menu: prepared_augmentation.menu,
+        sushi_config: prepared_augmentation.sushi_config,
+        assets: prepared_augmentation.assets,
+    };
+    let db = with_rows
+        .then(|| crate::projection::project_prepared(&prepared_guide))
+        .transpose()
+        .context("project PreparedGuide into SiteDb compatibility rows")?;
+    Ok((prepared_guide, db))
+}
+
+/// Produce renderer-neutral semantics without constructing SiteDb rows.
+pub fn assemble_prepared(
+    input: &AssembleInputs,
+    ledger: &mut BuildLedger,
+) -> Result<PreparedGuide> {
+    assemble_internal(input, ledger, false).map(|(prepared, _)| prepared)
+}
+
+pub fn assemble_prepared_and_rows(
+    input: &AssembleInputs,
+    ledger: &mut BuildLedger,
+) -> Result<AssembleOutcome> {
+    let (prepared_guide, db) = assemble_internal(input, ledger, true)?;
+    Ok(AssembleOutcome {
+        prepared_guide,
+        db: db.expect("with_rows constructs SiteDb"),
+    })
+}
+
+/// Compatibility projection for callers that still request only SiteDb rows.
+pub fn assemble_rows(input: &AssembleInputs, ledger: &mut BuildLedger) -> Result<SiteDb> {
+    assemble_prepared_and_rows(input, ledger).map(|outcome| outcome.db)
 }
 
 /// Inputs to the in-memory site.db producer (the wasm/editor path). The caller
@@ -495,7 +602,7 @@ pub struct InMemoryInputs<'a> {
 pub fn build_from_inputs(input: &InMemoryInputs) -> Result<BuildOutcome> {
     let mut ledger = BuildLedger::new();
     let files = crate::augment::MemFiles::new(input.vfs.clone());
-    let db = assemble_rows(
+    let assembled = assemble_prepared_and_rows(
         &AssembleInputs {
             generated: input.generated,
             primary_implementation_guide: input.primary_implementation_guide,
@@ -504,6 +611,7 @@ pub fn build_from_inputs(input: &InMemoryInputs) -> Result<BuildOutcome> {
             build_epoch_secs: input.build_epoch_secs,
             branch: input.branch.clone(),
             revision: input.revision.clone(),
+            project_root: input.ig_root.clone(),
             pagecontent_dir: input.ig_root.join("input").join("pagecontent"),
             image_dir: input.ig_root.join("input").join("images"),
             liquid_asset_dirs: input
@@ -517,9 +625,42 @@ pub fn build_from_inputs(input: &InMemoryInputs) -> Result<BuildOutcome> {
     )?;
     let report = ledger.finish(None);
     Ok(BuildOutcome {
-        db,
+        prepared_guide: assembled.prepared_guide,
+        db: assembled.db,
         ledger: report,
         resources_dir: PathBuf::new(),
+    })
+}
+
+/// Browser/in-memory preparation without constructing the relational
+/// compatibility projection.
+pub fn prepare_from_inputs(input: &InMemoryInputs) -> Result<PreparedBuildOutcome> {
+    let mut ledger = BuildLedger::new();
+    let files = crate::augment::MemFiles::new(input.vfs.clone());
+    let prepared_guide = assemble_prepared(
+        &AssembleInputs {
+            generated: input.generated,
+            primary_implementation_guide: input.primary_implementation_guide,
+            examples: input.examples,
+            sushi_config_yaml: input.sushi_config_yaml,
+            build_epoch_secs: input.build_epoch_secs,
+            branch: input.branch.clone(),
+            revision: input.revision.clone(),
+            project_root: input.ig_root.clone(),
+            pagecontent_dir: input.ig_root.join("input").join("pagecontent"),
+            image_dir: input.ig_root.join("input").join("images"),
+            liquid_asset_dirs: input
+                .liquid_asset_rel_dirs
+                .iter()
+                .map(|directory| input.ig_root.join(directory))
+                .collect(),
+            files: &files,
+        },
+        &mut ledger,
+    )?;
+    Ok(PreparedBuildOutcome {
+        prepared_guide,
+        ledger: ledger.finish(None),
     })
 }
 

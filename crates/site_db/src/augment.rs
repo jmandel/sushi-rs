@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Result};
+use prepared_guide::{MenuNode, PageNode, PreparedAsset, PreparedPath};
 use serde_json::Value;
 
 use crate::model::{AssetRow, MenuRow, PageRow, SiteConfigRow, SiteDb};
@@ -108,6 +109,8 @@ pub struct AugmentInputs<'a> {
     pub ig: &'a Value,
     /// The raw sushi-config.yaml text (consumed verbatim: SiteConfig + menu).
     pub sushi_config_yaml: &'a str,
+    /// Project root used to bind every captured asset to its exact source path.
+    pub project_root: PathBuf,
     /// input/pagecontent directory.
     pub pagecontent_dir: PathBuf,
     /// input/images directory.
@@ -116,6 +119,34 @@ pub struct AugmentInputs<'a> {
     pub liquid_asset_dirs: Vec<PathBuf>,
     /// The file source S6 reads through (disk or in-memory VFS).
     pub files: &'a dyn FileSource,
+}
+
+/// Renderer-neutral S6 result. Compatibility database rows are projected from
+/// the same captured values only after this value is complete.
+pub struct PreparedAugmentation {
+    pub pages: Vec<PageNode>,
+    pub menu: Vec<MenuNode>,
+    pub sushi_config: Value,
+    pub assets: Vec<PreparedAsset>,
+}
+
+struct AugmentationRows {
+    pages: Vec<PageRow>,
+    menu: Vec<MenuRow>,
+    site_config: Vec<SiteConfigRow>,
+    assets: Vec<AssetRow>,
+}
+
+fn prepared_source_path(project_root: &Path, path: &Path) -> Result<PreparedPath> {
+    let rel = path.strip_prefix(project_root).map_err(|_| {
+        anyhow::anyhow!(
+            "prepared input {} is outside project root {}",
+            path.display(),
+            project_root.display()
+        )
+    })?;
+    PreparedPath::parse(rel.to_string_lossy().replace('\\', "/"))
+        .map_err(|error| anyhow::anyhow!(error))
 }
 
 /// ingest.ts:71 — liquidAssetNames: `{% include X %}` / `{% lang-fragment X %}`.
@@ -230,14 +261,22 @@ fn text_like_mime(mime: &str) -> bool {
 }
 
 /// Walk the IG definition.page tree building Pages rows, gathering include names.
+struct CapturedPage {
+    slug: String,
+    name_url: String,
+    title: String,
+    generation: String,
+    depth: i64,
+    body: Option<String>,
+}
+
 fn walk_pages(
     node: &Value,
     depth: i64,
-    ord: &mut i64,
     pagecontent_dir: &Path,
     files: &dyn FileSource,
     page_include_names: &mut BTreeSet<String>,
-    pages: &mut Vec<PageRow>,
+    pages: &mut Vec<CapturedPage>,
 ) -> Result<()> {
     let nodes: Vec<&Value> = match node {
         Value::Array(a) => a.iter().collect(),
@@ -291,22 +330,19 @@ fn walk_pages(
                 .and_then(Value::as_str)
                 .unwrap_or("markdown")
                 .to_string();
-            pages.push(PageRow {
+            pages.push(CapturedPage {
                 slug: slug.clone(),
                 name_url,
                 title,
                 generation,
-                ord: *ord,
                 depth,
                 body,
             });
-            *ord += 1;
         }
         if let Some(children) = p.get("page") {
             walk_pages(
                 children,
                 depth + 1,
-                ord,
                 pagecontent_dir,
                 files,
                 page_include_names,
@@ -329,6 +365,51 @@ fn first_h1(body: Option<&str>) -> Option<String> {
         }
     }
     None
+}
+
+fn prepared_page_tree(rows: &[CapturedPage]) -> Result<Vec<PageNode>> {
+    fn level(rows: &[CapturedPage], index: &mut usize, depth: i64) -> Result<Vec<PageNode>> {
+        let mut result = Vec::new();
+        while let Some(row) = rows.get(*index) {
+            if row.depth < depth {
+                break;
+            }
+            if row.depth > depth {
+                bail!(
+                    "page {} jumps from prepared depth {} to {}",
+                    row.name_url,
+                    depth.saturating_sub(1),
+                    row.depth
+                );
+            }
+            *index += 1;
+            let child_depth = depth
+                .checked_add(1)
+                .ok_or_else(|| anyhow::anyhow!("page tree depth overflow"))?;
+            let children = level(rows, index, child_depth)?;
+            result.push(PageNode {
+                name_url: row.name_url.clone(),
+                title: row.title.clone(),
+                generation: row.generation.clone(),
+                body: row.body.clone(),
+                children,
+            });
+        }
+        Ok(result)
+    }
+
+    let Some(base_depth) = rows.first().map(|row| row.depth) else {
+        return Ok(Vec::new());
+    };
+    if base_depth < 0 {
+        bail!("page tree starts at negative depth {base_depth}");
+    }
+    let mut index = 0;
+    let result = level(rows, &mut index, base_depth)?;
+    if index != rows.len() {
+        bail!("page tree has an invalid depth transition");
+    }
+    Ok(result)
 }
 
 /// ingest.ts:108 — addMenuItems (recursive; groups vs links).
@@ -366,13 +447,37 @@ fn add_menu_items(
     }
 }
 
+fn prepared_menu_items(node: &serde_yaml::Mapping) -> Vec<MenuNode> {
+    node.iter()
+        .filter_map(|(key, value)| {
+            let label = key.as_str()?.to_string();
+            Some(MenuNode {
+                label,
+                href: value.as_str().map(str::to_string),
+                items: value
+                    .as_mapping()
+                    .map(prepared_menu_items)
+                    .unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+struct CapturedAsset {
+    name: String,
+    mime: String,
+    content: Vec<u8>,
+    source: PreparedPath,
+}
+
 /// Recursively ingest images (ingest.ts:153 ingestImageDir). Sourced through the
 /// `FileSource` (disk or in-memory); `list_recursive` yields sorted relative
 /// paths, matching the prior sorted `read_dir` walk order.
 fn ingest_image_dir(
     root: &Path,
+    project_root: &Path,
     files: &dyn FileSource,
-    assets: &mut Vec<AssetRow>,
+    assets: &mut Vec<CapturedAsset>,
 ) -> Result<usize> {
     let mut count = 0;
     for rel in files.list_recursive(root) {
@@ -380,53 +485,83 @@ fn ingest_image_dir(
         let Some(content) = files.read(&p) else {
             continue;
         };
-        assets.push(AssetRow {
+        assets.push(CapturedAsset {
             name: safe_asset_name(&rel)?,
             mime: mime_of(&rel).to_string(),
             content,
+            source: prepared_source_path(project_root, &p)?,
         });
         count += 1;
     }
     Ok(count)
 }
 
-/// Run S6. Populates db.pages/menu/site_config/assets.
-pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
+/// Run S6 once, returning renderer-neutral semantics while projecting the same
+/// captured values into compatibility rows.
+fn capture_augmentation(
+    input: &AugmentInputs,
+    with_rows: bool,
+) -> Result<(PreparedAugmentation, AugmentationRows)> {
     // ---- Pages ----
-    let mut ord: i64 = 0;
     let mut page_include_names: BTreeSet<String> = BTreeSet::new();
     let mut pages = Vec::new();
     if let Some(page) = input.ig.pointer("/definition/page") {
         walk_pages(
             page,
             0,
-            &mut ord,
             &input.pagecontent_dir,
             input.files,
             &mut page_include_names,
             &mut pages,
         )?;
     }
-    db.pages = pages;
+    let prepared_pages = prepared_page_tree(&pages)?;
+    let page_rows = if with_rows {
+        pages
+            .iter()
+            .enumerate()
+            .map(|(ord, page)| PageRow {
+                slug: page.slug.clone(),
+                name_url: page.name_url.clone(),
+                title: page.title.clone(),
+                generation: page.generation.clone(),
+                ord: ord as i64,
+                depth: page.depth,
+                body: page.body.clone(),
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     // ---- SiteConfig + Menu (from raw sushi-config.yaml) ----
     let cfg: serde_yaml::Value = serde_yaml::from_str(input.sushi_config_yaml)?;
     // SiteConfig: verbatim yaml -> json, pretty (JSON.stringify(cfg, null, 2)).
     let cfg_json: Value = serde_yaml::from_value(cfg.clone())?;
-    db.site_config = vec![SiteConfigRow {
-        name: "sushi-config".to_string(),
-        json: serde_json::to_string_pretty(&cfg_json)?,
-    }];
+    let site_config = if with_rows {
+        vec![SiteConfigRow {
+            name: "sushi-config".to_string(),
+            json: serde_json::to_string_pretty(&cfg_json)?,
+        }]
+    } else {
+        Vec::new()
+    };
     let mut menu = Vec::new();
     let mut mid = 0i64;
     let mut mord = 0i64;
-    if let Some(menu_map) = cfg.get("menu").and_then(|m| m.as_mapping()) {
-        add_menu_items(menu_map, None, 0, &[], &mut mid, &mut mord, &mut menu);
+    if with_rows {
+        if let Some(menu_map) = cfg.get("menu").and_then(|m| m.as_mapping()) {
+            add_menu_items(menu_map, None, 0, &[], &mut mid, &mut mord, &mut menu);
+        }
     }
-    db.menu = menu;
+    let prepared_menu = cfg
+        .get("menu")
+        .and_then(|value| value.as_mapping())
+        .map(prepared_menu_items)
+        .unwrap_or_default();
 
     // ---- Assets: referenced includes (nested), then images ----
-    let mut assets: Vec<AssetRow> = Vec::new();
+    let mut assets: Vec<CapturedAsset> = Vec::new();
     // BTreeSet iteration is sorted+deterministic; we extend the worklist as we
     // discover nested includes (ingest.ts adds to the same set mid-loop).
     let mut pending: Vec<String> = page_include_names.iter().cloned().collect();
@@ -447,10 +582,11 @@ pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
                         }
                     }
                 }
-                assets.push(AssetRow {
+                assets.push(CapturedAsset {
                     name: safe_name.clone(),
                     mime: mime.to_string(),
                     content,
+                    source: prepared_source_path(&input.project_root, &p)?,
                 });
                 found = true;
                 break;
@@ -473,43 +609,78 @@ pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
             // loud (walk_pages); only missing non-SVG *includes* are tolerated.
         }
     }
-    ingest_image_dir(&input.image_dir, input.files, &mut assets)?;
+    ingest_image_dir(
+        &input.image_dir,
+        &input.project_root,
+        input.files,
+        &mut assets,
+    )?;
 
     // De-dup by name keeping last-writer (INSERT OR REPLACE semantics), stable.
-    let mut by_name: indexmap_lite::OrderMap = indexmap_lite::OrderMap::new();
+    let mut order = Vec::new();
+    let mut by_name = std::collections::HashMap::new();
     for a in assets {
+        if !by_name.contains_key(&a.name) {
+            order.push(a.name.clone());
+        }
         by_name.insert(a.name.clone(), a);
     }
-    db.assets = by_name.into_values();
-    Ok(())
+    let assets: Vec<CapturedAsset> = order
+        .into_iter()
+        .filter_map(|name| by_name.remove(&name))
+        .collect();
+    let prepared_assets = assets
+        .iter()
+        .map(|asset| PreparedAsset {
+            path: PreparedPath::parse(asset.name.clone()).expect("safe asset is a PreparedPath"),
+            mime: asset.mime.clone(),
+            content: asset.content.clone(),
+            source_reads: BTreeSet::from([asset.source.clone()]),
+        })
+        .collect();
+    let asset_rows = if with_rows {
+        assets
+            .into_iter()
+            .map(|asset| AssetRow {
+                name: asset.name,
+                mime: asset.mime,
+                content: asset.content,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok((
+        PreparedAugmentation {
+            pages: prepared_pages,
+            menu: prepared_menu,
+            sushi_config: cfg_json,
+            assets: prepared_assets,
+        },
+        AugmentationRows {
+            pages: page_rows,
+            menu,
+            site_config,
+            assets: asset_rows,
+        },
+    ))
 }
 
-/// A tiny order-preserving map so we don't add an indexmap dep just for asset
-/// de-dup. INSERT OR REPLACE keeps the LAST value for a name; order is first-seen.
-mod indexmap_lite {
-    use crate::model::AssetRow;
-    pub struct OrderMap {
-        order: Vec<String>,
-        map: std::collections::HashMap<String, AssetRow>,
-    }
-    impl OrderMap {
-        pub fn new() -> Self {
-            Self {
-                order: Vec::new(),
-                map: std::collections::HashMap::new(),
-            }
-        }
-        pub fn insert(&mut self, key: String, value: AssetRow) {
-            if !self.map.contains_key(&key) {
-                self.order.push(key.clone());
-            }
-            self.map.insert(key, value);
-        }
-        pub fn into_values(mut self) -> Vec<AssetRow> {
-            self.order
-                .into_iter()
-                .filter_map(|k| self.map.remove(&k))
-                .collect()
-        }
-    }
+/// Prepare S6 semantics without constructing a SiteDb.
+pub fn prepare(input: &AugmentInputs) -> Result<PreparedAugmentation> {
+    capture_augmentation(input, false).map(|(prepared, _)| prepared)
+}
+
+pub fn prepare_and_augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<PreparedAugmentation> {
+    let (prepared, rows) = capture_augmentation(input, true)?;
+    db.pages = rows.pages;
+    db.menu = rows.menu;
+    db.site_config = rows.site_config;
+    db.assets = rows.assets;
+    Ok(prepared)
+}
+
+/// Compatibility-only convenience for callers that need relational rows.
+pub fn augment(db: &mut SiteDb, input: &AugmentInputs) -> Result<()> {
+    prepare_and_augment(db, input).map(|_| ())
 }

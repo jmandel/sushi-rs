@@ -1,12 +1,11 @@
-//! Typed `cycle-site/v2` projection over the current prepared site model.
+//! Typed `cycle-site/v2` projection over [`crate::PreparedGuide`].
 //!
-//! This is the migration boundary between the current `site_db::SiteDb`
-//! producer and a renderer-facing SiteBuild.  Unlike [`crate::site_db_compat`],
+//! This is the renderer-facing SiteBuild projection. Unlike
+//! [`crate::site_db_compat`],
 //! it does not expose relational row spelling: numeric surrogate keys,
 //! PascalCase column names, JSON strings, and base64 asset bodies do not cross
-//! the boundary.  The projector is intentionally transitional; a future
-//! renderer-neutral prepared-site model can produce the same wire documents
-//! without constructing `SiteDb` first.
+//! the boundary. The core projector has no `site_db` dependency. During the
+//! migration, [`prepare_from_site_db`] is the sole compatibility adapter.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,8 +16,19 @@ use thiserror::Error;
 use crate::{
     ArtifactCatalog, ArtifactKey, ArtifactProvenance, ArtifactRecord, ArtifactState,
     AssetNamespace, BuildDiagnostic, ClosedSiteBuild, ContentRef, ContractError, PackageLock,
-    ProducerRef, ProjectRevision, ReadDependency, RenderMode, RenderPlan, RenderTarget, SealError,
-    Sha256Digest, SiteBuild, SiteBuildError, SourceKind, SourcePath,
+    PreparedGuide, ProducerRef, ProjectRevision, ReadDependency, RenderMode, RenderPlan,
+    RenderTarget, SealError, Sha256Digest, SiteBuild, SiteBuildError, SourceKind, SourcePath,
+};
+
+#[cfg(feature = "site-db-projections")]
+use crate::{PreparedAsset, PreparedPath};
+
+// Preserve the original public type paths while placing their definitions at
+// the renderer-neutral PreparedGuide seam.
+pub use crate::{
+    ExpansionCode, GeneratedIdentity, GuideIdentity, MenuNode, PageNode, PublisherCompatibility,
+    ResourcePublication, SemanticResource, SemanticResourceKey, SourceControlIdentity,
+    ValueSetExpansion,
 };
 
 pub const TARGET: &str = "cycle-site/v2";
@@ -80,90 +90,6 @@ pub struct ClosedCycleProjection {
     pub objects: BTreeMap<Sha256Digest, Vec<u8>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SemanticResourceKey {
-    pub resource_type: String,
-    pub id: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GeneratedIdentity {
-    pub epoch_seconds: i64,
-    pub date: String,
-    pub day: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SourceControlIdentity {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branch: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub revision: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct GuideIdentity {
-    pub implementation_guide: SemanticResourceKey,
-    pub package_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub canonical: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    pub fhir_version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub release_label: Option<String>,
-    pub fhir_publication_base: String,
-    pub generated: GeneratedIdentity,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_control: Option<SourceControlIdentity>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PublisherCompatibility {
-    pub error_count: String,
-    pub tooling_version: String,
-    pub tooling_revision: String,
-    pub tooling_version_full: String,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ResourcePublication {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub standard_status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub base_definition: Option<String>,
-}
-
-impl ResourcePublication {
-    fn is_empty(&self) -> bool {
-        self.display_name.is_none()
-            && self.description.is_none()
-            && self.standard_status.is_none()
-            && self.base_definition.is_none()
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SemanticResource {
-    pub key: SemanticResourceKey,
-    pub resource: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub publication: Option<ResourcePublication>,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ResourcesDocument {
@@ -176,50 +102,9 @@ pub struct ResourcesDocument {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExpansionCode {
-    pub system: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    pub code: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ValueSetExpansion {
-    pub value_set: SemanticResourceKey,
-    pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    pub codes: Vec<ExpansionCode>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminologyDocument {
     pub schema: String,
     pub expansions: Vec<ValueSetExpansion>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PageNode {
-    pub name_url: String,
-    pub title: String,
-    pub generation: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub body: Option<String>,
-    pub children: Vec<PageNode>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct MenuNode {
-    pub label: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub href: Option<String>,
-    pub items: Vec<MenuNode>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -238,11 +123,13 @@ pub struct ConfigDocument {
 }
 
 #[derive(Clone, Debug)]
+#[cfg(feature = "site-db-projections")]
 struct ProjectedResourceIdentity {
     key: SemanticResourceKey,
     url: Option<String>,
 }
 
+#[cfg(feature = "site-db-projections")]
 const MAX_NAVIGATION_DEPTH: i64 = 256;
 const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 
@@ -264,17 +151,95 @@ pub enum CycleProjectionError {
     Seal(#[from] SealError),
 }
 
-/// Produce the complete callback-free `cycle-site/v2` handoff.
+/// Transitional adapter from the legacy relational row model.
+///
+/// New producers should construct [`PreparedGuide`] directly. Keeping this
+/// conversion separate makes `site.db` an optional projection concern rather
+/// than the renderer handoff.
+#[cfg(feature = "site-db-projections")]
+pub fn prepare_from_site_db(
+    db: &site_db::SiteDb,
+    input: &CycleProjectionInput,
+) -> Result<PreparedGuide, CycleProjectionError> {
+    validate_target(&input.render_target)?;
+    let (resources, resource_keys) = resources_document(db, input)?;
+    let terminology = terminology_document(db, &resource_keys)?;
+    let navigation = navigation_document(db)?;
+    let config = config_document(db)?;
+    let source_reads: BTreeSet<PreparedPath> = input
+        .project
+        .sources
+        .iter()
+        .map(|(path, _)| {
+            PreparedPath::parse(path.as_str().to_owned()).expect("SourcePath is normalized")
+        })
+        .collect();
+    let assets = db
+        .assets
+        .iter()
+        .map(|asset| {
+            Ok(PreparedAsset {
+                path: PreparedPath::parse(asset.name.clone()).map_err(|_| {
+                    CycleProjectionError::Invalid(format!("unsafe asset path {:?}", asset.name))
+                })?,
+                mime: asset.mime.clone(),
+                content: asset.content.clone(),
+                // SiteDb loses exact asset origin after last-writer de-dup. The
+                // adapter therefore records the honest conservative read set.
+                source_reads: source_reads.clone(),
+            })
+        })
+        .collect::<Result<Vec<_>, CycleProjectionError>>()?;
+    Ok(PreparedGuide {
+        guide: resources.guide,
+        resources: resources.resources,
+        publisher_compatibility: resources.publisher_compatibility,
+        expansions: terminology.expansions,
+        pages: navigation.pages,
+        menu: navigation.menu,
+        sushi_config: config.sushi_config,
+        assets,
+    })
+}
+
+/// Compatibility convenience: adapt SiteDb, then use the direct projector.
+#[cfg(feature = "site-db-projections")]
 pub fn close_projection(
     db: &site_db::SiteDb,
     input: CycleProjectionInput,
 ) -> Result<ClosedCycleProjection, CycleProjectionError> {
-    validate_target(&input.render_target)?;
+    let prepared = prepare_from_site_db(db, &input)?;
+    close_prepared(&prepared, input)
+}
 
-    let (resources, resource_keys) = resources_document(db, &input)?;
-    let terminology = terminology_document(db, &resource_keys)?;
-    let navigation = navigation_document(db)?;
-    let config = config_document(db)?;
+/// Produce the complete callback-free `cycle-site/v2` handoff directly from
+/// renderer-neutral prepared guide semantics.
+pub fn close_prepared(
+    prepared: &PreparedGuide,
+    input: CycleProjectionInput,
+) -> Result<ClosedCycleProjection, CycleProjectionError> {
+    validate_target(&input.render_target)?;
+    validate_prepared(prepared, &input)?;
+
+    let resources = ResourcesDocument {
+        schema: RESOURCES_SCHEMA.into(),
+        guide: prepared.guide.clone(),
+        resources: prepared.resources.clone(),
+        publisher_compatibility: prepared.publisher_compatibility.clone(),
+    };
+    let terminology = TerminologyDocument {
+        schema: TERMINOLOGY_SCHEMA.into(),
+        expansions: prepared.expansions.clone(),
+    };
+    let navigation = NavigationDocument {
+        schema: NAVIGATION_SCHEMA.into(),
+        pages: prepared.pages.clone(),
+        menu: prepared.menu.clone(),
+    };
+    let config = ConfigDocument {
+        schema: CONFIG_SCHEMA.into(),
+        sushi_config: prepared.sushi_config.clone(),
+    };
 
     // These are deterministic typed envelopes, but embedded FHIR/config JSON
     // deliberately retains insertion order. The exact bytes are committed by
@@ -362,25 +327,17 @@ pub fn close_projection(
     )?;
     required.insert(config_key);
 
-    // `SiteDb` currently loses exact asset origin after last-writer de-dup.
-    // Every authored source is therefore the honest conservative read set.
-    // A future PreparedSite will retain one exact source path per asset.
-    let asset_reads: BTreeSet<_> = input
-        .project
-        .sources
-        .iter()
-        .map(|(path, _)| ReadDependency::Source { path: path.clone() })
-        .collect();
     let mut seen_assets = BTreeSet::new();
-    for asset in &db.assets {
-        let path = SourcePath::parse(asset.name.clone()).map_err(|_| {
-            CycleProjectionError::Invalid(format!("unsafe asset path {:?}", asset.name))
-        })?;
-        let key = asset_key(path);
+    for asset in &prepared.assets {
+        let key = asset_key(
+            SourcePath::parse(asset.path.as_str().to_owned()).map_err(|_| {
+                CycleProjectionError::Invalid(format!("unsafe prepared asset path {}", asset.path))
+            })?,
+        );
         if !seen_assets.insert(key.clone()) {
             return Err(CycleProjectionError::Invalid(format!(
                 "duplicate asset {:?}",
-                asset.name
+                asset.path.as_str()
             )));
         }
         let content = ContentRef::of_bytes(&asset.content, Some(asset.mime.clone()));
@@ -389,7 +346,15 @@ pub fn close_projection(
             key: key.clone(),
             state: ArtifactState::Ready { content },
             provenance: provenance("site_semantics.asset", "authored-asset/v1"),
-            reads: asset_reads.clone(),
+            reads: asset
+                .source_reads
+                .iter()
+                .map(|path| {
+                    SourcePath::parse(path.as_str().to_owned())
+                        .map(|path| ReadDependency::Source { path })
+                        .expect("PreparedPath is normalized")
+                })
+                .collect(),
         });
         required.insert(key);
     }
@@ -418,6 +383,100 @@ fn validate_target(target: &RenderTarget) -> Result<(), CycleProjectionError> {
         || target.parameters.get("contract").map(String::as_str) != Some(TARGET)
     {
         return Err(CycleProjectionError::WrongTarget);
+    }
+    Ok(())
+}
+
+fn validate_prepared(
+    prepared: &PreparedGuide,
+    input: &CycleProjectionInput,
+) -> Result<(), CycleProjectionError> {
+    if prepared.guide.fhir_version != input.render_target.fhir_version {
+        return Err(CycleProjectionError::Invalid(format!(
+            "prepared FHIR version {} disagrees with render target {}",
+            prepared.guide.fhir_version, input.render_target.fhir_version
+        )));
+    }
+    if prepared.guide.generated.epoch_seconds
+        != input
+            .render_target
+            .parameters
+            .get("buildEpochSecs")
+            .and_then(|value| value.parse::<i64>().ok())
+            .ok_or_else(|| {
+                CycleProjectionError::Invalid(
+                    "missing or invalid buildEpochSecs target parameter".into(),
+                )
+            })?
+    {
+        return Err(CycleProjectionError::Invalid(
+            "prepared generation epoch disagrees with render target".into(),
+        ));
+    }
+    if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&prepared.guide.generated.epoch_seconds) {
+        return Err(CycleProjectionError::Invalid(
+            "buildEpochSecs is outside the JavaScript safe-integer range".into(),
+        ));
+    }
+    if !prepared.sushi_config.is_object() {
+        return Err(CycleProjectionError::Invalid(
+            "sushi-config semantic value must be an object".into(),
+        ));
+    }
+
+    let mut resources = BTreeMap::new();
+    for resource in &prepared.resources {
+        let resource_type = resource
+            .resource
+            .get("resourceType")
+            .and_then(Value::as_str);
+        let id = resource.resource.get("id").and_then(Value::as_str);
+        if resource_type != Some(resource.key.resource_type.as_str())
+            || id != Some(resource.key.id.as_str())
+        {
+            return Err(CycleProjectionError::Invalid(format!(
+                "prepared resource {}/{} disagrees with its JSON identity",
+                resource.key.resource_type, resource.key.id
+            )));
+        }
+        if resources
+            .insert(resource.key.clone(), &resource.resource)
+            .is_some()
+        {
+            return Err(CycleProjectionError::Invalid(format!(
+                "duplicate resource {}/{}",
+                resource.key.resource_type, resource.key.id
+            )));
+        }
+    }
+    let primary = &prepared.guide.implementation_guide;
+    if primary.resource_type != "ImplementationGuide" || !resources.contains_key(primary) {
+        return Err(CycleProjectionError::Invalid(format!(
+            "prepared primary guide {}/{} is absent from resources",
+            primary.resource_type, primary.id
+        )));
+    }
+    for expansion in &prepared.expansions {
+        if expansion.value_set.resource_type != "ValueSet"
+            || !resources.contains_key(&expansion.value_set)
+        {
+            return Err(CycleProjectionError::Invalid(format!(
+                "expansion references absent ValueSet {}/{}",
+                expansion.value_set.resource_type, expansion.value_set.id
+            )));
+        }
+    }
+    for asset in &prepared.assets {
+        for source in &asset.source_reads {
+            let source_path =
+                SourcePath::parse(source.as_str().to_owned()).expect("PreparedPath is normalized");
+            if input.project.sources.get(&source_path).is_none() {
+                return Err(CycleProjectionError::Invalid(format!(
+                    "asset {} reads absent project source {}",
+                    asset.path, source
+                )));
+            }
+        }
     }
     Ok(())
 }
@@ -485,6 +544,7 @@ fn insert_object(
     Ok(())
 }
 
+#[cfg(feature = "site-db-projections")]
 fn metadata(db: &site_db::SiteDb) -> Result<BTreeMap<&str, &str>, CycleProjectionError> {
     let mut values = BTreeMap::new();
     for row in &db.metadata {
@@ -501,6 +561,7 @@ fn metadata(db: &site_db::SiteDb) -> Result<BTreeMap<&str, &str>, CycleProjectio
     Ok(values)
 }
 
+#[cfg(feature = "site-db-projections")]
 fn optional_metadata(values: &BTreeMap<&str, &str>, key: &str) -> Option<String> {
     values
         .get(key)
@@ -509,10 +570,12 @@ fn optional_metadata(values: &BTreeMap<&str, &str>, key: &str) -> Option<String>
         .map(str::to_string)
 }
 
+#[cfg(feature = "site-db-projections")]
 fn non_empty(value: Option<String>) -> Option<String> {
     value.filter(|item| !item.trim().is_empty())
 }
 
+#[cfg(feature = "site-db-projections")]
 fn required_metadata(
     values: &BTreeMap<&str, &str>,
     key: &str,
@@ -525,6 +588,7 @@ fn required_metadata(
         .ok_or_else(|| CycleProjectionError::Invalid(format!("missing metadata {key}")))
 }
 
+#[cfg(feature = "site-db-projections")]
 fn resources_document(
     db: &site_db::SiteDb,
     input: &CycleProjectionInput,
@@ -689,6 +753,7 @@ fn resources_document(
     ))
 }
 
+#[cfg(feature = "site-db-projections")]
 fn terminology_document(
     db: &site_db::SiteDb,
     resources: &BTreeMap<i64, ProjectedResourceIdentity>,
@@ -774,6 +839,7 @@ fn terminology_document(
     })
 }
 
+#[cfg(feature = "site-db-projections")]
 fn navigation_document(db: &site_db::SiteDb) -> Result<NavigationDocument, CycleProjectionError> {
     let mut page_names = BTreeSet::new();
     for (index, page) in db.pages.iter().enumerate() {
@@ -811,6 +877,7 @@ fn navigation_document(db: &site_db::SiteDb) -> Result<NavigationDocument, Cycle
     })
 }
 
+#[cfg(feature = "site-db-projections")]
 fn page_level(
     rows: &[site_db::model::PageRow],
     index: &mut usize,
@@ -860,6 +927,7 @@ fn page_level(
     Ok(result)
 }
 
+#[cfg(feature = "site-db-projections")]
 fn menu_tree(rows: &[site_db::model::MenuRow]) -> Result<Vec<MenuNode>, CycleProjectionError> {
     let mut by_id = BTreeMap::new();
     let mut ordinals = BTreeSet::new();
@@ -964,6 +1032,7 @@ fn menu_tree(rows: &[site_db::model::MenuRow]) -> Result<Vec<MenuNode>, CyclePro
     Ok(result)
 }
 
+#[cfg(feature = "site-db-projections")]
 fn config_document(db: &site_db::SiteDb) -> Result<ConfigDocument, CycleProjectionError> {
     let mut matches = db
         .site_config

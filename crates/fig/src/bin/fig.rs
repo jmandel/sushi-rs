@@ -168,6 +168,15 @@ fn cmd_resolve(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_packages(args: &[String]) -> Result<Value> {
     match positional(args, 2) {
+        Some("prepare") => {
+            let request = package_acquisition::PreparedPackageSetRequest::parse_cli(&args[3..])?;
+            let manifest = request.execute()?;
+            let value = serde_json::to_value(&manifest)?;
+            if !has(args, "--json") {
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            }
+            Ok(value)
+        }
         Some("bundle") => {
             // `--template <id#ver>` emits the editor's warm-start artifact from the
             // LOADER's materialized template tree (task #39: the packed-bundle the
@@ -180,12 +189,7 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
             let out = opt(args, "-o")
                 .or_else(|| opt(args, "--out"))
                 .context("packages bundle needs --out <dir>")?;
-            let labels: Vec<String> = args
-                .iter()
-                .skip(3)
-                .filter(|a| !a.starts_with('-') && a.contains('#'))
-                .cloned()
-                .collect();
+            let labels = package_labels(args, 3);
             if labels.is_empty() {
                 bail!("packages bundle needs at least one <id#version> (or --template <id#ver>)");
             }
@@ -217,7 +221,7 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
             Ok(v)
         }
         _ => bail!(
-            "usage: fig packages <fetch <id#ver> | bundle --cache <dir> --out <dir> <id#ver>...>"
+            "usage: fig packages <fetch <id#ver> | bundle|prepare --cache <dir> --out <dir> <id#ver>...>"
         ),
     }
 }
@@ -626,6 +630,26 @@ fn has(args: &[String], name: &str) -> bool {
     args.iter().any(|a| a == name)
 }
 
+fn package_labels(args: &[String], start: usize) -> Vec<String> {
+    let mut labels = Vec::new();
+    let mut index = start;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--cache" | "--out" | "-o" | "--template" | "--cas" | "--registry" => {
+                index += 2;
+            }
+            "--json" => index += 1,
+            value => {
+                if value.contains('#') {
+                    labels.push(value.to_string());
+                }
+                index += 1;
+            }
+        }
+    }
+    labels
+}
+
 fn resolve_build_epoch(arg: Option<&str>) -> Result<i64> {
     let raw = match arg {
         Some(v) => v.to_string(),
@@ -666,7 +690,7 @@ fn print_usage() {
          \x20 build <ig-dir> [-o <out>] [--cache <dir>]        FSH -> resources\n\
          \x20 snapshot <sd.json> [--package p#v ...] [--cache] Walk-engine snapshot\n\
          \x20 resolve --cache <dir> (--root i#v | --project d) Dependency closure\n\
-         \x20 packages fetch <i#v> | bundle --cache -o <dir>   Acquire / CDN bundle\n\
+         \x20 packages fetch <i#v> | bundle|prepare --cache -o <dir> Package artifacts\n\
          \x20 expand <vs.json> [--resources <r.json>]          Tier-1 VS expansion\n\
          \x20 sitedb <ig> --sushi-out <d> --cache <d> -o <db>  S1-S7 site.db producer\n\
          \x20 prepare <ig> --target cycle-site/v2              Closed external-build bundle\n\

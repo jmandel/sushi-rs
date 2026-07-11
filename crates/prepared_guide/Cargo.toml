@@ -1,5 +1,5 @@
 [package]
-name = "package_store"
+name = "prepared_guide"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,9 +8,4 @@ rust-version.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
-anyhow.workspace = true
-rustc-hash.workspace = true
-hex.workspace = true
-sha2.workspace = true
-miniz_oxide.workspace = true
+thiserror.workspace = true

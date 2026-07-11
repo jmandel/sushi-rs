@@ -19,6 +19,7 @@ compiler.workspace = true          # build_project_with_cache (S1/S2)
 snapshot_gen.workspace = true      # generate_snapshot + PackageContext (S3)
 json_emit.workspace = true         # to_fhir_json_string (byte-stable FHIR JSON)
 package_store.workspace = true     # exact config/cache closure for S3 snapshots
+prepared_guide.workspace = true    # renderer-neutral prepared semantic model
 
 # External
 serde = { workspace = true }

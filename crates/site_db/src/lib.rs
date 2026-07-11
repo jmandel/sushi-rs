@@ -3,18 +3,20 @@
 //! Pipeline S1..S7 (see docs/cycle-package-db-plan.md §2b):
 //!   S1/S2  compiler::build_project_with_cache  -> fsh-generated/resources/*.json
 //!   S3     snapshot_gen::generate_snapshot     -> snapshot-complete SDs (in place)
-//!   S5     rows::*                              -> Resources/Concepts/Metadata rows
-//!   S6     augment::augment                     -> Pages/Menu/SiteConfig/Assets rows
+//!   S5/S6  shared semantic preparation          -> PreparedGuide
+//!   S5/S6  projection::project_prepared         -> optional compatibility rows
 //!   S7     writer::write_site_db                -> site.db (rusqlite sink)
 //! S4 (ValueSet expansion) is deferred (§4b — cycle needs zero expansions).
 //!
-//! The row model (`model::SiteDb`) is sqlite-free; only `writer` touches
-//! rusqlite (wasm requirement §5). A §2c BuildState ledger runs from day one.
+//! `prepare_build`/`prepare_from_inputs` construct no SiteDb. The row model
+//! (`model::SiteDb`) is sqlite-free; only `writer` touches rusqlite (wasm
+//! requirement §5). A §2c BuildState ledger runs from day one.
 
 pub mod augment;
 pub mod ledger;
 pub mod model;
 pub mod pipeline;
+pub mod projection;
 pub mod rows;
 pub mod timefmt;
 // The SQLite sink (S7) is native-only; the wasm build (default-features = false)
@@ -25,9 +27,11 @@ pub mod writer;
 pub use ledger::{BuildLedger, LedgerReport};
 pub use model::SiteDb;
 pub use pipeline::{
-    assemble_rows, build, build_from_inputs, AssembleInputs, BuildConfig, BuildOutcome,
-    InMemoryInputs,
+    assemble_prepared, assemble_prepared_and_rows, assemble_rows, build, build_from_inputs,
+    prepare_build, prepare_from_inputs, AssembleInputs, AssembleOutcome, BuildConfig, BuildOutcome,
+    InMemoryInputs, PreparedBuildOutcome, PreparedDiskBuildOutcome,
 };
+pub use projection::project_prepared;
 
 #[cfg(feature = "sqlite")]
 use anyhow::Result;

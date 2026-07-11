@@ -29,6 +29,14 @@ pub struct NormalizedPackageMaterial {
     pub declared_dependencies: BTreeMap<String, String>,
 }
 
+/// Canonicalized package input before the derived index and semantic payload
+/// are built. This internal split lets hosts measure validation/normalization
+/// independently from index construction without creating a second algorithm.
+pub(crate) struct CanonicalPackageMaterial {
+    pub files: BTreeMap<String, Vec<u8>>,
+    pub declared_dependencies: BTreeMap<String, String>,
+}
+
 /// Normalize package-relative entries and validate their declared identity.
 ///
 /// Safe nested members are retained because template packages consume them.
@@ -40,7 +48,13 @@ pub fn normalize_package_material(
     label: &str,
     entries: BTreeMap<String, Vec<u8>>,
 ) -> Result<NormalizedPackageMaterial> {
-    let (expected_id, expected_version) = parse_exact_label(label)?;
+    finish_normalized_package_material(label, canonicalize_package_material(label, entries)?)
+}
+
+pub(crate) fn canonicalize_package_material(
+    label: &str,
+    entries: BTreeMap<String, Vec<u8>>,
+) -> Result<CanonicalPackageMaterial> {
     let mut files = BTreeMap::new();
     for (name, bytes) in entries {
         validate_member_name(&name)?;
@@ -49,9 +63,66 @@ pub fn normalize_package_material(
         }
     }
 
+    let declared_dependencies = validate_package_identity(label, &files)?;
+
+    // A shipped sidecar is an optimization, not authoritative package input.
+    // Rebuilding it makes raw registry and native repacked forms byte-identical.
+    files.remove(derived_index::SIDECAR_NAME);
+    Ok(CanonicalPackageMaterial {
+        files,
+        declared_dependencies,
+    })
+}
+
+pub(crate) fn finish_normalized_package_material(
+    label: &str,
+    material: CanonicalPackageMaterial,
+) -> Result<NormalizedPackageMaterial> {
+    let CanonicalPackageMaterial {
+        mut files,
+        declared_dependencies,
+    } = material;
+    let mut source = BundleSource::new();
+    source.mount_package(label, files.clone());
+    let package_dir = source.cache_root().join(label).join("package");
+    let index = derived_index::build(&source, &package_dir);
+    files.insert(
+        derived_index::SIDECAR_NAME.to_string(),
+        derived_index::to_bytes(&index),
+    );
+
+    let semantic_files = files
+        .iter()
+        .filter(|(name, _)| !name.contains('/'))
+        .map(|(name, bytes)| (name.clone(), bytes.clone()))
+        .collect();
+    let payload = encode_normalized_package(&semantic_files);
+    Ok(NormalizedPackageMaterial {
+        files,
+        payload,
+        declared_dependencies,
+    })
+}
+
+/// Validate package identity and dependency metadata at the shared canonical
+/// preparation boundary. PreparedPackage v2 commits the resulting label,
+/// dependencies, and `package.json` member digest; warm decode authenticates
+/// that metadata without reparsing or inflating the body.
+pub(crate) fn validate_package_identity(
+    label: &str,
+    files: &BTreeMap<String, Vec<u8>>,
+) -> Result<BTreeMap<String, String>> {
     let package_json_bytes = files
         .get("package.json")
         .ok_or_else(|| anyhow!("package {label} has no top-level package.json"))?;
+    validate_package_identity_bytes(label, package_json_bytes)
+}
+
+pub(crate) fn validate_package_identity_bytes(
+    label: &str,
+    package_json_bytes: &[u8],
+) -> Result<BTreeMap<String, String>> {
+    let (expected_id, expected_version) = parse_exact_package_label(label)?;
     let package_json: Value = serde_json::from_slice(package_json_bytes)
         .with_context(|| format!("parse {label}/package.json"))?;
     let object = package_json
@@ -83,36 +154,12 @@ pub fn normalize_package_material(
         bail!("mounted package label {label} disagrees with package.json version={version:?}");
     }
 
-    let declared_dependencies = match object.get("dependencies") {
+    Ok(match object.get("dependencies") {
         None => BTreeMap::new(),
         Some(value) => serde_json::from_value::<BTreeMap<String, String>>(value.clone())
             .with_context(|| {
                 format!("{label}/package.json dependencies must map ids to strings")
             })?,
-    };
-
-    // A shipped sidecar is an optimization, not authoritative package input.
-    // Rebuilding it makes raw registry and native repacked forms byte-identical.
-    files.remove(derived_index::SIDECAR_NAME);
-    let mut source = BundleSource::new();
-    source.mount_package(label, files.clone());
-    let package_dir = source.cache_root().join(label).join("package");
-    let index = derived_index::build(&source, &package_dir);
-    files.insert(
-        derived_index::SIDECAR_NAME.to_string(),
-        derived_index::to_bytes(&index),
-    );
-
-    let semantic_files = files
-        .iter()
-        .filter(|(name, _)| !name.contains('/'))
-        .map(|(name, bytes)| (name.clone(), bytes.clone()))
-        .collect();
-    let payload = encode_normalized_package(&semantic_files);
-    Ok(NormalizedPackageMaterial {
-        files,
-        payload,
-        declared_dependencies,
     })
 }
 
@@ -138,7 +185,10 @@ pub fn encode_normalized_package(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
     encoded
 }
 
-fn parse_exact_label(label: &str) -> Result<(&str, &str)> {
+/// Parse and validate the exact `<id>#<version>` label used as a package-cache
+/// directory name. Call this before joining an untrusted label to a filesystem
+/// or OPFS root; package identity validation alone is too late for that use.
+pub fn parse_exact_package_label(label: &str) -> Result<(&str, &str)> {
     if label.contains(['/', '\\', '\0']) || label.trim() != label {
         bail!("unsafe package label {label:?}");
     }
@@ -153,7 +203,7 @@ fn parse_exact_label(label: &str) -> Result<(&str, &str)> {
 
 /// Validate a package-relative file path before joining it to BundleSource's
 /// synthetic root. Nested paths are needed by Publisher template packages.
-fn validate_member_name(name: &str) -> Result<()> {
+pub(crate) fn validate_member_name(name: &str) -> Result<()> {
     if name.is_empty()
         || name.starts_with('/')
         || name.contains('\\')
