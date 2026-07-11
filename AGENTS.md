@@ -7,6 +7,23 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**NATIVE FIG PRESERVES EXACT MULTI-VERSION CLOSURES (2026-07-11):** the
+closed Cycle v2 CI exposed one last Fig-only single-version assumption: native
+`fig prepare` collapsed the resolver's exact compile/context closure into a
+`package id -> coordinate` map and rejected the legitimate automatic
+`hl7.terminology.r4#7.2.0` plus exact transitive `#7.1.0` pair. Fig now retains
+the complete ordered set of `PackageCoordinate`s, selects the distinguished
+core by the config's exact FHIR-version coordinate even when other core
+coordinates coexist, and locks each package manifest dependency to the version
+selected by that dependency's own exact/wildcard request. It never retargets an
+edge merely by package id. The shared package-store version-selection rule is
+now public so Fig does not fork wildcard semantics. Regressions prove both
+terminology versions survive and that exact `7.1.0` and `latest` edges bind to
+`7.1.0` and `7.2.0`, respectively. Fig is 15/15 and package-store is 41/41. The
+literal Pages Cycle integration against the complete explicit cache is green:
+23 sources, 6 exact packages, 33 CAS objects, verified closed SiteBuild, link
+check, and an atomically published/verified 91-file SiteOutput.
+
 **UNCALLED TEMPLATE/BATCH COMPATIBILITY SURFACES DELETED (2026-07-11):** a
 whole-editor/engine scan found no caller for Fig's template-only warm JSON
 artifact or WASM's contiguous prepared-package batch. `fig packages bundle

@@ -248,7 +248,7 @@ fn compare_versions(l: &str, r: &str) -> std::cmp::Ordering {
 /// - `Ok(version)` — a concrete version (either the request was already concrete
 ///   after canonicalization, or the index yielded a match).
 /// - `Err(requested)` — resolution was needed but no index entry / no match.
-fn resolve_version(
+pub fn resolve_version(
     index: Option<&VersionIndex>,
     id: &str,
     requested: &str,

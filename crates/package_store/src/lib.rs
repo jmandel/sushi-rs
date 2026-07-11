@@ -37,9 +37,9 @@ pub use prepared::{
     PACKAGE_NORMALIZATION_VERSION, PREPARED_PACKAGE_FORMAT_VERSION, PREPARED_PACKAGE_MEDIA_TYPE,
 };
 pub use resolve::{
-    context_closure_for_root, resolve_project, version_index_from_cache, MissingPackage,
-    MissingReason, MutableVersionRequest, RequestedSet, ResolutionStep, VersionIndex,
-    RESOLVER_SCHEMA,
+    context_closure_for_root, resolve_project, resolve_version, version_index_from_cache,
+    MissingPackage, MissingReason, MutableVersionRequest, RequestedSet, ResolutionStep,
+    VersionIndex, RESOLVER_SCHEMA,
 };
 pub use source::{DirEntry, DiskSource, PackageSource};
 pub use template_loader::{

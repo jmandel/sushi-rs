@@ -75,8 +75,10 @@ struct SourceSnapshot {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ResolvedClosure {
-    /// Exactly one coordinate per package id, sorted by package id.
-    by_id: BTreeMap<String, PackageCoordinate>,
+    /// Every exact coordinate selected by the resolver. Different versions of
+    /// one package id are legitimate when an automatic compile dependency and
+    /// an exact transitive dependency select different releases.
+    coordinates: BTreeSet<PackageCoordinate>,
     core: PackageCoordinate,
 }
 
@@ -553,32 +555,32 @@ fn closure_from_step(
     config_text: &str,
     step: &package_store::ResolutionStep,
 ) -> Result<ResolvedClosure> {
-    let mut by_id = BTreeMap::new();
+    let mut coordinates = BTreeSet::new();
     for request in step.compile_set.iter().chain(&step.context_closure) {
         validate_package_component(&request.package_id, "package id")?;
         validate_package_component(&request.version, "package version")?;
         let coordinate = PackageCoordinate::new(&request.package_id, &request.version)?;
-        if let Some(prior) = by_id.insert(request.package_id.clone(), coordinate.clone()) {
-            if prior != coordinate {
-                bail!(
-                    "resolved closure contains conflicting versions for {}: {} and {}",
-                    request.package_id,
-                    prior,
-                    coordinate
-                );
-            }
-        }
+        coordinates.insert(coordinate);
     }
-    if by_id.is_empty() {
+    if coordinates.is_empty() {
         bail!("resolved package closure is empty");
     }
     let declared_fhir_version = config_fhir_version(config_text)?;
     let core_id = core_package_id(&declared_fhir_version)?;
-    let core = by_id
-        .get(core_id)
-        .cloned()
-        .ok_or_else(|| anyhow!("resolved closure has no expected core package {core_id}"))?;
-    Ok(ResolvedClosure { by_id, core })
+    let core_version = canonical_core_version(core_id, &declared_fhir_version);
+    let core = PackageCoordinate::new(core_id, core_version)?;
+    if !coordinates.contains(&core) {
+        bail!("resolved closure has no expected core package {core}");
+    }
+    Ok(ResolvedClosure { coordinates, core })
+}
+
+fn canonical_core_version<'a>(core_id: &str, fhir_version: &'a str) -> &'a str {
+    if core_id == "hl7.fhir.r4.core" && fhir_version == "4.0.0" {
+        "4.0.1"
+    } else {
+        fhir_version
+    }
 }
 
 fn config_fhir_version(config_text: &str) -> Result<String> {
@@ -629,9 +631,20 @@ fn collect_package_snapshot(
     cache_dir: &Path,
     closure: &ResolvedClosure,
 ) -> Result<PackageSnapshot> {
-    let mut packages = Vec::with_capacity(closure.by_id.len());
+    let mut packages = Vec::with_capacity(closure.coordinates.len());
     let mut objects = BTreeMap::new();
-    for coordinate in closure.by_id.values() {
+    let mut closure_versions = package_store::VersionIndex::new();
+    let mut versions_by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for coordinate in &closure.coordinates {
+        versions_by_id
+            .entry(coordinate.package_id().to_string())
+            .or_default()
+            .push(coordinate.version().to_string());
+    }
+    for (id, versions) in versions_by_id {
+        closure_versions.insert(id, versions);
+    }
+    for coordinate in &closure.coordinates {
         let label = coordinate.to_string();
         validate_package_component(&label, "package coordinate")?;
         let label_dir = cache_dir.join(&label);
@@ -670,8 +683,13 @@ fn collect_package_snapshot(
         insert_object(&mut objects, content.clone(), material.payload)?;
         let dependencies = material
             .declared_dependencies
-            .keys()
-            .filter_map(|id| closure.by_id.get(id).cloned())
+            .iter()
+            .filter_map(|(id, requested)| {
+                package_store::resolve_version(Some(&closure_versions), id, requested)
+                    .ok()
+                    .and_then(|version| PackageCoordinate::new(id, &version).ok())
+                    .filter(|dependency| closure.coordinates.contains(dependency))
+            })
             .collect();
         packages.push(LockedPackage {
             coordinate: coordinate.clone(),
@@ -1312,7 +1330,7 @@ mod tests {
         write(&cache.join("example#1.0.0/package/nested/a.txt"), b"alpha");
         let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
         let closure = ResolvedClosure {
-            by_id: BTreeMap::from([("example".into(), coordinate.clone())]),
+            coordinates: BTreeSet::from([coordinate.clone()]),
             core: coordinate,
         };
         let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
@@ -1362,6 +1380,50 @@ mod tests {
     }
 
     #[test]
+    fn package_lock_keeps_exact_dependency_edges_across_multiple_versions() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().canonicalize().unwrap();
+        package(
+            &cache,
+            "legacy-root",
+            "1.0.0",
+            serde_json::json!({"hl7.terminology.r4": "7.1.0"}),
+        );
+        package(
+            &cache,
+            "current-root",
+            "1.0.0",
+            serde_json::json!({"hl7.terminology.r4": "latest"}),
+        );
+        package(&cache, "hl7.terminology.r4", "7.1.0", serde_json::json!({}));
+        package(&cache, "hl7.terminology.r4", "7.2.0", serde_json::json!({}));
+        let legacy = PackageCoordinate::new("legacy-root", "1.0.0").unwrap();
+        let current = PackageCoordinate::new("current-root", "1.0.0").unwrap();
+        let terminology_71 = PackageCoordinate::new("hl7.terminology.r4", "7.1.0").unwrap();
+        let terminology_72 = PackageCoordinate::new("hl7.terminology.r4", "7.2.0").unwrap();
+        let closure = ResolvedClosure {
+            coordinates: BTreeSet::from([
+                legacy.clone(),
+                current.clone(),
+                terminology_71.clone(),
+                terminology_72.clone(),
+            ]),
+            core: legacy.clone(),
+        };
+
+        let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
+        assert_eq!(
+            snapshot.lock.get(&legacy).unwrap().dependencies,
+            BTreeSet::from([terminology_71])
+        );
+        assert_eq!(
+            snapshot.lock.get(&current).unwrap().dependencies,
+            BTreeSet::from([terminology_72])
+        );
+        assert_eq!(snapshot.lock.iter().count(), 4);
+    }
+
+    #[test]
     fn staged_inputs_are_detached_from_post_capture_live_mutations() {
         let live = tempfile::tempdir().unwrap();
         let ig = live.path().join("ig");
@@ -1378,7 +1440,7 @@ mod tests {
         let sources = collect_authored_sources(&ig).unwrap();
         let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
         let closure = ResolvedClosure {
-            by_id: BTreeMap::from([("example".into(), coordinate.clone())]),
+            coordinates: BTreeSet::from([coordinate.clone()]),
             core: coordinate,
         };
         let packages = collect_package_snapshot(&cache, &closure).unwrap();
@@ -1412,7 +1474,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_closure_is_satisfied_and_conflicting_versions_are_rejected() {
+    fn exact_closure_retains_multiple_versions_of_one_package_id() {
         let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().canonicalize().unwrap();
         package(&cache, "hl7.fhir.r4.core", "4.0.1", serde_json::json!({}));
@@ -1430,26 +1492,56 @@ mod tests {
             serde_json::json!({}),
         );
         let closure = resolve_exact_closure("fhirVersion: 4.0.1\n", &cache).unwrap();
-        assert_eq!(closure.by_id.len(), 4);
+        assert_eq!(closure.coordinates.len(), 4);
         assert_eq!(closure.core.to_string(), "hl7.fhir.r4.core#4.0.1");
 
-        let conflict = ResolutionStep {
+        let multi_version = ResolutionStep {
             resolver_schema: package_store::RESOLVER_SCHEMA,
-            compile_set: vec![PackageRequest {
-                package_id: "same".into(),
-                version: "1.0.0".into(),
-            }],
-            context_closure: vec![PackageRequest {
-                package_id: "same".into(),
-                version: "2.0.0".into(),
-            }],
+            compile_set: vec![
+                PackageRequest {
+                    package_id: "hl7.fhir.r4.core".into(),
+                    version: "4.0.1".into(),
+                },
+                PackageRequest {
+                    package_id: "hl7.terminology.r4".into(),
+                    version: "7.2.0".into(),
+                },
+            ],
+            context_closure: vec![
+                PackageRequest {
+                    package_id: "hl7.fhir.r4.core".into(),
+                    version: "4.0.0".into(),
+                },
+                PackageRequest {
+                    package_id: "hl7.fhir.r4.core".into(),
+                    version: "4.0.1".into(),
+                },
+                PackageRequest {
+                    package_id: "hl7.terminology.r4".into(),
+                    version: "7.1.0".into(),
+                },
+            ],
             resolution_support: Vec::new(),
             missing: Vec::new(),
             satisfied: true,
             mutable_requests: Vec::new(),
         };
-        let error = closure_from_step("fhirVersion: 4.0.1\n", &conflict).unwrap_err();
-        assert!(error.to_string().contains("conflicting versions"));
+        let closure = closure_from_step("fhirVersion: 4.0.1\n", &multi_version).unwrap();
+        let labels: Vec<String> = closure
+            .coordinates
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "hl7.fhir.r4.core#4.0.0",
+                "hl7.fhir.r4.core#4.0.1",
+                "hl7.terminology.r4#7.1.0",
+                "hl7.terminology.r4#7.2.0",
+            ]
+        );
+        assert_eq!(closure.core.to_string(), "hl7.fhir.r4.core#4.0.1");
     }
 
     #[cfg(unix)]
@@ -1469,7 +1561,7 @@ mod tests {
         .unwrap();
         let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
         let closure = ResolvedClosure {
-            by_id: BTreeMap::from([("example".into(), coordinate.clone())]),
+            coordinates: BTreeSet::from([coordinate.clone()]),
             core: coordinate,
         };
         let error = collect_package_snapshot(&cache_temp.path().canonicalize().unwrap(), &closure)
