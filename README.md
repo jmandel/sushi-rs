@@ -30,7 +30,7 @@ The browser host has one four-operation facade:
 ```text
 prepare(project, generatorSpec) -> immutable handle
 outputs(handle)                 -> complete path catalog
-render(handle, path)            -> ContentRef
+render(handle, path)            -> path + media type + ContentRef
 finalize(handle)                -> canonical SiteOutput
 ```
 

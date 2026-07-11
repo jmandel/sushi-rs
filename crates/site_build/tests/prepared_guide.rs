@@ -48,7 +48,7 @@ fn fixture() -> (PreparedGuide, cycle::CycleProjectionInput) {
         pages: Vec::new(),
         menu: Vec::new(),
         sushi_config: json!({"id":"example.ig"}),
-        assets: Vec::new(),
+        authored_files: Vec::new(),
     };
     let input = cycle::CycleProjectionInput {
         project,
@@ -88,5 +88,95 @@ fn direct_projection_fails_closed_on_semantic_identity_mismatch() {
         cycle::close_prepared(&prepared, input),
         Err(cycle::CycleProjectionError::Invalid(message))
             if message.contains("JSON identity")
+    ));
+}
+
+#[test]
+fn cycle_projects_images_publicly_and_includes_privately() {
+    let (mut prepared, mut input) = fixture();
+    let entries = [
+        (
+            "sushi-config.yaml",
+            SourceKind::Config,
+            b"id: example.ig\n".as_slice(),
+        ),
+        (
+            "input/images/logo.svg",
+            SourceKind::Asset,
+            b"<svg/>".as_slice(),
+        ),
+        (
+            "input/includes/shared.md",
+            SourceKind::Asset,
+            b"shared".as_slice(),
+        ),
+        ("input/data/site.json", SourceKind::Asset, b"{}".as_slice()),
+    ];
+    input.project.sources =
+        SourceManifest::from_entries(entries.into_iter().map(|(path, kind, bytes)| {
+            (
+                SourcePath::parse(path).unwrap(),
+                SourceEntry {
+                    kind,
+                    content: ContentRef::of_bytes(bytes, None::<String>),
+                },
+            )
+        }))
+        .unwrap();
+    prepared.authored_files = vec![
+        AuthoredFile {
+            role: AuthoredFileRole::Image,
+            path: PreparedPath::parse("logo.svg").unwrap(),
+            mime: "image/svg+xml".into(),
+            content: b"<svg/>".to_vec(),
+            source_reads: BTreeSet::from([PreparedPath::parse("input/images/logo.svg").unwrap()]),
+        },
+        AuthoredFile {
+            role: AuthoredFileRole::Include,
+            path: PreparedPath::parse("shared.md").unwrap(),
+            mime: "text/markdown".into(),
+            content: b"shared".to_vec(),
+            source_reads: BTreeSet::from(
+                [PreparedPath::parse("input/includes/shared.md").unwrap()],
+            ),
+        },
+        AuthoredFile {
+            role: AuthoredFileRole::Data,
+            path: PreparedPath::parse("site.json").unwrap(),
+            mime: "application/json".into(),
+            content: b"{}".to_vec(),
+            source_reads: BTreeSet::from([PreparedPath::parse("input/data/site.json").unwrap()]),
+        },
+    ];
+
+    let projection = cycle::close_prepared(&prepared, input).unwrap();
+    let required = projection
+        .site_build
+        .site_build()
+        .render_plan()
+        .required_artifacts();
+    assert!(required.contains(&cycle::asset_key(SourcePath::parse("logo.svg").unwrap())));
+    assert!(required.contains(&cycle::include_key(SourcePath::parse("shared.md").unwrap())));
+    assert!(!required.iter().any(|key| {
+        matches!(key, ArtifactKey::Asset { path, .. } if path.as_str() == "site.json")
+    }));
+}
+
+#[test]
+fn authored_page_body_requires_its_exact_project_source() {
+    let (mut prepared, input) = fixture();
+    prepared.pages.push(PageNode {
+        name_url: "index.html".into(),
+        title: "Home".into(),
+        generation: "markdown".into(),
+        body: Some("# Home".into()),
+        source: Some(PreparedPath::parse("input/pagecontent/index.md").unwrap()),
+        children: Vec::new(),
+    });
+
+    assert!(matches!(
+        cycle::close_prepared(&prepared, input),
+        Err(cycle::CycleProjectionError::Invalid(message))
+            if message.contains("page index.html reads absent project source")
     ));
 }

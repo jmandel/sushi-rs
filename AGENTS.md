@@ -7,6 +7,93 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**BROWSER EXAMPLES USE THE ONE LOCAL-RESOURCE CHANNEL (2026-07-11):**
+`input/examples/*.json` and `input/resources/*.json` cross `compileProject`
+through the same parsed local-resource map. The compiler's exported stock
+directory rank keeps resources before examples, exact source-root paths survive
+under `/__predefined__`, and overlap/source-manifest validation covers both
+roots. No `PrepareInputs.examples` side channel was restored. Focused compiler,
+PreparedGuide/site-producer, WASM facade, app-store, type, and production-build
+checks are green.
+
+**PUBLISHER PREPARATION IS COLLISION-CLOSED AND RENDER RETURNS ITS MIME (2026-07-11):**
+Prepared authored roles are preflighted against every internal tree and public
+output path they project before any staging mutation; two roles can no longer
+silently overwrite one `_includes`, `_data`, page, or public asset location.
+`site_producer` likewise rejects two resource shells/subjects resolving through
+template configuration to one final output path and reports both exact
+subjects/roles. Output insertion rejects collisions except the documented
+`runtime < core < template < authored` override; a directly declared output
+also intentionally wins over a page-relative compatibility alias. Rust
+`render(handle,path)` now returns the exact `mediaType` beside its `ContentRef`,
+so the worker no longer performs an `outputs(handle)` catalog read on every
+render. Publisher `packageLockMs` sums only base-lock and template-chain-lock
+work instead of spanning PreparedGuide phases; the fixture asserts all reported
+phases are disjoint. Gates: site-producer 16/16; WASM lib 35 pass/1 ignored;
+Session 8/8; wasm32 check; app 56/56 and Pages-base production build; fmt and
+diff-check green.
+
+**PUBLISHER OUTPUTS DECLARE EXACT RESOURCE SUBJECTS (2026-07-11):**
+`site_producer` records each resource shell's title, `resourceType/id`, and
+primary/companion role beside its exact final configured path. The WASM
+Publisher facade now carries that map through tree assembly and emits the
+optional `OutputDescriptor.title`, `subject`, and `subjectPage` fields directly;
+it never parses an output filename. Authored narrative pages, runtime assets,
+and other subjectless outputs omit all three fields. The real Publisher prepare
+facade regression uses a deliberately renamed ValueSet landing path and proves
+the subject survives, while its narrative and asset controls remain
+subjectless. Gates: WASM lib 32 pass/1 ignored; site-producer 14/14; fmt and
+diff-check green.
+
+**PREPAREDGUIDE CAPTURES COMPLETE AUTHORED PUBLISHER INPUTS (2026-07-11):**
+`PreparedGuide.authored_files` contains `AuthoredFile` values with an explicit
+`PageContent`, `ResourceContent`, `Data`, `Include`, `Image`, or `ImageSource`
+role plus their role-relative path and exact project
+source read. Preparation recursively captures `input/{pagecontent,pages}` as
+page content, `input/{intro-notes,resource-docs}` as resource content,
+`input/data`, every declared include root (not only includes discovered while
+parsing a page), images, and `input/images-source`. Authored page bodies name their exact source;
+generated HTML navigation nodes retain neither body nor source. Unsafe roots
+and references fail, and two declared roots claiming one role-relative path
+fail instead of depending on traversal order. Cycle projects `Image` as a
+public authored asset and `Include` through the private typed
+`cycle.authored.include/v1` namespace; Liquid can read the latter, but the
+Cycle output catalog cannot publish it. Page/resource content and data remain
+PreparedGuide inputs for the Publisher migration. Cycle navigation is
+`cycle.semantic.navigation/v2`; authored bodies require an exact normalized
+source while generated nodes have neither. Focused prepared-guide and
+site-build tests plus Cycle semantic tests/typecheck are green.
+
+**SITE PRODUCER PROJECTS PREPAREDGUIDE DIRECTLY (2026-07-11):**
+`ProducerInputs::from_prepared` selects only the explicit primary IG, verifies
+resource JSON identity, preserves its exact `definition.resource` order and
+example markers, derives intro/notes presence from typed authored files, and
+uses the prepared menu. `site_producer` now owns stock-compatible `menu.xml`
+generation and returns it with other generated includes in
+`SiteProducerOutput.includes`. The transitional `PreparedAsset`/`assets` names
+are deleted without aliases. The duplicate compiler menu module and its WASM
+caller are deleted; prepared menu semantics now have one Publisher projection.
+Focused prepared-guide, site-build, site-producer, and Cycle gates are green.
+
+**DIRECT PUBLISHER PREPARATION IS MEASURABLE (2026-07-11):** the existing WASM
+`prepare` result carries an observational metrics sidecar; it is not part of
+SiteBuild identity and adds no operation/cache/domain value. Nonnegative phases
+cover project revision/source manifest, package lock, PreparedGuide key/build
+and cache hit, template materialization, Publisher runtime, Publisher model,
+render model, catalog, and total. The editor adds compiler-boundary,
+Rust-envelope, and post-Rust host timings. Publisher now consumes the same
+PreparedGuide directly through `ProducerInputs::from_prepared`, typed authored
+file staging, and per-handle RenderSemantics/RenderState; no ambient tree or
+second snapshot-completion path remains. `RenderTarget.template` is the exact
+typed coordinate, and the SiteBuild package lock adds every authenticated
+mounted member of its resolved root-first base chain with exact parent edges.
+The ambient Engine `site_files`/menu/render-state layer, reconstruction and IG
+synthesis helpers, second snapshot path, obsolete ambient gates, and retired
+standalone Session compile/local-resource methods are deleted. Focused
+Publisher metrics/cache, typed subject, renamed-output, template-chain, and
+order-independent rendering regressions plus WASM lib 32/32 (1 ignored),
+site-producer 14/14, and Session 8/8 are green.
+
 **NATIVE FIG PRESERVES EXACT MULTI-VERSION CLOSURES (2026-07-11):** the
 closed Cycle v2 CI exposed one last Fig-only single-version assumption: native
 `fig prepare` collapsed the resolver's exact compile/context closure into a

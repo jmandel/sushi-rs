@@ -173,6 +173,10 @@ pub struct PageNode {
     pub generation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<String>,
+    /// Exact authored project source for `body`. Generated navigation nodes
+    /// have neither a body nor a source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<PreparedPath>,
     pub children: Vec<PageNode>,
 }
 
@@ -185,9 +189,28 @@ pub struct MenuNode {
     pub items: Vec<MenuNode>,
 }
 
-/// An authored asset and the exact project sources used to prepare it.
+/// Publisher-facing role of a captured authored file. Paths are relative to
+/// the role's declared root, while `source_reads` retain exact project
+/// ownership. Roles are deliberately distinct: an include or `_data` input is
+/// renderer input, not a public site asset.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthoredFileRole {
+    PageContent,
+    ResourceContent,
+    Data,
+    Include,
+    Image,
+    ImageSource,
+}
+
+/// A captured authored Publisher input and its exact project source.
+///
+/// `role` prevents downstream projections from treating every captured input
+/// as a public asset.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PreparedAsset {
+pub struct AuthoredFile {
+    pub role: AuthoredFileRole,
     pub path: PreparedPath,
     pub mime: String,
     pub content: Vec<u8>,
@@ -204,7 +227,7 @@ pub struct PreparedGuide {
     pub pages: Vec<PageNode>,
     pub menu: Vec<MenuNode>,
     pub sushi_config: Value,
-    pub assets: Vec<PreparedAsset>,
+    pub authored_files: Vec<AuthoredFile>,
 }
 
 /// Byte source for authored guide inputs. This is part of PreparedGuide
@@ -306,12 +329,12 @@ pub struct AugmentInputs<'a> {
     pub files: &'a dyn FileSource,
 }
 
-/// Renderer-neutral authored navigation/config/assets captured during guide
+/// Renderer-neutral authored navigation/config/files captured during guide
 /// preparation. Relational compatibility rows, when requested, are projected
 /// only after this value is complete.
 pub struct PreparedAugmentation {
     pub pages: Vec<PageNode>,
     pub menu: Vec<MenuNode>,
     pub sushi_config: Value,
-    pub assets: Vec<PreparedAsset>,
+    pub authored_files: Vec<AuthoredFile>,
 }

@@ -17,7 +17,6 @@
 //! s.beginPreparedMount(count);           // warm all-or-nothing compact transaction
 //! s.stagePreparedMount(bytes, key);      // one checked artifact at a time
 //! s.commitPreparedMount();               // publish only after all stages validate
-//! s.compile(filesJson, config, predefinedJson);
 //! s.snapshot(urlOrInlineSd);
 //! s.prepare(generatorSpecJson);
 //! s.expandValueSet(vsJson, resourcesJson);
@@ -47,7 +46,7 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use package_store::{BundleSource, PackageSource};
@@ -57,8 +56,7 @@ mod render_surface;
 #[cfg(test)]
 use render_surface::build_render_state;
 use render_surface::{
-    build_render_semantics, build_render_state_from_semantics, RenderSemantics, RenderState,
-    SiteOptions,
+    build_render_semantics, build_render_state_from_semantics, RenderState, SiteOptions,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -203,25 +201,11 @@ struct Engine {
     /// existing semantic/project identities are the sole reuse authority.
     last_compile_result: Option<CompileResult>,
     last_compile_diagnostics: Vec<DiagnosticJs>,
-    /// The mounted site tree (template statics + staged pagecontent + _data +
-    /// _includes + optional txcache), keyed by virtual path under /site.
-    site_files: std::collections::HashMap<PathBuf, Vec<u8>>,
-    site_options: SiteOptions,
-    /// `menu.xml` generated from the last `compile()`'s sushi-config `menu:` tree
-    /// (the navbar is IG data, not template chrome). `prepare(publisher)` stages it
-    /// into `_includes/` so the layouts' `{% include menu.xml %}` resolves.
-    menu_xml: Option<String>,
     /// Input page-folder listing (`input/{pagecontent,pages,resource-docs}` ->
     /// filenames) threaded into IG export so the generated IG's `definition.page`
     /// narrative tree is complete (narrative titles + the artifacts-section number).
     /// Set via `set_page_listing`; empty by default (artifact layer needs no pages).
     page_listing: std::collections::HashMap<String, Vec<String>>,
-    /// Expensive semantic renderer, shared by any number of site-only
-    /// generations. Its internal tree contains only snapshot-complete `/own`,
-    /// packages, and txcache, so page/template overlays cannot make it stale.
-    render_semantics: Option<Rc<RenderSemantics>>,
-    /// Cheap page/template surface for the current mounted site generation.
-    render_state: Option<Rc<RenderState>>,
     /// Immutable target-specific site runtimes. A handle is exactly the closed
     /// SiteBuild id; mutable work below it is only path-local memoization and
     /// can never change the build that another handle names. Only the current
@@ -349,15 +333,6 @@ fn set_panic_hook() {
 }
 
 impl Engine {
-    fn invalidate_render_surface(&mut self) {
-        self.render_state = None;
-    }
-
-    fn invalidate_render_semantics(&mut self) {
-        self.render_semantics = None;
-        self.invalidate_render_surface();
-    }
-
     /// Commit a successful compile generation. Exact render-set equality alone
     /// is insufficient: raw config/FSH/predefined/page-listing inputs are also
     /// part of the key so no relevant compiler context is hidden. Packages,
@@ -373,21 +348,10 @@ impl Engine {
             && self.last_render_semantic_inputs.as_ref() == Some(&inputs);
         self.last_compiled = compiled;
         self.last_render_semantic_inputs = Some(inputs);
-        if same_semantics {
-            self.invalidate_render_surface();
-        } else {
+        if !same_semantics {
             self.prepared_guide_cache = None;
             self.closed_site_build_cache = None;
-            self.invalidate_render_semantics();
         }
-    }
-
-    fn replace_local_render_set(&mut self, compiled: Vec<(PathBuf, Value)>) {
-        self.last_compiled = compiled;
-        self.last_render_semantic_inputs = None;
-        self.prepared_guide_cache = None;
-        self.closed_site_build_cache = None;
-        self.invalidate_render_semantics();
     }
 
     /// Mount a set of bundles as the package cache, REPLACING any prior mount.
@@ -420,7 +384,6 @@ impl Engine {
         self.last_compile_diagnostics.clear();
         self.prepared_guide_cache = None;
         self.closed_site_build_cache = None;
-        self.invalidate_render_semantics();
         Ok(parsed.len() as u32)
     }
 
@@ -477,7 +440,6 @@ impl Engine {
             // set. Even if a new package looks unrelated, mutable/range
             // requests must be resolved again before another compileProject.
             self.resolved_packages = None;
-            self.invalidate_render_semantics();
         }
         Ok(total)
     }
@@ -780,7 +742,6 @@ impl Engine {
             self.cache_root = source.cache_root().to_path_buf();
             self.bundle = Some(Rc::new(source));
             self.resolved_packages = None;
-            self.invalidate_render_semantics();
         }
         Ok(added)
     }
@@ -838,8 +799,8 @@ impl Engine {
     /// Package view for operations derived from the current compile. A complete
     /// `compileProject` revision remains bound to its captured resolver closure
     /// even if unrelated/template/other-version packages are mounted later.
-    /// Legacy `compile`/`setLocalResources` revisions have no such certificate
-    /// and retain the historical all-mounted behavior.
+    /// Internal non-project revisions have no such certificate and retain the
+    /// historical all-mounted behavior for snapshot-only operations.
     fn source_for_current_revision(&self) -> Result<(SharedBundle, PathBuf, Vec<String>), String> {
         match self
             .last_project
@@ -849,17 +810,6 @@ impl Engine {
             Some(resolved) => self.source_for_resolved(resolved),
             None => self.source(),
         }
-    }
-
-    /// Compile a project in memory. Returns the [`CompileResult`] payload and
-    /// stashes the compiled resources as snapshot-resolution locals.
-    fn compile(
-        &mut self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-    ) -> Result<CompileResult, String> {
-        self.compile_with_resolved(files_json, config, predefined_json, None)
     }
 
     fn compile_with_resolved(
@@ -883,18 +833,17 @@ impl Engine {
             .map(|(path, source)| (path.clone(), source.clone()))
             .collect();
 
-        // Predefined resources: object path -> body. Sorted by path so
-        // `PredefinedPackage::load_from` sees the disk-equivalent order.
+        // Authored local resources: object path -> body. Preserve stock SUSHI's
+        // fixed input-directory order rather than lexical map order: examples
+        // deliberately follow resources and therefore win later duplicate-
+        // identity projection exactly as they do on disk.
         let predefined_map: BTreeMap<String, Value> = if predefined_json.trim().is_empty() {
             BTreeMap::new()
         } else {
             serde_json::from_str(predefined_json)
                 .map_err(|e| format!("compile: bad predefined JSON: {e}"))?
         };
-        let predefined: Vec<(PathBuf, Value)> = predefined_map
-            .iter()
-            .map(|(path, body)| (PathBuf::from(path), body.clone()))
-            .collect();
+        let predefined = ordered_predefined_resources(&predefined_map);
         let semantic_inputs = RenderSemanticInputs {
             config: config.to_string(),
             fsh: files_map,
@@ -948,14 +897,7 @@ impl Engine {
             })
             .collect();
         for (path, body) in &predefined_for_render {
-            let fname = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("resource.json");
-            render_set.push((
-                PathBuf::from(format!("/__predefined__/{fname}")),
-                body.clone(),
-            ));
+            render_set.push((predefined_render_path(path)?, body.clone()));
         }
         // The generated ImplementationGuide joins the render set so prepare(publisher)
         // finds a faithful IG (correct titles/example markers/page tree) rather than
@@ -965,39 +907,8 @@ impl Engine {
         }
         self.replace_compiled_render_set(render_set, semantic_inputs);
 
-        // Generate the navbar (menu.xml) from the sushi-config `menu:` tree so
-        // prepare(publisher) can stage it into _includes/ — SUSHI writes this per-IG;
-        // it is IG data, not template chrome (the template only supplies the
-        // `{% include menu.xml %}` point).
-        self.menu_xml = compiler::menu::menu_xml(config);
-
-        let resources: Vec<CompiledResourceJs> = compiled
-            .into_iter()
-            .map(|r| {
-                let rt = r
-                    .body
-                    .get("resourceType")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string);
-                let id = r
-                    .body
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string);
-                let url = r
-                    .body
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string);
-                CompiledResourceJs {
-                    filename: r.filename,
-                    text: r.text,
-                    resource_type: rt,
-                    id,
-                    url,
-                }
-            })
-            .collect();
+        let resources: Vec<CompiledResourceJs> =
+            compiled.into_iter().map(CompiledResourceJs::from).collect();
 
         let diagnostics: Vec<DiagnosticJs> = diagnostics
             .into_iter()
@@ -1079,10 +990,6 @@ impl Engine {
                 .last_compile_result
                 .clone()
                 .expect("reuse guard requires a prior compile result");
-            // The semantic renderer remains exact, but any ambient surface was
-            // assembled over the prior authored site tree. Immutable retained
-            // SiteBuild handles own their RenderState and are unaffected.
-            self.invalidate_render_surface();
             self.last_project = Some(CompiledProjectRevision {
                 config: config.to_string(),
                 fsh,
@@ -1114,24 +1021,6 @@ impl Engine {
             resolved_packages: Some(resolved_packages),
         });
         Ok(result)
-    }
-
-    /// Set the "local" StructureDefinitions the next snapshot resolves bases
-    /// against — the in-memory equivalent of the CLI's `--local-dir`. Replaces the
-    /// local set from the last `compile()`. Returns the count.
-    fn set_local_resources(&mut self, json: &str) -> Result<u32, String> {
-        let map: std::collections::BTreeMap<String, Value> = serde_json::from_str(json)
-            .map_err(|e| format!("set_local_resources: bad JSON: {e}"))?;
-        let locals: Vec<(PathBuf, Value)> = map
-            .into_iter()
-            .map(|(p, v)| (PathBuf::from(format!("/__local__/{p}")), v))
-            .collect();
-        let n = locals.len() as u32;
-        self.replace_local_render_set(locals);
-        self.last_project = None;
-        self.last_compile_result = None;
-        self.last_compile_diagnostics.clear();
-        Ok(n)
     }
 
     /// Build a fresh `PackageContext` over the last complete project's exact
@@ -1285,16 +1174,30 @@ impl Engine {
     fn prepare_cycle(
         &mut self,
         options: &PrepareGuideOptions,
-    ) -> Result<site_build::cycle_semantic::ClosedCycleProjection, String> {
+    ) -> Result<
+        (
+            site_build::cycle_semantic::ClosedCycleProjection,
+            PrepareMetrics,
+        ),
+        String,
+    > {
+        let total_started = clock_ms();
+        let mut metrics = PrepareMetrics::default();
         let operation = "prepare(cycle)";
         let project = self.last_project.clone().ok_or_else(|| {
             format!("{operation}: compileProject has not established a complete source revision")
         })?;
         let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
+        let started = clock_ms();
         let project_revision = self.site_build_project_revision(&project, &project_id)?;
+        metrics.project_revision_ms = (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let package_lock = self.site_build_package_lock(&project)?;
+        metrics.package_lock_ms = (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let prepared_key =
             self.prepared_guide_cache_key(options, &project_revision, &package_lock, operation)?;
+        metrics.prepared_guide_key_ms = (clock_ms() - started).max(0.0);
 
         let diagnostics = site_build_diagnostics(&self.last_compile_diagnostics);
 
@@ -1332,15 +1235,28 @@ impl Engine {
             .map_err(|error| format!("{operation}: cache key: {error}"))?;
         if let Some(entry) = &self.closed_site_build_cache {
             if entry.key == closed_key {
+                metrics.site_build_cache_hit = true;
+                metrics.prepared_guide_cache_hit = self
+                    .prepared_guide_cache
+                    .as_ref()
+                    .is_some_and(|prepared| prepared.key == prepared_key);
+                metrics.total_ms = (clock_ms() - total_started).max(0.0);
                 #[cfg(test)]
                 {
                     self.derived_cache_hits.closed_site_build += 1;
                 }
-                return Ok(entry.projection.clone());
+                return Ok((entry.projection.clone(), metrics));
             }
         }
 
+        metrics.prepared_guide_cache_hit = self
+            .prepared_guide_cache
+            .as_ref()
+            .is_some_and(|prepared| prepared.key == prepared_key);
+        let started = clock_ms();
         let prepared_guide = self.site_model_from_compile(options, operation, prepared_key)?;
+        metrics.prepared_guide_ms = (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let input = site_build::cycle_semantic::CycleProjectionInput {
             project: project_revision,
             package_lock,
@@ -1349,11 +1265,13 @@ impl Engine {
         };
         let projection = site_build::cycle_semantic::close_prepared(&prepared_guide, input)
             .map_err(|e| format!("{operation}: {e}"))?;
+        metrics.catalog_ms = (clock_ms() - started).max(0.0);
         self.closed_site_build_cache = Some(ClosedSiteBuildCacheEntry {
             key: closed_key,
             projection: projection.clone(),
         });
-        Ok(projection)
+        metrics.total_ms = (clock_ms() - total_started).max(0.0);
+        Ok((projection, metrics))
     }
 
     /// Canonical lookup identity for the expensive snapshot + semantic
@@ -1436,49 +1354,43 @@ impl Engine {
         let (source, cache_root, package_context) = self.source_for_resolved(resolved)?;
         let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
             .map_err(|e| format!("{operation}: package context: {e:#}"))?;
-        let compiled_locals: Vec<(PathBuf, Value)> = self
-            .last_compiled
-            .iter()
-            .filter(|(path, _)| path.starts_with("/__compiled__"))
-            .cloned()
-            .collect();
-        ctx.load_local_resources(compiled_locals);
+        // `last_compiled` is the complete local render set: generated FSH
+        // resources, predefined `input/resources/**` bodies, and the explicitly
+        // generated primary IG. Collapse it once by FHIR identity before any
+        // semantic preparation. This preserves the old effective precedence
+        // (later predefined inputs replace an identically keyed generated body),
+        // while the explicit /__ig__ artifact remains authoritative for its own
+        // identity.
+        let (mut local_resources, primary_implementation_guide) =
+            prepared_local_resource_set(&self.last_compiled, operation)?;
 
-        let mut generated = Vec::new();
-        let mut primary_implementation_guide = None;
-        for (path, body) in &self.last_compiled {
-            if path.starts_with("/__compiled__") {
-                if body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-                    let label = path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or("StructureDefinition");
-                    generated.push(
-                        snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
-                            .map_err(|e| format!("{operation}: snapshot {label}: {e:#}"))?,
-                    );
-                } else {
-                    generated.push(body.clone());
-                }
-            } else if path.starts_with("/__ig__") {
-                generated.push(body.clone());
-                if primary_implementation_guide.replace(body.clone()).is_some() {
-                    return Err(format!(
-                        "{operation}: compiled revision has multiple primary ImplementationGuide artifacts"
-                    ));
-                }
+        // Snapshot resolution must see the same complete, deduplicated local set
+        // that PreparedGuide receives. In particular, predefined differential
+        // profiles may derive from generated siblings or other predefined
+        // profiles. PackageContext requires path order for disk-equivalent local
+        // precedence, so do not rely on the render-set channel ordering here.
+        let mut snapshot_locals = local_resources.clone();
+        snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
+        ctx.load_local_resources(snapshot_locals);
+        for (path, body) in &mut local_resources {
+            if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
+                continue;
             }
+            let label = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("StructureDefinition");
+            *body = snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
+                .map_err(|e| format!("{operation}: snapshot {label}: {e:#}"))?;
         }
-        let primary_implementation_guide = primary_implementation_guide.ok_or_else(|| {
-            format!("{operation}: compiled revision has no primary ImplementationGuide")
-        })?;
-
-        let examples = collect_example_resources(&project.site_files, operation)?;
+        let generated = local_resources
+            .into_iter()
+            .map(|(_, body)| body)
+            .collect::<Vec<_>>();
         let guide = assemble_prepared_model(
             operation,
             &generated,
             &primary_implementation_guide,
-            &examples,
             &project.config,
             &project.site_files,
             input.build_epoch_secs,
@@ -1758,12 +1670,104 @@ fn resolved_packages_from_step(
     })
 }
 
+fn ordered_predefined_resources(resources: &BTreeMap<String, Value>) -> Vec<(PathBuf, Value)> {
+    let mut ordered = resources
+        .iter()
+        .map(|(path, body)| (PathBuf::from(path), body.clone()))
+        .collect::<Vec<_>>();
+    ordered.sort_by(|(left, _), (right, _)| {
+        compiler::predefined::input_path_rank(left)
+            .cmp(&compiler::predefined::input_path_rank(right))
+            .then_with(|| left.cmp(right))
+    });
+    ordered
+}
+
+fn predefined_render_path(source: &Path) -> Result<PathBuf, String> {
+    let source_text = source
+        .to_str()
+        .ok_or_else(|| format!("compile: local resource path is not UTF-8: {source:?}"))?;
+    let source_path = site_build::SourcePath::parse(source_text.to_string())
+        .map_err(|error| format!("compile: invalid local resource path {source:?}: {error}"))?;
+    Ok(PathBuf::from(format!(
+        "/__predefined__/{}",
+        source_path.as_str()
+    )))
+}
+
+/// Select the one complete local resource input to PreparedGuide.
+///
+/// `compile_with_resolved` deliberately records channels in effective
+/// precedence order (generated FSH, predefined resources, explicit generated
+/// IG). The former `generated + examples` handoff happened to deduplicate by
+/// `(resourceType, id)` inside semantic preparation with the later channel
+/// winning. Make that rule explicit here so snapshot generation and semantic
+/// preparation consume exactly the same bodies. The primary IG is selected by
+/// its `/__ig__` ownership marker, never by position or resource identity, and
+/// remains authoritative if another channel repeats its key.
+fn prepared_local_resource_set(
+    render_set: &[(PathBuf, Value)],
+    operation: &str,
+) -> Result<(Vec<(PathBuf, Value)>, Value), String> {
+    let explicit = render_set
+        .iter()
+        .enumerate()
+        .filter(|(_, (path, body))| {
+            path.starts_with("/__ig__")
+                && body.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
+        })
+        .collect::<Vec<_>>();
+    let (primary_index, (primary_path, primary)) = match explicit.as_slice() {
+        [(index, entry)] => (*index, *entry),
+        [] => {
+            return Err(format!(
+                "{operation}: compiled revision has no explicit primary ImplementationGuide artifact"
+            ));
+        }
+        _ => {
+            return Err(format!(
+                "{operation}: compiled revision has multiple explicit primary ImplementationGuide artifacts"
+            ));
+        }
+    };
+
+    let key = |body: &Value| -> Option<(String, String)> {
+        Some((
+            body.get("resourceType")?.as_str()?.to_string(),
+            body.get("id")?.as_str()?.to_string(),
+        ))
+    };
+    let primary_key = key(primary).ok_or_else(|| {
+        format!("{operation}: explicit primary ImplementationGuide has no resourceType/id")
+    })?;
+
+    let mut selected: BTreeMap<(String, String), (usize, PathBuf, Value)> = BTreeMap::new();
+    for (index, (path, body)) in render_set.iter().enumerate() {
+        if let Some(key) = key(body) {
+            selected.insert(key, (index, path.clone(), body.clone()));
+        }
+    }
+    selected.insert(
+        primary_key,
+        (primary_index, primary_path.clone(), primary.clone()),
+    );
+
+    let mut resources = selected.into_values().collect::<Vec<_>>();
+    resources.sort_by_key(|(index, _, _)| *index);
+    Ok((
+        resources
+            .into_iter()
+            .map(|(_, path, body)| (path, body))
+            .collect(),
+        primary.clone(),
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assemble_prepared_model(
     operation: &str,
     generated: &[Value],
     primary_implementation_guide: &Value,
-    examples: &[Value],
     config: &str,
     site_files: &BTreeMap<String, String>,
     build_epoch_secs: i64,
@@ -1787,7 +1791,11 @@ fn assemble_prepared_model(
     prepared_guide::semantics::prepare(&prepared_guide::semantics::PrepareInputs {
         generated,
         primary_implementation_guide,
-        examples,
+        // Every local resource has already been selected, deduplicated, and
+        // snapshot-completed above. Example-ness is publication metadata on the
+        // explicit IG's definition.resource entries, not a second resource
+        // transport channel.
+        examples: &[],
         sushi_config_yaml: config,
         build_epoch_secs,
         branch,
@@ -1841,6 +1849,59 @@ struct CompiledResourceJs {
     resource_type: Option<String>,
     id: Option<String>,
     url: Option<String>,
+    /// Exact authored declaration that produced this output. Generated
+    /// resources have no declaration, so this key is omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    definition: Option<DefinitionJs>,
+}
+
+#[derive(Clone, Serialize, PartialEq, Eq, Debug)]
+struct DefinitionJs {
+    kind: &'static str,
+    path: String,
+    /// 1-based authored line.
+    line: u32,
+    /// 0-based authored column.
+    column: u32,
+}
+
+impl From<compiler::CompiledResource> for CompiledResourceJs {
+    fn from(resource: compiler::CompiledResource) -> Self {
+        let compiler::CompiledResource {
+            filename,
+            text,
+            body,
+            definition,
+        } = resource;
+        let resource_type = body
+            .get("resourceType")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        let id = body
+            .get("id")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        let url = body
+            .get("url")
+            .and_then(|value| value.as_str())
+            .map(str::to_string);
+        let definition = definition.map(|definition| DefinitionJs {
+            kind: match definition.kind {
+                compiler::DefinitionKind::FshDeclaration => "fsh-declaration",
+            },
+            path: definition.path,
+            line: definition.line,
+            column: definition.column,
+        });
+        Self {
+            filename,
+            text,
+            resource_type,
+            id,
+            url,
+            definition,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Default)]
@@ -2011,6 +2072,26 @@ struct PrepareSiteResult {
     build_id: String,
     generator: String,
     site_build: site_build::ClosedSiteBuild,
+    metrics: PrepareMetrics,
+}
+
+/// Diagnostic timings for the existing `prepare` operation. These are an
+/// observational sidecar, never part of SiteBuild identity or cache authority.
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrepareMetrics {
+    total_ms: f64,
+    project_revision_ms: f64,
+    package_lock_ms: f64,
+    prepared_guide_key_ms: f64,
+    prepared_guide_ms: f64,
+    prepared_guide_cache_hit: bool,
+    site_build_cache_hit: bool,
+    template_materialize_ms: f64,
+    publisher_runtime_ms: f64,
+    publisher_model_ms: f64,
+    render_model_ms: f64,
+    catalog_ms: f64,
 }
 
 #[derive(Clone, Serialize)]
@@ -2021,6 +2102,26 @@ struct OutputDescriptor {
     media_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<site_build::ContentRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject: Option<OutputResourceSubject>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subject_page: Option<OutputSubjectPage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OutputResourceSubject {
+    resource_type: String,
+    id: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum OutputSubjectPage {
+    Primary,
+    Companion,
 }
 
 #[derive(Serialize)]
@@ -2034,6 +2135,7 @@ struct OutputCatalogResult {
 #[serde(rename_all = "camelCase")]
 struct RenderSiteResult {
     path: site_build::OutputPath,
+    media_type: String,
     content: site_build::ContentRef,
     non_ready_fragments: usize,
 }
@@ -2196,7 +2298,6 @@ fn package_version_cmp(left: &str, right: &str) -> std::cmp::Ordering {
 
 // The result/error envelope helpers now live in the shared `api_envelope` crate
 // (imported above) — one implementation for the Session and the `fig` CLI.
-
 // ===========================================================================
 // Session — the preferred isolated engine handle, with grouped methods and the
 // uniform envelope.
@@ -2341,16 +2442,6 @@ impl Session {
             .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
 
-    /// Compile a project in memory. Envelope result: `{ resources, diagnostics,
-    /// timings }`.
-    pub fn compile(&self, files_json: &str, config: &str, predefined_json: &str) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "compile",
-            self.with_engine(|e| e.compile(files_json, config, predefined_json)),
-        )
-    }
-
     /// Compile one complete project revision, including its authored site-file
     /// manifest. The latter supplies page-folder names to IG export so downstream
     /// SiteBuild projections reuse this exact compile instead of rerunning
@@ -2369,18 +2460,6 @@ impl Session {
             self.with_engine(|e| {
                 e.compile_project(files_json, config, predefined_json, site_files_json)
             }),
-        )
-    }
-
-    /// Replace the local StructureDefinitions the next `snapshot` resolves bases
-    /// against. Envelope result: `{ "count": <n> }`.
-    #[wasm_bindgen(js_name = setLocalResources)]
-    pub fn set_local_resources(&self, json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "setLocalResources",
-            self.with_engine(|e| e.set_local_resources(json))
-                .map(|n| serde_json::json!({ "count": n })),
         )
     }
 
@@ -2647,26 +2726,9 @@ fn clock_ms() -> f64 {
     START.get_or_init(Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
-/// Parse `input/resources/**` JSON files out of the site_files map (base64 text)
-/// into resource `Value`s for renderer-neutral guide preparation.
-fn collect_example_resources(
-    site_files: &std::collections::BTreeMap<String, String>,
-    operation: &str,
-) -> Result<Vec<Value>, String> {
-    let mut out = Vec::new();
-    for (path, b64) in site_files {
-        if !(path.starts_with("input/resources/") && path.ends_with(".json")) {
-            continue;
-        }
-        let bytes = base64_decode(b64)
-            .map_err(|error| format!("{operation}: invalid base64 in {path}: {error}"))?;
-        let text = String::from_utf8(bytes)
-            .map_err(|error| format!("{operation}: {path} is not UTF-8: {error}"))?;
-        let value = serde_json::from_str::<Value>(&text)
-            .map_err(|error| format!("{operation}: invalid JSON in {path}: {error}"))?;
-        out.push(value);
-    }
-    Ok(out)
+fn is_local_resource_json(path: &str) -> bool {
+    path.ends_with(".json")
+        && (path.starts_with("input/resources/") || path.starts_with("input/examples/"))
 }
 
 fn validate_predefined_site_overlap(
@@ -2677,7 +2739,7 @@ fn validate_predefined_site_overlap(
     let predefined_paths: BTreeSet<&str> = predefined.keys().map(String::as_str).collect();
     let raw_paths: BTreeSet<&str> = site_files
         .keys()
-        .filter(|path| path.starts_with("input/resources/") && path.ends_with(".json"))
+        .filter(|path| is_local_resource_json(path))
         .map(String::as_str)
         .collect();
     if predefined_paths != raw_paths {
@@ -2690,7 +2752,7 @@ fn validate_predefined_site_overlap(
             .copied()
             .collect::<Vec<_>>();
         return Err(format!(
-            "{operation}: predefined and raw input/resources JSON paths differ (only predefined: {only_predefined:?}; only raw: {only_raw:?})"
+            "{operation}: parsed and raw local-resource JSON paths differ (only parsed: {only_predefined:?}; only raw: {only_raw:?})"
         ));
     }
     for (path, compiled_value) in predefined {
@@ -2735,7 +2797,7 @@ fn source_kind_and_media_type(path: &str) -> (site_build::SourceKind, &'static s
     } else {
         "application/octet-stream"
     };
-    let kind = if path.starts_with("input/resources/") {
+    let kind = if is_local_resource_json(path) {
         site_build::SourceKind::PredefinedResource
     } else if ["input/pagecontent/", "input/pages/", "input/resource-docs/"]
         .iter()
@@ -2822,139 +2884,6 @@ fn page_listing_from_site_files(
     }
     listing
 }
-
-/// The `(resourceType, id)` set the IG marks as examples — an entry in
-/// `definition.resource[]` with `exampleBoolean == true` or an `exampleCanonical`
-/// (the publisher's example signal). Drives `is_example` in the stock producer.
-/// FHIR conformance/definitional resource types the publisher lists as ARTIFACTS
-/// (not examples). Anything else in the render set is an instance → an example.
-const DEFINITIONAL_TYPES: &[&str] = &[
-    "StructureDefinition",
-    "ValueSet",
-    "CodeSystem",
-    "CapabilityStatement",
-    "OperationDefinition",
-    "SearchParameter",
-    "ConceptMap",
-    "NamingSystem",
-    "StructureMap",
-    "ExampleScenario",
-    "GraphDefinition",
-    "MessageDefinition",
-    "CompartmentDefinition",
-    "TerminologyCapabilities",
-    "ImplementationGuide",
-];
-
-/// Synthesize a minimal ImplementationGuide from the render-set resources when the
-/// real (publisher-generated) one is absent — the in-wasm equivalent of the IG the
-/// disk build gets from `ig_export`. Produces the fields the site-producer reads:
-/// `url`/`version`/`id`/`name` (IG context) and `definition.resource[]` (each
-/// resource's `Type/id` reference, display `name`, and `exampleBoolean` flag).
-/// Ordering follows the render set (compiled first, then predefined) — the same
-/// order `Session.compile` assembles it in.
-fn synthesize_ig(render_set: &[(PathBuf, Value)]) -> Value {
-    let field = |v: &Value, k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
-
-    // Derive the IG canonical + version from any conformance resource's url/version:
-    // a profile url is `<canonical>/<ResourceType>/<id>`, so strip the last two
-    // segments to recover the IG canonical base.
-    let mut canonical = String::new();
-    let mut version = String::new();
-    for (_, body) in render_set {
-        let rt = body
-            .get("resourceType")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if !DEFINITIONAL_TYPES.contains(&rt) {
-            continue;
-        }
-        if canonical.is_empty() {
-            if let Some(url) = field(body, "url") {
-                if let Some((base, _)) = url.rsplit_once(&format!("/{rt}/")) {
-                    canonical = base.to_string();
-                }
-            }
-        }
-        if version.is_empty() {
-            if let Some(v) = field(body, "version") {
-                version = v;
-            }
-        }
-        if !canonical.is_empty() && !version.is_empty() {
-            break;
-        }
-    }
-    let ig_id = canonical.rsplit('/').next().unwrap_or("ig").to_string();
-
-    let mut resource_entries = Vec::new();
-    for (_, body) in render_set {
-        let rt = body
-            .get("resourceType")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if rt.is_empty() || rt == "ImplementationGuide" {
-            continue;
-        }
-        let id = body.get("id").and_then(Value::as_str).unwrap_or("");
-        if id.is_empty() {
-            continue;
-        }
-        // Display name: the resource's own title/name; instances rarely carry one.
-        let name = field(body, "title")
-            .or_else(|| field(body, "name"))
-            .unwrap_or_else(|| format!("{rt}/{id}"));
-        let is_example = !DEFINITIONAL_TYPES.contains(&rt);
-        let mut entry = serde_json::Map::new();
-        entry.insert(
-            "reference".into(),
-            serde_json::json!({ "reference": format!("{rt}/{id}") }),
-        );
-        entry.insert("name".into(), Value::String(name));
-        if is_example {
-            entry.insert("exampleBoolean".into(), Value::Bool(true));
-        }
-        resource_entries.push(Value::Object(entry));
-    }
-
-    serde_json::json!({
-        "resourceType": "ImplementationGuide",
-        "id": ig_id,
-        "url": format!("{canonical}/ImplementationGuide/{ig_id}"),
-        "version": version,
-        "name": ig_id,
-        "definition": { "resource": resource_entries },
-    })
-}
-
-fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, String)> {
-    let mut set = std::collections::HashSet::new();
-    let Some(arr) = ig
-        .get("definition")
-        .and_then(|d| d.get("resource"))
-        .and_then(Value::as_array)
-    else {
-        return set;
-    };
-    for r in arr {
-        let is_example = r.get("exampleBoolean").and_then(Value::as_bool) == Some(true)
-            || r.get("exampleCanonical").and_then(Value::as_str).is_some();
-        if !is_example {
-            continue;
-        }
-        if let Some(reference) = r
-            .get("reference")
-            .and_then(|x| x.get("reference"))
-            .and_then(Value::as_str)
-        {
-            if let Some((rt, id)) = reference.split_once('/') {
-                set.insert((rt.to_string(), id.to_string()));
-            }
-        }
-    }
-    set
-}
-
 fn core_coordinate_for_fhir_version(fhir_version: &str) -> Result<(&'static str, String), String> {
     let numeric = fhir_version.split('-').next().unwrap_or(fhir_version);
     let mut parts = numeric.split('.');
@@ -3002,6 +2931,86 @@ fn target_core_from_package_lock(
     }
 }
 
+fn with_template_chain(
+    compile_lock: &site_build::PackageLock,
+    chain: &[String],
+    materials: &BTreeMap<String, MountedPackage>,
+    operation: &str,
+) -> Result<site_build::PackageLock, String> {
+    let mut packages = compile_lock
+        .iter()
+        .map(|(coordinate, package)| (coordinate.clone(), package.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let coordinates = chain
+        .iter()
+        .map(|label| {
+            site_build::PackageCoordinate::parse(label)
+                .map(|coordinate| (label, coordinate))
+                .map_err(|error| {
+                    format!("{operation}: non-exact template package {label}: {error}")
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut candidates_by_id: BTreeMap<String, Vec<site_build::PackageCoordinate>> =
+        BTreeMap::new();
+    for coordinate in compile_lock
+        .iter()
+        .map(|(coordinate, _)| coordinate)
+        .chain(coordinates.iter().map(|(_, coordinate)| coordinate))
+    {
+        candidates_by_id
+            .entry(coordinate.package_id().to_string())
+            .or_default()
+            .push(coordinate.clone());
+    }
+    for (index, (label, coordinate)) in coordinates.iter().enumerate() {
+        let material = materials.get(*label).ok_or_else(|| {
+            format!("{operation}: template package {label} has no authenticated mounted material")
+        })?;
+        let mut dependencies = material
+            .declared_dependencies
+            .iter()
+            .filter_map(|(package_id, requested)| {
+                candidates_by_id
+                    .get(package_id)
+                    .map(|candidates| (package_id, requested, candidates))
+            })
+            .map(|(package_id, requested, candidates)| {
+                select_locked_dependency(package_id, requested, candidates, &[]).and_then(
+                    |selected| {
+                        selected.ok_or_else(|| {
+                            format!(
+                                "{operation}: template dependency {package_id}#{requested} was unexpectedly excluded"
+                            )
+                        })
+                    },
+                )
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if index > 0 {
+            dependencies.insert(coordinates[index - 1].1.clone());
+        }
+        let mut locked = site_build::LockedPackage {
+            coordinate: coordinate.clone(),
+            content: material.content.clone(),
+            dependencies,
+        };
+        if let Some(existing) = packages.get(coordinate) {
+            if existing.content != locked.content {
+                return Err(format!(
+                    "{operation}: template coordinate {coordinate} disagrees with compile-lock material"
+                ));
+            }
+            locked
+                .dependencies
+                .extend(existing.dependencies.iter().cloned());
+        }
+        packages.insert(coordinate.clone(), locked);
+    }
+    site_build::PackageLock::from_packages(packages.into_values())
+        .map_err(|error| format!("{operation}: extend template package lock: {error}"))
+}
+
 const PAGE_MD_SHIM: &str = "---\r\n---\r\n{% include template-page-md.html %}";
 const FRAGMENT_SUFFIXES: &[&str] = &[
     "intro",
@@ -3042,30 +3051,12 @@ fn is_static_asset(path: &str) -> bool {
     )
 }
 
-fn mime_for_path(path: &str) -> &'static str {
-    match path
-        .rsplit_once('.')
-        .map(|(_, extension)| extension.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("html") => "text/html",
-        Some("css") => "text/css",
-        Some("js") => "text/javascript",
-        Some("json") => "application/json",
-        Some("xml") => "application/xml",
-        Some("png") => "image/png",
-        Some("svg") => "image/svg+xml",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("webp") => "image/webp",
-        Some("ico") => "image/x-icon",
-        Some("woff") => "font/woff",
-        Some("woff2") => "font/woff2",
-        Some("ttf") => "font/ttf",
-        Some("otf") => "font/otf",
-        Some("eot") => "application/vnd.ms-fontobject",
-        _ => "application/octet-stream",
-    }
+#[derive(Clone, Copy)]
+enum PreparedOutputCollision {
+    Reject,
+    /// The normative Publisher namespace gives authenticated authored files
+    /// precedence over renderer/runtime bytes at the same public path.
+    AuthoredOverridesRenderer,
 }
 
 fn insert_prepared_output(
@@ -3076,9 +3067,18 @@ fn insert_prepared_output(
     media_type: &str,
     producer: site_build::OutputProducer,
     source: Option<String>,
+    collision: PreparedOutputCollision,
 ) -> Result<(), String> {
     let path = site_build::OutputPath::parse(path.to_string())
         .map_err(|error| format!("invalid output path {path}: {error}"))?;
+    if let Some(existing) = outputs.get(&path) {
+        if matches!(collision, PreparedOutputCollision::Reject) {
+            return Err(format!(
+                "prepared output collision at {path}: producer {} and {}",
+                existing.producer.id, producer.id
+            ));
+        }
+    }
     let content = site_build::ContentRef::of_bytes(&bytes, Some(media_type));
     if let Some(existing) = objects.get(&content.sha256) {
         if existing != &bytes {
@@ -3125,46 +3125,138 @@ fn add_page_relative_output_aliases(
                 .source
                 .as_ref()
                 .map(|source| format!("{source}; alias={alias}"));
+            // A directly declared output owns its path. Relative aliases are a
+            // compatibility view only and never replace canonical/authored
+            // content already present there.
             outputs.entry(alias).or_insert(alias_output);
         }
     }
     Ok(())
 }
 
-fn stage_authored_publisher_inputs(
-    project: &CompiledProjectRevision,
+fn authored_projection_targets(file: &site_build::AuthoredFile) -> Result<Vec<String>, String> {
+    let path = file.path.as_str();
+    let mut targets = Vec::new();
+    let tree = |path: String| format!("tree:/site/{path}");
+    let output = |path: &str| -> Result<String, String> {
+        site_build::OutputPath::parse(path.to_string())
+            .map(|path| format!("output:{path}"))
+            .map_err(|error| {
+                format!(
+                    "prepare(publisher): authored {:?} path {path} is not a safe output path: {error}",
+                    file.role
+                )
+            })
+    };
+    match file.role {
+        site_build::AuthoredFileRole::Image => targets.push(output(path)?),
+        site_build::AuthoredFileRole::Data => targets.push(tree(format!("_data/{path}"))),
+        site_build::AuthoredFileRole::Include | site_build::AuthoredFileRole::ResourceContent => {
+            targets.push(tree(format!("_includes/{path}")));
+        }
+        site_build::AuthoredFileRole::PageContent => {
+            if let Some(name) = path.strip_suffix(".md") {
+                targets.push(tree(format!("_includes/en/{path}")));
+                targets.push(tree(format!("_includes/{path}")));
+                if !is_fragment_include(name) {
+                    let page = format!("en/{name}.html");
+                    targets.push(tree(page.clone()));
+                    targets.push(output(&page)?);
+                }
+            } else if path.ends_with(".html") {
+                let page = format!("en/{path}");
+                targets.push(tree(page.clone()));
+                targets.push(output(&page)?);
+            }
+        }
+        site_build::AuthoredFileRole::ImageSource => {}
+    }
+    Ok(targets)
+}
+
+fn validate_authored_projections(files: &[site_build::AuthoredFile]) -> Result<(), String> {
+    let mut claims = BTreeMap::<String, String>::new();
+    for file in files {
+        let owner = format!("{:?} {}", file.role, file.path);
+        for target in authored_projection_targets(file)? {
+            if let Some(existing) = claims.insert(target.clone(), owner.clone()) {
+                return Err(format!(
+                    "prepare(publisher): authored projection collision at {target}: {existing} and {owner}"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn stage_prepared_authored_files(
+    prepared: &site_build::PreparedGuide,
     site_files: &mut std::collections::HashMap<PathBuf, Vec<u8>>,
     outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
     objects: &mut BTreeMap<site_build::Sha256Digest, Vec<u8>>,
     project_id: &str,
 ) -> Result<(), String> {
-    for (source_path, encoded) in &project.site_files {
-        let bytes = base64_decode(encoded)
-            .map_err(|error| format!("prepare(publisher): decode {source_path}: {error}"))?;
-        if let Some(path) = source_path.strip_prefix("input/images/") {
-            insert_prepared_output(
+    // Validate the complete authored projection before mutating either tree.
+    // Different semantic roles can map to the same Publisher location (for
+    // example ResourceContent and Include both target `_includes/<path>`).
+    // Traversal order must never decide which authored bytes survive.
+    validate_authored_projections(&prepared.authored_files)?;
+
+    for file in &prepared.authored_files {
+        let path = file.path.as_str();
+        let source = file
+            .source_reads
+            .iter()
+            .map(|source| source.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        match file.role {
+            site_build::AuthoredFileRole::Image => insert_prepared_output(
                 outputs,
                 objects,
                 path,
-                bytes,
-                mime_for_path(path),
+                file.content.clone(),
+                &file.mime,
                 site_build::OutputProducer {
                     id: "publisher-authored-asset".into(),
                     version: project_id.into(),
                 },
-                Some(source_path.clone()),
-            )?;
-        } else if let Some(path) = source_path.strip_prefix("input/data/") {
-            site_files.insert(PathBuf::from(format!("/site/_data/{path}")), bytes);
-        } else if let Some(path) = source_path.strip_prefix("input/includes/") {
-            site_files.insert(PathBuf::from(format!("/site/_includes/{path}")), bytes);
-        } else if let Some(path) = source_path.strip_prefix("input/pagecontent/") {
-            if let Some(name) = path.strip_suffix(".md").filter(|name| !name.contains('/')) {
+                Some(source),
+                PreparedOutputCollision::AuthoredOverridesRenderer,
+            )?,
+            site_build::AuthoredFileRole::Data => {
+                // Authored files are the documented final overlay over selected
+                // template and generated Publisher model bytes.
                 site_files.insert(
-                    PathBuf::from(format!("/site/_includes/en/{name}.md")),
-                    bytes.clone(),
+                    PathBuf::from(format!("/site/_data/{path}")),
+                    file.content.clone(),
                 );
-                site_files.insert(PathBuf::from(format!("/site/_includes/{name}.md")), bytes);
+            }
+            site_build::AuthoredFileRole::Include
+            | site_build::AuthoredFileRole::ResourceContent => {
+                site_files.insert(
+                    PathBuf::from(format!("/site/_includes/{path}")),
+                    file.content.clone(),
+                );
+            }
+            site_build::AuthoredFileRole::PageContent => {
+                let Some(name) = path.strip_suffix(".md") else {
+                    if path.ends_with(".html") {
+                        site_files.insert(
+                            PathBuf::from(format!("/site/en/{path}")),
+                            file.content.clone(),
+                        );
+                    }
+                    continue;
+                };
+                site_files.insert(
+                    PathBuf::from(format!("/site/_includes/en/{path}")),
+                    file.content.clone(),
+                );
+                site_files.insert(
+                    PathBuf::from(format!("/site/_includes/{path}")),
+                    file.content.clone(),
+                );
                 if !is_fragment_include(name) {
                     site_files.insert(
                         PathBuf::from(format!("/site/en/{name}.html")),
@@ -3172,9 +3264,50 @@ fn stage_authored_publisher_inputs(
                     );
                 }
             }
+            site_build::AuthoredFileRole::ImageSource => {}
         }
     }
     Ok(())
+}
+
+fn prepared_render_set(
+    prepared: &site_build::PreparedGuide,
+) -> Result<Vec<(PathBuf, Value)>, String> {
+    let mut seen = BTreeSet::new();
+    prepared
+        .resources
+        .iter()
+        .map(|resource| {
+            if !seen.insert(resource.key.clone()) {
+                return Err(format!(
+                    "prepare(publisher): PreparedGuide repeats resource {}/{}",
+                    resource.key.resource_type, resource.key.id
+                ));
+            }
+            if resource.resource.get("resourceType").and_then(Value::as_str)
+                != Some(resource.key.resource_type.as_str())
+                || resource.resource.get("id").and_then(Value::as_str)
+                    != Some(resource.key.id.as_str())
+            {
+                return Err(format!(
+                    "prepare(publisher): PreparedGuide resource {}/{} disagrees with its JSON identity",
+                    resource.key.resource_type, resource.key.id
+                ));
+            }
+            let channel = if resource.key == prepared.guide.implementation_guide {
+                "__ig__"
+            } else {
+                "__prepared__"
+            };
+            Ok((
+                PathBuf::from(format!(
+                    "/{channel}/{}-{}.json",
+                    resource.key.resource_type, resource.key.id
+                )),
+                resource.resource.clone(),
+            ))
+        })
+        .collect()
 }
 
 // A tiny dependency-free base64 decoder (standard alphabet, optional '='
@@ -3236,175 +3369,6 @@ impl Engine {
         })
     }
 
-    /// Assemble Publisher page shells and `_data` from the captured compile and
-    /// the template tree materialized earlier in the same `prepare` operation.
-    ///
-    /// Wiring over `site_producer::ProducerInputs::from_memory`:
-    ///   * `config.json` ← the mounted `/site/template/config.json`;
-    ///   * `layouts/*`  ← the mounted `/site/template/layouts/*` (keyed
-    ///     `template/layouts/<name>`, the config-relative path the producer reads);
-    ///   * resources    ← the last compile's render set (the IG is pulled out and
-    ///     passed as `ig`); example-ness comes from the IG's
-    ///     `definition.resource[].example*` markers (publisher-faithful);
-    ///   * page-fragment includes ← the staged `/site/_includes/*` names (so
-    ///     `pages.json` only emits `intro`/`notes` for fragments that exist).
-    ///
-    /// Merges the produced shells to `/site/<name>` and `_data` to
-    /// `/site/_data/<name>`, drops the render state, and returns
-    /// `(pages, data)` counts.
-    fn assemble_publisher_tree(&mut self) -> Result<(usize, usize), String> {
-        // 1. Template config.json, already captured under /site/template/<rel>.
-        let cfg_bytes = self
-            .site_files
-            .get(&PathBuf::from("/site/template/config.json"))
-            .ok_or(
-                "prepare(publisher): no template config at /site/template/config.json \
-                 — Publisher template assembly is incomplete",
-            )?;
-        let config_json: Value = serde_json::from_slice(cfg_bytes)
-            .map_err(|e| format!("prepare(publisher): bad template config.json: {e}"))?;
-
-        // 2. layouts/* -> "template/layouts/<name>" (the producer's LayoutSource::Map
-        //    also accepts the template-root-relative "layouts/<name>" fallback).
-        let mut layouts: std::collections::HashMap<String, String> =
-            std::collections::HashMap::new();
-        for (p, bytes) in &self.site_files {
-            if let Ok(rel) = p.strip_prefix("/site/template/") {
-                let rels = rel.to_string_lossy();
-                if rels.starts_with("layouts/") {
-                    if let Ok(txt) = String::from_utf8(bytes.clone()) {
-                        layouts.insert(format!("template/{rels}"), txt);
-                    }
-                }
-            }
-        }
-        if layouts.is_empty() {
-            return Err(
-                "prepare(publisher): no template layouts mounted (template/layouts/*) \
-                 — Publisher template assembly is incomplete"
-                    .into(),
-            );
-        }
-
-        // 3. Render set -> resources + IG. Example-ness from the IG's
-        //    definition.resource example markers.
-        //
-        // The publisher's ImplementationGuide resource is a build artifact: FSH IGs
-        // get it from disk-only `ig_export` (not run in-wasm), and predefined-resource
-        // IGs (US Core/IPS) never ship it in `input/resources` (it too is generated).
-        // So the render set usually has NO IG. When absent, synthesize a minimal IG
-        // from the render-set resources themselves — enough to drive the producer
-        // (definition.resource[] for ordering/titles/example flags + canonical/version
-        // for the IG context). The native/disk path is unaffected (it reads the real
-        // IG from the built tree); this fallback lives only in the wasm surface.
-        let ig_candidates: Vec<&(PathBuf, Value)> = self
-            .last_compiled
-            .iter()
-            .filter(|(_, v)| {
-                v.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
-            })
-            .collect();
-        let explicit: Vec<&(PathBuf, Value)> = ig_candidates
-            .iter()
-            .copied()
-            .filter(|(path, _)| path.starts_with("/__ig__"))
-            .collect();
-        let primary_ig =
-            match explicit.as_slice() {
-                [primary] => Some(*primary),
-                [] if ig_candidates.len() == 1 => Some(ig_candidates[0]),
-                [] if ig_candidates.is_empty() => None,
-                [] => return Err(
-                    "prepare(publisher): multiple ImplementationGuides without an explicit primary"
-                        .into(),
-                ),
-                _ => {
-                    return Err(
-                        "prepare(publisher): multiple explicit primary ImplementationGuides".into(),
-                    )
-                }
-            };
-        let ig_json = primary_ig
-            .map(|(_, body)| body.clone())
-            .unwrap_or_else(|| synthesize_ig(&self.last_compiled));
-        let primary_ig_id = primary_ig
-            .and_then(|(_, body)| body.get("id"))
-            .and_then(Value::as_str);
-        let example_refs = example_reference_set(&ig_json);
-
-        let mut resources = Vec::new();
-        for (path, body) in &self.last_compiled {
-            let rt = body
-                .get("resourceType")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            if rt == "ImplementationGuide"
-                && primary_ig_id.is_some()
-                && body.get("id").and_then(Value::as_str) == primary_ig_id
-            {
-                continue;
-            }
-            let id = body.get("id").and_then(Value::as_str).unwrap_or("");
-            let fname = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(String::from)
-                .unwrap_or_else(|| format!("{rt}-{id}.json"));
-            let is_example = example_refs.contains(&(rt.to_string(), id.to_string()));
-            if let Some(r) = site_producer::Resource::from_value(body.clone(), &fname, is_example) {
-                resources.push(r);
-            }
-        }
-
-        // 4. Staged page-fragment include filenames (for pages.json intro/notes).
-        let mut page_includes: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for p in self.site_files.keys() {
-            if let Ok(rel) = p.strip_prefix("/site/_includes") {
-                if let Some(name) = rel.file_name().and_then(|n| n.to_str()) {
-                    page_includes.insert(name.to_string());
-                }
-            }
-        }
-
-        // The editor renders via hl7.fhir.template, whose staged pages live under
-        // `en/`; the shell FILE keys + pages.json KEYS must match that page.path.
-        let inputs = site_producer::ProducerInputs::from_memory(
-            resources,
-            &config_json,
-            layouts,
-            &ig_json,
-            page_includes,
-            "en/",
-        )
-        .map_err(|e| format!("prepare(publisher): {e:#}"))?;
-        let out =
-            site_producer::produce(&inputs).map_err(|e| format!("prepare(publisher): {e:#}"))?;
-
-        let (np, nd) = (out.pages.len(), out.data.len());
-        for (name, body) in out.pages {
-            self.site_files
-                .insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
-        }
-        for (name, body) in out.data {
-            self.site_files.insert(
-                PathBuf::from(format!("/site/_data/{name}")),
-                body.into_bytes(),
-            );
-        }
-        // Stage the generated navbar so the layouts' `{% include menu.xml %}`
-        // resolves (an absent include renders an empty navbar). Only overwrites
-        // when we generated one; an IG-authored input/includes/menu.xml already
-        // mounted under _includes stays if the config carried no `menu:`.
-        if let Some(menu) = &self.menu_xml {
-            self.site_files.insert(
-                PathBuf::from("/site/_includes/menu.xml"),
-                menu.clone().into_bytes(),
-            );
-        }
-        self.invalidate_render_surface();
-        Ok((np, nd))
-    }
-
     /// Publish one fully prepared immutable runtime, then retire generations
     /// older than the immediately previous build. Call this only after every
     /// fallible preparation step has succeeded so an error cannot evict the
@@ -3435,7 +3399,7 @@ impl Engine {
                 branch,
                 revision,
             } => {
-                let projection = self.prepare_cycle(&PrepareGuideOptions {
+                let (projection, metrics) = self.prepare_cycle(&PrepareGuideOptions {
                     build_epoch_secs,
                     liquid_asset_dirs,
                     branch,
@@ -3454,6 +3418,7 @@ impl Engine {
                     build_id: handle,
                     generator: "cycle".into(),
                     site_build: projection.site_build,
+                    metrics,
                 })
             }
             GeneratorSpec::Publisher {
@@ -3482,43 +3447,79 @@ impl Engine {
         active_tables: bool,
         run_uuid: Option<String>,
     ) -> Result<PrepareSiteResult, String> {
+        let total_started = clock_ms();
         let operation = "prepare(publisher)";
+        let mut metrics = PrepareMetrics::default();
         if template_coordinate.trim().is_empty() {
             return Err(format!("{operation}: template coordinate is empty"));
         }
+        let template = site_build::PackageCoordinate::parse(template_coordinate)
+            .map_err(|error| format!("{operation}: template coordinate must be exact: {error}"))?;
         let project = self.last_project.clone().ok_or_else(|| {
             format!("{operation}: compileProject has not established a complete source revision")
         })?;
         let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)
             .map_err(|error| format!("{operation}: {error}"))?;
+        let started = clock_ms();
         let project_revision = self.site_build_project_revision(&project, &project_id)?;
+        metrics.project_revision_ms = (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let package_lock = self.site_build_package_lock(&project)?;
+        metrics.package_lock_ms = (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let prepared_key = self.prepared_guide_cache_key(
             &guide_options,
             &project_revision,
             &package_lock,
             operation,
         )?;
+        metrics.prepared_guide_key_ms = (clock_ms() - started).max(0.0);
+        metrics.prepared_guide_cache_hit = self
+            .prepared_guide_cache
+            .as_ref()
+            .is_some_and(|entry| entry.key == prepared_key);
         // Publisher consumes the same renderer-neutral preparation as Cycle.
         // The render surface remains an implementation detail of this target.
-        let _prepared =
+        let started = clock_ms();
+        let prepared =
             self.site_model_from_compile(&guide_options, operation, prepared_key.clone())?;
-
-        self.site_files.clear();
-        self.site_options = SiteOptions {
+        metrics.prepared_guide_ms = (clock_ms() - started).max(0.0);
+        if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
+            return Err(format!(
+                "{operation}: PreparedGuide identity disagrees with compiled project"
+            ));
+        }
+        let site_options = SiteOptions {
             active_tables,
             run_uuid: run_uuid.clone(),
             ..Default::default()
         };
-        self.invalidate_render_surface();
 
         let (source, cache_root, _packages) = self.source()?;
         let paths = package_store::template_loader::TemplatePaths::new(&cache_root);
+        let template_resolution =
+            package_store::resolve_template_base_chain(&source, &paths, template_coordinate)
+                .map_err(|error| format!("{operation}: resolve template chain: {error}"))?;
+        if let Some(missing) = &template_resolution.missing {
+            return Err(format!(
+                "{operation}: template chain is incomplete; missing {missing}"
+            ));
+        }
+        let started = clock_ms();
+        let package_lock = with_template_chain(
+            &package_lock,
+            &template_resolution.chain,
+            &self.package_materials,
+            operation,
+        )?;
+        metrics.package_lock_ms += (clock_ms() - started).max(0.0);
+        let started = clock_ms();
         let tree =
             package_store::template_loader::materialize(&source, &paths, template_coordinate)
                 .map_err(|error| {
                     format!("{operation}: materialize {template_coordinate}: {error}")
                 })?;
+        metrics.template_materialize_ms = (clock_ms() - started).max(0.0);
 
         // Cross-version tooling may legitimately add support cores to the exact
         // closure (mCODE is R4 but also carries R5 core). Select the target core
@@ -3526,6 +3527,7 @@ impl Engine {
         // in the lock; counting every `*.core` package confuses execution input
         // with support context.
         let core = target_core_from_package_lock(&package_lock, &fhir_version, operation)?;
+        let started = clock_ms();
         let runtime = site_producer::publisher_runtime::PublisherRuntime::assemble(
             &source,
             &cache_root,
@@ -3560,32 +3562,94 @@ impl Engine {
                     file.provenance.source_path,
                     transformation
                 )),
+                PreparedOutputCollision::Reject,
             )?;
         }
+        metrics.publisher_runtime_ms = (clock_ms() - started).max(0.0);
+
+        let started = clock_ms();
+        let config_json: Value = serde_json::from_slice(
+            tree.get("config.json").ok_or_else(|| {
+                format!(
+                    "{operation}: no template config.json; Publisher template assembly is incomplete"
+                )
+            })?,
+        )
+        .map_err(|error| format!("{operation}: bad template config.json: {error}"))?;
+        let layouts = tree
+            .files()
+            .iter()
+            .filter_map(|(relative, bytes)| {
+                relative
+                    .strip_prefix("layouts/")
+                    .and_then(|_| String::from_utf8(bytes.clone()).ok())
+                    .map(|text| (format!("template/{relative}"), text))
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        if layouts.is_empty() {
+            return Err(format!(
+                "{operation}: no template layouts; Publisher template assembly is incomplete"
+            ));
+        }
+        let producer_inputs =
+            site_producer::ProducerInputs::from_prepared(&prepared, &config_json, layouts, "en/")
+                .map_err(|error| format!("{operation}: {error:#}"))?;
+        let produced = site_producer::produce(&producer_inputs)
+            .map_err(|error| format!("{operation}: {error:#}"))?;
+        let resource_pages = produced.resource_pages;
+        let mut site_files = std::collections::HashMap::new();
         for (relative, bytes) in tree.into_files() {
             let mounted = match relative.strip_prefix("includes/") {
                 Some(name) => format!("_includes/{name}"),
                 None => format!("template/{relative}"),
             };
-            self.site_files
-                .insert(PathBuf::from(format!("/site/{mounted}")), bytes.clone());
+            site_files.insert(PathBuf::from(format!("/site/{mounted}")), bytes);
         }
 
-        self.assemble_publisher_tree()?;
-        stage_authored_publisher_inputs(
-            &project,
-            &mut self.site_files,
+        for (name, body) in produced.pages {
+            site_files.insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
+        }
+        for (name, body) in produced.data {
+            site_files.insert(
+                PathBuf::from(format!("/site/_data/{name}")),
+                body.into_bytes(),
+            );
+        }
+        for (name, body) in produced.includes {
+            site_files.insert(
+                PathBuf::from(format!("/site/_includes/{name}")),
+                body.into_bytes(),
+            );
+        }
+        stage_prepared_authored_files(
+            &prepared,
+            &mut site_files,
             &mut ready,
             &mut objects,
             &project_id,
         )?;
-        self.invalidate_render_surface();
-        let state = self.render_state()?;
+        metrics.publisher_model_ms = (clock_ms() - started).max(0.0);
+
+        let started = clock_ms();
+        let (render_source, _, _) = self.source_for_current_revision()?;
+        let semantics = build_render_semantics(
+            prepared_render_set(&prepared)?,
+            Some(render_source),
+            &site_files,
+            &site_options,
+        )?;
+        let state = Rc::new(build_render_state_from_semantics(
+            &semantics,
+            &site_files,
+            &site_options,
+        )?);
+        metrics.render_model_ms = (clock_ms() - started).max(0.0);
+
+        let started = clock_ms();
         let pages = state.list_pages();
         add_page_relative_output_aliases(&mut ready, &pages)?;
 
-        let tree_manifest = self
-            .site_files
+        let tree_manifest = site_files
             .iter()
             .map(|(path, bytes)| {
                 (
@@ -3598,7 +3662,6 @@ impl Engine {
             .map_err(|error| format!("{operation}: hash mounted tree: {error}"))?;
         let mut parameters = BTreeMap::from([
             ("contract".into(), "publisher-site/v1".into()),
-            ("templateCoordinate".into(), template_coordinate.into()),
             ("mountedTreeSha256".into(), tree_digest.to_string()),
             ("preparedGuideSha256".into(), prepared_key.to_string()),
             (
@@ -3624,7 +3687,7 @@ impl Engine {
                 ),
                 mode: site_build::RenderMode::NativeTemplate,
                 fhir_version,
-                template: None,
+                template: Some(template.clone()),
                 parameters: parameters.clone(),
             },
             site_build::RenderPlan::default(),
@@ -3651,9 +3714,13 @@ impl Engine {
                     .clone()
                     .expect("prepared output media type"),
                 content: Some(output.content.clone()),
+                title: None,
+                subject: None,
+                subject_page: None,
             })
             .collect::<Vec<_>>();
         for page in pages {
+            let metadata = resource_pages.get(&page);
             let path = site_build::OutputPath::parse(page.clone())
                 .map_err(|error| format!("{operation}: invalid page {page}: {error}"))?;
             catalog.push(OutputDescriptor {
@@ -3661,6 +3728,15 @@ impl Engine {
                 kind: "page",
                 media_type: "text/html".into(),
                 content: None,
+                title: metadata.map(|metadata| metadata.title.clone()),
+                subject: metadata.map(|metadata| OutputResourceSubject {
+                    resource_type: metadata.resource_type.clone(),
+                    id: metadata.id.clone(),
+                }),
+                subject_page: metadata.map(|metadata| match metadata.role {
+                    site_producer::ResourcePageRole::Primary => OutputSubjectPage::Primary,
+                    site_producer::ResourcePageRole::Companion => OutputSubjectPage::Companion,
+                }),
             });
         }
         catalog.sort_by(|left, right| left.path.cmp(&right.path));
@@ -3676,7 +3752,7 @@ impl Engine {
         let renderer = site_build::RendererImplementation {
             id: "publisher-template-rust".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            recipe_sha256: site_build::sha256_canonical(&parameters)
+            recipe_sha256: site_build::sha256_canonical(&(template, &parameters))
                 .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
         };
         let handle = build.site_build().build_id().to_string();
@@ -3693,11 +3769,14 @@ impl Engine {
                 output_options: parameters,
             }),
         );
+        metrics.catalog_ms = (clock_ms() - started).max(0.0);
+        metrics.total_ms = (clock_ms() - total_started).max(0.0);
         Ok(PrepareSiteResult {
             handle: handle.clone(),
             build_id: handle,
             generator: "publisher".into(),
             site_build: build,
+            metrics,
         })
     }
 
@@ -3736,6 +3815,11 @@ impl Engine {
         if let Some(output) = runtime.ready.get(&path) {
             return Ok(RenderSiteResult {
                 path,
+                media_type: output
+                    .content
+                    .media_type
+                    .clone()
+                    .ok_or_else(|| "render: prepared output has no media type".to_string())?,
                 content: output.content.clone(),
                 non_ready_fragments: 0,
             });
@@ -3778,6 +3862,7 @@ impl Engine {
         );
         Ok(RenderSiteResult {
             path,
+            media_type: "text/html".into(),
             content,
             non_ready_fragments,
         })
@@ -3918,93 +4003,6 @@ impl Engine {
             .map_err(|error| format!("finalizeExternal: verify: {error}"))?;
         Ok(output)
     }
-
-    /// The lazily-(re)built render surface for the current generation.
-    fn render_state(&mut self) -> Result<Rc<RenderState>, String> {
-        if let Some(rs) = &self.render_state {
-            return Ok(rs.clone());
-        }
-        let semantics = if let Some(semantics) = &self.render_semantics {
-            semantics.clone()
-        } else {
-            let compiled = self.snapshot_complete_own()?;
-            // ContentApi is intentionally usable over a mounted site tree with
-            // no package store at all.  Project compiles still receive the
-            // exact resolver closure captured for their revision; the `None`
-            // branch is only the package-free standalone content surface.
-            let packages = self
-                .bundle
-                .as_ref()
-                .map(|_| {
-                    self.source_for_current_revision()
-                        .map(|(source, _, _)| source)
-                })
-                .transpose()?;
-            let semantics = Rc::new(build_render_semantics(
-                compiled,
-                packages,
-                &self.site_files,
-                &self.site_options,
-            )?);
-            self.render_semantics = Some(semantics.clone());
-            semantics
-        };
-        let rs = Rc::new(build_render_state_from_semantics(
-            &semantics,
-            &self.site_files,
-            &self.site_options,
-        )?);
-        self.render_state = Some(rs.clone());
-        Ok(rs)
-    }
-
-    /// Snapshot-complete the differential-only StructureDefinitions in the
-    /// render set for the render surface's `/own` dir — the render layer walks
-    /// `snapshot.element`. Resolves `baseDefinition` (and the type/extension/
-    /// contentReference canonicals the walk touches) against the compile-bound
-    /// exact package closure + the render set as locals — i.e. the SAME context
-    /// the on-demand `snapshot` op uses (`build_context`), the publisher-faithful
-    /// model the wasm-parity corpus gates (ips/mcode/sdc, full per-IG closure)
-    /// prove byte-correct. SiteBuild preparation follows the same exact-closure
-    /// rule: a predefined-resource IG may have profiles based on EXTERNAL bases
-    /// (e.g. US Core's us-core-questionnaireresponse →
-    /// sdc-questionnaireresponse), which a core-only context cannot resolve.
-    ///
-    /// SDs that already carry a snapshot pass through untouched. A per-SD
-    /// snapshot failure is non-fatal: the differential body is left in place so
-    /// the rest of the site still renders (that one page surfaces the editor's
-    /// fragment-gap notice) rather than one bad profile blanking every page.
-    /// With no differential-only SDs, this is a pure pass-through.
-    fn snapshot_complete_own(&self) -> Result<Vec<(PathBuf, Value)>, String> {
-        let needs: Vec<usize> = self
-            .last_compiled
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, v))| {
-                v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
-                    && v.get("snapshot").is_none()
-            })
-            .map(|(i, _)| i)
-            .collect();
-        if needs.is_empty() {
-            return Ok(self.last_compiled.clone());
-        }
-        let ctx = self.build_context()?;
-        let mut out = self.last_compiled.clone();
-        for i in needs {
-            let body = out[i].1.clone();
-            if let Ok(snap) = snapshot_gen::generate_snapshot(body, &ctx, Default::default()) {
-                out[i].1 = snap;
-            }
-        }
-        Ok(out)
-    }
-
-    #[cfg(test)]
-    fn render_fragment(&mut self, ref_: &str, kind: &str) -> Result<String, String> {
-        let rs = self.render_state()?;
-        rs.render_fragment(ref_, kind).map_err(|e| e.to_string())
-    }
 }
 
 #[cfg(test)]
@@ -4012,26 +4010,6 @@ mod render_invalidation_tests {
     use super::*;
 
     const CONFIG: &str = "id: test\ncanonical: https://example.test\nfhirVersion: 4.0.1\n";
-
-    fn compiled() -> Vec<(PathBuf, Value)> {
-        vec![(
-            PathBuf::from("ImplementationGuide-test.json"),
-            serde_json::json!({
-                "resourceType": "ImplementationGuide",
-                "id": "test",
-                "version": "1.0.0"
-            }),
-        )]
-    }
-
-    fn semantic_inputs() -> RenderSemanticInputs {
-        RenderSemanticInputs {
-            config: "id: test\nfhirVersion: 4.0.1\n".into(),
-            fsh: BTreeMap::from([("input/fsh/test.fsh".into(), "Profile: Test".into())]),
-            predefined: BTreeMap::new(),
-            page_listing: BTreeMap::from([("input/pagecontent".into(), vec!["index.md".into()])]),
-        }
-    }
 
     fn compile_project_reuse_engine() -> Engine {
         let resolved = ResolvedPackages {
@@ -4067,6 +4045,7 @@ mod render_invalidation_tests {
                     resource_type: Some("StructureDefinition".into()),
                     id: Some("Test".into()),
                     url: Some("https://example.test/StructureDefinition/Test".into()),
+                    definition: None,
                 }],
                 diagnostics: Vec::new(),
                 timings: Timings::default(),
@@ -4091,44 +4070,6 @@ mod render_invalidation_tests {
             })
             .to_string(),
         )
-    }
-
-    fn semantics() -> Rc<RenderSemantics> {
-        Rc::new(
-            build_render_semantics(
-                compiled(),
-                None,
-                &Default::default(),
-                &SiteOptions::default(),
-            )
-            .expect("minimal render semantics"),
-        )
-    }
-
-    #[test]
-    fn prose_only_revision_can_retain_exact_semantic_core() {
-        let core = semantics();
-        let inputs = semantic_inputs();
-        let compiled = compiled();
-        let mut engine = Engine {
-            last_compiled: compiled.clone(),
-            last_render_semantic_inputs: Some(inputs.clone()),
-            render_semantics: Some(core.clone()),
-            last_project: Some(CompiledProjectRevision {
-                config: inputs.config.clone(),
-                fsh: inputs.fsh.clone(),
-                predefined: inputs.predefined.clone(),
-                site_files: BTreeMap::from([("input/pagecontent/index.md".into(), "old".into())]),
-                resolved_packages: None,
-            }),
-            ..Default::default()
-        };
-
-        // compileProject captures the new raw prose revision separately. The
-        // compiler-visible inputs and resulting render set are byte-for-byte
-        // unchanged, so the existing semantic core remains authoritative.
-        engine.replace_compiled_render_set(compiled, inputs);
-        assert!(Rc::ptr_eq(engine.render_semantics.as_ref().unwrap(), &core));
     }
 
     #[test]
@@ -4247,139 +4188,98 @@ mod render_invalidation_tests {
         assert!(error.contains("engine not initialized"), "{error}");
         assert_eq!(engine.derived_cache_hits.compile_project, 0);
     }
-
-    #[test]
-    fn compiler_visible_context_or_render_set_change_invalidates_semantic_core() {
-        let baseline_inputs = semantic_inputs();
-        let baseline_compiled = compiled();
-
-        let mut changed_inputs = Vec::new();
-        let mut config = baseline_inputs.clone();
-        config.config.push_str("status: active\n");
-        changed_inputs.push(("config", config));
-        let mut fsh = baseline_inputs.clone();
-        fsh.fsh
-            .insert("input/fsh/next.fsh".into(), "Profile: Next".into());
-        changed_inputs.push(("FSH", fsh));
-        let mut predefined = baseline_inputs.clone();
-        predefined.predefined.insert(
-            "input/resources/Patient-p.json".into(),
-            serde_json::json!({"resourceType": "Patient", "id": "p"}),
-        );
-        changed_inputs.push(("predefined", predefined));
-        let mut pages = baseline_inputs.clone();
-        pages
-            .page_listing
-            .get_mut("input/pagecontent")
-            .unwrap()
-            .push("new.md".into());
-        changed_inputs.push(("page listing", pages));
-
-        for (label, inputs) in changed_inputs {
-            let mut engine = Engine {
-                last_compiled: baseline_compiled.clone(),
-                last_render_semantic_inputs: Some(baseline_inputs.clone()),
-                render_semantics: Some(semantics()),
-                ..Default::default()
-            };
-            engine.replace_compiled_render_set(baseline_compiled.clone(), inputs);
-            assert!(
-                engine.render_semantics.is_none(),
-                "{label} change must invalidate semantics"
-            );
-        }
-
-        let mut engine = Engine {
-            last_compiled: baseline_compiled,
-            last_render_semantic_inputs: Some(baseline_inputs.clone()),
-            render_semantics: Some(semantics()),
-            ..Default::default()
-        };
-        engine.replace_compiled_render_set(
-            vec![(
-                PathBuf::from("Patient-next.json"),
-                serde_json::json!({"resourceType": "Patient", "id": "next"}),
-            )],
-            baseline_inputs,
-        );
-
-        assert!(engine.render_semantics.is_none());
-        assert_eq!(engine.last_compiled.len(), 1);
-    }
-
-    #[test]
-    fn stock_producer_uses_explicit_primary_and_keeps_additional_guides() {
-        let mut engine = Engine {
-            last_compiled: vec![
-                (
-                    PathBuf::from("/__compiled__/ImplementationGuide-aaa-example.json"),
-                    serde_json::json!({
-                        "resourceType": "ImplementationGuide",
-                        "id": "aaa-example",
-                        "packageId": "wrong.example",
-                        "url": "https://wrong.example/ImplementationGuide/aaa-example",
-                        "version": "9.0.0",
-                        "fhirVersion": ["5.0.0"]
-                    }),
-                ),
-                (
-                    PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
-                    serde_json::json!({
-                        "resourceType": "ImplementationGuide",
-                        "id": "primary",
-                        "packageId": "example.primary",
-                        "url": "https://example.org/ImplementationGuide/primary",
-                        "name": "Primary",
-                        "version": "1.0.0",
-                        "fhirVersion": ["4.0.1"],
-                        "definition": { "resource": [] }
-                    }),
-                ),
-            ],
-            site_files: std::collections::HashMap::from([
-                (
-                    PathBuf::from("/site/template/config.json"),
-                    br#"{"defaults":{}}"#.to_vec(),
-                ),
-                (
-                    PathBuf::from("/site/template/layouts/unused.html"),
-                    b"unused".to_vec(),
-                ),
-            ]),
-            ..Default::default()
-        };
-
-        engine.assemble_publisher_tree().unwrap();
-        let fhir: Value =
-            serde_json::from_slice(&engine.site_files[&PathBuf::from("/site/_data/fhir.json")])
-                .unwrap();
-        assert_eq!(fhir["ig"]["id"], "primary");
-        let resources: Value = serde_json::from_slice(
-            &engine.site_files[&PathBuf::from("/site/_data/resources.json")],
-        )
-        .unwrap();
-        assert!(resources.get("ImplementationGuide/aaa-example").is_some());
-    }
-
-    #[test]
-    fn package_context_replacement_invalidates_semantic_core() {
-        let mut engine = Engine {
-            render_semantics: Some(semantics()),
-            ..Default::default()
-        };
-        engine
-            .init(
-                r#"[{"label":"example.package#1.0.0","files":{"package.json":"eyJuYW1lIjoiZXhhbXBsZS5wYWNrYWdlIiwidmVyc2lvbiI6IjEuMC4wIn0="}}]"#,
-            )
-            .unwrap();
-        assert!(engine.render_semantics.is_none());
-    }
 }
 
 #[cfg(test)]
 mod site_facade_tests {
     use super::*;
     use std::collections::HashMap;
+
+    fn authored(role: site_build::AuthoredFileRole, path: &str) -> site_build::AuthoredFile {
+        site_build::AuthoredFile {
+            role,
+            path: site_build::PreparedPath::parse(path).unwrap(),
+            mime: "text/plain".into(),
+            content: path.as_bytes().to_vec(),
+            source_reads: BTreeSet::from([site_build::PreparedPath::parse(format!(
+                "input/{path}"
+            ))
+            .unwrap()]),
+        }
+    }
+
+    #[test]
+    fn authored_roles_cannot_project_to_one_publisher_path() {
+        let error = validate_authored_projections(&[
+            authored(site_build::AuthoredFileRole::ResourceContent, "shared.md"),
+            authored(site_build::AuthoredFileRole::Include, "shared.md"),
+        ])
+        .unwrap_err();
+        assert!(error.contains("authored projection collision"));
+        assert!(error.contains("tree:/site/_includes/shared.md"));
+        assert!(error.contains("ResourceContent"));
+        assert!(error.contains("Include"));
+
+        let error = validate_authored_projections(&[
+            authored(site_build::AuthoredFileRole::PageContent, "guide.md"),
+            authored(site_build::AuthoredFileRole::Image, "en/guide.html"),
+        ])
+        .unwrap_err();
+        assert!(error.contains("output:en/guide.html"));
+    }
+
+    #[test]
+    fn authored_output_override_is_the_only_explicit_output_precedence() {
+        let mut outputs = BTreeMap::new();
+        let mut objects = BTreeMap::new();
+        let runtime = site_build::OutputProducer {
+            id: "runtime".into(),
+            version: "1".into(),
+        };
+        insert_prepared_output(
+            &mut outputs,
+            &mut objects,
+            "logo.svg",
+            b"runtime".to_vec(),
+            "image/svg+xml",
+            runtime.clone(),
+            None,
+            PreparedOutputCollision::Reject,
+        )
+        .unwrap();
+        assert!(insert_prepared_output(
+            &mut outputs,
+            &mut objects,
+            "logo.svg",
+            b"other runtime".to_vec(),
+            "image/svg+xml",
+            runtime,
+            None,
+            PreparedOutputCollision::Reject,
+        )
+        .unwrap_err()
+        .contains("prepared output collision"));
+        insert_prepared_output(
+            &mut outputs,
+            &mut objects,
+            "logo.svg",
+            b"authored".to_vec(),
+            "image/svg+xml",
+            site_build::OutputProducer {
+                id: "publisher-authored-asset".into(),
+                version: "guide".into(),
+            },
+            None,
+            PreparedOutputCollision::AuthoredOverridesRenderer,
+        )
+        .unwrap();
+        assert_eq!(
+            outputs[&site_build::OutputPath::parse("logo.svg").unwrap()]
+                .producer
+                .id,
+            "publisher-authored-asset"
+        );
+    }
 
     fn closed(project: &str) -> site_build::ClosedSiteBuild {
         site_build::SiteBuild::new(
@@ -4449,18 +4349,27 @@ mod site_facade_tests {
                 kind: "page",
                 media_type: "text/html".into(),
                 content: None,
+                title: None,
+                subject: None,
+                subject_page: None,
             },
             OutputDescriptor {
                 path: site_build::OutputPath::parse("en/b.html").unwrap(),
                 kind: "page",
                 media_type: "text/html".into(),
                 content: None,
+                title: None,
+                subject: None,
+                subject_page: None,
             },
             OutputDescriptor {
                 path: asset_path.clone(),
                 kind: "asset",
                 media_type: "text/css".into(),
                 content: Some(asset.content.clone()),
+                title: None,
+                subject: None,
+                subject_page: None,
             },
         ];
         PublisherBuildRuntime {
@@ -4521,11 +4430,20 @@ mod site_facade_tests {
 
         for path in ["en/a.html", "en/b.html"] {
             let rendered = engine.render_site_output(&handle, path).unwrap();
+            assert_eq!(rendered.media_type, "text/html");
             let bytes = engine
                 .read_site_content(&handle, rendered.content.sha256.as_str())
                 .unwrap();
             rendered.content.verify(&bytes).unwrap();
         }
+        let asset = engine
+            .render_site_output(&handle, "assets/app.css")
+            .unwrap();
+        assert_eq!(asset.media_type, "text/css");
+        assert_eq!(
+            serde_json::to_value(asset).unwrap()["mediaType"],
+            "text/css"
+        );
         let output = engine.finalize_site(&handle).unwrap();
         output.verify().unwrap();
         assert_eq!(output.files().len(), 3);
@@ -4556,13 +4474,9 @@ mod site_facade_tests {
     }
 
     #[test]
-    fn immutable_handles_are_isolated_from_other_builds_and_ambient_state() {
+    fn immutable_handles_are_isolated_from_other_builds() {
         let (mut engine, first) = engine_with("first.test", "first");
         let second = retain_publisher(&mut engine, "second.test", "second");
-        engine.site_files.insert(
-            PathBuf::from("/site/en/a.html"),
-            b"---\n---\n<p>ambient mutation</p>".to_vec(),
-        );
         let first_output = engine.render_site_output(&first, "en/a.html").unwrap();
         let second_output = engine.render_site_output(&second, "en/a.html").unwrap();
         assert_ne!(first, second);
@@ -4646,6 +4560,53 @@ mod site_facade_tests {
     }
 
     #[test]
+    fn publisher_lock_includes_authenticated_template_base_chain() {
+        let core = site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap();
+        let compile_lock = site_build::PackageLock::from_packages([site_build::LockedPackage {
+            coordinate: core,
+            content: site_build::ContentRef::of_bytes(b"core", None::<String>),
+            dependencies: BTreeSet::new(),
+        }])
+        .unwrap();
+        let parent = "base.template#1.0.0";
+        let child = "child.template#2.0.0";
+        let materials = BTreeMap::from([
+            (
+                parent.into(),
+                MountedPackage {
+                    content: site_build::ContentRef::of_bytes(b"parent", None::<String>),
+                    declared_dependencies: BTreeMap::new(),
+                },
+            ),
+            (
+                child.into(),
+                MountedPackage {
+                    content: site_build::ContentRef::of_bytes(b"child", None::<String>),
+                    declared_dependencies: BTreeMap::from([(
+                        "base.template".into(),
+                        "1.0.0".into(),
+                    )]),
+                },
+            ),
+        ]);
+        let lock = with_template_chain(
+            &compile_lock,
+            &[parent.into(), child.into()],
+            &materials,
+            "test",
+        )
+        .unwrap();
+        let parent = site_build::PackageCoordinate::parse(parent).unwrap();
+        let child = site_build::PackageCoordinate::parse(child).unwrap();
+        assert_eq!(lock.get(&parent).unwrap().content.byte_length, 6);
+        assert_eq!(lock.get(&child).unwrap().content.byte_length, 5);
+        assert_eq!(
+            lock.get(&child).unwrap().dependencies,
+            BTreeSet::from([parent])
+        );
+    }
+
+    #[test]
     fn external_finalizer_requires_the_complete_declared_catalog() {
         let build = closed("cycle.test");
         let handle = build.site_build().build_id().to_string();
@@ -4718,7 +4679,7 @@ mod site_facade_tests {
             "type":"fhir.template"
         })
         .to_string();
-        let config_json = r#"{"defaults":{"Any":{"template-base":"default.html","base":"{{[type]}}-{{[id]}}.html"}}}"#;
+        let config_json = r#"{"defaults":{"Any":{"template-base":"template/layouts/default.html","base":"{{[type]}}-{{[id]}}.html"},"ValueSet":{"template-base":"template/layouts/default.html","base":"published-{{[id]}}-landing.html"}}}"#;
         let bundles = serde_json::json!([
             {
                 "label":"hl7.fhir.r4.core#4.0.1",
@@ -4781,9 +4742,20 @@ mod site_facade_tests {
             ]),
             resolved_packages: Some(resolved),
         });
-        engine.last_compiled = vec![(
-            PathBuf::from("/__ig__/ImplementationGuide-facade-test.json"),
-            serde_json::json!({
+        engine.last_compiled = vec![
+            (
+                PathBuf::from("/__compiled__/ValueSet-renamed-status.json"),
+                serde_json::json!({
+                    "resourceType":"ValueSet",
+                    "id":"renamed-status",
+                    "url":"https://example.org/facade/ValueSet/renamed-status",
+                    "name":"RenamedStatus",
+                    "status":"draft"
+                }),
+            ),
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-facade-test.json"),
+                serde_json::json!({
                 "resourceType":"ImplementationGuide",
                 "id":"facade-test",
                 "packageId":"facade.test",
@@ -4793,7 +4765,10 @@ mod site_facade_tests {
                 "version":"1.0.0",
                 "fhirVersion":["4.0.1"],
                 "definition":{
-                    "resource":[],
+                    "resource":[{
+                        "reference":{"reference":"ValueSet/renamed-status"},
+                        "name":"Renamed status values"
+                    }],
                     "page":{
                         "nameUrl":"toc.html",
                         "title":"Table of Contents",
@@ -4812,13 +4787,60 @@ mod site_facade_tests {
                         ]
                     }
                 }
-            }),
-        )];
+                }),
+            ),
+        ];
         let prepared = engine
             .prepare_site(
                 r#"{"generator":"publisher","templateCoordinate":"demo.template#1.0.0","buildEpochSecs":1,"activeTables":true}"#,
             )
             .unwrap();
+        assert_eq!(
+            prepared
+                .site_build
+                .site_build()
+                .render_target()
+                .template
+                .as_ref(),
+            Some(&site_build::PackageCoordinate::parse("demo.template#1.0.0").unwrap())
+        );
+        assert!(!prepared
+            .site_build
+            .site_build()
+            .render_target()
+            .parameters
+            .contains_key("templateCoordinate"));
+        let wire = serde_json::to_value(&prepared).unwrap();
+        let timings = wire["metrics"].as_object().unwrap();
+        let phase_names = [
+            "projectRevisionMs",
+            "packageLockMs",
+            "preparedGuideKeyMs",
+            "preparedGuideMs",
+            "templateMaterializeMs",
+            "publisherRuntimeMs",
+            "publisherModelMs",
+            "renderModelMs",
+            "catalogMs",
+        ];
+        for name in phase_names {
+            let phase = timings[name].as_f64().unwrap();
+            assert!(phase >= 0.0, "{name} must be nonnegative");
+            assert!(
+                timings["totalMs"].as_f64().unwrap() >= phase,
+                "total must include {name}"
+            );
+        }
+        let phase_total = phase_names
+            .iter()
+            .map(|name| timings[*name].as_f64().unwrap())
+            .sum::<f64>();
+        assert!(
+            timings["totalMs"].as_f64().unwrap() + f64::EPSILON >= phase_total,
+            "timing phases must be disjoint: {timings:?}"
+        );
+        assert_eq!(timings["preparedGuideCacheHit"], false);
+        assert_eq!(timings["siteBuildCacheHit"], false);
         let guide = &engine.prepared_guide_cache.as_ref().unwrap().guide;
         assert!(guide.pages.iter().any(|page| {
             page.name_url == "artifacts.html" && page.generation == "html" && page.body.is_none()
@@ -4828,7 +4850,7 @@ mod site_facade_tests {
             .iter()
             .any(|page| page.name_url == "conformance-patients.html"));
         assert!(!guide
-            .assets
+            .authored_files
             .iter()
             .any(|asset| asset.path.as_str() == "patients-with-cancer-condition.svg"));
         let catalog = engine.site_outputs(&prepared.handle).unwrap();
@@ -4844,6 +4866,20 @@ mod site_facade_tests {
         assert!(paths.contains("icon_element.gif"));
         assert!(paths.contains("en/assets/app.css"));
         assert!(paths.contains("en/icon_element.gif"));
+        let subject_page = catalog
+            .outputs
+            .iter()
+            .find(|output| output.path.as_str() == "en/published-renamed-status-landing.html")
+            .unwrap_or_else(|| panic!("configured ValueSet landing page; paths={paths:?}"));
+        assert_eq!(subject_page.title.as_deref(), Some("RenamedStatus"));
+        assert_eq!(
+            subject_page.subject,
+            Some(OutputResourceSubject {
+                resource_type: "ValueSet".into(),
+                id: "renamed-status".into(),
+            })
+        );
+        assert_eq!(subject_page.subject_page, Some(OutputSubjectPage::Primary));
         let content_at = |path: &str| {
             catalog
                 .outputs
@@ -4878,6 +4914,14 @@ mod site_facade_tests {
             assert!(page_html.contains(relative));
             assert!(paths.contains(format!("en/{relative}").as_str()));
         }
+
+        let repeated = engine
+            .prepare_site(
+                r#"{"generator":"publisher","templateCoordinate":"demo.template#1.0.0","buildEpochSecs":1,"activeTables":true}"#,
+            )
+            .unwrap();
+        assert!(repeated.metrics.prepared_guide_cache_hit);
+        assert!(!repeated.metrics.site_build_cache_hit);
     }
 }
 
@@ -5204,8 +5248,8 @@ mod site_build_handoff_tests {
             .unwrap();
         assert!(engine.resolved_packages.is_none());
 
-        // Snapshot completion, on-demand snapshots, and RenderSemantics all use
-        // this current-revision view rather than the newly enlarged cache.
+        // Every operation derived from the current revision uses this scoped
+        // package view rather than the newly enlarged cache.
         let (source, root, labels) = engine.source_for_current_revision().unwrap();
         assert_eq!(labels, vec![first]);
         let listed = source.read_dir(&root).unwrap();
@@ -5231,19 +5275,6 @@ mod site_build_handoff_tests {
             .fetch("https://example.org/StructureDefinition/conflict")
             .unwrap();
         assert_eq!(resolved["version"], "1.0.0");
-
-        let state = engine.render_state().unwrap();
-        assert_eq!(
-            state
-                .tree
-                .read(&root.join(first).join("package/marker.txt"))
-                .as_deref(),
-            Some("first")
-        );
-        assert!(state
-            .tree
-            .read(&root.join(second).join("package/marker.txt"))
-            .is_none());
     }
 
     #[test]
@@ -5342,26 +5373,13 @@ mod site_build_handoff_tests {
         assert!(engine
             .site_build_project_revision(&only_predefined, "demo.ig")
             .unwrap_err()
-            .contains("only predefined"));
+            .contains("only parsed"));
         let mut only_raw = different;
         only_raw.predefined.clear();
         assert!(engine
             .site_build_project_revision(&only_raw, "demo.ig")
             .unwrap_err()
             .contains("only raw"));
-    }
-
-    #[test]
-    fn malformed_authored_resource_files_fail_loudly() {
-        for (encoded, expected) in [
-            ("not-base64".to_string(), "invalid base64"),
-            ("/w==".to_string(), "not UTF-8"),
-            (base64_encode(b"{"), "invalid JSON"),
-        ] {
-            let files = BTreeMap::from([("input/resources/Patient-p.json".into(), encoded)]);
-            let error = collect_example_resources(&files, "test").unwrap_err();
-            assert!(error.contains(expected), "{error}");
-        }
     }
 
     #[test]
@@ -5794,8 +5812,240 @@ mod site_build_handoff_tests {
             pages: Vec::new(),
             menu: Vec::new(),
             sushi_config: serde_json::json!({"id":"demo.ig"}),
-            assets: Vec::new(),
+            authored_files: Vec::new(),
         }
+    }
+
+    #[test]
+    fn browser_examples_share_one_ordered_collision_free_local_resource_channel() {
+        let resource_path = "input/resources/Patient-shared.json";
+        let example_path = "input/examples/Patient-shared.json";
+        let resources = BTreeMap::from([
+            (
+                example_path.into(),
+                serde_json::json!({"resourceType":"Patient","id":"shared","marker":"example"}),
+            ),
+            (
+                resource_path.into(),
+                serde_json::json!({"resourceType":"Patient","id":"shared","marker":"resource"}),
+            ),
+        ]);
+        let ordered = ordered_predefined_resources(&resources);
+        assert_eq!(ordered[0].0, PathBuf::from(resource_path));
+        assert_eq!(ordered[1].0, PathBuf::from(example_path));
+
+        let resource_render_path = predefined_render_path(&ordered[0].0).unwrap();
+        let example_render_path = predefined_render_path(&ordered[1].0).unwrap();
+        assert_eq!(
+            resource_render_path,
+            PathBuf::from("/__predefined__/input/resources/Patient-shared.json")
+        );
+        assert_eq!(
+            example_render_path,
+            PathBuf::from("/__predefined__/input/examples/Patient-shared.json")
+        );
+        assert_ne!(resource_render_path, example_render_path);
+
+        let primary = serde_json::json!({
+            "resourceType":"ImplementationGuide", "id":"primary",
+            "packageId":"example.primary", "fhirVersion":["4.0.1"],
+            "definition":{"resource":[{
+                "reference":{"reference":"Patient/shared"}, "exampleBoolean":true
+            }]}
+        });
+        let mut render_set = ordered
+            .into_iter()
+            .map(|(path, body)| (predefined_render_path(&path).unwrap(), body))
+            .collect::<Vec<_>>();
+        render_set.push((
+            PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
+            primary,
+        ));
+        let (selected, _) = prepared_local_resource_set(&render_set, "test").unwrap();
+        assert_eq!(
+            selected
+                .iter()
+                .find(|(_, body)| body["resourceType"] == "Patient")
+                .unwrap()
+                .1["marker"],
+            "example",
+            "stock resources-before-examples order must give the example later precedence"
+        );
+
+        let site_files = BTreeMap::from([
+            (
+                resource_path.into(),
+                base64_encode(resources[resource_path].to_string().as_bytes()),
+            ),
+            (
+                example_path.into(),
+                base64_encode(resources[example_path].to_string().as_bytes()),
+            ),
+        ]);
+        validate_predefined_site_overlap(&resources, &site_files, "test").unwrap();
+        assert_eq!(
+            source_kind_and_media_type(example_path).0,
+            site_build::SourceKind::PredefinedResource
+        );
+    }
+
+    #[test]
+    fn prepared_local_set_deduplicates_and_preserves_explicit_primary_metadata() {
+        let declarations = serde_json::json!([
+            {"reference":{"reference":"Patient/example"},"exampleBoolean":true},
+            {"reference":{"reference":"Observation/example"},"exampleCanonical":"https://example.org/StructureDefinition/example"}
+        ]);
+        let primary = serde_json::json!({
+            "resourceType":"ImplementationGuide", "id":"primary",
+            "packageId":"example.primary", "fhirVersion":["4.0.1"],
+            "marker":"explicit", "definition":{"resource":declarations.clone()}
+        });
+        let render_set = vec![
+            (
+                PathBuf::from("/__compiled__/Patient-example.json"),
+                serde_json::json!({"resourceType":"Patient","id":"example","marker":"compiled"}),
+            ),
+            (
+                PathBuf::from("/__compiled__/ImplementationGuide-secondary.json"),
+                serde_json::json!({"resourceType":"ImplementationGuide","id":"secondary"}),
+            ),
+            (
+                PathBuf::from("/__predefined__/Patient-example.json"),
+                serde_json::json!({"resourceType":"Patient","id":"example","marker":"predefined"}),
+            ),
+            (
+                PathBuf::from("/__predefined__/ImplementationGuide-primary.json"),
+                serde_json::json!({"resourceType":"ImplementationGuide","id":"primary","marker":"wrong"}),
+            ),
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-primary.json"),
+                primary.clone(),
+            ),
+        ];
+
+        let (resources, selected_primary) =
+            prepared_local_resource_set(&render_set, "test").unwrap();
+        assert_eq!(selected_primary, primary);
+        assert_eq!(
+            selected_primary.pointer("/definition/resource"),
+            Some(&declarations)
+        );
+        assert_eq!(resources.len(), 3);
+        assert_eq!(
+            resources
+                .iter()
+                .find(|(_, value)| value["resourceType"] == "Patient")
+                .unwrap()
+                .1["marker"],
+            "predefined"
+        );
+        assert_eq!(
+            resources
+                .iter()
+                .find(|(_, value)| value["id"] == "primary")
+                .unwrap()
+                .1["marker"],
+            "explicit"
+        );
+        assert!(resources
+            .iter()
+            .any(|(_, value)| value["id"] == "secondary"));
+
+        let mut multiple = render_set.clone();
+        multiple.push((
+            PathBuf::from("/__ig__/ImplementationGuide-other.json"),
+            serde_json::json!({"resourceType":"ImplementationGuide","id":"other"}),
+        ));
+        assert!(prepared_local_resource_set(&multiple, "test")
+            .unwrap_err()
+            .contains("multiple explicit primary"));
+        assert!(prepared_local_resource_set(&render_set[..4], "test")
+            .unwrap_err()
+            .contains("no explicit primary"));
+    }
+
+    #[test]
+    fn prepared_guide_snapshot_completes_predefined_structure_definition() {
+        let base = serde_json::json!({
+            "resourceType":"StructureDefinition", "id":"Patient",
+            "url":"http://hl7.org/fhir/StructureDefinition/Patient", "version":"4.0.1",
+            "name":"Patient", "status":"active", "kind":"resource", "abstract":false,
+            "type":"Patient", "derivation":"specialization",
+            "snapshot":{"element":[{"id":"Patient","path":"Patient","min":0,"max":"*"}]},
+            "differential":{"element":[{"id":"Patient","path":"Patient","min":0,"max":"*"}]}
+        });
+        let bundle = serde_json::json!([{
+            "label":"hl7.fhir.r4.core#4.0.1", "files":{
+                "package.json":base64_encode(serde_json::json!({"name":"hl7.fhir.r4.core","version":"4.0.1","fhirVersions":["4.0.1"]}).to_string().as_bytes()),
+                ".index.json":base64_encode(serde_json::json!({"index-version":2,"files":[{"filename":"StructureDefinition-Patient.json","resourceType":"StructureDefinition","id":"Patient","url":"http://hl7.org/fhir/StructureDefinition/Patient","version":"4.0.1","kind":"resource","type":"Patient"}]}).to_string().as_bytes()),
+                "StructureDefinition-Patient.json":base64_encode(base.to_string().as_bytes())
+            }
+        }]);
+        let config = "id: snapshot.test\ncanonical: https://example.org\nstatus: draft\nfhirVersion: 4.0.1\n";
+        let path = "input/resources/StructureDefinition-local-profile.json";
+        let differential = serde_json::json!({
+            "resourceType":"StructureDefinition", "id":"local-profile",
+            "url":"https://example.org/StructureDefinition/local-profile", "name":"LocalProfile",
+            "status":"draft", "kind":"resource", "abstract":false, "type":"Patient",
+            "baseDefinition":"http://hl7.org/fhir/StructureDefinition/Patient", "derivation":"constraint",
+            "differential":{"element":[{"id":"Patient","path":"Patient","short":"Local profile"}]}
+        });
+        let primary = serde_json::json!({
+            "resourceType":"ImplementationGuide", "id":"snapshot-test", "packageId":"snapshot.test",
+            "url":"https://example.org/ImplementationGuide/snapshot-test", "fhirVersion":["4.0.1"],
+            "definition":{"resource":[{"reference":{"reference":"StructureDefinition/local-profile"}}]}
+        });
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
+            labels: vec!["hl7.fhir.r4.core#4.0.1".into()],
+        };
+        let project = CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::from([(path.into(), differential.clone())]),
+            site_files: BTreeMap::from([(
+                path.into(),
+                base64_encode(differential.to_string().as_bytes()),
+            )]),
+            resolved_packages: Some(resolved),
+        };
+        let mut engine = Engine::default();
+        engine.init(&bundle.to_string()).unwrap();
+        engine.last_project = Some(project);
+        engine.last_compiled = vec![
+            (
+                PathBuf::from("/__predefined__/StructureDefinition-local-profile.json"),
+                differential,
+            ),
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-snapshot-test.json"),
+                primary,
+            ),
+        ];
+        let guide = engine
+            .site_model_from_compile(
+                &PrepareGuideOptions {
+                    build_epoch_secs: 1,
+                    liquid_asset_dirs: Vec::new(),
+                    branch: None,
+                    revision: None,
+                },
+                "test",
+                site_build::Sha256Digest::of_bytes(b"snapshot-predefined"),
+            )
+            .unwrap();
+        let matching = guide
+            .resources
+            .iter()
+            .filter(|resource| resource.key.id == "local-profile")
+            .collect::<Vec<_>>();
+        assert_eq!(matching.len(), 1);
+        assert!(matching[0]
+            .resource
+            .pointer("/snapshot/element")
+            .and_then(Value::as_array)
+            .is_some_and(|elements| !elements.is_empty()));
     }
 
     #[test]
@@ -5889,630 +6139,6 @@ mod site_build_handoff_tests {
         assert_ne!(
             baseline,
             closed_site_build_cache_key(&prepared, &target, &changed_diagnostics).unwrap()
-        );
-    }
-}
-
-// ===========================================================================
-// Predefined-resource IG render surface — native gate (task #42).
-//
-// A predefined-resource IG (0 FSH; conformance authored under input/resources/**
-// as DIFFERENTIAL-only SDs, e.g. US Core 9.0.0) must render LIVE: its profile
-// pages need a real HierarchicalTableGenerator snapshot table, which means the
-// render surface must (a) carry the predefined bodies in the render set and
-// (b) snapshot-complete the differential-only SDs against the full mounted
-// closure — including profiles whose base is EXTERNAL — never panicking on a
-// binding shape the byte-parity corpus happens not to exercise.
-//
-// This test drives the EXACT render-surface path the fix changed
-// (compile -> render set incl. predefined -> snapshot_complete_own ->
-// render_fragment) over US Core 9.0.0's real closure + predefined SDs, sourced
-// entirely from the local package cache (temp/fhir-home/.fhir/packages). It is
-// network-free and skips if the cache is absent.
-//
-// The predefined SDs are the published us.core#9.0.0 SDs with their `snapshot`
-// REMOVED — i.e. the authored differential-only form the editor feeds from
-// input/resources/**. Stripping the snapshot forces snapshot_complete_own to
-// regenerate it against the closure, which is precisely the code path that
-// panicked before the fix.
-// ===========================================================================
-#[cfg(test)]
-mod predefined_render_gate {
-    use super::*;
-    use std::path::Path;
-
-    fn repo() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .to_path_buf()
-    }
-
-    /// The US Core 9.0.0 dependency closure, all present in the shared cache
-    /// (verified network-free). Mounting the whole closure lets a profile whose
-    /// base is external (us-core-questionnaireresponse -> sdc) snapshot-complete.
-    const CLOSURE: &[&str] = &[
-        "hl7.fhir.r4.core#4.0.1",
-        "hl7.fhir.us.core#9.0.0",
-        "hl7.fhir.uv.sdc#4.0.0",
-        "hl7.fhir.uv.smart-app-launch#2.2.0",
-        "hl7.fhir.uv.extensions.r4#5.3.0",
-        "hl7.fhir.uv.tools.r4#1.1.2",
-        "hl7.fhir.uv.xver-r5.r4#0.1.0",
-        "hl7.terminology.r4#7.1.0",
-        "us.cdc.phinvads#0.12.0",
-    ];
-
-    /// Only the conformance/index files a snapshot+render needs — never the bulky
-    /// example instances. `BundleSource::read_dir` reflects exactly what we mount,
-    /// so the package index build sees only these.
-    fn is_wanted(name: &str) -> bool {
-        matches!(name, ".index.json" | ".derived-index.json" | "package.json")
-            || [
-                "StructureDefinition-",
-                "structuredefinition-",
-                "ValueSet-",
-                "valueset-",
-                "CodeSystem-",
-                "codesystem-",
-                "ConceptMap-",
-                "NamingSystem-",
-                "ImplementationGuide-",
-                "CapabilityStatement-",
-                "SearchParameter-",
-                "OperationDefinition-",
-            ]
-            .iter()
-            .any(|p| name.starts_with(p))
-    }
-
-    fn mount_pkg(src: &mut BundleSource, cache: &Path, label: &str) -> bool {
-        let dir = cache.join(label).join("package");
-        if !dir.is_dir() {
-            return false;
-        }
-        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-        for e in std::fs::read_dir(&dir).unwrap().flatten() {
-            let p = e.path();
-            if !p.is_file() {
-                continue;
-            }
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            if is_wanted(&name) {
-                if let Ok(bytes) = std::fs::read(&p) {
-                    entries.push((name, bytes));
-                }
-            }
-        }
-        src.mount_package(label, entries);
-        true
-    }
-
-    #[test]
-    fn us_core_patient_renders_live_hierarchy_table() {
-        let repo = repo();
-        let cache = repo.join("temp/fhir-home/.fhir/packages");
-        if !cache.join("hl7.fhir.us.core#9.0.0/package").is_dir() {
-            eprintln!("skip: no us.core#9.0.0 in cache ({})", cache.display());
-            return;
-        }
-
-        // ---- Mount the closure as a BundleSource (the render surface's package
-        //      backend), conformance files only. ----
-        let mut src = BundleSource::new();
-        for label in CLOSURE {
-            assert!(
-                mount_pkg(&mut src, &cache, label),
-                "closure package missing from cache: {label}"
-            );
-        }
-        let cache_root = src.cache_root().to_path_buf();
-
-        // ---- Predefined = us.core#9.0.0 conformance resources with `snapshot`
-        //      stripped from every SD (the authored differential-only form the
-        //      editor feeds from input/resources/**). ----
-        let uscore = cache.join("hl7.fhir.us.core#9.0.0/package");
-        let mut predefined = serde_json::Map::new();
-        for e in std::fs::read_dir(&uscore).unwrap().flatten() {
-            let p = e.path();
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            let lname = name.to_ascii_lowercase();
-            let is_conf = ["structuredefinition-", "valueset-", "codesystem-"]
-                .iter()
-                .any(|pre| lname.starts_with(pre));
-            if !is_conf || !name.ends_with(".json") {
-                continue;
-            }
-            let Ok(bytes) = std::fs::read(&p) else {
-                continue;
-            };
-            let Ok(mut body) = serde_json::from_slice::<Value>(&bytes) else {
-                continue;
-            };
-            if body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-                body.as_object_mut().unwrap().remove("snapshot");
-            }
-            predefined.insert(format!("input/resources/{name}"), body);
-        }
-        assert!(
-            predefined.len() > 80,
-            "expected the full US Core conformance set, got {}",
-            predefined.len()
-        );
-        let predefined_json = Value::Object(predefined).to_string();
-
-        // Minimal sushi-config: id/canonical/fhirVersion + the real dependency
-        // set so the compiler resolves the closure (0 FSH — predefined-only IG).
-        let config = "\
-id: hl7.fhir.us.core
-canonical: http://hl7.org/fhir/us/core
-name: USCore
-title: US Core
-status: active
-version: 9.0.0
-fhirVersion: 4.0.1
-dependencies:
-  hl7.fhir.uv.sdc: 4.0.0
-  hl7.fhir.uv.smart-app-launch: 2.2.0
-  hl7.fhir.uv.extensions.r4: 5.3.0
-  hl7.fhir.uv.xver-r5.r4: 0.1.0
-  us.cdc.phinvads: 0.12.0
-";
-
-        // ---- Drive the render surface EXACTLY as the Session worker does. ----
-        let mut engine = Engine {
-            bundle: Some(Rc::new(src)),
-            cache_root,
-            packages: CLOSURE.iter().map(|s| s.to_string()).collect(),
-            ..Default::default()
-        };
-
-        let compiled = engine
-            .compile("{}", config, &predefined_json)
-            .expect("compile predefined-only IG");
-        // Fix #1: the predefined bodies land in the render set.
-        let sd_count = engine
-            .last_compiled
-            .iter()
-            .filter(|(_, v)| {
-                v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
-            })
-            .count();
-        assert!(
-            sd_count > 50,
-            "render set must carry the predefined SDs; got {sd_count} (compiled {} resources)",
-            compiled.resources.len()
-        );
-
-        // Fix #2: rendering the differential-only us-core-patient must produce a
-        // real HierarchicalTableGenerator snapshot table — NO panic.
-        let snap = engine
-            .render_fragment("StructureDefinition-us-core-patient", "snapshot")
-            .expect("us-core-patient snapshot fragment renders");
-        assert!(
-            snap.contains("class=\"hierarchy\""),
-            "snapshot fragment must be a real hierarchy table; got:\n{}",
-            &snap[..snap.len().min(400)]
-        );
-        // The table must have real rows (resource content), not an empty shell.
-        assert!(
-            snap.contains("us-core-patient") || snap.contains("Patient"),
-            "hierarchy table must carry the profile's rows"
-        );
-
-        // The `tx` (terminology bindings) fragment is the one the browser panicked
-        // on — it must render without aborting.
-        let tx = engine
-            .render_fragment("StructureDefinition-us-core-patient", "tx")
-            .expect("us-core-patient tx fragment renders without panic");
-        assert!(!tx.is_empty(), "tx fragment produced no output");
-
-        // And the differential view (also part of the page) must not panic.
-        let diff = engine
-            .render_fragment("StructureDefinition-us-core-patient", "diff")
-            .expect("us-core-patient diff fragment renders");
-        assert!(
-            diff.contains("class=\"hierarchy\""),
-            "diff must be a hierarchy table"
-        );
-
-        eprintln!(
-            "OK: us-core-patient live render — snapshot {} bytes, tx {} bytes, diff {} bytes; render-set SDs = {}",
-            snap.len(),
-            tx.len(),
-            diff.len(),
-            sd_count
-        );
-
-        // Whole-IG robustness: rendering EVERY predefined profile's snapshot/diff/tx
-        // must never panic (the render surface builds the whole site — one bad
-        // profile cannot be allowed to abort). Gaps (Err) are acceptable — a hard
-        // panic (which is `unreachable`/abort in wasm) is not.
-        let profile_ids: Vec<String> = engine
-            .last_compiled
-            .iter()
-            .filter_map(|(_, v)| {
-                (v.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition"))
-                    .then(|| v.get("id").and_then(Value::as_str).map(String::from))
-                    .flatten()
-            })
-            .collect();
-        let mut rendered = 0usize;
-        for id in &profile_ids {
-            for kind in ["snapshot", "diff", "tx"] {
-                // Err is fine (a documented gap); the point is no panic unwinds here.
-                if engine
-                    .render_fragment(&format!("StructureDefinition-{id}"), kind)
-                    .is_ok()
-                {
-                    rendered += 1;
-                }
-            }
-        }
-        assert!(
-            rendered > profile_ids.len(), // most fragments across most profiles render
-            "expected most predefined profile fragments to render; only {rendered} of {} ok",
-            profile_ids.len() * 3
-        );
-        eprintln!(
-            "OK: whole-IG render smoke — {} profiles, {} fragments rendered, 0 panics",
-            profile_ids.len(),
-            rendered
-        );
-    }
-}
-
-// ===========================================================================
-// A/B _data-sufficiency gate (task #45).
-//
-// Proves the source-driven `_data` model (site_producer) renders US Core pages
-// identically to the known-good F0 publisher `_data`. Both sides share the SAME
-// shells, `_includes`, compiled+snapshotted SDs and package closure — the ONLY
-// variable is the structural `_data/*.json` (resources/structuredefinitions/
-// pages/fhir/info/...). Any diff is therefore attributable to `_data`; we assert
-// only the cited run-context classes remain (OID identifiers, artifact-page
-// label numbering, cross-section prev/next nav — see docs/site-producer.md).
-//
-// Network-free; skips if the US Core package cache or F0 build tree is absent.
-// Run: cargo test -q --release -p wasm_api -- --ignored ab_data
-// ===========================================================================
-#[cfg(test)]
-mod ab_data_parity_gate {
-    use super::*;
-    use render_sd::tree::{FsTree, TreeSource};
-    use std::collections::HashMap;
-    use std::path::Path;
-
-    const F0_USCORE: &str = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/us-core";
-
-    fn repo() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .to_path_buf()
-    }
-
-    const CLOSURE: &[&str] = &[
-        "hl7.fhir.r4.core#4.0.1",
-        "hl7.fhir.us.core#9.0.0",
-        "hl7.fhir.uv.sdc#4.0.0",
-        "hl7.fhir.uv.smart-app-launch#2.2.0",
-        "hl7.fhir.uv.extensions.r4#5.3.0",
-        "hl7.fhir.uv.tools.r4#1.1.2",
-        "hl7.fhir.uv.xver-r5.r4#0.1.0",
-        "hl7.terminology.r4#7.1.0",
-        "us.cdc.phinvads#0.12.0",
-    ];
-
-    fn is_wanted(name: &str) -> bool {
-        matches!(name, ".index.json" | ".derived-index.json" | "package.json")
-            || [
-                "StructureDefinition-",
-                "structuredefinition-",
-                "ValueSet-",
-                "valueset-",
-                "CodeSystem-",
-                "codesystem-",
-                "ConceptMap-",
-                "NamingSystem-",
-                "ImplementationGuide-",
-                "CapabilityStatement-",
-                "SearchParameter-",
-                "OperationDefinition-",
-            ]
-            .iter()
-            .any(|p| name.starts_with(p))
-    }
-
-    fn mount_pkg(src: &mut BundleSource, cache: &Path, label: &str) -> bool {
-        let dir = cache.join(label).join("package");
-        if !dir.is_dir() {
-            return false;
-        }
-        let mut entries: Vec<(String, Vec<u8>)> = Vec::new();
-        for e in std::fs::read_dir(&dir).unwrap().flatten() {
-            let p = e.path();
-            if !p.is_file() {
-                continue;
-            }
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            if is_wanted(&name) {
-                if let Ok(bytes) = std::fs::read(&p) {
-                    entries.push((name, bytes));
-                }
-            }
-        }
-        src.mount_package(label, entries);
-        true
-    }
-
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        if let Ok(rd) = std::fs::read_dir(dir) {
-            for e in rd.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    walk(&p, out);
-                } else {
-                    out.push(p);
-                }
-            }
-        }
-    }
-
-    /// Read the F0 `temp/pages` tree into a `/site/**` site_files map.
-    fn load_site_files(pages_root: &Path, txcache: &Path) -> HashMap<PathBuf, Vec<u8>> {
-        let mut site: HashMap<PathBuf, Vec<u8>> = HashMap::new();
-        let mut all = Vec::new();
-        walk(pages_root, &mut all);
-        for f in all {
-            let rel = f
-                .strip_prefix(pages_root)
-                .unwrap()
-                .to_string_lossy()
-                .to_string();
-            site.insert(
-                PathBuf::from(format!("/site/{rel}")),
-                std::fs::read(&f).unwrap(),
-            );
-        }
-        if txcache.is_dir() {
-            let mut tx = Vec::new();
-            walk(txcache, &mut tx);
-            for f in tx {
-                let rel = f
-                    .strip_prefix(txcache)
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string();
-                site.insert(
-                    PathBuf::from(format!("/site/txcache/{rel}")),
-                    std::fs::read(&f).unwrap(),
-                );
-            }
-        }
-        site
-    }
-
-    /// Classify a per-line diff as an ACCEPTED (cited) run-context class, or a
-    /// hard content diff. Returns Some(class) if accepted, None if it must fail.
-    fn classify(line: &str) -> Option<&'static str> {
-        let l = line.trim();
-        // OID identifiers row (publisher auto-assigned registry, not in source)
-        if l.contains("Other Identifiers") || l.contains("OID:") || l.contains("UUID:") {
-            return Some("oid-identifiers");
-        }
-        // artifact-page label numbering (CSS --heading-prefix var) + prev/next nav
-        if l.contains("--heading-prefix") || l.contains("&lt;prev") || l.contains("next&gt;") {
-            return Some("label-or-nav");
-        }
-        // footer/run-context (genDate/build year/publish-box placeholder)
-        if l.contains("genDate") || l.contains("publish-box") || l.contains("Publish Box") {
-            return Some("run-context");
-        }
-        None
-    }
-
-    fn render_both(
-        compiled: &[(PathBuf, Value)],
-        bundle: Option<Rc<BundleSource>>,
-        site_a: &HashMap<PathBuf, Vec<u8>>,
-        site_b: &HashMap<PathBuf, Vec<u8>>,
-        page: &str,
-    ) -> (String, String) {
-        let opts = SiteOptions {
-            active_tables: true,
-            run_uuid: Some("00000000-0000-4000-8000-abdata000000".to_string()),
-            engine_first_includes: true,
-            artifact_resolution: true,
-        };
-        let rs_a = build_render_state(compiled, bundle.clone(), site_a, &opts).expect("A state");
-        let rs_b = build_render_state(compiled, bundle, site_b, &opts).expect("B state");
-        (
-            rs_a.render_page_by_name(page).expect("A render"),
-            rs_b.render_page_by_name(page).expect("B render"),
-        )
-    }
-
-    #[test]
-    #[ignore = "needs the US Core F0 build tree + package cache; run explicitly"]
-    fn ab_data_sufficiency_uscore() {
-        let f0 = Path::new(F0_USCORE);
-        let cache = repo().join("temp/fhir-home/.fhir/packages");
-        if !f0.exists() || !cache.join("hl7.fhir.us.core#9.0.0/package").is_dir() {
-            eprintln!(
-                "skip: missing F0 tree ({}) or us.core cache ({})",
-                f0.display(),
-                cache.display()
-            );
-            return;
-        }
-
-        // ---- package closure ----
-        let mut src = BundleSource::new();
-        for label in CLOSURE {
-            assert!(
-                mount_pkg(&mut src, &cache, label),
-                "closure pkg missing: {label}"
-            );
-        }
-        let cache_root = src.cache_root().to_path_buf();
-        let bundle = Some(Rc::new(src));
-
-        // ---- compile the predefined US Core IG (differential SDs from input/resources) ----
-        let mut predefined = serde_json::Map::new();
-        let resdir = f0.join("input/resources");
-        for e in std::fs::read_dir(&resdir).unwrap().flatten() {
-            let p = e.path();
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            if !name.ends_with(".json") {
-                continue;
-            }
-            let Ok(bytes) = std::fs::read(&p) else {
-                continue;
-            };
-            let Ok(body) = serde_json::from_slice::<Value>(&bytes) else {
-                continue;
-            };
-            predefined.insert(format!("input/resources/{name}"), body);
-        }
-        let predefined_json = Value::Object(predefined).to_string();
-        // also feed the fsh-generated IG (predefined-resource IGs keep the IG there)
-        let mut fsh_predef = serde_json::Map::new();
-        let gendir = f0.join("fsh-generated/resources");
-        for e in std::fs::read_dir(&gendir).unwrap().flatten() {
-            let p = e.path();
-            let name = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            if !name.starts_with("ImplementationGuide") || !name.ends_with(".json") {
-                continue;
-            }
-            let Ok(bytes) = std::fs::read(&p) else {
-                continue;
-            };
-            let Ok(body) = serde_json::from_slice::<Value>(&bytes) else {
-                continue;
-            };
-            fsh_predef.insert(format!("input/resources/{name}"), body);
-        }
-        // Merge the IG into the predefined set so it lands in the render set.
-        let mut all_predef: serde_json::Map<String, Value> =
-            serde_json::from_str(&predefined_json).unwrap();
-        all_predef.extend(fsh_predef);
-        let predefined_json = Value::Object(all_predef).to_string();
-
-        let config = "\
-id: hl7.fhir.us.core
-canonical: http://hl7.org/fhir/us/core
-name: USCore
-title: US Core
-status: active
-version: 9.0.0
-fhirVersion: 4.0.1
-dependencies:
-  hl7.fhir.uv.sdc: 4.0.0
-  hl7.fhir.uv.smart-app-launch: 2.2.0
-  hl7.fhir.uv.extensions.r4: 5.3.0
-  hl7.fhir.uv.xver-r5.r4: 0.1.0
-  us.cdc.phinvads: 0.12.0
-";
-        let mut engine = Engine {
-            bundle: bundle.clone(),
-            cache_root,
-            packages: CLOSURE.iter().map(|s| s.to_string()).collect(),
-            ..Default::default()
-        };
-        engine
-            .compile("{}", config, &predefined_json)
-            .expect("compile US Core");
-        let compiled = engine
-            .snapshot_complete_own()
-            .expect("snapshot-complete render set");
-
-        // ---- site trees: A = F0 _data, B = producer _data overlaid ----
-        let pages_root = f0.join("temp/pages");
-        let txcache = repo().join("temp/fhir-home"); // absent → no txcache; fine
-        let site_a = load_site_files(&pages_root, &txcache);
-
-        // Producer _data from source (gather_inputs over the F0 build dir).
-        let inputs = site_producer::gather_inputs(f0).expect("gather_inputs");
-        let produced = site_producer::produce(&inputs).expect("produce");
-        let mut site_b = site_a.clone();
-        for (name, body) in &produced.data {
-            site_b.insert(
-                PathBuf::from(format!("/site/_data/{name}")),
-                body.clone().into_bytes(),
-            );
-        }
-
-        // ---- render + classify ----
-        let pages = ["StructureDefinition-us-core-patient.html", "index.html"];
-        let mut hard_failures: Vec<String> = Vec::new();
-        for page in pages {
-            // ensure the shell + narrative source exists in the tree
-            if FsTree.read(&pages_root.join(page)).is_none() {
-                eprintln!("skip page (no shell): {page}");
-                continue;
-            }
-            let (a, b) = render_both(&compiled, bundle.clone(), &site_a, &site_b, page);
-            let a_lines: Vec<&str> = a.lines().collect();
-            let b_lines: Vec<&str> = b.lines().collect();
-            let mut classes: std::collections::BTreeMap<&str, usize> = Default::default();
-            let mut matched = 0usize;
-            let max = a_lines.len().max(b_lines.len());
-            for i in 0..max {
-                let al = a_lines.get(i).copied().unwrap_or("");
-                let bl = b_lines.get(i).copied().unwrap_or("");
-                if al == bl {
-                    matched += 1;
-                    continue;
-                }
-                // a diff at line i — classify by BOTH sides' content
-                let cls = classify(al).or_else(|| classify(bl));
-                match cls {
-                    Some(c) => *classes.entry(c).or_default() += 1,
-                    None => {
-                        if hard_failures.len() < 12 {
-                            hard_failures.push(format!(
-                                "{page} L{i}:\n   A: {}\n   B: {}",
-                                al.trim(),
-                                bl.trim()
-                            ));
-                        }
-                    }
-                }
-            }
-            eprintln!(
-                "A/B {page}: {}/{} lines identical; accepted-diff classes = {:?}",
-                matched, max, classes
-            );
-        }
-        assert!(
-            hard_failures.is_empty(),
-            "UNCLASSIFIED content diffs (not run-context/OID/label-nav):\n{}",
-            hard_failures.join("\n")
         );
     }
 }

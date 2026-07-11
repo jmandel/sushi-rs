@@ -647,6 +647,6 @@ pub fn prepare(input: &PrepareInputs<'_>) -> Result<PreparedGuide> {
         pages: augmentation.pages,
         menu: augmentation.menu,
         sushi_config: augmentation.sushi_config,
-        assets: augmentation.assets,
+        authored_files: augmentation.authored_files,
     })
 }

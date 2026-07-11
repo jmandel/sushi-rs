@@ -1,24 +1,24 @@
-//! Renderer-neutral authored-guide augmentation: builds the
-//! page, menu, configuration, and asset values from the IG page tree,
-//! sushi-config `menu:`, images, and referenced includes. An include reference
-//! is not itself an authored asset: template preprocessing may generate its
-//! final bytes (for example, an `input/images-source/*.plantuml` source becoming
-//! a temporary `.svg`). Only includes actually found under a declared authored
-//! root are captured here. Missing authored Markdown page files still fail
-//! loud; generated HTML navigation nodes are retained with no authored body.
-//! This crate does not execute PlantUML: without a separate preprocessing stage
-//! that figure is omitted, but unsupported figure fidelity is not grounds to
-//! reject the renderer-neutral guide.
+//! Renderer-neutral authored-guide augmentation: builds page, menu, and
+//! configuration semantics and captures the complete Publisher-facing authored
+//! inputs. Typed roles distinguish page/resource prose, `_data`, declared
+//! include roots, public images, and image-generator sources. An include
+//! reference is not itself proof of an authored file: template preprocessing
+//! may generate its final bytes (for example, an
+//! `input/images-source/*.plantuml` source becoming a temporary `.svg`). Every
+//! file that does exist beneath a declared root is captured whether referenced
+//! or not. Missing authored Markdown page files still fail loud; generated HTML
+//! navigation nodes are retained with no authored body or source. This crate
+//! captures but does not execute PlantUML.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{bail, Result};
 use serde_json::Value;
 
 use crate::{
-    AugmentInputs, FileSource, MenuNode, PageNode, PreparedAsset, PreparedAugmentation,
-    PreparedPath,
+    AugmentInputs, AuthoredFile, AuthoredFileRole, FileSource, MenuNode, PageNode,
+    PreparedAugmentation, PreparedPath,
 };
 
 fn prepared_source_path(project_root: &Path, path: &Path) -> Result<PreparedPath> {
@@ -129,19 +129,21 @@ fn mime_of(f: &str) -> &'static str {
         "text/html"
     } else if lower.ends_with(".md") {
         "text/markdown"
+    } else if lower.ends_with(".json") {
+        "application/json"
+    } else if lower.ends_with(".xml") {
+        "application/xml"
+    } else if lower.ends_with(".css") {
+        "text/css"
+    } else if lower.ends_with(".js") {
+        "text/javascript"
+    } else if lower.ends_with(".liquid") {
+        "text/plain"
     } else if lower.ends_with(".txt") {
         "text/plain"
     } else {
         "application/octet-stream"
     }
-}
-
-/// ingest.ts:144 — textLikeMime.
-fn text_like_mime(mime: &str) -> bool {
-    mime.starts_with("text/")
-        || mime == "image/svg+xml"
-        || mime == "application/xml"
-        || mime == "application/xhtml+xml"
 }
 
 /// Walk the IG definition.page tree building Pages rows, gathering include names.
@@ -151,12 +153,14 @@ struct CapturedPage {
     generation: String,
     depth: i64,
     body: Option<String>,
+    source: Option<PreparedPath>,
 }
 
 fn walk_pages(
     node: &Value,
     depth: i64,
-    pagecontent_dir: &Path,
+    pagecontent_dirs: &[PathBuf],
+    project_root: &Path,
     files: &dyn FileSource,
     page_include_names: &mut BTreeSet<String>,
     pages: &mut Vec<CapturedPage>,
@@ -183,32 +187,49 @@ fn walk_pages(
                 .and_then(Value::as_str)
                 .unwrap_or("markdown")
                 .to_string();
-            let md_path = pagecontent_dir.join(format!("{slug}.md"));
-            let xml_path = pagecontent_dir.join(format!("{slug}.xml"));
             let read_text = |p: &Path| -> Result<Option<String>> {
                 match files.read(p) {
                     Some(bytes) => Ok(Some(String::from_utf8(bytes)?)),
                     None => Ok(None),
                 }
             };
-            let body: Option<String> = if let Some(t) = read_text(&md_path)? {
-                Some(t)
-            } else if let Some(t) = read_text(&xml_path)? {
-                Some(t)
+            let candidates = pagecontent_dirs
+                .iter()
+                .flat_map(|root| {
+                    [
+                        root.join(format!("{slug}.md")),
+                        root.join(format!("{slug}.xml")),
+                    ]
+                })
+                .filter(|path| files.is_file(path))
+                .collect::<Vec<_>>();
+            if candidates.len() > 1 {
+                bail!(
+                    "page slug '{slug}' has multiple authored sources: {}",
+                    candidates
+                        .iter()
+                        .map(|path| path.display().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+            let (body, source): (Option<String>, Option<PreparedPath>) = if let Some(path) =
+                candidates.first()
+            {
+                let body = read_text(path)?.ok_or_else(|| {
+                    anyhow::anyhow!("listed authored page {} is unreadable", path.display())
+                })?;
+                (Some(body), Some(prepared_source_path(project_root, path)?))
             } else if generation != "markdown" {
                 // Publisher-generated structural pages such as artifacts.html
                 // legitimately appear in definition.page with generation=html
                 // and have no authored pagecontent file. Preserve the declared
                 // navigation node; its final body is generator-owned.
-                None
+                (None, None)
             } else {
                 // A Markdown page claims an authored source. Missing it is a
                 // real incomplete project rather than a generated page.
-                bail!(
-                    "Missing page file for slug '{slug}': expected {} or {}",
-                    md_path.display(),
-                    xml_path.display()
-                );
+                bail!("Missing page file for slug '{slug}' under any declared page-content root");
             };
             if let Some(b) = &body {
                 for name in liquid_asset_names(b) {
@@ -226,13 +247,15 @@ fn walk_pages(
                 generation,
                 depth,
                 body,
+                source,
             });
         }
         if let Some(children) = p.get("page") {
             walk_pages(
                 children,
                 depth + 1,
-                pagecontent_dir,
+                pagecontent_dirs,
+                project_root,
                 files,
                 page_include_names,
                 pages,
@@ -281,6 +304,7 @@ fn prepared_page_tree(rows: &[CapturedPage]) -> Result<Vec<PageNode>> {
                 title: row.title.clone(),
                 generation: row.generation.clone(),
                 body: row.body.clone(),
+                source: row.source.clone(),
                 children,
             });
         }
@@ -317,33 +341,46 @@ fn prepared_menu_items(node: &serde_yaml::Mapping) -> Vec<MenuNode> {
         .collect()
 }
 
-struct CapturedAsset {
+struct CapturedFile {
+    role: AuthoredFileRole,
     name: String,
     mime: String,
     content: Vec<u8>,
     source: PreparedPath,
 }
 
-/// Recursively ingest images (ingest.ts:153 ingestImageDir). Sourced through the
-/// `FileSource` (disk or in-memory); `list_recursive` yields sorted relative
-/// paths, matching the prior sorted `read_dir` walk order.
-fn ingest_image_dir(
+/// Capture every file beneath a declared Publisher input root. The logical
+/// path is role-relative; the exact project-relative source is retained
+/// separately. Unsafe listings fail before a read and are never normalized
+/// into a different file.
+fn capture_root(
+    role: AuthoredFileRole,
     root: &Path,
     project_root: &Path,
     files: &dyn FileSource,
-    assets: &mut Vec<CapturedAsset>,
+    authored_files: &mut Vec<CapturedFile>,
 ) -> Result<usize> {
+    let root = normalize_path(root);
+    let project_root = normalize_path(project_root);
+    if !root.starts_with(&project_root) {
+        bail!(
+            "prepared input root {} is outside project root {}",
+            root.display(),
+            project_root.display()
+        );
+    }
     let mut count = 0;
-    for rel in files.list_recursive(root) {
-        let p = safe_path_under(root, &rel)?;
-        let Some(content) = files.read(&p) else {
-            continue;
-        };
-        assets.push(CapturedAsset {
+    for rel in files.list_recursive(&root) {
+        let p = safe_path_under(&root, &rel)?;
+        let content = files.read(&p).ok_or_else(|| {
+            anyhow::anyhow!("listed authored input {} is unreadable", p.display())
+        })?;
+        authored_files.push(CapturedFile {
+            role: role.clone(),
             name: safe_asset_name(&rel)?,
             mime: mime_of(&rel).to_string(),
             content,
-            source: prepared_source_path(project_root, &p)?,
+            source: prepared_source_path(&project_root, &p)?,
         });
         count += 1;
     }
@@ -356,15 +393,27 @@ fn capture_augmentation(input: &AugmentInputs) -> Result<PreparedAugmentation> {
     // ---- Pages ----
     let mut page_include_names: BTreeSet<String> = BTreeSet::new();
     let mut pages = Vec::new();
+    let pagecontent_dirs = vec![
+        input.pagecontent_dir.clone(),
+        input.project_root.join("input/pages"),
+        input.project_root.join("input/resource-docs"),
+    ];
     if let Some(page) = input.ig.pointer("/definition/page") {
         walk_pages(
             page,
             0,
-            &input.pagecontent_dir,
+            &pagecontent_dirs,
+            &input.project_root,
             input.files,
             &mut page_include_names,
             &mut pages,
         )?;
+    }
+    // A reference may be generator-owned and therefore absent from authored
+    // include roots, but it is never allowed to smuggle an unsafe path into a
+    // later renderer.
+    for name in &page_include_names {
+        safe_asset_name(name)?;
     }
     let prepared_pages = prepared_page_tree(&pages)?;
 
@@ -378,86 +427,105 @@ fn capture_augmentation(input: &AugmentInputs) -> Result<PreparedAugmentation> {
         .map(prepared_menu_items)
         .unwrap_or_default();
 
-    // ---- Assets: referenced includes (nested), then images ----
-    let mut assets: Vec<CapturedAsset> = Vec::new();
-    // BTreeSet iteration is sorted+deterministic; we extend the worklist as we
-    // discover nested includes (ingest.ts adds to the same set mid-loop).
-    let mut pending: Vec<String> = page_include_names.iter().cloned().collect();
-    let mut seen_includes: BTreeSet<String> = page_include_names.clone();
-    while let Some(include_name) = pending.pop() {
-        let safe_name = safe_asset_name(&include_name)?;
-        let mut found = false;
-        for dir in &input.liquid_asset_dirs {
-            let p = safe_path_under(dir, &safe_name)?;
-            if let Some(content) = input.files.read(&p) {
-                let mime = mime_of(&safe_name);
-                if text_like_mime(mime) {
-                    if let Ok(text) = std::str::from_utf8(&content) {
-                        for nested in liquid_asset_names(text) {
-                            if seen_includes.insert(nested.clone()) {
-                                pending.push(nested);
-                            }
-                        }
-                    }
-                }
-                assets.push(CapturedAsset {
-                    name: safe_name.clone(),
-                    mime: mime.to_string(),
-                    content,
-                    source: prepared_source_path(&input.project_root, &p)?,
-                });
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            // Mirror ingest.ts: capture only an include whose bytes exist under
-            // an authored include root. A safe unresolved name is not proof of
-            // a missing authored file. Publisher/template preprocessing may own
-            // it (mCODE, for example, references an SVG generated from a
-            // PlantUML source), or it may name a Publisher-generated include
-            // such as dependency-table.xhtml. PreparedGuide is renderer-neutral
-            // and must not invent or require that downstream output here.
-            //
-            // Path safety is intentionally checked before lookup, so this does
-            // not turn unsafe names into tolerated misses. Missing authored
-            // Markdown sources also remain hard errors in `walk_pages`.
-        }
+    // ---- Complete authored Publisher inputs ----
+    let mut authored_files: Vec<CapturedFile> = Vec::new();
+    capture_root(
+        AuthoredFileRole::PageContent,
+        &input.pagecontent_dir,
+        &input.project_root,
+        input.files,
+        &mut authored_files,
+    )?;
+    capture_root(
+        AuthoredFileRole::PageContent,
+        &input.project_root.join("input/pages"),
+        &input.project_root,
+        input.files,
+        &mut authored_files,
+    )?;
+    capture_root(
+        AuthoredFileRole::ResourceContent,
+        &input.project_root.join("input/intro-notes"),
+        &input.project_root,
+        input.files,
+        &mut authored_files,
+    )?;
+    capture_root(
+        AuthoredFileRole::ResourceContent,
+        &input.project_root.join("input/resource-docs"),
+        &input.project_root,
+        input.files,
+        &mut authored_files,
+    )?;
+    capture_root(
+        AuthoredFileRole::Data,
+        &input.project_root.join("input/data"),
+        &input.project_root,
+        input.files,
+        &mut authored_files,
+    )?;
+    for dir in &input.liquid_asset_dirs {
+        capture_root(
+            AuthoredFileRole::Include,
+            dir,
+            &input.project_root,
+            input.files,
+            &mut authored_files,
+        )?;
     }
-    ingest_image_dir(
+    capture_root(
+        AuthoredFileRole::Image,
         &input.image_dir,
         &input.project_root,
         input.files,
-        &mut assets,
+        &mut authored_files,
+    )?;
+    capture_root(
+        AuthoredFileRole::ImageSource,
+        &input.project_root.join("input/images-source"),
+        &input.project_root,
+        input.files,
+        &mut authored_files,
     )?;
 
-    // De-dup by name keeping last-writer (INSERT OR REPLACE semantics), stable.
-    let mut order = Vec::new();
-    let mut by_name = std::collections::HashMap::new();
-    for a in assets {
-        if !by_name.contains_key(&a.name) {
-            order.push(a.name.clone());
+    // Roles are independent namespaces. A repeated declaration of the exact
+    // same source is harmless; two sources claiming one role-relative path are
+    // ambiguous and fail rather than depending on traversal order.
+    let mut by_name: BTreeMap<(AuthoredFileRole, String), CapturedFile> = BTreeMap::new();
+    for a in authored_files {
+        let key = (a.role.clone(), a.name.clone());
+        if let Some(existing) = by_name.get(&key) {
+            if existing.source != a.source
+                || existing.content != a.content
+                || existing.mime != a.mime
+            {
+                bail!(
+                    "authored {:?} path '{}' is declared by both {} and {}",
+                    a.role,
+                    a.name,
+                    existing.source,
+                    a.source
+                );
+            }
+            continue;
         }
-        by_name.insert(a.name.clone(), a);
+        by_name.insert(key, a);
     }
-    let assets: Vec<CapturedAsset> = order
-        .into_iter()
-        .filter_map(|name| by_name.remove(&name))
-        .collect();
-    let prepared_assets = assets
-        .iter()
-        .map(|asset| PreparedAsset {
-            path: PreparedPath::parse(asset.name.clone()).expect("safe asset is a PreparedPath"),
-            mime: asset.mime.clone(),
-            content: asset.content.clone(),
-            source_reads: BTreeSet::from([asset.source.clone()]),
+    let authored_files = by_name
+        .into_values()
+        .map(|asset| AuthoredFile {
+            role: asset.role,
+            path: PreparedPath::parse(asset.name).expect("safe asset is a PreparedPath"),
+            mime: asset.mime,
+            content: asset.content,
+            source_reads: BTreeSet::from([asset.source]),
         })
         .collect();
     Ok(PreparedAugmentation {
         pages: prepared_pages,
         menu: prepared_menu,
         sushi_config: cfg_json,
-        assets: prepared_assets,
+        authored_files,
     })
 }
 
@@ -506,6 +574,7 @@ mod tests {
         assert_eq!(prepared.pages[0].generation, "html");
         assert_eq!(prepared.pages[0].title, "Artifacts Summary");
         assert!(prepared.pages[0].body.is_none());
+        assert!(prepared.pages[0].source.is_none());
     }
 
     #[test]
@@ -566,7 +635,13 @@ mod tests {
             .expect("a safe generator-owned SVG reference must not reject the guide");
 
         assert_eq!(prepared.pages.len(), 1);
-        assert!(prepared.assets.is_empty());
+        assert_eq!(
+            prepared.pages[0].source.as_ref().map(PreparedPath::as_str),
+            Some("input/pagecontent/conformance-patients.md")
+        );
+        assert!(prepared.authored_files.iter().all(|asset| {
+            asset.role != AuthoredFileRole::Image && asset.role != AuthoredFileRole::Include
+        }));
     }
 
     #[test]
@@ -592,5 +667,182 @@ mod tests {
         assert!(error
             .to_string()
             .contains("Unsafe asset name: ../escape.svg"));
+    }
+
+    #[test]
+    fn captures_complete_typed_publisher_inputs_with_exact_sources() {
+        let ig = serde_json::json!({
+            "definition": { "page": {
+                "nameUrl": "toc.html",
+                "generation": "html",
+                "page": [
+                    {
+                        "nameUrl": "home.html",
+                        "generation": "markdown"
+                    },
+                    {
+                        "nameUrl": "resource-guide.html",
+                        "generation": "markdown"
+                    }
+                ]
+            }}
+        });
+        let files = MemFiles::new(BTreeMap::from([
+            (
+                PathBuf::from("/ig/input/pagecontent/home.md"),
+                b"# Home".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/pagecontent/unlisted.md"),
+                b"unused page".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/pages/secondary.md"),
+                b"secondary page root".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/intro-notes/StructureDefinition-demo-intro.md"),
+                b"resource introduction".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/resource-docs/resource-guide.md"),
+                b"# Resource guide".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/data/nested/site.json"),
+                b"{}".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/includes/unreferenced.liquid"),
+                b"complete include root".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/images/nested/logo.svg"),
+                b"<svg/>".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/images-source/diagram.plantuml"),
+                b"@startuml\n@enduml".to_vec(),
+            ),
+        ]));
+
+        let prepared = prepare(&inputs(&ig, &files)).unwrap();
+        assert_eq!(prepared.pages[0].body.as_deref(), Some("# Home"));
+        assert_eq!(
+            prepared.pages[0].source.as_ref().map(PreparedPath::as_str),
+            Some("input/pagecontent/home.md")
+        );
+        assert_eq!(
+            prepared.pages[1].source.as_ref().map(PreparedPath::as_str),
+            Some("input/resource-docs/resource-guide.md")
+        );
+
+        let captured = prepared
+            .authored_files
+            .iter()
+            .map(|asset| {
+                (
+                    asset.role.clone(),
+                    asset.path.as_str(),
+                    asset
+                        .source_reads
+                        .iter()
+                        .next()
+                        .expect("one exact source")
+                        .as_str(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            captured,
+            vec![
+                (
+                    AuthoredFileRole::PageContent,
+                    "home.md",
+                    "input/pagecontent/home.md"
+                ),
+                (
+                    AuthoredFileRole::PageContent,
+                    "secondary.md",
+                    "input/pages/secondary.md"
+                ),
+                (
+                    AuthoredFileRole::PageContent,
+                    "unlisted.md",
+                    "input/pagecontent/unlisted.md"
+                ),
+                (
+                    AuthoredFileRole::ResourceContent,
+                    "StructureDefinition-demo-intro.md",
+                    "input/intro-notes/StructureDefinition-demo-intro.md"
+                ),
+                (
+                    AuthoredFileRole::ResourceContent,
+                    "resource-guide.md",
+                    "input/resource-docs/resource-guide.md"
+                ),
+                (
+                    AuthoredFileRole::Data,
+                    "nested/site.json",
+                    "input/data/nested/site.json"
+                ),
+                (
+                    AuthoredFileRole::Include,
+                    "unreferenced.liquid",
+                    "input/includes/unreferenced.liquid"
+                ),
+                (
+                    AuthoredFileRole::Image,
+                    "nested/logo.svg",
+                    "input/images/nested/logo.svg"
+                ),
+                (
+                    AuthoredFileRole::ImageSource,
+                    "diagram.plantuml",
+                    "input/images-source/diagram.plantuml"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn conflicting_declared_include_roots_fail_loudly() {
+        let ig = serde_json::json!({});
+        let files = MemFiles::new(BTreeMap::from([
+            (
+                PathBuf::from("/ig/input/includes/shared.md"),
+                b"first".to_vec(),
+            ),
+            (
+                PathBuf::from("/ig/input/other-includes/shared.md"),
+                b"second".to_vec(),
+            ),
+        ]));
+        let mut input = inputs(&ig, &files);
+        input.liquid_asset_dirs = vec![
+            PathBuf::from("/ig/input/includes"),
+            PathBuf::from("/ig/input/other-includes"),
+        ];
+
+        let error = prepare(&input).err().expect("colliding roots must fail");
+        assert!(error
+            .to_string()
+            .contains("authored Include path 'shared.md' is declared by both"));
+    }
+
+    #[test]
+    fn declared_roots_outside_project_are_rejected() {
+        let ig = serde_json::json!({});
+        let files = MemFiles::new(BTreeMap::from([(
+            PathBuf::from("/external/includes/shared.md"),
+            b"outside".to_vec(),
+        )]));
+        let mut input = inputs(&ig, &files);
+        input.liquid_asset_dirs = vec![PathBuf::from("/external/includes")];
+
+        let error = prepare(&input)
+            .err()
+            .expect("out-of-project roots must fail");
+        assert!(error.to_string().contains("is outside project root /ig"));
     }
 }

@@ -89,7 +89,7 @@ keeps one body per digest, so URL closure does not duplicate bytes.
 
 The crate's reusable typed APIs are:
 
-- `ProducerInputs::from_memory` / `gather_inputs`;
+- `ProducerInputs::from_prepared`, `from_memory`, and `gather_inputs`;
 - `produce` and `SiteProducerOutput::write_to`;
 - `PublisherRuntime::assemble`, `files`, `recipe_sha256`, and `finish_html`.
 

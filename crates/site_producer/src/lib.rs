@@ -47,12 +47,29 @@ use serde_json::Value;
 
 pub mod config;
 pub mod data;
+pub mod menu;
 pub mod publisher_runtime;
 pub mod resource;
 pub mod shells;
 
 pub use config::Defaults;
 pub use resource::{enumerate_resources, Resource};
+
+/// Renderer-owned presentation metadata for one emitted resource page. This is
+/// adjacent to the shell bytes, not inferred later from an output filename.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResourcePageMetadata {
+    pub resource_type: String,
+    pub id: String,
+    pub title: String,
+    pub role: ResourcePageRole,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResourcePageRole {
+    Primary,
+    Companion,
+}
 
 /// The full producer output: the `temp/pages` shell + `_data` tree, as an
 /// in-memory file map (relative path → bytes). Native callers write it to disk;
@@ -61,8 +78,14 @@ pub use resource::{enumerate_resources, Resource};
 pub struct SiteProducerOutput {
     /// Page shells, keyed by output filename (e.g. `StructureDefinition-us-core-patient.html`).
     pub pages: BTreeMap<String, String>,
+    /// Exact resource subject for resource-owned shells, keyed by the same
+    /// final configured path as `pages`. Narrative pages are not emitted by
+    /// this producer and therefore have no entry.
+    pub resource_pages: BTreeMap<String, ResourcePageMetadata>,
     /// `_data/*.json` files, keyed by bare filename (e.g. `artifacts.json`).
     pub data: BTreeMap<String, String>,
+    /// Generated renderer includes owned by semantic guide preparation.
+    pub includes: BTreeMap<String, String>,
 }
 
 impl SiteProducerOutput {
@@ -70,6 +93,7 @@ impl SiteProducerOutput {
     /// shells at the root, `_data/*` under `_data/`. Existing files are overwritten.
     pub fn write_to(&self, pages_root: &Path) -> Result<usize> {
         let data_dir = pages_root.join("_data");
+        let includes_dir = pages_root.join("_includes");
         std::fs::create_dir_all(&data_dir)
             .with_context(|| format!("mkdir {}", data_dir.display()))?;
         let mut n = 0;
@@ -79,6 +103,14 @@ impl SiteProducerOutput {
         }
         for (name, body) in &self.data {
             std::fs::write(data_dir.join(name), body)?;
+            n += 1;
+        }
+        if !self.includes.is_empty() {
+            std::fs::create_dir_all(&includes_dir)
+                .with_context(|| format!("mkdir {}", includes_dir.display()))?;
+        }
+        for (name, body) in &self.includes {
+            std::fs::write(includes_dir.join(name), body)?;
             n += 1;
         }
         Ok(n)
@@ -111,8 +143,9 @@ impl LayoutSource {
 
 /// Inputs to the producer, gathered from a repo/source dir tree.
 pub struct ProducerInputs {
-    /// Every resource that gets a page: compiled (`fsh-generated/resources`) +
-    /// predefined (`input/resources`) + examples (`input/examples`).
+    /// Every resource that gets a page. `from_prepared` receives the complete
+    /// local resource set from `PreparedGuide`; native filesystem gathering
+    /// also recognizes the Publisher's generated, resource, and example roots.
     pub resources: Vec<Resource>,
     /// The template's merged `config.json` `defaults` + `extraTemplates`.
     pub defaults: Defaults,
@@ -134,6 +167,8 @@ pub struct ProducerInputs {
     /// spurious heading (publisher gates on file existence, PublisherGenerator
     /// `addPageDataRow` :3690).
     pub page_includes: std::collections::HashSet<String>,
+    /// Prepared semantic navigation menu used to generate `menu.xml`.
+    pub menu: Vec<site_build::MenuNode>,
     /// Output page-directory prefix for the shell file locations AND the
     /// `pages.json` KEYS — these two must be equal to the render surface's
     /// `page.path` (`site.data.pages[page.path]`). Empty (native `fig`,
@@ -169,6 +204,96 @@ impl ProducerInputs {
             ig: IgContext::from_ig(ig),
             ig_json: ig.clone(),
             page_includes,
+            menu: Vec::new(),
+            page_prefix: page_prefix.to_string(),
+        })
+    }
+
+    /// Direct Publisher projection from the one renderer-neutral handoff.
+    /// Primary-guide selection, resource order, example classification, and
+    /// authored fragment presence all come from `PreparedGuide`; no ambient
+    /// compiled resource or site-file tree is consulted.
+    pub fn from_prepared(
+        prepared: &site_build::PreparedGuide,
+        config_json: &Value,
+        layouts: std::collections::HashMap<String, String>,
+        page_prefix: &str,
+    ) -> Result<ProducerInputs> {
+        let primary = prepared
+            .resources
+            .iter()
+            .filter(|resource| resource.key == prepared.guide.implementation_guide)
+            .collect::<Vec<_>>();
+        let primary = match primary.as_slice() {
+            [primary] if primary.key.resource_type == "ImplementationGuide" => *primary,
+            [] => bail!(
+                "PreparedGuide primary {}/{} is absent",
+                prepared.guide.implementation_guide.resource_type,
+                prepared.guide.implementation_guide.id
+            ),
+            [_] => bail!("PreparedGuide primary is not an ImplementationGuide"),
+            _ => bail!("PreparedGuide contains duplicate primary ImplementationGuides"),
+        };
+        let ig = &primary.resource;
+        let examples = example_reference_set(ig);
+        let mut resources = prepared
+            .resources
+            .iter()
+            .filter(|resource| resource.key != prepared.guide.implementation_guide)
+            .map(|resource| {
+                let key = &resource.key;
+                let reference = (key.resource_type.clone(), key.id.clone());
+                let file_name = format!("{}-{}.json", key.resource_type, key.id);
+                let resource = Resource::from_value(
+                    resource.resource.clone(),
+                    &file_name,
+                    examples.contains(&reference),
+                )
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "PreparedGuide resource {}/{} disagrees with its JSON identity",
+                        key.resource_type,
+                        key.id
+                    )
+                })?;
+                if resource.rt != key.resource_type || resource.id != key.id {
+                    bail!(
+                        "PreparedGuide resource {}/{} disagrees with JSON identity {}/{}",
+                        key.resource_type,
+                        key.id,
+                        resource.rt,
+                        resource.id
+                    );
+                }
+                Ok(resource)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if let Some(order) = ig_resource_order(ig) {
+            order_resources(&mut resources, &order);
+        }
+
+        let page_includes = prepared
+            .authored_files
+            .iter()
+            .filter(|file| {
+                matches!(
+                    file.role,
+                    site_build::AuthoredFileRole::PageContent
+                        | site_build::AuthoredFileRole::ResourceContent
+                        | site_build::AuthoredFileRole::Include
+                )
+            })
+            .filter_map(|file| file.path.as_str().rsplit('/').next().map(str::to_string))
+            .collect();
+
+        Ok(ProducerInputs {
+            resources,
+            defaults: Defaults::from_value(config_json)?,
+            layouts: LayoutSource::Map(layouts),
+            ig: IgContext::from_ig(ig),
+            ig_json: ig.clone(),
+            page_includes,
+            menu: prepared.menu.clone(),
             page_prefix: page_prefix.to_string(),
         })
     }
@@ -325,6 +450,7 @@ pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
         ig,
         ig_json,
         page_includes,
+        menu: Vec::new(),
         page_prefix: String::new(),
     })
 }
@@ -366,10 +492,33 @@ fn ig_resource_order(ig: &Value) -> Option<Vec<(String, String)>> {
     Some(out)
 }
 
+fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, String)> {
+    ig.pointer("/definition/resource")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|entry| {
+            entry.get("exampleBoolean") == Some(&Value::Bool(true))
+                || matches!(entry.get("exampleCanonical"), Some(Value::String(_)))
+                || matches!(entry.get("profile"), Some(Value::String(_)))
+        })
+        .filter_map(|entry| {
+            entry
+                .pointer("/reference/reference")
+                .and_then(Value::as_str)
+                .and_then(|reference| reference.split_once('/'))
+                .map(|(resource_type, id)| (resource_type.to_string(), id.to_string()))
+        })
+        .collect()
+}
+
 /// Run the full producer: page shells + the derivable `_data` files.
 pub fn produce(inputs: &ProducerInputs) -> Result<SiteProducerOutput> {
     let mut out = SiteProducerOutput::default();
-    shells::emit_shells(inputs, &mut out.pages)?;
+    shells::emit_shells(inputs, &mut out.pages, &mut out.resource_pages)?;
     data::emit_data(inputs, &mut out.data)?;
+    if let Some(menu) = menu::menu_xml(&inputs.menu) {
+        out.includes.insert("menu.xml".into(), menu);
+    }
     Ok(out)
 }

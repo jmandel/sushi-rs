@@ -15,6 +15,42 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// Stock SUSHI's fixed predefined-resource directory order. Directory order is
+/// semantically observable when two authored files declare the same FHIR
+/// identity: later entries replace earlier ones during IG/resource projection.
+/// Browser/in-memory callers must use this order rather than lexical path order
+/// (`examples` sorts before `resources`, while SUSHI deliberately loads it
+/// after).
+pub const PREDEFINED_INPUT_DIRS: [&str; 8] = [
+    "capabilities",
+    "extensions",
+    "models",
+    "operations",
+    "profiles",
+    "resources",
+    "vocabulary",
+    "examples",
+];
+
+/// Rank a project-relative predefined input path by the stock directory order.
+/// Unknown/custom `path-resource` roots sort after the fixed roots; their exact
+/// config-declared order remains a responsibility of native collection.
+pub fn input_path_rank(path: &Path) -> usize {
+    let components = path
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>();
+    components
+        .windows(2)
+        .find(|pair| pair[0] == "input")
+        .and_then(|pair| {
+            PREDEFINED_INPUT_DIRS
+                .iter()
+                .position(|directory| *directory == pair[1])
+        })
+        .unwrap_or(PREDEFINED_INPUT_DIRS.len())
+}
+
 #[derive(Clone)]
 pub struct PredefinedResource {
     pub body: Rc<J>,
@@ -364,16 +400,7 @@ fn sd_characteristics(sd: &J) -> Vec<String> {
 fn collect_predefined_paths(ig_dir: &str, cfg_yaml: &Y) -> Vec<PathBuf> {
     let input = Path::new(ig_dir).join("input");
     let mut dirs = Vec::<PathBuf>::new();
-    for end in [
-        "capabilities",
-        "extensions",
-        "models",
-        "operations",
-        "profiles",
-        "resources",
-        "vocabulary",
-        "examples",
-    ] {
+    for end in PREDEFINED_INPUT_DIRS {
         let p = input.join(end);
         if p.is_dir() {
             dirs.push(p);
@@ -1240,5 +1267,17 @@ mod tests {
         assert!(pkg
             .fish_for_metadata("practitioner-period", &[FishType::Extension])
             .is_none());
+    }
+
+    #[test]
+    fn browser_local_resource_order_matches_stock_directory_order() {
+        assert!(
+            input_path_rank(Path::new("input/resources/Patient-shared.json"))
+                < input_path_rank(Path::new("input/examples/Patient-shared.json"))
+        );
+        assert_eq!(
+            input_path_rank(Path::new("/ig/input/examples/Patient-example.json")),
+            7
+        );
     }
 }

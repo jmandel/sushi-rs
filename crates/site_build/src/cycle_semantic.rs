@@ -13,9 +13,10 @@ use thiserror::Error;
 
 use crate::{
     ArtifactCatalog, ArtifactKey, ArtifactProvenance, ArtifactRecord, ArtifactState,
-    AssetNamespace, BuildDiagnostic, ClosedSiteBuild, ContentRef, ContractError, PackageLock,
-    PreparedGuide, ProducerRef, ProjectRevision, ReadDependency, RenderMode, RenderPlan,
-    RenderTarget, SealError, Sha256Digest, SiteBuild, SiteBuildError, SourceKind, SourcePath,
+    AssetNamespace, AuthoredFileRole, BuildDiagnostic, ClosedSiteBuild, ContentRef, ContractError,
+    PackageLock, PreparedGuide, ProducerRef, ProjectRevision, ReadDependency, RenderMode,
+    RenderPlan, RenderTarget, SealError, Sha256Digest, SiteBuild, SiteBuildError, SourceKind,
+    SourcePath,
 };
 
 // Preserve the original public type paths while placing their definitions at
@@ -30,13 +31,14 @@ pub const TARGET: &str = "cycle-site/v2";
 pub const NAMESPACE: &str = "cycle.semantic/v1";
 pub const RESOURCES_SCHEMA: &str = "cycle.semantic.resources/v1";
 pub const TERMINOLOGY_SCHEMA: &str = "cycle.semantic.terminology/v1";
-pub const NAVIGATION_SCHEMA: &str = "cycle.semantic.navigation/v1";
+pub const NAVIGATION_SCHEMA: &str = "cycle.semantic.navigation/v2";
 pub const CONFIG_SCHEMA: &str = "cycle.semantic.config/v1";
 
 pub const RESOURCES_NAME: &str = "resources.json";
 pub const TERMINOLOGY_NAME: &str = "terminology.json";
 pub const NAVIGATION_NAME: &str = "navigation.json";
 pub const CONFIG_NAME: &str = "config.json";
+pub const AUTHORED_INCLUDE_NAMESPACE: &str = "cycle.authored.include/v1";
 
 pub fn data_key(name: &str) -> ArtifactKey {
     ArtifactKey::Data {
@@ -63,6 +65,15 @@ pub fn config_key() -> ArtifactKey {
 pub fn asset_key(path: SourcePath) -> ArtifactKey {
     ArtifactKey::Asset {
         namespace: AssetNamespace::Authored,
+        path,
+    }
+}
+
+pub fn include_key(path: SourcePath) -> ArtifactKey {
+    ArtifactKey::Asset {
+        namespace: AssetNamespace::Other {
+            name: AUTHORED_INCLUDE_NAMESPACE.into(),
+        },
         path,
     }
 }
@@ -252,12 +263,18 @@ pub fn close_prepared(
     required.insert(config_key);
 
     let mut seen_assets = BTreeSet::new();
-    for asset in &prepared.assets {
-        let key = asset_key(
-            SourcePath::parse(asset.path.as_str().to_owned()).map_err(|_| {
-                CycleProjectionError::Invalid(format!("unsafe prepared asset path {}", asset.path))
-            })?,
-        );
+    for asset in &prepared.authored_files {
+        let path = SourcePath::parse(asset.path.as_str().to_owned()).map_err(|_| {
+            CycleProjectionError::Invalid(format!("unsafe prepared asset path {}", asset.path))
+        })?;
+        let key = match asset.role {
+            AuthoredFileRole::Image => asset_key(path),
+            AuthoredFileRole::Include => include_key(path),
+            AuthoredFileRole::PageContent
+            | AuthoredFileRole::ResourceContent
+            | AuthoredFileRole::Data
+            | AuthoredFileRole::ImageSource => continue,
+        };
         if !seen_assets.insert(key.clone()) {
             return Err(CycleProjectionError::Invalid(format!(
                 "duplicate asset {:?}",
@@ -269,7 +286,14 @@ pub fn close_prepared(
         records.push(ArtifactRecord {
             key: key.clone(),
             state: ArtifactState::Ready { content },
-            provenance: provenance("site_semantics.asset", "authored-asset/v1"),
+            provenance: provenance(
+                "site_semantics.asset",
+                match asset.role {
+                    AuthoredFileRole::Image => "authored-image/v1",
+                    AuthoredFileRole::Include => "authored-include/v1",
+                    _ => unreachable!("non-Cycle inputs were filtered above"),
+                },
+            ),
             reads: asset
                 .source_reads
                 .iter()
@@ -390,7 +414,8 @@ fn validate_prepared(
             )));
         }
     }
-    for asset in &prepared.assets {
+    validate_page_sources(&prepared.pages, &input.project)?;
+    for asset in &prepared.authored_files {
         for source in &asset.source_reads {
             let source_path =
                 SourcePath::parse(source.as_str().to_owned()).expect("PreparedPath is normalized");
@@ -401,6 +426,35 @@ fn validate_prepared(
                 )));
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_page_sources(
+    pages: &[PageNode],
+    project: &ProjectRevision,
+) -> Result<(), CycleProjectionError> {
+    for page in pages {
+        match (&page.body, &page.source) {
+            (Some(_), Some(source)) => {
+                let source = SourcePath::parse(source.as_str().to_owned())
+                    .expect("PreparedPath is normalized");
+                if project.sources.get(&source).is_none() {
+                    return Err(CycleProjectionError::Invalid(format!(
+                        "page {} reads absent project source {}",
+                        page.name_url, source
+                    )));
+                }
+            }
+            (None, None) => {}
+            _ => {
+                return Err(CycleProjectionError::Invalid(format!(
+                    "page {} must have both an authored body and source, or neither",
+                    page.name_url
+                )));
+            }
+        }
+        validate_page_sources(&page.children, project)?;
     }
     Ok(())
 }

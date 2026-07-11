@@ -11,7 +11,6 @@ pub mod config;
 pub mod export;
 pub mod ig_export;
 pub mod instance_export;
-pub mod menu;
 pub mod paths;
 pub mod predefined;
 pub mod sd_export;
@@ -647,12 +646,47 @@ impl CompileDiagnostic {
 /// One compiled FHIR resource: the exact output filename SUSHI writes and the
 /// byte-identical serialized JSON body (from `json_emit::to_fhir_json_string`).
 /// The in-memory `compile_conformance` returns these instead of writing them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionKind {
+    /// An entity declaration in an authored FSH source file.
+    FshDeclaration,
+}
+
+/// Exact authored declaration that produced a compiled resource.
+///
+/// Lines are 1-based and columns are 0-based at this public seam. The parser's
+/// `SourceInfo` columns are 1-based, so construction performs the conversion
+/// once rather than making every host reinterpret the parser coordinate space.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DefinitionLocation {
+    pub kind: DefinitionKind,
+    pub path: String,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl DefinitionLocation {
+    fn from_source_info(source_info: &SourceInfo) -> Option<Self> {
+        let path = source_info.file.clone()?;
+        let location = source_info.location.as_ref()?;
+        Some(Self {
+            kind: DefinitionKind::FshDeclaration,
+            path,
+            line: location.start_line,
+            column: location.start_column.saturating_sub(1),
+        })
+    }
+}
+
 pub struct CompiledResource {
     pub filename: String,
     pub text: String,
     /// The parsed body, so callers (the wasm API) can feed it to the snapshot
     /// generator or inspect it without re-parsing `text`.
     pub body: serde_json::Value,
+    /// Exact entity declaration for authored FSH outputs. Generated resources
+    /// such as the ImplementationGuide have no FSH declaration and use `None`.
+    pub definition: Option<DefinitionLocation>,
 }
 
 /// The full result of the conformance compile core: the byte-identical resource
@@ -723,6 +757,7 @@ pub fn compile_conformance(
             filename: exported.filename.clone(),
             text,
             body: exported.body.clone(),
+            definition: DefinitionLocation::from_source_info(&exported.source_info),
         });
         exported_conformance.push(std::rc::Rc::new(exported.body));
     }
@@ -780,6 +815,7 @@ pub fn compile_conformance(
             filename: exported.filename.clone(),
             text,
             body: exported.body.clone(),
+            definition: DefinitionLocation::from_source_info(&exported.source_info),
         });
     }
     // SD-export diagnostics (mapping-source / caret / obeys resolution). SUSHI
@@ -798,6 +834,7 @@ pub fn compile_conformance(
             filename: inst.exported.filename.clone(),
             text,
             body: inst.exported.body.clone(),
+            definition: DefinitionLocation::from_source_info(&inst.exported.source_info),
         });
         instance_ig.push(inst.ig.clone());
     }
@@ -928,6 +965,7 @@ pub fn build_project_in_memory_with_ig(
                 filename: exported.filename,
                 text,
                 body: exported.body,
+                definition: None,
             }
         })
     };

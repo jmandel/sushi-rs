@@ -793,6 +793,10 @@ fn precreate_implied_for_path(
 pub struct Exported {
     pub filename: String,
     pub body: J,
+    /// Exact declaration that produced this resource. This is carried beside
+    /// the resource bytes; it must never be reconstructed from the output
+    /// filename.
+    pub source_info: fsh_model::SourceInfo,
 }
 
 pub fn export_value_set(
@@ -910,6 +914,7 @@ pub fn export_value_set(
     Some(Exported {
         filename: crate::instance_export::sanitize(&format!("ValueSet-{}.json", id)),
         body: J::Object(obj),
+        source_info: vs.source_info.clone(),
     })
 }
 
@@ -1491,6 +1496,7 @@ pub fn export_code_system(
     Exported {
         filename: crate::instance_export::sanitize(&format!("CodeSystem-{}.json", id)),
         body: J::Object(obj),
+        source_info: cs.source_info.clone(),
     }
 }
 

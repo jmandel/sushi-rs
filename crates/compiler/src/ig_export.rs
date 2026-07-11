@@ -405,6 +405,9 @@ pub fn export_ig(cfg_yaml: &Y, cfg: &Config, inputs: &IgInputs) -> Option<Export
     Some(Exported {
         filename,
         body: J::Object(ig),
+        // The IG is synthesized from project configuration and has no FSH
+        // entity declaration.
+        source_info: Default::default(),
     })
 }
 

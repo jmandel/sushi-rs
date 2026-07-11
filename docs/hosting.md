@@ -22,7 +22,7 @@ The public worker API is deliberately four operations:
 ```ts
 prepare(project, generatorSpec): Promise<BuildHandle>
 outputs(handle): Promise<OutputDescriptor[]>
-render(handle, path): Promise<ContentRef>
+render(handle, path): Promise<{ path: string; mediaType: string; content: ContentRef }>
 finalize(handle): Promise<SiteOutput>
 ```
 

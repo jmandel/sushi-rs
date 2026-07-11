@@ -59,6 +59,7 @@ pub struct ExportedSd {
     pub name: String,
     pub sd: StructureDefinition,
     pub kind: StructureKind,
+    pub source_info: fsh_model::SourceInfo,
 }
 
 pub struct SdContext<'a> {
@@ -685,6 +686,7 @@ impl<'a> SdContext<'a> {
             name: name.to_string(),
             sd,
             kind,
+            source_info: def.source_info.clone(),
         });
     }
 
@@ -2888,6 +2890,7 @@ pub fn exported_files(ctx: &SdContext) -> Vec<crate::export::Exported> {
         out.push(crate::export::Exported {
             filename: crate::instance_export::sanitize(&format!("StructureDefinition-{}.json", id)),
             body,
+            source_info: e.source_info.clone(),
         });
     }
     out

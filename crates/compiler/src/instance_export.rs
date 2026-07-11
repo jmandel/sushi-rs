@@ -3048,6 +3048,7 @@ fn replace_references(
 struct ExportedInst {
     body: J,
     filename: String,
+    source_info: fsh_model::SourceInfo,
     write: bool,
     ig: IgInstanceMeta,
     /// FHIR type of the InstanceOf SD (`sd.type`, or `Binary` for logicals).
@@ -3266,6 +3267,7 @@ pub fn export_instances(
                     exported: crate::export::Exported {
                         filename: e.filename,
                         body: e.body,
+                        source_info: e.source_info,
                     },
                     ig: e.ig,
                 });
@@ -3507,6 +3509,7 @@ impl<'a> Exporter<'a> {
         Some(ExportedInst {
             body,
             filename,
+            source_info: inst.source_info.clone(),
             write: !is_inline,
             ig,
             type_name,
