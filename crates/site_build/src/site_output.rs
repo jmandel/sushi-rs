@@ -18,13 +18,12 @@ use crate::{canonical_json_bytes, CanonicalError, ClosedSiteBuild, ContentRef, S
 pub const SITE_OUTPUT_SCHEMA: &str = "site-output/v1";
 pub const SITE_OUTPUT_MANIFEST_PATH: &str = "site-output.json";
 
-/// Exact input identity. Normal production uses a closed SiteBuild id; the
-/// explicit legacy form is retained only for byte-addressed SQLite migration.
+/// Exact closed SiteBuild input identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OutputInputId(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
-#[error("output input id must be an sb1 or legacy-site-db SHA-256 identity")]
+#[error("output input id must be an sb1 SHA-256 identity")]
 pub struct OutputInputIdError;
 
 impl OutputInputId {
@@ -36,7 +35,6 @@ impl OutputInputId {
         let value = value.into();
         let digest = value
             .strip_prefix("sb1-sha256:")
-            .or_else(|| value.strip_prefix("legacy-site-db-sha256:"))
             .ok_or(OutputInputIdError)?;
         Sha256Digest::parse(digest).map_err(|_| OutputInputIdError)?;
         Ok(Self(value))

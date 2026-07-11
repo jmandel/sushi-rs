@@ -47,6 +47,7 @@ use serde_json::Value;
 
 pub mod config;
 pub mod data;
+pub mod publisher_runtime;
 pub mod resource;
 pub mod shells;
 

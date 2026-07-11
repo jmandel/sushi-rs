@@ -13,13 +13,3 @@ thiserror.workspace = true
 prepared_guide.workspace = true
 content_store.workspace = true
 tempfile.workspace = true
-site_db = { workspace = true, optional = true }
-
-[features]
-default = []
-# Deliberately one-way: SiteBuild is the core contract. The current prepared
-# site row model may be projected into typed artifacts during migration, but it
-# never enters the core wire contract.
-site-db-projections = ["dep:site_db"]
-# Keep the aggregate v1 reader/producer available during the v2 migration.
-site-db-compat = ["site-db-projections"]

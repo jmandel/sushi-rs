@@ -2,11 +2,11 @@
 
 The `wasm_api` crate (wasm-bindgen) driving the rust_sushi compiler + the
 snapshot walk engine on `wasm32-unknown-unknown`, exercised by a plain page + Web
-Worker (no framework). This is the **production shape** (wasm-editor-plan P2): a
+Worker (no framework). This records the early production-shaped spike: a
 typed `init`/`compile`/`generate_snapshot` surface over an in-memory
 `BundleSource` package cache — the WASI shim of P0 is gone.
 
-See `docs/wasm-editor-plan.md` §9c for full status, sizes, and timings.
+The current production host contract is documented in `docs/hosting.md`.
 
 ## What it does
 

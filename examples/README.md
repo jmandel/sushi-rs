@@ -18,7 +18,7 @@ scripts/examples-gate.sh
 | `template-as-data` (in the gate) | CLI | Same render path, different template — zero code | fig, an F0 build |
 
 See `docs/hosting.md` for the prose. The external-builder example lives with its
-real consumer in Cycle's `site-gen/FIG-INTEGRATION.md`: native `fig prepare`
+real consumer in Cycle's `site-gen/README.md`: native `fig prepare`
 emits the closed filesystem bundle and Cycle consumes it through
 `SITE_BUILD_DIR`. The retired callback shim over a second WASM session is not a
 supported example.

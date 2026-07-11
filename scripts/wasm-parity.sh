@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# WASM parity harness (wasm-editor-plan §4.6): build the wasm_api module
+# WASM parity harness: build the wasm_api module
 # (wasm32-unknown-unknown + wasm-bindgen), then run — under Node, no browser —
 # the 17-rung fixture ladder + the ips/mcode/sdc corpus gates AGAINST THE WASM
 # BUILD, comparing every generated snapshot to the SAME goldens the native gates

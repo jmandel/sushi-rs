@@ -1,4 +1,4 @@
-// WASM parity driver (wasm-editor-plan §4.6).
+// WASM parity driver.
 //
 // Runs the 17-rung fixture ladder + the ips/mcode/sdc corpus gates AGAINST THE
 // WASM BUILD (wasm32-unknown-unknown + wasm-bindgen, loaded under Node — no

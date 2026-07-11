@@ -1,7 +1,7 @@
 //! `render_page` — F5, the convergence phase: whole PAGES at Publisher parity.
 //!
 //! The publisher's `jekyll build` over `temp/pages/` is reproduced here as a
-//! pure Liquid page pass (see docs/render-worklog.md F5 findings):
+//! pure Liquid page pass:
 //!
 //!   strip front-matter  →  render_liquid render  →  (done)
 //!

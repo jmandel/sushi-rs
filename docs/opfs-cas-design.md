@@ -112,29 +112,26 @@ and proxy. Mutable requests
 current authority. Rust re-resolves after mounting and the exact compile/context
 closures must match; otherwise the normal resolve/fetch/mount fixpoint runs.
 
-## Derived build and output caches
+## Build and output reuse
 
-`app/src/storage/derivedArtifactCache.ts` is the generic browser pointer store
-over the same OPFS `ContentStore`. Recipes are recursively canonical JSON;
-content is written and verified first, and the small recipe pointer is published
-last. A read rechecks the pointer, recipe digest, media type, byte length, and
-content digest.
+The browser does not persist a second serialized build representation. The
+Worker retains bounded immutable build handles created by `prepare`; their
+catalog entries carry `ContentRef`s into the same OPFS `ContentStore`. A lazy
+page render writes and verifies its content first, then updates only the private
+handle runtime. `finalize` can create a `SiteOutput` only after the complete
+declared catalog is ready.
 
-The Cycle host uses it at two boundaries:
+The preview Service Worker persists one small per-IG publication pointer:
+`{ handle, buildId, catalog }`. It accepts only validated output paths and reads
+ready bytes by digest/length from OPFS; build-id response caches and transferred
+ArrayBuffers are performance fallbacks, not authority. There is no derived-
+artifact manifest, asset-byte API, or base64 generation cache.
 
-- a persistent verified `ClosedSiteBuild` payload keyed by the exact authored
-  and PreparedPackage-bound project revision, snapshot-role source digests,
-  build epoch, target, engine commit, and emitted engine recipe digest; and
-- lazy page/asset outputs keyed by the closed BuildId, output path/kind, and a
-  digest of the Cycle renderer sources and dependency lock.
-
-The Worker verifies a cached closed manifest and every reachable CAS body before
-installing it. Output caching stays lazy; it does not pre-render the whole site.
-Within WASM, PreparedGuide and closed projection results also have exact
-in-session caches. The PreparedGuide key binds ProjectRevision, PackageLock,
-actual compiled-value digest, preparation inputs, and recipe/API versions.
-There is intentionally no browser cache of the UI `CompileResult`: it cannot
-restore compiler semantics into a new Session and would be a false cache hit.
+Within WASM, PreparedGuide and target preparation have exact in-session reuse.
+Their identity binds ProjectRevision, PackageLock, actual compiled semantics,
+preparation inputs, and recipe/API versions. There is intentionally no browser
+cache of the UI `CompileResult`: it cannot restore compiler semantics into a
+new Session and would be a false cache hit.
 
 Native complete output caching uses `FileSiteOutputCache`. It indexes canonical
 `SiteOutput` manifests by the pre-render `sok1` key, verifies the requested
@@ -174,7 +171,7 @@ Compilation and rendering use separate immutable identities:
 - `SiteBuild` / `ClosedSiteBuild`: artifact graph and ready-closure proof; and
 - renderer output identity: closed BuildId plus renderer recipe/output schema.
 
-`site.db` is an optional v1/SQLite projection of `PreparedGuide`. It is not a CAS
+`site.db` was an obsolete v1/SQLite projection and has been deleted. It is not a CAS
 and not the compile-to-render handoff.
 
 ## Measurement and gates

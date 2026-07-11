@@ -5,7 +5,7 @@
 # filter set + options that the HL7 FHIR IG Publisher's Jekyll runs.
 #
 # This is the reference ("oracle") for the render_liquid Rust crate's
-# differential gate (task F1c of docs/stock-template-renderer-plan.md).
+# differential gate.
 #
 # ---------------------------------------------------------------------------
 # What "Jekyll-as-it-runs-it" means here (all cited):

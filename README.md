@@ -12,106 +12,62 @@ is recorded. The browser editor is at
 
 ## Architecture at a glance
 
-The repository exposes the same Rust implementation through three host
-surfaces, but they are not all JSON wrappers:
-
-| Surface | Contract | Where |
-| --- | --- | --- |
-| Rust libraries | typed Rust values, traits, and errors | workspace crates |
-| `Session` | isolated in-memory engine; JSON result/error envelopes at the WASM boundary | [`crates/wasm_api`](crates/wasm_api/) |
-| `fig` | native filesystem/process host; `--json` uses the same envelope shape as `Session` | [`crates/fig`](crates/fig/) |
-
-`crates/api_envelope` is shared by `Session` and `fig --json`. It is not the
-library API. A normal `Session::new()` owns isolated mutable engine state;
-`Session::global()` is an explicitly named compatibility door for legacy native
-callers.
-
-Compilation has two renderer branches. External builders close their plan
-before execution. The native branch may discover fragments while evaluating
-Liquid, then promotes the captured result through the same immutable contract:
+The supported site-generation model contains three domain values:
 
 ```text
-exact authored bytes + exact resolved packages
-                    |
-             compileProject once
-                    v
-          compiled project revision
-          /                     \
-         v                       v
-native session/template      external target projection
-typed ArtifactResolver              |
-+ page read sets                  SiteBuild
-         |                          |
- SiteBuild::successor          ClosedSiteBuild
- + stock RenderPlan            + pure builder
-         |
- ClosedSiteBuild or typed blockers
+PreparedGuide -> SiteBuild -> SiteOutput
+                      |
+                 ContentStore
 ```
 
-[`site_build`](crates/site_build/) defines an immutable manifest over the exact
-source and package closure, render target, typed artifacts, provenance,
-diagnostics, and artifact read dependencies. Artifact bytes are addressed by
-digest and live outside the manifest. `ClosedSiteBuild` proves that a render
-plan's roots and transitive reads are all ready; callback-free external builders
-should accept this closed wrapper. `SiteBuild::successor` atomically replaces
-resolved records and returns the new build plus the exact new CAS objects,
-without mutating or implicitly selecting a predecessor.
+`ContentStore` carries verified digest-addressed bytes; it is not another
+domain layer. Compiler revisions, exact package locks, template trees, fragment
+observations, caches, and opaque handles are inputs or private implementation
+details.
 
-`site.db` is not the universal handoff. Preferred Cycle builds use four typed
-semantic data artifacts plus one raw artifact per authored asset. The current
-projector still consumes the prepared `SiteDb` model internally as migration
-scaffolding, while v1 retains `compat.site_db/rows.json` for existing consumers.
-The prepared model carries the compiler-selected primary ImplementationGuide
-identity separately from its sorted resource rows. Its v1 row projection marks
-that same guide as the sole ImplementationGuide whose `Web` is `index.html`;
-additional guides retain ordinary resource ids and pages. In WASM, a fresh package
-mount invalidates resolution; `compileProject` runs only over the exact selected
-labels. On-demand snapshots, stock snapshot completion, and the native render
-tree continue to use the closure captured by that compiled revision even if a
-deferred/template/other-version package is mounted later; the next compile must
-resolve again. SiteDb snapshot completion uses the same full closure. Raw
-`input/resources` bytes and parsed predefined objects must have identical paths
-and values.
-Native Publisher templates may discover generated includes while evaluating
-Rust Liquid. At that compatibility edge, `render_page` translates the legacy
-include filename to an `ArtifactKey`, calls an explicit `ArtifactResolver`,
-caches by the typed key, and records attempted and successful reads in
-`PageArtifactReadSet`. Ordinary authored and template includes remain files.
-The browser calls `openStockBuild` after its final overlay to freeze that exact
-tree and semantic state behind a content-derived predecessor. Each
-`renderStockPage(handle, path)` call applies the typed need/result batch through
-`SiteBuild::successor` and returns a closed successor handle plus new CAS
-objects; the editor does not render stock pages from ambient Session state.
+The browser host has one four-operation facade:
 
-For a complete native render, `render_page::collect_stock_revision` makes every
-advertised page and assembled static asset a plan root. The page source,
-`site.data` file, staged/template includes, and successful generated fragments
-become transitive typed reads. Failed fragment attempts remain typed catalog
-records but are not misreported as successful page reads. Native Fig recursively
-captures the complete public staged tree, renders from those bytes, and rejects
-symlinks, unreadable entries, unsupported Markdown pages, strict `_data`
-failures, or any tree change observed by a second capture. The
-`render_site_for_revision(predecessor, root, options)` entry point returns an
-opaque capture bound to that predecessor and root/options, with a seal over the
-complete HTML/read-set/fragment/asset payload and inventory; only that capture can be passed to
-`collect_site_build_revision`. The ordinary `render_site`/`fig render` path
-still writes the site directly and cannot accidentally be promoted. A host
-publishing revisions must persist the returned objects in its CAS before the
-successor manifest. Constructing the initial predecessor/root pair is an
-explicit trusted-producer assertion until native rendering consumes a fully
-reconstructed closed input rather than an ambient F0 tree.
+```text
+prepare(project, generatorSpec) -> immutable handle
+outputs(handle)                 -> complete path catalog
+render(handle, path)            -> ContentRef
+finalize(handle)                -> canonical SiteOutput
+```
 
-The overall toolchain intentionally has two Liquid implementations:
+The worker mounts the exact package closure, compiles the project once, and
+calls Rust preparation inside that single public request. Project bytes cross
+the worker boundary once. Rendering is independent by path: it memoizes bytes
+but neither consumes nor advances the handle.
+
+Cycle and Publisher use that facade without pretending their execution models
+are identical. Cycle receives a closed `cycle-site/v2` build and renders it with
+its shared LiquidJS implementation, without callbacks. Publisher materializes
+the exact template base chain, assembles page shells, `_data`, fixed runtime
+assets, and authored overlays in Rust, then renders with
+[`render_liquid`](crates/render_liquid/). Registered generated fragments resolve
+synchronously through the immutable typed `ArtifactResolver`; discovery never
+becomes a host callback or an affine successor handle.
+
+The output catalog is complete before page rendering. JSON carries
+`ContentRef`s rather than base64 bodies; the private binary ContentStore returns
+bytes by digest and deduplicates aliases. Both renderers finish as the same
+validated [`SiteOutput`](crates/site_build/src/site_output.rs) receipt.
+
+The repository exposes this implementation through typed Rust crates, an
+isolated WASM `Session`, and the native `fig` CLI. `crates/api_envelope` is only
+the WASM/`fig --json` transport envelope. There is no global Session and no
+`site.db`/`cycle-site/v1` compatibility architecture.
+
+The overall toolchain intentionally has two Liquid engines:
 
 | Renderer architecture | Liquid implementation |
 | --- | --- |
-| native Publisher templates (`fig` and WASM stock renderer) | this repository's Rust [`render_liquid`](crates/render_liquid/) crate |
-| Cycle external builder (native CLI and browser) | Cycle's shared LiquidJS content implementation |
+| Publisher-compatible native templates | Rust `render_liquid` |
+| Cycle external builder | Cycle LiquidJS |
 
-There is one Liquid implementation per renderer architecture. Cycle does not
-use `Session.renderLiquid`; its browser and CLI share Cycle's own renderer and
-content policy over a `SiteBuildView`. See the workspace-level architecture for
-the cross-repository seams.
+See [`docs/hosting.md`](docs/hosting.md) for the host API and
+[`docs/site-producer.md`](docs/site-producer.md) for Publisher assembly. The
+editor's `ARCHITECTURE.md` is the normative cross-repository contract.
 
 ## Parity (the regression floor)
 
@@ -153,9 +109,7 @@ fig snapshot <sd.json> --package p#v       # walk-engine snapshot
 fig resolve --cache <dir> --project <ig>   # dependency closure
 fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
 fig packages prepare --cache <d> -o <d> id#v  # versioned binary warm-mount artifacts
-fig packages bundle --template id#v -o t.json  # editor warm-start template artifact (loader-emitted)
 fig expand <valueset.json>                 # tier-1 enumerable expansion
-fig sitedb <ig> --sushi-out <d> --cache <d> -o site.db   # S1-S7 producer
 fig prepare <ig> --target cycle-site/v2 --sushi-out <new> \
   --cache <d> --out <new> --build-date <epoch>  # sealed external-builder bundle
 fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment
@@ -167,10 +121,9 @@ The former `fig render --generator ts:<adapter.mjs>` runner has been removed.
 It loaded a stale editor callback API, required a second Node-target WASM host,
 and could compile inputs independently of the native build. Portable external
 builders instead consume a verified `ClosedSiteBuild` and addressed objects.
-Cycle uses that boundary in the browser, and `fig prepare` emits the preferred
+Cycle uses that boundary in the browser, and `fig prepare` emits the sole
 `cycle-site/v2` contract natively as `site-build.json` plus
-`objects/sha256/<digest>` (`cycle-site/v1` remains an explicit migration
-target). V2 roots are prepared FHIR resources, terminology, recursive
+`objects/sha256/<digest>`. Its roots are prepared FHIR resources, terminology, recursive
 navigation, parsed config, and raw authored assets. Fig compiles once through
 the current prepared-site pipeline, derives identity from the produced IG, and
 gives the build only a private filesystem reconstructed from captured source
@@ -194,7 +147,7 @@ serve with live-reload. Warm page edits re-render in ~270 ms on us-core.
 
 | Need | Current source |
 | --- | --- |
-| Cross-repository editor/renderer contract | [`fhir-ig-editor/SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md) |
+| Cross-repository editor/renderer contract | editor [`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
 | `SiteBuild`, artifact states, hashing, render plans, and closure | [`crates/site_build/README.md`](crates/site_build/README.md) |
 | Native exact compile → closed external-builder bundle | [`crates/fig/src/prepare.rs`](crates/fig/src/prepare.rs) |
 | Canonical package identity, binary warm artifacts, and derived index shared by native/WASM | [`crates/package_store/src/material.rs`](crates/package_store/src/material.rs), [`prepared.rs`](crates/package_store/src/prepared.rs) |
@@ -203,9 +156,8 @@ serve with live-reload. Warm page edits re-render in ~270 ms on us-core.
 | Current versus historical engine documents | [`docs/README.md`](docs/README.md) |
 | Runnable examples | [`examples/`](examples/) and `scripts/examples-gate.sh` |
 
-The phase plans and render worklog remain useful derivation evidence, but they
-do not define the current API. Their banners point back to the current
-architecture.
+Obsolete v1 plans and worklogs were deleted with their APIs. The remaining
+dated audits preserve oracle or measurement evidence, not alternate contracts.
 
 ## Package Acquisition Tutorial
 

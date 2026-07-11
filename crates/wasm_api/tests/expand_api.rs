@@ -18,6 +18,10 @@
 use serde_json::{json, Value};
 use wasm_api::Session;
 
+thread_local! {
+    static TEST_SESSION: Session = Session::new();
+}
+
 /// Session-envelope helpers: every op returns `{apiVersion, ok, op, result|error}`.
 fn call(env_json: String) -> Value {
     let env: Value = serde_json::from_str(&env_json).unwrap();
@@ -34,17 +38,14 @@ fn expand_enumerable(vs: &str, resources: &str) -> Result<String, String> {
     }
 }
 fn init(bundles: &str) -> Result<u32, String> {
-    Ok(call(Session::global().init(bundles))["mounted"]
-        .as_u64()
-        .unwrap() as u32)
+    TEST_SESSION.with(|session| Ok(call(session.init(bundles))["mounted"].as_u64().unwrap() as u32))
 }
 fn mount_bundles(bundles: &str) -> Result<u32, String> {
-    Ok(call(Session::global().mount(bundles))["mounted"]
-        .as_u64()
-        .unwrap() as u32)
+    TEST_SESSION
+        .with(|session| Ok(call(session.mount(bundles))["mounted"].as_u64().unwrap() as u32))
 }
 fn wasm_resolve(config: &str, index: &str) -> Result<String, String> {
-    Ok(call(Session::global().resolve_project(config, index)).to_string())
+    TEST_SESSION.with(|session| Ok(call(session.resolve_project(config, index)).to_string()))
 }
 
 fn ok(r: Result<String, String>) -> Value {

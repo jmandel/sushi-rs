@@ -1,17 +1,12 @@
-//! Native coverage for the `Session` surface (the preferred, enveloped API that
-//! collapses the accreted flat exports into one handle — simplification-ledger
-//! #1). Two things are proven here:
+//! Native coverage for the isolated, enveloped `Session` API. Two things are
+//! proven here:
 //!   1. Session methods return the uniform envelope
 //!      (`{ apiVersion, ok, op, result | error }`).
-//!   2. The envelope's `result` payload is IDENTICAL to what the (still-present,
-//!      deprecated) legacy free function returns — so migrating callers from the
-//!      legacy surface to `Session` is a pure re-wrapping, no behavior change.
+//!   2. Envelope payloads remain identical to their typed native computations.
 //!
 //! `Session` methods return a JSON string (never a `JsError` for domain errors —
 //! failures land as `ok:false`), so unlike expand_api.rs we never need the
 //! JsError-panics-off-wasm dance.
-
-#![allow(deprecated)] // the parity checks intentionally call the legacy exports too
 
 use serde_json::{json, Value};
 use wasm_api::Session;
@@ -132,9 +127,8 @@ fn independently_constructed_sessions_do_not_share_mutable_state() {
 }
 
 #[test]
-fn session_expand_result_equals_legacy_payload() {
-    // The Session envelope's `result` must equal the RAW payload the deprecated
-    // `expand_enumerable` returns — migrating is pure re-wrapping.
+fn session_expand_result_is_stable() {
+    // Repeating the same expansion through one Session yields the same payload.
     let cs = json!({
         "resourceType": "CodeSystem", "url": "https://ex.org/cs", "version": "1",
         "content": "complete", "concept": [{"code": "a", "display": "A"}]
@@ -149,7 +143,7 @@ fn session_expand_result_equals_legacy_payload() {
     assert_eq!(enveloped["ok"], true);
     let session_result = &enveloped["result"];
 
-    let legacy: Value = serde_json::from_str(&{
+    let repeated: Value = serde_json::from_str(&{
         let env: Value =
             serde_json::from_str(&s.expand_valueset(&vs.to_string(), &json!([cs]).to_string()))
                 .unwrap();
@@ -158,17 +152,13 @@ fn session_expand_result_equals_legacy_payload() {
     })
     .unwrap();
 
-    assert_eq!(
-        session_result, &legacy,
-        "Session result must equal legacy payload"
-    );
+    assert_eq!(session_result, &repeated, "Session result must be stable");
     assert_eq!(session_result["expansion"]["total"], 1);
 }
 
 #[test]
-fn session_resolve_result_equals_legacy_and_native() {
-    // Session.resolveProject's envelope result must equal the legacy raw JSON,
-    // which in turn equals the native package_store resolver (the #32 invariant).
+fn session_resolve_result_matches_native_contract() {
+    // Session.resolveProject exposes the native package_store resolver contract.
     let pkgjson = |id: &str, deps: &[(&str, &str)]| {
         let d: serde_json::Map<String, Value> = deps
             .iter()
@@ -209,6 +199,43 @@ fn session_resolve_result_equals_legacy_and_native() {
 }
 
 #[test]
+fn session_resolve_template_reports_exact_missing_parent_then_complete_chain() {
+    let package = |label: &str, manifest: &str| {
+        json!({
+            "label": label,
+            "files": {
+                "package.json": base64(manifest.as_bytes()),
+                ".index.json": base64(br#"{"files":[]}"#),
+            }
+        })
+    };
+    let leaf = package(
+        "leaf#2.0.0",
+        r#"{"name":"leaf","version":"2.0.0","type":"fhir.template","base":"base","dependencies":{"base":"1.0.0"}}"#,
+    );
+    let base = package(
+        "base#1.0.0",
+        r#"{"name":"base","version":"1.0.0","type":"fhir.template"}"#,
+    );
+
+    let session = Session::new();
+    assert_eq!(parse(session.init(&json!([leaf]).to_string()))["ok"], true);
+    let missing = parse(session.resolve_template("leaf#2.0.0"));
+    assert_eq!(missing["ok"], true);
+    assert_eq!(missing["result"]["satisfied"], false);
+    assert_eq!(missing["result"]["missing"], "base#1.0.0");
+
+    assert_eq!(parse(session.mount(&json!([base]).to_string()))["ok"], true);
+    let complete = parse(session.resolve_template("leaf#2.0.0"));
+    assert_eq!(complete["ok"], true);
+    assert_eq!(complete["result"]["satisfied"], true);
+    assert_eq!(
+        complete["result"]["chain"],
+        json!(["base#1.0.0", "leaf#2.0.0"])
+    );
+}
+
+#[test]
 fn session_version_is_stamped() {
     let v: Value = serde_json::from_str(&Session::version()).unwrap();
     assert_eq!(v["apiVersion"], 1);
@@ -230,86 +257,34 @@ fn project_compile_and_site_projection_fail_loud_without_hidden_fallbacks() {
         .unwrap()
         .contains("bad site-files JSON"));
 
-    // The projection API accepts no sources and cannot silently invoke a compile.
-    let projection = parse(
-        session.build_site_db_from_compile(
-            &json!({
-                "config": "id: demo",
-                "site_files": {},
-                "build_epoch_secs": 1
-            })
-            .to_string(),
-        ),
-    );
-    assert_eq!(projection["ok"], false);
-    assert_eq!(projection["op"], "buildSiteDbFromCompile");
-    assert!(projection["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("call compileProject first"));
-
-    let closed = parse(
-        session.build_site_build_from_compile(
-            &json!({
-                "config": "id: demo",
-                "site_files": {},
-                "build_epoch_secs": 1
-            })
-            .to_string(),
-        ),
-    );
+    // prepare accepts generator choices only and cannot silently invoke a
+    // compile or accept replacement project sources.
+    let closed =
+        parse(session.prepare_site(&json!({"generator":"cycle", "buildEpochSecs":1}).to_string()));
     assert_eq!(closed["ok"], false);
-    assert_eq!(closed["op"], "buildSiteBuildFromCompile");
-    assert!(closed["error"]["message"]
+    assert_eq!(closed["op"], "prepare");
+    assert!(
+        closed["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("complete source revision"),
+        "{closed}"
+    );
+
+    let resent = parse(
+        session.prepare_site(
+            &json!({
+                "generator":"cycle",
+                "buildEpochSecs":1,
+                "config":"id: forbidden",
+                "siteFiles":{}
+            })
+            .to_string(),
+        ),
+    );
+    assert_eq!(resent["ok"], false);
+    assert!(resent["error"]["message"]
         .as_str()
         .unwrap()
-        .contains("complete source revision"));
-}
-
-/// ContentApi: mountSite + renderLiquid (include from tree + data global +
-/// markdownify filter) + renderMarkdown + renderPage/listPages over a tiny
-/// mounted site. All through the Session envelopes — the same wire the editor
-/// worker drives.
-#[test]
-fn session_content_api() {
-    let s = Session::new();
-    let site = serde_json::json!({
-        "en/index.html": "---\n---\n<h1>{{ site.data.info.title }}</h1>{% include hello.xhtml %}",
-        "_includes/hello.xhtml": "<p>hi {{ include.who }}{{ who }}</p>",
-        "_data/info.json": "{\"title\":\"Smoke IG\"}",
-    })
-    .to_string();
-    let env = parse(s.mount_site(&site, ""));
-    assert_eq!(env["ok"], true, "{env}");
-    assert_eq!(env["result"]["mounted"], 3);
-
-    // listPages + renderPage (rel-path keys; front-matter gate inside render_page).
-    let env = parse(s.list_pages());
-    assert_eq!(env["result"]["pages"], serde_json::json!(["en/index.html"]));
-    let env = parse(s.render_page("en/index.html"));
-    assert_eq!(env["result"]["html"], "<h1>Smoke IG</h1><p>hi </p>");
-
-    // renderLiquid: caller globals + tree include + markdownify filter.
-    let env = parse(s.render_liquid(
-        "{% include hello.xhtml %} — {{ note | markdownify }}",
-        r#"{"who":"you","note":"*em*"}"#,
-    ));
-    assert_eq!(env["ok"], true, "{env}");
-    assert_eq!(
-        env["result"]["html"],
-        "<p>hi you</p> — <p><em>em</em></p>\n"
-    );
-
-    // renderMarkdown: kramdown semantics; rouge wrappers default ON.
-    let env = parse(s.render_markdown("a `b` c", ""));
-    assert_eq!(
-        env["result"]["html"],
-        "<p>a <code class=\"language-plaintext highlighter-rouge\">b</code> c</p>\n"
-    );
-    let env = parse(s.render_markdown("a `b` c", r#"{"rougeWrappers":false}"#));
-    assert_eq!(env["result"]["html"], "<p>a <code>b</code> c</p>\n");
-
-    // renderFragment on an unknown kind: typed domain error, not a throw.
-    let env = parse(s.render_fragment("X-y", "nope"));
-    assert_eq!(env["ok"], false);
+        .contains("unknown field"));
 }

@@ -34,7 +34,7 @@
 //! Projection applies ONLY when the IG's fhirVersion is R4. For an R5 IG
 //! `convertToElement` takes the else-branch (PublisherBase.java:421-424, plain R5
 //! compose): no xpath, no downconversion. `project_r4` is only called on the R4
-//! path; R5 IGs get no projection (the site_db flag gates on `--core` R4).
+//! path; R5 IGs get no R4 projection.
 //!
 //! Default OFF: this is opt-in Layer B only.
 

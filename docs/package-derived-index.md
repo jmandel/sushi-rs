@@ -217,11 +217,10 @@ read/authenticate and `stagePreparedMount(bytes, cacheKey)` one artifact at a
 time. `commitPreparedMount()` installs the complete set only after every artifact
 and conflict validates; `abortPreparedMount()` drops staged state on failure.
 This bounds JavaScript peak memory by the largest artifact instead of allocating
-a closure-sized concatenation. The compatibility `mountPreparedBatch` remains
-available and shares one compact backing/cache. Results report
-`decodeValidateMs`, `mountMs`, artifact bytes, requested packages, and newly
-added/total package counts, compressed retained/declared raw bytes, lazy-inflate
-counters, `indexedMembers`, and `memberBodyCopies` (zero at mount).
+a closure-sized concatenation. Results report `decodeValidateMs`, `mountMs`,
+artifact bytes, requested packages, and newly added/total package counts,
+compressed retained/declared raw bytes, lazy-inflate counters, `indexedMembers`,
+and `memberBodyCopies` (zero at mount).
 
 For a cold registry bundle, `Session.prepareAndMount(legacyBundlesJson)` performs
 base64 decode, normalization, derived-index construction, binary encoding, and

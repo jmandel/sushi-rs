@@ -3,12 +3,12 @@
 This Rust workspace crate interprets the Liquid subset used by native Publisher
 templates, matching **Jekyll 4.4.1 / Liquid 4.0.4** byte-for-byte on the measured
 survey cutline plus the US Core T2 layer. It began as task F1c of the now
-historical `docs/stock-template-renderer-plan.md`; the current composition is
-documented in the repository README and `docs/hosting.md`.
+historical Publisher-renderer work; the current composition is documented in
+the repository README and `docs/hosting.md`.
 
-`render_liquid` powers both `fig` native Publisher rendering and the WASM stock
-template surface (`Session.renderPage` / `Session.renderLiquid`). It is a member
-of the root Rust workspace, not a standalone workspace.
+`render_liquid` powers both `fig` native Publisher rendering and Publisher
+rendering behind the WASM `prepare`/`render` facade. It is a member of the root
+Rust workspace, not a standalone workspace.
 
 It does **not** power Cycle. The Cycle external builder intentionally uses
 LiquidJS through one shared Cycle content implementation for both its native CLI
@@ -76,9 +76,7 @@ translated to a typed `site_build::ArtifactKey`, resolved by an
 This crate only asks its provider for include source; it does not know whether a
 caller served an ordinary file or a typed materialized artifact.
 
-`site.db` is not the backing model for this trait. In the current architecture it
-is one compatibility artifact for the closed Cycle render target. Native
-Publisher `site.data.*` comes from the produced/mounted `_data` model.
+Native Publisher `site.data.*` comes from the produced/mounted `_data` model.
 
 ## Scope (what's IN)
 

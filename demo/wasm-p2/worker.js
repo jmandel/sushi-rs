@@ -1,7 +1,7 @@
 // WASM P2 — engine Web Worker.
 //
 // Owns the wasm-bindgen module (wasm32-unknown-unknown, web target). Speaks the
-// worker protocol from docs/fhir-ig-editor-spec.md §4:
+// historical demo worker protocol:
 //   {type:'init'}                     -> mount package bundles
 //   {type:'compile'}                  -> {resources[], diagnostics[], buildMs}
 //   {type:'snapshot', url}            -> {snapshot, messages, snapshotMs}

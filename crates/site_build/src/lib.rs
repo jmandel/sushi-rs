@@ -1,7 +1,7 @@
 //! `site_build` defines the versioned, immutable handoff between compilation and
 //! rendering.
 //!
-//! The contract is intentionally independent of a renderer and of `site.db`.
+//! The contract is intentionally independent of a renderer.
 //! It describes an exact project revision, exact package inputs, a render target,
 //! and a typed artifact catalog. Artifact bytes live in a content-addressed store;
 //! this manifest contains only verified references to those bytes.
@@ -22,8 +22,6 @@ mod site_output;
 mod site_output_cache;
 
 pub mod cycle_semantic;
-#[cfg(feature = "site-db-compat")]
-pub mod site_db_compat;
 
 pub use canonical::{canonical_json_bytes, sha256_canonical, CanonicalError};
 pub use content::{BuildId, ContentRef, Sha256Digest};

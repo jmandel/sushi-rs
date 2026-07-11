@@ -1,8 +1,7 @@
-# SiteBuild v1
+# SiteBuild contract
 
 `site_build` is the renderer-neutral handoff between compilation and site
-production. It is a value contract, not a build coordinator and not another
-name for `site.db`.
+production. It is a value contract, not a build coordinator.
 
 A `SiteBuild` records:
 
@@ -42,7 +41,13 @@ fails with typed blockers unless the whole closure is `ready`. A callback-free
 external builder should accept this proof-bearing wrapper, not an open
 `SiteBuild`.
 
-## Native stock-template revisions
+## Internal native revision machinery
+
+The transition APIs in this section support native Fig capture, renderer tests,
+and closure verification. They are not a browser hosting protocol. The browser
+does not expose predecessor/successor choreography: its sole facade prepares one
+immutable handle, declares its outputs, renders independent paths, and finalizes
+one `SiteOutput`.
 
 `render_page::collect_stock_revision` is the stock renderer's thin collector
 over the transition API. Its plan roots are every advertised final page and
@@ -83,9 +88,8 @@ identity, FHIR resources and publication metadata, terminology expansions,
 navigation, parsed config, and authored assets with their source reads. It has
 no database row keys and no Cycle artifact names or schemas.
 
-`cycle_semantic::close_prepared` consumes that value directly; this API is
-available without `site_db` or the `site-db-projections` feature. It emits a
-closed `cycle-site/v2` plan rooted in:
+`cycle_semantic::close_prepared` consumes that value directly and emits a closed
+`cycle-site/v2` plan rooted in:
 
 - `cycle.semantic/v1/resources.json` — prepared FHIR objects and only the
   publication facets not safely recoverable from them;
@@ -100,61 +104,10 @@ FHIR/config object order is intentionally retained: artifact identity hashes the
 exact serialized bytes through `ContentRef`, while only the SiteBuild manifest
 uses recursively key-sorted canonical JSON.
 
-Navigation roots are semantic roots. The transitional flat `Pages` projection
-may begin at a positive depth after a synthetic structural page such as
-`toc.html` was omitted; the projector rebases that uniform source offset to
-semantic depth zero while preserving every relative parent/child edge. The
-offset is compatibility bookkeeping and is not part of v2 identity.
-
-The optional `site-db-projections` feature adds the one migration adapter,
-`cycle_semantic::prepare_from_site_db`. `close_projection` remains a convenience
-wrapper around that adapter plus `close_prepared`. Native Fig and WASM spell the
-direct path explicitly, so their renderer-facing seam is
-`PreparedGuide -> ClosedSiteBuild`; neither constructs SiteDb rows for v2.
-Equality tests prove that shared preparation and the compatibility adapter
-produce the same semantic objects for common inputs.
-
-The `prepared_guide` crate is upstream of both `site_build` and `site_db`.
-Shared disk and in-memory preparation constructs it directly from compiled
-resources, navigation/config inputs, and authored bytes. Authored assets retain
-the exact winning source path after de-duplication. `site_db::project_prepared`
-is the single one-way compatibility projection used only by v1/SQLite callers;
-the semantic preparation path never constructs rows in parallel.
-`SiteDb` retains an in-memory, non-legacy-row primary ImplementationGuide key
-selected by the compiler before examples are merged and rows sorted. Snapshot
-completion uses the complete exact resolved dependency closure, with core only
-as a validated distinguished member.
-The optional legacy row projection carries the same choice without a new wire
-field: exactly one ImplementationGuide row has `Web = index.html`; additional
-guides keep their resource ids, canonicals, and ordinary pages.
-The reverse `prepare_from_site_db` adapter is retained only for migration gates
-and legacy callers; it can be removed once those callers move to shared
-preparation.
-
-## V1 `site.db` compatibility
-
-The optional `site-db-compat` feature provides a deliberately narrow adapter. It
-canonicalizes the current Cycle-oriented `SiteDb` rows as one legacy data
-artifact and returns both the bytes and their ready artifact record. The core
-crate does not depend on SQLite, and individual legacy rows are not presented as
-the universal semantic model.
-
-`site_db_compat::close_projection` is the one shared Rust assembly for this
-external-builder target. It accepts a row model plus an already-derived exact
-`ProjectRevision`, `PackageLock`, render target, and diagnostics; attaches the
-complete source/package reads; creates the one-root plan; and returns a
-`ClosedSiteBuild` plus the addressed bytes. It cannot derive or fabricate
-project/package identity from `site.db`. Both WASM and native
-`fig prepare --target cycle-site/v1` use this function only for migration. The
-editor and preferred native flow select `cycle-site/v2`. Fig supplies the exact
-inputs by content-addressing every authored input file, resolving and hashing
-the explicit-cache package closure with
-`package_store::normalize_package_material` (the same identity/dependency/
-derived-index/canonical-byte boundary used by WASM), reconstructing both inputs
-in a private staged filesystem, and
-deriving identity from the same native `site_db::build` whose rows are
-projected. No post-capture live-tree read can influence semantic inputs,
-execution, or identity; later live comparisons are mutation diagnostics only.
+The `prepared_guide` crate owns both native and in-memory preparation. Fig and
+WASM pass its `PreparedGuide` result directly to
+`cycle_semantic::close_prepared`; relational rows and reverse adapters are not
+part of the contract.
 
 ## Exact rendered-output caching
 
@@ -181,6 +134,4 @@ nondeterminism rather than overwritten. Browser hosts implement the same
 
 ```sh
 cargo test -p site_build
-cargo test -p site_build --features site-db-projections
-cargo test -p site_build --features site-db-compat
 ```

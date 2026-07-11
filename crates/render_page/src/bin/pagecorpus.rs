@@ -76,7 +76,7 @@ fn ig_paths(ig: &str) -> IgPaths {
             // the rendered oracle by supplying that include (the wrapper's real
             // content shape) and running the SAME Jekyll (4.4.1) over the existing
             // temp/pages, then gate against it. `CYCLE_GOLDEN_DIR` points at that
-            // fresh Jekyll output tree (see docs/render-worklog.md F5 target 4).
+            // fresh Jekyll output tree captured as the page-parity oracle.
             let golden_dir = std::env::var("CYCLE_GOLDEN_DIR")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from(format!("{}/output/en", b)));

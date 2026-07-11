@@ -69,7 +69,7 @@ fn fixture() -> (PreparedGuide, cycle::CycleProjectionInput) {
 }
 
 #[test]
-fn cycle_v2_projects_prepared_guide_without_site_db() {
+fn cycle_v2_projects_prepared_guide_directly() {
     let (prepared, input) = fixture();
     let projection = cycle::close_prepared(&prepared, input).unwrap();
     let build = projection.site_build.site_build();

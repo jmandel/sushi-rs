@@ -2,8 +2,7 @@
 //!
 //! In the publisher's Jekyll tree, `temp/pages/_data/<name>.json` is exposed as
 //! `site.data.<name>`. For the F5 gate we read those files DIRECTLY (the same
-//! faithful-oracle-input pattern the fragment gates use for `output/` SDs); the
-//! editor's site_db → _data mapping is documented separately.
+//! faithful-oracle-input pattern the fragment gates use for `output/` SDs).
 //!
 //! Each `_data/<name>.json` becomes one key under `site.data`. The values are
 //! converted from serde_json into render_liquid `Value`s (insertion-ordered

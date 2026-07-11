@@ -1,213 +1,113 @@
-# The site-producer — page shells + `_data` model, from source
+# Publisher site production
 
-> **Current-state correction (2026-07-09).** The original task write-up below
-> predated the landed WASM integration. `Session.produceStockSite()` now calls
-> this crate from the current compile and mounted template. The producer emits
-> page shells plus eight derivable `_data` files; `artifacts.json` and page
-> shells retain the corpus byte-parity gates. Generated fragment bodies are not
-> hidden file-miss behavior owned by this crate: `render_page` translates a
-> registered Publisher include name to a typed `ArtifactKey` and calls an
-> explicit `ArtifactResolver`. See [`hosting.md`](hosting.md) and
-> [`crates/site_build/README.md`](../crates/site_build/README.md) for the current
-> execution contracts.
+`crates/site_producer` is the Publisher-compatible assembly layer between a
+prepared guide and Rust Liquid rendering. It owns two related jobs:
 
-The producer selects the project ImplementationGuide explicitly. In memory it
-receives the compiler's `/__ig__/` artifact; on disk it matches the
-`sushi-config.yaml` `id` to `ImplementationGuide-<id>.json`. Additional
-ImplementationGuide instances are ordinary resources with their own pages and
-never overwrite project metadata through scan order.
+1. derive Publisher page shells and the `_data` model from the current guide;
+2. assemble the fixed Publisher runtime namespace from the exact core package,
+   selected template chain, and a small audited embedded payload.
 
-Crate: `crates/site_producer`. Gate:
-`crates/site_producer/tests/producer_gate.rs`.
+It does not define another handoff value. Its results are private inputs while
+the facade prepares a `SiteBuild`; final bytes are described by `SiteOutput`.
 
-## 1. What this is / why
+## Data flow
 
-The stock-template render path used to mount a **pre-baked `-stock.json`** — a
-snapshot of the Java IG-Publisher's `temp/pages` tree (page shells + `_data` +
-`_includes`). To build the stock site *from a repo dir tree* (and make `fig
-render <ig-source-dir>` work from source), the engine must synthesize the two
-things the publisher generates that we didn't already produce:
-
-* **(a) per-artifact page SHELLS** — the `<Type>-<id>.html` pages that
-  `{% include <Type>-<id>-snapshot.xhtml %}` (etc.) pull fragment bodies into;
-* **(b) the `_data/*.json` SITE-DATA MODEL** — what the stock layouts/fragments
-  read via `site.data.*`.
-
-Fragment **bodies** (`_includes/*.xhtml`) are not produced here. The native page
-stack may materialize a registered fragment through
-`render_page::ArtifactResolver`; authored/template includes remain tree files.
-The producer emits **shells + `_data` only**. Downstream,
-`render_page`/`fig::engine` or the WASM render state consumes that produced tree.
-
-## 2. Where it lives
-
-```
-crates/site_producer/
-  src/lib.rs       gather_inputs (dir) / ProducerInputs::from_memory (wasm) / produce / write_to
-  src/config.rs    Defaults: config.json `defaults` + `extraTemplates`; find_config/get_property; sd_type
-  src/resource.rs  Resource model + enumerate_resources
-  src/shells.rs    page-shell emission  (the validated core)
-  src/data.rs      _data builders (artifacts.json byte-exact; structuredefinitions model)
-  tests/producer_gate.rs   byte-parity gate vs the US Core F0 temp/pages oracle
+```text
+PreparedGuide + exact PackageLock
+              + materialized TemplateTree
+              |
+              +-> produce() -> page shells + _data
+              |
+              +-> PublisherRuntime::assemble()
+                    -> runtime/core/template assets
+                    -> deterministic HTML finishing rules
+              |
+              +-> authored overlays
+              v
+       immutable RenderState + complete output catalog
+              |
+       render(handle, path)
+              v
+         ContentRef in ContentStore
 ```
 
-Consumed by `fig` (`fig produce`, and auto-produce inside `fig render`) and by
-the WASM `Session.produceStockSite()` surface (§6).
+Precedence is explicit and collision checked:
 
-## 3. Publisher parity model (cited — pinned publisher clone
-`org.hl7.fhir.publisher.core`)
-
-### 3.1 Page shells
-
-The publisher generates one page per `(resource × layout)` in
-`PublisherGenerator.makeTemplates` (`PublisherGenerator.java:1019`) →
-`genWrapper` → `genWrapperInner` (`:1378`):
-
-1. Resolve the resource's config (which layout + which output filename) via
-   `IGKnowledgeProvider.findConfiguration` (`IGKnowledgeProvider.java:417`).
-   * StructureDefinition flavor: `getSDType` (`:293`) — `extension` if
-     `type==Extension`; `resourcedefn` if `kind==resource &&
-     derivation==specialization`; else `kind` (+ `:abstract`). The stock
-     `defaults` only keys `StructureDefinition` and `StructureDefinition:extension`,
-     so plain profiles (`kind=resource, derivation=constraint` → `"resource"`,
-     no `StructureDefinition:resource` key) fall through to `StructureDefinition`.
-   * examples → the `example` default; else the type default; else `Any`.
-2. `makeTemplates` emits, per resource: the **base** page (`template-base` →
-   `base` filename), **definitions** (`template-defns` → `defns`), and each
-   **extraTemplate** name (`template-<name>` → `<name>`), *skipping* `format`
-   and `defns` in the loop (`:1029`). A layout whose `template-*` value is empty
-   (`""`) emits nothing — this is how `StructureDefinition` suppresses
-   `change-history` while canonicals suppress `profile-history`, purely from the
-   config table.
-3. `genWrapperInner`: read the layout file, run `doReplacements`
-   (`IGKnowledgeProvider.java:147`) — `{{[title]}}` = `r.getTitle()` (the
-   resource `name`, `PublisherIGLoader.java:3028`, falling back to `type/id`),
-   `{{[name]}}` = `id[-fmt]-html`, `{{[id]}}`, `{{[type]}}`, `{{[uid]}}` =
-   `type=id`, `{{[langsuffix]}}` = `""` — then write to `<tempDir>/<outputName>`.
-4. Property precedence (`getProperty`, `:255`): resource's own config →
-   `StructureDefinition:<flavor>` → type default → `Any`.
-
-### 3.2 Resource processing order
-
-The publisher walks the ImplementationGuide's `definition.resource[]` list;
-`artifacts.json` key order and `structuredefinitions.json` `index` both follow
-it. The producer parses that order (`ig_resource_order`) and applies it
-(`order_resources`).
-
-## 4. Parity scoreboard (vs the US Core F0 `temp/pages` oracle — the raw Java
-IG-Publisher output at `/home/jmandel/hobby/sushi-rs-snapshot-f0-builds/us-core`)
-
-| Artifact | Result |
-|---|---|
-| **Page shells** | **1297 / 1297 byte-identical** (base + definitions + mappings + testing + examples + profile-history + change-history across 442 resources) |
-| **`_data/artifacts.json`** | **byte-identical** (442 entries, IG-resource order) |
-| `_data/structuredefinitions.json` | emitted; load-bearing identity fields exact, with classified run-context/model gaps (§5) |
-| other load-bearing `_data/*.json` | emitted from source; classified fidelity gaps remain (§5) |
-
-> Oracle note: the editor's pre-baked bundle
-> `fhir-ig-editor/site-bundles/uscore-stock.json` is a **filtered subset** of
-> `temp/pages` — it drops the 372 `*.change.history.html` shells and all
-> `*.profile.{xml,json,ttl}.html` format-dump pages. The producer reproduces the
-> *raw* publisher `temp/pages` (superset); the editor filter is a bundling step,
-> not a producer concern. Compare against `temp/pages`, not the bundle.
-
-## 5. `_data` outputs and classified gaps
-
-`data::emit_data` currently writes `artifacts.json`,
-`structuredefinitions.json`, `resources.json`, `pages.json`, `fhir.json`,
-`info.json`, `languages.json`, and `related.json`. The values are serialized for
-Liquid to parse; except for the separately gated `artifacts.json`, matching the
-Java pretty-printer's whitespace is not a page-rendering requirement.
-
-The remaining known fidelity gaps are explicit in `src/data.rs`:
-
-* `resources.json.identifiers` cannot reproduce Publisher-assigned OIDs that are
-  absent from source; history/test-plan/test-script flags require audit/run
-  context and currently remain false.
-* `structuredefinitions.json.date` is Java `Date.toString()` in the build
-  machine timezone and is not read by the template. Other load-bearing identity
-  fields are pinned by the field-level gate.
-* several `fhir.json` values are build-run context: validation error counts,
-  tooling/version strings, repository source, and processed-file counters.
-  They are stubbed or omitted when unavailable.
-* `pages.json` does not yet reproduce the Publisher's global interleaving and
-  hierarchical numbering for every narrative/artifact page. The residual
-  affects small previous/next footer links and a heading-prefix value.
-
-These gaps do not block page-shell generation, but they must remain classified
-rather than being presented as full `_data` byte parity.
-
-## 6. Surfaces
-
-### Native (`fig`)
-
-* `fig produce <ig-source-dir> [-o <pages-root>]` — synthesize the shell + `_data`
-  tree (default output `<dir>/temp/pages`). Direct exposure of the producer.
-* `fig render <ig-source-dir> -o <site/>` — when there is **no** staged
-  `temp/pages` but the dir is an IG source tree (`template/config.json` present),
-  auto-produces the shells + `_data` first, then runs the existing page pass.
-  Demonstrated: US Core source → `produced 1297 shells + 8 _data files from
-  source`, then `ok: true, pages: 1297`. (ValueSet expansion-cache misses seen in
-  the demo are the fragment engine's tx-cache **input**, unrelated to the
-  producer.)
-
-### WASM / `Session` (landed)
-
-The library is `std::fs`-free on the in-memory hot path via
-`LayoutSource::Map`. The underlying entry point is:
-
-```rust
-let inputs = site_producer::ProducerInputs::from_memory(
-    resources,     // Vec<Resource> parsed from the mounted resource files
-    &config_json,  // the materialized template's config.json, as serde_json::Value
-    layouts_map,   // HashMap<"template/layouts/layout-*.html", contents> from the template tree
-    &ig_json,      // the ImplementationGuide resource (for order + publisher fallback)
-    page_includes, // names that really exist, for intro/notes gating
-    "en/",        // browser stock page path prefix
-);
-let out = site_producer::produce(&inputs)?;   // out.pages, out.data (relpath -> bytes)
+```text
+embedded runtime < exact FHIR core < selected template < authored files
 ```
 
-`Session.produceStockSite()` is the landed wrapper. After `compileProject`,
-`mountSite`, and `mountTemplate`, it gathers the current render resources,
-template config/layouts, and staged intro/notes names; produces the tree; merges
-shells and `_data` into `/site`; stages generated `menu.xml` when available; and
-invalidates the render state. If a generated ImplementationGuide resource is
-absent on the WASM path, the wrapper synthesizes the minimal IG context needed
-for page ordering and metadata.
+The producer selects the compiler's explicit primary ImplementationGuide.
+Additional ImplementationGuide resources remain ordinary artifacts and cannot
+replace project identity through traversal order.
 
-After the final authored overlay, the editor calls
-`Session.openStockBuild(templateCoord)`. That operation freezes the exact
-render tree/semantic state and returns an explicit native-template predecessor
-handle. Every preview request then calls `renderStockPage(handle, path)`, which
-promotes discovered page inputs and typed fragment outcomes through
-`collect_stock_revision` and returns a closed successor plus its new CAS
-objects. The adapter advances to the returned handle; it does not use the
-ambient HTML-only `renderPage` compatibility call.
+## Shell and `_data` production
 
-The producer itself still emits intermediate shells and `_data`, not a manifest.
-The downstream render layer now closes that gap:
-`render_page::collect_stock_revision` promotes every advertised final page and
-assembled asset plus its actual data/include/fragment reads into an immutable
-SiteBuild successor. Native `fig::engine::render_site_for_revision` recursively
-captures the public tree and seals its full read sets, fragment observations,
-HTML, asset bytes, root/options, inventory, and explicit predecessor; only that opaque outcome can be passed to
-`collect_site_build_revision`. Plain `render_site` remains a direct-write API.
-A host still makes a trusted assertion that the initial ambient F0 root belongs
-to the predecessor; the seal prevents mutation or relabeling after capture.
-A failed fragment attempt remains a typed diagnostic artifact and is not
-presented as a successful read when a staged include was used instead.
-The WASM predecessor additionally binds a canonical digest of the complete
-mounted tree, and its frozen `RenderState` remains usable even if the mutable
-Session later mounts another project or template.
+`produce(&ProducerInputs)` emits resource page shells and eight derivable data
+files. Shell layout selection and output names follow the Publisher's config
+fallback rules. Resource ordering follows the primary IG's
+`definition.resource[]` order. The focused corpus gates preserve byte parity for
+all page shells and `artifacts.json`.
 
-## 7. Quirks registered
+Generated fragment bodies are not files made by this crate. During Publisher
+Liquid evaluation, `render_page` maps a registered include name to a typed
+`ArtifactKey` and resolves it synchronously through the captured
+`ArtifactResolver`. Authored and template includes are ordinary mounted files.
+This distinction keeps late Publisher compatibility internal without making the
+host participate in a file-miss protocol.
 
-* **Q-SP1** `change-history`/`profile-history` shell suppression is config-driven
-  (empty `template-*` value), not a code gate — matches `temp/pages` exactly.
-* **Q-SP2** `{{[title]}}` resolves to the resource `name` (not `title`), falling
-  back to `type/id` for complex-`name` resources (Patient examples).
-* **Q-SP3** the editor `-stock.json` bundle is a filtered subset of `temp/pages`
-  (no change-history / format-dump pages) — oracle is `temp/pages`.
-* **Q-SP4** `structuredefinitions.json.date` is Java-`Date.toString()` in the
-  build TZ — a run-context value, excluded from the field-derivation gate.
+The other `_data` files intentionally expose known Publisher run-context gaps
+where source data is insufficient, such as Publisher-assigned OIDs, validation
+counters, tooling strings, and exact global previous/next interleaving. Those
+are classified model gaps, not claims of byte parity.
+
+## Publisher runtime assembly
+
+`publisher_runtime::PublisherRuntime::assemble` consumes:
+
+- the exact resolved FHIR core coordinate and package source;
+- the fully materialized template tree;
+- 25 audited irreducible embedded runtime files (150,112 bytes).
+
+Standard tree icons, fixed table images, and FHIR CSS come from the exact core
+package. Template-owned fonts and scripts come from the selected template.
+Only irreducible files are embedded, with their license notices. Generated
+`tbl_bck*` backgrounds use deterministic inline SVG rather than a hidden editor
+asset bundle. The narrow jQuery compatibility transform is gated by exact input
+byte pairs and order, then applied after Liquid and before content addressing.
+
+The runtime exposes a recipe digest binding all selected bytes, provenance,
+licenses, transform versions, and the core coordinate. That digest participates
+in the renderer recipe and output lookup identity.
+
+Publisher pages commonly use relative asset URLs under `en/`. Preparation
+therefore declares page-relative aliases (for example `en/assets/app.css`) that
+point to the same `ContentRef` as the canonical asset. The private ContentStore
+keeps one body per digest, so URL closure does not duplicate bytes.
+
+## Public Rust entry points
+
+The crate's reusable typed APIs are:
+
+- `ProducerInputs::from_memory` / `gather_inputs`;
+- `produce` and `SiteProducerOutput::write_to`;
+- `PublisherRuntime::assemble`, `files`, `recipe_sha256`, and `finish_html`.
+
+The WASM facade composes these internally during Publisher `prepare`. Hosts do
+not mount page shells, runtime assets, or templates through separate site APIs.
+Native `fig render` composes the same producer/rendering crates directly.
+
+## Verification
+
+Run:
+
+```sh
+cargo test -p site_producer
+cargo test -p package_store template_loader
+cargo test -p wasm_api site_facade_tests --lib
+```
+
+The facade tests require a complete pre-render catalog, independent render
+order, handle isolation, exact external finalization, synthetic end-to-end
+template/core/authored assembly, relative asset closure, and verified canonical
+`SiteOutput` creation.

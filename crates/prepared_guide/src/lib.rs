@@ -1,11 +1,17 @@
 //! Renderer-neutral semantic result of FHIR guide preparation.
 //!
-//! This crate deliberately depends on neither `site_build` nor `site_db` so the
+//! This crate deliberately does not depend on `site_build`, so the
 //! same prepared value can feed renderer manifests and optional relational
 //! compatibility projections without reversing the dependency direction.
 
-use std::collections::BTreeSet;
+pub mod augment;
+pub mod native;
+pub mod semantics;
+pub mod timefmt;
+
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::path::{Path, PathBuf};
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -195,6 +201,115 @@ pub struct PreparedGuide {
     pub resources: Vec<SemanticResource>,
     pub publisher_compatibility: Option<PublisherCompatibility>,
     pub expansions: Vec<ValueSetExpansion>,
+    pub pages: Vec<PageNode>,
+    pub menu: Vec<MenuNode>,
+    pub sushi_config: Value,
+    pub assets: Vec<PreparedAsset>,
+}
+
+/// Byte source for authored guide inputs. This is part of PreparedGuide
+/// preparation, not a relational database concern; native and browser hosts
+/// provide the same normalized paths through different implementations.
+pub trait FileSource {
+    fn read(&self, path: &Path) -> Option<Vec<u8>>;
+
+    fn is_file(&self, path: &Path) -> bool {
+        self.read(path).is_some()
+    }
+
+    /// Recursively list files under `dir` as sorted relative POSIX paths.
+    fn list_recursive(&self, dir: &Path) -> Vec<String>;
+}
+
+/// Native authored-input source.
+pub struct DiskFiles;
+
+impl FileSource for DiskFiles {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        std::fs::read(path).ok()
+    }
+
+    fn is_file(&self, path: &Path) -> bool {
+        path.is_file()
+    }
+
+    fn list_recursive(&self, dir: &Path) -> Vec<String> {
+        fn walk(root: &Path, current: &Path, out: &mut Vec<String>) {
+            let Ok(entries) = std::fs::read_dir(current) else {
+                return;
+            };
+            let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
+                if kind.is_dir() {
+                    walk(root, &path, out);
+                } else if kind.is_file() {
+                    if let Ok(relative) = path.strip_prefix(root) {
+                        out.push(relative.to_string_lossy().replace('\\', "/"));
+                    }
+                }
+            }
+        }
+
+        let mut out = Vec::new();
+        walk(dir, dir, &mut out);
+        out.sort();
+        out
+    }
+}
+
+/// Browser/in-memory authored-input source.
+pub struct MemFiles {
+    files: BTreeMap<PathBuf, Vec<u8>>,
+}
+
+impl MemFiles {
+    pub fn new(files: BTreeMap<PathBuf, Vec<u8>>) -> Self {
+        Self { files }
+    }
+}
+
+impl FileSource for MemFiles {
+    fn read(&self, path: &Path) -> Option<Vec<u8>> {
+        self.files.get(path).cloned()
+    }
+
+    fn is_file(&self, path: &Path) -> bool {
+        self.files.contains_key(path)
+    }
+
+    fn list_recursive(&self, dir: &Path) -> Vec<String> {
+        let mut out = self
+            .files
+            .keys()
+            .filter_map(|path| path.strip_prefix(dir).ok())
+            .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+            .filter(|relative| !relative.is_empty())
+            .collect::<Vec<_>>();
+        out.sort();
+        out
+    }
+}
+
+/// Renderer-neutral authored augmentation inputs.
+pub struct AugmentInputs<'a> {
+    pub ig: &'a Value,
+    pub sushi_config_yaml: &'a str,
+    pub project_root: PathBuf,
+    pub pagecontent_dir: PathBuf,
+    pub image_dir: PathBuf,
+    pub liquid_asset_dirs: Vec<PathBuf>,
+    pub files: &'a dyn FileSource,
+}
+
+/// Renderer-neutral authored navigation/config/assets captured during guide
+/// preparation. Relational compatibility rows, when requested, are projected
+/// only after this value is complete.
+pub struct PreparedAugmentation {
     pub pages: Vec<PageNode>,
     pub menu: Vec<MenuNode>,
     pub sushi_config: Value,

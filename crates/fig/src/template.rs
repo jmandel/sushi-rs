@@ -100,35 +100,6 @@ pub fn write_tree(tree: &TemplateTree, dir: &Path) -> Result<usize> {
     Ok(n)
 }
 
-/// Standard base64 (RFC 4648) encode — for the `packages bundle --template`
-/// artifact's binary assets (fonts, images, plantuml.jar). No external dep; the
-/// mountSite/mountTemplate consumer decodes with the existing `base64_decode`.
-pub fn b64_encode(bytes: &[u8]) -> String {
-    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
-    for chunk in bytes.chunks(3) {
-        let b = [
-            chunk[0],
-            *chunk.get(1).unwrap_or(&0),
-            *chunk.get(2).unwrap_or(&0),
-        ];
-        let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
-        out.push(T[((n >> 18) & 63) as usize] as char);
-        out.push(T[((n >> 12) & 63) as usize] as char);
-        out.push(if chunk.len() > 1 {
-            T[((n >> 6) & 63) as usize] as char
-        } else {
-            '='
-        });
-        out.push(if chunk.len() > 2 {
-            T[(n & 63) as usize] as char
-        } else {
-            '='
-        });
-    }
-    out
-}
-
 /// Resolve the render-time template source directory for the `fig render`
 /// `--template`/`--template-dir` options:
 ///

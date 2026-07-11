@@ -25,11 +25,11 @@
 //!     string) or we pin the final snapshot post-walk.
 //!   * Therefore post-walk pinning over the SAME `PackageContext`, gating on the
 //!     SAME resolution, yields the identical pinned strings. The proof is the
-//!     gate: full `Resources.Json` parity vs the fresh Java cycle package.db
-//!     (docs/cycle-package-db-plan.md §4b), every residual classified.
+//!     gate: full resource parity vs the fresh Java Cycle oracle, every residual
+//!     classified.
 //!
 //! Default OFF: `generate_snapshot` never calls this; only the opt-in
-//! `generate_snapshot_layer_b` / the site_db `--layer-b` flag do.
+//! `generate_snapshot_layer_b` does.
 
 use serde_json::Value;
 

@@ -1,8 +1,7 @@
 //! `render_xhtml` — a byte-exact Rust port of fhir-core's
 //! `org.hl7.fhir.utilities.xhtml` XhtmlNode / XhtmlParser / XhtmlComposer.
 //!
-//! This is the C3 substrate for the stock-template renderer (see
-//! docs/stock-template-renderer-plan.md, phase F1a). Its job is byte-parity:
+//! This is the XHTML substrate for the Publisher-compatible renderer. Its job is byte-parity:
 //! parse a Publisher-emitted xhtml fragment and re-serialize it to identical
 //! bytes.
 //!

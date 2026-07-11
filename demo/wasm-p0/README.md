@@ -1,6 +1,6 @@
 # WASM P0 — rust_sushi + snapshot_gen in the browser
 
-A throwaway-quality spike (plan task #13, `docs/wasm-editor-plan.md` §5 / phase P0)
+A throwaway-quality early spike
 proving the Rust toolchain — **rust_sushi** (FSH → FHIR resources) and
 **snapshot_gen** (the walk snapshot engine) — runs unmodified in a browser via
 WASI, compiling the cycle IG and generating validation-grade snapshots whose

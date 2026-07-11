@@ -10,11 +10,13 @@
 //!   AGENTS.md §Phase-1.
 //!
 //! - **context_closure** — the SNAPSHOT / RENDER context set: the TRANSITIVE
-//!   `package.json` dependency closure, walked over the *currently mounted*
-//!   packages, with an R4-compatibility filter and a `4.0.0 -> 4.0.1` core
-//!   canonicalization. This ports, rule-for-rule, `snapshot/package-deps.cjs`
-//!   (the NODE reimplementation this consolidates). Each ported rule cites the
-//!   `.cjs` line it mirrors.
+//!   `package.json` dependency closure rooted at every exact compile-set member,
+//!   including automatic tools/terminology/extensions packages, walked over the
+//!   *currently mounted* packages with an R4-compatibility filter and a
+//!   `4.0.0 -> 4.0.1` core canonicalization. The traversal rules port
+//!   `snapshot/package-deps.cjs`; using the full compile set adapts its published-
+//!   package root to an in-memory project whose automatic inputs are not listed
+//!   in `sushi-config.yaml`.
 //!
 //! The API is **iterative by design**: the transitive dependencies of a package
 //! that is not yet mounted are unknowable until it is mounted. So the host loop is
@@ -114,9 +116,9 @@ pub struct ResolutionStep {
     /// Stock-SUSHI COMPILE load set (non-transitive), in stock load order. Every
     /// entry is a concrete `pkg#ver` the compile needs mounted.
     pub compile_set: Vec<PackageRequest>,
-    /// Transitive snapshot/render context closure over the MOUNTED packages
-    /// (R4-compat filtered, core-canonicalized), in the `.cjs` output order
-    /// (core first, then discovery order).
+    /// Transitive snapshot/render context closure rooted at the exact compile
+    /// set and walked over the MOUNTED packages (R4-compat filtered,
+    /// core-canonicalized), with core first then discovery order.
     pub context_closure: Vec<PackageRequest>,
     /// Mounted package manifests read while proving `context_closure`, including
     /// packages later excluded by compatibility rules. Replaying a cached
@@ -146,7 +148,7 @@ pub struct MutableVersionRequest {
     pub set: RequestedSet,
 }
 
-pub const RESOLVER_SCHEMA: u32 = 2;
+pub const RESOLVER_SCHEMA: u32 = 3;
 
 impl ResolutionStep {
     /// Serialize to the JSON string the wasm surface returns.
@@ -430,13 +432,11 @@ fn resolve_project_from_config(
     }
 
     // ---- context_closure: transitive package.json walk over MOUNTED packages. ----
-    // Ports `package-deps.cjs`: seed from the project's configured dependencies
-    // (the `.cjs` seeds from the root package's `dependencies`; a project config's
-    // configured deps are the same seed set), walk transitively, R4-compat filter,
+    // Root at the exact compile set, walk transitively, R4-compat filter,
     // canonicalize core, prepend r4.core if the project is R4 and it is absent,
     // then core-first sort.
     let (context_closure, resolution_support, mut ctx_missing, ctx_mutable) =
-        context_closure(cfg, mounted, cache, index);
+        context_closure(cfg, &compile_set, mounted, cache, index);
     missing.append(&mut ctx_missing);
     for request in ctx_mutable {
         push_mutable_request(&mut mutable_requests, request);
@@ -513,6 +513,7 @@ fn record_compile_missing(
 /// carries packages the walk reached but could not read (unmounted) or resolve.
 fn context_closure(
     cfg: &ProjectConfig,
+    compile_set: &[PackageRequest],
     mounted: &dyn PackageSource,
     cache: &Path,
     index: Option<&VersionIndex>,
@@ -533,9 +534,21 @@ fn context_closure(
     // Implemented iteratively with an explicit work stack to stay wasm-safe.
     let mut stack: Vec<(String, String)> = Vec::new();
 
-    // Seed: the project's CONFIGURED dependencies (the `.cjs` seeds from the root
-    // package's `dependencies` — the project's configured deps are that same seed).
-    // Resolve each seed's version (canonicalize + index) before pushing.
+    // Every exact compile input is a context root. This is broader than merely
+    // seeding configured dependencies: SUSHI's automatic tools/terminology/
+    // extensions packages are executable compiler inputs whose manifests can
+    // carry exact transitive edges needed by snapshot/render preparation. A
+    // project such as Cycle has no configured dependencies, so omitting these
+    // roots would incorrectly report a core-only satisfied closure without ever
+    // reading tools.r4's exact extensions.r4#5.2.0 dependency.
+    //
+    // Push in reverse so the explicit LIFO walk observes compile load order.
+    for request in compile_set.iter().rev() {
+        stack.push((request.package_id.clone(), request.version.clone()));
+    }
+
+    // Mutable requests that selected context roots remain explicit freshness
+    // inputs in both the compile and context sets.
     for dep in cfg.dependencies() {
         let Some(v) = dep.version() else { continue };
         let canonical = canonical_version(dep.package_id(), v);
@@ -550,18 +563,17 @@ fn context_closure(
                 },
             );
         }
-        match resolve_version(index, dep.package_id(), v) {
-            Ok(ver) => stack.push((dep.package_id().to_string(), ver)),
-            Err(requested) => push_missing(
-                &mut missing,
-                MissingPackage {
-                    package_id: dep.package_id().to_string(),
-                    version: v.to_string(),
-                    reason: MissingReason::UnresolvedVersion { requested },
-                    set: RequestedSet::Context,
-                },
-            ),
-        }
+    }
+    for (package_id, requested) in cfg.auto_dep_coordinates() {
+        push_mutable_request(
+            &mut mutable_requests,
+            MutableVersionRequest {
+                resolved_version: resolve_version(index, &package_id, &requested).ok(),
+                package_id,
+                requested,
+                set: RequestedSet::Context,
+            },
+        );
     }
 
     while let Some((id, version)) = stack.pop() {
@@ -951,6 +963,73 @@ mod tests {
             .mutable_requests
             .iter()
             .all(|request| request.resolved_version.is_some()));
+        std::fs::remove_dir_all(&cache).ok();
+    }
+
+    #[test]
+    fn automatic_compile_roots_discover_exact_transitive_support_before_fixpoint() {
+        let cache = tmp("automatic-context-roots");
+        write_pkg(&cache, "hl7.fhir.r4.core", "4.0.1", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "hl7.fhir.uv.tools.r4",
+            "1.1.2",
+            &["4.0.1"],
+            &[
+                ("hl7.fhir.r4.core", "4.0.1"),
+                ("hl7.terminology.r4", "7.1.0"),
+                ("hl7.fhir.uv.extensions.r4", "5.2.0"),
+            ],
+        );
+        write_pkg(&cache, "hl7.terminology.r4", "7.2.0", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "hl7.fhir.uv.extensions.r4",
+            "5.3.0",
+            &["4.0.1"],
+            &[],
+        );
+        let index = version_index_from_cache(&DiskSource, &cache);
+        let config = "id: cycle-like\nfhirVersion: 4.0.1\n";
+
+        let incomplete = resolve_project(config, &DiskSource, &cache, Some(&index)).unwrap();
+        assert!(!incomplete.satisfied);
+        for (package_id, version) in [
+            ("hl7.terminology.r4", "7.1.0"),
+            ("hl7.fhir.uv.extensions.r4", "5.2.0"),
+        ] {
+            assert!(incomplete.missing.iter().any(|missing| {
+                missing.package_id == package_id
+                    && missing.version == version
+                    && missing.set == RequestedSet::Context
+                    && matches!(missing.reason, MissingReason::NotMounted)
+            }));
+        }
+
+        write_pkg(&cache, "hl7.terminology.r4", "7.1.0", &["4.0.1"], &[]);
+        write_pkg(
+            &cache,
+            "hl7.fhir.uv.extensions.r4",
+            "5.2.0",
+            &["4.0.1"],
+            &[],
+        );
+        let complete = resolve_project(config, &DiskSource, &cache, Some(&index)).unwrap();
+        assert!(complete.satisfied, "missing={:?}", complete.missing);
+        for (package_id, version) in [
+            ("hl7.fhir.uv.tools.r4", "1.1.2"),
+            ("hl7.terminology.r4", "7.1.0"),
+            ("hl7.fhir.uv.extensions.r4", "5.2.0"),
+        ] {
+            assert!(complete
+                .context_closure
+                .iter()
+                .any(|request| { request.package_id == package_id && request.version == version }));
+            assert!(complete
+                .resolution_support
+                .iter()
+                .any(|request| { request.package_id == package_id && request.version == version }));
+        }
         std::fs::remove_dir_all(&cache).ok();
     }
 

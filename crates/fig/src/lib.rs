@@ -2,14 +2,13 @@
 //!
 //! ONE engine, three skins: the native CLI (`fig`, this crate's bin), the wasm
 //! `Session` (`wasm_api`), and the library API (the `render_*`/compiler/
-//! snapshot_gen/site_db crates). The CLI subcommands are thin — arg-parse →
+//! snapshot_gen/prepared_guide crates). The CLI subcommands are thin — arg-parse →
 //! engine-core call → output — and this library is where any COMPOSITION the
-//! engine core lacks lives, so the Session can grow the same method later
-//! (docs/unified-cli-plan.md §1 iron rule).
+//! engine core lacks lives, so native and WASM hosts can share it.
 //!
 //! Layout:
 //!   - [`engine`]  — native "engine methods": the render composition (build →
-//!                   snapshot → sitedb → page pass → asset copy) and the render
+//!                   snapshot → PreparedGuide → page pass → asset copy) and the render
 //!                   surface assembly the page pass drives. This is the native
 //!                   twin of `wasm_api::render_surface`; both compose the SAME
 //!                   F5/F6 machinery (`render_sd::engine::FragmentEngine` +

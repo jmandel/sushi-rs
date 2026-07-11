@@ -590,7 +590,7 @@ fn build_project_inner(
     // (depends-on version resolution) via `std::fs` beyond the package-cache
     // `PackageSource` boundary. The editor's M1 views (JSON / differential /
     // snapshot) do not need it; wiring the IG-project + cache-dir scans through
-    // an abstraction is deferred (see docs/wasm-editor-plan.md §9c). The
+    // an abstraction is deferred on this disk-only compatibility path. The
     // in-memory `compile_conformance` therefore stops before this step.
     let cfg = config::Config::from_yaml(&cfg_text)?;
     if !cfg.fsh_only {
@@ -884,7 +884,7 @@ pub fn build_project_in_memory_with_diagnostics(
 /// The conformance resources are byte-identical to
 /// [`build_project_in_memory_with_diagnostics`]; the IG resource is byte-identical
 /// to the disk path's `ImplementationGuide-<id>.json` for the same inputs (proven
-/// by the site_db in-memory-vs-disk parity test). `None` IG when config is
+/// by native/in-memory preparation parity tests). `None` IG when config is
 /// FSH-only or lacks an `id`.
 pub fn build_project_in_memory_with_ig(
     cfg_text: &str,

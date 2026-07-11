@@ -174,8 +174,8 @@ Gate: same ok=N/N numbers as legacy for every corpus dir.
    generated-snapshot memoization, id→index side maps); re-run the sushi
    31-IG perf harness; then a clarity/simplification review with gates green
    at every step.
-3. **Only after perf is covered: the WASM demo** (docs/wasm-editor-plan.md
-   P0). Perf pass moved OUT of wave 4 into this roadmap step.
+3. **Only after perf is covered: the historical WASM demo.** Perf pass moved
+   OUT of wave 4 into this roadmap step.
 4. **After the editor demo (task #17): Layer B as a separate OPT-IN stage** —
    the Publisher post-passes over finished snapshots (canonical version
    pinning `url|x.y.z` first; narrative/validation-edit scope decided by an

@@ -1,5 +1,5 @@
-//! `wasm_api` — the wasm-bindgen JS surface for the FSH editor (wasm-editor-plan
-//! P2). It keeps `wasm-bindgen` OUT of the core crates: the compiler and the
+//! `wasm_api` — the wasm-bindgen JS surface for the FSH editor. It keeps
+//! `wasm-bindgen` OUT of the core crates: the compiler and the
 //! snapshot walk engine stay bindgen-free and native-tested; this crate is the
 //! only place JS types are marshalled.
 //!
@@ -10,7 +10,7 @@
 //! Worker and call methods on it:
 //!
 //! ```js
-//! const s = new Session();               // or Session.global() for the shared one
+//! const s = new Session();
 //! s.mount(bundlesJson);                  // -> { ok, apiVersion, result: { mounted } }
 //! s.prepareAndMount(bundlesJson);        // cold normalize/mount + artifact metadata
 //! const artifact = s.takePrepared(label); // direct Uint8Array, intentionally not JSON
@@ -19,7 +19,7 @@
 //! s.commitPreparedMount();               // publish only after all stages validate
 //! s.compile(filesJson, config, predefinedJson);
 //! s.snapshot(urlOrInlineSd);
-//! s.buildSiteDb(inputJson);
+//! s.prepare(generatorSpecJson);
 //! s.expandValueSet(vsJson, resourcesJson);
 //! s.resolveProject(config, versionIndexJson);
 //! Session.version();                     // static
@@ -33,12 +33,9 @@
 //! deliberate exception is `takePrepared`: it moves a pending binary artifact
 //! directly into a `Uint8Array`, and throws if the label is absent/already taken.
 //!
-//! # Legacy global compatibility
-//!
-//! The original flat free-function exports are gone: [`Session`] is the only JS
-//! API. A regular constructed session owns isolated mutable state. The explicit
-//! [`Session::global`] constructor exists only for native compatibility tests and
-//! old embedders that deliberately need the former thread-local singleton.
+//! The original flat exports and process-global engine are gone. Each Session
+//! owns one compiler/package coordinator; prepared site runtimes are addressed
+//! only by immutable SiteBuild handles.
 //!
 //! Everything runs synchronously in the Worker; the walk engine is the same code
 //! the native gates exercise (proven byte-identical by `scripts/wasm-parity.sh`).
@@ -49,17 +46,12 @@
 //! under `wasm32-unknown-unknown` + wasm-bindgen.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use package_store::{BundleSource, PackageSource};
-use render_page::{
-    all_compile_inputs, collect_stock_revision, ArtifactObservation, PageArtifactReadSet,
-    StockFragmentPolicy, StockInput, StockPage, StockPageOutcome, STOCK_PAGE_SOURCE_NAMESPACE,
-    STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE, STOCK_STAGED_INCLUDE_NAMESPACE,
-    STOCK_TEMPLATE_INCLUDE_NAMESPACE,
-};
+use render_page::ArtifactObservation;
 
 mod render_surface;
 #[cfg(test)]
@@ -75,6 +67,12 @@ use wasm_bindgen::prelude::*;
 /// The result/error envelope + apiVersion are the SHARED implementation
 /// (`api_envelope`) — one schema for the Session and the `fig` CLI's `--json`.
 use api_envelope::{envelope, envelope_ser, API_VERSION};
+
+/// Keep enough immutable generations for hot-reload comparison without
+/// retaining an editing session's complete history of RenderStates and CAS
+/// objects. This is preparation recency, not read recency: querying an old
+/// handle never extends its lifetime.
+const RETAINED_SITE_BUILD_LIMIT: usize = 2;
 
 // ---------------------------------------------------------------------------
 // A shareable package source. Store/context take `impl PackageSource + 'static`
@@ -150,8 +148,7 @@ impl PackageSource for SharedBundle {
 
 // ---------------------------------------------------------------------------
 // Engine — the mounted package source + last-compile locals. Each constructed
-// `Session` owns one Engine. Only `Session::global()` uses the explicit legacy
-// thread-local compatibility instance below.
+// `Session` owns exactly one Engine.
 //
 // Every operation is an inherent method returning `Result<_, String>` — plain
 // Rust errors, no `JsError` (which panics off-wasm). Session does the JS
@@ -199,13 +196,19 @@ struct Engine {
     /// Legacy `compile` deliberately leaves this absent, preventing it from
     /// masquerading as a complete project revision.
     last_project: Option<CompiledProjectRevision>,
+    /// Serialized public result of the last successful semantic compile. This
+    /// is retained beside `last_project` only so an exactly compiler-equivalent
+    /// `compileProject` revision can return the same resources/diagnostics while
+    /// replacing its authored site bytes. It is not a second build cache: the
+    /// existing semantic/project identities are the sole reuse authority.
+    last_compile_result: Option<CompileResult>,
     last_compile_diagnostics: Vec<DiagnosticJs>,
     /// The mounted site tree (template statics + staged pagecontent + _data +
     /// _includes + optional txcache), keyed by virtual path under /site.
     site_files: std::collections::HashMap<PathBuf, Vec<u8>>,
     site_options: SiteOptions,
     /// `menu.xml` generated from the last `compile()`'s sushi-config `menu:` tree
-    /// (the navbar is IG data, not template chrome). `produceStockSite` stages it
+    /// (the navbar is IG data, not template chrome). `prepare(publisher)` stages it
     /// into `_includes/` so the layouts' `{% include menu.xml %}` resolves.
     menu_xml: Option<String>,
     /// Input page-folder listing (`input/{pagecontent,pages,resource-docs}` ->
@@ -219,10 +222,13 @@ struct Engine {
     render_semantics: Option<Rc<RenderSemantics>>,
     /// Cheap page/template surface for the current mounted site generation.
     render_state: Option<Rc<RenderState>>,
-    /// Frozen native-template executions keyed by their content-derived
-    /// SiteBuild id. Unlike `render_state`, these survive later mounts/compiles:
-    /// a handle always renders the exact tree and semantic context it opened.
-    stock_builds: BTreeMap<String, StockBuildRuntime>,
+    /// Immutable target-specific site runtimes. A handle is exactly the closed
+    /// SiteBuild id; mutable work below it is only path-local memoization and
+    /// can never change the build that another handle names. Only the current
+    /// and immediately previous successful preparations are retained.
+    site_builds: BTreeMap<String, SiteBuildRuntime>,
+    /// Oldest-to-newest successful preparation order for `site_builds`.
+    site_build_generations: VecDeque<String>,
     /// Renderer-neutral semantics derived from the current (or an earlier)
     /// exact compile revision. The entry is reusable only when its canonical
     /// key matches every authored byte, locked package, compiled value,
@@ -251,36 +257,52 @@ struct PreparedMountTransaction {
 struct PreparedGuideCacheEntry {
     key: site_build::Sha256Digest,
     guide: site_build::PreparedGuide,
-    /// Populated only when a compatibility caller explicitly asks for rows.
-    /// Cycle v2 never constructs this value.
-    site_db: Option<site_db::SiteDb>,
 }
 
 #[derive(Clone)]
 struct ClosedSiteBuildCacheEntry {
     key: site_build::Sha256Digest,
-    result: SiteBuildFromCompileResult,
+    projection: site_build::cycle_semantic::ClosedCycleProjection,
 }
 
 #[cfg(test)]
 #[derive(Default)]
 struct DerivedCacheHits {
+    compile_project: u64,
     prepared_guide: u64,
     closed_site_build: u64,
 }
 
 #[derive(Clone)]
-struct StockBuildRuntime {
+struct PublisherBuildRuntime {
     state: Rc<RenderState>,
-    build: site_build::SiteBuild,
-    pages: BTreeMap<String, StockRenderedPage>,
-    provenance_attributes: BTreeMap<String, String>,
+    runtime: Option<site_producer::publisher_runtime::PublisherRuntime>,
+    build: site_build::ClosedSiteBuild,
+    catalog: Vec<OutputDescriptor>,
+    ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
+    objects: BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+    renderer: site_build::RendererImplementation,
+    output_options: BTreeMap<String, String>,
 }
 
 #[derive(Clone)]
-struct StockRenderedPage {
-    html: String,
-    reads: PageArtifactReadSet,
+struct CycleBuildRuntime {
+    build: site_build::ClosedSiteBuild,
+    objects: BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+}
+
+#[derive(Clone)]
+enum SiteBuildRuntime {
+    Publisher(PublisherBuildRuntime),
+    Cycle(CycleBuildRuntime),
+}
+
+#[derive(Clone)]
+struct PreparedOutput {
+    content: site_build::ContentRef,
+    producer: site_build::OutputProducer,
+    source: Option<String>,
+    owner: Option<site_build::OutputPath>,
 }
 
 #[derive(Clone, Debug)]
@@ -289,9 +311,15 @@ struct MountedPackage {
     declared_dependencies: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ResolvedPackages {
     config_sha256: site_build::Sha256Digest,
+    /// Exact package manifests read while proving the context closure. This
+    /// includes R4-incompatible dependencies which the resolver deliberately
+    /// inspected and excluded from the executable closure. Retaining these
+    /// coordinates lets PackageLock distinguish an excluded declared edge from
+    /// an unresolved/dangling one without adding the excluded package itself.
+    resolution_support: BTreeSet<String>,
     labels: Vec<String>,
 }
 
@@ -313,14 +341,6 @@ struct RenderSemanticInputs {
     fsh: BTreeMap<String, String>,
     predefined: BTreeMap<String, Value>,
     page_listing: BTreeMap<String, Vec<String>>,
-}
-
-thread_local! {
-    /// Compatibility engine used only by the explicitly requested
-    /// `Session::global()` handle. Regular `new Session()` instances own isolated
-    /// state; sharing package bytes belongs at the immutable package-store layer,
-    /// not in mutable compile/template/site fields.
-    static ENGINE: RefCell<Engine> = RefCell::new(Engine::default());
 }
 
 fn set_panic_hook() {
@@ -396,6 +416,7 @@ impl Engine {
         self.last_compiled.clear();
         self.last_render_semantic_inputs = None;
         self.last_project = None;
+        self.last_compile_result = None;
         self.last_compile_diagnostics.clear();
         self.prepared_guide_cache = None;
         self.closed_site_build_cache = None;
@@ -472,102 +493,6 @@ impl Engine {
             .map_err(|error| format!("mountPrepared: invalid artifact: {error:#}"))?;
         self.commit_prepared(vec![prepared], "mountPrepared")?;
         Ok(self.packages.len() as u32)
-    }
-
-    /// Compatibility entry point for validating artifacts carried in one
-    /// contiguous binary batch before appending any immutable package layer.
-    /// The browser warm path uses staged per-artifact transactions instead, so
-    /// it never constructs a closure-sized JavaScript batch.
-    fn mount_prepared_batch(
-        &mut self,
-        bytes: Vec<u8>,
-        manifest_json: &str,
-    ) -> Result<PackageMountResult, String> {
-        if self.bundle.is_none() {
-            return Err("mountPreparedBatch: engine not initialized; call init() first".into());
-        }
-        let started = clock_ms();
-        let compression_before = self
-            .bundle
-            .as_ref()
-            .map(|source| source.compression_metrics())
-            .unwrap_or_default();
-        let entries: Vec<PreparedBatchEntry> = serde_json::from_str(manifest_json)
-            .map_err(|error| format!("mountPreparedBatch: bad manifest JSON: {error}"))?;
-        let parsed_at = clock_ms();
-        if entries.is_empty() {
-            return Err("mountPreparedBatch: manifest has no packages".into());
-        }
-        let requested = entries.len() as u32;
-        let artifact_bytes = bytes.len() as u64;
-        let backing = package_store::PreparedArtifactBacking::new(bytes);
-        let mut cursor = 0usize;
-        let mut prepared = Vec::with_capacity(entries.len());
-        for entry in entries {
-            let offset: usize = entry
-                .offset
-                .try_into()
-                .map_err(|_| "mountPreparedBatch: offset exceeds host size")?;
-            let length: usize = entry
-                .byte_length
-                .try_into()
-                .map_err(|_| "mountPreparedBatch: byteLength exceeds host size")?;
-            if offset != cursor {
-                return Err(format!(
-                    "mountPreparedBatch: artifacts must be contiguous and ordered; expected offset {cursor}, got {offset}"
-                ));
-            }
-            let end = offset
-                .checked_add(length)
-                .ok_or("mountPreparedBatch: artifact range overflow")?;
-            if end > backing.len() {
-                return Err("mountPreparedBatch: artifact range exceeds binary batch".into());
-            }
-            let key: package_store::PreparedPackageKey = entry
-                .cache_key
-                .parse()
-                .map_err(|error| format!("mountPreparedBatch: invalid cache key: {error:#}"))?;
-            prepared.push(
-                package_store::PreparedPackage::decode_backing_range(
-                    backing.clone(),
-                    offset..end,
-                    &key,
-                )
-                .map_err(|error| format!("mountPreparedBatch: invalid artifact: {error:#}"))?,
-            );
-            cursor = end;
-        }
-        if cursor != backing.len() {
-            return Err("mountPreparedBatch: binary batch has unreferenced trailing bytes".into());
-        }
-        let indexed_members = prepared
-            .iter()
-            .map(|package| package.files.len() as u64)
-            .sum();
-        let decoded = clock_ms();
-        let mounted = self.commit_prepared(prepared, "mountPreparedBatch")?;
-        let compression = compression_delta(
-            compression_before,
-            self.bundle
-                .as_ref()
-                .map(|source| source.compression_metrics())
-                .unwrap_or_default(),
-        );
-        let finished = clock_ms();
-        Ok(PackageMountResult {
-            mounted: self.packages.len() as u32,
-            added: mounted,
-            packages: requested,
-            manifest_json_bytes: manifest_json.len() as u64,
-            artifact_bytes,
-            retained_blob_bytes: artifact_bytes,
-            indexed_members,
-            member_body_copies: 0,
-            manifest_parse_ms: (parsed_at - started).max(0.0),
-            decode_validate_ms: (decoded - parsed_at).max(0.0),
-            mount_ms: (finished - decoded).max(0.0),
-            compression,
-        })
     }
 
     fn begin_prepared_mount(&mut self, expected_packages: u32) -> Result<(), String> {
@@ -996,7 +921,7 @@ impl Engine {
         // Generate the REAL ImplementationGuide (byte-identical to the disk build's
         // ImplementationGuide-<id>.json) alongside the conformance resources, so the
         // render set carries a faithful IG — correct artifact/example titles and
-        // example markers — instead of the minimal produceStockSite synthesis. The
+        // example markers — instead of the minimal prepare(publisher) synthesis. The
         // page-folder listing (for definition.page narrative pages) is threaded via
         // `self.page_listing`; empty is fine for the artifact layer.
         let (compiled, ig_resource, diagnostics) = compiler::build_project_in_memory_with_ig(
@@ -1032,7 +957,7 @@ impl Engine {
                 body.clone(),
             ));
         }
-        // The generated ImplementationGuide joins the render set so produceStockSite
+        // The generated ImplementationGuide joins the render set so prepare(publisher)
         // finds a faithful IG (correct titles/example markers/page tree) rather than
         // falling back to the minimal synthesis.
         if let Some(ig) = ig_resource {
@@ -1041,7 +966,7 @@ impl Engine {
         self.replace_compiled_render_set(render_set, semantic_inputs);
 
         // Generate the navbar (menu.xml) from the sushi-config `menu:` tree so
-        // produceStockSite can stage it into _includes/ — SUSHI writes this per-IG;
+        // prepare(publisher) can stage it into _includes/ — SUSHI writes this per-IG;
         // it is IG data, not template chrome (the template only supplies the
         // `{% include menu.xml %}` point).
         self.menu_xml = compiler::menu::menu_xml(config);
@@ -1090,16 +1015,18 @@ impl Engine {
         self.last_project = None;
         self.last_compile_diagnostics = diagnostics.clone();
 
-        Ok(CompileResult {
+        let result = CompileResult {
             resources,
             diagnostics,
             timings: Timings::default(),
-        })
+        };
+        self.last_compile_result = Some(result.clone());
+        Ok(result)
     }
 
     /// Compile with the authored site-file manifest in scope. This is the normal
     /// editor build entry point: page-folder names must reach IG export during the
-    /// ONE compile, so a later site.db projection can consume `last_compiled`
+    /// ONE compile, so the later SiteBuild projection can consume `last_compiled`
     /// without recompiling merely to recover `definition.page`.
     fn compile_project(
         &mut self,
@@ -1129,13 +1056,56 @@ impl Engine {
                 "compileProject: no satisfied package resolver fixpoint for these config bytes; call resolveProject after the latest mount"
                     .to_string()
             })?;
-        self.page_listing = page_listing_from_site_files(&site_files);
+        let page_listing = page_listing_from_site_files(&site_files);
+        let semantic_inputs = RenderSemanticInputs {
+            config: config.to_string(),
+            fsh: fsh.clone(),
+            predefined: predefined.clone(),
+            page_listing: page_listing
+                .iter()
+                .map(|(directory, names)| (directory.clone(), names.clone()))
+                .collect(),
+        };
+        let can_reuse = self.last_render_semantic_inputs.as_ref() == Some(&semantic_inputs)
+            && self
+                .last_project
+                .as_ref()
+                .and_then(|project| project.resolved_packages.as_ref())
+                == Some(&resolved_packages)
+            && self.last_compile_result.is_some();
+        let previous_page_listing = std::mem::replace(&mut self.page_listing, page_listing);
+        if can_reuse {
+            let result = self
+                .last_compile_result
+                .clone()
+                .expect("reuse guard requires a prior compile result");
+            // The semantic renderer remains exact, but any ambient surface was
+            // assembled over the prior authored site tree. Immutable retained
+            // SiteBuild handles own their RenderState and are unaffected.
+            self.invalidate_render_surface();
+            self.last_project = Some(CompiledProjectRevision {
+                config: config.to_string(),
+                fsh,
+                predefined,
+                site_files,
+                resolved_packages: Some(resolved_packages),
+            });
+            #[cfg(test)]
+            {
+                self.derived_cache_hits.compile_project += 1;
+            }
+            return Ok(result);
+        }
         let result = self.compile_with_resolved(
             files_json,
             config,
             predefined_json,
             Some(&resolved_packages),
-        )?;
+        );
+        if result.is_err() {
+            self.page_listing = previous_page_listing;
+        }
+        let result = result?;
         self.last_project = Some(CompiledProjectRevision {
             config: config.to_string(),
             fsh,
@@ -1159,6 +1129,7 @@ impl Engine {
         let n = locals.len() as u32;
         self.replace_local_render_set(locals);
         self.last_project = None;
+        self.last_compile_result = None;
         self.last_compile_diagnostics.clear();
         Ok(n)
     }
@@ -1308,303 +1279,91 @@ impl Engine {
         })
     }
 
-    /// Build the site.db ROW MODEL from fully in-memory IG inputs. Returns the row
-    /// model as a `Value` (SQLite/`core/db.ts` column casing).
-    fn build_site_db(&self, input_json: &str) -> Result<Value, String> {
-        let input: SiteDbInput = serde_json::from_str(input_json)
-            .map_err(|e| format!("build_site_db: bad input JSON: {e}"))?;
-        validate_predefined_site_overlap(&input.predefined, &input.site_files, "build_site_db")?;
-
-        let (candidate_source, candidate_root, _packages) = self.source()?;
-        let index = package_store::version_index_from_cache(&candidate_source, &candidate_root);
-        let step = package_store::resolve_project(
-            &input.config,
-            &candidate_source,
-            &candidate_root,
-            Some(&index),
-        )
-        .map_err(|error| format!("build_site_db: resolve package closure: {error:#}"))?;
-        if !step.satisfied {
-            return Err(format!(
-                "build_site_db: mounted packages do not satisfy the project closure: {}",
-                serde_json::to_string(&step.missing).unwrap_or_else(|_| "[]".into())
-            ));
-        }
-        let resolved = resolved_packages_from_step(&input.config, &step)?;
-        let (source, cache_root, package_context) = self.source_for_resolved(&resolved)?;
-        let cache = cache_root.to_string_lossy().into_owned();
-
-        // ---- S1/S2 (+ IG export): compile in memory, producing the IG resource. ----
-        let fsh_files: Vec<(String, String)> = input.fsh.into_iter().collect();
-        let predefined: Vec<(PathBuf, Value)> = input
-            .predefined
-            .into_iter()
-            .map(|(p, v)| (PathBuf::from(p), v))
-            .collect();
-        // The page-folder listing ig_export needs (folder -> filenames) is derived
-        // from the site_files map: the disk path would scan input/{pagecontent,
-        // pages,resource-docs}; we hand it the same names from the VFS.
-        let page_dir_listing = page_listing_from_site_files(&input.site_files);
-
-        let (conformance, ig_resource, _diagnostics) = compiler::build_project_in_memory_with_ig(
-            &input.config,
-            &fsh_files,
-            predefined,
-            source.clone(),
-            &cache,
-            page_dir_listing,
-        )
-        .map_err(|e| format!("build_site_db: compile failed: {e:#}"))?;
-
-        // ---- S3: snapshot-complete each StructureDefinition against the same
-        // exact package fixpoint used by the compile. Core remains a validated
-        // distinguished member; external dependency bases remain resolvable.
-        let fhir_version = ig_resource
-            .as_ref()
-            .and_then(|resource| implementation_guide_fhir_version(&resource.body))
-            .ok_or("build_site_db: compiled ImplementationGuide has no fhirVersion")?;
-        self.resolved_core_package(&resolved, &input.config, &fhir_version, "build_site_db")?;
-        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
-            .map_err(|e| format!("build_site_db: package context: {e:#}"))?;
-        let locals: Vec<(PathBuf, Value)> = conformance
-            .iter()
-            .map(|r| {
-                (
-                    PathBuf::from(format!("/__compiled__/{}", r.filename)),
-                    r.body.clone(),
-                )
-            })
-            .collect();
-        ctx.load_local_resources(locals);
-
-        let mut generated: Vec<Value> = Vec::new();
-        for r in &conformance {
-            if r.body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition") {
-                let snap =
-                    snapshot_gen::generate_snapshot(r.body.clone(), &ctx, Default::default())
-                        .map_err(|e| format!("build_site_db: snapshot {}: {e:#}", r.filename))?;
-                generated.push(snap);
-            } else {
-                generated.push(r.body.clone());
-            }
-        }
-        let primary_implementation_guide = ig_resource.as_ref().map(|ig| ig.body.clone()).ok_or(
-            "build_site_db: no ImplementationGuide produced (FSHOnly config or missing id)",
-        )?;
-        generated.push(primary_implementation_guide.clone());
-
-        // Predefined `input/resources/**` bodies are the examples (S5 loadResources).
-        let examples: Vec<Value> = collect_example_resources(&input.site_files, "build_site_db")?;
-
-        assemble_site_db_value(
-            "build_site_db",
-            &generated,
-            &primary_implementation_guide,
-            &examples,
-            &input.config,
-            &input.site_files,
-            input.build_epoch_secs,
-            &input.liquid_asset_dirs,
-            input.branch,
-            input.revision,
-        )
-    }
-
-    /// Project the exact most recent `compileProject` revision into site.db rows.
-    /// Unlike the legacy `build_site_db`, this path has no FSH inputs and therefore
-    /// cannot accidentally perform a second semantic compile.
-    fn build_site_db_from_compile(&mut self, input_json: &str) -> Result<Value, String> {
-        let input: SiteDbFromCompileInput = serde_json::from_str(input_json)
-            .map_err(|e| format!("build_site_db_from_compile: bad input JSON: {e}"))?;
-        let project = self
-            .validate_project_projection(&input, "build_site_db_from_compile")?
-            .clone();
-        let (project_id, _) = compiled_ig_identity(&self.last_compiled)?;
-        let project_revision = self.site_build_project_revision(&project, &project_id)?;
-        let package_lock = self.site_build_package_lock(&project)?;
-        let prepared_key = self.prepared_guide_cache_key(
-            &input,
-            &project_revision,
-            &package_lock,
-            "build_site_db_from_compile",
-        )?;
-        let (_, db) =
-            self.site_model_from_compile(&input, "build_site_db_from_compile", true, prepared_key)?;
-        serde_json::to_value(db.expect("row projection requested"))
-            .map_err(|e| format!("build_site_db_from_compile: serialize rows: {e}"))
-    }
-
-    /// Build a callback-free Cycle handoff from the exact preceding compile.
-    /// `cycle-site/v2` returns four typed semantic objects plus raw asset objects;
-    /// omitted `target` retains the aggregate v1 compatibility contract. Both
-    /// use the same digest-indexed CAS transport and neither can invoke a second
-    /// compile or a request-time fragment callback.
-    fn build_site_build_from_compile(
+    /// Build the callback-free Cycle v2 handoff from the exact preceding
+    /// compile. This cannot invoke a second compile or a request-time fragment
+    /// callback.
+    fn prepare_cycle(
         &mut self,
-        input_json: &str,
-    ) -> Result<SiteBuildFromCompileResult, String> {
-        let input: SiteDbFromCompileInput = serde_json::from_str(input_json)
-            .map_err(|e| format!("build_site_build_from_compile: bad input JSON: {e}"))?;
-        let project = self
-            .validate_project_projection(&input, "build_site_build_from_compile")?
-            .clone();
-        let target = input.target.as_deref().unwrap_or("cycle-site/v1");
-        if !matches!(target, "cycle-site/v1" | "cycle-site/v2") {
-            return Err(format!(
-                "build_site_build_from_compile: unsupported target {target:?}"
-            ));
-        }
+        options: &PrepareGuideOptions,
+    ) -> Result<site_build::cycle_semantic::ClosedCycleProjection, String> {
+        let operation = "prepare(cycle)";
+        let project = self.last_project.clone().ok_or_else(|| {
+            format!("{operation}: compileProject has not established a complete source revision")
+        })?;
         let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
         let project_revision = self.site_build_project_revision(&project, &project_id)?;
         let package_lock = self.site_build_package_lock(&project)?;
-        let prepared_key = self.prepared_guide_cache_key(
-            &input,
-            &project_revision,
-            &package_lock,
-            "build_site_build_from_compile",
-        )?;
+        let prepared_key =
+            self.prepared_guide_cache_key(options, &project_revision, &package_lock, operation)?;
 
         let diagnostics = site_build_diagnostics(&self.last_compile_diagnostics);
 
         let mut parameters = BTreeMap::from([
-            ("contract".into(), target.into()),
-            ("buildEpochSecs".into(), input.build_epoch_secs.to_string()),
+            ("contract".into(), site_build::cycle_semantic::TARGET.into()),
+            (
+                "buildEpochSecs".into(),
+                options.build_epoch_secs.to_string(),
+            ),
             (
                 "liquidAssetDirs".into(),
-                if input.liquid_asset_dirs.is_empty() {
+                if options.liquid_asset_dirs.is_empty() {
                     "input/includes".into()
                 } else {
-                    input.liquid_asset_dirs.join(",")
+                    options.liquid_asset_dirs.join(",")
                 },
             ),
         ]);
-        if let Some(branch) = &input.branch {
+        if let Some(branch) = &options.branch {
             parameters.insert("branch".into(), branch.clone());
         }
-        if let Some(revision) = &input.revision {
+        if let Some(revision) = &options.revision {
             parameters.insert("revision".into(), revision.clone());
         }
 
         let render_target = site_build::RenderTarget {
-            renderer: site_build::ProducerRef::new(
-                "cycle-site",
-                if target == "cycle-site/v2" { "2" } else { "1" },
-            ),
+            renderer: site_build::ProducerRef::new("cycle-site", "2"),
             mode: site_build::RenderMode::ExternalBuilder,
             fhir_version,
             template: None,
             parameters,
         };
 
-        let closed_key =
-            closed_site_build_cache_key(&prepared_key, &render_target, &diagnostics, target)
-                .map_err(|error| format!("build_site_build_from_compile: cache key: {error}"))?;
+        let closed_key = closed_site_build_cache_key(&prepared_key, &render_target, &diagnostics)
+            .map_err(|error| format!("{operation}: cache key: {error}"))?;
         if let Some(entry) = &self.closed_site_build_cache {
             if entry.key == closed_key {
                 #[cfg(test)]
                 {
                     self.derived_cache_hits.closed_site_build += 1;
                 }
-                return Ok(entry.result.clone());
+                return Ok(entry.projection.clone());
             }
         }
 
-        let (prepared_guide, db) = self.site_model_from_compile(
-            &input,
-            "build_site_build_from_compile",
-            target == "cycle-site/v1",
-            prepared_key,
-        )?;
-
-        let result = if target == "cycle-site/v2" {
-            let input = site_build::cycle_semantic::CycleProjectionInput {
-                project: project_revision,
-                package_lock,
-                render_target,
-                diagnostics,
-            };
-            let projection = site_build::cycle_semantic::close_prepared(&prepared_guide, input)
-                .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
-            SiteBuildFromCompileResult {
-                transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
-                site_build: projection.site_build,
-                objects: encode_cas_objects(projection.objects),
-                site_db_json: None,
-            }
-        } else {
-            let projection = site_build::site_db_compat::close_projection(
-                db.as_ref().expect("v1 requests SiteDb projection"),
-                site_build::site_db_compat::CloseProjectionInput {
-                    project: project_revision,
-                    package_lock,
-                    render_target,
-                    diagnostics,
-                },
-            )
-            .map_err(|e| format!("build_site_build_from_compile: {e}"))?;
-            let site_db_json = String::from_utf8(projection.bytes.clone())
-                .map_err(|e| format!("build_site_build_from_compile: site.db UTF-8: {e}"))?;
-            let content =
-                site_build::ContentRef::of_bytes(&projection.bytes, Some("application/json"));
-            SiteBuildFromCompileResult {
-                transport_version: SITE_BUILD_CAS_TRANSPORT.into(),
-                site_build: projection.site_build,
-                objects: BTreeMap::from([(
-                    content.sha256.to_string(),
-                    base64_encode(&projection.bytes),
-                )]),
-                site_db_json: Some(site_db_json),
-            }
+        let prepared_guide = self.site_model_from_compile(options, operation, prepared_key)?;
+        let input = site_build::cycle_semantic::CycleProjectionInput {
+            project: project_revision,
+            package_lock,
+            render_target,
+            diagnostics,
         };
+        let projection = site_build::cycle_semantic::close_prepared(&prepared_guide, input)
+            .map_err(|e| format!("{operation}: {e}"))?;
         self.closed_site_build_cache = Some(ClosedSiteBuildCacheEntry {
             key: closed_key,
-            result: result.clone(),
+            projection: projection.clone(),
         });
-        Ok(result)
-    }
-
-    fn validate_project_projection<'a>(
-        &'a self,
-        input: &SiteDbFromCompileInput,
-        operation: &str,
-    ) -> Result<&'a CompiledProjectRevision, String> {
-        let project = self.last_project.as_ref().ok_or_else(|| {
-            format!(
-                "{operation}: compileProject has not established a complete source revision; call compileProject first"
-            )
-        })?;
-        if project.config != input.config {
-            return Err(format!(
-                "{operation}: projection config differs from the compiled revision"
-            ));
-        }
-        if project.fsh != input.fsh {
-            return Err(format!(
-                "{operation}: projection FSH files differ from the compiled revision"
-            ));
-        }
-        if project.predefined != input.predefined {
-            return Err(format!(
-                "{operation}: projection predefined resources differ from the compiled revision"
-            ));
-        }
-        if project.site_files != input.site_files {
-            return Err(format!(
-                "{operation}: projection site files differ from the compiled revision"
-            ));
-        }
-        Ok(project)
+        Ok(projection)
     }
 
     /// Canonical lookup identity for the expensive snapshot + semantic
-    /// preparation phase. This is intentionally independent of Cycle v1/v2:
-    /// both projections consume the same PreparedGuide. The key includes the
+    /// preparation phase. The key includes the
     /// actual compiled values as a defensive binding in addition to exact
     /// source/package identities, so a caller can never turn a hidden compiler
     /// state difference into a false cache hit.
     fn prepared_guide_cache_key(
         &self,
-        input: &SiteDbFromCompileInput,
+        input: &PrepareGuideOptions,
         project: &site_build::ProjectRevision,
         package_lock: &site_build::PackageLock,
         operation: &str,
@@ -1643,29 +1402,29 @@ impl Engine {
 
     fn site_model_from_compile(
         &mut self,
-        input: &SiteDbFromCompileInput,
+        input: &PrepareGuideOptions,
         operation: &str,
-        with_rows: bool,
         cache_key: site_build::Sha256Digest,
-    ) -> Result<(site_build::PreparedGuide, Option<site_db::SiteDb>), String> {
+    ) -> Result<site_build::PreparedGuide, String> {
         if self.last_compiled.is_empty() {
             return Err(format!(
                 "{operation}: no compiled revision; call compileProject first"
             ));
         }
 
-        self.validate_project_projection(input, operation)?;
         if let Some(entry) = &self.prepared_guide_cache {
-            if entry.key == cache_key && (!with_rows || entry.site_db.is_some()) {
+            if entry.key == cache_key {
                 #[cfg(test)]
                 {
                     self.derived_cache_hits.prepared_guide += 1;
                 }
-                return Ok((entry.guide.clone(), entry.site_db.clone()));
+                return Ok(entry.guide.clone());
             }
         }
 
-        let project = self.validate_project_projection(input, operation)?;
+        let project = self.last_project.as_ref().ok_or_else(|| {
+            format!("{operation}: compileProject has not established a complete source revision")
+        })?;
         let (_, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
         let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
             format!("{operation}: compiled revision has no bound package resolver fixpoint")
@@ -1673,7 +1432,7 @@ impl Engine {
         // Validate the distinguished core, but snapshot against the complete
         // exact closure used by compileProject so profiles may derive from
         // external dependencies without consulting unrelated mounted versions.
-        self.resolved_core_package(resolved, &input.config, &fhir_version, operation)?;
+        self.resolved_core_package(resolved, &project.config, &fhir_version, operation)?;
         let (source, cache_root, package_context) = self.source_for_resolved(resolved)?;
         let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
             .map_err(|e| format!("{operation}: package context: {e:#}"))?;
@@ -1714,49 +1473,24 @@ impl Engine {
             format!("{operation}: compiled revision has no primary ImplementationGuide")
         })?;
 
-        let examples = collect_example_resources(&input.site_files, operation)?;
-        if with_rows {
-            let outcome = assemble_site_db_model(
-                operation,
-                &generated,
-                &primary_implementation_guide,
-                &examples,
-                &input.config,
-                &input.site_files,
-                input.build_epoch_secs,
-                &input.liquid_asset_dirs,
-                input.branch.clone(),
-                input.revision.clone(),
-            )?;
-            let guide = outcome.prepared_guide;
-            let db = outcome.db;
-            self.prepared_guide_cache = Some(PreparedGuideCacheEntry {
-                key: cache_key,
-                guide: guide.clone(),
-                site_db: Some(db.clone()),
-            });
-            Ok((guide, Some(db)))
-        } else {
-            let outcome = assemble_prepared_model(
-                operation,
-                &generated,
-                &primary_implementation_guide,
-                &examples,
-                &input.config,
-                &input.site_files,
-                input.build_epoch_secs,
-                &input.liquid_asset_dirs,
-                input.branch.clone(),
-                input.revision.clone(),
-            )?;
-            let guide = outcome.prepared_guide;
-            self.prepared_guide_cache = Some(PreparedGuideCacheEntry {
-                key: cache_key,
-                guide: guide.clone(),
-                site_db: None,
-            });
-            Ok((guide, None))
-        }
+        let examples = collect_example_resources(&project.site_files, operation)?;
+        let guide = assemble_prepared_model(
+            operation,
+            &generated,
+            &primary_implementation_guide,
+            &examples,
+            &project.config,
+            &project.site_files,
+            input.build_epoch_secs,
+            &input.liquid_asset_dirs,
+            input.branch.clone(),
+            input.revision.clone(),
+        )?;
+        self.prepared_guide_cache = Some(PreparedGuideCacheEntry {
+            key: cache_key,
+            guide: guide.clone(),
+        });
+        Ok(guide)
     }
 
     fn site_build_project_revision(
@@ -1764,11 +1498,7 @@ impl Engine {
         project: &CompiledProjectRevision,
         project_id: &str,
     ) -> Result<site_build::ProjectRevision, String> {
-        validate_predefined_site_overlap(
-            &project.predefined,
-            &project.site_files,
-            "build_site_build_from_compile",
-        )?;
+        validate_predefined_site_overlap(&project.predefined, &project.site_files, "prepare")?;
         let mut entries: BTreeMap<site_build::SourcePath, site_build::SourceEntry> =
             BTreeMap::new();
         let mut insert = |path: &str,
@@ -1777,14 +1507,14 @@ impl Engine {
                           media_type: &str|
          -> Result<(), String> {
             let path = site_build::SourcePath::parse(path.to_string())
-                .map_err(|e| format!("build_site_build_from_compile: source path {path}: {e}"))?;
+                .map_err(|e| format!("prepare: source path {path}: {e}"))?;
             let entry = site_build::SourceEntry {
                 kind,
                 content: site_build::ContentRef::of_bytes(bytes, Some(media_type)),
             };
             if entries.insert(path.clone(), entry).is_some() {
                 return Err(format!(
-                    "build_site_build_from_compile: source path {path} is declared by more than one input channel"
+                    "prepare: source path {path} is declared by more than one input channel"
                 ));
             }
             Ok(())
@@ -1811,9 +1541,8 @@ impl Engine {
             if project.site_files.contains_key(path) {
                 continue;
             }
-            let bytes = site_build::canonical_json_bytes(body).map_err(|e| {
-                format!("build_site_build_from_compile: canonical predefined {path}: {e}")
-            })?;
+            let bytes = site_build::canonical_json_bytes(body)
+                .map_err(|e| format!("prepare: canonical predefined {path}: {e}"))?;
             insert(
                 path,
                 site_build::SourceKind::PredefinedResource,
@@ -1822,19 +1551,18 @@ impl Engine {
             )?;
         }
         for (path, encoded) in &project.site_files {
-            let bytes = base64_decode(encoded).map_err(|e| {
-                format!("build_site_build_from_compile: bad base64 source {path}: {e}")
-            })?;
+            let bytes = base64_decode(encoded)
+                .map_err(|e| format!("prepare: bad base64 source {path}: {e}"))?;
             let (kind, media_type) = source_kind_and_media_type(path);
             insert(path, kind, &bytes, media_type)?;
         }
 
         let sources = site_build::SourceManifest::from_entries(entries)
-            .map_err(|e| format!("build_site_build_from_compile: source manifest: {e}"))?;
+            .map_err(|e| format!("prepare: source manifest: {e}"))?;
         let revision = format!(
             "sources-sha256:{}",
             site_build::sha256_canonical(&sources)
-                .map_err(|e| format!("build_site_build_from_compile: source revision: {e}"))?
+                .map_err(|e| format!("prepare: source revision: {e}"))?
         );
         Ok(site_build::ProjectRevision {
             project_id: project_id.to_string(),
@@ -1847,13 +1575,13 @@ impl Engine {
         &self,
         project: &CompiledProjectRevision,
     ) -> Result<site_build::PackageLock, String> {
-        let resolved = project.resolved_packages.as_ref().ok_or(
-            "build_site_build_from_compile: compiled revision has no bound package resolver fixpoint",
-        )?;
+        let resolved = project
+            .resolved_packages
+            .as_ref()
+            .ok_or("prepare: compiled revision has no bound package resolver fixpoint")?;
         if resolved.config_sha256 != site_build::Sha256Digest::of_bytes(project.config.as_bytes()) {
             return Err(
-                "build_site_build_from_compile: compiled package closure belongs to different config bytes"
-                    .into(),
+                "prepare: compiled package closure belongs to different config bytes".into(),
             );
         }
 
@@ -1861,9 +1589,8 @@ impl Engine {
             BTreeMap::new();
         let mut ordered = Vec::new();
         for label in &resolved.labels {
-            let coordinate = site_build::PackageCoordinate::parse(label).map_err(|e| {
-                format!("build_site_build_from_compile: non-exact resolved package {label}: {e}")
-            })?;
+            let coordinate = site_build::PackageCoordinate::parse(label)
+                .map_err(|e| format!("prepare: non-exact resolved package {label}: {e}"))?;
             coordinates_by_id
                 .entry(coordinate.package_id().to_string())
                 .or_default()
@@ -1871,22 +1598,48 @@ impl Engine {
             ordered.push((label, coordinate));
         }
 
+        let mut support_by_id: BTreeMap<String, Vec<site_build::PackageCoordinate>> =
+            BTreeMap::new();
+        for label in &resolved.resolution_support {
+            if !self.package_materials.contains_key(label) {
+                return Err(format!(
+                    "prepare: resolution-support package {label} has no mounted material"
+                ));
+            }
+            let coordinate = site_build::PackageCoordinate::parse(label).map_err(|e| {
+                format!("prepare: non-exact resolution-support package {label}: {e}")
+            })?;
+            support_by_id
+                .entry(coordinate.package_id().to_string())
+                .or_default()
+                .push(coordinate);
+        }
+
         let mut packages = Vec::new();
         for (label, coordinate) in ordered {
             let material = self.package_materials.get(label).ok_or_else(|| {
-                format!("build_site_build_from_compile: resolved package {label} has no mounted material")
+                format!("prepare: resolved package {label} has no mounted material")
             })?;
             let dependencies = material
                 .declared_dependencies
                 .iter()
                 .filter_map(|(package_id, requested)| {
-                    coordinates_by_id
-                        .get(package_id)
-                        .map(|candidates| (package_id, requested, candidates))
+                    coordinates_by_id.get(package_id).map(|candidates| {
+                        (
+                            package_id,
+                            requested,
+                            candidates,
+                            support_by_id
+                                .get(package_id)
+                                .map(Vec::as_slice)
+                                .unwrap_or_default(),
+                        )
+                    })
                 })
-                .map(|(package_id, requested, candidates)| {
-                    select_locked_dependency(package_id, requested, candidates)
+                .map(|(package_id, requested, candidates, support)| {
+                    select_locked_dependency(package_id, requested, candidates, support)
                 })
+                .filter_map(Result::transpose)
                 .collect::<Result<BTreeSet<_>, _>>()?;
             packages.push(site_build::LockedPackage {
                 coordinate,
@@ -1895,7 +1648,7 @@ impl Engine {
             });
         }
         site_build::PackageLock::from_packages(packages)
-            .map_err(|e| format!("build_site_build_from_compile: package lock: {e}"))
+            .map_err(|e| format!("prepare: package lock: {e}"))
     }
 
     /// Choose the single exact core package from the resolver fixpoint bound to
@@ -1993,79 +1746,16 @@ fn resolved_packages_from_step(
     if labels.is_empty() {
         return Err("package resolver produced an empty satisfied closure".into());
     }
+    let resolution_support = step
+        .resolution_support
+        .iter()
+        .map(|request| format!("{}#{}", request.package_id, request.version))
+        .collect();
     Ok(ResolvedPackages {
         config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+        resolution_support,
         labels,
     })
-}
-
-#[allow(clippy::too_many_arguments)]
-fn assemble_site_db_value(
-    operation: &str,
-    generated: &[Value],
-    primary_implementation_guide: &Value,
-    examples: &[Value],
-    config: &str,
-    site_files: &std::collections::BTreeMap<String, String>,
-    build_epoch_secs: i64,
-    liquid_asset_dirs: &[String],
-    branch: Option<String>,
-    revision: Option<String>,
-) -> Result<Value, String> {
-    let models = assemble_site_db_model(
-        operation,
-        generated,
-        primary_implementation_guide,
-        examples,
-        config,
-        site_files,
-        build_epoch_secs,
-        liquid_asset_dirs,
-        branch,
-        revision,
-    )?;
-    serde_json::to_value(models.db).map_err(|e| format!("{operation}: serialize rows: {e}"))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn assemble_site_db_model(
-    operation: &str,
-    generated: &[Value],
-    primary_implementation_guide: &Value,
-    examples: &[Value],
-    config: &str,
-    site_files: &BTreeMap<String, String>,
-    build_epoch_secs: i64,
-    liquid_asset_dirs: &[String],
-    branch: Option<String>,
-    revision: Option<String>,
-) -> Result<site_db::BuildOutcome, String> {
-    let ig_root = PathBuf::from("/ig");
-    let mut vfs: BTreeMap<PathBuf, Vec<u8>> = BTreeMap::new();
-    for (path, b64) in site_files {
-        let bytes =
-            base64_decode(b64).map_err(|e| format!("{operation}: bad base64 for {path}: {e}"))?;
-        vfs.insert(ig_root.join(path), bytes);
-    }
-    let liquid_asset_rel_dirs = if liquid_asset_dirs.is_empty() {
-        vec!["input/includes".to_string()]
-    } else {
-        liquid_asset_dirs.to_vec()
-    };
-    let outcome = site_db::build_from_inputs(&site_db::InMemoryInputs {
-        generated,
-        primary_implementation_guide,
-        examples,
-        sushi_config_yaml: config,
-        build_epoch_secs,
-        branch,
-        revision,
-        vfs,
-        ig_root,
-        liquid_asset_rel_dirs,
-    })
-    .map_err(|e| format!("{operation}: assemble rows: {e:#}"))?;
-    Ok(outcome)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2080,7 +1770,7 @@ fn assemble_prepared_model(
     liquid_asset_dirs: &[String],
     branch: Option<String>,
     revision: Option<String>,
-) -> Result<site_db::PreparedBuildOutcome, String> {
+) -> Result<site_build::PreparedGuide, String> {
     let ig_root = PathBuf::from("/ig");
     let mut vfs: BTreeMap<PathBuf, Vec<u8>> = BTreeMap::new();
     for (path, b64) in site_files {
@@ -2093,7 +1783,8 @@ fn assemble_prepared_model(
     } else {
         liquid_asset_dirs.to_vec()
     };
-    site_db::prepare_from_inputs(&site_db::InMemoryInputs {
+    let files = prepared_guide::MemFiles::new(vfs);
+    prepared_guide::semantics::prepare(&prepared_guide::semantics::PrepareInputs {
         generated,
         primary_implementation_guide,
         examples,
@@ -2101,16 +1792,20 @@ fn assemble_prepared_model(
         build_epoch_secs,
         branch,
         revision,
-        vfs,
-        ig_root,
-        liquid_asset_rel_dirs,
+        augmentation: prepared_guide::AugmentInputs {
+            ig: primary_implementation_guide,
+            sushi_config_yaml: config,
+            project_root: ig_root.clone(),
+            pagecontent_dir: ig_root.join("input/pagecontent"),
+            image_dir: ig_root.join("input/images"),
+            liquid_asset_dirs: liquid_asset_rel_dirs
+                .iter()
+                .map(|directory| ig_root.join(directory))
+                .collect(),
+            files: &files,
+        },
     })
     .map_err(|e| format!("{operation}: prepare guide: {e:#}"))
-}
-
-/// Run `f` against the process-global engine.
-fn with_engine<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
-    ENGINE.with(|e| f(&mut e.borrow_mut()))
 }
 
 // ---------------------------------------------------------------------------
@@ -2118,7 +1813,7 @@ fn with_engine<T>(f: impl FnOnce(&mut Engine) -> T) -> T {
 // simplest robust bindgen contract).
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct CompileResult {
     resources: Vec<CompiledResourceJs>,
     diagnostics: Vec<DiagnosticJs>,
@@ -2137,7 +1832,7 @@ struct DiagnosticJs {
     line: Option<u32>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct CompiledResourceJs {
     filename: String,
     /// The exact bytes SUSHI writes (already FHIR-canonical JSON as a string).
@@ -2148,7 +1843,7 @@ struct CompiledResourceJs {
     url: Option<String>,
 }
 
-#[derive(Serialize, Default)]
+#[derive(Clone, Serialize, Default)]
 struct Timings {
     /// Milliseconds for the in-memory compile. Wall clock is unavailable under
     /// `wasm32-unknown-unknown` without JS help, so the Worker measures the call
@@ -2167,14 +1862,6 @@ struct SnapshotResult {
 struct BundleInput {
     label: String,
     files: std::collections::BTreeMap<String, String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedBatchEntry {
-    offset: u64,
-    byte_length: u64,
-    cache_key: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -2237,57 +1924,40 @@ struct PrepareMountResult {
     mount_ms: f64,
 }
 
-/// The JS input for `build_site_db`: the whole IG working set, in memory.
-#[derive(Deserialize)]
-struct SiteDbInput {
-    /// sushi-config.yaml text.
-    config: String,
-    /// FSH sources: project path -> text.
-    fsh: std::collections::BTreeMap<String, String>,
-    /// Predefined resources: `input/resources/**` path -> JSON body. May be empty.
-    #[serde(default)]
-    predefined: std::collections::BTreeMap<String, Value>,
-    /// Site-content files (pagecontent/images/includes) the S6 augmentation reads:
-    /// project-relative path (e.g. `input/pagecontent/index.md`) -> base64 bytes.
-    /// Text files may be base64'd UTF-8; images are raw bytes.
-    #[serde(default)]
-    site_files: std::collections::BTreeMap<String, String>,
-    /// Injected build timestamp (seconds since epoch) — genDate/genDay/date come
-    /// from this, never a wall clock (determinism, §2c).
-    build_epoch_secs: i64,
-    /// project.liquidAssetDirs, relative to the IG root (cycle default:
-    /// ["input/includes"]). May be omitted (defaults to that).
-    #[serde(default)]
-    liquid_asset_dirs: Vec<String>,
-    #[serde(default)]
-    branch: Option<String>,
-    #[serde(default)]
-    revision: Option<String>,
+/// Generator-only input to the exact preceding `compileProject` revision.
+/// Authored project bytes are deliberately absent: they cross the boundary
+/// once at compile and are captured by `last_project`.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "generator", rename_all = "camelCase", deny_unknown_fields)]
+enum GeneratorSpec {
+    Cycle {
+        #[serde(rename = "buildEpochSecs")]
+        build_epoch_secs: i64,
+        #[serde(default, rename = "liquidAssetDirs")]
+        liquid_asset_dirs: Vec<String>,
+        #[serde(default)]
+        branch: Option<String>,
+        #[serde(default)]
+        revision: Option<String>,
+    },
+    Publisher {
+        #[serde(rename = "templateCoordinate")]
+        template_coordinate: String,
+        #[serde(rename = "buildEpochSecs")]
+        build_epoch_secs: i64,
+        #[serde(default, rename = "activeTables")]
+        active_tables: bool,
+        #[serde(default, rename = "runUuid")]
+        run_uuid: Option<String>,
+    },
 }
 
-/// SiteBuild/site.db projection inputs after `compileProject` has established an
-/// immutable compile revision in the session. Authored bodies are equality
-/// assertions only: this operation remains deliberately unable to compile.
-#[derive(Clone, Serialize, Deserialize)]
-struct SiteDbFromCompileInput {
-    config: String,
-    #[serde(default)]
-    fsh: std::collections::BTreeMap<String, String>,
-    #[serde(default)]
-    predefined: std::collections::BTreeMap<String, Value>,
-    #[serde(default)]
-    site_files: std::collections::BTreeMap<String, String>,
+#[derive(Clone)]
+struct PrepareGuideOptions {
     build_epoch_secs: i64,
-    #[serde(default)]
     liquid_asset_dirs: Vec<String>,
-    #[serde(default)]
     branch: Option<String>,
-    #[serde(default)]
     revision: Option<String>,
-    /// External-builder contract. Omitted means the readable v1 compatibility
-    /// projection; new editor callers request `cycle-site/v2` explicitly.
-    #[serde(default)]
-    target: Option<String>,
 }
 
 const PREPARED_GUIDE_CACHE_SCHEMA: &str = "prepared-guide-cache-key/v1";
@@ -2318,14 +1988,12 @@ struct ClosedSiteBuildCachePayload<'a> {
     prepared_guide_key: &'a site_build::Sha256Digest,
     render_target: &'a site_build::RenderTarget,
     diagnostics: &'a BTreeSet<site_build::BuildDiagnostic>,
-    contract: &'a str,
 }
 
 fn closed_site_build_cache_key(
     prepared_guide_key: &site_build::Sha256Digest,
     render_target: &site_build::RenderTarget,
     diagnostics: &BTreeSet<site_build::BuildDiagnostic>,
-    contract: &str,
 ) -> Result<site_build::Sha256Digest, site_build::CanonicalError> {
     site_build::sha256_canonical(&ClosedSiteBuildCachePayload {
         schema: CLOSED_SITE_BUILD_CACHE_SCHEMA,
@@ -2333,67 +2001,61 @@ fn closed_site_build_cache_key(
         prepared_guide_key,
         render_target,
         diagnostics,
-        contract,
     })
 }
 
-const SITE_BUILD_CAS_TRANSPORT: &str = "site-build-cas/v1";
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrepareSiteResult {
+    handle: String,
+    build_id: String,
+    generator: String,
+    site_build: site_build::ClosedSiteBuild,
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SiteBuildFromCompileResult {
-    transport_version: String,
-    site_build: site_build::ClosedSiteBuild,
-    /// Digest -> base64 raw artifact bytes. This is transport only; semantic v2
-    /// asset artifacts themselves contain raw bytes, never base64 JSON fields.
-    objects: BTreeMap<String, String>,
-    /// Temporary source compatibility for consumers that have not adopted the
-    /// generic CAS map. Present only when the caller selects/omits v1.
+struct OutputDescriptor {
+    path: site_build::OutputPath,
+    kind: &'static str,
+    media_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    site_db_json: Option<String>,
+    content: Option<site_build::ContentRef>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct OpenStockBuildResult {
-    handle: String,
+struct OutputCatalogResult {
     build_id: String,
-    site_build: site_build::SiteBuild,
-    pages: Vec<String>,
-}
-
-/// One explicit demand-discovery/result transition. `requested` is the typed
-/// Need<ArtifactKey> set encountered by Liquid; `resolved` is the immutable
-/// resolution batch installed in the successor. Failed/deferred observations
-/// remain typed records and are never represented as successful page reads.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StockArtifactTransition {
-    requested: Vec<site_build::ArtifactKey>,
-    read: Vec<site_build::ArtifactKey>,
-    resolved: Vec<site_build::ArtifactRecord>,
+    outputs: Vec<OutputDescriptor>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RenderStockPageResult {
-    html: String,
-    handle: String,
-    predecessor_build_id: String,
-    build_id: String,
-    site_build: site_build::ClosedSiteBuild,
-    objects: BTreeMap<String, String>,
-    transition: StockArtifactTransition,
+struct RenderSiteResult {
+    path: site_build::OutputPath,
+    content: site_build::ContentRef,
     non_ready_fragments: usize,
 }
 
-fn encode_cas_objects(
-    objects: BTreeMap<site_build::Sha256Digest, Vec<u8>>,
-) -> BTreeMap<String, String> {
-    objects
-        .into_iter()
-        .map(|(digest, bytes)| (digest.to_string(), base64_encode(&bytes)))
-        .collect()
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExternalFinalizeInput {
+    renderer: site_build::RendererImplementation,
+    output_schema: String,
+    #[serde(default)]
+    options: BTreeMap<String, String>,
+    catalog: Vec<site_build::OutputPath>,
+    files: Vec<site_build::SiteOutputFile>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TemplateResolutionWire {
+    satisfied: bool,
+    chain: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing: Option<String>,
 }
 
 fn site_build_diagnostics(diagnostics: &[DiagnosticJs]) -> BTreeSet<site_build::BuildDiagnostic> {
@@ -2430,10 +2092,8 @@ fn select_locked_dependency(
     package_id: &str,
     requested: &str,
     candidates: &[site_build::PackageCoordinate],
-) -> Result<site_build::PackageCoordinate, String> {
-    if candidates.len() == 1 {
-        return Ok(candidates[0].clone());
-    }
+    resolution_support: &[site_build::PackageCoordinate],
+) -> Result<Option<site_build::PackageCoordinate>, String> {
     let requested = if package_id.starts_with("hl7.fhir.")
         && package_id.ends_with(".core")
         && requested == "4.0.0"
@@ -2448,16 +2108,35 @@ fn select_locked_dependency(
         .cloned()
         .collect::<Vec<_>>();
     matches.sort_by(|left, right| package_version_cmp(left.version(), right.version()));
-    matches.pop().ok_or_else(|| {
-        format!(
-            "build_site_build_from_compile: dependency {package_id}#{requested} matches none of the resolved coordinates: {}",
-            candidates
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    })
+    if let Some(selected) = matches.pop() {
+        return Ok(Some(selected));
+    }
+
+    // The context resolver reads a dependency manifest before applying its R4
+    // compatibility filter. A matching support coordinate proves that this
+    // exact declared edge was intentionally excluded from the executable
+    // closure. Do not retarget it to an unrelated resolved version and do not
+    // place a dangling edge in PackageLock.
+    if resolution_support
+        .iter()
+        .any(|candidate| package_version_matches(candidate.version(), requested))
+    {
+        return Ok(None);
+    }
+
+    Err(format!(
+        "prepare: dependency {package_id}#{requested} matches neither the resolved coordinates nor an intentionally excluded resolution-support coordinate; resolved: {}; support: {}",
+        candidates
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        resolution_support
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
 }
 
 fn package_version_matches(version: &str, pattern: &str) -> bool {
@@ -2515,88 +2194,6 @@ fn package_version_cmp(left: &str, right: &str) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
-fn stock_input_media_type(namespace: &str, name: &str) -> Result<String, String> {
-    let media_type = match namespace {
-        STOCK_RUNTIME_INPUT_NAMESPACE if name == "release-header.html" => "text/html",
-        STOCK_PAGE_SOURCE_NAMESPACE
-        | STOCK_SITE_DATA_NAMESPACE
-        | STOCK_STAGED_INCLUDE_NAMESPACE
-        | STOCK_TEMPLATE_INCLUDE_NAMESPACE => match std::path::Path::new(name)
-            .extension()
-            .and_then(|extension| extension.to_str())
-        {
-            Some("html" | "xhtml") => "text/html",
-            Some("md") => "text/markdown",
-            Some("json") => "application/json",
-            Some("xml") => "application/xml",
-            Some("yaml" | "yml") => "application/yaml",
-            Some("csv") => "text/csv",
-            Some("css") => "text/css",
-            Some("js") => "text/javascript",
-            Some("svg") => "image/svg+xml",
-            Some("png") => "image/png",
-            Some("gif") => "image/gif",
-            Some("jpg" | "jpeg") => "image/jpeg",
-            Some("woff") => "font/woff",
-            _ => "application/octet-stream",
-        },
-        _ => {
-            return Err(format!(
-                "renderStockPage: unknown stock input namespace {namespace} for {name}"
-            ))
-        }
-    };
-    Ok(media_type.to_string())
-}
-
-fn stock_inputs_from_pages<'a>(
-    pages: impl IntoIterator<Item = &'a PageArtifactReadSet>,
-    provenance: &site_build::ArtifactProvenance,
-    semantic_reads: &BTreeSet<site_build::ReadDependency>,
-) -> Result<Vec<StockInput>, String> {
-    let mut captured = BTreeMap::<site_build::ArtifactKey, Vec<u8>>::new();
-    for reads in pages {
-        for key in reads.input_reads() {
-            let values = reads.input_objects().get(key).ok_or_else(|| {
-                format!("renderStockPage: input {key:?} was read without captured bytes")
-            })?;
-            if values.len() != 1 {
-                return Err(format!(
-                    "renderStockPage: input {key:?} changed during rendering"
-                ));
-            }
-            let bytes = values.iter().next().expect("one captured input");
-            if let Some(existing) = captured.get(key) {
-                if existing != bytes {
-                    return Err(format!(
-                        "renderStockPage: input {key:?} changed between rendered pages"
-                    ));
-                }
-            } else {
-                captured.insert(key.clone(), bytes.clone());
-            }
-        }
-    }
-    captured
-        .into_iter()
-        .map(|(key, bytes)| {
-            let site_build::ArtifactKey::Data { namespace, name } = &key else {
-                return Err(format!(
-                    "renderStockPage: page recorded non-Data input key {key:?}"
-                ));
-            };
-            let media_type = stock_input_media_type(namespace, name)?;
-            Ok(StockInput {
-                key,
-                bytes,
-                media_type,
-                provenance: provenance.clone(),
-                reads: semantic_reads.clone(),
-            })
-        })
-        .collect()
-}
-
 // The result/error envelope helpers now live in the shared `api_envelope` crate
 // (imported above) — one implementation for the Session and the `fig` CLI.
 
@@ -2607,12 +2204,11 @@ fn stock_inputs_from_pages<'a>(
 
 /// The editor's engine session. Construct once; call methods per operation.
 ///
-/// A regular `Session` owns its mutable engine state. `Session::global()` remains
-/// as an explicit compatibility door onto the legacy process-global instance.
+/// Every `Session` owns its mutable compiler/package coordinator. Site handles
+/// below it name immutable build runtimes and never an ambient latest site.
 #[wasm_bindgen]
 pub struct Session {
-    /// `Some` for an isolated session; `None` only for `Session::global()`.
-    engine: Option<RefCell<Engine>>,
+    engine: RefCell<Engine>,
 }
 
 impl Default for Session {
@@ -2623,10 +2219,7 @@ impl Default for Session {
 
 impl Session {
     fn with_engine<T>(&self, f: impl FnOnce(&mut Engine) -> T) -> T {
-        match &self.engine {
-            Some(engine) => f(&mut engine.borrow_mut()),
-            None => with_engine(f),
-        }
+        f(&mut self.engine.borrow_mut())
     }
 }
 
@@ -2637,15 +2230,8 @@ impl Session {
     pub fn new() -> Session {
         set_panic_hook();
         Session {
-            engine: Some(RefCell::new(Engine::default())),
+            engine: RefCell::new(Engine::default()),
         }
-    }
-
-    /// The shared process-global compatibility session. New code should construct
-    /// an isolated `Session` instead.
-    pub fn global() -> Session {
-        set_panic_hook();
-        Session { engine: None }
     }
 
     /// Mount a set of prebuilt package bundles as the package cache, REPLACING any
@@ -2680,18 +2266,6 @@ impl Session {
             "mountPrepared",
             self.with_engine(|engine| engine.mount_prepared(bytes, expected_key))
                 .map(|mounted| serde_json::json!({ "mounted": mounted })),
-        )
-    }
-
-    /// Atomically validate and mount a contiguous binary batch. `manifest_json`
-    /// is `[{offset,byteLength,cacheKey}]`; ranges must cover `bytes` exactly.
-    /// The envelope reports decode/validation and immutable-layer mount timings.
-    #[wasm_bindgen(js_name = mountPreparedBatch)]
-    pub fn mount_prepared_batch(&self, bytes: Vec<u8>, manifest_json: &str) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "mountPreparedBatch",
-            self.with_engine(|engine| engine.mount_prepared_batch(bytes, manifest_json)),
         )
     }
 
@@ -2779,7 +2353,7 @@ impl Session {
 
     /// Compile one complete project revision, including its authored site-file
     /// manifest. The latter supplies page-folder names to IG export so downstream
-    /// SiteBuild/site.db projections reuse this exact compile instead of rerunning
+    /// SiteBuild projections reuse this exact compile instead of rerunning
     /// the compiler. Envelope result matches `compile()`.
     #[wasm_bindgen(js_name = compileProject)]
     pub fn compile_project(
@@ -2817,38 +2391,70 @@ impl Session {
         envelope_ser("snapshot", self.with_engine(|e| e.snapshot(input)))
     }
 
-    /// Build the site.db row model from in-memory IG inputs. Envelope result: the
-    /// row model object.
-    #[wasm_bindgen(js_name = buildSiteDb)]
-    pub fn build_site_db(&self, input_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "buildSiteDb",
-            self.with_engine(|e| e.build_site_db(input_json)),
-        )
-    }
-
-    /// Project the last `compileProject` result into the site.db compatibility
-    /// model without accepting sources or invoking the compiler again.
-    #[wasm_bindgen(js_name = buildSiteDbFromCompile)]
-    pub fn build_site_db_from_compile(&self, input_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "buildSiteDbFromCompile",
-            self.with_engine(|e| e.build_site_db_from_compile(input_json)),
-        )
-    }
-
-    /// Produce a closed, callback-free Cycle SiteBuild plus its generic CAS
-    /// transport. `cycle-site/v2` returns typed semantic roots and raw assets;
-    /// v1 optionally retains `siteDbJson` for old consumers.
-    /// `buildSiteDbFromCompile` remains a migration adapter.
-    #[wasm_bindgen(js_name = buildSiteBuildFromCompile)]
-    pub fn build_site_build_from_compile(&self, input_json: &str) -> String {
+    /// Prepare one generator against the exact project captured by the preceding
+    /// `compileProject`. The specification contains generator choices only;
+    /// authored project bytes are never accepted a second time.
+    #[wasm_bindgen(js_name = prepare)]
+    pub fn prepare_site(&self, generator_spec_json: &str) -> String {
         set_panic_hook();
         envelope_ser(
-            "buildSiteBuildFromCompile",
-            self.with_engine(|e| e.build_site_build_from_compile(input_json)),
+            "prepare",
+            self.with_engine(|engine| engine.prepare_site(generator_spec_json)),
+        )
+    }
+
+    /// Complete, collision-checked output inventory for an immutable build.
+    #[wasm_bindgen(js_name = outputs)]
+    pub fn site_outputs(&self, handle: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "outputs",
+            self.with_engine(|engine| engine.site_outputs(handle)),
+        )
+    }
+
+    /// Materialize one declared output independently of every other path.
+    #[wasm_bindgen(js_name = render)]
+    pub fn render_site_output(&self, handle: &str, path: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "render",
+            self.with_engine(|engine| engine.render_site_output(handle, path)),
+        )
+    }
+
+    /// Return the canonical Rust SiteOutput after every catalog path is ready.
+    #[wasm_bindgen(js_name = finalize)]
+    pub fn finalize_site(&self, handle: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "finalize",
+            self.with_engine(|engine| engine.finalize_site(handle)),
+        )
+    }
+
+    /// Internal ContentStore bridge. Public worker operations return only
+    /// ContentRefs; the worker drains this direct Uint8Array, verifies it, and
+    /// publishes it to OPFS before resolving the public operation.
+    #[wasm_bindgen(js_name = readContent)]
+    pub fn read_site_content(
+        &self,
+        handle: &str,
+        sha256: &str,
+    ) -> Result<Vec<u8>, wasm_bindgen::JsValue> {
+        self.with_engine(|engine| engine.read_site_content(handle, sha256))
+            .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+    }
+
+    /// Internal external-renderer receipt authority. The worker's public Cycle
+    /// `finalize(handle)` supplies only its already-verified ContentRefs and
+    /// metadata; Rust checks catalog equality and emits canonical SiteOutput.
+    #[wasm_bindgen(js_name = finalizeExternal)]
+    pub fn finalize_external_site(&self, handle: &str, input_json: &str) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "finalizeExternal",
+            self.with_engine(|engine| engine.finalize_external_site(handle, input_json)),
         )
     }
 
@@ -2880,140 +2486,16 @@ impl Session {
         envelope("resolveProject", payload)
     }
 
-    /// Mount (REPLACE) the site tree the render surface serves pages/includes
-    /// from. `files_json`: `{ "<rel path>": "<text>" | {"b64": "<bytes>"} }`
-    /// (rel paths: `en/index.md`, `_includes/…`, `_data/…`, `txcache/…`);
-    /// `options_json`: `{ "activeTables": bool, "runUuid": "…", "merge": bool,
-    /// "engineFirstIncludes": bool, "artifactResolution": bool }` or "".
-    /// Envelope result: `{ "mounted": <count> }`.
-    #[wasm_bindgen(js_name = mountSite)]
-    pub fn mount_site(&self, files_json: &str, options_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "mountSite",
-            self.with_engine(|e| e.mount_site(files_json, options_json))
-                .map(|n| serde_json::json!({ "mounted": n })),
-        )
-    }
-
-    /// Materialize a template `id#ver` chain from the MOUNTED bundle packages and
-    /// merge the staged `template/` tree into the site tree — the driven template
-    /// story (task #39). Fetch the template chain packages first via the SAME
-    /// bundle path regular packages take (`resolveProject`/`mount`); this call then
-    /// walks the `base` chain and materializes byte-exactly (the same bytes the
-    /// parity gate proves). Envelope result: `{ "files": <count> }`.
-    #[wasm_bindgen(js_name = mountTemplate)]
-    pub fn mount_template(&self, coord: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "mountTemplate",
-            self.with_engine(|e| e.mount_template(coord))
-                .map(|n| serde_json::json!({ "files": n })),
-        )
-    }
-
-    /// Synthesize the stock-template page shells + `_data` model from the current
-    /// compile + mounted template and merge them into the site tree (task #45 —
-    /// the source-driven replacement for the pre-baked `-stock.json`). Call after
-    /// `compile()` + `mountTemplate()`, before rendering. Envelope result:
-    /// `{ "pages": <shell count>, "data": <_data file count> }`.
-    #[wasm_bindgen(js_name = produceStockSite)]
-    pub fn produce_stock_site(&self) -> String {
-        set_panic_hook();
-        envelope(
-            "produceStockSite",
-            self.with_engine(|e| e.produce_stock_site())
-                .map(|(pages, data)| serde_json::json!({ "pages": pages, "data": data })),
-        )
-    }
-
-    /// Freeze the current compiled/template/site generation behind an explicit
-    /// native-template SiteBuild handle. Later session mounts or compiles cannot
-    /// change what this handle renders. Call after `produceStockSite` and the
-    /// final authored overlay mount.
-    #[wasm_bindgen(js_name = openStockBuild)]
-    pub fn open_stock_build(&self, template_coord: &str) -> String {
+    /// Private package-acquisition handshake for Publisher templates. Rust is
+    /// the sole interpreter of `package.json.base`: the host fetches the one
+    /// exact `missing` coordinate through ordinary package plumbing, mounts it,
+    /// and retries until `satisfied`.
+    #[wasm_bindgen(js_name = resolveTemplate)]
+    pub fn resolve_template(&self, coordinate: &str) -> String {
         set_panic_hook();
         envelope_ser(
-            "openStockBuild",
-            self.with_engine(|e| e.open_stock_build(template_coord)),
-        )
-    }
-
-    /// Render one page from an explicit frozen stock-build handle and promote
-    /// all newly discovered typed artifact needs through SiteBuild::successor.
-    /// The returned handle names the immutable successor; callers never rely on
-    /// an ambient "last site" or mutable fragment cache as an identity boundary.
-    #[wasm_bindgen(js_name = renderStockPage)]
-    pub fn render_stock_page(&self, handle: &str, name: &str) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "renderStockPage",
-            self.with_engine(|e| e.render_stock_page(handle, name)),
-        )
-    }
-
-    /// Render one fragment (`ref` = `{Type}-{id}`, `kind` = the registered
-    /// fragment kind, e.g. `snapshot`). Served through the session-shared typed
-    /// artifact cache (the same map the page pass fills). Envelope result:
-    /// `{ "html": "…" }`.
-    #[wasm_bindgen(js_name = renderFragment)]
-    pub fn render_fragment(&self, ref_: &str, kind: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "renderFragment",
-            self.with_engine(|e| e.render_fragment(ref_, kind))
-                .map(|h| serde_json::json!({ "html": h })),
-        )
-    }
-
-    /// Render a page by output name (e.g. `index.html`). Envelope result:
-    /// `{ "html": "…" }`.
-    #[wasm_bindgen(js_name = renderPage)]
-    pub fn render_page(&self, name: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "renderPage",
-            self.with_engine(|e| e.render_page(name))
-                .map(|h| serde_json::json!({ "html": h })),
-        )
-    }
-
-    /// The renderable page names (sorted `stem.html`). Envelope result:
-    /// `{ "pages": [ … ] }`.
-    #[wasm_bindgen(js_name = listPages)]
-    pub fn list_pages(&self) -> String {
-        set_panic_hook();
-        envelope(
-            "listPages",
-            self.with_engine(|e| e.list_pages())
-                .map(|p| serde_json::json!({ "pages": p })),
-        )
-    }
-
-    /// ContentApi: render a Liquid source against the session provider
-    /// (engine-first includes + mounted `_includes`/`_data`), with caller
-    /// globals from `data_json` (a JSON object). Envelope result: `{ "html" }`.
-    #[wasm_bindgen(js_name = renderLiquid)]
-    pub fn render_liquid(&self, source: &str, data_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "renderLiquid",
-            self.with_engine(|e| e.render_liquid_src(source, data_json))
-                .map(|h| serde_json::json!({ "html": h })),
-        )
-    }
-
-    /// ContentApi: kramdown markdown, Jekyll `markdownify` semantics.
-    /// `opts_json`: `{ "rougeWrappers": bool }` or "". Envelope result:
-    /// `{ "html" }`.
-    #[wasm_bindgen(js_name = renderMarkdown)]
-    pub fn render_markdown(&self, md: &str, opts_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "renderMarkdown",
-            self.with_engine(|e| e.render_markdown(md, opts_json))
-                .map(|h| serde_json::json!({ "html": h })),
+            "resolveTemplate",
+            self.with_engine(|engine| engine.resolve_template(coordinate)),
         )
     }
 
@@ -3044,6 +2526,7 @@ fn version_json() -> String {
 
 /// Standard-alphabet base64 with `=` padding for the generic in-memory CAS
 /// transport. Kept dependency-free beside the matching decoder below.
+#[cfg(test)]
 fn base64_encode(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut output = String::with_capacity(bytes.len().div_ceil(3) * 4);
@@ -3165,7 +2648,7 @@ fn clock_ms() -> f64 {
 }
 
 /// Parse `input/resources/**` JSON files out of the site_files map (base64 text)
-/// into resource `Value`s — the example set the site.db orders after conformance.
+/// into resource `Value`s for renderer-neutral guide preparation.
 fn collect_example_resources(
     site_files: &std::collections::BTreeMap<String, String>,
     operation: &str,
@@ -3296,13 +2779,13 @@ fn compiled_ig_identity(compiled: &[(PathBuf, Value)]) -> Result<(String, String
                 && body.get("resourceType").and_then(Value::as_str) == Some("ImplementationGuide")
         })
         .map(|(_, body)| body)
-        .ok_or("build_site_build_from_compile: compiled revision has no ImplementationGuide")?;
+        .ok_or("prepare: compiled revision has no ImplementationGuide")?;
     let project_id = ig
         .get("packageId")
         .or_else(|| ig.get("id"))
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
-        .ok_or("build_site_build_from_compile: ImplementationGuide has no packageId/id")?
+        .ok_or("prepare: ImplementationGuide has no packageId/id")?
         .to_string();
     let fhir_version = match ig.get("fhirVersion") {
         Some(Value::String(value)) => Some(value.as_str()),
@@ -3310,7 +2793,7 @@ fn compiled_ig_identity(compiled: &[(PathBuf, Value)]) -> Result<(String, String
         _ => None,
     }
     .filter(|value| !value.trim().is_empty())
-    .ok_or("build_site_build_from_compile: ImplementationGuide has no fhirVersion")?
+    .ok_or("prepare: ImplementationGuide has no fhirVersion")?
     .to_string();
     Ok((project_id, fhir_version))
 }
@@ -3472,14 +2955,6 @@ fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, Strin
     set
 }
 
-fn implementation_guide_fhir_version(ig: &Value) -> Option<String> {
-    match ig.get("fhirVersion") {
-        Some(Value::String(value)) => Some(value.clone()),
-        Some(Value::Array(values)) => values.first().and_then(Value::as_str).map(str::to_string),
-        _ => None,
-    }
-}
-
 fn core_coordinate_for_fhir_version(fhir_version: &str) -> Result<(&'static str, String), String> {
     let numeric = fhir_version.split('-').next().unwrap_or(fhir_version);
     let mut parts = numeric.split('.');
@@ -3498,6 +2973,208 @@ fn core_coordinate_for_fhir_version(fhir_version: &str) -> Result<(&'static str,
         fhir_version.to_string()
     };
     Ok((package_id, version))
+}
+
+fn target_core_from_package_lock(
+    package_lock: &site_build::PackageLock,
+    fhir_version: &str,
+    operation: &str,
+) -> Result<site_build::PackageCoordinate, String> {
+    let (expected_id, expected_version) = core_coordinate_for_fhir_version(fhir_version)
+        .map_err(|error| format!("{operation}: {error}"))?;
+    let expected = format!("{expected_id}#{expected_version}");
+    let matches = package_lock
+        .iter()
+        .map(|(coordinate, _)| coordinate)
+        .filter(|coordinate| coordinate.package_id() == expected_id)
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [coordinate] if coordinate.version() == expected_version => Ok((*coordinate).clone()),
+        [coordinate] => Err(format!(
+            "{operation}: FHIR version {fhir_version} requires target core {expected}, but the exact package lock contains {coordinate}"
+        )),
+        [] => Err(format!(
+            "{operation}: exact package lock has no required target core {expected}"
+        )),
+        _ => Err(format!(
+            "{operation}: exact package lock contains multiple coordinates for target core package {expected_id}"
+        )),
+    }
+}
+
+const PAGE_MD_SHIM: &str = "---\r\n---\r\n{% include template-page-md.html %}";
+const FRAGMENT_SUFFIXES: &[&str] = &[
+    "intro",
+    "introduction",
+    "notes",
+    "search",
+    "summary",
+    "examples",
+];
+
+fn is_fragment_include(name: &str) -> bool {
+    FRAGMENT_SUFFIXES
+        .iter()
+        .any(|suffix| name.ends_with(&format!("-{suffix}")))
+}
+
+fn is_static_asset(path: &str) -> bool {
+    matches!(
+        path.rsplit_once('.')
+            .map(|(_, extension)| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some(
+            "css"
+                | "js"
+                | "png"
+                | "svg"
+                | "jpg"
+                | "jpeg"
+                | "gif"
+                | "webp"
+                | "ico"
+                | "woff"
+                | "woff2"
+                | "ttf"
+                | "otf"
+                | "eot"
+        )
+    )
+}
+
+fn mime_for_path(path: &str) -> &'static str {
+    match path
+        .rsplit_once('.')
+        .map(|(_, extension)| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("html") => "text/html",
+        Some("css") => "text/css",
+        Some("js") => "text/javascript",
+        Some("json") => "application/json",
+        Some("xml") => "application/xml",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("ico") => "image/x-icon",
+        Some("woff") => "font/woff",
+        Some("woff2") => "font/woff2",
+        Some("ttf") => "font/ttf",
+        Some("otf") => "font/otf",
+        Some("eot") => "application/vnd.ms-fontobject",
+        _ => "application/octet-stream",
+    }
+}
+
+fn insert_prepared_output(
+    outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    objects: &mut BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+    path: &str,
+    bytes: Vec<u8>,
+    media_type: &str,
+    producer: site_build::OutputProducer,
+    source: Option<String>,
+) -> Result<(), String> {
+    let path = site_build::OutputPath::parse(path.to_string())
+        .map_err(|error| format!("invalid output path {path}: {error}"))?;
+    let content = site_build::ContentRef::of_bytes(&bytes, Some(media_type));
+    if let Some(existing) = objects.get(&content.sha256) {
+        if existing != &bytes {
+            return Err(format!("content digest collision for {path}"));
+        }
+    } else {
+        objects.insert(content.sha256.clone(), bytes);
+    }
+    outputs.insert(
+        path,
+        PreparedOutput {
+            content,
+            producer,
+            source,
+            owner: None,
+        },
+    );
+    Ok(())
+}
+
+fn add_page_relative_output_aliases(
+    outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    pages: &[String],
+) -> Result<(), String> {
+    let directories = pages
+        .iter()
+        .filter_map(|page| page.rsplit_once('/').map(|(directory, _)| directory))
+        .filter(|directory| !directory.is_empty())
+        .collect::<BTreeSet<_>>();
+    let originals = outputs
+        .iter()
+        .filter(|(path, _)| is_static_asset(path.as_str()))
+        .map(|(path, output)| (path.clone(), output.clone()))
+        .collect::<Vec<_>>();
+    for directory in directories {
+        for (path, output) in &originals {
+            if path.as_str().starts_with(&format!("{directory}/")) {
+                continue;
+            }
+            let alias = site_build::OutputPath::parse(format!("{directory}/{path}"))
+                .map_err(|error| format!("prepare(publisher): invalid asset alias: {error}"))?;
+            let mut alias_output = output.clone();
+            alias_output.source = alias_output
+                .source
+                .as_ref()
+                .map(|source| format!("{source}; alias={alias}"));
+            outputs.entry(alias).or_insert(alias_output);
+        }
+    }
+    Ok(())
+}
+
+fn stage_authored_publisher_inputs(
+    project: &CompiledProjectRevision,
+    site_files: &mut std::collections::HashMap<PathBuf, Vec<u8>>,
+    outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    objects: &mut BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+    project_id: &str,
+) -> Result<(), String> {
+    for (source_path, encoded) in &project.site_files {
+        let bytes = base64_decode(encoded)
+            .map_err(|error| format!("prepare(publisher): decode {source_path}: {error}"))?;
+        if let Some(path) = source_path.strip_prefix("input/images/") {
+            insert_prepared_output(
+                outputs,
+                objects,
+                path,
+                bytes,
+                mime_for_path(path),
+                site_build::OutputProducer {
+                    id: "publisher-authored-asset".into(),
+                    version: project_id.into(),
+                },
+                Some(source_path.clone()),
+            )?;
+        } else if let Some(path) = source_path.strip_prefix("input/data/") {
+            site_files.insert(PathBuf::from(format!("/site/_data/{path}")), bytes);
+        } else if let Some(path) = source_path.strip_prefix("input/includes/") {
+            site_files.insert(PathBuf::from(format!("/site/_includes/{path}")), bytes);
+        } else if let Some(path) = source_path.strip_prefix("input/pagecontent/") {
+            if let Some(name) = path.strip_suffix(".md").filter(|name| !name.contains('/')) {
+                site_files.insert(
+                    PathBuf::from(format!("/site/_includes/en/{name}.md")),
+                    bytes.clone(),
+                );
+                site_files.insert(PathBuf::from(format!("/site/_includes/{name}.md")), bytes);
+                if !is_fragment_include(name) {
+                    site_files.insert(
+                        PathBuf::from(format!("/site/en/{name}.html")),
+                        PAGE_MD_SHIM.as_bytes().to_vec(),
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // A tiny dependency-free base64 decoder (standard alphabet, optional '='
@@ -3537,96 +3214,30 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
 // F6 render surface — Engine methods (Session wrappers below in Session impl).
 // ===========================================================================
 impl Engine {
-    /// Mount (REPLACE) the site tree: `files_json` = `{ "<rel path>": "<text>"
-    /// | { "b64": "<bytes>" } }` with rel paths like `en/index.md`,
-    /// `_includes/menu.xml`, `_data/pages.json`, `txcache/vs-externals.json`.
-    /// `options_json` = `{ "activeTables": bool, "runUuid": "..." }` (or "").
-    fn mount_site(&mut self, files_json: &str, options_json: &str) -> Result<usize, String> {
-        let m: std::collections::BTreeMap<String, Value> = serde_json::from_str(files_json)
-            .map_err(|e| format!("mountSite: bad files JSON: {e}"))?;
-        let mut files = std::collections::HashMap::new();
-        for (rel, v) in m {
-            let bytes = match &v {
-                Value::String(t) => t.as_bytes().to_vec(),
-                Value::Object(o) => {
-                    let b64 = o
-                        .get("b64")
-                        .and_then(|x| x.as_str())
-                        .ok_or_else(|| format!("mountSite: {rel}: object without b64"))?;
-                    base64_decode(b64).map_err(|e| format!("mountSite: {rel}: bad b64: {e}"))?
-                }
-                _ => return Err(format!("mountSite: {rel}: value must be text or {{b64}}")),
-            };
-            files.insert(
-                PathBuf::from(format!("/site/{}", rel.trim_start_matches('/'))),
-                bytes,
-            );
+    fn resolve_template(&self, coordinate: &str) -> Result<TemplateResolutionWire, String> {
+        if self.bundle.is_none() {
+            return Ok(TemplateResolutionWire {
+                satisfied: false,
+                chain: Vec::new(),
+                missing: Some(coordinate.to_string()),
+            });
         }
-        let next_options = if options_json.trim().is_empty() {
-            SiteOptions::default()
-        } else {
-            serde_json::from_str(options_json)
-                .map_err(|e| format!("mountSite: bad options JSON: {e}"))?
-        };
-        let semantics_changed = !self.site_options.same_fragment_semantics(&next_options);
-        // A replacement may remove or change an existing txcache. A merge only
-        // affects semantic rendering when the overlay itself touches txcache;
-        // ordinary pages/data/includes/assets are page-surface inputs.
-        let txcache_changed = !next_options.merge
-            || files
-                .keys()
-                .any(|path| path.starts_with(PathBuf::from("/site/txcache")));
-        self.site_options = next_options;
-        if self.site_options.merge {
-            self.site_files.extend(files);
-        } else {
-            self.site_files = files;
-        }
-        let n = self.site_files.len();
-        if semantics_changed || txcache_changed {
-            self.invalidate_render_semantics();
-        } else {
-            self.invalidate_render_surface();
-        }
-        Ok(n)
+        let (source, cache_root, _) = self.source()?;
+        let resolution = package_store::resolve_template_base_chain(
+            &source,
+            &package_store::TemplatePaths::new(cache_root),
+            coordinate,
+        )
+        .map_err(|error| format!("resolveTemplate: {error}"))?;
+        Ok(TemplateResolutionWire {
+            satisfied: resolution.satisfied(),
+            chain: resolution.chain,
+            missing: resolution.missing,
+        })
     }
 
-    /// Materialize a template `id#ver` chain from the MOUNTED bundle packages and
-    /// merge the staged `template/` tree into the site tree — the wasm half of the
-    /// driven template story (task #39). The host fetches the template chain
-    /// packages via the SAME bundle path regular packages take (resolve → fetch →
-    /// `mount`); Rust then walks the `base` chain and materializes with the loader
-    /// (`package_store::template_loader`) — Rust decides, host fetches.
-    ///
-    /// The materialized tree is merged additively into the site tree: `includes/X`
-    /// maps to `_includes/X` (so the render surface's include resolution serves the
-    /// template's `template-page.html`/`fragment-*.html`); every other file mounts
-    /// under `template/X` for reference. Envelope result: `{ "files": <count> }`.
-    fn mount_template(&mut self, coord: &str) -> Result<usize, String> {
-        let (source, cache_root, _packages) = self.source()?;
-        let paths = package_store::template_loader::TemplatePaths::new(&cache_root);
-        let tree = package_store::template_loader::materialize(&source, &paths, coord)
-            .map_err(|e| format!("mountTemplate {coord}: {e}"))?;
-        let n = tree.len();
-        for (rel, bytes) in tree.into_files() {
-            // includes/* -> _includes/* (the render surface's include dir); other
-            // files under template/* for reference/assets.
-            let mapped = match rel.strip_prefix("includes/") {
-                Some(name) => format!("_includes/{name}"),
-                None => format!("template/{rel}"),
-            };
-            self.site_files
-                .insert(PathBuf::from(format!("/site/{mapped}")), bytes);
-        }
-        self.invalidate_render_surface();
-        Ok(n)
-    }
-
-    /// Synthesize the stock-template page SHELLS + `_data` model from the CURRENT
-    /// compile (the render set + mounted template) and merge them into the site
-    /// tree — the source-driven replacement for the pre-baked `-stock.json`
-    /// warm-start bundle (task #45). Requires a prior `compile()` (for the render
-    /// set incl. the IG) and `mountTemplate()` (for `config.json` + `layouts/*`).
+    /// Assemble Publisher page shells and `_data` from the captured compile and
+    /// the template tree materialized earlier in the same `prepare` operation.
     ///
     /// Wiring over `site_producer::ProducerInputs::from_memory`:
     ///   * `config.json` ← the mounted `/site/template/config.json`;
@@ -3641,18 +3252,17 @@ impl Engine {
     /// Merges the produced shells to `/site/<name>` and `_data` to
     /// `/site/_data/<name>`, drops the render state, and returns
     /// `(pages, data)` counts.
-    fn produce_stock_site(&mut self) -> Result<(usize, usize), String> {
-        // 1. Template config.json (mountTemplate stores template files under
-        //    /site/template/<rel>).
+    fn assemble_publisher_tree(&mut self) -> Result<(usize, usize), String> {
+        // 1. Template config.json, already captured under /site/template/<rel>.
         let cfg_bytes = self
             .site_files
             .get(&PathBuf::from("/site/template/config.json"))
             .ok_or(
-                "produceStockSite: no template config at /site/template/config.json \
-                 — call mountTemplate() first",
+                "prepare(publisher): no template config at /site/template/config.json \
+                 — Publisher template assembly is incomplete",
             )?;
         let config_json: Value = serde_json::from_slice(cfg_bytes)
-            .map_err(|e| format!("produceStockSite: bad template config.json: {e}"))?;
+            .map_err(|e| format!("prepare(publisher): bad template config.json: {e}"))?;
 
         // 2. layouts/* -> "template/layouts/<name>" (the producer's LayoutSource::Map
         //    also accepts the template-root-relative "layouts/<name>" fallback).
@@ -3670,8 +3280,8 @@ impl Engine {
         }
         if layouts.is_empty() {
             return Err(
-                "produceStockSite: no template layouts mounted (template/layouts/*) \
-                 — call mountTemplate() first"
+                "prepare(publisher): no template layouts mounted (template/layouts/*) \
+                 — Publisher template assembly is incomplete"
                     .into(),
             );
         }
@@ -3705,12 +3315,12 @@ impl Engine {
                 [] if ig_candidates.len() == 1 => Some(ig_candidates[0]),
                 [] if ig_candidates.is_empty() => None,
                 [] => return Err(
-                    "produceStockSite: multiple ImplementationGuides without an explicit primary"
+                    "prepare(publisher): multiple ImplementationGuides without an explicit primary"
                         .into(),
                 ),
                 _ => {
                     return Err(
-                        "produceStockSite: multiple explicit primary ImplementationGuides".into(),
+                        "prepare(publisher): multiple explicit primary ImplementationGuides".into(),
                     )
                 }
             };
@@ -3766,9 +3376,9 @@ impl Engine {
             page_includes,
             "en/",
         )
-        .map_err(|e| format!("produceStockSite: {e:#}"))?;
+        .map_err(|e| format!("prepare(publisher): {e:#}"))?;
         let out =
-            site_producer::produce(&inputs).map_err(|e| format!("produceStockSite: {e:#}"))?;
+            site_producer::produce(&inputs).map_err(|e| format!("prepare(publisher): {e:#}"))?;
 
         let (np, nd) = (out.pages.len(), out.data.len());
         for (name, body) in out.pages {
@@ -3795,25 +3405,184 @@ impl Engine {
         Ok((np, nd))
     }
 
-    /// Establish the immutable predecessor and freeze the exact render surface
-    /// that belongs to it. The mounted tree digest is part of the predecessor
-    /// identity because warm template trees are host-provided bytes rather than
-    /// members of the compile resolver closure.
-    fn open_stock_build(&mut self, template_coord: &str) -> Result<OpenStockBuildResult, String> {
-        if template_coord.trim().is_empty() {
-            return Err("openStockBuild: template coordinate is empty".into());
+    /// Publish one fully prepared immutable runtime, then retire generations
+    /// older than the immediately previous build. Call this only after every
+    /// fallible preparation step has succeeded so an error cannot evict the
+    /// current working generation.
+    fn retain_site_build(&mut self, handle: String, runtime: SiteBuildRuntime) {
+        self.site_build_generations
+            .retain(|existing| existing != &handle);
+        self.site_builds.insert(handle.clone(), runtime);
+        self.site_build_generations.push_back(handle);
+        while self.site_build_generations.len() > RETAINED_SITE_BUILD_LIMIT {
+            let retired = self
+                .site_build_generations
+                .pop_front()
+                .expect("retained generation limit exceeded");
+            self.site_builds.remove(&retired);
         }
-        let project = self.last_project.clone().ok_or(
-            "openStockBuild: compileProject has not established a complete source revision",
-        )?;
+        debug_assert_eq!(self.site_builds.len(), self.site_build_generations.len());
+        debug_assert!(self.site_builds.len() <= RETAINED_SITE_BUILD_LIMIT);
+    }
+
+    fn prepare_site(&mut self, spec_json: &str) -> Result<PrepareSiteResult, String> {
+        let spec: GeneratorSpec = serde_json::from_str(spec_json)
+            .map_err(|error| format!("prepare: invalid generator specification: {error}"))?;
+        match spec {
+            GeneratorSpec::Cycle {
+                build_epoch_secs,
+                liquid_asset_dirs,
+                branch,
+                revision,
+            } => {
+                let projection = self.prepare_cycle(&PrepareGuideOptions {
+                    build_epoch_secs,
+                    liquid_asset_dirs,
+                    branch,
+                    revision,
+                })?;
+                let handle = projection.site_build.site_build().build_id().to_string();
+                self.retain_site_build(
+                    handle.clone(),
+                    SiteBuildRuntime::Cycle(CycleBuildRuntime {
+                        build: projection.site_build.clone(),
+                        objects: projection.objects,
+                    }),
+                );
+                Ok(PrepareSiteResult {
+                    handle: handle.clone(),
+                    build_id: handle,
+                    generator: "cycle".into(),
+                    site_build: projection.site_build,
+                })
+            }
+            GeneratorSpec::Publisher {
+                template_coordinate,
+                build_epoch_secs,
+                active_tables,
+                run_uuid,
+            } => self.prepare_publisher(
+                &template_coordinate,
+                PrepareGuideOptions {
+                    build_epoch_secs,
+                    liquid_asset_dirs: vec!["input/includes".into()],
+                    branch: None,
+                    revision: None,
+                },
+                active_tables,
+                run_uuid,
+            ),
+        }
+    }
+
+    fn prepare_publisher(
+        &mut self,
+        template_coordinate: &str,
+        guide_options: PrepareGuideOptions,
+        active_tables: bool,
+        run_uuid: Option<String>,
+    ) -> Result<PrepareSiteResult, String> {
+        let operation = "prepare(publisher)";
+        if template_coordinate.trim().is_empty() {
+            return Err(format!("{operation}: template coordinate is empty"));
+        }
+        let project = self.last_project.clone().ok_or_else(|| {
+            format!("{operation}: compileProject has not established a complete source revision")
+        })?;
         let (project_id, fhir_version) = compiled_ig_identity(&self.last_compiled)
-            .map_err(|e| format!("openStockBuild: {e}"))?;
-        let project_revision = self
-            .site_build_project_revision(&project, &project_id)
-            .map_err(|e| e.replace("build_site_build_from_compile", "openStockBuild"))?;
-        let package_lock = self
-            .site_build_package_lock(&project)
-            .map_err(|e| e.replace("build_site_build_from_compile", "openStockBuild"))?;
+            .map_err(|error| format!("{operation}: {error}"))?;
+        let project_revision = self.site_build_project_revision(&project, &project_id)?;
+        let package_lock = self.site_build_package_lock(&project)?;
+        let prepared_key = self.prepared_guide_cache_key(
+            &guide_options,
+            &project_revision,
+            &package_lock,
+            operation,
+        )?;
+        // Publisher consumes the same renderer-neutral preparation as Cycle.
+        // The render surface remains an implementation detail of this target.
+        let _prepared =
+            self.site_model_from_compile(&guide_options, operation, prepared_key.clone())?;
+
+        self.site_files.clear();
+        self.site_options = SiteOptions {
+            active_tables,
+            run_uuid: run_uuid.clone(),
+            ..Default::default()
+        };
+        self.invalidate_render_surface();
+
+        let (source, cache_root, _packages) = self.source()?;
+        let paths = package_store::template_loader::TemplatePaths::new(&cache_root);
+        let tree =
+            package_store::template_loader::materialize(&source, &paths, template_coordinate)
+                .map_err(|error| {
+                    format!("{operation}: materialize {template_coordinate}: {error}")
+                })?;
+
+        // Cross-version tooling may legitimately add support cores to the exact
+        // closure (mCODE is R4 but also carries R5 core). Select the target core
+        // from the compiled IG's FHIR version and require that exact coordinate
+        // in the lock; counting every `*.core` package confuses execution input
+        // with support context.
+        let core = target_core_from_package_lock(&package_lock, &fhir_version, operation)?;
+        let runtime = site_producer::publisher_runtime::PublisherRuntime::assemble(
+            &source,
+            &cache_root,
+            &core,
+            &tree,
+        )
+        .map_err(|error| format!("{operation}: Publisher runtime: {error:#}"))?;
+
+        let mut ready = BTreeMap::new();
+        let mut objects = BTreeMap::new();
+        for file in runtime.files() {
+            let transformation = file
+                .provenance
+                .transformation
+                .as_deref()
+                .map(|value| format!("; transformation={value}"))
+                .unwrap_or_default();
+            insert_prepared_output(
+                &mut ready,
+                &mut objects,
+                &file.path,
+                file.bytes.clone(),
+                &file.media_type,
+                site_build::OutputProducer {
+                    id: "publisher-runtime".into(),
+                    version: env!("CARGO_PKG_VERSION").into(),
+                },
+                Some(format!(
+                    "{}; license={}; source={}{}",
+                    file.provenance.source,
+                    file.provenance.license,
+                    file.provenance.source_path,
+                    transformation
+                )),
+            )?;
+        }
+        for (relative, bytes) in tree.into_files() {
+            let mounted = match relative.strip_prefix("includes/") {
+                Some(name) => format!("_includes/{name}"),
+                None => format!("template/{relative}"),
+            };
+            self.site_files
+                .insert(PathBuf::from(format!("/site/{mounted}")), bytes.clone());
+        }
+
+        self.assemble_publisher_tree()?;
+        stage_authored_publisher_inputs(
+            &project,
+            &mut self.site_files,
+            &mut ready,
+            &mut objects,
+            &project_id,
+        )?;
+        self.invalidate_render_surface();
+        let state = self.render_state()?;
+        let pages = state.list_pages();
+        add_page_relative_output_aliases(&mut ready, &pages)?;
 
         let tree_manifest = self
             .site_files
@@ -3826,193 +3595,328 @@ impl Engine {
             })
             .collect::<BTreeMap<_, _>>();
         let tree_digest = site_build::sha256_canonical(&tree_manifest)
-            .map_err(|e| format!("openStockBuild: hash mounted tree: {e}"))?;
+            .map_err(|error| format!("{operation}: hash mounted tree: {error}"))?;
         let mut parameters = BTreeMap::from([
-            ("contract".into(), "stock-site/v1".into()),
-            ("templateCoordinate".into(), template_coord.to_string()),
+            ("contract".into(), "publisher-site/v1".into()),
+            ("templateCoordinate".into(), template_coordinate.into()),
             ("mountedTreeSha256".into(), tree_digest.to_string()),
+            ("preparedGuideSha256".into(), prepared_key.to_string()),
             (
-                "activeTables".into(),
-                self.site_options.active_tables.to_string(),
+                "publisherRuntimeRecipeSha256".into(),
+                runtime.recipe_sha256().to_string(),
             ),
             (
-                "artifactResolution".into(),
-                self.site_options.artifact_resolution.to_string(),
+                "buildEpochSecs".into(),
+                guide_options.build_epoch_secs.to_string(),
             ),
-            (
-                "engineFirstIncludes".into(),
-                self.site_options.engine_first_includes.to_string(),
-            ),
+            ("activeTables".into(), active_tables.to_string()),
         ]);
-        if let Some(run_uuid) = &self.site_options.run_uuid {
+        if let Some(run_uuid) = &run_uuid {
             parameters.insert("runUuid".into(), run_uuid.clone());
         }
-        let provenance_attributes = parameters.clone();
         let build = site_build::SiteBuild::new(
             project_revision,
             package_lock,
             site_build::RenderTarget {
                 renderer: site_build::ProducerRef::new(
-                    "stock-template-wasm",
+                    "publisher-template-rust",
                     env!("CARGO_PKG_VERSION"),
                 ),
                 mode: site_build::RenderMode::NativeTemplate,
                 fhir_version,
-                // The warm browser template tree is authenticated by the exact
-                // mounted-tree digest above. It may not have a mounted package
-                // coordinate, so claiming one in PackageLock would be false.
                 template: None,
-                parameters,
+                parameters: parameters.clone(),
             },
             site_build::RenderPlan::default(),
             site_build::ArtifactCatalog::from_records(Vec::new())
-                .map_err(|e| format!("openStockBuild: artifact catalog: {e}"))?,
+                .map_err(|error| format!("{operation}: artifact catalog: {error}"))?,
             site_build_diagnostics(&self.last_compile_diagnostics),
         )
-        .map_err(|e| format!("openStockBuild: predecessor: {e}"))?;
-        let state = self.render_state()?;
-        let pages = state.list_pages();
-        let handle = build.build_id().to_string();
-        // The browser adapter has one active stock generation. Opening the next
-        // generation explicitly retires its prior affine handle chain so large
-        // frozen trees/page objects do not accumulate across live edits.
-        self.stock_builds.clear();
-        self.stock_builds.insert(
+        .map_err(|error| format!("{operation}: SiteBuild: {error}"))?
+        .close()
+        .map_err(|error| format!("{operation}: close SiteBuild: {error}"))?;
+
+        let mut catalog = ready
+            .iter()
+            .map(|(path, output)| OutputDescriptor {
+                path: path.clone(),
+                kind: if is_static_asset(path.as_str()) {
+                    "asset"
+                } else {
+                    "auxiliary"
+                },
+                media_type: output
+                    .content
+                    .media_type
+                    .clone()
+                    .expect("prepared output media type"),
+                content: Some(output.content.clone()),
+            })
+            .collect::<Vec<_>>();
+        for page in pages {
+            let path = site_build::OutputPath::parse(page.clone())
+                .map_err(|error| format!("{operation}: invalid page {page}: {error}"))?;
+            catalog.push(OutputDescriptor {
+                path,
+                kind: "page",
+                media_type: "text/html".into(),
+                content: None,
+            });
+        }
+        catalog.sort_by(|left, right| left.path.cmp(&right.path));
+        for pair in catalog.windows(2) {
+            if pair[0].path == pair[1].path {
+                return Err(format!(
+                    "{operation}: duplicate output path {}",
+                    pair[0].path
+                ));
+            }
+        }
+
+        let renderer = site_build::RendererImplementation {
+            id: "publisher-template-rust".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            recipe_sha256: site_build::sha256_canonical(&parameters)
+                .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
+        };
+        let handle = build.site_build().build_id().to_string();
+        self.retain_site_build(
             handle.clone(),
-            StockBuildRuntime {
+            SiteBuildRuntime::Publisher(PublisherBuildRuntime {
                 state,
+                runtime: Some(runtime),
                 build: build.clone(),
-                pages: BTreeMap::new(),
-                provenance_attributes,
-            },
+                catalog,
+                ready,
+                objects,
+                renderer,
+                output_options: parameters,
+            }),
         );
-        Ok(OpenStockBuildResult {
-            handle,
-            build_id: build.build_id().to_string(),
+        Ok(PrepareSiteResult {
+            handle: handle.clone(),
+            build_id: handle,
+            generator: "publisher".into(),
             site_build: build,
-            pages,
         })
     }
 
-    fn render_stock_page(
-        &mut self,
-        handle: &str,
-        name: &str,
-    ) -> Result<RenderStockPageResult, String> {
-        let runtime = self.stock_builds.get(handle).cloned().ok_or_else(|| {
-            format!("renderStockPage: unknown or released stock build handle {handle}")
-        })?;
+    fn site_outputs(&self, handle: &str) -> Result<OutputCatalogResult, String> {
+        let runtime = self
+            .site_builds
+            .get(handle)
+            .ok_or_else(|| format!("outputs: unknown build handle {handle}"))?;
+        let SiteBuildRuntime::Publisher(runtime) = runtime else {
+            return Err(
+                "outputs: Cycle output catalog belongs to the external LiquidJS host".into(),
+            );
+        };
+        let mut outputs = runtime.catalog.clone();
+        for output in &mut outputs {
+            if let Some(ready) = runtime.ready.get(&output.path) {
+                output.content = Some(ready.content.clone());
+            }
+        }
+        Ok(OutputCatalogResult {
+            build_id: runtime.build.site_build().build_id().to_string(),
+            outputs,
+        })
+    }
+
+    fn render_site_output(&mut self, handle: &str, path: &str) -> Result<RenderSiteResult, String> {
+        let path = site_build::OutputPath::parse(path.to_string())
+            .map_err(|error| format!("render: invalid output path {path}: {error}"))?;
+        let runtime = self
+            .site_builds
+            .get_mut(handle)
+            .ok_or_else(|| format!("render: unknown build handle {handle}"))?;
+        let SiteBuildRuntime::Publisher(runtime) = runtime else {
+            return Err("render: Cycle outputs are rendered by the external LiquidJS host".into());
+        };
+        if let Some(output) = runtime.ready.get(&path) {
+            return Ok(RenderSiteResult {
+                path,
+                content: output.content.clone(),
+                non_ready_fragments: 0,
+            });
+        }
+        let declared = runtime.catalog.iter().any(|output| output.path == path);
+        if !declared {
+            return Err(format!("render: path {path} is not declared by outputs"));
+        }
         let (html, reads) = runtime
             .state
-            .render_page_tracked_by_name(name)
-            .map_err(|e| format!("renderStockPage {name}: {e}"))?;
-        let mut rendered_pages = runtime.pages.clone();
-        rendered_pages.insert(
-            name.to_string(),
-            StockRenderedPage {
-                html: html.clone(),
-                reads: reads.clone(),
-            },
-        );
-
-        let producer =
-            site_build::ProducerRef::new("stock-template-wasm", env!("CARGO_PKG_VERSION"));
-        let provenance = |recipe: &str| site_build::ArtifactProvenance {
-            producer: producer.clone(),
-            recipe: recipe.to_string(),
-            attributes: runtime.provenance_attributes.clone(),
-        };
-        let semantic_reads = all_compile_inputs(&runtime.build);
-        let inputs = stock_inputs_from_pages(
-            rendered_pages.values().map(|page| &page.reads),
-            &provenance("capture-page-input"),
-            &semantic_reads,
-        )?;
-        let pages = rendered_pages
-            .iter()
-            .map(|(path, page)| {
-                Ok(StockPage {
-                    path: site_build::SourcePath::parse(path.clone())
-                        .map_err(|e| format!("renderStockPage: invalid page path {path}: {e}"))?,
-                    outcome: StockPageOutcome::Ready {
-                        bytes: page.html.as_bytes().to_vec(),
-                        reads: page.reads.clone(),
-                    },
-                    provenance: provenance("render-page"),
-                })
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let successor = collect_stock_revision(
-            &runtime.build,
-            inputs,
-            pages,
-            Vec::new(),
-            StockFragmentPolicy {
-                provenance: provenance("render-publisher-fragment"),
-                reads: semantic_reads,
-            },
-        )
-        .map_err(|e| format!("renderStockPage: successor: {e}"))?;
-        successor
-            .verify()
-            .map_err(|e| format!("renderStockPage: verify successor: {e}"))?;
-        let closed = successor
-            .site_build()
-            .clone()
-            .close()
-            .map_err(|e| format!("renderStockPage: close successor: {e}"))?;
-        let build_id = successor.site_build().build_id().to_string();
-        let predecessor_build_id = successor.predecessor().to_string();
-        let objects = successor
-            .objects()
-            .iter()
-            .map(|(digest, object)| (digest.to_string(), base64_encode(object.bytes())))
-            .collect();
-
-        let mut resolution_keys = reads.input_reads().clone();
-        resolution_keys.extend(reads.requested().iter().cloned());
-        resolution_keys.insert(site_build::ArtifactKey::Page {
-            path: site_build::SourcePath::parse(name.to_string())
-                .map_err(|e| format!("renderStockPage: invalid page path {name}: {e}"))?,
-        });
-        let resolved = resolution_keys
-            .iter()
-            .filter_map(|key| successor.site_build().artifacts().get(key).cloned())
-            .collect();
-        let transition = StockArtifactTransition {
-            requested: reads.requested().iter().cloned().collect(),
-            read: reads.read().iter().cloned().collect(),
-            resolved,
-        };
+            .render_page_tracked_by_name(path.as_str())
+            .map_err(|error| format!("render {path}: {error}"))?;
+        let html = runtime
+            .runtime
+            .as_ref()
+            .map(|publisher| publisher.finish_html(&html))
+            .unwrap_or(html);
         let non_ready_fragments = reads
             .observations()
             .values()
             .filter(|observation| matches!(observation, ArtifactObservation::NotReady { .. }))
             .count();
-
-        // Successful transitions consume the predecessor handle and install
-        // its immutable successor atomically. A failed render leaves the prior
-        // handle available for retry.
-        self.stock_builds.remove(handle);
-        self.stock_builds.insert(
-            build_id.clone(),
-            StockBuildRuntime {
-                state: runtime.state,
-                build: successor.site_build().clone(),
-                pages: rendered_pages,
-                provenance_attributes: runtime.provenance_attributes,
+        let bytes = html.into_bytes();
+        let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
+        runtime
+            .objects
+            .entry(content.sha256.clone())
+            .or_insert(bytes);
+        runtime.ready.insert(
+            path.clone(),
+            PreparedOutput {
+                content: content.clone(),
+                producer: site_build::OutputProducer {
+                    id: "publisher-page".into(),
+                    version: env!("CARGO_PKG_VERSION").into(),
+                },
+                source: Some(path.to_string()),
+                owner: None,
             },
         );
-        Ok(RenderStockPageResult {
-            html,
-            handle: build_id.clone(),
-            predecessor_build_id,
-            build_id,
-            site_build: closed,
-            objects,
-            transition,
+        Ok(RenderSiteResult {
+            path,
+            content,
             non_ready_fragments,
         })
+    }
+
+    fn read_site_content(&self, handle: &str, digest: &str) -> Result<Vec<u8>, String> {
+        let digest = site_build::Sha256Digest::parse(digest.to_string())
+            .map_err(|error| format!("readContent: invalid digest: {error}"))?;
+        let runtime = self
+            .site_builds
+            .get(handle)
+            .ok_or_else(|| format!("readContent: unknown build handle {handle}"))?;
+        let bytes = match runtime {
+            SiteBuildRuntime::Publisher(runtime) => runtime.objects.get(&digest).cloned(),
+            SiteBuildRuntime::Cycle(runtime) => runtime.objects.get(&digest).cloned(),
+        }
+        .ok_or_else(|| format!("readContent: object {digest} is absent from build {handle}"))?;
+        if site_build::Sha256Digest::of_bytes(&bytes) != digest {
+            return Err(format!(
+                "readContent: object {digest} failed digest verification"
+            ));
+        }
+        Ok(bytes)
+    }
+
+    fn finalize_site(&self, handle: &str) -> Result<site_build::SiteOutput, String> {
+        let runtime = self
+            .site_builds
+            .get(handle)
+            .ok_or_else(|| format!("finalize: unknown build handle {handle}"))?;
+        let SiteBuildRuntime::Publisher(runtime) = runtime else {
+            return Err(
+                "finalize: Cycle finalization uses the internal external-renderer binding".into(),
+            );
+        };
+        let missing = runtime
+            .catalog
+            .iter()
+            .filter(|output| !runtime.ready.contains_key(&output.path))
+            .map(|output| output.path.to_string())
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(format!(
+                "finalize: {} declared outputs are not rendered: {}",
+                missing.len(),
+                missing.join(", ")
+            ));
+        }
+        let files = runtime
+            .ready
+            .iter()
+            .map(|(path, output)| site_build::SiteOutputFile {
+                path: path.clone(),
+                content: output.content.clone(),
+                producer: output.producer.clone(),
+                source: output.source.clone(),
+                owner: output.owner.clone(),
+            });
+        let output = site_build::SiteOutput::new(
+            &runtime.build,
+            runtime.renderer.clone(),
+            "publisher-site/v1",
+            runtime.output_options.clone(),
+            files,
+        )
+        .map_err(|error| format!("finalize: {error}"))?;
+        output
+            .verify_for(&runtime.build)
+            .map_err(|error| format!("finalize: verify: {error}"))?;
+        for file in output.files() {
+            let bytes = runtime
+                .objects
+                .get(&file.content.sha256)
+                .ok_or_else(|| format!("finalize: content object for {} is absent", file.path))?;
+            file.content
+                .verify(bytes)
+                .map_err(|error| format!("finalize: verify {} bytes: {error}", file.path))?;
+        }
+        Ok(output)
+    }
+
+    fn finalize_external_site(
+        &self,
+        handle: &str,
+        input_json: &str,
+    ) -> Result<site_build::SiteOutput, String> {
+        let runtime = self
+            .site_builds
+            .get(handle)
+            .ok_or_else(|| format!("finalizeExternal: unknown build handle {handle}"))?;
+        let SiteBuildRuntime::Cycle(runtime) = runtime else {
+            return Err("finalizeExternal: handle does not name an external Cycle build".into());
+        };
+        let input: ExternalFinalizeInput = serde_json::from_str(input_json)
+            .map_err(|error| format!("finalizeExternal: invalid input: {error}"))?;
+        let catalog = input.catalog.into_iter().collect::<BTreeSet<_>>();
+        if catalog.len() != input.files.len() {
+            return Err(
+                "finalizeExternal: catalog/file cardinality differs or catalog contains duplicates"
+                    .into(),
+            );
+        }
+        let file_paths = input
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<BTreeSet<_>>();
+        if file_paths.len() != input.files.len() {
+            return Err("finalizeExternal: output files contain duplicate paths".into());
+        }
+        let missing = catalog.difference(&file_paths).cloned().collect::<Vec<_>>();
+        let undeclared = file_paths.difference(&catalog).cloned().collect::<Vec<_>>();
+        if !missing.is_empty() || !undeclared.is_empty() {
+            return Err(format!(
+                "finalizeExternal: incomplete catalog (missing: {}; undeclared: {})",
+                missing
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                undeclared
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        let output = site_build::SiteOutput::new(
+            &runtime.build,
+            input.renderer,
+            input.output_schema,
+            input.options,
+            input.files,
+        )
+        .map_err(|error| format!("finalizeExternal: {error}"))?;
+        output
+            .verify_for(&runtime.build)
+            .map_err(|error| format!("finalizeExternal: verify: {error}"))?;
+        Ok(output)
     }
 
     /// The lazily-(re)built render surface for the current generation.
@@ -4061,7 +3965,7 @@ impl Engine {
     /// exact package closure + the render set as locals — i.e. the SAME context
     /// the on-demand `snapshot` op uses (`build_context`), the publisher-faithful
     /// model the wasm-parity corpus gates (ips/mcode/sdc, full per-IG closure)
-    /// prove byte-correct. SiteDb projection follows the same exact-closure
+    /// prove byte-correct. SiteBuild preparation follows the same exact-closure
     /// rule: a predefined-resource IG may have profiles based on EXTERNAL bases
     /// (e.g. US Core's us-core-questionnaireresponse →
     /// sdc-questionnaireresponse), which a core-only context cannot resolve.
@@ -4096,53 +4000,18 @@ impl Engine {
         Ok(out)
     }
 
-    /// ContentApi: Liquid over the session provider (+ caller globals).
-    fn render_liquid_src(&mut self, source: &str, data_json: &str) -> Result<String, String> {
-        let rs = self.render_state()?;
-        rs.render_liquid_src(source, data_json)
-    }
-
-    /// ContentApi: kramdown markdown (Jekyll semantics). `opts_json`:
-    /// `{ "rougeWrappers": bool }` ("" = Jekyll markdownify defaults, wrappers ON —
-    /// matching the page pass and the Liquid `markdownify` filter).
-    fn render_markdown(&mut self, md: &str, opts_json: &str) -> Result<String, String> {
-        let rouge = if opts_json.trim().is_empty() {
-            true
-        } else {
-            let v: serde_json::Value = serde_json::from_str(opts_json)
-                .map_err(|e| format!("renderMarkdown: bad options JSON: {e}"))?;
-            v.get("rougeWrappers")
-                .and_then(|x| x.as_bool())
-                .unwrap_or(true)
-        };
-        Ok(render_md::render_with(
-            md,
-            &render_md::Options {
-                rouge_wrappers: rouge,
-                ..Default::default()
-            },
-        ))
-    }
-
+    #[cfg(test)]
     fn render_fragment(&mut self, ref_: &str, kind: &str) -> Result<String, String> {
         let rs = self.render_state()?;
         rs.render_fragment(ref_, kind).map_err(|e| e.to_string())
-    }
-
-    fn render_page(&mut self, name: &str) -> Result<String, String> {
-        let rs = self.render_state()?;
-        rs.render_page_by_name(name)
-    }
-
-    fn list_pages(&mut self) -> Result<Vec<String>, String> {
-        let rs = self.render_state()?;
-        Ok(rs.list_pages())
     }
 }
 
 #[cfg(test)]
 mod render_invalidation_tests {
     use super::*;
+
+    const CONFIG: &str = "id: test\ncanonical: https://example.test\nfhirVersion: 4.0.1\n";
 
     fn compiled() -> Vec<(PathBuf, Value)> {
         vec![(
@@ -4164,6 +4033,66 @@ mod render_invalidation_tests {
         }
     }
 
+    fn compile_project_reuse_engine() -> Engine {
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(CONFIG.as_bytes()),
+            resolution_support: BTreeSet::from(["hl7.fhir.r4.core#4.0.1".into()]),
+            labels: vec!["hl7.fhir.r4.core#4.0.1".into()],
+        };
+        let fsh = BTreeMap::from([(
+            "input/fsh/test.fsh".into(),
+            "Profile: Test\nParent: Patient\n".into(),
+        )]);
+        let site_files =
+            BTreeMap::from([("input/pagecontent/index.md".into(), "b2xkIHByb3Nl".into())]);
+        Engine {
+            resolved_packages: Some(resolved.clone()),
+            last_render_semantic_inputs: Some(RenderSemanticInputs {
+                config: CONFIG.into(),
+                fsh: fsh.clone(),
+                predefined: BTreeMap::new(),
+                page_listing: BTreeMap::from([("pagecontent".into(), vec!["index.md".into()])]),
+            }),
+            last_project: Some(CompiledProjectRevision {
+                config: CONFIG.into(),
+                fsh,
+                predefined: BTreeMap::new(),
+                site_files,
+                resolved_packages: Some(resolved),
+            }),
+            last_compile_result: Some(CompileResult {
+                resources: vec![CompiledResourceJs {
+                    filename: "StructureDefinition-Test.json".into(),
+                    text: r#"{"resourceType":"StructureDefinition","id":"Test"}"#.into(),
+                    resource_type: Some("StructureDefinition".into()),
+                    id: Some("Test".into()),
+                    url: Some("https://example.test/StructureDefinition/Test".into()),
+                }],
+                diagnostics: Vec::new(),
+                timings: Timings::default(),
+            }),
+            page_listing: std::collections::HashMap::from([(
+                "pagecontent".into(),
+                vec!["index.md".into()],
+            )]),
+            ..Default::default()
+        }
+    }
+
+    fn compile_project_args() -> (String, String, String) {
+        (
+            serde_json::json!({
+                "input/fsh/test.fsh": "Profile: Test\nParent: Patient\n"
+            })
+            .to_string(),
+            "{}".into(),
+            serde_json::json!({
+                "input/pagecontent/index.md": "bmV3IHByb3Nl"
+            })
+            .to_string(),
+        )
+    }
+
     fn semantics() -> Rc<RenderSemantics> {
         Rc::new(
             build_render_semantics(
@@ -4174,57 +4103,6 @@ mod render_invalidation_tests {
             )
             .expect("minimal render semantics"),
         )
-    }
-
-    #[test]
-    fn ordinary_site_overlay_rebuilds_surface_but_reuses_fragment_engine() {
-        let core = semantics();
-        let mut engine = Engine {
-            render_semantics: Some(core.clone()),
-            ..Default::default()
-        };
-
-        engine
-            .mount_site(
-                r#"{"en/index.md":"---\ntitle: first\n---\nfirst"}"#,
-                r#"{"merge":true}"#,
-            )
-            .unwrap();
-        let first = engine.render_state().unwrap();
-        assert!(Rc::ptr_eq(&first.engine, &core.engine));
-
-        engine
-            .mount_site(
-                r#"{"en/second.md":"---\ntitle: second\n---\nsecond","template/config.json":"{}"}"#,
-                r#"{"merge":true,"engineFirstIncludes":false,"artifactResolution":false}"#,
-            )
-            .unwrap();
-        let second = engine.render_state().unwrap();
-
-        assert!(!Rc::ptr_eq(&first, &second));
-        assert!(Rc::ptr_eq(&first.engine, &second.engine));
-        assert!(Rc::ptr_eq(&second.engine, &core.engine));
-    }
-
-    #[test]
-    fn txcache_and_fragment_options_invalidate_semantic_core() {
-        let mut txcache_engine = Engine {
-            render_semantics: Some(semantics()),
-            ..Default::default()
-        };
-        txcache_engine
-            .mount_site(r#"{"txcache/vs-externals.json":"{}"}"#, r#"{"merge":true}"#)
-            .unwrap();
-        assert!(txcache_engine.render_semantics.is_none());
-
-        let mut options_engine = Engine {
-            render_semantics: Some(semantics()),
-            ..Default::default()
-        };
-        options_engine
-            .mount_site("{}", r#"{"merge":true,"activeTables":true}"#)
-            .unwrap();
-        assert!(options_engine.render_semantics.is_none());
     }
 
     #[test]
@@ -4251,6 +4129,123 @@ mod render_invalidation_tests {
         // unchanged, so the existing semantic core remains authoritative.
         engine.replace_compiled_render_set(compiled, inputs);
         assert!(Rc::ptr_eq(engine.render_semantics.as_ref().unwrap(), &core));
+    }
+
+    #[test]
+    fn compile_project_reuses_exact_semantic_result_but_replaces_site_revision() {
+        let mut engine = compile_project_reuse_engine();
+        let (files, predefined, site_files) = compile_project_args();
+
+        let result = engine
+            .compile_project(&files, CONFIG, &predefined, &site_files)
+            .expect("prose-only revision reuses the exact compile");
+
+        assert_eq!(engine.derived_cache_hits.compile_project, 1);
+        assert_eq!(result.resources.len(), 1);
+        assert_eq!(
+            result.resources[0].filename,
+            "StructureDefinition-Test.json"
+        );
+        assert_eq!(
+            engine
+                .last_project
+                .as_ref()
+                .unwrap()
+                .site_files
+                .get("input/pagecontent/index.md")
+                .map(String::as_str),
+            Some("bmV3IHByb3Nl")
+        );
+    }
+
+    #[test]
+    fn compile_project_reuse_invalidates_for_every_compiler_visible_identity_change() {
+        let (baseline_files, baseline_predefined, baseline_site_files) = compile_project_args();
+
+        let cases = [
+            (
+                "config",
+                baseline_files.clone(),
+                format!("{CONFIG}status: active\n"),
+                baseline_predefined.clone(),
+                baseline_site_files.clone(),
+            ),
+            (
+                "FSH",
+                serde_json::json!({
+                    "input/fsh/test.fsh": "Profile: Test\nParent: Observation\n"
+                })
+                .to_string(),
+                CONFIG.into(),
+                baseline_predefined.clone(),
+                baseline_site_files.clone(),
+            ),
+            (
+                "predefined",
+                baseline_files.clone(),
+                CONFIG.into(),
+                serde_json::json!({
+                    "input/resources/Patient-p.json": {
+                        "resourceType": "Patient",
+                        "id": "p"
+                    }
+                })
+                .to_string(),
+                serde_json::json!({
+                    "input/pagecontent/index.md": "bmV3IHByb3Nl",
+                    "input/resources/Patient-p.json":
+                        "eyJyZXNvdXJjZVR5cGUiOiJQYXRpZW50IiwiaWQiOiJwIn0="
+                })
+                .to_string(),
+            ),
+            (
+                "page listing",
+                baseline_files.clone(),
+                CONFIG.into(),
+                baseline_predefined.clone(),
+                serde_json::json!({
+                    "input/pagecontent/index.md": "bmV3IHByb3Nl",
+                    "input/pagecontent/next.md": "bmV4dA=="
+                })
+                .to_string(),
+            ),
+        ];
+
+        for (label, files, config, predefined, site_files) in cases {
+            let mut engine = compile_project_reuse_engine();
+            if label == "config" {
+                engine.resolved_packages.as_mut().unwrap().config_sha256 =
+                    site_build::Sha256Digest::of_bytes(config.as_bytes());
+            }
+            let error = engine
+                .compile_project(&files, &config, &predefined, &site_files)
+                .err()
+                .expect("changed identity must execute the compiler path");
+            assert!(
+                error.contains("engine not initialized"),
+                "{label} change unexpectedly reused the prior compile: {error}"
+            );
+            assert_eq!(engine.derived_cache_hits.compile_project, 0, "{label}");
+        }
+
+        let mut engine = compile_project_reuse_engine();
+        engine
+            .resolved_packages
+            .as_mut()
+            .unwrap()
+            .labels
+            .push("hl7.terminology.r4#7.2.0".into());
+        let error = engine
+            .compile_project(
+                &baseline_files,
+                CONFIG,
+                &baseline_predefined,
+                &baseline_site_files,
+            )
+            .err()
+            .expect("changed closure must execute the compiler path");
+        assert!(error.contains("engine not initialized"), "{error}");
+        assert_eq!(engine.derived_cache_hits.compile_project, 0);
     }
 
     #[test]
@@ -4354,7 +4349,7 @@ mod render_invalidation_tests {
             ..Default::default()
         };
 
-        engine.produce_stock_site().unwrap();
+        engine.assemble_publisher_tree().unwrap();
         let fhir: Value =
             serde_json::from_slice(&engine.site_files[&PathBuf::from("/site/_data/fhir.json")])
                 .unwrap();
@@ -4379,92 +4374,510 @@ mod render_invalidation_tests {
             .unwrap();
         assert!(engine.render_semantics.is_none());
     }
+}
+
+#[cfg(test)]
+mod site_facade_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn closed(project: &str) -> site_build::ClosedSiteBuild {
+        site_build::SiteBuild::new(
+            site_build::ProjectRevision {
+                project_id: project.into(),
+                revision: format!("revision-{project}"),
+                sources: site_build::SourceManifest::default(),
+            },
+            site_build::PackageLock::default(),
+            site_build::RenderTarget {
+                renderer: site_build::ProducerRef::new(
+                    "publisher-template-rust",
+                    env!("CARGO_PKG_VERSION"),
+                ),
+                mode: site_build::RenderMode::NativeTemplate,
+                fhir_version: "4.0.1".into(),
+                template: None,
+                parameters: BTreeMap::from([("contract".into(), "publisher-site/v1".into())]),
+            },
+            site_build::RenderPlan::default(),
+            site_build::ArtifactCatalog::default(),
+            BTreeSet::new(),
+        )
+        .unwrap()
+        .close()
+        .unwrap()
+    }
+
+    fn publisher_runtime(project: &str, marker: &str) -> PublisherBuildRuntime {
+        let compiled = vec![(
+            PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+            serde_json::json!({
+                "resourceType":"ImplementationGuide",
+                "id":"demo",
+                "packageId":project,
+                "fhirVersion":["4.0.1"]
+            }),
+        )];
+        let site_files = HashMap::from([
+            (
+                PathBuf::from("/site/en/a.html"),
+                format!("---\n---\n<p>{marker}-a</p>").into_bytes(),
+            ),
+            (
+                PathBuf::from("/site/en/b.html"),
+                format!("---\n---\n<p>{marker}-b</p>").into_bytes(),
+            ),
+        ]);
+        let state = Rc::new(
+            build_render_state(&compiled, None, &site_files, &SiteOptions::default()).unwrap(),
+        );
+        let asset_path = site_build::OutputPath::parse("assets/app.css").unwrap();
+        let asset_bytes = format!("/* {marker} */").into_bytes();
+        let asset_content = site_build::ContentRef::of_bytes(&asset_bytes, Some("text/css"));
+        let asset = PreparedOutput {
+            content: asset_content.clone(),
+            producer: site_build::OutputProducer {
+                id: "fixture-asset".into(),
+                version: "1".into(),
+            },
+            source: Some("fixture".into()),
+            owner: None,
+        };
+        let catalog = vec![
+            OutputDescriptor {
+                path: site_build::OutputPath::parse("en/a.html").unwrap(),
+                kind: "page",
+                media_type: "text/html".into(),
+                content: None,
+            },
+            OutputDescriptor {
+                path: site_build::OutputPath::parse("en/b.html").unwrap(),
+                kind: "page",
+                media_type: "text/html".into(),
+                content: None,
+            },
+            OutputDescriptor {
+                path: asset_path.clone(),
+                kind: "asset",
+                media_type: "text/css".into(),
+                content: Some(asset.content.clone()),
+            },
+        ];
+        PublisherBuildRuntime {
+            state,
+            runtime: None,
+            build: closed(project),
+            catalog,
+            ready: BTreeMap::from([(asset_path, asset)]),
+            objects: BTreeMap::from([(asset_content.sha256, asset_bytes)]),
+            renderer: site_build::RendererImplementation {
+                id: "publisher-template-rust".into(),
+                version: "1".into(),
+                recipe_sha256: site_build::Sha256Digest::of_bytes(marker.as_bytes()),
+            },
+            output_options: BTreeMap::from([("marker".into(), marker.into())]),
+        }
+    }
+
+    fn engine_with(project: &str, marker: &str) -> (Engine, String) {
+        let runtime = publisher_runtime(project, marker);
+        let handle = runtime.build.site_build().build_id().to_string();
+        let mut engine = Engine::default();
+        engine.retain_site_build(handle.clone(), SiteBuildRuntime::Publisher(runtime));
+        (engine, handle)
+    }
+
+    fn retain_publisher(engine: &mut Engine, project: &str, marker: &str) -> String {
+        let runtime = publisher_runtime(project, marker);
+        let handle = runtime.build.site_build().build_id().to_string();
+        engine.retain_site_build(handle.clone(), SiteBuildRuntime::Publisher(runtime));
+        handle
+    }
 
     #[test]
-    fn stock_handle_renders_frozen_tree_and_returns_closed_successor() {
-        let config = "id: test\nfhirVersion: 4.0.1\n";
-        let resolved = ResolvedPackages {
-            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
-            labels: Vec::new(),
-        };
-        let mut engine = Engine {
-            last_compiled: vec![
-                (
-                    PathBuf::from("/__ig__/ImplementationGuide-test.json"),
-                    serde_json::json!({
-                        "resourceType": "ImplementationGuide",
-                        "id": "test",
-                        "packageId": "example.test",
-                        "version": "1.0.0",
-                        "fhirVersion": ["4.0.1"]
-                    }),
-                ),
-                (
-                    PathBuf::from("/__compiled__/StructureDefinition-test.json"),
-                    serde_json::json!({
-                        "resourceType": "StructureDefinition",
-                        "id": "test",
-                        "url": "http://example.org/StructureDefinition/test",
-                        "name": "Test",
-                        "status": "draft",
-                        "fhirVersion": "4.0.1",
-                        "kind": "resource",
-                        "abstract": false,
-                        "type": "Patient",
-                        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
-                        "derivation": "constraint",
-                        "snapshot": { "element": [{ "id": "Patient", "path": "Patient" }] }
-                    }),
-                ),
-            ],
-            last_project: Some(CompiledProjectRevision {
-                config: config.into(),
-                fsh: BTreeMap::new(),
-                predefined: BTreeMap::new(),
-                site_files: BTreeMap::new(),
-                resolved_packages: Some(resolved),
-            }),
-            site_files: std::collections::HashMap::from([(
-                PathBuf::from("/site/en/index.html"),
-                b"---\ntitle: Test\n---\n<p>frozen</p>{% include StructureDefinition-test-snapshot.xhtml %}".to_vec(),
+    fn outputs_is_complete_before_render_and_finalize_is_verified() {
+        let (mut engine, handle) = engine_with("catalog.test", "one");
+        let catalog = engine.site_outputs(&handle).unwrap();
+        assert_eq!(catalog.outputs.len(), 3);
+        assert_eq!(
+            catalog
+                .outputs
+                .iter()
+                .filter(|entry| entry.kind == "page")
+                .count(),
+            2
+        );
+        assert!(catalog
+            .outputs
+            .iter()
+            .find(|entry| entry.kind == "asset")
+            .unwrap()
+            .content
+            .is_some());
+        assert!(engine
+            .finalize_site(&handle)
+            .unwrap_err()
+            .contains("2 declared outputs"));
+
+        for path in ["en/a.html", "en/b.html"] {
+            let rendered = engine.render_site_output(&handle, path).unwrap();
+            let bytes = engine
+                .read_site_content(&handle, rendered.content.sha256.as_str())
+                .unwrap();
+            rendered.content.verify(&bytes).unwrap();
+        }
+        let output = engine.finalize_site(&handle).unwrap();
+        output.verify().unwrap();
+        assert_eq!(output.files().len(), 3);
+        assert_eq!(output.input_build_id().as_str(), handle);
+    }
+
+    #[test]
+    fn pages_render_in_any_order_without_advancing_the_handle() {
+        let (mut left, handle) = engine_with("order.test", "same");
+        let b_then_a = ["en/b.html", "en/a.html"]
+            .map(|path| left.render_site_output(&handle, path).unwrap().content);
+        assert!(left.site_builds.contains_key(&handle));
+
+        let (mut right, other_handle) = engine_with("order.test", "same");
+        assert_eq!(handle, other_handle);
+        let a_then_b = ["en/a.html", "en/b.html"].map(|path| {
+            right
+                .render_site_output(&other_handle, path)
+                .unwrap()
+                .content
+        });
+        assert_eq!(b_then_a[1], a_then_b[0]);
+        assert_eq!(b_then_a[0], a_then_b[1]);
+        assert_eq!(
+            left.finalize_site(&handle).unwrap().output_id(),
+            right.finalize_site(&other_handle).unwrap().output_id()
+        );
+    }
+
+    #[test]
+    fn immutable_handles_are_isolated_from_other_builds_and_ambient_state() {
+        let (mut engine, first) = engine_with("first.test", "first");
+        let second = retain_publisher(&mut engine, "second.test", "second");
+        engine.site_files.insert(
+            PathBuf::from("/site/en/a.html"),
+            b"---\n---\n<p>ambient mutation</p>".to_vec(),
+        );
+        let first_output = engine.render_site_output(&first, "en/a.html").unwrap();
+        let second_output = engine.render_site_output(&second, "en/a.html").unwrap();
+        assert_ne!(first, second);
+        assert_ne!(first_output.content, second_output.content);
+        let first_bytes = engine
+            .read_site_content(&first, first_output.content.sha256.as_str())
+            .unwrap();
+        assert_eq!(String::from_utf8(first_bytes).unwrap(), "<p>first-a</p>");
+    }
+
+    #[test]
+    fn successful_prepares_retain_only_current_and_immediately_previous_builds() {
+        let mut engine = Engine::default();
+        let first = retain_publisher(&mut engine, "retain.first", "first");
+        let second = retain_publisher(&mut engine, "retain.second", "second");
+
+        assert_eq!(engine.site_builds.len(), RETAINED_SITE_BUILD_LIMIT);
+        assert!(engine.site_outputs(&first).is_ok());
+        assert!(engine.site_outputs(&second).is_ok());
+
+        let third = retain_publisher(&mut engine, "retain.third", "third");
+        assert_eq!(engine.site_builds.len(), RETAINED_SITE_BUILD_LIMIT);
+        assert_eq!(
+            engine
+                .site_build_generations
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![second.clone(), third.clone()]
+        );
+        assert!(engine
+            .site_outputs(&first)
+            .err()
+            .expect("oldest handle must be evicted")
+            .contains("unknown build handle"));
+        assert!(engine.site_outputs(&second).is_ok());
+        assert!(engine.site_outputs(&third).is_ok());
+    }
+
+    #[test]
+    fn preparing_an_existing_handle_refreshes_recency_without_growing_the_bound() {
+        let mut engine = Engine::default();
+        let first = retain_publisher(&mut engine, "refresh.first", "first");
+        let second = retain_publisher(&mut engine, "refresh.second", "second");
+        assert_eq!(
+            retain_publisher(&mut engine, "refresh.first", "first"),
+            first
+        );
+        assert_eq!(engine.site_builds.len(), RETAINED_SITE_BUILD_LIMIT);
+        assert_eq!(
+            engine
+                .site_build_generations
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![second.clone(), first.clone()]
+        );
+
+        let third = retain_publisher(&mut engine, "refresh.third", "third");
+        assert!(engine.site_outputs(&second).is_err());
+        assert!(engine.site_outputs(&first).is_ok());
+        assert!(engine.site_outputs(&third).is_ok());
+    }
+
+    #[test]
+    fn failed_prepare_preserves_every_retained_generation() {
+        let mut engine = Engine::default();
+        let first = retain_publisher(&mut engine, "failure.first", "first");
+        let second = retain_publisher(&mut engine, "failure.second", "second");
+        let before = engine.site_build_generations.clone();
+
+        let error = engine
+            .prepare_site(r#"{"generator":"publisher","templateCoordinate":"","buildEpochSecs":1}"#)
+            .err()
+            .expect("empty template coordinate must fail");
+        assert!(error.contains("template coordinate is empty"));
+        assert_eq!(engine.site_build_generations, before);
+        assert_eq!(engine.site_builds.len(), RETAINED_SITE_BUILD_LIMIT);
+        assert!(engine.site_outputs(&first).is_ok());
+        assert!(engine.site_outputs(&second).is_ok());
+    }
+
+    #[test]
+    fn external_finalizer_requires_the_complete_declared_catalog() {
+        let build = closed("cycle.test");
+        let handle = build.site_build().build_id().to_string();
+        let engine = Engine {
+            site_builds: BTreeMap::from([(
+                handle.clone(),
+                SiteBuildRuntime::Cycle(CycleBuildRuntime {
+                    build,
+                    objects: BTreeMap::new(),
+                }),
             )]),
             ..Default::default()
         };
+        let file = site_build::SiteOutputFile {
+            path: site_build::OutputPath::parse("index.html").unwrap(),
+            content: site_build::ContentRef::of_bytes(b"page", Some("text/html")),
+            producer: site_build::OutputProducer {
+                id: "cycle-page".into(),
+                version: "2".into(),
+            },
+            source: Some("cycle".into()),
+            owner: None,
+        };
+        let renderer = site_build::RendererImplementation {
+            id: "cycle-site".into(),
+            version: "2".into(),
+            recipe_sha256: site_build::Sha256Digest::of_bytes(b"cycle recipe"),
+        };
+        let incomplete = serde_json::json!({
+            "renderer": renderer,
+            "outputSchema": "cycle-static/v1",
+            "catalog": ["index.html", "assets/app.css"],
+            "files": [file]
+        });
+        assert!(engine
+            .finalize_external_site(&handle, &incomplete.to_string())
+            .unwrap_err()
+            .contains("cardinality"));
 
-        let opened = engine.open_stock_build("hl7.fhir.template#1.0.0").unwrap();
-        assert_eq!(opened.pages, vec!["en/index.html"]);
-        engine
-            .mount_site(
-                r#"{"en/index.html":"---\ntitle: Test\n---\n<p>mutated</p>"}"#,
-                "",
+        let complete = serde_json::json!({
+            "renderer": renderer,
+            "outputSchema": "cycle-static/v1",
+            "catalog": ["index.html"],
+            "files": [file]
+        });
+        let output = engine
+            .finalize_external_site(&handle, &complete.to_string())
+            .unwrap();
+        output.verify().unwrap();
+        assert_eq!(output.files().len(), 1);
+    }
+
+    #[test]
+    fn publisher_prepare_owns_template_and_authored_assembly() {
+        let core_manifest = serde_json::json!({
+            "name":"hl7.fhir.r4.core",
+            "version":"4.0.1",
+            "fhirVersions":["4.0.1"]
+        })
+        .to_string();
+        let support_core_manifest = serde_json::json!({
+            "name":"hl7.fhir.r5.core",
+            "version":"5.0.0",
+            "fhirVersions":["5.0.0"]
+        })
+        .to_string();
+        let template_manifest = serde_json::json!({
+            "name":"demo.template",
+            "version":"1.0.0",
+            "type":"fhir.template"
+        })
+        .to_string();
+        let config_json = r#"{"defaults":{"Any":{"template-base":"default.html","base":"{{[type]}}-{{[id]}}.html"}}}"#;
+        let bundles = serde_json::json!([
+            {
+                "label":"hl7.fhir.r4.core#4.0.1",
+                "files":{
+                    "package.json":base64_encode(core_manifest.as_bytes()),
+                    "other/fhir.css":base64_encode(b"/* fhir */"),
+                    "other/icon_element.gif":base64_encode(b"icon"),
+                    "other/tbl_spacer.png":base64_encode(b"spacer")
+                }
+            },
+            {
+                "label":"hl7.fhir.r5.core#5.0.0",
+                "files":{
+                    "package.json":base64_encode(support_core_manifest.as_bytes())
+                }
+            },
+            {
+                "label":"demo.template#1.0.0",
+                "files":{
+                    "package.json":base64_encode(template_manifest.as_bytes()),
+                    "config.json":base64_encode(config_json.as_bytes()),
+                    "layouts/default.html":base64_encode(b"---\n---\n{{content}}"),
+                    "includes/template-page-md.html":base64_encode(
+                        br#"<link href="assets/app.css"><img src="icon_element.gif">{{content}}"#
+                    ),
+                    "content/assets/app.css":base64_encode(b"body{}")
+                }
+            }
+        ]);
+        let config = "id: facade.test\ncanonical: https://example.org/facade\nname: FacadeTest\nstatus: draft\nversion: 1.0.0\nfhirVersion: 4.0.1\n";
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
+            labels: vec![
+                "hl7.fhir.r4.core#4.0.1".into(),
+                "hl7.fhir.r5.core#5.0.0".into(),
+            ],
+        };
+        let mut engine = Engine::default();
+        engine.init(&bundles.to_string()).unwrap();
+        engine.last_project = Some(CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::from([
+                (
+                    "input/pagecontent/index.md".into(),
+                    base64_encode(b"# Intro"),
+                ),
+                (
+                    "input/pagecontent/conformance-patients.md".into(),
+                    base64_encode(
+                        br#"# Conformance: Patients
+
+<div>{% include patients-with-cancer-condition.svg %}</div>
+"#,
+                    ),
+                ),
+                ("input/images/logo.svg".into(), base64_encode(b"<svg/>")),
+            ]),
+            resolved_packages: Some(resolved),
+        });
+        engine.last_compiled = vec![(
+            PathBuf::from("/__ig__/ImplementationGuide-facade-test.json"),
+            serde_json::json!({
+                "resourceType":"ImplementationGuide",
+                "id":"facade-test",
+                "packageId":"facade.test",
+                "url":"https://example.org/facade/ImplementationGuide/facade-test",
+                "name":"FacadeTest",
+                "status":"draft",
+                "version":"1.0.0",
+                "fhirVersion":["4.0.1"],
+                "definition":{
+                    "resource":[],
+                    "page":{
+                        "nameUrl":"toc.html",
+                        "title":"Table of Contents",
+                        "generation":"html",
+                        "page":[
+                            {
+                                "nameUrl":"artifacts.html",
+                                "title":"Artifacts Summary",
+                                "generation":"html"
+                            },
+                            {
+                                "nameUrl":"conformance-patients.html",
+                                "title":"Conformance: Patients",
+                                "generation":"markdown"
+                            }
+                        ]
+                    }
+                }
+            }),
+        )];
+        let prepared = engine
+            .prepare_site(
+                r#"{"generator":"publisher","templateCoordinate":"demo.template#1.0.0","buildEpochSecs":1,"activeTables":true}"#,
             )
             .unwrap();
-
-        let rendered = engine
-            .render_stock_page(&opened.handle, "en/index.html")
-            .unwrap();
-        assert!(rendered.html.contains("frozen"));
-        assert!(!rendered.html.contains("mutated"));
-        assert_eq!(rendered.predecessor_build_id, opened.build_id);
-        assert_ne!(rendered.build_id, opened.build_id);
-        rendered.site_build.site_build().verify().unwrap();
-        assert_eq!(rendered.transition.requested.len(), 1);
-        assert_eq!(rendered.transition.read.len(), 1);
-        assert_eq!(rendered.non_ready_fragments, 0);
-        assert!(rendered
-            .transition
-            .resolved
+        let guide = &engine.prepared_guide_cache.as_ref().unwrap().guide;
+        assert!(guide.pages.iter().any(|page| {
+            page.name_url == "artifacts.html" && page.generation == "html" && page.body.is_none()
+        }));
+        assert!(guide
+            .pages
             .iter()
-            .any(|record| matches!(record.key, site_build::ArtifactKey::Page { .. })));
-        assert!(!rendered.objects.is_empty());
-        let released = match engine.render_stock_page(&opened.handle, "en/index.html") {
-            Err(error) => error,
-            Ok(_) => panic!("consumed stock handle unexpectedly remained live"),
+            .any(|page| page.name_url == "conformance-patients.html"));
+        assert!(!guide
+            .assets
+            .iter()
+            .any(|asset| asset.path.as_str() == "patients-with-cancer-condition.svg"));
+        let catalog = engine.site_outputs(&prepared.handle).unwrap();
+        let paths = catalog
+            .outputs
+            .iter()
+            .map(|output| output.path.as_str())
+            .collect::<BTreeSet<_>>();
+        assert!(paths.contains("en/index.html"));
+        assert!(paths.contains("en/conformance-patients.html"));
+        assert!(paths.contains("assets/app.css"));
+        assert!(paths.contains("logo.svg"));
+        assert!(paths.contains("icon_element.gif"));
+        assert!(paths.contains("en/assets/app.css"));
+        assert!(paths.contains("en/icon_element.gif"));
+        let content_at = |path: &str| {
+            catalog
+                .outputs
+                .iter()
+                .find(|output| output.path.as_str() == path)
+                .and_then(|output| output.content.clone())
+                .unwrap()
         };
-        assert!(released.contains("unknown or released"));
-        engine
-            .render_stock_page(&rendered.handle, "en/index.html")
+        assert_eq!(
+            content_at("assets/app.css"),
+            content_at("en/assets/app.css")
+        );
+        assert_eq!(
+            content_at("icon_element.gif"),
+            content_at("en/icon_element.gif")
+        );
+        let page = engine
+            .render_site_output(&prepared.handle, "en/index.html")
             .unwrap();
+        page.content
+            .verify(
+                &engine
+                    .read_site_content(&prepared.handle, page.content.sha256.as_str())
+                    .unwrap(),
+            )
+            .unwrap();
+        let page_bytes = engine
+            .read_site_content(&prepared.handle, page.content.sha256.as_str())
+            .unwrap();
+        let page_html = String::from_utf8(page_bytes).unwrap();
+        for relative in ["assets/app.css", "icon_element.gif"] {
+            assert!(page_html.contains(relative));
+            assert!(paths.contains(format!("en/{relative}").as_str()));
+        }
     }
 }
 
@@ -4594,74 +5007,6 @@ mod site_build_handoff_tests {
             .unwrap_err()
             .contains("checksum"));
         assert_eq!(engine.packages, vec!["example.pkg#1.0.0"]);
-    }
-
-    #[test]
-    fn prepared_batch_is_one_transaction_with_phase_metrics() {
-        let package = |label: &str, marker: &str| {
-            let (name, version) = label.split_once('#').unwrap();
-            package_store::PreparedPackage::prepare(
-                label,
-                BTreeMap::from([
-                    (
-                        "package.json".into(),
-                        serde_json::to_vec(&serde_json::json!({
-                            "name": name,
-                            "version": version,
-                        }))
-                        .unwrap(),
-                    ),
-                    ("marker.txt".into(), marker.as_bytes().to_vec()),
-                ]),
-            )
-            .unwrap()
-        };
-        let a = package("a.pkg#1.0.0", "a");
-        let b = package("b.pkg#1.0.0", "b");
-        let a_bytes = a.encode();
-        let b_bytes = b.encode();
-        let mut bytes = a_bytes.clone();
-        bytes.extend_from_slice(&b_bytes);
-        let manifest = serde_json::json!([
-            {"offset": 0, "byteLength": a_bytes.len(), "cacheKey": a.key.cache_key()},
-            {"offset": a_bytes.len(), "byteLength": b_bytes.len(), "cacheKey": b.key.cache_key()},
-        ]);
-        let mut engine = Engine::default();
-        engine.init("[]").unwrap();
-        let outcome = engine
-            .mount_prepared_batch(bytes.clone(), &manifest.to_string())
-            .unwrap();
-        assert_eq!(outcome.added, 2);
-        assert_eq!(outcome.mounted, 2);
-        assert_eq!(outcome.artifact_bytes, bytes.len() as u64);
-        assert_eq!(
-            outcome.manifest_json_bytes,
-            manifest.to_string().len() as u64
-        );
-        assert_eq!(outcome.retained_blob_bytes, bytes.len() as u64);
-        assert_eq!(outcome.member_body_copies, 0);
-        assert!(outcome.indexed_members >= 4);
-        assert!(
-            outcome.manifest_parse_ms >= 0.0
-                && outcome.decode_validate_ms >= 0.0
-                && outcome.mount_ms >= 0.0
-        );
-
-        let conflict = package("a.pkg#1.0.0", "different");
-        let fresh = package("c.pkg#1.0.0", "c");
-        let conflict_bytes = conflict.encode();
-        let fresh_bytes = fresh.encode();
-        let mut failed_bytes = conflict_bytes.clone();
-        failed_bytes.extend_from_slice(&fresh_bytes);
-        let failed_manifest = serde_json::json!([
-            {"offset": 0, "byteLength": conflict_bytes.len(), "cacheKey": conflict.key.cache_key()},
-            {"offset": conflict_bytes.len(), "byteLength": fresh_bytes.len(), "cacheKey": fresh.key.cache_key()},
-        ]);
-        assert!(engine
-            .mount_prepared_batch(failed_bytes, &failed_manifest.to_string())
-            .unwrap_err()
-            .contains("different content"));
-        assert_eq!(engine.packages, vec!["a.pkg#1.0.0", "b.pkg#1.0.0"]);
     }
 
     #[test]
@@ -4829,6 +5174,7 @@ mod site_build_handoff_tests {
             .unwrap();
         let selected = ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
+            resolution_support: BTreeSet::new(),
             labels: vec![first.into()],
         };
         engine.resolved_packages = Some(selected.clone());
@@ -4917,15 +5263,15 @@ mod site_build_handoff_tests {
             )
             .unwrap();
 
-        assert!(engine.mount_template("demo.template#1.0.0").unwrap() >= 3);
-        assert_eq!(
-            engine.site_files[&PathBuf::from("/site/_includes/demo.html")],
-            b"nested include"
-        );
-        assert_eq!(
-            engine.site_files[&PathBuf::from("/site/template/layouts/default.html")],
-            b"layout"
-        );
+        let (source, root, _) = engine.source().unwrap();
+        let tree = package_store::template_loader::materialize(
+            &source,
+            &package_store::template_loader::TemplatePaths::new(&root),
+            "demo.template#1.0.0",
+        )
+        .unwrap();
+        assert_eq!(tree.get("includes/demo.html"), Some(&b"nested include"[..]));
+        assert_eq!(tree.get("layouts/default.html"), Some(&b"layout"[..]));
     }
 
     #[test]
@@ -5025,6 +5371,7 @@ mod site_build_handoff_tests {
         let dep = "example.dep#1.0.0";
         let resolved = ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
             labels: vec![core.into(), dep.into()],
         };
         let engine = Engine {
@@ -5053,6 +5400,7 @@ mod site_build_handoff_tests {
             // was captured by the compiled project below.
             resolved_packages: Some(ResolvedPackages {
                 config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+                resolution_support: BTreeSet::new(),
                 labels: vec![core.into(), "example.dep#2.0.0".into()],
             }),
             ..Default::default()
@@ -5089,6 +5437,7 @@ mod site_build_handoff_tests {
         };
         let resolved = ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
             labels: vec![old.into(), new.into(), consumer.into()],
         };
         let engine = Engine {
@@ -5130,6 +5479,206 @@ mod site_build_handoff_tests {
     }
 
     #[test]
+    fn package_lock_omits_proven_filtered_exact_edge_without_retargeting_it() {
+        let config = "id: mcode-like\nfhirVersion: 4.0.1\n";
+        let extensions_old = "hl7.fhir.uv.extensions.r4#1.0.0";
+        let extensions_current = "hl7.fhir.uv.extensions.r4#5.3.0";
+        let extensions_filtered = "hl7.fhir.uv.extensions.r4#5.2.0";
+        let consumer = "example.mcode-like#4.0.0";
+        let material = |bytes: &'static [u8], dependencies| MountedPackage {
+            content: site_build::ContentRef::of_bytes(bytes, None::<String>),
+            declared_dependencies: dependencies,
+        };
+        let request = |label: &str| {
+            let (package_id, version) = label.split_once('#').unwrap();
+            package_store::PackageRequest {
+                package_id: package_id.into(),
+                version: version.into(),
+            }
+        };
+        let resolved = resolved_packages_from_step(
+            config,
+            &package_store::ResolutionStep {
+                resolver_schema: package_store::RESOLVER_SCHEMA,
+                // The executable closure independently contains two other
+                // exact versions of the same package id.
+                compile_set: vec![
+                    request(extensions_old),
+                    request(extensions_current),
+                    request(consumer),
+                ],
+                context_closure: Vec::new(),
+                // The resolver read 5.2.0 and rejected it at its R4
+                // compatibility filter.
+                resolution_support: vec![request(extensions_filtered)],
+                missing: Vec::new(),
+                satisfied: true,
+                mutable_requests: Vec::new(),
+            },
+        )
+        .unwrap();
+        let engine = Engine {
+            package_materials: BTreeMap::from([
+                (
+                    extensions_old.into(),
+                    material(b"extensions-old", BTreeMap::new()),
+                ),
+                (
+                    extensions_current.into(),
+                    material(b"extensions-current", BTreeMap::new()),
+                ),
+                (
+                    extensions_filtered.into(),
+                    material(b"extensions-filtered", BTreeMap::new()),
+                ),
+                (
+                    consumer.into(),
+                    material(
+                        b"consumer",
+                        BTreeMap::from([("hl7.fhir.uv.extensions.r4".into(), "5.2.0".into())]),
+                    ),
+                ),
+            ]),
+            ..Default::default()
+        };
+        let project = |resolved_packages| CompiledProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::new(),
+            resolved_packages: Some(resolved_packages),
+        };
+
+        let lock = engine
+            .site_build_package_lock(&project(resolved.clone()))
+            .unwrap();
+        let consumer = lock
+            .get(&site_build::PackageCoordinate::parse(consumer).unwrap())
+            .unwrap();
+        assert!(
+            consumer.dependencies.is_empty(),
+            "the filtered 5.2.0 edge must not be retargeted to 5.3.0 or 1.0.0"
+        );
+        lock.iter().for_each(|(_, package)| {
+            package.dependencies.iter().for_each(|dependency| {
+                assert!(
+                    lock.get(dependency).is_some(),
+                    "lock emitted a dangling edge"
+                );
+            });
+        });
+
+        // Without the resolver's exact exclusion witness, the same version
+        // mismatch is a real closure inconsistency and must still fail loudly.
+        let mut unproven = resolved;
+        unproven.resolution_support.clear();
+        let error = engine
+            .site_build_package_lock(&project(unproven))
+            .unwrap_err();
+        assert!(
+            error.contains("matches neither the resolved coordinates"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn cycle_zero_dependency_project_resolves_exact_automatic_transitives_before_prepare() {
+        let bundle = |package_id: &str, version: &str, dependencies: BTreeMap<&str, &str>| {
+            let label = format!("{package_id}#{version}");
+            let manifest = serde_json::json!({
+                "name": package_id,
+                "version": version,
+                "fhirVersions": ["4.0.1"],
+                "dependencies": dependencies,
+            });
+            serde_json::json!({
+                "label": label,
+                "files": {
+                    "package.json": base64_encode(manifest.to_string().as_bytes()),
+                }
+            })
+        };
+        let current = vec![
+            bundle(
+                "hl7.fhir.uv.tools.r4",
+                "1.1.2",
+                BTreeMap::from([
+                    ("hl7.fhir.r4.core", "4.0.1"),
+                    ("hl7.terminology.r4", "7.1.0"),
+                    ("hl7.fhir.uv.extensions.r4", "5.2.0"),
+                ]),
+            ),
+            bundle("hl7.terminology.r4", "7.2.0", BTreeMap::new()),
+            bundle("hl7.fhir.r4.core", "4.0.1", BTreeMap::new()),
+            bundle("hl7.fhir.uv.extensions.r4", "5.3.0", BTreeMap::new()),
+        ];
+        let exact_transitives = vec![
+            bundle(
+                "hl7.terminology.r4",
+                "7.1.0",
+                BTreeMap::from([("hl7.fhir.r4.core", "4.0.1")]),
+            ),
+            bundle(
+                "hl7.fhir.uv.extensions.r4",
+                "5.2.0",
+                BTreeMap::from([("hl7.fhir.r4.core", "4.0.1")]),
+            ),
+        ];
+        let config = "id: cycle.test\ncanonical: https://example.org/cycle\nname: CycleTest\nstatus: draft\nversion: 1.0.0\nfhirVersion: 4.0.1\n";
+        let index = serde_json::json!({
+            "versions": {
+                "hl7.fhir.uv.tools.r4": ["1.1.2"],
+                "hl7.terminology.r4": ["7.2.0"],
+                "hl7.fhir.r4.core": ["4.0.1"],
+                "hl7.fhir.uv.extensions.r4": ["5.3.0"]
+            }
+        })
+        .to_string();
+
+        let mut engine = Engine::default();
+        engine
+            .init(&serde_json::to_string(&current).unwrap())
+            .unwrap();
+        let incomplete: package_store::ResolutionStep =
+            serde_json::from_str(&engine.resolve_project(config, &index).unwrap()).unwrap();
+        assert!(!incomplete.satisfied);
+        assert!(incomplete.missing.iter().any(|missing| {
+            missing.package_id == "hl7.fhir.uv.extensions.r4" && missing.version == "5.2.0"
+        }));
+
+        engine
+            .mount(&serde_json::to_string(&exact_transitives).unwrap())
+            .unwrap();
+        let complete: package_store::ResolutionStep =
+            serde_json::from_str(&engine.resolve_project(config, &index).unwrap()).unwrap();
+        assert!(complete.satisfied, "missing={:?}", complete.missing);
+        assert!(complete.context_closure.iter().any(|request| {
+            request.package_id == "hl7.fhir.uv.extensions.r4" && request.version == "5.2.0"
+        }));
+
+        engine.compile_project("{}", config, "{}", "{}").unwrap();
+        let prepared = engine
+            .prepare_site(r#"{"generator":"cycle","buildEpochSecs":1}"#)
+            .unwrap();
+        let lock = prepared.site_build.site_build().package_lock();
+        let tools = site_build::PackageCoordinate::parse("hl7.fhir.uv.tools.r4#1.1.2").unwrap();
+        let extensions_old =
+            site_build::PackageCoordinate::parse("hl7.fhir.uv.extensions.r4#5.2.0").unwrap();
+        let extensions_current =
+            site_build::PackageCoordinate::parse("hl7.fhir.uv.extensions.r4#5.3.0").unwrap();
+        assert!(lock.get(&extensions_old).is_some());
+        assert!(lock.get(&extensions_current).is_some());
+        assert_eq!(
+            lock.get(&tools).unwrap().dependencies,
+            BTreeSet::from([
+                site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap(),
+                site_build::PackageCoordinate::parse("hl7.terminology.r4#7.1.0").unwrap(),
+                extensions_old,
+            ])
+        );
+    }
+
+    #[test]
     fn core_selection_uses_the_exact_resolved_closure_not_mount_order() {
         let config = "id: demo\nfhirVersion: 4.0.1\n";
         let selected = "hl7.fhir.r4.core#4.0.1";
@@ -5141,6 +5690,7 @@ mod site_build_handoff_tests {
         };
         let resolved = ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
             labels: vec![selected.into()],
         };
         let engine = Engine {
@@ -5170,52 +5720,43 @@ mod site_build_handoff_tests {
     }
 
     #[test]
-    fn projection_is_bound_to_every_authored_compile_input() {
-        let project = CompiledProjectRevision {
-            config: "id: demo".into(),
-            fsh: BTreeMap::from([("input/fsh/demo.fsh".into(), "Profile: Demo".into())]),
-            predefined: BTreeMap::from([(
-                "input/resources/Patient-p.json".into(),
-                serde_json::json!({"resourceType": "Patient", "id": "p"}),
-            )]),
-            site_files: BTreeMap::new(),
-            resolved_packages: None,
-        };
-        let engine = Engine {
-            last_project: Some(project.clone()),
-            ..Default::default()
-        };
-        let input = |fsh: BTreeMap<String, String>, predefined: BTreeMap<String, Value>| {
-            SiteDbFromCompileInput {
-                config: project.config.clone(),
-                fsh,
-                predefined,
-                site_files: BTreeMap::new(),
-                build_epoch_secs: 1,
-                liquid_asset_dirs: Vec::new(),
-                branch: None,
-                revision: None,
-                target: None,
-            }
+    fn publisher_target_core_selection_ignores_support_cores_and_fails_closed() {
+        let lock = |coordinates: &[&str]| {
+            site_build::PackageLock::from_packages(coordinates.iter().map(|coordinate| {
+                let coordinate = site_build::PackageCoordinate::parse(*coordinate).unwrap();
+                site_build::LockedPackage {
+                    content: site_build::ContentRef::of_bytes(
+                        coordinate.to_string().as_bytes(),
+                        None::<String>,
+                    ),
+                    coordinate,
+                    dependencies: BTreeSet::new(),
+                }
+            }))
+            .unwrap()
         };
 
-        engine
-            .validate_project_projection(
-                &input(project.fsh.clone(), project.predefined.clone()),
-                "test",
-            )
-            .unwrap();
-        assert!(engine
-            .validate_project_projection(
-                &input(BTreeMap::new(), project.predefined.clone()),
-                "test",
-            )
+        let mixed = lock(&["hl7.fhir.r4.core#4.0.1", "hl7.fhir.r5.core#5.0.0"]);
+        assert_eq!(
+            target_core_from_package_lock(&mixed, "4.0.1", "test")
+                .unwrap()
+                .to_string(),
+            "hl7.fhir.r4.core#4.0.1"
+        );
+
+        let missing = lock(&["hl7.fhir.r5.core#5.0.0"]);
+        assert!(target_core_from_package_lock(&missing, "4.0.1", "test")
             .unwrap_err()
-            .contains("FSH files differ"));
-        assert!(engine
-            .validate_project_projection(&input(project.fsh, BTreeMap::new()), "test")
+            .contains("no required target core hl7.fhir.r4.core#4.0.1"));
+
+        let ambiguous = lock(&[
+            "hl7.fhir.r4.core#4.0.0",
+            "hl7.fhir.r4.core#4.0.1",
+            "hl7.fhir.r5.core#5.0.0",
+        ]);
+        assert!(target_core_from_package_lock(&ambiguous, "4.0.1", "test")
             .unwrap_err()
-            .contains("predefined resources differ"));
+            .contains("multiple coordinates for target core package hl7.fhir.r4.core"));
     }
 
     fn minimal_prepared_guide() -> site_build::PreparedGuide {
@@ -5267,6 +5808,7 @@ mod site_build_handoff_tests {
             site_files: BTreeMap::new(),
             resolved_packages: Some(ResolvedPackages {
                 config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+                resolution_support: BTreeSet::new(),
                 labels: Vec::new(),
             }),
         };
@@ -5281,16 +5823,11 @@ mod site_build_handoff_tests {
             last_compiled: vec![(PathBuf::from("/__ig__/ImplementationGuide-demo.json"), ig)],
             ..Default::default()
         };
-        let input = SiteDbFromCompileInput {
-            config: config.into(),
-            fsh: BTreeMap::new(),
-            predefined: BTreeMap::new(),
-            site_files: BTreeMap::new(),
+        let input = PrepareGuideOptions {
             build_epoch_secs: 1,
             liquid_asset_dirs: Vec::new(),
             branch: None,
             revision: None,
-            target: Some("cycle-site/v2".into()),
         };
         let revision = engine
             .site_build_project_revision(&project, "demo.ig")
@@ -5303,14 +5840,12 @@ mod site_build_handoff_tests {
         engine.prepared_guide_cache = Some(PreparedGuideCacheEntry {
             key: key.clone(),
             guide: prepared.clone(),
-            site_db: None,
         });
 
-        let (actual, db) = engine
-            .site_model_from_compile(&input, "test", false, key.clone())
+        let actual = engine
+            .site_model_from_compile(&input, "test", key.clone())
             .unwrap();
         assert_eq!(actual, prepared);
-        assert!(db.is_none());
         assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
 
         let mut changed = input.clone();
@@ -5320,14 +5855,14 @@ mod site_build_handoff_tests {
             .unwrap();
         assert_ne!(changed_key, key);
         assert!(engine
-            .site_model_from_compile(&changed, "test", false, changed_key)
+            .site_model_from_compile(&changed, "test", changed_key)
             .unwrap_err()
             .contains("resolved closure has no required core package"));
         assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
     }
 
     #[test]
-    fn closed_build_cache_key_binds_target_diagnostics_and_contract() {
+    fn closed_build_cache_key_binds_target_and_diagnostics() {
         let prepared = site_build::Sha256Digest::of_bytes(b"prepared");
         let target = site_build::RenderTarget {
             renderer: site_build::ProducerRef::new("cycle-site", "2"),
@@ -5337,16 +5872,14 @@ mod site_build_handoff_tests {
             parameters: BTreeMap::from([("contract".into(), "cycle-site/v2".into())]),
         };
         let diagnostics = BTreeSet::new();
-        let baseline =
-            closed_site_build_cache_key(&prepared, &target, &diagnostics, "cycle-site/v2").unwrap();
+        let baseline = closed_site_build_cache_key(&prepared, &target, &diagnostics).unwrap();
         let mut changed_target = target.clone();
         changed_target
             .parameters
             .insert("buildEpochSecs".into(), "2".into());
         assert_ne!(
             baseline,
-            closed_site_build_cache_key(&prepared, &changed_target, &diagnostics, "cycle-site/v2")
-                .unwrap()
+            closed_site_build_cache_key(&prepared, &changed_target, &diagnostics).unwrap()
         );
         let changed_diagnostics = BTreeSet::from([site_build::BuildDiagnostic::new(
             site_build::DiagnosticSeverity::Warning,
@@ -5355,12 +5888,7 @@ mod site_build_handoff_tests {
         )]);
         assert_ne!(
             baseline,
-            closed_site_build_cache_key(&prepared, &target, &changed_diagnostics, "cycle-site/v2")
-                .unwrap()
-        );
-        assert_ne!(
-            baseline,
-            closed_site_build_cache_key(&prepared, &target, &diagnostics, "cycle-site/v1").unwrap()
+            closed_site_build_cache_key(&prepared, &target, &changed_diagnostics).unwrap()
         );
     }
 }
@@ -5380,8 +5908,7 @@ mod site_build_handoff_tests {
 // (compile -> render set incl. predefined -> snapshot_complete_own ->
 // render_fragment) over US Core 9.0.0's real closure + predefined SDs, sourced
 // entirely from the local package cache (temp/fhir-home/.fhir/packages). It is
-// network-free and skips if the cache is absent, like the sibling
-// site_db_snapshot test.
+// network-free and skips if the cache is absent.
 //
 // The predefined SDs are the published us.core#9.0.0 SDs with their `snapshot`
 // REMOVED — i.e. the authored differential-only form the editor feeds from
@@ -5811,7 +6338,6 @@ mod ab_data_parity_gate {
         let opts = SiteOptions {
             active_tables: true,
             run_uuid: Some("00000000-0000-4000-8000-abdata000000".to_string()),
-            merge: false,
             engine_first_includes: true,
             artifact_resolution: true,
         };

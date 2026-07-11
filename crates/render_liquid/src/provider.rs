@@ -1,8 +1,8 @@
 //! The pluggable data + include resolution surface.
 //!
 //! `DataProvider` is the seam the plan calls for: T1's `site.data.*` reads are
-//! served through it, so the same engine can be backed by (a) an in-memory
-//! JSON context (tests / oracle parity), or (b) `site.db` queries later (F5).
+//! served through it, so the same engine can be backed by an in-memory JSON
+//! context in production, tests, and oracle parity checks.
 //! Include resolution is likewise pluggable so the host controls where
 //! `{% include %}` bodies and template-artifact `.xhtml` fragments come from.
 

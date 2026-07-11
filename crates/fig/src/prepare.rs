@@ -2,8 +2,8 @@
 //!
 //! This module is deliberately library composition rather than CLI business
 //! logic. It resolves one exact package closure from an explicit cache, runs the
-//! native `site_db` pipeline once, derives the project identity from that
-//! pipeline's produced IG/rows, closes the shared SiteBuild compatibility
+//! native renderer-neutral preparation pipeline once, derives the project
+//! identity from its PreparedGuide, closes the shared SiteBuild projection
 //! projection, and atomically emits a filesystem CAS bundle.
 //!
 //! The bundle layout is intentionally small and transport-neutral:
@@ -31,16 +31,14 @@ use serde::Serialize;
 #[cfg(test)]
 use serde_json::Value;
 use site_build::{
-    cycle_semantic, site_db_compat, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage,
-    PackageCoordinate, PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderTarget,
-    Sha256Digest, SourceEntry, SourceKind, SourceManifest, SourcePath,
+    cycle_semantic, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage, PackageCoordinate,
+    PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderTarget, Sha256Digest, SourceEntry,
+    SourceKind, SourceManifest, SourcePath,
 };
 use walkdir::WalkDir;
 
-/// Preferred typed external-builder contract. V1 remains available only as a
-/// migration producer/reader and can still be selected explicitly.
+/// Typed external-builder contract.
 pub const CYCLE_SITE_TARGET: &str = cycle_semantic::TARGET;
-pub const CYCLE_SITE_TARGET_V1: &str = "cycle-site/v1";
 
 /// All host inputs for one closed bundle. Every path is explicit; this API never
 /// consults a default package cache and never performs package acquisition.
@@ -114,12 +112,9 @@ impl Drop for StagedBuildInputs {
 /// not relied on for correctness: even an A→B→A live mutation cannot influence
 /// the rows while retaining A's manifest.
 pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
-    if !matches!(
-        config.target.as_str(),
-        CYCLE_SITE_TARGET | CYCLE_SITE_TARGET_V1
-    ) {
+    if config.target != CYCLE_SITE_TARGET {
         bail!(
-            "unsupported prepare target {:?}; supported targets are {CYCLE_SITE_TARGET} (preferred) and {CYCLE_SITE_TARGET_V1}",
+            "unsupported prepare target {:?}; supported target is {CYCLE_SITE_TARGET}",
             config.target
         );
     }
@@ -165,28 +160,19 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     // cannot introduce stale generated resources.
     require_new_sushi_output(&config.sushi_out)?;
 
-    let build_config = site_db::BuildConfig {
+    let prepared_guide = prepared_guide::native::prepare(&prepared_guide::native::PrepareInputs {
         ig_dir: staged.ig_dir.clone(),
         sushi_out: config.sushi_out.clone(),
         cache_dir: staged.cache_dir.clone(),
-        // `site_db::build` returns the row model and never writes this path.
-        out_db: output.with_extension("unused-site-db"),
         build_epoch_secs: config.build_epoch_secs,
         branch: None,
         revision: None,
         run_sushi: true,
         core_package: closure_before.core.to_string(),
         layer_b: snapshot_gen::LayerBOptions::default(),
-    };
-    let (prepared_guide, site_db) = if config.target == CYCLE_SITE_TARGET {
-        let built = site_db::prepare_build(&build_config, None)
-            .context("native renderer-neutral guide preparation")?;
-        (built.prepared_guide, None)
-    } else {
-        let built = site_db::build(&build_config, None).context("native site_db build")?;
-        (built.prepared_guide, Some(built.db))
-    };
-
+        liquid_asset_dirs: vec![staged.ig_dir.join("input/includes")],
+    })
+    .context("native renderer-neutral guide preparation")?;
     // Detect any unexpected mutation by the pipeline itself. This is not a live
     // ABA defense (the staged paths already provide that); it asserts the staged
     // filesystem remained the exact value reconstructed from the manifest/lock.
@@ -225,14 +211,7 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
         sources: source_before.manifest.clone(),
     };
     let render_target = RenderTarget {
-        renderer: ProducerRef::new(
-            "cycle-site",
-            if config.target == CYCLE_SITE_TARGET {
-                "2"
-            } else {
-                "1"
-            },
-        ),
+        renderer: ProducerRef::new("cycle-site", "2"),
         mode: RenderMode::ExternalBuilder,
         fhir_version: fhir_version.clone(),
         template: None,
@@ -242,33 +221,15 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
             ("liquidAssetDirs".into(), "input/includes".into()),
         ]),
     };
-    let (site_build, projected_objects) = if config.target == CYCLE_SITE_TARGET {
-        let input = cycle_semantic::CycleProjectionInput {
-            project,
-            package_lock: packages_before.lock.clone(),
-            render_target,
-            diagnostics: BTreeSet::new(),
-        };
-        let projection = cycle_semantic::close_prepared(&prepared_guide, input)
-            .context("close typed Cycle semantic projection")?;
-        (projection.site_build, projection.objects)
-    } else {
-        let projection = site_db_compat::close_projection(
-            site_db.as_ref().expect("v1 requests SiteDb projection"),
-            site_db_compat::CloseProjectionInput {
-                project,
-                package_lock: packages_before.lock.clone(),
-                render_target,
-                diagnostics: BTreeSet::new(),
-            },
-        )
-        .context("close legacy Cycle site.db projection")?;
-        let content = ContentRef::of_bytes(&projection.bytes, Some("application/json"));
-        (
-            projection.site_build,
-            BTreeMap::from([(content.sha256, projection.bytes)]),
-        )
+    let input = cycle_semantic::CycleProjectionInput {
+        project,
+        package_lock: packages_before.lock.clone(),
+        render_target,
+        diagnostics: BTreeSet::new(),
     };
+    let projection = cycle_semantic::close_prepared(&prepared_guide, input)
+        .context("close typed Cycle semantic projection")?;
+    let (site_build, projected_objects) = (projection.site_build, projection.objects);
 
     let mut objects = source_before.objects;
     merge_objects(&mut objects, packages_before.objects)?;

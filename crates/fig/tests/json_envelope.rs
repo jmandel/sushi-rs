@@ -1,4 +1,4 @@
-//! Shared-schema gate (unified-cli-plan §4): the `fig --json` envelope and the
+//! Shared-schema gate: the `fig --json` envelope and the
 //! wasm `Session` envelope are the SAME schema — because they are the SAME
 //! implementation (`api_envelope`). This test pins the shape from BOTH sides so
 //! a drift in either fails here.
@@ -36,6 +36,26 @@ fn fig_error_envelope_shape() {
     assert_eq!(v["op"], "snapshot");
     assert!(v["error"]["message"].is_string());
     assert!(v.get("result").is_none());
+}
+
+#[test]
+fn retired_template_only_package_bundle_is_not_an_alias_for_a_complete_bundle() {
+    let v = fig_json(&[
+        "packages",
+        "bundle",
+        "--template",
+        "example.template#1.0.0",
+        "--cache",
+        "/unused",
+        "--out",
+        "/unused",
+        "--json",
+    ]);
+    assert_eq!(v["ok"], false);
+    assert!(v["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("unknown option --template"));
 }
 
 #[test]

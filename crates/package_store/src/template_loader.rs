@@ -5,8 +5,8 @@
 //! handling *truly driven*: pick any `id#version`, walk its `base` chain, union-
 //! copy root→leaf, apply the `_append.` concat + the `config.json` deep-merge, and
 //! emit the exact `template/` tree the Publisher's Java would stage — WITHOUT any
-//! ant / XSLT / plantuml / JVM. See docs/template-machinery-notes.md for the full
-//! investigation (lifecycle citations, sizing, diligence M1/M2).
+//! ant / XSLT / plantuml / JVM. The current host flow is documented in
+//! `docs/hosting.md`.
 //!
 //! ## What this reproduces (and what it deliberately does NOT)
 //!
@@ -117,6 +117,23 @@ struct ChainPackage {
     /// Package id (used in the recurse-loop error message and hook attribution).
     #[allow(dead_code)]
     id: String,
+}
+
+/// One canonical Rust decision about an exact template base chain. A browser
+/// host may fetch only [`missing`](TemplateResolution::missing), mount it through
+/// the ordinary package path, and retry. It never parses `package.json.base`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateResolution {
+    /// Root-first exact coordinates when the chain is complete. On a miss this
+    /// is the already-proven leaf-to-root prefix and is diagnostic only.
+    pub chain: Vec<String>,
+    pub missing: Option<String>,
+}
+
+impl TemplateResolution {
+    pub fn satisfied(&self) -> bool {
+        self.missing.is_none()
+    }
 }
 
 /// A loud, structured error naming an ant hook that would compute site-feeding
@@ -321,16 +338,52 @@ fn walk_base_chain(
     paths: &TemplatePaths,
     root_label: &str,
 ) -> anyhow::Result<Vec<ChainPackage>> {
+    let resolution = resolve_base_chain(source, paths, root_label)?;
+    if let Some(missing) = resolution.missing {
+        anyhow::bail!("template package '{missing}' not mounted / no package.json")
+    }
+    Ok(resolution
+        .chain
+        .into_iter()
+        .map(|label| ChainPackage {
+            id: label_id(&label).to_string(),
+            label,
+        })
+        .collect())
+}
+
+/// Resolve one exact template chain without materializing it. Missing packages
+/// are data, while malformed manifests, non-template types, absent exact parent
+/// versions, and recursion remain loud errors.
+pub fn resolve_base_chain(
+    source: &dyn PackageSource,
+    paths: &TemplatePaths,
+    root_label: &str,
+) -> anyhow::Result<TemplateResolution> {
+    let exact = |label: &str| {
+        label
+            .split_once('#')
+            .is_some_and(|(id, version)| !id.is_empty() && !version.is_empty())
+    };
+    if !exact(root_label) {
+        anyhow::bail!("template coordinate must be exact id#version: {root_label}")
+    }
     // Leaf → root, then reversed to root → leaf.
-    let mut leaf_to_root: Vec<ChainPackage> = Vec::new();
+    let mut leaf_to_root: Vec<String> = Vec::new();
     let mut visited: Vec<String> = Vec::new(); // preserves order for the error msg.
 
     let mut current = root_label.to_string();
     loop {
         let pj_path = paths.package_json_path(&current);
-        let bytes = source.read(&pj_path).map_err(|e| {
-            anyhow::anyhow!("template package '{current}' not mounted / no package.json: {e}")
-        })?;
+        let bytes = match source.read(&pj_path) {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                return Ok(TemplateResolution {
+                    chain: leaf_to_root,
+                    missing: Some(current),
+                })
+            }
+        };
         let pj: Value = serde_json::from_slice(&bytes)
             .map_err(|e| anyhow::anyhow!("template '{current}' package.json parse error: {e}"))?;
 
@@ -355,10 +408,7 @@ fn walk_base_chain(
         }
         visited.push(id.clone());
 
-        leaf_to_root.push(ChainPackage {
-            label: current.clone(),
-            id: id.clone(),
-        });
+        leaf_to_root.push(current.clone());
 
         // Parent?
         let Some(base) = pj.get("base").and_then(Value::as_str) else {
@@ -385,7 +435,10 @@ fn walk_base_chain(
     }
 
     leaf_to_root.reverse(); // → root-first.
-    Ok(leaf_to_root)
+    Ok(TemplateResolution {
+        chain: leaf_to_root,
+        missing: None,
+    })
 }
 
 /// The `applyConfigChanges` deep-merge (TemplateManager.java:227-246), folding
@@ -916,6 +969,34 @@ mod tests {
         let paths = TemplatePaths::new(src.cache_root().to_path_buf());
         let err = walk_base_chain(&src, &paths, "a#1.0.0").unwrap_err();
         assert!(err.to_string().contains("dependencies"), "got: {err}");
+    }
+
+    #[test]
+    fn resolution_reports_one_exact_missing_coordinate_without_host_parsing() {
+        let mut src = BundleSource::new();
+        src.mount_package(
+            "leaf#2.0.0",
+            vec![(
+                "package.json",
+                br#"{"name":"leaf","type":"fhir.template","base":"base","dependencies":{"base":"1.0.0"}}"#
+                    .to_vec(),
+            )],
+        );
+        let paths = TemplatePaths::new(src.cache_root().to_path_buf());
+        let first = resolve_base_chain(&src, &paths, "leaf#2.0.0").unwrap();
+        assert!(!first.satisfied());
+        assert_eq!(first.missing.as_deref(), Some("base#1.0.0"));
+
+        src.mount_package(
+            "base#1.0.0",
+            vec![(
+                "package.json",
+                br#"{"name":"base","type":"fhir.template"}"#.to_vec(),
+            )],
+        );
+        let complete = resolve_base_chain(&src, &paths, "leaf#2.0.0").unwrap();
+        assert!(complete.satisfied());
+        assert_eq!(complete.chain, vec!["base#1.0.0", "leaf#2.0.0"]);
     }
 
     #[test]

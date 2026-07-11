@@ -1,5 +1,13 @@
 # Rust SUSHI Port Plan
 
+> Historical compiler design brief (2026-06-29). The Rust port and its package
+> acquisition/compiler architecture were subsequently implemented and evolved.
+> This document preserves the original performance evidence and design
+> reasoning; it is not a current API, crate map, browser adapter contract, or
+> execution plan. See [`README.md`](README.md),
+> [`docs/hosting.md`](docs/hosting.md), and the editor's `ARCHITECTURE.md` for the
+> supported architecture.
+
 Date: 2026-06-29
 Worktree: `/home/jmandel/periodicity/.worktrees/sushi-package-index`
 Primary benchmark IG: `/home/jmandel/periodicity/temp/ips-ig`

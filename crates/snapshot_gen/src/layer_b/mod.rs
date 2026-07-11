@@ -46,7 +46,7 @@ pub struct LayerBOptions {
     /// B1 — CoreVersionPinner (mechanism A) version pinning.
     pub pin: bool,
     /// B0 — R4-artifact projection. Only meaningful for an R4 IG; the caller is
-    /// responsible for the version condition (site_db gates on `--core` R4).
+    /// responsible for the core-package version condition.
     pub project_r4: bool,
 }
 

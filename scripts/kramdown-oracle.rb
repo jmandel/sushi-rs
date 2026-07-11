@@ -5,7 +5,7 @@
 # EXACTLY the options the HL7 FHIR IG Publisher's Jekyll config puts in play.
 #
 # This is the reference ("oracle") for the render_md Rust crate's differential
-# gate (task F1b of docs/stock-template-renderer-plan.md).
+# gate.
 #
 # ---------------------------------------------------------------------------
 # Jekyll config source of truth

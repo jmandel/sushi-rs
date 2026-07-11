@@ -27,20 +27,16 @@ path = "src/bin/fig.rs"
 name = "snapshot_gen"
 path = "src/bin/snapshot_gen.rs"
 
-[[bin]]
-name = "site_db"
-path = "src/bin/site_db.rs"
-
 [dependencies]
 # The engine core — fig subcommands are arg-parse -> engine-core call -> output.
 compiler = { workspace = true }
 snapshot_gen = { workspace = true }
-site_db = { workspace = true, default-features = true, features = ["sqlite"] }
+prepared_guide = { workspace = true }
 package_store = { workspace = true }
 package_acquisition = { workspace = true }
 render_sd = { workspace = true }
 render_page = { workspace = true }
-site_build = { workspace = true, features = ["site-db-compat"] }
+site_build = { workspace = true }
 content_store = { workspace = true }
 site_producer = { workspace = true }
 render_liquid = { workspace = true }

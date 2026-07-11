@@ -5,7 +5,200 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
-## 0. HANDOFF — current state (read FIRST, updated 2026-07-10)
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
+
+**UNCALLED TEMPLATE/BATCH COMPATIBILITY SURFACES DELETED (2026-07-11):** a
+whole-editor/engine scan found no caller for Fig's template-only warm JSON
+artifact or WASM's contiguous prepared-package batch. `fig packages bundle
+--template ...`, its serializer/base64 helper, and its README entry are gone;
+ordinary complete `packages bundle`, compact `packages prepare`, Rust template
+resolution, and `fig render --template` remain. Bundle parsing rejects the
+retired flag instead of silently treating it as an ordinary package label. The
+`mountPreparedBatch` Engine/Session method, wire manifest type, transactional
+test, and documentation are also gone. Warm browser mounting has one bounded
+`beginPreparedMount -> stagePreparedMount -> commitPreparedMount` transaction;
+single `mountPrepared` and cold `prepareAndMount` remain. Active generated WASM
+browser artifacts were deliberately not edited by hand and must be refreshed by
+the normal rebuild. Gates: Fig library 14/14 plus integration 4/4,
+`cargo check -p fig`, WASM lib 35 pass/2 ignored, Session 8/8, fmt/diff-check.
+The documented-toolchain wasm32 check is also green.
+
+**PUBLISHER TARGET CORE SELECTION IS FHIR-VERSION-EXACT (2026-07-11):**
+Publisher runtime preparation no longer counts every package id ending in
+`.core`. Cross-version support legitimately puts multiple cores in one exact
+lock (mCODE targets R4 while R5 core is also present). The compiled IG's
+`fhirVersion` now maps through the existing canonical core coordinate rule, and
+that one exact coordinate is selected from `PackageLock`; a missing coordinate,
+wrong version, or multiple versions of the target core id fails loudly. One
+synthetic mCODE-shaped `prepare(publisher)` regression now crosses all three
+previous browser blockers together: a generated HTML navigation node, a safe
+unresolved PlantUML-derived SVG include, and a mixed R4-target/R5-support lock.
+Focused selection tests also cover missing/ambiguous target cores. WASM lib is
+35 pass/2 ignored and Session remains 8/8; fmt/diff-check are green. The rebuilt
+browser gate must still prove mCODE reaches a real page.
+
+**GENERATOR-OWNED SAFE INCLUDES DO NOT REJECT PREPAREDGUIDE (2026-07-11):**
+renderer-neutral augmentation now captures a referenced include only when its
+bytes exist under a declared authored include root. A safe unresolved name may
+be produced by Publisher/template preprocessing and is not evidence of a
+missing authored asset. This fixes mCODE's `*.svg` includes, whose real sources
+are `input/images-source/*.plantuml`; the former SVG-only hard failure was an
+old Cycle-ingest policy applied at the wrong layer. Unsafe absolute/traversal
+names still fail before lookup, and missing authored Markdown remains fatal.
+PlantUML execution is still unsupported, so the affected figure may be absent
+unless another preprocessing stage supplies it; that fidelity gap no longer
+prevents the rest of the guide from rendering. Focused prepared-guide gate is
+4/4, including real-shaped mCODE ownership and traversal regressions. The
+rebuilt browser gate must prove mCODE reaches a real page.
+
+**EXACT PROSE-ONLY COMPILE REUSE (2026-07-11):** `compileProject` now reuses
+the prior serialized SUSHI result when and only when its existing semantic key
+(exact config bytes, parsed FSH, parsed predefined resources, and normalized
+page-name listing) and its captured `ResolvedPackages` closure are equal. It
+still replaces the complete `CompiledProjectRevision.site_files`, so Publisher
+and Cycle preparation see the new prose/assets, and it invalidates only the
+ambient render surface while immutable retained handles remain untouched. The
+engine retains one private last-result value beside the already-existing exact
+identity; no public operation, domain value, host cache, or fallback was added.
+A focused reuse counter proves the fast branch, while the invalidation matrix
+forces config, FSH, predefined-resource, page-listing, and package-closure
+changes through the compiler branch. Gates: WASM lib 35 pass/2 ignored,
+Session 8/8, `cargo check --workspace`, and documented-toolchain wasm32 check.
+The rebuilt browser performance gate still owns the end-to-end timing receipt.
+
+**ONE SITE HOST FACADE (RUST SLICE IMPLEMENTED, 2026-07-11):** the WASM
+site-generation surface is now `prepare -> outputs -> render -> finalize`. The worker's public
+`prepare(project, generatorSpec)` calls `compileProject` and Rust `prepare`
+inside one serialized request, so project bytes cross that boundary once; the
+Rust generator specification rejects config/FSH/predefined/site-file fields.
+Cycle preparation retains a strict closed `cycle-site/v2` SiteBuild and its CAS
+inside an immutable build runtime for external LiquidJS. Publisher preparation
+materializes the exact template chain, assembles shells/data/authored overlays,
+freezes the Rust Liquid render state, and declares a collision-checked complete
+catalog. Page rendering is independent by path and memoizes bytes without
+advancing or consuming the handle; finalization fails until the whole catalog
+is ready and returns canonical Rust `SiteOutput`.
+
+Publisher runtime assembly is wired into preparation. The exact core package,
+materialized template chain, audited embedded runtime, and authored overlay form
+one deterministic namespace. Page-relative asset aliases share ContentRefs and
+the private digest-keyed object map stores each body once. Runtime HTML finishing
+runs after Liquid and before content addressing. The runtime recipe digest is
+part of the renderer recipe.
+
+Immutable runtime retention is bounded: after each successful `prepare`, the
+Engine keeps only the current and immediately previous distinct SiteBuild
+handles. Re-preparing the same build refreshes its preparation recency without
+growing the set; reads never extend lifetime. Eviction drops the whole runtime,
+including its RenderState and private CAS objects, and an evicted handle fails
+as unknown. All fallible preparation completes before publication/eviction, so
+a failed prepare preserves both retained generations. This is private lifecycle
+management, not a public `release` API. Focused retention tests cover the bound,
+prior availability, deterministic eviction/refresh, and failure preservation.
+
+The removed host APIs are `buildSiteBuildFromCompile`, `mountSite`,
+`mountTemplate`, `produceStockSite`, `openStockBuild`, `renderStockPage`,
+ambient `renderFragment`/`renderPage`/`listPages`, `renderLiquid`,
+`renderMarkdown`, and `Session.global`. Private ContentStore plumbing is direct
+binary `readContent(handle,digest)`, never JSON/base64. Cycle's internal
+`finalizeExternal` accepts only a complete catalog plus verified ContentRefs
+and metadata, checks exact set equality/collisions, and delegates receipt
+identity to Rust `SiteOutput::new/verify_for`.
+
+Template acquisition is also Rust-owned:
+`resolve_template_base_chain` interprets `package.json.base` and exact parent
+dependencies and private `resolveTemplate` reports one missing exact coordinate.
+The host only fetches/mounts that coordinate through ordinary package plumbing
+and retries; JS must not parse template manifests. Registered Publisher
+fragment needs already resolve synchronously through the captured typed
+`ArtifactResolver`; `NotReady` is a typed terminal failure for that immutable
+input, not a host callback or an affine successor.
+
+Current gates green: package-store 43/43 including template base-chain parity;
+site-producer 8/8; facade catalog/order/handle-isolation/SiteOutput/external-
+finalizer/synthetic Publisher preparation/retention 8/8; WASM lib 35 pass with 2
+environment-dependent ignored; Session 8/8 including the exact template-parent
+acquisition handshake; expand 5/5; exact mCODE lock
+regression; `cargo check --workspace`; and wasm32 checking through the documented
+rustup toolchain at `/home/jmandel/.cargo/bin/cargo` (the system distro Cargo has
+no wasm target). `cargo test --workspace` is also green. Do not restore the
+editor asset side channel or a generic prepare byte bag.
+
+**PUBLISHER RUNTIME ASSEMBLY WIRED INTO THE FACADE (2026-07-11):**
+`site_producer::publisher_runtime::PublisherRuntime` assembles the stock
+renderer static namespace directly from the exact mounted target-core package,
+the materialized template tree, and 25 audited irreducible embedded files
+(150,112 bytes). It replaces the editor's 610,591-byte raw / 858,577-byte
+base64-JSON runtime side channel. Selection is deterministic
+`runtime < core < template`; the facade applies authored assets last from the
+already-captured project. Open Sans and the null-safe table script are
+derived/hash-gated from the template, while tree icons/fixed table images/FHIR
+CSS come from the exact core. Full MIT/OFL/Apache notices are emitted. Novel
+`tbl_bck*` SVG data URIs and the exact-byte-pair/order-gated jQuery bridge are
+applied after Liquid and before ContentRef creation. The runtime recipe digest
+binds all selected bytes, provenance/licenses, transform versions, and the core
+coordinate. Focused gate: `cargo test -p site_producer` (8/8 green).
+Package transport must preserve the core package's complete native `other/`
+tree and normalize it to mounted `package/other`; `PublisherRuntime` also accepts
+the native sibling layout directly and deliberately fails if either the tree or
+required FHIR CSS/icon/table bytes are absent. The browser serializer owns that
+normalization. Never replace this validation with a JS asset side channel or a
+silent embedded fallback.
+
+**MCODE MULTI-VERSION PACKAGE-LOCK FIX (2026-07-11):** the resolver's
+`resolution_support` coordinates are now retained with each compiled revision so
+SiteBuild lock preparation can distinguish an exact declared dependency which
+was read and deliberately removed by the R4 compatibility filter from a truly
+unresolved edge. This fixes mCODE's declaration of
+`hl7.fhir.uv.extensions.r4#5.2.0` when the executable closure independently
+contains `#5.3.0` and `#1.0.0`: the filtered edge is omitted, never retargeted.
+Exact mismatches without the resolver exclusion witness still fail loudly, and
+every emitted lock edge is checked by `PackageLock` to name a present exact
+coordinate. Focused regression:
+`site_build_handoff_tests::package_lock_omits_proven_filtered_exact_edge_without_retargeting_it`;
+`cargo test -p wasm_api --lib` and `cargo test -p wasm_api --test session_api`
+are green.
+
+**CYCLE AUTOMATIC-DEPENDENCY CLOSURE FIX (2026-07-11):** resolver schema 3
+roots snapshot/render context traversal at every exact compile-set member,
+including SUSHI's automatic tools/terminology/extensions inputs. Schema 2
+incorrectly rooted only at explicit `sushi-config.yaml` dependencies; Cycle has
+none, so it claimed a satisfied core-only context without reading
+`hl7.fhir.uv.tools.r4#1.1.2` and never reported that manifest's exact
+`hl7.terminology.r4#7.1.0` and `hl7.fhir.uv.extensions.r4#5.2.0` dependencies.
+The missing-driven host loop was correct but could not acquire coordinates Rust
+never exposed. Schema 3 first reports those exact transitive packages as
+context misses, then includes them in the closure/support proof after mount.
+No lock edge is retargeted or relaxed. A Cycle-shaped regression executes the
+full `resolveProject -> mount exact misses -> resolveProject -> compileProject ->
+prepare(cycle)` sequence and asserts the tools package locks to 7.1.0/5.2.0
+while the independently selected 7.2.0/5.3.0 packages remain present. Gates:
+package-store 43/43; WASM lib 33 pass, 2 ignored; Session 8/8.
+
+**GENERATED HTML PAGE OWNERSHIP FIX (2026-07-11):** PreparedGuide augmentation
+now distinguishes authored Markdown pages from generator-owned HTML navigation
+nodes. mCODE declares `artifacts.html` in `sushi-config.yaml pages` but correctly
+has no `input/pagecontent/artifacts.md` or `.xml`; Publisher/template generation
+owns that final page. Such a `generation=html` node is retained in `PageNode`
+with `body=None`, while an existing authored body is still captured and a
+missing `generation=markdown` source still fails loudly. This is generation-
+semantic, not a slug allow-list or callback. Focused gates: prepared-guide 2/2
+and synthetic Publisher facade preparation.
+
+**PREPAREDGUIDE IS THE SOLE PRE-RENDER HANDOFF (2026-07-11):** authored-input
+preparation lives in `prepared_guide`: `FileSource`, disk/in-memory
+implementations, augmentation, deterministic time formatting,
+`semantics::prepare(PrepareInputs) -> PreparedGuide`, and the native
+compile/snapshot adapter `native::prepare(PrepareInputs) -> PreparedGuide`.
+Fig and WASM both call these APIs directly and project the result only to the
+typed `cycle-site/v2` SiteBuild roots. The relational database crate, its Fig
+command/binary alias, WASM row APIs, Cycle v1 target, reverse adapters, optional
+SiteBuild features, and compatibility tests have been deleted rather than left
+as deprecated wrappers. The old parallel row assembly (`AugmentationRows`,
+row-specific page/menu/config/asset generation, and ordered-map assembly) is
+also gone. Green gates after this deletion are `cargo check --workspace`,
+`cargo test -p prepared_guide`, `cargo test -p site_build`, `cargo test -p fig`,
+`cargo test -p wasm_api --lib`, and `cargo test -p wasm_api --test session_api`.
 
 **SCORE — LEAD WITH IT.** The validation corpus is now **31 IGs** (12 core + 6 top-20 +
 13 next-20), all in `harness/gate1.sh`. Current after the predefined-resource merge,
@@ -62,20 +255,14 @@ are all ready, giving callback-free builders a proof-bearing input. Preferred
 `cycle-site/v2` projects four typed semantic data roots plus raw authored asset roots;
 numeric row keys, JSON strings, and base64 bodies do not cross the wire. The current
 renderer-neutral `PreparedGuide` owns guide identity, resources/publication metadata,
-terminology expansions, navigation, config, and authored assets with source reads. The
-model now lives in an independent crate upstream of both SiteBuild and SiteDb. Shared native
-and in-memory preparation constructs it directly before optional relational rows, retaining
-each asset's exact winning source path; Cycle v2 in Fig and wasm constructs no SiteDb. The
-Cycle v2 projector consumes it directly and compiles without `site_db`; the reverse
-`prepare_from_site_db` adapter remains only for migration/equality gates. The optional
-`site-db-compat` feature retains the v1 aggregate for migration (dependency direction stays
-SiteBuild → optional projection, never SiteDb → core contract). Focused gates:
-`cargo test -p site_build` and
-`cargo test -p site_build --features site-db-compat`. The wasm API now emits a sealed
+terminology expansions, navigation, config, and authored assets with source reads. Shared
+native and in-memory preparation constructs it directly, retaining each asset's exact
+winning source path. Fig and WASM consume the same value through the sole Cycle v2
+projector. Focused gate: `cargo test -p site_build`. The wasm API now emits a sealed
 Cycle handoff from the exact prior `compileProject` revision, ordinary `Session` handles
 are isolated, and `render_page` translates legacy fragment include names once into a typed
 resolver/read-set boundary. The compiler-selected primary ImplementationGuide identity is
-explicit across SiteDb, v1/v2 Cycle, stock production, native Fig, and render context;
+explicit across Cycle v2, stock production, native Fig, and render context;
 additional guides remain ordinary resources. A compiled revision retains the exact resolved
 package-label allow-list used for compilation, snapshot completion, and fragment rendering
 even after later mounts; a fresh mount invalidates resolution for the next compile.
@@ -93,26 +280,25 @@ is a direct-write path and is deliberately not promotable. Strict public-tree an
 loading fail closed on unreadable entries, symlinks, unsupported Markdown, and concurrent
 inventory changes. The initial predecessor/F0-root association remains an explicit trusted-producer
 assertion until native inputs are reconstructed from a closed build/CAS. `ClosedBuildArtifactResolver` replays only the sealed plan closure and verifies CAS
-digest/length/UTF-8 without callbacks. No v1 wire field changed. Focused gates now also
+digest/length/UTF-8 without callbacks. Focused gates now also
 include `cargo test -p render_page --lib` and `cargo test -p fig`.
-The browser stock adapter follows the same identity law: `openStockBuild`
-freezes an exact `RenderState` behind a native-template predecessor, and
-`renderStockPage(handle, path)` promotes typed needs/reads through
-`collect_stock_revision` into a verified closed successor plus CAS batch. The
-adapter no longer calls ambient `renderPage`/`renderFragment`. Package locks may
-contain multiple exact versions of one package id (US Core legitimately resolves
-`hl7.terminology.r4#7.1.0` and `#7.2.0`); declared edges select the matching exact
-coordinate instead of rejecting the closure.
+The browser-adapter portion of this 2026-07-10 checkpoint is superseded.
+`openStockBuild`, `renderStockPage`, and the ambient render calls were deleted;
+the browser now uses only `prepare -> outputs -> render -> finalize` over one
+immutable handle. `collect_stock_revision` and successor transitions remain
+internal native/renderer machinery, not browser host operations. The package-
+lock finding remains current: a lock may contain multiple exact versions of one
+package id (US Core legitimately resolves `hl7.terminology.r4#7.1.0` and
+`#7.2.0`), and declared edges select the matching exact coordinate.
 
 **NATIVE CLOSED CYCLE BUNDLE — DONE (2026-07-10).** `fig prepare <ig>
 --target cycle-site/v2 --sushi-out <new> --cache <explicit> --out <new>
 --build-date ...` is the native producer for the same callback-free external-builder
-contract (`cycle-site/v1` remains an explicit migration target). Library composition lives
-in `fig::prepare`: it captures config plus every
+contract. Library composition lives in `fig::prepare`: it captures config plus every
 regular `input/**` byte, resolves the satisfied compile/context package union, normalizes
 package material through the shared browser `build_bundle -> read_bundle` path, reconstructs
 a private IG/cache tree from those captured objects, and passes only that staged filesystem
-to the one `site_db::build` (so A→B→A live mutation cannot split identity from execution).
+to `prepared_guide::native` (so A→B→A live mutation cannot split identity from execution).
 It verifies staged and live values after the build, derives project/FHIR identity from the
 produced IG/prepared model, calls the typed semantic projection, verifies all content refs, and atomically
 publishes `site-build.json` + `objects/sha256/*`. It never acquires packages or
@@ -120,9 +306,7 @@ uses a default cache; source/nested-package symlinks, cache escapes, stale/exist
 outputs, overlapping outputs, and ambient `SITE_LIQUID_ASSET_DIRS` fail closed. Real Cycle
 gate after its canonical example preprocessor: 23 sources, 4 packages, 31
 objects in v2, closed build produced successfully from the explicit workspace
-cache. The corresponding v1/v2 Cycle renders have 91 ordinary files with byte-identical
-non-receipt output; their receipt ids differ because each binds its own input
-SiteBuild id. Focused gate: `cargo test -p fig`.
+cache. Focused gate: `cargo test -p fig`.
 
 **UNIFIED CONTENT + EXACT SITE OUTPUT IDENTITY — LANDED (2026-07-10).**
 The renderer/package-neutral `content_store` crate owns `ContentRef`, verified
@@ -135,7 +319,7 @@ verification. Cycle native and browser hosts share the canonical
 `site-output/v1` serialization and a fixed Rust/JavaScript identity fixture;
 native publication writes `site-output.json` only after full-tree verification.
 Focused gates: `cargo test -p content_store -p site_build --no-default-features`,
-`cargo test -p site_build --features site-db-compat`, and Cycle renderer tests.
+`cargo test -p site_build`, and Cycle renderer tests.
 
 **COMPACT PREPARED PACKAGES V2 — LANDED (2026-07-10).**
 `package_store::PreparedPackage` defines a deterministic compact `.fpp`
@@ -151,14 +335,14 @@ same strict `PreparedPackageSetRequest` parser/executor and reject unsafe labels
 before constructing cache/output paths. Their ordinary manifest output and `.fpp`
 bytes are identical; `fig --json` adds only its standard API envelope. WASM
 exposes `Session.mountPrepared(bytes, expectedKey)`. The editor Worker uses the
-batch/cold APIs below and stores artifacts through its verified OPFS ContentStore.
+staged/cold APIs below and stores artifacts through its verified OPFS ContentStore.
 Focused gates: `cargo test -p package_store -p package_acquisition`, the prepared
 mount tests in `wasm_api`, and a real two-binary artifact `cmp`.
 Cold hosts can call `Session.prepareAndMount` once then drain direct binary
 artifacts with `takePrepared`; warm hosts can atomically call
 `beginPreparedMount` / per-artifact `stagePreparedMount` /
-`commitPreparedMount`; failure aborts without package mutation. The compatibility
-batch API remains. Both return phase and compressed/lazy-storage metrics.
+`commitPreparedMount`; failure aborts without package mutation. These paths
+return phase and compressed/lazy-storage metrics.
 Cold metrics separate JSON parsing, base64 decoding, normalization, derived-index
 construction, artifact encoding, and mount time with input/base64/decoded/
 normalized/artifact byte counts; warm metrics separate manifest parsing,

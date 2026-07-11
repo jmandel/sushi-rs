@@ -1,5 +1,5 @@
 //! `fig` — the unified FHIR IG CLI. ONE binary; subcommands map onto the SAME
-//! engine core the wasm Session exposes (docs/unified-cli-plan.md).
+//! engine core used by the wasm Session.
 //!
 //! IRON RULE: subcommands contain NO logic — each is arg-parse → engine-core
 //! call → output. Any composition the engine lacks lives in `fig::engine` (a
@@ -30,7 +30,6 @@ fn main() {
         Some("resolve") => cmd_resolve(&args),
         Some("packages") => cmd_packages(&args),
         Some("expand") => cmd_expand(&args),
-        Some("sitedb") => cmd_sitedb(&args),
         Some("prepare") => cmd_prepare(&args),
         Some("fragment") => cmd_fragment(&args),
         Some("fragments") => cmd_fragments(&args),
@@ -178,20 +177,13 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
             Ok(value)
         }
         Some("bundle") => {
-            // `--template <id#ver>` emits the editor's warm-start artifact from the
-            // LOADER's materialized template tree (task #39: the packed-bundle the
-            // editor consumes becomes an artifact the loader emits — same bytes the
-            // parity gate proves). Otherwise the regular package-bundle path.
-            if let Some(coord) = opt(args, "--template") {
-                return cmd_bundle_template(args, coord);
-            }
             let cache = opt(args, "--cache").context("packages bundle needs --cache <dir>")?;
             let out = opt(args, "-o")
                 .or_else(|| opt(args, "--out"))
                 .context("packages bundle needs --out <dir>")?;
-            let labels = package_labels(args, 3);
+            let labels = package_labels(args, 3)?;
             if labels.is_empty() {
-                bail!("packages bundle needs at least one <id#version> (or --template <id#ver>)");
+                bail!("packages bundle needs at least one <id#version>");
             }
             let manifest =
                 package_acquisition::build_bundle_set(Path::new(cache), &labels, Path::new(out))?;
@@ -224,55 +216,6 @@ fn cmd_packages(args: &[String]) -> Result<Value> {
             "usage: fig packages <fetch <id#ver> | bundle|prepare --cache <dir> --out <dir> <id#ver>...>"
         ),
     }
-}
-
-/// `fig packages bundle --template <id#ver>` — materialize the template chain via
-/// the LOADER and emit it as the editor's warm-start artifact: a `mountSite`-
-/// compatible files-JSON (`{ "<rel>": "<text>" | {"b64":"<bytes>"} }`), plus a
-/// small manifest. This is the SAME materialized bytes the parity gate proves, so
-/// the editor's warm-start template tree is loader-produced (task #39). Text files
-/// go verbatim; binary assets are base64'd — exactly the shape `mountSite` /
-/// `mountTemplate` parse.
-fn cmd_bundle_template(args: &[String], coord: &str) -> Result<Value> {
-    let out = opt(args, "-o")
-        .or_else(|| opt(args, "--out"))
-        .context("packages bundle --template needs -o <file.json>")?;
-    let cache = opt(args, "--template-cache")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("fig-template-cache"));
-    let cas =
-        package_acquisition::PackageCas::new(package_acquisition::PackageCas::default_root()?);
-    let registries = package_acquisition::default_registries();
-    let offline = has(args, "--offline");
-    let tree = fig::template::acquire_and_materialize(coord, &cache, &cas, &registries, offline)?;
-
-    // Build the mountSite files-JSON: UTF-8 text verbatim, else {"b64":...}.
-    let mut files = serde_json::Map::new();
-    let mut binary = 0usize;
-    for (rel, bytes) in tree.files() {
-        let v = match std::str::from_utf8(bytes) {
-            Ok(text) => json!(text),
-            Err(_) => {
-                binary += 1;
-                json!({ "b64": fig::template::b64_encode(bytes) })
-            }
-        };
-        files.insert(rel.clone(), v);
-    }
-    let doc = json!({
-        "template": coord,
-        "files": Value::Object(files),
-        "fileCount": tree.len(),
-        "binaryCount": binary,
-    });
-    std::fs::write(out, serde_json::to_vec(&doc)?).with_context(|| format!("write {out}"))?;
-    if !has(args, "--json") {
-        eprintln!(
-            "fig packages bundle --template {coord}: {} files ({binary} binary) -> {out}",
-            tree.len()
-        );
-    }
-    Ok(json!({ "out": out, "template": coord, "fileCount": tree.len(), "binaryCount": binary }))
 }
 
 // ===========================================================================
@@ -308,52 +251,6 @@ fn cmd_expand(args: &[String]) -> Result<Value> {
         println!("{}", serde_json::to_string_pretty(&payload)?);
     }
     Ok(payload)
-}
-
-// ===========================================================================
-// sitedb — S1-S7 producer (site_db build)
-// ===========================================================================
-fn cmd_sitedb(args: &[String]) -> Result<Value> {
-    let ig = positional(args, 2)
-        .context("usage: fig sitedb <ig-dir> --sushi-out <dir> --cache <dir> -o <site.db>")?;
-    let sushi_out = opt(args, "--sushi-out").context("--sushi-out <dir> is required")?;
-    let cache = opt(args, "--cache").context("--cache <dir> is required")?;
-    let out_db = opt(args, "-o")
-        .or_else(|| opt(args, "--out"))
-        .context("-o <site.db> is required")?;
-    let build_epoch = resolve_build_epoch(opt(args, "--build-date"))?;
-    let config = site_db::BuildConfig {
-        ig_dir: PathBuf::from(ig),
-        sushi_out: PathBuf::from(sushi_out),
-        cache_dir: PathBuf::from(cache),
-        out_db: PathBuf::from(out_db),
-        build_epoch_secs: build_epoch,
-        branch: opt(args, "--branch").map(str::to_string),
-        revision: opt(args, "--revision").map(str::to_string),
-        run_sushi: !has(args, "--no-sushi"),
-        core_package: opt(args, "--core")
-            .unwrap_or("hl7.fhir.r4.core#4.0.1")
-            .to_string(),
-        layer_b: snapshot_gen::LayerBOptions::default(),
-    };
-    let report = site_db::build_and_write(&config)?;
-    if !has(args, "--json") {
-        eprintln!(
-            "fig sitedb: {} nodes ({} clean, {} dirty){}",
-            report.ledger.nodes.len(),
-            report.clean.len(),
-            report.dirty.len(),
-            if report.no_op { " — NO-OP" } else { "" },
-        );
-        println!("{out_db}");
-    }
-    Ok(json!({
-        "out": out_db,
-        "nodes": report.ledger.nodes.len(),
-        "clean": report.clean.len(),
-        "dirty": report.dirty.len(),
-        "noOp": report.no_op,
-    }))
 }
 
 // ===========================================================================
@@ -630,15 +527,18 @@ fn has(args: &[String], name: &str) -> bool {
     args.iter().any(|a| a == name)
 }
 
-fn package_labels(args: &[String], start: usize) -> Vec<String> {
+fn package_labels(args: &[String], start: usize) -> Result<Vec<String>> {
     let mut labels = Vec::new();
     let mut index = start;
     while index < args.len() {
         match args[index].as_str() {
-            "--cache" | "--out" | "-o" | "--template" | "--cas" | "--registry" => {
+            "--cache" | "--out" | "-o" => {
                 index += 2;
             }
             "--json" => index += 1,
+            value if value.starts_with('-') => {
+                bail!("packages bundle: unknown option {value}")
+            }
             value => {
                 if value.contains('#') {
                     labels.push(value.to_string());
@@ -647,7 +547,7 @@ fn package_labels(args: &[String], start: usize) -> Vec<String> {
             }
         }
     }
-    labels
+    Ok(labels)
 }
 
 fn resolve_build_epoch(arg: Option<&str>) -> Result<i64> {
@@ -692,7 +592,6 @@ fn print_usage() {
          \x20 resolve --cache <dir> (--root i#v | --project d) Dependency closure\n\
          \x20 packages fetch <i#v> | bundle|prepare --cache -o <dir> Package artifacts\n\
          \x20 expand <vs.json> [--resources <r.json>]          Tier-1 VS expansion\n\
-         \x20 sitedb <ig> --sushi-out <d> --cache <d> -o <db>  S1-S7 site.db producer\n\
          \x20 prepare <ig> --target cycle-site/v2              Closed external-build bundle\n\
          \x20         --sushi-out <new> --cache <d> --out <new>\n\
          \x20         --build-date <epoch|RFC3339>\n\

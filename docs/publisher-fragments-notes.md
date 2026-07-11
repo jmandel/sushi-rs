@@ -1,5 +1,9 @@
 # How the Java IG Publisher decides WHAT xhtml fragments to produce
 
+> Historical oracle research. The pinned Java behavior remains useful evidence,
+> but the `site.db` proposals near the end predate and do not define the current
+> `PreparedGuide -> SiteBuild -> SiteOutput` architecture.
+
 Research date: 2026-07-03. Publisher source pinned to **HL7/fhir-ig-publisher tag `2.2.10`** (commit
 `37a39a2c`, shallow clone in scratchpad). Templates from **HL7/ig-template-base** and
 **HL7/ig-template-fhir** (default branch). Ground truth from a real publisher run under
@@ -164,24 +168,37 @@ HTML page:
 
 ---
 
-## (d) Implications for OUR approach (cycle site-gen live from Resources.Json; sushi-rs site.db)
+## (d) Point-in-time implications from the retired prototype
 
-**Yes — the Publisher's model is "everything, eagerly"; ours is "on demand."** The publisher's default
-is the eager complete menu (79 fragments/SD, ~5,462 base fragment files for ~17 artifacts, ~66% never
-included). Our renderers instead compute a view when a page/route needs it:
+This section originally compared the Publisher with Cycle's then-current
+`Resources.Json` prototype and a proposed `site.db` pipeline. Both interfaces
+were later deleted. The inventory remains useful as a dated gap audit, but none
+of its prototype names or data paths define the current host contract.
 
-- **cycle site-gen** (`…/cycle/site-gen/`) renders per-artifact React pages on demand —
+The durable finding is that the Publisher's model is "everything, eagerly"
+while both current renderers can compute an output only when its path is
+requested. The Publisher's default is the eager complete menu (79 fragments/SD,
+~5,462 base fragment files for ~17 artifacts, ~66% never included). At the time
+of the audit, the prototypes did this as follows:
+
+- **then-current Cycle site-gen** (`…/cycle/site-gen/`) rendered per-artifact React pages on demand —
   `ProfilePage.tsx` builds Key/Differential/Snapshot element tables via `ElementTable`/`elementViews`
   (`ProfilePage.tsx:131-135`), an Examples section (`:75-93`), and machine formats
   (`MachineFormats.tsx`). `fhir/fragments.ts` is a live directive-driven renderer (json/xml payloads,
   `elide`/`except`) — it materializes the *data-payload* fragments, not the publisher's derived-analysis
   menu. This is structurally the rapido idea done natively: produce a view only where consumed.
-- **sushi-rs site.db pipeline**: same philosophy — derive HTML views from the resource DB per route
-  rather than pre-baking a fixed fragment set.
+- **then-proposed `site.db` pipeline**: intended the same philosophy—derive HTML views per route rather
+  than pre-baking a fixed fragment set. It was never retained as the handoff.
+
+Today Cycle consumes a callback-free closed `cycle-site/v2` `SiteBuild`; the
+Publisher path keeps registered fragment discovery internal to Rust. Both are
+hosted through `prepare -> outputs -> render -> finalize`, and both finish as a
+verified `SiteOutput` over the shared `ContentStore`.
 
 ### Fragment kinds in the Publisher's menu that our renderer has NO equivalent for yet
-Cross-referencing the 79-kind SD menu (and CS/VS menus) against what cycle/site.db renders. cycle
-already covers: snapshot/differential/key element tables, examples list, machine formats
+The following is the **2026-07-03 inventory**, not a current completeness claim.
+It cross-referenced the 79-kind SD menu (and CS/VS menus) against what the two
+prototypes rendered. Cycle then covered snapshot/differential/key element tables, examples list, machine formats
 (json/xml/ttl code blocks), dependency/globals/ip-statements includes
 (`project/includes.ts:53-73`), CodeSystem content, ValueSet expansion pages. **Missing equivalents:**
 
@@ -203,8 +220,8 @@ already covers: snapshot/differential/key element tables, examples list, machine
    (aggregated cross-profile spanning tables), `experimental-warning`, `maturity`/`status`,
    `other-versions`.
 
-For OUR pipeline the practical takeaway: we don't need to match the eager menu 1:1 — most of it is
-never included even by the stock template. The high-value gaps to prioritize are the ones a normal IG's
+The audit's practical takeaway was that a renderer need not eagerly materialize the menu 1:1—most of it is
+never included even by the stock template. The high-value gaps it identified were the ones a normal IG's
 pages actually reference: **xref/used-by, mappings, invariant tables, terminology binding/tx views, the
 data dictionary, and downloadable csv/xlsx/ttl/shex/json-schema**. cross-version-analysis is genuinely
 outside a single-package DB and is reasonable to keep stubbed.

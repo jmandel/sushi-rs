@@ -1,22 +1,21 @@
 # Engine documentation map
 
-Documentation in this directory spans several implementation phases. Use the
-following precedence when statements conflict:
+Documentation in this directory includes current contracts and dated evidence.
+Use the following precedence when statements conflict:
 
-1. the editor's current
-   [`SPEC.md`](https://github.com/jmandel/fhir-ig-editor/blob/main/SPEC.md) for
+1. the editor's current [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) for
    the cross-repository browser/renderer contract;
 2. the engine [`README.md`](../README.md),
    [`crates/site_build/README.md`](../crates/site_build/README.md), and current
    guides below for engine-specific contracts; then
-3. dated plans, audits, surveys, and worklogs as historical evidence.
+3. dated audits, surveys, and performance records as historical evidence.
 
 ## Current guides and contracts
 
 | Document | Authority |
 | --- | --- |
-| [`hosting.md`](hosting.md) | Current guide to isolated `Session` ownership, compile/projection sequencing, closed external builds, native typed resolution, CLI hosting, and envelopes. |
-| [`site-producer.md`](site-producer.md) | Current implementation note for source-driven Publisher page shells and `_data`, including the landed WASM path and known model gaps. |
+| [`hosting.md`](hosting.md) | The four-operation site facade, immutable handles, ContentStore plumbing, generator differences, and removed APIs. |
+| [`site-producer.md`](site-producer.md) | Publisher page/data/runtime assembly, asset provenance, relative aliases, and known model gaps. |
 | [`package-derived-index.md`](package-derived-index.md) | Implemented native CAS derived-index design and invariants. |
 | [`opfs-cas-design.md`](opfs-cas-design.md) | Implemented cross-host `ContentStore`, binary `PreparedPackage`, OPFS warm path, resolution-lock rules, and benchmark commands. |
 | [`designs/package-acquisition-plan.md`](designs/package-acquisition-plan.md) | Historical design for the now-implemented CAS/acquisition/materialization subsystem; current commands live in the root README. |
@@ -33,29 +32,13 @@ or investigated surface rather than today's architecture:
 | --- | --- |
 | [`ig-jekyll-surface-survey.md`](ig-jekyll-surface-survey.md) | Empirical Liquid/Jekyll feature distribution. |
 | [`publisher-fragments-notes.md`](publisher-fragments-notes.md) | Pinned Java Publisher fragment-generation behavior. |
-| [`rust-fragment-generator-feasibility.md`](rust-fragment-generator-feasibility.md) | Pre-implementation feasibility study. |
-| [`template-machinery-notes.md`](template-machinery-notes.md) | Investigation that led to the driven template loader. |
 | [`layer-b-audit.md`](layer-b-audit.md) | Pinned Publisher/core versioning and projection audit. |
 | [`perf31.md`](perf31.md), [`perf-snapshot-gen.md`](perf-snapshot-gen.md) | Performance methodology and measured findings. |
+| [`sushi-rust-port-plan.md`](../sushi-rust-port-plan.md) | Original compiler-port design brief and pre-port performance evidence; superseded as architecture. |
 
-## Historical plans and ledgers
-
-These explain how the current code was derived. They are not active API or
-product specifications:
-
-- [`stock-template-renderer-plan.md`](stock-template-renderer-plan.md)
-- [`unified-cli-plan.md`](unified-cli-plan.md)
-- [`cycle-package-db-plan.md`](cycle-package-db-plan.md)
-- [`wasm-editor-plan.md`](wasm-editor-plan.md)
-- [`fhir-ig-editor-spec.md`](fhir-ig-editor-spec.md)
-- [`render-worklog.md`](render-worklog.md)
-- [`simplification-ledger.md`](simplification-ledger.md)
-
-Their shipped findings may still be correct, but terms such as “all adapters
-consume site.db,” “first include miss,” “global engine,” or milestone/branch
-status must not be treated as the current contract. In particular, `SiteBuild`
-is now renderer-neutral, Cycle receives a verified `ClosedSiteBuild`, and native
-Publisher pages use a typed `ArtifactResolver`.
+Obsolete implementation plans and worklogs were removed when their v1 APIs were
+deleted. Historical documents that remain preserve unique oracle or measurement
+evidence; they do not define a supported host surface.
 
 ## Point-in-time corpus and performance records
 

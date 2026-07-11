@@ -43,7 +43,8 @@ pub use resolve::{
 };
 pub use source::{DirEntry, DiskSource, PackageSource};
 pub use template_loader::{
-    materialize as materialize_template, AntHookError, TemplatePaths, TemplateTree,
+    materialize as materialize_template, resolve_base_chain as resolve_template_base_chain,
+    AntHookError, TemplatePaths, TemplateResolution, TemplateTree,
 };
 
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
@@ -269,8 +270,7 @@ fn parse_config(ig_dir: &str) -> anyhow::Result<ProjectConfig> {
 
 /// Same dependency-graph resolution as [`parse_config`], but from the
 /// `sushi-config.yaml` TEXT rather than reading it off disk. This is the last
-/// read-path `std::fs` site the wasm build needed to shed (see
-/// docs/wasm-editor-plan.md §4.3): the browser passes the config text through the
+/// read-path `std::fs` site the wasm build needed to shed: the browser passes the config text through the
 /// API. Native callers keep `parse_config` (identical behavior; it just reads
 /// then delegates here).
 pub(crate) fn parse_config_text(text: &str) -> anyhow::Result<ProjectConfig> {

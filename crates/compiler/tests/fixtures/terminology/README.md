@@ -10,9 +10,8 @@ These fixtures drive `crates/compiler/tests/oracle_tx.rs`, the ORACLE gate for
   tx.fhir.org via the `tx-resource` expand parameter so BOTH expanders see the
   same complete content for the synthetic/local cases).
 - `../goldens/terminology/<name>.golden.json` — the tx.fhir.org `$expand`
-  response, **committed** with its `expansion.parameter` (per
-  docs/cycle-package-db-plan.md §3: cache each `$expand` WITH the code-system
-  versions the server used). These are the AUTHORITY the evaluator is gated
+  response, **committed** with its `expansion.parameter`, including the
+  code-system versions the server used. These are the AUTHORITY the evaluator is gated
   against.
 
 ## Provenance (per §3 cache discipline)

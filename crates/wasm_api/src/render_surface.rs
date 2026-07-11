@@ -35,13 +35,16 @@ use std::rc::Rc;
 #[cfg(test)]
 use package_store::bundle::BundleSource;
 use package_store::source::PackageSource;
+#[cfg(test)]
+use render_page::{legacy_include_to_artifact_key, ArtifactCacheEntry};
 use render_page::{
-    legacy_include_to_artifact_key, render_page, ArtifactCacheEntry,
-    FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider, SharedArtifactCache,
-    SiteData,
+    render_page, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider,
+    SharedArtifactCache, SiteData,
 };
 use render_sd::context::{IgContext, ResourceIdentity};
-use render_sd::engine::{FragError, FragmentEngine, IgFacts};
+#[cfg(test)]
+use render_sd::engine::FragError;
+use render_sd::engine::{FragmentEngine, IgFacts};
 use render_sd::tree::{DirEntry, MemTree, TreeSource};
 use serde_json::Value;
 
@@ -98,12 +101,6 @@ pub struct SiteOptions {
     /// value so re-renders are stable and the ledgers can hash outputs.
     #[serde(default)]
     pub run_uuid: Option<String>,
-    /// Merge into the existing mounted tree instead of REPLACING it. The
-    /// editor mounts a large packed template tree ONCE, then per-compile
-    /// re-mounts only the small live-overlay set (pagecontent copies + shims)
-    /// with merge:true — only the cheap page surface drops for such overlays.
-    #[serde(default)]
-    pub merge: bool,
     /// Include resolution order. TRUE (default; the stock-template path): live
     /// engine fragments shadow staged tree copies. FALSE: mounted `_includes`
     /// win and the resolver is consulted only afterward.
@@ -128,19 +125,9 @@ impl Default for SiteOptions {
         Self {
             active_tables: false,
             run_uuid: None,
-            merge: false,
             engine_first_includes: true,
             artifact_resolution: true,
         }
-    }
-}
-
-impl SiteOptions {
-    /// Whether two site mounts have identical inputs to the FragmentEngine.
-    /// Include precedence, artifact callbacks, and merge policy belong to the
-    /// page surface and therefore do not invalidate semantic FHIR state.
-    pub fn same_fragment_semantics(&self, other: &Self) -> bool {
-        self.active_tables == other.active_tables && self.run_uuid == other.run_uuid
     }
 }
 
@@ -396,42 +383,10 @@ impl RenderState {
         provider
     }
 
-    /// ContentApi: render a Liquid source against the session provider —
-    /// includes resolve engine-first then from the mounted `/site/_includes`,
-    /// `site.data` from the mounted `_data`, plus caller globals from
-    /// `data_json` (a JSON object of top-level variables). markdownify is the
-    /// kramdown hook (Jekyll semantics), same as the page pass.
-    pub fn render_liquid_src(&self, source: &str, data_json: &str) -> Result<String, String> {
-        let mut globals: Vec<(String, render_liquid::Value)> = Vec::new();
-        if !data_json.trim().is_empty() {
-            let v: Value = serde_json::from_str(data_json)
-                .map_err(|e| format!("renderLiquid: bad data JSON: {e}"))?;
-            let obj = v
-                .as_object()
-                .ok_or_else(|| "renderLiquid: data must be a JSON object".to_string())?;
-            for (k, val) in obj {
-                globals.push((k.clone(), render_page::sitedata::json_to_value(val)));
-            }
-        }
-        let provider = self.provider();
-        let refs: Vec<(&str, render_liquid::Value)> = globals
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.clone()))
-            .collect();
-        Ok(render_liquid::render_with(
-            source,
-            &provider,
-            &refs,
-            render_liquid::Options {
-                publisher_raw_quirk: false,
-                markdownify: Some(render_page::markdownify),
-            },
-        ))
-    }
-
     /// Render one fragment through the SHARED typed artifact cache. Its key is
     /// the fragment artifact translated from
     /// `{ref}-{kind}.xhtml`, the same key the page include loop uses.
+    #[cfg(test)]
     pub fn render_fragment(&self, ref_: &str, kind: &str) -> Result<String, FragError> {
         let include_name = if ref_.is_empty() {
             format!("{kind}.xhtml")
@@ -458,6 +413,7 @@ impl RenderState {
     /// in a flat layout) — the same string is the Jekyll `page.path`. A source
     /// without front matter is a static file: returned verbatim (the
     /// publisher's Jekyll copies those unrendered).
+    #[cfg(test)]
     pub fn render_page_by_name(&self, name: &str) -> Result<String, String> {
         self.render_page_tracked_by_name(name).map(|(html, _)| html)
     }
@@ -731,7 +687,6 @@ mod tests {
         let opts = SiteOptions {
             active_tables: true,
             run_uuid: Some(uuid),
-            merge: false,
             engine_first_includes: true,
             artifact_resolution: true,
         };

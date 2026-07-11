@@ -1,6 +1,5 @@
 //! render_liquid — a just-enough Jekyll/Liquid (T1+T2) engine at Publisher
-//! parity, for the stock-template renderer (docs/stock-template-renderer-plan.md
-//! task F1c).
+//! parity, for the Publisher-compatible native-template renderer.
 //!
 //! # Scope
 //! This engine reproduces the surface measured in
