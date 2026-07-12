@@ -123,6 +123,27 @@ preparation; `site_build` owns `SiteBuild`, closure proofs, `ContentRef`, and
 prepare --target cycle-site/v2` publishes a native closed bundle for external
 builders. `fig render` is the direct Publisher-template path.
 
+Native complete-output reuse is the host composition in
+`fig::output_cache`. `load` accepts a `ClosedSiteBuild` plus the exact renderer
+implementation/recipe, output schema, and options; it returns only a fully
+verified canonical `SiteOutput` or an ordinary miss. `publish_tree` accepts the
+same closed input and a renderer-sealed tree containing canonical
+`site-output.json`, imports its declared bytes into `FileContentStore`, and
+atomically publishes the receipt through `FileSiteOutputCache`. The thin
+`fig output-cache load|publish` commands expose those library calls to Cycle's
+native Bun host; they do not define another manifest.
+
+Cycle materializes a hit into its existing private
+`AtomicOutputPublication` staging directory, validates the receipt and all
+files through its independent SiteOutput implementation, and re-verifies them
+immediately before the normal atomic rename. On a miss it renders as before,
+seals the same receipt, imports it into the cache, and publishes. Browser Cycle
+continues to use the four-operation worker facade and is unaffected.
+
+The legacy staged-tree `fig render` path is deliberately not cached this way:
+it has no `ClosedSiteBuild`, and filesystem paths or mtimes cannot stand in for
+the canonical input identity.
+
 Package acquisition and warm mounting remain separate from generation. Package
 coordinates are exact, a compiled revision retains the resolution closure used
 for compilation, and later mounts affect only a later compile.

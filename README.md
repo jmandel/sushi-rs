@@ -112,9 +112,13 @@ fig packages prepare --cache <d> -o <d> id#v  # versioned binary warm-mount arti
 fig expand <valueset.json>                 # tier-1 enumerable expansion
 fig prepare <ig> --target cycle-site/v2 --sushi-out <new> \
   --cache <d> --out <new> --build-date <epoch>  # sealed external-builder bundle
+fig output-cache load <bundle> --cache <d> \
+  --renderer-id <id> --renderer-version <v> --recipe-sha256 <digest> \
+  --output-schema <schema> [--option key=value] [--into <empty-staging>]
+fig output-cache publish <bundle> --cache <d> --site <sealed-site>
 fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment
 fig fragments <build-dir> -o _includes/    # materialize fragment files (escape hatch)
-fig watch <build-dir> --serve :8080        # incremental dev loop + live-reload
+fig watch <build-dir> --serve :8080        # legacy staged-tree watcher
 ```
 
 The former `fig render --generator ts:<adapter.mjs>` runner has been removed.
@@ -139,9 +143,28 @@ Cycle's native consumer is then
 reachable artifact closure, digest, and byte length before rendering through
 the same `CycleSiteRenderer` used in the browser.
 
-`fig watch --serve` is the native twin of the browser editor: an mtime poll →
-dirty cone (via the fragment read-set boundary) → re-render only dirtied pages →
-serve with live-reload. Warm page edits re-render in ~270 ms on us-core.
+That consumer composes [`fig::output_cache`](crates/fig/src/output_cache.rs)
+around the canonical render. Before opening the generator it supplies the exact
+closed build, renderer id/version/recipe, output schema, and options to
+`fig output-cache load`; a hit verifies the cached `SiteOutput` and every
+addressed byte, then fills Cycle's private atomic-publication staging tree.
+After a miss, Cycle seals the ordinary `site-output.json` and calls
+`fig output-cache publish` before publishing the tree. The cache root contains
+only a `FileSiteOutputCache` under `manifests/` and a `FileContentStore` under
+`objects/sha256/`. Set `FIG_OUTPUT_CACHE` to choose the root (Cycle defaults to
+`temp/fig-output-cache`).
+
+This does not wrap legacy `fig render`: that staged Publisher-tree command has
+no canonical `ClosedSiteBuild`, so it cannot compute a truthful pre-render
+`sok1` key. A path, mtime, or mutable tree hash is not substituted for the
+missing domain input.
+
+`fig watch --serve` is a legacy watcher for an already-staged Publisher tree.
+It neither compiles FSH nor follows `prepare -> outputs -> render -> finalize`,
+so it is not the native twin of the browser editor and its old page-only timing
+must not be compared with an editable build. It remains only while its useful
+read-set/dirty-cone machinery is moved behind the canonical host flow, then it
+is a deletion target rather than a second architecture.
 
 ## Where to look
 

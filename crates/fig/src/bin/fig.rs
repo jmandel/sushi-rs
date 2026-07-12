@@ -8,7 +8,9 @@
 //! `--json` on every subcommand emits the shared `api_envelope` envelope,
 //! schema-identical to the Session's.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
 use api_envelope::{envelope, API_VERSION};
@@ -31,6 +33,7 @@ fn main() {
         Some("packages") => cmd_packages(&args),
         Some("expand") => cmd_expand(&args),
         Some("prepare") => cmd_prepare(&args),
+        Some("output-cache") => cmd_output_cache(&args),
         Some("fragment") => cmd_fragment(&args),
         Some("fragments") => cmd_fragments(&args),
         Some("produce") => cmd_produce(&args),
@@ -285,6 +288,144 @@ fn cmd_prepare(args: &[String]) -> Result<Value> {
 }
 
 // ===========================================================================
+// output-cache — exact native SiteOutput lookup/publication
+// ===========================================================================
+fn cmd_output_cache(args: &[String]) -> Result<Value> {
+    let action = positional(args, 2)
+        .context("usage: fig output-cache <load|publish> <closed-bundle> --cache <dir> ...")?;
+    let bundle = positional(args, 3).context("output-cache needs <closed-bundle>")?;
+    let cache = opt(args, "--cache").context("output-cache needs --cache <dir>")?;
+    let total_started = Instant::now();
+    let verify_started = Instant::now();
+    let closed = fig::output_cache::open_closed_bundle(Path::new(bundle))?;
+    let verify_input_ms = millis(verify_started.elapsed());
+
+    match action {
+        "load" => {
+            let (renderer, output_schema, options) = output_cache_derivation(args)?;
+            let lookup_started = Instant::now();
+            let loaded = fig::output_cache::load(
+                &closed,
+                Path::new(cache),
+                &renderer,
+                &output_schema,
+                &options,
+            )?;
+            let lookup_ms = millis(lookup_started.elapsed());
+            let materialize_started = Instant::now();
+            if let (Some(output), Some(destination)) = (&loaded.output, opt(args, "--into")) {
+                fig::output_cache::materialize(output, Path::new(cache), Path::new(destination))?;
+            }
+            let materialize_ms = millis(materialize_started.elapsed());
+            let payload = json!({
+                "cacheHit": loaded.output.is_some(),
+                "cacheKey": loaded.cache_key,
+                "outputId": loaded.output.as_ref().map(|output| output.output_id()),
+                "files": loaded.output.as_ref().map_or(0, |output| output.files().len()),
+                "out": loaded.output.as_ref().and_then(|_| opt(args, "--into")),
+                "timings": {
+                    "verifyInputMs": verify_input_ms,
+                    "lookupMs": lookup_ms,
+                    "materializeMs": materialize_ms,
+                    "totalMs": millis(total_started.elapsed()),
+                },
+            });
+            if !has(args, "--json") {
+                if loaded.output.is_some() {
+                    eprintln!(
+                        "fig output-cache: verified hit {} ({} files, {:.1} ms)",
+                        loaded.cache_key,
+                        loaded
+                            .output
+                            .as_ref()
+                            .map_or(0, |output| output.files().len()),
+                        millis(total_started.elapsed()),
+                    );
+                } else {
+                    eprintln!(
+                        "fig output-cache: miss {} ({:.1} ms)",
+                        loaded.cache_key,
+                        millis(total_started.elapsed()),
+                    );
+                }
+            }
+            Ok(payload)
+        }
+        "publish" => {
+            let site = opt(args, "--site").context("output-cache publish needs --site <dir>")?;
+            let publish_started = Instant::now();
+            let (output, already_present) =
+                fig::output_cache::publish_tree(&closed, Path::new(cache), Path::new(site))?;
+            let payload = json!({
+                "cacheKey": output.cache_key(),
+                "outputId": output.output_id(),
+                "files": output.files().len(),
+                "alreadyPresent": already_present,
+                "timings": {
+                    "verifyInputMs": verify_input_ms,
+                    "importAndPublishMs": millis(publish_started.elapsed()),
+                    "totalMs": millis(total_started.elapsed()),
+                },
+            });
+            if !has(args, "--json") {
+                eprintln!(
+                    "fig output-cache: {} {} ({} files, {:.1} ms)",
+                    if already_present {
+                        "verified"
+                    } else {
+                        "published"
+                    },
+                    output.cache_key(),
+                    output.files().len(),
+                    millis(total_started.elapsed()),
+                );
+            }
+            Ok(payload)
+        }
+        other => bail!("output-cache action must be load or publish, got {other}"),
+    }
+}
+
+fn output_cache_derivation(
+    args: &[String],
+) -> Result<(
+    site_build::RendererImplementation,
+    String,
+    BTreeMap<String, String>,
+)> {
+    let renderer_id =
+        opt(args, "--renderer-id").context("output-cache load needs --renderer-id")?;
+    let renderer_version =
+        opt(args, "--renderer-version").context("output-cache load needs --renderer-version")?;
+    let recipe = opt(args, "--recipe-sha256")
+        .context("output-cache load needs --recipe-sha256 <64 lowercase hex>")?;
+    let output_schema =
+        opt(args, "--output-schema").context("output-cache load needs --output-schema")?;
+    let mut options = BTreeMap::new();
+    for option in collect(args, "--option") {
+        let (key, value) = option
+            .split_once('=')
+            .with_context(|| format!("output-cache option must be key=value, got {option}"))?;
+        if options.insert(key.to_string(), value.to_string()).is_some() {
+            bail!("output-cache option repeats key {key}");
+        }
+    }
+    Ok((
+        site_build::RendererImplementation {
+            id: renderer_id.to_string(),
+            version: renderer_version.to_string(),
+            recipe_sha256: site_build::Sha256Digest::parse(recipe)?,
+        },
+        output_schema.to_string(),
+        options,
+    ))
+}
+
+fn millis(duration: std::time::Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
+}
+
+// ===========================================================================
 // fragment — render ONE typed Publisher fragment
 // ===========================================================================
 fn cmd_fragment(args: &[String]) -> Result<Value> {
@@ -463,7 +604,7 @@ fn cmd_render(args: &[String]) -> Result<Value> {
 }
 
 // ===========================================================================
-// watch — incremental dev loop, native twin of the browser editor
+// watch — legacy watcher for an already-staged Publisher tree
 // ===========================================================================
 fn cmd_watch(args: &[String]) -> Result<Value> {
     let build = positional(args, 2).context("usage: fig watch <build-dir> [--serve <addr>]")?;
@@ -595,6 +736,7 @@ fn print_usage() {
          \x20 prepare <ig> --target cycle-site/v2              Closed external-build bundle\n\
          \x20         --sushi-out <new> --cache <d> --out <new>\n\
          \x20         --build-date <epoch|RFC3339>\n\
+         \x20 output-cache load|publish <bundle> --cache <d>   Exact SiteOutput reuse\n\
          \x20 fragment <build-dir> <ref> <kind>                Render ONE fragment\n\
          \x20 fragments <build-dir> -o <dir> [--kinds k1,k2]   Materialize fragment files\n\
          \x20 render <build-dir> -o <site/> [--template i#v]  Full static site (Publisher parity)\n\

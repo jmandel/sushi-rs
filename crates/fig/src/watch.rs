@@ -1,9 +1,9 @@
-//! `fig watch [--serve :port]` — the incremental dev loop, the native twin of
-//! the browser editor.
+//! `fig watch [--serve :port]` — legacy incremental loop for a staged tree, not
+//! the browser editor's canonical compile/prepare/render/finalize host flow.
 //!
 //! fs poll (dependency-free mtime scan) → dirty cone → re-render only dirtied
-//! pages → serve with live-reload. The dirty cone is derived from the SAME
-//! read-set boundary the editor uses:
+//! pages → serve with live-reload. The dirty cone is derived from the staged
+//! page renderer's read-set boundary:
 //!   - each page's typed artifact request/read sets are captured by
 //!     `render_page_tracked`; a resource edit re-renders pages with that exact
 //!     resource scope, while a whole-IG request invalidates on any resource edit;

@@ -182,17 +182,16 @@ struct Engine {
     /// A SiteBuild may only claim this closure when its compile used those same
     /// config bytes.
     resolved_packages: Option<ResolvedPackages>,
-    /// Last `compile()` outputs `(synthetic path, body)`, indexed as local
-    /// resources for snapshot base resolution.
+    /// Current `compileProject()` outputs `(synthetic path, body)`, indexed as
+    /// local resources for snapshot base resolution.
     last_compiled: Vec<(PathBuf, Value)>,
-    /// Authored inputs that can affect the semantic render set. Site-file
-    /// CONTENT is deliberately absent: only its page listing reaches IG export.
-    /// This lets prose-only edits retain an exactly-equal FragmentEngine while
-    /// config, FSH, predefined resources, or the narrative tree invalidate it.
-    last_render_semantic_inputs: Option<RenderSemanticInputs>,
+    /// Exact compiler identity installed in `last_compiled`. Site-file CONTENT
+    /// is deliberately absent: only its page listing reaches IG export. The
+    /// resolved package fixpoint is part of this key, so a semantically equal
+    /// authored project under a different exact closure cannot reuse compiler
+    /// state or retain downstream preparation caches.
+    last_compile_key: Option<SemanticCompilationKey>,
     /// Exact authored inputs for the last successful `compileProject` call.
-    /// Legacy `compile` deliberately leaves this absent, preventing it from
-    /// masquerading as a complete project revision.
     last_project: Option<CompiledProjectRevision>,
     /// Serialized public result of the last successful semantic compile. This
     /// is retained beside `last_project` only so an exactly compiler-equivalent
@@ -201,6 +200,10 @@ struct Engine {
     /// existing semantic/project identities are the sole reuse authority.
     last_compile_result: Option<CompileResult>,
     last_compile_diagnostics: Vec<DiagnosticJs>,
+    /// The one exact successful semantic compilation immediately preceding the
+    /// active fields above. A previous hit swaps the two payloads; a third
+    /// distinct success replaces this value. Failed compiles do not touch it.
+    previous_compilation: Option<SemanticCompilation>,
     /// Input page-folder listing (`input/{pagecontent,pages,resource-docs}` ->
     /// filenames) threaded into IG export so the generated IG's `definition.page`
     /// narrative tree is complete (narrative titles + the artifacts-section number).
@@ -218,6 +221,12 @@ struct Engine {
     /// key matches every authored byte, locked package, compiled value,
     /// preparation option, and preparation recipe below.
     prepared_guide_cache: Option<PreparedGuideCacheEntry>,
+    /// Snapshot-completed local resources are independent of authored prose,
+    /// images, data, and includes. Retain exactly one set under a key binding
+    /// the compiled resource values, exact package material/edges, resolver
+    /// order, and snapshot recipe. A hit still re-runs authored augmentation
+    /// and constructs a new complete PreparedGuide for the current revision.
+    snapshot_completed_local_cache: Option<SnapshotCompletedLocalCacheEntry>,
     /// Complete external-builder handoff derived from one exact prepared-guide
     /// key plus target/diagnostics/projection recipe. Keeping the result (CAS
     /// objects included) avoids both semantic preparation and reprojection on a
@@ -243,6 +252,30 @@ struct PreparedGuideCacheEntry {
     guide: site_build::PreparedGuide,
 }
 
+struct SnapshotCompletedLocalCacheEntry {
+    key: site_build::Sha256Digest,
+    generated: Vec<Value>,
+    primary_implementation_guide: Value,
+}
+
+struct PreparationCacheKeys {
+    prepared_guide: site_build::Sha256Digest,
+    snapshot_completed_local: site_build::Sha256Digest,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct SemanticCompilationKey {
+    semantic_inputs_sha256: site_build::Sha256Digest,
+    resolved_packages: ResolvedPackages,
+}
+
+struct SemanticCompilation {
+    key: SemanticCompilationKey,
+    compiled: Vec<(PathBuf, Value)>,
+    result: CompileResult,
+    diagnostics: Vec<DiagnosticJs>,
+}
+
 #[derive(Clone)]
 struct ClosedSiteBuildCacheEntry {
     key: site_build::Sha256Digest,
@@ -253,12 +286,18 @@ struct ClosedSiteBuildCacheEntry {
 #[derive(Default)]
 struct DerivedCacheHits {
     compile_project: u64,
+    snapshot_completed_local: u64,
     prepared_guide: u64,
     closed_site_build: u64,
+    retained_publisher_runtime: u64,
 }
 
 #[derive(Clone)]
 struct PublisherBuildRuntime {
+    /// Private identity of every input that can affect Publisher runtime,
+    /// model, render-state, catalog, or SiteBuild assembly. This is only an
+    /// index over the already-bounded retained runtimes, never a build value.
+    preparation_key: site_build::Sha256Digest,
     state: Rc<RenderState>,
     runtime: Option<site_producer::publisher_runtime::PublisherRuntime>,
     build: site_build::ClosedSiteBuild,
@@ -319,12 +358,42 @@ struct CompiledProjectRevision {
     resolved_packages: Option<ResolvedPackages>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 struct RenderSemanticInputs {
     config: String,
     fsh: BTreeMap<String, String>,
     predefined: BTreeMap<String, Value>,
     page_listing: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SemanticCompilationKeyPayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    engine_api: u32,
+    inputs: &'a RenderSemanticInputs,
+}
+
+const SEMANTIC_COMPILATION_KEY_SCHEMA: &str = "semantic-compilation-key/v1";
+const SEMANTIC_COMPILATION_RECIPE: &str = "sushi.compile-project/v1";
+
+fn semantic_compilation_key(
+    inputs: &RenderSemanticInputs,
+    resolved_packages: &ResolvedPackages,
+    operation: &str,
+) -> Result<SemanticCompilationKey, String> {
+    let semantic_inputs_sha256 = site_build::sha256_canonical(&SemanticCompilationKeyPayload {
+        schema: SEMANTIC_COMPILATION_KEY_SCHEMA,
+        recipe: SEMANTIC_COMPILATION_RECIPE,
+        engine_api: API_VERSION,
+        inputs,
+    })
+    .map_err(|error| format!("{operation}: hash semantic compilation key: {error}"))?;
+    Ok(SemanticCompilationKey {
+        semantic_inputs_sha256,
+        resolved_packages: resolved_packages.clone(),
+    })
 }
 
 fn set_panic_hook() {
@@ -339,19 +408,65 @@ impl Engine {
     /// txcache, active-tables, and run UUID are invalidated at their own mutation
     /// boundaries. Ordinary site bytes and template chrome are intentionally not
     /// FragmentEngine inputs.
-    fn replace_compiled_render_set(
-        &mut self,
-        compiled: Vec<(PathBuf, Value)>,
-        inputs: RenderSemanticInputs,
-    ) {
-        let same_semantics = self.last_compiled == compiled
-            && self.last_render_semantic_inputs.as_ref() == Some(&inputs);
-        self.last_compiled = compiled;
-        self.last_render_semantic_inputs = Some(inputs);
+    fn take_active_compilation(&mut self) -> Option<SemanticCompilation> {
+        let key = self.last_compile_key.take()?;
+        Some(SemanticCompilation {
+            key,
+            compiled: std::mem::take(&mut self.last_compiled),
+            result: self
+                .last_compile_result
+                .take()
+                .expect("an active compilation has a public result"),
+            diagnostics: std::mem::take(&mut self.last_compile_diagnostics),
+        })
+    }
+
+    /// Atomically make one already-successful semantic compilation current and
+    /// retain exactly the displaced current payload. The caller constructs a
+    /// fresh payload completely before this commit, so compiler failures cannot
+    /// disturb the active or previous generation.
+    fn replace_active_compilation(&mut self, next: SemanticCompilation) {
+        let same_semantics = self.last_compile_key.as_ref() == Some(&next.key)
+            && self.last_compiled == next.compiled;
+        let previous = self.take_active_compilation();
+        self.last_compile_key = Some(next.key);
+        self.last_compiled = next.compiled;
+        self.last_compile_result = Some(next.result);
+        self.last_compile_diagnostics = next.diagnostics;
+        self.previous_compilation = previous;
         if !same_semantics {
+            self.snapshot_completed_local_cache = None;
             self.prepared_guide_cache = None;
             self.closed_site_build_cache = None;
         }
+    }
+
+    fn restore_cached_compilation(
+        &mut self,
+        key: &SemanticCompilationKey,
+    ) -> Option<CompileResult> {
+        if self.last_compile_key.as_ref() == Some(key) {
+            let result = self.last_compile_result.clone();
+            #[cfg(test)]
+            {
+                self.derived_cache_hits.compile_project += 1;
+            }
+            return result;
+        }
+        if self.previous_compilation.as_ref().map(|entry| &entry.key) != Some(key) {
+            return None;
+        }
+        let previous = self
+            .previous_compilation
+            .take()
+            .expect("previous compilation key matched");
+        let result = previous.result.clone();
+        self.replace_active_compilation(previous);
+        #[cfg(test)]
+        {
+            self.derived_cache_hits.compile_project += 1;
+        }
+        Some(result)
     }
 
     /// Mount a set of bundles as the package cache, REPLACING any prior mount.
@@ -378,10 +493,12 @@ impl Engine {
         self.package_generation = self.package_generation.wrapping_add(1);
         self.resolved_packages = None;
         self.last_compiled.clear();
-        self.last_render_semantic_inputs = None;
+        self.last_compile_key = None;
         self.last_project = None;
         self.last_compile_result = None;
         self.last_compile_diagnostics.clear();
+        self.previous_compilation = None;
+        self.snapshot_completed_local_cache = None;
         self.prepared_guide_cache = None;
         self.closed_site_build_cache = None;
         Ok(parsed.len() as u32)
@@ -813,16 +930,14 @@ impl Engine {
     }
 
     fn compile_with_resolved(
-        &mut self,
+        &self,
         files_json: &str,
         config: &str,
         predefined_json: &str,
-        resolved: Option<&ResolvedPackages>,
-    ) -> Result<CompileResult, String> {
-        let (source, cache_root, _packages) = match resolved {
-            Some(resolved) => self.source_for_resolved(resolved)?,
-            None => self.source()?,
-        };
+        resolved: &ResolvedPackages,
+        key: SemanticCompilationKey,
+    ) -> Result<SemanticCompilation, String> {
+        let (source, cache_root, _packages) = self.source_for_resolved(resolved)?;
 
         // FSH files: object -> Vec sorted by path (matches the disk walk order).
         let files_map: std::collections::BTreeMap<String, String> =
@@ -844,21 +959,6 @@ impl Engine {
                 .map_err(|e| format!("compile: bad predefined JSON: {e}"))?
         };
         let predefined = ordered_predefined_resources(&predefined_map);
-        let semantic_inputs = RenderSemanticInputs {
-            config: config.to_string(),
-            fsh: files_map,
-            predefined: predefined_map,
-            page_listing: self
-                .page_listing
-                .iter()
-                .map(|(directory, names)| {
-                    let mut names = names.clone();
-                    names.sort();
-                    (directory.clone(), names)
-                })
-                .collect(),
-        };
-
         let cache = cache_root.to_string_lossy().into_owned();
         // Keep the predefined bodies: the compiler consumes them for resolution
         // but does NOT re-emit them as `compiled` output. A predefined-resource IG
@@ -905,8 +1005,6 @@ impl Engine {
         if let Some(ig) = ig_resource {
             render_set.push((PathBuf::from(format!("/__ig__/{}", ig.filename)), ig.body));
         }
-        self.replace_compiled_render_set(render_set, semantic_inputs);
-
         let resources: Vec<CompiledResourceJs> =
             compiled.into_iter().map(CompiledResourceJs::from).collect();
 
@@ -920,19 +1018,17 @@ impl Engine {
             })
             .collect();
 
-        // `compile()` itself does not prove that authored site bytes were in
-        // scope. `compileProject()` immediately replaces this with its complete
-        // input capture after this successful semantic compile.
-        self.last_project = None;
-        self.last_compile_diagnostics = diagnostics.clone();
-
         let result = CompileResult {
             resources,
-            diagnostics,
+            diagnostics: diagnostics.clone(),
             timings: Timings::default(),
         };
-        self.last_compile_result = Some(result.clone());
-        Ok(result)
+        Ok(SemanticCompilation {
+            key,
+            compiled: render_set,
+            result,
+            diagnostics,
+        })
     }
 
     /// Compile with the authored site-file manifest in scope. This is the normal
@@ -977,19 +1073,9 @@ impl Engine {
                 .map(|(directory, names)| (directory.clone(), names.clone()))
                 .collect(),
         };
-        let can_reuse = self.last_render_semantic_inputs.as_ref() == Some(&semantic_inputs)
-            && self
-                .last_project
-                .as_ref()
-                .and_then(|project| project.resolved_packages.as_ref())
-                == Some(&resolved_packages)
-            && self.last_compile_result.is_some();
+        let key = semantic_compilation_key(&semantic_inputs, &resolved_packages, "compileProject")?;
         let previous_page_listing = std::mem::replace(&mut self.page_listing, page_listing);
-        if can_reuse {
-            let result = self
-                .last_compile_result
-                .clone()
-                .expect("reuse guard requires a prior compile result");
+        if let Some(result) = self.restore_cached_compilation(&key) {
             self.last_project = Some(CompiledProjectRevision {
                 config: config.to_string(),
                 fsh,
@@ -997,22 +1083,21 @@ impl Engine {
                 site_files,
                 resolved_packages: Some(resolved_packages),
             });
-            #[cfg(test)]
-            {
-                self.derived_cache_hits.compile_project += 1;
-            }
             return Ok(result);
         }
-        let result = self.compile_with_resolved(
+        let compilation = self.compile_with_resolved(
             files_json,
             config,
             predefined_json,
-            Some(&resolved_packages),
+            &resolved_packages,
+            key,
         );
-        if result.is_err() {
+        if compilation.is_err() {
             self.page_listing = previous_page_listing;
         }
-        let result = result?;
+        let compilation = compilation?;
+        let result = compilation.result.clone();
+        self.replace_active_compilation(compilation);
         self.last_project = Some(CompiledProjectRevision {
             config: config.to_string(),
             fsh,
@@ -1195,8 +1280,22 @@ impl Engine {
         let package_lock = self.site_build_package_lock(&project)?;
         metrics.package_lock_ms = (clock_ms() - started).max(0.0);
         let started = clock_ms();
-        let prepared_key =
-            self.prepared_guide_cache_key(options, &project_revision, &package_lock, operation)?;
+        let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
+            format!("{operation}: compiled revision has no bound package resolver fixpoint")
+        })?;
+        let cache_keys = self.preparation_cache_keys(
+            options,
+            &project_revision,
+            &package_lock,
+            resolved,
+            operation,
+        )?;
+        let prepared_key = cache_keys.prepared_guide;
+        let snapshot_cache_key = cache_keys.snapshot_completed_local;
+        metrics.snapshot_completed_local_cache_hit = self
+            .snapshot_completed_local_cache
+            .as_ref()
+            .is_some_and(|entry| entry.key == snapshot_cache_key);
         metrics.prepared_guide_key_ms = (clock_ms() - started).max(0.0);
 
         let diagnostics = site_build_diagnostics(&self.last_compile_diagnostics);
@@ -1254,7 +1353,8 @@ impl Engine {
             .as_ref()
             .is_some_and(|prepared| prepared.key == prepared_key);
         let started = clock_ms();
-        let prepared_guide = self.site_model_from_compile(options, operation, prepared_key)?;
+        let prepared_guide =
+            self.site_model_from_compile(options, operation, prepared_key, snapshot_cache_key)?;
         metrics.prepared_guide_ms = (clock_ms() - started).max(0.0);
         let started = clock_ms();
         let input = site_build::cycle_semantic::CycleProjectionInput {
@@ -1274,16 +1374,54 @@ impl Engine {
         Ok((projection, metrics))
     }
 
-    /// Canonical lookup identity for the expensive snapshot + semantic
-    /// preparation phase. The key includes the
-    /// actual compiled values as a defensive binding in addition to exact
-    /// source/package identities, so a caller can never turn a hidden compiler
-    /// state difference into a false cache hit.
-    fn prepared_guide_cache_key(
+    /// Compute the whole-PreparedGuide and narrower snapshot-local identities
+    /// from one canonical hash of the compiled revision. Both are private cache
+    /// indexes; neither is a domain handoff or authority independent of the
+    /// value it reconstructs.
+    fn preparation_cache_keys(
         &self,
         input: &PrepareGuideOptions,
         project: &site_build::ProjectRevision,
         package_lock: &site_build::PackageLock,
+        resolved: &ResolvedPackages,
+        operation: &str,
+    ) -> Result<PreparationCacheKeys, String> {
+        let compiled_sha256 = self.compiled_revision_sha256(operation)?;
+        let prepared_guide = site_build::sha256_canonical(&PreparedGuideCachePayload {
+            schema: PREPARED_GUIDE_CACHE_SCHEMA,
+            recipe: PREPARED_GUIDE_RECIPE,
+            engine_api: API_VERSION,
+            project,
+            package_lock,
+            compiled_sha256: &compiled_sha256,
+            build_epoch_secs: input.build_epoch_secs,
+            liquid_asset_dirs: &input.liquid_asset_dirs,
+            branch: input.branch.as_deref(),
+            revision: input.revision.as_deref(),
+        })
+        .map_err(|error| format!("{operation}: hash PreparedGuide cache key: {error}"))?;
+        let snapshot_completed_local =
+            site_build::sha256_canonical(&SnapshotCompletedLocalCachePayload {
+                schema: SNAPSHOT_COMPLETED_LOCAL_CACHE_SCHEMA,
+                recipe: SNAPSHOT_COMPLETED_LOCAL_RECIPE,
+                engine_api: API_VERSION,
+                compiled_sha256: &compiled_sha256,
+                package_lock,
+                resolved_config_sha256: &resolved.config_sha256,
+                resolution_support: &resolved.resolution_support,
+                resolved_labels: &resolved.labels,
+            })
+            .map_err(|error| {
+                format!("{operation}: hash snapshot-completed local cache key: {error}")
+            })?;
+        Ok(PreparationCacheKeys {
+            prepared_guide,
+            snapshot_completed_local,
+        })
+    }
+
+    fn compiled_revision_sha256(
+        &self,
         operation: &str,
     ) -> Result<site_build::Sha256Digest, String> {
         let compiled: BTreeMap<String, &Value> = self
@@ -1300,22 +1438,8 @@ impl Engine {
                 "{operation}: compiled revision contains duplicate paths"
             ));
         }
-        let compiled_sha256 = site_build::sha256_canonical(&compiled)
-            .map_err(|error| format!("{operation}: hash compiled revision: {error}"))?;
-        let payload = PreparedGuideCachePayload {
-            schema: PREPARED_GUIDE_CACHE_SCHEMA,
-            recipe: PREPARED_GUIDE_RECIPE,
-            engine_api: API_VERSION,
-            project,
-            package_lock,
-            compiled_sha256: &compiled_sha256,
-            build_epoch_secs: input.build_epoch_secs,
-            liquid_asset_dirs: &input.liquid_asset_dirs,
-            branch: input.branch.as_deref(),
-            revision: input.revision.as_deref(),
-        };
-        site_build::sha256_canonical(&payload)
-            .map_err(|error| format!("{operation}: hash PreparedGuide cache key: {error}"))
+        site_build::sha256_canonical(&compiled)
+            .map_err(|error| format!("{operation}: hash compiled revision: {error}"))
     }
 
     fn site_model_from_compile(
@@ -1323,6 +1447,7 @@ impl Engine {
         input: &PrepareGuideOptions,
         operation: &str,
         cache_key: site_build::Sha256Digest,
+        snapshot_cache_key: site_build::Sha256Digest,
     ) -> Result<site_build::PreparedGuide, String> {
         if self.last_compiled.is_empty() {
             return Err(format!(
@@ -1340,57 +1465,88 @@ impl Engine {
             }
         }
 
+        let snapshot_cache_hit = self
+            .snapshot_completed_local_cache
+            .as_ref()
+            .is_some_and(|entry| entry.key == snapshot_cache_key);
+        if snapshot_cache_hit {
+            #[cfg(test)]
+            {
+                self.derived_cache_hits.snapshot_completed_local += 1;
+            }
+        } else {
+            let entry = {
+                let project = self.last_project.as_ref().ok_or_else(|| {
+                    format!(
+                        "{operation}: compileProject has not established a complete source revision"
+                    )
+                })?;
+                let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
+                    format!("{operation}: compiled revision has no bound package resolver fixpoint")
+                })?;
+                let (_, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
+                // Validate the distinguished core, but snapshot against the complete
+                // exact closure used by compileProject so profiles may derive from
+                // external dependencies without consulting unrelated mounted versions.
+                self.resolved_core_package(resolved, &project.config, &fhir_version, operation)?;
+                let (source, cache_root, package_context) = self.source_for_resolved(resolved)?;
+                let mut ctx =
+                    snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
+                        .map_err(|e| format!("{operation}: package context: {e:#}"))?;
+                // `last_compiled` is the complete local render set: generated FSH
+                // resources, predefined `input/resources/**` bodies, and the explicitly
+                // generated primary IG. Collapse it once by FHIR identity before any
+                // semantic preparation. This preserves the old effective precedence
+                // (later predefined inputs replace an identically keyed generated body),
+                // while the explicit /__ig__ artifact remains authoritative for its own
+                // identity.
+                let (mut local_resources, primary_implementation_guide) =
+                    prepared_local_resource_set(&self.last_compiled, operation)?;
+
+                // Snapshot resolution must see the same complete, deduplicated local set
+                // that PreparedGuide receives. In particular, predefined differential
+                // profiles may derive from generated siblings or other predefined
+                // profiles. PackageContext requires path order for disk-equivalent local
+                // precedence, so do not rely on the render-set channel ordering here.
+                let mut snapshot_locals = local_resources.clone();
+                snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
+                ctx.load_local_resources(snapshot_locals);
+                for (path, body) in &mut local_resources {
+                    if body.get("resourceType").and_then(Value::as_str)
+                        != Some("StructureDefinition")
+                    {
+                        continue;
+                    }
+                    let label = path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("StructureDefinition");
+                    *body = snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
+                        .map_err(|e| format!("{operation}: snapshot {label}: {e:#}"))?;
+                }
+                let generated = local_resources
+                    .into_iter()
+                    .map(|(_, body)| body)
+                    .collect::<Vec<_>>();
+                SnapshotCompletedLocalCacheEntry {
+                    key: snapshot_cache_key,
+                    generated,
+                    primary_implementation_guide,
+                }
+            };
+            self.snapshot_completed_local_cache = Some(entry);
+        }
+        let snapshot = self
+            .snapshot_completed_local_cache
+            .as_ref()
+            .expect("snapshot-completed local cache was hit or installed");
         let project = self.last_project.as_ref().ok_or_else(|| {
             format!("{operation}: compileProject has not established a complete source revision")
         })?;
-        let (_, fhir_version) = compiled_ig_identity(&self.last_compiled)?;
-        let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
-            format!("{operation}: compiled revision has no bound package resolver fixpoint")
-        })?;
-        // Validate the distinguished core, but snapshot against the complete
-        // exact closure used by compileProject so profiles may derive from
-        // external dependencies without consulting unrelated mounted versions.
-        self.resolved_core_package(resolved, &project.config, &fhir_version, operation)?;
-        let (source, cache_root, package_context) = self.source_for_resolved(resolved)?;
-        let mut ctx = snapshot_gen::PackageContext::new_with(source, &cache_root, &package_context)
-            .map_err(|e| format!("{operation}: package context: {e:#}"))?;
-        // `last_compiled` is the complete local render set: generated FSH
-        // resources, predefined `input/resources/**` bodies, and the explicitly
-        // generated primary IG. Collapse it once by FHIR identity before any
-        // semantic preparation. This preserves the old effective precedence
-        // (later predefined inputs replace an identically keyed generated body),
-        // while the explicit /__ig__ artifact remains authoritative for its own
-        // identity.
-        let (mut local_resources, primary_implementation_guide) =
-            prepared_local_resource_set(&self.last_compiled, operation)?;
-
-        // Snapshot resolution must see the same complete, deduplicated local set
-        // that PreparedGuide receives. In particular, predefined differential
-        // profiles may derive from generated siblings or other predefined
-        // profiles. PackageContext requires path order for disk-equivalent local
-        // precedence, so do not rely on the render-set channel ordering here.
-        let mut snapshot_locals = local_resources.clone();
-        snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
-        ctx.load_local_resources(snapshot_locals);
-        for (path, body) in &mut local_resources {
-            if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
-                continue;
-            }
-            let label = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("StructureDefinition");
-            *body = snapshot_gen::generate_snapshot(body.clone(), &ctx, Default::default())
-                .map_err(|e| format!("{operation}: snapshot {label}: {e:#}"))?;
-        }
-        let generated = local_resources
-            .into_iter()
-            .map(|(_, body)| body)
-            .collect::<Vec<_>>();
         let guide = assemble_prepared_model(
             operation,
-            &generated,
-            &primary_implementation_guide,
+            &snapshot.generated,
+            &snapshot.primary_implementation_guide,
             &project.config,
             &project.site_files,
             input.build_epoch_secs,
@@ -2023,8 +2179,18 @@ struct PrepareGuideOptions {
 
 const PREPARED_GUIDE_CACHE_SCHEMA: &str = "prepared-guide-cache-key/v1";
 const PREPARED_GUIDE_RECIPE: &str = "sushi.snapshot+site-semantics/v1";
+const SNAPSHOT_COMPLETED_LOCAL_CACHE_SCHEMA: &str = "snapshot-completed-local-cache-key/v1";
+const SNAPSHOT_COMPLETED_LOCAL_RECIPE: &str = "snapshot-gen.walk+local-precedence/v1";
 const CLOSED_SITE_BUILD_CACHE_SCHEMA: &str = "closed-site-build-cache-key/v1";
 const CYCLE_PROJECTION_RECIPE: &str = "site-build.cycle-projection/v2";
+const PUBLISHER_RUNTIME_PREPARATION_SCHEMA: &str = "publisher-runtime-preparation-key/v1";
+// This private recipe covers the complete preparation implementation from an
+// exact PreparedGuide through template/runtime assembly, ProducerInputs,
+// RenderState, output catalog, and ClosedSiteBuild. A retained hit can only
+// occur inside one immutable engine binary, but naming the recipe makes that
+// boundary explicit and keeps invalidation reviewable.
+const PUBLISHER_RUNTIME_PREPARATION_RECIPE: &str =
+    "publisher-template-rust.runtime+model+render+catalog/v1";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2043,12 +2209,51 @@ struct PreparedGuideCachePayload<'a> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct SnapshotCompletedLocalCachePayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    engine_api: u32,
+    compiled_sha256: &'a site_build::Sha256Digest,
+    package_lock: &'a site_build::PackageLock,
+    resolved_config_sha256: &'a site_build::Sha256Digest,
+    resolution_support: &'a BTreeSet<String>,
+    /// PackageContext precedence is ordered; PackageLock is deliberately
+    /// coordinate-sorted, so the resolver's exact root-first order is also
+    /// required cache identity.
+    resolved_labels: &'a [String],
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ClosedSiteBuildCachePayload<'a> {
     schema: &'static str,
     recipe: &'static str,
     prepared_guide_key: &'a site_build::Sha256Digest,
     render_target: &'a site_build::RenderTarget,
     diagnostics: &'a BTreeSet<site_build::BuildDiagnostic>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRuntimePreparationKeyPayload<'a> {
+    schema: &'static str,
+    recipe: &'a str,
+    engine_api: u32,
+    project: &'a site_build::ProjectRevision,
+    package_lock: &'a site_build::PackageLock,
+    prepared_guide_key: &'a site_build::Sha256Digest,
+    diagnostics: &'a BTreeSet<site_build::BuildDiagnostic>,
+    template: &'a site_build::PackageCoordinate,
+    template_chain: &'a [String],
+    renderer: &'a site_build::ProducerRef,
+    active_tables: bool,
+    run_uuid: Option<&'a str>,
+}
+
+fn publisher_runtime_preparation_key(
+    payload: &PublisherRuntimePreparationKeyPayload<'_>,
+) -> Result<site_build::Sha256Digest, site_build::CanonicalError> {
+    site_build::sha256_canonical(payload)
 }
 
 fn closed_site_build_cache_key(
@@ -2085,6 +2290,7 @@ struct PrepareMetrics {
     package_lock_ms: f64,
     prepared_guide_key_ms: f64,
     prepared_guide_ms: f64,
+    snapshot_completed_local_cache_hit: bool,
     prepared_guide_cache_hit: bool,
     site_build_cache_hit: bool,
     template_materialize_ms: f64,
@@ -3389,6 +3595,36 @@ impl Engine {
         debug_assert!(self.site_builds.len() <= RETAINED_SITE_BUILD_LIMIT);
     }
 
+    /// Reuse an exact Publisher preparation only while its complete runtime is
+    /// already one of the two retained handles. A hit refreshes preparation
+    /// recency but deliberately leaves the runtime in place, preserving its
+    /// memoized rendered pages and object store.
+    fn reuse_retained_publisher(
+        &mut self,
+        preparation_key: &site_build::Sha256Digest,
+    ) -> Option<(String, site_build::ClosedSiteBuild)> {
+        let (handle, build) =
+            self.site_build_generations
+                .iter()
+                .rev()
+                .find_map(|handle| match self.site_builds.get(handle) {
+                    Some(SiteBuildRuntime::Publisher(runtime))
+                        if &runtime.preparation_key == preparation_key =>
+                    {
+                        Some((handle.clone(), runtime.build.clone()))
+                    }
+                    _ => None,
+                })?;
+        self.site_build_generations
+            .retain(|existing| existing != &handle);
+        self.site_build_generations.push_back(handle.clone());
+        #[cfg(test)]
+        {
+            self.derived_cache_hits.retained_publisher_runtime += 1;
+        }
+        Some((handle, build))
+    }
+
     fn prepare_site(&mut self, spec_json: &str) -> Result<PrepareSiteResult, String> {
         let spec: GeneratorSpec = serde_json::from_str(spec_json)
             .map_err(|error| format!("prepare: invalid generator specification: {error}"))?;
@@ -3467,34 +3703,27 @@ impl Engine {
         let package_lock = self.site_build_package_lock(&project)?;
         metrics.package_lock_ms = (clock_ms() - started).max(0.0);
         let started = clock_ms();
-        let prepared_key = self.prepared_guide_cache_key(
+        let resolved = project.resolved_packages.as_ref().ok_or_else(|| {
+            format!("{operation}: compiled revision has no bound package resolver fixpoint")
+        })?;
+        let cache_keys = self.preparation_cache_keys(
             &guide_options,
             &project_revision,
             &package_lock,
+            resolved,
             operation,
         )?;
+        let prepared_key = cache_keys.prepared_guide;
+        let snapshot_cache_key = cache_keys.snapshot_completed_local;
+        metrics.snapshot_completed_local_cache_hit = self
+            .snapshot_completed_local_cache
+            .as_ref()
+            .is_some_and(|entry| entry.key == snapshot_cache_key);
         metrics.prepared_guide_key_ms = (clock_ms() - started).max(0.0);
         metrics.prepared_guide_cache_hit = self
             .prepared_guide_cache
             .as_ref()
             .is_some_and(|entry| entry.key == prepared_key);
-        // Publisher consumes the same renderer-neutral preparation as Cycle.
-        // The render surface remains an implementation detail of this target.
-        let started = clock_ms();
-        let prepared =
-            self.site_model_from_compile(&guide_options, operation, prepared_key.clone())?;
-        metrics.prepared_guide_ms = (clock_ms() - started).max(0.0);
-        if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
-            return Err(format!(
-                "{operation}: PreparedGuide identity disagrees with compiled project"
-            ));
-        }
-        let site_options = SiteOptions {
-            active_tables,
-            run_uuid: run_uuid.clone(),
-            ..Default::default()
-        };
-
         let (source, cache_root, _packages) = self.source()?;
         let paths = package_store::template_loader::TemplatePaths::new(&cache_root);
         let template_resolution =
@@ -3513,6 +3742,59 @@ impl Engine {
             operation,
         )?;
         metrics.package_lock_ms += (clock_ms() - started).max(0.0);
+        let diagnostics = site_build_diagnostics(&self.last_compile_diagnostics);
+        let renderer =
+            site_build::ProducerRef::new("publisher-template-rust", env!("CARGO_PKG_VERSION"));
+        let preparation_key =
+            publisher_runtime_preparation_key(&PublisherRuntimePreparationKeyPayload {
+                schema: PUBLISHER_RUNTIME_PREPARATION_SCHEMA,
+                recipe: PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+                engine_api: API_VERSION,
+                project: &project_revision,
+                package_lock: &package_lock,
+                prepared_guide_key: &prepared_key,
+                diagnostics: &diagnostics,
+                template: &template,
+                template_chain: &template_resolution.chain,
+                renderer: &renderer,
+                active_tables,
+                run_uuid: run_uuid.as_deref(),
+            })
+            .map_err(|error| format!("{operation}: retained runtime key: {error}"))?;
+        let retained = self.reuse_retained_publisher(&preparation_key);
+        if let Some((handle, build)) = retained {
+            metrics.site_build_cache_hit = true;
+            metrics.total_ms = (clock_ms() - total_started).max(0.0);
+            return Ok(PrepareSiteResult {
+                handle: handle.clone(),
+                build_id: handle,
+                generator: "publisher".into(),
+                site_build: build,
+                metrics,
+            });
+        }
+
+        // Publisher consumes the same renderer-neutral preparation as Cycle.
+        // The render surface remains an implementation detail of this target.
+        let started = clock_ms();
+        let prepared = self.site_model_from_compile(
+            &guide_options,
+            operation,
+            prepared_key.clone(),
+            snapshot_cache_key,
+        )?;
+        metrics.prepared_guide_ms = (clock_ms() - started).max(0.0);
+        if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
+            return Err(format!(
+                "{operation}: PreparedGuide identity disagrees with compiled project"
+            ));
+        }
+        let site_options = SiteOptions {
+            active_tables,
+            run_uuid: run_uuid.clone(),
+            ..Default::default()
+        };
+
         let started = clock_ms();
         let tree =
             package_store::template_loader::materialize(&source, &paths, template_coordinate)
@@ -3681,10 +3963,7 @@ impl Engine {
             project_revision,
             package_lock,
             site_build::RenderTarget {
-                renderer: site_build::ProducerRef::new(
-                    "publisher-template-rust",
-                    env!("CARGO_PKG_VERSION"),
-                ),
+                renderer,
                 mode: site_build::RenderMode::NativeTemplate,
                 fhir_version,
                 template: Some(template.clone()),
@@ -3693,7 +3972,7 @@ impl Engine {
             site_build::RenderPlan::default(),
             site_build::ArtifactCatalog::from_records(Vec::new())
                 .map_err(|error| format!("{operation}: artifact catalog: {error}"))?,
-            site_build_diagnostics(&self.last_compile_diagnostics),
+            diagnostics,
         )
         .map_err(|error| format!("{operation}: SiteBuild: {error}"))?
         .close()
@@ -3759,6 +4038,7 @@ impl Engine {
         self.retain_site_build(
             handle.clone(),
             SiteBuildRuntime::Publisher(PublisherBuildRuntime {
+                preparation_key,
                 state,
                 runtime: Some(runtime),
                 build: build.clone(),
@@ -4011,65 +4291,98 @@ mod render_invalidation_tests {
 
     const CONFIG: &str = "id: test\ncanonical: https://example.test\nfhirVersion: 4.0.1\n";
 
-    fn compile_project_reuse_engine() -> Engine {
-        let resolved = ResolvedPackages {
+    fn resolved() -> ResolvedPackages {
+        ResolvedPackages {
             config_sha256: site_build::Sha256Digest::of_bytes(CONFIG.as_bytes()),
             resolution_support: BTreeSet::from(["hl7.fhir.r4.core#4.0.1".into()]),
             labels: vec!["hl7.fhir.r4.core#4.0.1".into()],
+        }
+    }
+
+    fn compilation(name: &str, parent: &str) -> SemanticCompilation {
+        let fsh_source = format!("Profile: {name}\nParent: {parent}\n");
+        let inputs = RenderSemanticInputs {
+            config: CONFIG.into(),
+            fsh: BTreeMap::from([("input/fsh/test.fsh".into(), fsh_source)]),
+            predefined: BTreeMap::new(),
+            page_listing: BTreeMap::from([("pagecontent".into(), vec!["index.md".into()])]),
         };
+        let body = serde_json::json!({
+            "resourceType": "StructureDefinition",
+            "id": name
+        });
+        let result = CompileResult {
+            resources: vec![CompiledResourceJs {
+                filename: format!("StructureDefinition-{name}.json"),
+                text: serde_json::to_string(&body).unwrap(),
+                resource_type: Some("StructureDefinition".into()),
+                id: Some(name.into()),
+                url: Some(format!("https://example.test/StructureDefinition/{name}")),
+                definition: None,
+            }],
+            diagnostics: vec![DiagnosticJs {
+                severity: "information".into(),
+                message: format!("compiled {name}"),
+                file: None,
+                line: None,
+            }],
+            timings: Timings::default(),
+        };
+        SemanticCompilation {
+            key: semantic_compilation_key(&inputs, &resolved(), "test").unwrap(),
+            compiled: vec![(
+                PathBuf::from(format!("/__compiled__/StructureDefinition-{name}.json")),
+                body,
+            )],
+            diagnostics: result.diagnostics.clone(),
+            result,
+        }
+    }
+
+    fn compile_project_reuse_engine() -> Engine {
+        let active = compilation("Test", "Patient");
         let fsh = BTreeMap::from([(
             "input/fsh/test.fsh".into(),
             "Profile: Test\nParent: Patient\n".into(),
         )]);
         let site_files =
             BTreeMap::from([("input/pagecontent/index.md".into(), "b2xkIHByb3Nl".into())]);
-        Engine {
-            resolved_packages: Some(resolved.clone()),
-            last_render_semantic_inputs: Some(RenderSemanticInputs {
-                config: CONFIG.into(),
-                fsh: fsh.clone(),
-                predefined: BTreeMap::new(),
-                page_listing: BTreeMap::from([("pagecontent".into(), vec!["index.md".into()])]),
-            }),
-            last_project: Some(CompiledProjectRevision {
-                config: CONFIG.into(),
-                fsh,
-                predefined: BTreeMap::new(),
-                site_files,
-                resolved_packages: Some(resolved),
-            }),
-            last_compile_result: Some(CompileResult {
-                resources: vec![CompiledResourceJs {
-                    filename: "StructureDefinition-Test.json".into(),
-                    text: r#"{"resourceType":"StructureDefinition","id":"Test"}"#.into(),
-                    resource_type: Some("StructureDefinition".into()),
-                    id: Some("Test".into()),
-                    url: Some("https://example.test/StructureDefinition/Test".into()),
-                    definition: None,
-                }],
-                diagnostics: Vec::new(),
-                timings: Timings::default(),
-            }),
+        let mut engine = Engine {
+            resolved_packages: Some(resolved()),
             page_listing: std::collections::HashMap::from([(
                 "pagecontent".into(),
                 vec!["index.md".into()],
             )]),
             ..Default::default()
-        }
+        };
+        engine.replace_active_compilation(active);
+        engine.previous_compilation = None;
+        engine.last_project = Some(CompiledProjectRevision {
+            config: CONFIG.into(),
+            fsh,
+            predefined: BTreeMap::new(),
+            site_files,
+            resolved_packages: Some(resolved()),
+        });
+        engine
     }
 
-    fn compile_project_args() -> (String, String, String) {
+    fn compile_project_args_for(parent: &str, site_body: &str) -> (String, String, String) {
         (
             serde_json::json!({
-                "input/fsh/test.fsh": "Profile: Test\nParent: Patient\n"
+                "input/fsh/test.fsh": format!("Profile: Test\nParent: {parent}\n")
             })
             .to_string(),
             "{}".into(),
             serde_json::json!({
-                "input/pagecontent/index.md": "bmV3IHByb3Nl"
+                "input/pagecontent/index.md": site_body
             })
             .to_string(),
         )
+    }
+
+    fn compile_project_args() -> (String, String, String) {
+        compile_project_args_for("Patient", "bmV3IHByb3Nl")
     }
 
     #[test]
@@ -4187,6 +4500,140 @@ mod render_invalidation_tests {
             .expect("changed closure must execute the compiler path");
         assert!(error.contains("engine not initialized"), "{error}");
         assert_eq!(engine.derived_cache_hits.compile_project, 0);
+    }
+
+    #[test]
+    fn compile_project_reuses_previous_exact_compilation_across_a_b_a() {
+        let mut engine = compile_project_reuse_engine();
+        engine.replace_active_compilation(compilation("Other", "Observation"));
+        assert_eq!(
+            engine
+                .previous_compilation
+                .as_ref()
+                .unwrap()
+                .result
+                .resources[0]
+                .filename,
+            "StructureDefinition-Test.json"
+        );
+
+        let (files, predefined, site_files) = compile_project_args_for("Patient", "Y3VycmVudCBB");
+        let result = engine
+            .compile_project(&files, CONFIG, &predefined, &site_files)
+            .expect("A -> B -> A must restore the previous exact compilation");
+
+        assert_eq!(engine.derived_cache_hits.compile_project, 1);
+        assert_eq!(
+            result.resources[0].filename,
+            "StructureDefinition-Test.json"
+        );
+        assert_eq!(
+            engine.last_compiled[0].1.get("id").and_then(Value::as_str),
+            Some("Test")
+        );
+        assert_eq!(engine.last_compile_diagnostics[0].message, "compiled Test");
+        assert_eq!(
+            engine
+                .previous_compilation
+                .as_ref()
+                .unwrap()
+                .result
+                .resources[0]
+                .filename,
+            "StructureDefinition-Other.json"
+        );
+        assert_eq!(
+            engine
+                .last_project
+                .as_ref()
+                .unwrap()
+                .site_files
+                .get("input/pagecontent/index.md")
+                .map(String::as_str),
+            Some("Y3VycmVudCBB")
+        );
+    }
+
+    #[test]
+    fn failed_compile_preserves_current_previous_and_authored_revision() {
+        let mut engine = compile_project_reuse_engine();
+        engine.replace_active_compilation(compilation("Other", "Observation"));
+        engine
+            .last_project
+            .as_mut()
+            .unwrap()
+            .site_files
+            .insert("input/pagecontent/index.md".into(), "cHJpb3I=".into());
+        let current_key = engine.last_compile_key.clone();
+        let previous_key = engine
+            .previous_compilation
+            .as_ref()
+            .map(|entry| entry.key.clone());
+
+        let (files, predefined, site_files) =
+            compile_project_args_for("Encounter", "ZmFpbGVkIGF1dGhvcmVk");
+        let error = engine
+            .compile_project(&files, CONFIG, &predefined, &site_files)
+            .err()
+            .expect("a third uncached compilation needs the unavailable compiler source");
+        assert!(error.contains("engine not initialized"), "{error}");
+        assert_eq!(engine.last_compile_key, current_key);
+        assert_eq!(
+            engine
+                .previous_compilation
+                .as_ref()
+                .map(|entry| entry.key.clone()),
+            previous_key
+        );
+        assert_eq!(
+            engine
+                .last_project
+                .as_ref()
+                .unwrap()
+                .site_files
+                .get("input/pagecontent/index.md")
+                .map(String::as_str),
+            Some("cHJpb3I=")
+        );
+        assert_eq!(engine.derived_cache_hits.compile_project, 0);
+    }
+
+    #[test]
+    fn third_distinct_success_evicts_only_the_oldest_compilation() {
+        let mut engine = compile_project_reuse_engine();
+        engine.replace_active_compilation(compilation("Other", "Observation"));
+        engine.replace_active_compilation(compilation("Third", "Encounter"));
+        assert_eq!(
+            engine
+                .previous_compilation
+                .as_ref()
+                .unwrap()
+                .result
+                .resources[0]
+                .filename,
+            "StructureDefinition-Other.json"
+        );
+
+        let (a_files, predefined, site_files) = compile_project_args();
+        let error = engine
+            .compile_project(&a_files, CONFIG, &predefined, &site_files)
+            .err()
+            .expect("the evicted oldest compilation must run the compiler");
+        assert!(error.contains("engine not initialized"), "{error}");
+        assert_eq!(engine.derived_cache_hits.compile_project, 0);
+
+        let b_files = serde_json::json!({
+            "input/fsh/test.fsh": "Profile: Other\nParent: Observation\n"
+        })
+        .to_string();
+        let result = engine
+            .compile_project(&b_files, CONFIG, &predefined, &site_files)
+            .expect("the immediately previous compilation remains reusable");
+        assert_eq!(
+            result.resources[0].filename,
+            "StructureDefinition-Other.json"
+        );
+        assert_eq!(engine.derived_cache_hits.compile_project, 1);
     }
 }
 
@@ -4373,6 +4820,9 @@ mod site_facade_tests {
             },
         ];
         PublisherBuildRuntime {
+            preparation_key: site_build::Sha256Digest::of_bytes(
+                format!("{project}\0{marker}").as_bytes(),
+            ),
             state,
             runtime: None,
             build: closed(project),
@@ -4542,6 +4992,63 @@ mod site_facade_tests {
     }
 
     #[test]
+    fn retained_publisher_probe_preserves_memoized_runtime_and_obeys_eviction() {
+        let mut engine = Engine::default();
+        let first_runtime = publisher_runtime("reuse.first", "first");
+        let first_key = first_runtime.preparation_key.clone();
+        let first_state = first_runtime.state.clone();
+        let first = first_runtime.build.site_build().build_id().to_string();
+        engine.retain_site_build(first.clone(), SiteBuildRuntime::Publisher(first_runtime));
+        engine.render_site_output(&first, "en/a.html").unwrap();
+
+        let cycle_build = closed("reuse.cycle");
+        let cycle = cycle_build.site_build().build_id().to_string();
+        engine.retain_site_build(
+            cycle.clone(),
+            SiteBuildRuntime::Cycle(CycleBuildRuntime {
+                build: cycle_build,
+                objects: BTreeMap::new(),
+            }),
+        );
+        let (reused, _) = engine
+            .reuse_retained_publisher(&first_key)
+            .expect("A -> Cycle -> A must find the still-retained Publisher runtime");
+        assert_eq!(reused, first);
+        assert_eq!(
+            engine
+                .site_build_generations
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![cycle, first.clone()]
+        );
+        let SiteBuildRuntime::Publisher(runtime) = engine.site_builds.get(&first).unwrap() else {
+            panic!("reused handle changed generator");
+        };
+        assert!(Rc::ptr_eq(&runtime.state, &first_state));
+        assert!(runtime
+            .ready
+            .contains_key(&site_build::OutputPath::parse("en/a.html").unwrap()));
+        assert_eq!(engine.derived_cache_hits.retained_publisher_runtime, 1);
+
+        let order_before_miss = engine.site_build_generations.clone();
+        assert!(engine
+            .reuse_retained_publisher(&site_build::Sha256Digest::of_bytes(b"different"))
+            .is_none());
+        assert_eq!(engine.site_build_generations, order_before_miss);
+
+        let mut evicted = Engine::default();
+        let old_runtime = publisher_runtime("evict.first", "first");
+        let old_key = old_runtime.preparation_key.clone();
+        let old = old_runtime.build.site_build().build_id().to_string();
+        evicted.retain_site_build(old, SiteBuildRuntime::Publisher(old_runtime));
+        retain_publisher(&mut evicted, "evict.second", "second");
+        retain_publisher(&mut evicted, "evict.third", "third");
+        assert!(evicted.reuse_retained_publisher(&old_key).is_none());
+        assert_eq!(evicted.derived_cache_hits.retained_publisher_runtime, 0);
+    }
+
+    #[test]
     fn failed_prepare_preserves_every_retained_generation() {
         let mut engine = Engine::default();
         let first = retain_publisher(&mut engine, "failure.first", "first");
@@ -4604,6 +5111,210 @@ mod site_facade_tests {
             lock.get(&child).unwrap().dependencies,
             BTreeSet::from([parent])
         );
+    }
+
+    #[test]
+    fn publisher_runtime_preparation_key_has_the_exact_invalidation_boundary() {
+        let project = site_build::ProjectRevision {
+            project_id: "key.test".into(),
+            revision: "revision-a".into(),
+            sources: site_build::SourceManifest::default(),
+        };
+        let core = site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap();
+        let template = site_build::PackageCoordinate::parse("demo.template#1.0.0").unwrap();
+        let lock = |template_bytes: &[u8]| {
+            site_build::PackageLock::from_packages([
+                site_build::LockedPackage {
+                    coordinate: core.clone(),
+                    content: site_build::ContentRef::of_bytes(b"core", None::<String>),
+                    dependencies: BTreeSet::new(),
+                },
+                site_build::LockedPackage {
+                    coordinate: template.clone(),
+                    content: site_build::ContentRef::of_bytes(template_bytes, None::<String>),
+                    dependencies: BTreeSet::new(),
+                },
+            ])
+            .unwrap()
+        };
+        let lock_a = lock(b"template-a");
+        let prepared = site_build::Sha256Digest::of_bytes(b"prepared-a");
+        let diagnostics = BTreeSet::new();
+        let chain = vec![template.to_string()];
+        let renderer = site_build::ProducerRef::new("publisher-template-rust", "1");
+        let key = |project: &site_build::ProjectRevision,
+                   package_lock: &site_build::PackageLock,
+                   prepared_guide_key: &site_build::Sha256Digest,
+                   diagnostics: &BTreeSet<site_build::BuildDiagnostic>,
+                   template: &site_build::PackageCoordinate,
+                   template_chain: &[String],
+                   renderer: &site_build::ProducerRef,
+                   active_tables: bool,
+                   run_uuid: Option<&str>,
+                   recipe: &str| {
+            publisher_runtime_preparation_key(&PublisherRuntimePreparationKeyPayload {
+                schema: PUBLISHER_RUNTIME_PREPARATION_SCHEMA,
+                recipe,
+                engine_api: API_VERSION,
+                project,
+                package_lock,
+                prepared_guide_key,
+                diagnostics,
+                template,
+                template_chain,
+                renderer,
+                active_tables,
+                run_uuid,
+            })
+            .unwrap()
+        };
+        let baseline = key(
+            &project,
+            &lock_a,
+            &prepared,
+            &diagnostics,
+            &template,
+            &chain,
+            &renderer,
+            true,
+            Some("run-a"),
+            PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+        );
+
+        let mut changed_project = project.clone();
+        changed_project.revision = "revision-b".into();
+        let mut changed_diagnostics = diagnostics.clone();
+        changed_diagnostics.insert(site_build::BuildDiagnostic::new(
+            site_build::DiagnosticSeverity::Warning,
+            "changed",
+            "changed",
+        ));
+        let changed_template = site_build::PackageCoordinate::parse("demo.template#2.0.0").unwrap();
+        let changed_renderer = site_build::ProducerRef::new("publisher-template-rust", "2");
+        let changed_prepared = site_build::Sha256Digest::of_bytes(b"prepared-b");
+        let cases = [
+            key(
+                &changed_project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock(b"template-b"),
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &changed_prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &changed_diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &changed_template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &["base.template#1.0.0".into(), template.to_string()],
+                &renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &changed_renderer,
+                true,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                false,
+                Some("run-a"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-b"),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE,
+            ),
+            key(
+                &project,
+                &lock_a,
+                &prepared,
+                &diagnostics,
+                &template,
+                &chain,
+                &renderer,
+                true,
+                Some("run-a"),
+                "publisher-template-rust.changed-recipe/v2",
+            ),
+        ];
+        assert!(cases.into_iter().all(|changed| changed != baseline));
     }
 
     #[test]
@@ -4915,13 +5626,76 @@ mod site_facade_tests {
             assert!(paths.contains(format!("en/{relative}").as_str()));
         }
 
+        let retained_state = match engine.site_builds.get(&prepared.handle).unwrap() {
+            SiteBuildRuntime::Publisher(runtime) => runtime.state.clone(),
+            SiteBuildRuntime::Cycle(_) => panic!("Publisher prepare retained Cycle runtime"),
+        };
+        let cycle_build = closed("facade-cycle-switch.test");
+        let cycle_handle = cycle_build.site_build().build_id().to_string();
+        engine.retain_site_build(
+            cycle_handle.clone(),
+            SiteBuildRuntime::Cycle(CycleBuildRuntime {
+                build: cycle_build,
+                objects: BTreeMap::new(),
+            }),
+        );
         let repeated = engine
             .prepare_site(
                 r#"{"generator":"publisher","templateCoordinate":"demo.template#1.0.0","buildEpochSecs":1,"activeTables":true}"#,
             )
             .unwrap();
+        assert_eq!(repeated.handle, prepared.handle);
         assert!(repeated.metrics.prepared_guide_cache_hit);
-        assert!(!repeated.metrics.site_build_cache_hit);
+        assert!(repeated.metrics.snapshot_completed_local_cache_hit);
+        assert!(repeated.metrics.site_build_cache_hit);
+        assert_eq!(repeated.metrics.prepared_guide_ms, 0.0);
+        assert_eq!(repeated.metrics.template_materialize_ms, 0.0);
+        assert_eq!(repeated.metrics.publisher_runtime_ms, 0.0);
+        assert_eq!(repeated.metrics.publisher_model_ms, 0.0);
+        assert_eq!(repeated.metrics.render_model_ms, 0.0);
+        assert_eq!(repeated.metrics.catalog_ms, 0.0);
+        assert_eq!(engine.derived_cache_hits.retained_publisher_runtime, 1);
+        assert_eq!(
+            engine
+                .site_build_generations
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![cycle_handle, prepared.handle.clone()]
+        );
+        let SiteBuildRuntime::Publisher(retained) =
+            engine.site_builds.get(&prepared.handle).unwrap()
+        else {
+            panic!("retained Publisher runtime changed generator");
+        };
+        assert!(Rc::ptr_eq(&retained.state, &retained_state));
+        assert!(retained
+            .ready
+            .contains_key(&site_build::OutputPath::parse("en/index.html").unwrap()));
+
+        // A prose-only successor is a new complete PreparedGuide/SiteBuild,
+        // but its compiled local resources and exact package context are
+        // unchanged. Reuse only the snapshot-completed local set, then rerun
+        // authored augmentation against the current bytes.
+        engine.last_project.as_mut().unwrap().site_files.insert(
+            "input/pagecontent/index.md".into(),
+            base64_encode(b"# Updated intro"),
+        );
+        let prose_successor = engine
+            .prepare_site(
+                r#"{"generator":"publisher","templateCoordinate":"demo.template#1.0.0","buildEpochSecs":1,"activeTables":true}"#,
+            )
+            .unwrap();
+        assert!(!prose_successor.metrics.prepared_guide_cache_hit);
+        assert!(prose_successor.metrics.snapshot_completed_local_cache_hit);
+        assert_eq!(engine.derived_cache_hits.snapshot_completed_local, 1);
+        let guide = &engine.prepared_guide_cache.as_ref().unwrap().guide;
+        assert!(guide.authored_files.iter().any(|file| {
+            file.role == site_build::AuthoredFileRole::PageContent
+                && file.path.as_str() == "index.md"
+                && file.content == b"# Updated intro"
+        }));
+        assert_ne!(prose_successor.build_id, prepared.build_id);
     }
 }
 
@@ -6033,6 +6807,7 @@ mod site_build_handoff_tests {
                 },
                 "test",
                 site_build::Sha256Digest::of_bytes(b"snapshot-predefined"),
+                site_build::Sha256Digest::of_bytes(b"snapshot-predefined-local"),
             )
             .unwrap();
         let matching = guide
@@ -6083,9 +6858,11 @@ mod site_build_handoff_tests {
             .site_build_project_revision(&project, "demo.ig")
             .unwrap();
         let lock = engine.site_build_package_lock(&project).unwrap();
+        let resolved = project.resolved_packages.as_ref().unwrap();
         let key = engine
-            .prepared_guide_cache_key(&input, &revision, &lock, "test")
+            .preparation_cache_keys(&input, &revision, &lock, resolved, "test")
             .unwrap();
+        let key = key.prepared_guide;
         let prepared = minimal_prepared_guide();
         engine.prepared_guide_cache = Some(PreparedGuideCacheEntry {
             key: key.clone(),
@@ -6093,7 +6870,12 @@ mod site_build_handoff_tests {
         });
 
         let actual = engine
-            .site_model_from_compile(&input, "test", key.clone())
+            .site_model_from_compile(
+                &input,
+                "test",
+                key.clone(),
+                site_build::Sha256Digest::of_bytes(b"snapshot-local"),
+            )
             .unwrap();
         assert_eq!(actual, prepared);
         assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
@@ -6101,14 +6883,108 @@ mod site_build_handoff_tests {
         let mut changed = input.clone();
         changed.build_epoch_secs = 2;
         let changed_key = engine
-            .prepared_guide_cache_key(&changed, &revision, &lock, "test")
-            .unwrap();
+            .preparation_cache_keys(&changed, &revision, &lock, resolved, "test")
+            .unwrap()
+            .prepared_guide;
         assert_ne!(changed_key, key);
         assert!(engine
-            .site_model_from_compile(&changed, "test", changed_key)
+            .site_model_from_compile(
+                &changed,
+                "test",
+                changed_key,
+                site_build::Sha256Digest::of_bytes(b"changed-snapshot-local"),
+            )
             .unwrap_err()
             .contains("resolved closure has no required core package"));
         assert_eq!(engine.derived_cache_hits.prepared_guide, 1);
+    }
+
+    #[test]
+    fn snapshot_completed_local_cache_key_has_the_exact_invalidation_boundary() {
+        let mut engine = Engine {
+            last_compiled: vec![(
+                PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+                serde_json::json!({
+                    "resourceType":"ImplementationGuide",
+                    "id":"demo",
+                    "packageId":"demo.ig",
+                    "fhirVersion":["4.0.1"]
+                }),
+            )],
+            ..Default::default()
+        };
+        let coordinate = site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap();
+        let package = |bytes: &[u8]| {
+            site_build::PackageLock::from_packages([site_build::LockedPackage {
+                coordinate: coordinate.clone(),
+                content: site_build::ContentRef::of_bytes(bytes, None::<String>),
+                dependencies: BTreeSet::new(),
+            }])
+            .unwrap()
+        };
+        let resolved = ResolvedPackages {
+            config_sha256: site_build::Sha256Digest::of_bytes(b"config"),
+            resolution_support: BTreeSet::new(),
+            labels: vec!["hl7.fhir.r4.core#4.0.1".into(), "support#1".into()],
+        };
+        let input = PrepareGuideOptions {
+            build_epoch_secs: 1,
+            liquid_asset_dirs: vec!["input/includes".into()],
+            branch: None,
+            revision: None,
+        };
+        let project = site_build::ProjectRevision {
+            project_id: "demo.ig".into(),
+            revision: "fixture".into(),
+            sources: site_build::SourceManifest::default(),
+        };
+        let snapshot_key =
+            |engine: &Engine, lock: &site_build::PackageLock, resolved: &ResolvedPackages| {
+                engine
+                    .preparation_cache_keys(&input, &project, lock, resolved, "test")
+                    .unwrap()
+                    .snapshot_completed_local
+            };
+        let baseline = snapshot_key(&engine, &package(b"package-a"), &resolved);
+
+        // Authored prose/build metadata are deliberately absent from this key;
+        // the complete PreparedGuide key binds them and augmentation reruns.
+        assert_eq!(
+            baseline,
+            snapshot_key(&engine, &package(b"package-a"), &resolved)
+        );
+
+        engine.last_compiled[0].1["version"] = Value::String("2".into());
+        let compiled_change = snapshot_key(&engine, &package(b"package-a"), &resolved);
+        assert_ne!(baseline, compiled_change);
+        engine.last_compiled[0]
+            .1
+            .as_object_mut()
+            .unwrap()
+            .remove("version");
+
+        let package_change = snapshot_key(&engine, &package(b"package-b"), &resolved);
+        assert_ne!(baseline, package_change);
+
+        let mut changed_fixpoint = resolved.clone();
+        changed_fixpoint.config_sha256 = site_build::Sha256Digest::of_bytes(b"other-config");
+        assert_ne!(
+            baseline,
+            snapshot_key(&engine, &package(b"package-a"), &changed_fixpoint)
+        );
+        let mut changed_support = resolved.clone();
+        changed_support
+            .resolution_support
+            .insert("excluded#1".into());
+        assert_ne!(
+            baseline,
+            snapshot_key(&engine, &package(b"package-a"), &changed_support)
+        );
+
+        let mut reordered = resolved.clone();
+        reordered.labels.reverse();
+        let order_change = snapshot_key(&engine, &package(b"package-a"), &reordered);
+        assert_ne!(baseline, order_change);
     }
 
     #[test]

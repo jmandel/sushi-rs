@@ -7,6 +7,102 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**RECENT EXACT SEMANTIC COMPILATION REOPENS A -> B -> A (2026-07-11):**
+`compileProject` now retains exactly the active successful semantic compilation
+and one previous distinct payload. A previous hit atomically swaps the two;
+a third distinct success evicts the oldest. The private key contains a
+canonical schema/recipe/API-bound digest of the complete `RenderSemanticInputs`
+(config, FSH, predefined resources, normalized page listing) plus the exact
+`ResolvedPackages` fixpoint (config digest, resolution-support evidence, and
+ordered executable labels). The digest avoids retaining another full copy of
+US Core's large authored semantic maps. A hit restores the compiler render set,
+public result, and diagnostics, while `compileProject` always captures the
+call's current site files into a new current `CompiledProjectRevision`. Failed
+compiles leave the active payload, previous payload, authored revision, and
+page listing untouched; `init` clears both generations. This remains private
+in-memory execution reuse, not persistent/raw-project authority or a new domain
+value/API. The existing test-only `compile_project` hit counter observes both
+current and previous hits; no wire field was added. Focused tests prove exact
+A -> B -> A restoration, config/FSH/predefined/page-listing/package-closure
+invalidation, failure preservation, and third-generation eviction. Current
+gates: WASM lib 41 passed/1 environment-dependent ignored, expand 5/5, Session
+8/8, and documented-toolchain wasm32 check green. The rebuilt browser receipt
+`/tmp/uscore-perf-recent-compile.json` exercises the exact A -> Cycle -> A hit:
+US Core reopen is 1.820 s (prior 5.348 s), `compileProjectMs` is 116 ms (prior
+1.678 s), and the retained-runtime prepare remains exact. The final complete
+browser gate is `/tmp/fhir-perf-final-full-gate.log` (`E2E GATE: PASS`).
+
+**RETAINED PUBLISHER RUNTIME REOPENS EXACTLY (2026-07-11):** Publisher
+preparation now stores one private recipe-bound key directly on each already
+bounded `PublisherBuildRuntime`. Before reconstructing a `PreparedGuide`,
+materializing the template, assembling runtime/model/render state, or cataloging
+outputs, `prepare(publisher)` resolves the exact template base chain, extends
+the authenticated package lock, and probes the current+previous runtime set.
+The key binds the complete project revision, exact extended package lock and
+template-chain order, compiled/PreparedGuide identity, diagnostics, exact
+template coordinate, renderer id/version, `activeTables`, `runUuid`, engine API,
+and the private runtime+model+render+catalog recipe. A US Core -> Cycle ->
+identical US Core sequence can therefore return the original handle/runtime;
+its recency is refreshed without replacing the runtime, so memoized rendered
+pages and objects survive. Misses do not affect recency, eviction remains the
+existing two-handle policy, and no public value/API or independent cache/map was
+added. The existing `siteBuildCacheHit` metric reports the hit; skipped phase
+timings remain zero. The exact-key invalidation matrix, A -> Cycle -> A
+memoization/recency, non-refreshing miss, and eviction regressions are green.
+The combined current `cargo test -p wasm_api` is 41 passed/1
+environment-dependent ignored plus 5/5 expand and 8/8 Session;
+documented-toolchain wasm32 check is green. In the real rebuilt browser receipt
+`/tmp/uscore-perf-recent-compile.json`, the retained Publisher runtime makes
+Rust preparation 182 ms with `siteBuildCacheHit=1`; template materialization,
+Publisher runtime/model, render model, and catalog reconstruction are all zero.
+
+**NATIVE CYCLE REUSES EXACT COMPLETE SITEOUTPUT (2026-07-11):** Fig's new
+library-first `output_cache` module composes the existing `ClosedSiteBuild`,
+`SiteOutput`, `FileSiteOutputCache`, and `FileContentStore` without another
+manifest or cached value. The thin `fig output-cache load|publish` exposure lets
+Cycle probe before opening its generator and import its ordinary sealed tree
+after a miss. Hits verify the canonical build manifest and all build objects,
+the exact `sok1` derivation, the `SiteOutput`, and every output CAS object; Cycle
+materializes into its existing private `AtomicOutputPublication`, independently
+re-verifies receipt/tree bytes, and uses the same atomic replacement path.
+Corrupt cache entries fail loudly rather than becoming false misses. Browser
+Cycle is unchanged. Legacy `fig render` is intentionally not wrapped because
+its mutable staged tree has no `ClosedSiteBuild`; paths/mtimes are not cache
+identity. Focused Fig tests are 18/18 plus 4/4 envelope tests; Cycle core is
+54/54 and renderer typecheck is green. Real release two-pass Cycle evidence:
+first render/import 1.588 s; unchanged second invocation 0.487 s wall with Fig
+lookup/materialization 153.2 ms, the identical 91-file `so1`, and the explicit
+`skipped Cycle rendering` path. Complete receipt:
+`/tmp/cycle-output-cache-final.log`.
+
+**PROSE-ONLY PREPARATION REUSES EXACT SNAPSHOT-COMPLETED LOCALS (2026-07-11):**
+the WASM host now retains one private snapshot-completed local-resource set
+beside the complete `PreparedGuide` cache. Its key binds one canonical hash of
+the compiled local resource values, the exact content-addressed `PackageLock`,
+the resolver config digest, resolution-support evidence, root-first executable
+label order, engine API, and snapshot/local-precedence recipe. The same compiled
+hash feeds the whole-`PreparedGuide` key, so preparation does not hash US Core's
+resource tree twice. A prose/image/data/include byte change still constructs a
+new complete `PreparedGuide`, `SiteBuild`, and handle: only unchanged snapshot
+completion is borrowed, while authored augmentation reruns against the current
+captured files. The hit path borrows the retained `Vec<Value>` and performs only
+the one clone required to populate the new canonical `PreparedGuide`; it does
+not clone an intermediate snapshot tree. Config, FSH/predefined/page-listing,
+compiled-value, package-content/edge, resolver-fixpoint/support/order, or recipe
+changes miss or explicitly invalidate. Focused tests prove the prose successor
+has changed authored bytes and a distinct build id, plus the complete key
+invalidation matrix. WASM lib: 36 pass/1 ignored; wasm32 release build green
+(6.4 MB unoptimized artifact); app: 66/66 and production build green. The new
+metric is `snapshotCompletedLocalCacheHit`. The focused fresh-profile Publisher
+warm-edit receipt is `/tmp/fhir-snapshot-local-warm-edit.log` (`MOBILE PREVIEW
+GATE: PASS`): the authored successor reported a real cache hit, whole-guide
+cache miss, 24.7 ms compile boundary, 37 ms `preparedGuideMs`, 295 ms total Rust
+prepare, 338.9 ms worker prepare, and 1,078 ms edit-to-rendered-preview. This
+small four-resource fixture proves the hit is exercised but is not a US Core
+before/after benchmark, so do not extrapolate the 37 ms or claim a large-guide
+speedup yet. This is intentionally a single-entry same-project edit optimization
+and does not accelerate a US Core -> other guide -> US Core cross-project reopen.
+
 **BROWSER EXAMPLES USE THE ONE LOCAL-RESOURCE CHANNEL (2026-07-11):**
 `input/examples/*.json` and `input/resources/*.json` cross `compileProject`
 through the same parsed local-resource map. The compiler's exported stock
@@ -155,20 +251,11 @@ prevents the rest of the guide from rendering. Focused prepared-guide gate is
 4/4, including real-shaped mCODE ownership and traversal regressions. The
 rebuilt browser gate must prove mCODE reaches a real page.
 
-**EXACT PROSE-ONLY COMPILE REUSE (2026-07-11):** `compileProject` now reuses
-the prior serialized SUSHI result when and only when its existing semantic key
-(exact config bytes, parsed FSH, parsed predefined resources, and normalized
-page-name listing) and its captured `ResolvedPackages` closure are equal. It
-still replaces the complete `CompiledProjectRevision.site_files`, so Publisher
-and Cycle preparation see the new prose/assets, and it invalidates only the
-ambient render surface while immutable retained handles remain untouched. The
-engine retains one private last-result value beside the already-existing exact
-identity; no public operation, domain value, host cache, or fallback was added.
-A focused reuse counter proves the fast branch, while the invalidation matrix
-forces config, FSH, predefined-resource, page-listing, and package-closure
-changes through the compiler branch. Gates: WASM lib 35 pass/2 ignored,
-Session 8/8, `cargo check --workspace`, and documented-toolchain wasm32 check.
-The rebuilt browser performance gate still owns the end-to-end timing receipt.
+**EXACT PROSE-ONLY COMPILE REUSE (superseded 2026-07-11):** the original
+single-current-result implementation was generalized by “RECENT EXACT SEMANTIC
+COMPILATION REOPENS A -> B -> A” above. Preserve that exact key and bounded
+current+previous swap; do not restore a last-result-only cache or broaden it
+into persistent raw-project authority.
 
 **ONE SITE HOST FACADE (RUST SLICE IMPLEMENTED, 2026-07-11):** the WASM
 site-generation surface is now `prepare -> outputs -> render -> finalize`. The worker's public

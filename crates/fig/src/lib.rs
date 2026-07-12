@@ -1,26 +1,25 @@
-//! `fig` — the unified FHIR IG CLI library.
+//! Native host composition for the `fig` FHIR IG CLI.
 //!
-//! ONE engine, three skins: the native CLI (`fig`, this crate's bin), the wasm
-//! `Session` (`wasm_api`), and the library API (the `render_*`/compiler/
-//! snapshot_gen/prepared_guide crates). The CLI subcommands are thin — arg-parse →
-//! engine-core call → output — and this library is where any COMPOSITION the
-//! engine core lacks lives, so native and WASM hosts can share it.
+//! The canonical domain flow remains `PreparedGuide -> SiteBuild -> SiteOutput`
+//! over `ContentStore`; this crate does not define a native-only model. CLI
+//! subcommands are thin argument/result adapters over typed library calls.
 //!
 //! Layout:
-//!   - [`engine`]  — native "engine methods": the render composition (build →
-//!                   snapshot → PreparedGuide → page pass → asset copy) and the render
-//!                   surface assembly the page pass drives. This is the native
-//!                   twin of `wasm_api::render_surface`; both compose the SAME
-//!                   F5/F6 machinery (`render_sd::engine::FragmentEngine` +
-//!                   `render_page::render_page`).
-//!   - [`watch`]   — the incremental dev loop (mtime poll → dirty cone via the
-//!                   BuildState/PageProvider read-set boundary → re-render →
-//!                   live-reload server). The native twin of the browser editor.
+//!   - [`prepare`] captures native inputs and emits the canonical closed
+//!     `cycle-site/v2` SiteBuild plus addressed objects.
+//!   - [`output_cache`] performs verified pre-render SiteOutput lookup and
+//!     post-render publication through the shared cache/store contracts.
+//!   - [`template`] owns native package acquisition/materialization helpers.
+//!   - [`engine`] and [`watch`] are legacy staged-Publisher-tree tools. They do
+//!     not compile or implement `prepare -> outputs -> render -> finalize`; they
+//!     remain only while useful rendering/read-set machinery is migrated, then
+//!     are deletion targets rather than a parallel host architecture.
 //!
 //! `--json` on every subcommand emits the shared [`api_envelope`] envelope —
-//! schema-identical to the Session's (one implementation, `api_envelope`).
+//! schema-identical to the WASM Session's transport envelope.
 
 pub mod engine;
+pub mod output_cache;
 pub mod prepare;
 pub mod template;
 pub mod watch;
