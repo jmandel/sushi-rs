@@ -6,7 +6,8 @@ production. It is a value contract, not a build coordinator.
 A `SiteBuild` records:
 
 - an exact project revision and content-addressed source manifest;
-- an exact, content-addressed FHIR package closure;
+- an exact, content-addressed FHIR package closure whose `content` value is the
+  deterministic prepared-package carrier consumed by execution;
 - the renderer, template, mode, and parameters of the render target;
 - typed semantic, fragment, page, asset, and data artifact keys; fragments carry
   a whole-IG or resource scope, while assets carry an authored, template,
@@ -15,6 +16,10 @@ A `SiteBuild` records:
   cataloged artifact;
 - the producer, recipe, and actual read dependencies of each artifact; and
 - stable build diagnostics.
+
+New values use the `site-build/v2` schema. The prior `site-build/v1` tag remains
+recognizable on the wire so it can be rejected explicitly as unsupported; it is
+not adapted into the v2 contract.
 
 The value is immutable once constructed. Its `sb1-sha256:...` build id covers
 every other field using recursively key-sorted canonical JSON. Deserialization

@@ -116,9 +116,11 @@ publisher-build/objects/sha256/<digest>
 
 The object store contains every byte addressed by the `ClosedSiteBuild`, not
 only source files: package material, prepared semantic documents, authored
-roles, the materialized template, Publisher runtime inputs, and render-package
-evidence are all in the verified closure. The live project and package cache
-are not consulted by later operations.
+roles, the materialized template, and Publisher runtime inputs are all in the
+verified closure. The package lock itself roots the exact
+deterministic PreparedPackage carrier used by execution, so no second package
+payload or renderer-package evidence is needed. The live project and package
+cache are not consulted by later operations.
 
 Each native `outputs`, `render`, or `finalize` invocation can start in a fresh
 process. It authenticates the closed build and object closure, reconstructs an

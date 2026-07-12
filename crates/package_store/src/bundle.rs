@@ -3,7 +3,7 @@
 //!
 //! This is the package-source shape the browser mounts. Cold material arrives as
 //! one fetched/inflated bundle per package and uses owned in-memory files; warm
-//! PreparedPackage v2 material keeps compact chunks and inflates members lazily.
+//! PreparedPackage v3 material keeps compact chunks and inflates members lazily.
 //! Neither path needs `std::fs`, so both compile and run on
 //! `wasm32-unknown-unknown`. Native tests exercise the source directly (the P1
 //! BundleSource fixture-ladder gate).

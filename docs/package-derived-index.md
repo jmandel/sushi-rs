@@ -165,8 +165,8 @@ in `package_acquisition`:
   entries. Hosts first call `normalize_package_material(label, entries)`, the
   shared native/WASM trust boundary: it verifies `package.json` identity and
   dependency shape, validates and retains safe nested template transport,
-  regenerates `.derived-index.json`, and returns canonical compiler-visible
-  top-level bytes for the semantic package lock.
+  regenerates `.derived-index.json`, and returns the complete canonical files
+  from which the deterministic prepared carrier is built.
   `BundleSource::mount_package(label, material.files)` places
   them under a synthetic cache root at `<root>/<id>#<ver>/package/...`. Pass
   `source.cache_root()` as the `cache_dir` to `new_with`/`for_project_with`. Cold
@@ -181,22 +181,31 @@ bundles from the isolated cache, round-trips them through
 through a `BundleSource`-backed `PackageContext` — proving the bundle path
 end-to-end, natively, to the same goldens as the disk cache.
 
-### PreparedPackage format (v2)
+### PreparedPackage format (v3)
 
 `package_store::PreparedPackage` is the warm-start successor to both the
 JSON/base64 envelope and the expanded v1 artifact. Its deterministic compact
 container carries a canonical member directory plus independently compressed
 1 MiB raw-DEFLATE chunks. Every member and chunk has an exact raw length and
 SHA-256; the source key is a domain-separated digest of canonical member
-metadata. The exact normalized top-level semantic payload identity remains
-equal across native and browser hosts.
+metadata. `PackageLock` roots the SHA-256 and byte length of this exact carrier,
+which is also the object execution mounts. There is no parallel inflated
+package-lock payload.
 
-Decode checks the format tuple, host-selected key, outer checksum, dependency
-and member order, safe paths, metadata digest, exact chunk partition, bounds,
-and required `package.json`/current-sidecar members without inflating a chunk.
+Decode checks the format tuple, host-selected key, dependency and member order,
+safe paths, metadata digest, exact chunk partition, bounds, and required
+`package.json`/current-sidecar members without inflating a chunk. It computes
+the exact carrier SHA-256 once and retains it for the enclosing `ContentRef`;
+the content-addressed carrier has no redundant internal checksum footer.
 `PackageSource::read` later bounded-inflates one chunk and verifies its chunk and
 member digests before exposing bytes. An 8 MiB per-artifact LRU is the only
 optional expanded retention; oversized chunks are never cached.
+
+SiteEngine retains one typed prepared mount containing the exact carrier and
+its validated directory. Closing a build verifies that already-admitted carrier
+reference without expanding members; fresh restoration reads the same rooted
+carrier and mounts it lazily. Chunk and member digests are checked before any
+body is exposed.
 
 Native production uses the same API exposed to WASM:
 
@@ -209,8 +218,9 @@ rust_sushi packages prepare --cache <cache> --out <dir> <id#ver>...
 Both commands emit `<id>#<ver>.fpp` files and
 `prepared-package-manifest.json`. `Session.mountPrepared(bytes, expectedKey)`
 consumes one artifact. Hosts must also verify the manifest's artifact SHA-256
-before calling the engine; the engine independently verifies the embedded
-checksum and prepared-package key.
+before calling the engine; the engine independently verifies the
+prepared-package key and canonical directory metadata, and derives the exact
+carrier digest retained by SiteBuild.
 
 For a warm multi-package start, call `Session.beginPreparedMount(count)`, then
 read/authenticate and `stagePreparedMount(bytes, cacheKey)` one artifact at a
@@ -227,7 +237,7 @@ base64 decode, normalization, derived-index construction, binary encoding, and
 mounting in one transaction. Its metadata envelope identifies every artifact
 and reports `decodeValidatePrepareMs` separately from `mountMs`; the host then
 calls `takePrepared(label)` once per package to receive a direct `Uint8Array` for
-OPFS. PreparedPackage v1 pointers are rejected as misses and rebuilt from the
+OPFS. PreparedPackage v1/v2 pointers are rejected as misses and rebuilt from the
 authenticated tgz/registry source; the browser never expands v1 merely to
 migrate it.
 

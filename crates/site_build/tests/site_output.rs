@@ -162,11 +162,11 @@ fn wire_roundtrip_rechecks_ids() {
     // UTF-8 ordering or canonical-field drift across Rust and JavaScript.
     assert_eq!(
         output.cache_key().as_str(),
-        "sok1-sha256:52a6568c5df7d5db15d43a1c5c1ce4eb0a64cffad5f4c2dc53ba09335180af2b"
+        "sok1-sha256:5ef64273facec16ccebeeadfef049984a2fc77ae17e7aff1f1d5230274141b43"
     );
     assert_eq!(
         output.output_id().as_str(),
-        "so1-sha256:5c395c8bde04a11939c040de1bb920dc720db9e859453dea647560b46b18f0c1"
+        "so1-sha256:01a26ca9b48d01f109b0cc4e67c32e9c57b626c5a1de551bb5861f9487395bf3"
     );
     assert_eq!(
         serde_json::from_slice::<SiteOutput>(&bytes).unwrap(),

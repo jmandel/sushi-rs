@@ -70,18 +70,28 @@ fn site_engine_inputs(
         .context("sushi-config.yaml must be UTF-8")?
         .to_string();
 
-    let scoped_labels = closure
-        .resolved
-        .labels
-        .iter()
-        .cloned()
-        .collect::<BTreeSet<_>>();
-    let (package_source, package_root) = captured_package_source(packages)?;
-    let compile_view = site_engine::PackageView::new(
-        package_source.clone(),
-        package_root.clone(),
-        Some(scoped_labels),
-    );
+    let mut prepared = Vec::new();
+    for (coordinate, locked) in packages.lock.iter() {
+        let label = coordinate.to_string();
+        let bytes = packages
+            .objects
+            .get(&locked.content.sha256)
+            .ok_or_else(|| anyhow!("package object for {label} is absent"))?;
+        let package = package_store::PreparedPackage::decode(bytes)
+            .with_context(|| format!("decode prepared package {label}"))?;
+        if package.label != label {
+            bail!(
+                "package lock {label} selected carrier for {}",
+                package.label
+            );
+        }
+        prepared.push(package);
+    }
+    let environment = site_engine::PackageEnvironment::new(prepared).map_err(anyhow::Error::msg)?;
+    let compile_view = environment
+        .scoped(&closure.resolved.labels, "fig prepare")
+        .map_err(anyhow::Error::msg)?;
+    let package_root = compile_view.root().to_path_buf();
     let store = package_store::PackageStore::for_project_with_config(
         compile_view,
         &config,
@@ -126,35 +136,6 @@ fn site_engine_inputs(
             site_files.insert(path.as_str().to_string(), bytes.to_vec());
         }
     }
-    let materials = packages
-        .lock
-        .iter()
-        .map(|(coordinate, locked)| {
-            let label = coordinate.to_string();
-            let bytes = packages
-                .objects
-                .get(&locked.content.sha256)
-                .ok_or_else(|| anyhow!("package object for {label} is absent"))?;
-            let material = site_engine::PackageMaterial::new(
-                locked.content.clone(),
-                packages
-                    .declared_dependencies
-                    .get(&label)
-                    .cloned()
-                    .unwrap_or_default(),
-                std::rc::Rc::new(bytes.clone()),
-            )
-            .map_err(anyhow::Error::msg)?;
-            Ok((label, material))
-        })
-        .collect::<Result<BTreeMap<_, _>>>()?;
-    let labels = materials.keys().cloned().collect::<Vec<_>>();
-    let environment = site_engine::PackageEnvironment::new(
-        site_engine::PackageView::new(package_source, package_root, None),
-        labels,
-        materials,
-    )
-    .map_err(anyhow::Error::msg)?;
     Ok((
         site_engine::ProjectRevision {
             config,
@@ -201,32 +182,6 @@ struct ResolvedClosure {
 struct PackageSnapshot {
     lock: PackageLock,
     objects: BTreeMap<Sha256Digest, Vec<u8>>,
-    declared_dependencies: BTreeMap<String, BTreeMap<String, String>>,
-    /// Complete validated files mounted for compilation/template preparation.
-    /// The package lock addresses the canonical semantic payload separately;
-    /// nested template/runtime inputs become explicit target artifacts.
-    mounted_files: BTreeMap<String, BTreeMap<String, Vec<u8>>>,
-}
-
-fn captured_package_source(
-    packages: &PackageSnapshot,
-) -> Result<(std::rc::Rc<dyn package_store::PackageSource>, PathBuf)> {
-    let mut source = package_store::BundleSource::new();
-    for (label, files) in &packages.mounted_files {
-        if packages
-            .lock
-            .get(&PackageCoordinate::parse(label)?)
-            .is_none()
-        {
-            bail!("captured mounted package {label} is absent from its package lock");
-        }
-        source.mount_package(label, files.clone());
-    }
-    if packages.mounted_files.len() != packages.lock.iter().count() {
-        bail!("captured mounted package inventory differs from its package lock");
-    }
-    let root = source.cache_root().to_path_buf();
-    Ok((std::rc::Rc::new(source), root))
 }
 
 /// Compile and project an IG exactly once, then publish its sealed target bundle.
@@ -678,8 +633,6 @@ fn collect_package_snapshot(
 ) -> Result<PackageSnapshot> {
     let mut packages = Vec::with_capacity(closure.coordinates.len());
     let mut objects = BTreeMap::new();
-    let mut declared_dependencies = BTreeMap::new();
-    let mut mounted_files = BTreeMap::new();
     let mut closure_versions = package_store::VersionIndex::new();
     let mut versions_by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for coordinate in &closure.coordinates {
@@ -782,13 +735,15 @@ fn collect_package_snapshot(
             }
             files.insert(relative, bytes);
         }
-        declared_dependencies.insert(label.clone(), material.declared_dependencies.clone());
-        let content = ContentRef::of_bytes(
-            &material.payload,
-            Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE),
-        );
-        insert_object(&mut objects, content.clone(), material.payload)?;
-        mounted_files.insert(label.clone(), files);
+        let prepared = package_store::PreparedPackage::prepare(&label, files)
+            .with_context(|| format!("prepare package carrier {label}"))?;
+        let carrier = prepared.artifact_bytes();
+        let content = ContentRef {
+            sha256: Sha256Digest::parse(prepared.artifact_sha256())?,
+            byte_length: carrier.len() as u64,
+            media_type: Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE.into()),
+        };
+        insert_object(&mut objects, content.clone(), carrier.as_ref().clone())?;
         let dependencies = material
             .declared_dependencies
             .iter()
@@ -808,8 +763,6 @@ fn collect_package_snapshot(
     Ok(PackageSnapshot {
         lock: PackageLock::from_packages(packages)?,
         objects,
-        declared_dependencies,
-        mounted_files,
     })
 }
 
@@ -1094,7 +1047,7 @@ fn emit_bundle(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use package_store::{PackageRequest, ResolutionStep};
+    use package_store::{PackageRequest, PackageSource, ResolutionStep};
 
     fn write(path: &Path, bytes: &[u8]) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1178,7 +1131,7 @@ mod tests {
     }
 
     #[test]
-    fn package_payload_separates_semantic_lock_from_complete_mounted_files() {
+    fn package_lock_roots_the_complete_prepared_carrier() {
         let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().canonicalize().unwrap();
         package(&cache, "example", "1.0.0", serde_json::json!({}));
@@ -1201,22 +1154,26 @@ mod tests {
         assert_eq!(files["nested/a.txt"], b"alpha");
         let locked = snapshot.lock.iter().next().unwrap().1;
         assert_eq!(
-            locked.content.sha256,
-            Sha256Digest::of_bytes(&material.payload)
+            locked.content.media_type.as_deref(),
+            Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE)
         );
-        assert_eq!(
-            snapshot.objects.get(&locked.content.sha256),
-            Some(&material.payload)
-        );
+        let carrier = &snapshot.objects[&locked.content.sha256];
+        assert_eq!(locked.content.sha256, Sha256Digest::of_bytes(carrier));
+        let prepared = package_store::PreparedPackage::decode(carrier).unwrap();
+        let mut source = package_store::BundleSource::new();
+        prepared.mount_into(&mut source);
+        let root = source.cache_root().join("example#1.0.0/package");
         for (path, bytes) in &files {
-            assert_eq!(&snapshot.mounted_files["example#1.0.0"][path], bytes);
+            assert_eq!(source.read(&root.join(path)).unwrap(), *bytes);
         }
         assert_eq!(
-            snapshot.mounted_files["example#1.0.0"]["content/layouts/page.html"],
+            source
+                .read(&root.join("content/layouts/page.html"))
+                .unwrap(),
             b"template layout"
         );
         assert_eq!(
-            snapshot.mounted_files["example#1.0.0"]["other/spec.internals"],
+            source.read(&root.join("other/spec.internals")).unwrap(),
             b"renderer facts"
         );
         assert!(!package_store::decode_normalized_package(&material.payload)
@@ -1259,7 +1216,13 @@ mod tests {
             b"live mutation",
         );
 
-        let (source, root) = captured_package_source(&snapshot).unwrap();
+        let locked = snapshot.lock.iter().next().unwrap().1;
+        let carrier = &snapshot.objects[&locked.content.sha256];
+        let package = package_store::PreparedPackage::decode(carrier).unwrap();
+        let mut captured = package_store::BundleSource::new();
+        package.mount_into(&mut captured);
+        let root = captured.cache_root().to_path_buf();
+        let source: std::rc::Rc<dyn package_store::PackageSource> = std::rc::Rc::new(captured);
         let view = site_engine::PackageView::new(
             source.clone(),
             root.clone(),

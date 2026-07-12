@@ -29,8 +29,8 @@ pub use compilation::{
     CompilationResource, CompilationTransition, ProjectRevision, ResolvedPackageClosure,
 };
 pub use preparation::{
-    GeneratorSpec, PackageEnvironment, PackageMaterial, PrepareMetrics, PrepareProjectError,
-    PrepareResult, PreparedProjectResult, TemplateResolution,
+    GeneratorSpec, PackageEnvironment, PrepareMetrics, PrepareProjectError, PrepareResult,
+    PreparedProjectResult, TemplateResolution,
 };
 pub(crate) use render_surface::{
     build_render_semantics, build_render_state_from_semantics, RenderState, SiteOptions,
@@ -50,6 +50,8 @@ pub struct PackageView {
     source: Rc<dyn PackageSource>,
     root: PathBuf,
     allowed_labels: Option<BTreeSet<String>>,
+    allowed_files: Option<BTreeSet<PathBuf>>,
+    allowed_directories: Option<BTreeSet<PathBuf>>,
 }
 
 impl std::fmt::Debug for PackageView {
@@ -58,6 +60,10 @@ impl std::fmt::Debug for PackageView {
             .debug_struct("PackageView")
             .field("root", &self.root)
             .field("allowed_labels", &self.allowed_labels)
+            .field(
+                "allowed_file_count",
+                &self.allowed_files.as_ref().map(BTreeSet::len),
+            )
             .finish_non_exhaustive()
     }
 }
@@ -72,6 +78,8 @@ impl PackageView {
             source,
             root,
             allowed_labels,
+            allowed_files: None,
+            allowed_directories: None,
         }
     }
 
@@ -84,7 +92,57 @@ impl PackageView {
             source: self.source.clone(),
             root: self.root.clone(),
             allowed_labels: Some(labels.into_iter().collect()),
+            allowed_files: self.allowed_files.clone(),
+            allowed_directories: self.allowed_directories.clone(),
         }
+    }
+
+    pub(crate) fn restricted_to_files(&self, files: BTreeSet<PathBuf>) -> Result<Self, String> {
+        let labels = self.allowed_labels.as_ref().ok_or_else(|| {
+            "restricted package view must already have an exact label scope".to_string()
+        })?;
+        for file in &files {
+            let relative = file.strip_prefix(&self.root).map_err(|_| {
+                format!(
+                    "restricted package file {} is outside the package root",
+                    file.display()
+                )
+            })?;
+            let label = relative
+                .components()
+                .next()
+                .and_then(|component| component.as_os_str().to_str())
+                .ok_or_else(|| {
+                    format!("restricted package file {} has no label", file.display())
+                })?;
+            if !labels.contains(label) {
+                return Err(format!(
+                    "restricted package file {} is outside the exact label scope",
+                    file.display()
+                ));
+            }
+        }
+        let mut directories = BTreeSet::from([self.root.clone()]);
+        for file in &files {
+            let mut parent = file.parent();
+            while let Some(path) = parent {
+                if !path.starts_with(&self.root) {
+                    break;
+                }
+                directories.insert(path.to_path_buf());
+                if path == self.root {
+                    break;
+                }
+                parent = path.parent();
+            }
+        }
+        Ok(Self {
+            source: self.source.clone(),
+            root: self.root.clone(),
+            allowed_labels: self.allowed_labels.clone(),
+            allowed_files: Some(files),
+            allowed_directories: Some(directories),
+        })
     }
 
     pub fn is_scoped_to(&self, labels: &[String]) -> bool {
@@ -109,7 +167,17 @@ impl PackageView {
         else {
             return false;
         };
-        allowed.contains(label)
+        if !allowed.contains(label) {
+            return false;
+        }
+        let Some(files) = &self.allowed_files else {
+            return true;
+        };
+        files.contains(path)
+            || self
+                .allowed_directories
+                .as_ref()
+                .is_some_and(|directories| directories.contains(path))
     }
 }
 
@@ -136,6 +204,8 @@ impl PackageSource for PackageView {
             if let Some(allowed) = &self.allowed_labels {
                 entries.retain(|entry| allowed.contains(&entry.file_name));
             }
+        } else if self.allowed_files.is_some() {
+            entries.retain(|entry| self.permits(&path.join(&entry.file_name)));
         }
         Ok(entries)
     }

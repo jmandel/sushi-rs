@@ -156,6 +156,7 @@ pub struct CompilationDiagnostic {
     pub message: String,
     pub file: Option<String>,
     pub line: Option<u32>,
+    pub owner_definition: Option<CompilationDefinition>,
 }
 
 #[derive(Clone, Debug)]
@@ -430,6 +431,7 @@ fn compile(
             message: diagnostic.message,
             file: diagnostic.file,
             line: diagnostic.line,
+            owner_definition: diagnostic.owner_definition.map(compilation_definition),
         })
         .collect::<Vec<_>>();
     Ok(SemanticCompilation {
@@ -449,19 +451,23 @@ fn compilation_resource(resource: compiler::CompiledResource) -> CompilationReso
         body,
         definition,
     } = resource;
-    let definition = definition.map(|definition| CompilationDefinition {
+    let definition = definition.map(compilation_definition);
+    CompilationResource {
+        filename,
+        text,
+        body,
+        definition,
+    }
+}
+
+fn compilation_definition(definition: compiler::DefinitionLocation) -> CompilationDefinition {
+    CompilationDefinition {
         kind: match definition.kind {
             compiler::DefinitionKind::FshDeclaration => CompilationDefinitionKind::FshDeclaration,
         },
         path: definition.path,
         line: definition.line,
         column: definition.column,
-    });
-    CompilationResource {
-        filename,
-        text,
-        body,
-        definition,
     }
 }
 
@@ -637,6 +643,7 @@ mod tests {
                     message: format!("compiled {name}"),
                     file: None,
                     line: None,
+                    owner_definition: None,
                 }],
             },
         }
@@ -861,22 +868,16 @@ mod tests {
     #[test]
     fn atomic_prepare_preserves_typed_compilation_on_generator_failure() {
         let mut engine = reuse_engine();
-        let package_bytes = Rc::new(b"authenticated core fixture".to_vec());
         let core_label = "hl7.fhir.r4.core#4.0.1";
-        let environment = crate::PackageEnvironment::new(
-            package_view(),
-            vec![core_label.into()],
+        let package = package_store::PreparedPackage::prepare(
+            core_label,
             BTreeMap::from([(
-                core_label.into(),
-                crate::PackageMaterial::new(
-                    site_build::ContentRef::of_bytes(package_bytes.as_ref(), None::<String>),
-                    BTreeMap::new(),
-                    package_bytes,
-                )
-                .unwrap(),
+                "package.json".into(),
+                br#"{"name":"hl7.fhir.r4.core","version":"4.0.1"}"#.to_vec(),
             )]),
         )
         .unwrap();
+        let environment = crate::PackageEnvironment::new([package]).unwrap();
 
         let error = engine
             .prepare_project(

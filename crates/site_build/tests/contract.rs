@@ -43,12 +43,12 @@ fn fixture(reverse: bool) -> SiteBuild {
 
     let core = LockedPackage {
         coordinate: package("hl7.fhir.r4.core#4.0.1"),
-        content: ContentRef::of_bytes(b"core", Some("application/gzip")),
+        content: ContentRef::of_bytes(b"core", Some(PREPARED_PACKAGE_MEDIA_TYPE)),
         dependencies: BTreeSet::new(),
     };
     let template = LockedPackage {
         coordinate: package("hl7.fhir.template#1.0.0"),
-        content: ContentRef::of_bytes(b"template", Some("application/gzip")),
+        content: ContentRef::of_bytes(b"template", Some(PREPARED_PACKAGE_MEDIA_TYPE)),
         dependencies: BTreeSet::from([core.coordinate.clone()]),
     };
     let package_lock = PackageLock::from_packages(if reverse {
@@ -176,11 +176,12 @@ fn build_id_and_canonical_bytes_are_order_independent() {
     let forward = fixture(false);
     let reverse = fixture(true);
     assert_eq!(forward.build_id(), reverse.build_id());
-    // Golden v1 hash: changing the wire contract or canonicalization is an
+    assert_eq!(forward.schema_version(), SchemaVersion::V2);
+    // Golden v2 hash: changing the wire contract or canonicalization is an
     // explicit schema decision, not an unnoticed serde refactor.
     assert_eq!(
         forward.build_id().as_str(),
-        "sb1-sha256:11e155b59fbd1a934559c07cbb5e4e35e7cf29c7c9ce5302f8321e2f98834311"
+        "sb1-sha256:0490a3e4add53e3246b0865ddf07cf757fb8181b6d82beee088781fceefb1cd5"
     );
     assert_eq!(
         forward.canonical_bytes().unwrap(),
@@ -189,7 +190,7 @@ fn build_id_and_canonical_bytes_are_order_independent() {
 }
 
 #[test]
-fn non_bmp_object_keys_have_a_cross_host_v1_hash() {
+fn non_bmp_object_keys_have_a_cross_host_v2_hash() {
     let key = ArtifactKey::Data {
         namespace: "test".into(),
         name: "root".into(),
@@ -227,7 +228,7 @@ fn non_bmp_object_keys_have_a_cross_host_v1_hash() {
     .unwrap();
     assert_eq!(
         build.build_id().as_str(),
-        "sb1-sha256:64c14aa10cf7f0597222c274ba47d1afd9aaf81691f3c09b04ec53c2e2cc3638"
+        "sb1-sha256:4b560ddd18498b28623af0a4608727cd6831ab8fdb22c549bbd52073877f9333"
     );
 }
 
@@ -262,6 +263,17 @@ fn serialization_roundtrip_checks_integrity() {
     tampered["project"]["revision"] = serde_json::Value::String("different".into());
     let error = serde_json::from_value::<SiteBuild>(tampered).unwrap_err();
     assert!(error.to_string().contains("build id mismatch"));
+}
+
+#[test]
+fn v1_wire_values_are_recognized_but_rejected_as_unsupported() {
+    let mut wire = serde_json::to_value(fixture(false)).unwrap();
+    wire["schemaVersion"] = serde_json::Value::String("site-build/v1".into());
+
+    let error = serde_json::from_value::<SiteBuild>(wire).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("unsupported site build schema V1"));
 }
 
 #[test]
@@ -514,7 +526,7 @@ fn digests_and_paths_reject_noncanonical_values() {
 fn package_lock_rejects_a_wire_key_coordinate_mismatch() {
     let locked = LockedPackage {
         coordinate: package("example.a#1.0.0"),
-        content: ContentRef::of_bytes(b"package", Some("application/gzip")),
+        content: ContentRef::of_bytes(b"package", Some(PREPARED_PACKAGE_MEDIA_TYPE)),
         dependencies: BTreeSet::new(),
     };
     let mut wire = serde_json::to_value(PackageLock::from_packages([locked]).unwrap()).unwrap();
@@ -542,4 +554,49 @@ fn package_lock_rejects_a_wire_key_coordinate_mismatch() {
     assert!(error
         .to_string()
         .contains("does not match embedded coordinate"));
+}
+
+#[test]
+fn locked_package_keeps_the_content_carrier_wire_field() {
+    let locked = LockedPackage {
+        coordinate: package("example.a#1.0.0"),
+        content: ContentRef::of_bytes(b"prepared package", Some(PREPARED_PACKAGE_MEDIA_TYPE)),
+        dependencies: BTreeSet::new(),
+    };
+    let wire = serde_json::to_value(locked).unwrap();
+
+    assert!(wire.get("content").is_some());
+    assert!(wire.get("preparedPackage").is_none());
+}
+
+#[test]
+fn site_build_v2_rejects_a_non_prepared_package_carrier() {
+    let locked = LockedPackage {
+        coordinate: package("example.a#1.0.0"),
+        content: ContentRef::of_bytes(
+            b"legacy normalized payload",
+            Some("application/octet-stream"),
+        ),
+        dependencies: BTreeSet::new(),
+    };
+    let error = SiteBuild::new(
+        ProjectRevision {
+            project_id: "demo".into(),
+            revision: "rev".into(),
+            sources: SourceManifest::default(),
+        },
+        PackageLock::from_packages([locked]).unwrap(),
+        RenderTarget {
+            renderer: ProducerRef::new("test", "1"),
+            mode: RenderMode::ExternalBuilder,
+            fhir_version: "4.0.1".into(),
+            template: None,
+            parameters: BTreeMap::new(),
+        },
+        RenderPlan::default(),
+        ArtifactCatalog::default(),
+        BTreeSet::new(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("unsupported carrier media type"));
 }

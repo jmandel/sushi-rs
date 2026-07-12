@@ -1,10 +1,13 @@
 //! Versioned, compact package artifacts for deterministic warm mounting.
 //!
-//! PreparedPackage v2 keeps a canonical metadata directory in front of
+//! PreparedPackage v3 keeps a canonical metadata directory in front of
 //! independently compressed chunks. Mounting authenticates and validates that
 //! directory without inflating package bodies. A body is exposed only after its
 //! chunk and member digests have been checked; verified chunks are retained in a
 //! bounded cache shared by every package using the same backing object.
+//! The SHA-256 of the exact complete carrier is computed once at encode/decode
+//! and retained for its enclosing ContentRef; there is no redundant checksum
+//! footer inside the content-addressed artifact.
 
 use crate::material::{
     canonicalize_package_material, finish_normalized_package_material, parse_exact_package_label,
@@ -15,6 +18,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use miniz_oxide::{deflate, inflate};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::cell::OnceCell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -24,8 +28,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 const MAGIC: &[u8; 8] = b"FHIRPPK\0";
-const CHECKSUM_LEN: usize = 32;
-const SOURCE_ID_DOMAIN: &[u8] = b"fhir-prepared-package-source-v2\0";
+const SOURCE_ID_DOMAIN: &[u8] = b"fhir-prepared-package-source-v3\0";
 const CHUNK_TARGET_BYTES: usize = 1024 * 1024;
 // Level 1 retains a strong JSON compression ratio while keeping first-use
 // browser preparation bounded. Level 6 was ~1.9x slower on R4 core for a warm
@@ -38,14 +41,14 @@ const DECOMPRESSED_CACHE_BYTES: usize = 8 * 1024 * 1024;
 
 /// Binary container version. Bump if the layout, identity construction,
 /// compression recipe, or deterministic packing changes.
-pub const PREPARED_PACKAGE_FORMAT_VERSION: u32 = 2;
+pub const PREPARED_PACKAGE_FORMAT_VERSION: u32 = 3;
 /// Package normalization algorithm version. Bump when canonical mounted bytes
 /// or semantic payload selection changes.
 pub const PACKAGE_NORMALIZATION_VERSION: u32 = 1;
 /// ABI of the package read/mount interpretation.
 pub const PACKAGE_ENGINE_ABI_VERSION: u32 = 1;
 /// Stable media type for the compact prepared package artifact.
-pub const PREPARED_PACKAGE_MEDIA_TYPE: &str = "application/vnd.fhir.package.prepared.v2";
+pub const PREPARED_PACKAGE_MEDIA_TYPE: &str = "application/vnd.fhir.package.prepared.v3";
 
 /// Complete cache identity for a prepared package.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -81,15 +84,7 @@ impl PreparedPackageKey {
     }
 
     fn source_digest(&self) -> Result<[u8; 32]> {
-        let bytes = hex::decode(&self.source_sha256)
-            .context("prepared-package key sourceSha256 is not hex")?;
-        let digest: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| anyhow!("prepared-package key sourceSha256 must contain 32 bytes"))?;
-        if hex::encode(digest) != self.source_sha256 {
-            bail!("prepared-package key sourceSha256 must be canonical lowercase hex");
-        }
-        Ok(digest)
+        parse_canonical_digest(&self.source_sha256, "prepared-package key sourceSha256")
     }
 
     fn require_current(&self) -> Result<()> {
@@ -109,6 +104,17 @@ impl PreparedPackageKey {
         self.source_digest()?;
         Ok(())
     }
+}
+
+fn parse_canonical_digest(value: &str, field: &str) -> Result<[u8; 32]> {
+    let bytes = hex::decode(value).with_context(|| format!("{field} is not hex"))?;
+    let digest: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| anyhow!("{field} must contain 32 bytes"))?;
+    if hex::encode(digest) != value {
+        bail!("{field} must be canonical lowercase hex");
+    }
+    Ok(digest)
 }
 
 impl fmt::Display for PreparedPackageKey {
@@ -155,15 +161,31 @@ impl FromStr for PreparedPackageKey {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct PreparedPackage {
     pub label: String,
     pub key: PreparedPackageKey,
     pub files: PreparedFiles,
-    pub semantic_payload_sha256: String,
-    pub semantic_payload_bytes: u64,
     pub declared_dependencies: BTreeMap<String, String>,
+    artifact: OnceCell<ExactArtifact>,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ExactArtifact {
+    bytes: Rc<Vec<u8>>,
+    sha256: String,
+}
+
+impl PartialEq for PreparedPackage {
+    fn eq(&self, other: &Self) -> bool {
+        self.label == other.label
+            && self.key == other.key
+            && self.files == other.files
+            && self.declared_dependencies == other.declared_dependencies
+    }
+}
+
+impl Eq for PreparedPackage {}
 
 #[derive(Clone, Debug)]
 pub struct PreparedFiles(PreparedFileStorage);
@@ -398,6 +420,20 @@ impl PreparedFiles {
         }
     }
 
+    /// Materialize the complete validated file map. Native package-preparation
+    /// tools use this only while folding sibling template files into a new
+    /// canonical carrier; browser execution remains member-lazy.
+    pub fn materialize_all(&self) -> io::Result<BTreeMap<String, Vec<u8>>> {
+        let mut files = BTreeMap::new();
+        for member in self.metadata() {
+            let bytes = self.read(&member.name)?.ok_or_else(|| {
+                invalid_data(format!("prepared member {} disappeared", member.name))
+            })?;
+            files.insert(member.name, bytes);
+        }
+        Ok(files)
+    }
+
     pub fn len(&self) -> usize {
         match &self.0 {
             PreparedFileStorage::Owned(files) => files.len(),
@@ -428,16 +464,21 @@ impl PreparedFiles {
         }
     }
 
-    fn original_artifact(&self) -> Option<Vec<u8>> {
+    fn original_artifact(&self) -> Option<Rc<Vec<u8>>> {
         let PreparedFileStorage::Compressed(files) = &self.0 else {
             return None;
         };
+        if files.artifact_range.start == 0
+            && files.artifact_range.end == files.backing.0.bytes.len()
+        {
+            return Some(files.backing.0.bytes.clone());
+        }
         files
             .backing
             .0
             .bytes
             .get(files.artifact_range.clone())
-            .map(<[u8]>::to_vec)
+            .map(|bytes| Rc::new(bytes.to_vec()))
     }
 
     fn mount_into(self, source: &mut BundleSource, label: &str) {
@@ -483,9 +524,23 @@ impl Eq for PreparedFiles {}
 pub struct PreparedPackageMount {
     pub label: String,
     pub key: PreparedPackageKey,
-    pub semantic_payload_sha256: String,
-    pub semantic_payload_bytes: u64,
     pub declared_dependencies: BTreeMap<String, String>,
+    artifact: ExactArtifact,
+}
+
+impl PreparedPackageMount {
+    /// Exact deterministic prepared-package carrier bytes. Reading this value
+    /// never inflates a member body. The returned allocation is shared by every
+    /// caller holding this mount.
+    pub fn artifact_bytes(&self) -> Rc<Vec<u8>> {
+        self.artifact.bytes.clone()
+    }
+
+    /// Canonical SHA-256 of the exact complete carrier bytes. The digest was
+    /// computed once while the artifact was encoded or shallow-decoded.
+    pub fn artifact_sha256(&self) -> &str {
+        &self.artifact.sha256
+    }
 }
 
 pub struct PreparedPackageBuilder {
@@ -504,20 +559,12 @@ impl PreparedPackageBuilder {
                 .iter()
                 .filter(|member| member.name != derived_index::SIDECAR_NAME),
         );
-        let semantic_members: Vec<_> = members
-            .iter()
-            .filter(|member| !member.name.contains('/'))
-            .collect();
-        let semantic_digest = canonical_payload_digest(&material.files);
-        let semantic_payload_bytes = semantic_length(semantic_members.iter().copied())?;
-        debug_assert_eq!(semantic_payload_bytes, material.payload.len() as u64);
         Ok(PreparedPackage {
             label: self.label,
             key: PreparedPackageKey::current(source_digest),
             files: PreparedFiles(PreparedFileStorage::Owned(material.files)),
-            semantic_payload_sha256: hex::encode(semantic_digest),
-            semantic_payload_bytes,
             declared_dependencies: material.declared_dependencies,
+            artifact: OnceCell::new(),
         })
     }
 }
@@ -537,16 +584,39 @@ impl PreparedPackage {
         })
     }
 
-    /// Encode deterministic v2 bytes. Decoded packages retain their original
+    /// Encode deterministic v3 bytes. Decoded packages retain their original
     /// exact artifact, so decode/encode is also byte preserving.
     pub fn encode(&self) -> Vec<u8> {
-        if let Some(bytes) = self.files.original_artifact() {
-            return bytes;
-        }
-        let PreparedFileStorage::Owned(files) = &self.files.0 else {
-            unreachable!()
-        };
-        encode_owned(self, files).expect("a prepared package always encodes")
+        self.artifact_bytes().as_ref().clone()
+    }
+
+    /// Exact deterministic prepared-package carrier bytes. The first call for
+    /// an owned package encodes once; decoded packages copy only their exact
+    /// artifact range. Subsequent calls and the mounted value share one `Rc`.
+    pub fn artifact_bytes(&self) -> Rc<Vec<u8>> {
+        self.exact_artifact().bytes.clone()
+    }
+
+    /// Canonical SHA-256 of the exact complete carrier bytes. This never
+    /// re-hashes the artifact.
+    pub fn artifact_sha256(&self) -> &str {
+        &self.exact_artifact().sha256
+    }
+
+    fn exact_artifact(&self) -> &ExactArtifact {
+        self.artifact.get_or_init(|| {
+            let bytes = match self.files.original_artifact() {
+                Some(bytes) => bytes,
+                None => {
+                    let PreparedFileStorage::Owned(files) = &self.files.0 else {
+                        unreachable!()
+                    };
+                    Rc::new(encode_owned(self, files).expect("a prepared package always encodes"))
+                }
+            };
+            let sha256 = hex::encode(Sha256::digest(bytes.as_ref()));
+            ExactArtifact { bytes, sha256 }
+        })
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self> {
@@ -590,21 +660,20 @@ impl PreparedPackage {
     }
 
     pub fn mount_into(self, source: &mut BundleSource) -> PreparedPackageMount {
+        let artifact = self.exact_artifact().clone();
         let Self {
             label,
             key,
             files,
-            semantic_payload_sha256,
-            semantic_payload_bytes,
             declared_dependencies,
+            artifact: _,
         } = self;
         files.mount_into(source, &label);
         PreparedPackageMount {
             label,
             key,
-            semantic_payload_sha256,
-            semantic_payload_bytes,
             declared_dependencies,
+            artifact,
         }
     }
 }
@@ -641,17 +710,6 @@ fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) ->
     if source != package.key.source_digest()? {
         bail!("prepared-package source metadata disagrees with its key");
     }
-    let semantic: Vec<_> = identities
-        .iter()
-        .filter(|member| !member.name.contains('/'))
-        .collect();
-    let semantic_digest = canonical_payload_digest(files);
-    if hex::encode(semantic_digest) != package.semantic_payload_sha256
-        || semantic_length(semantic.iter().copied())? != package.semantic_payload_bytes
-    {
-        bail!("prepared-package semantic metadata disagrees with its identity");
-    }
-
     let mut encoded_members: Vec<EncodedMember> = identities
         .iter()
         .cloned()
@@ -708,8 +766,6 @@ fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) ->
     put_u32(&mut out, package.key.derived_index_version);
     put_u32(&mut out, package.key.engine_abi_version);
     out.extend_from_slice(&source);
-    out.extend_from_slice(&semantic_digest);
-    put_u64(&mut out, package.semantic_payload_bytes);
     put_string(&mut out, &package.label)?;
     put_u32(
         &mut out,
@@ -736,8 +792,6 @@ fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) ->
     for chunk in chunks {
         out.extend_from_slice(&chunk.compressed);
     }
-    let checksum = Sha256::digest(&out);
-    out.extend_from_slice(&checksum);
     Ok(out)
 }
 
@@ -785,32 +839,39 @@ fn decode_shared(
         .bytes
         .get(artifact_range.clone())
         .ok_or_else(|| anyhow!("prepared-package artifact range is out of bounds"))?;
-    if bytes.len() < MAGIC.len() + 4 * 4 + 32 * 3 + CHECKSUM_LEN {
+    if bytes.len() < MAGIC.len() + 4 * 4 + 32 {
         bail!("prepared-package artifact is truncated");
     }
-    let payload_end = bytes.len() - CHECKSUM_LEN;
-    let actual_checksum = Sha256::digest(&bytes[..payload_end]);
-    if actual_checksum.as_slice() != &bytes[payload_end..] {
-        bail!("prepared-package artifact checksum mismatch");
-    }
+    let artifact_sha256 = hex::encode(Sha256::digest(bytes));
+    let artifact = ExactArtifact {
+        bytes: if artifact_range.start == 0 && artifact_range.end == backing.0.bytes.len() {
+            backing.0.bytes.clone()
+        } else {
+            Rc::new(bytes.to_vec())
+        },
+        sha256: artifact_sha256,
+    };
 
-    let mut reader = Reader::new(&bytes[..payload_end]);
+    let mut reader = Reader::new(bytes);
     if reader.take(MAGIC.len())? != MAGIC {
         bail!("prepared-package artifact has the wrong magic");
     }
+    let format_version = reader.u32()?;
+    let normalization_version = reader.u32()?;
+    let derived_index_version = reader.u32()?;
+    let engine_abi_version = reader.u32()?;
+    let source_sha256 = hex::encode(reader.take(32)?);
     let key = PreparedPackageKey {
-        format_version: reader.u32()?,
-        normalization_version: reader.u32()?,
-        derived_index_version: reader.u32()?,
-        engine_abi_version: reader.u32()?,
-        source_sha256: hex::encode(reader.take(32)?),
+        format_version,
+        normalization_version,
+        derived_index_version,
+        engine_abi_version,
+        source_sha256,
     };
     key.require_current()?;
     if expected.is_some_and(|expected| expected != &key) {
         bail!("prepared-package embedded key does not match the requested cache key");
     }
-    let semantic_digest: [u8; 32] = reader.take(32)?.try_into().unwrap();
-    let semantic_payload_bytes = reader.u64()?;
     let label = reader.counted_string("package label")?;
     parse_exact_package_label(&label)?;
 
@@ -841,8 +902,9 @@ fn decode_shared(
     // Reject impossible attacker-controlled counts before using them as Vec
     // capacities. Even the smallest valid member consumes 57 directory bytes
     // (a one-byte name plus fixed fields), and every chunk consumes 48 bytes.
-    // The outer checksum detects accidental corruption but is not a keyed MAC,
-    // so a parser must not rely on it to make allocation metadata trustworthy.
+    // Exact carrier integrity comes from the cached SHA-256 ContentRef, so the
+    // parser must still reject impossible attacker-controlled allocation counts
+    // before using them as Vec capacities.
     let minimum_directory_bytes = file_count
         .checked_mul(57)
         .and_then(|bytes| {
@@ -901,15 +963,6 @@ fn decode_shared(
     if actual_source != key.source_digest()? {
         bail!("prepared-package source metadata digest mismatch");
     }
-    let semantic_members: Vec<_> = members
-        .iter()
-        .map(|member| &member.identity)
-        .filter(|member| !member.name.contains('/'))
-        .collect();
-    if semantic_length(semantic_members.iter().copied())? != semantic_payload_bytes {
-        bail!("prepared-package semantic payload length mismatch");
-    }
-
     #[derive(Clone)]
     struct ChunkDescription {
         raw_len: usize,
@@ -947,7 +1000,7 @@ fn decode_shared(
         chunk_ranges.push(absolute_start..absolute_end);
     }
     if !reader.is_empty() {
-        bail!("prepared-package artifact has trailing data before its checksum");
+        bail!("prepared-package artifact has trailing data");
     }
 
     let mut grouped: Vec<Vec<&DecodedMember>> = vec![Vec::new(); chunk_count];
@@ -1019,9 +1072,8 @@ fn decode_shared(
             members: compressed_members,
             artifact_range,
         })),
-        semantic_payload_sha256: hex::encode(semantic_digest),
-        semantic_payload_bytes,
         declared_dependencies,
+        artifact: OnceCell::from(artifact),
     })
 }
 
@@ -1059,30 +1111,6 @@ fn source_metadata_digest<'a>(
         hasher.update(member.raw_sha256);
     }
     hasher.finalize().into()
-}
-
-/// SHA-256 of the exact canonical top-level normalized-package payload. This is
-/// deliberately the existing cross-host PackageLock identity, not a v2
-/// metadata/Merkle identity.
-fn canonical_payload_digest(files: &BTreeMap<String, Vec<u8>>) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    for (name, body) in files.iter().filter(|(name, _)| !name.contains('/')) {
-        hasher.update((name.len() as u64).to_be_bytes());
-        hasher.update(name.as_bytes());
-        hasher.update((body.len() as u64).to_be_bytes());
-        hasher.update(body);
-    }
-    hasher.finalize().into()
-}
-
-fn semantic_length<'a>(members: impl IntoIterator<Item = &'a MemberIdentity>) -> Result<u64> {
-    members.into_iter().try_fold(0u64, |total, member| {
-        total
-            .checked_add(16)
-            .and_then(|v| v.checked_add(member.name.len() as u64))
-            .and_then(|v| v.checked_add(member.raw_len))
-            .ok_or_else(|| anyhow!("prepared-package semantic payload length overflow"))
-    })
 }
 
 fn u32_len(value: usize, field: &str) -> Result<u32> {
@@ -1178,16 +1206,14 @@ mod tests {
     #[test]
     fn deterministic_compact_round_trip_and_lazy_mount() {
         let input = entries();
-        let normalized =
-            crate::normalize_package_material("example.pkg#1.2.3", input.clone()).unwrap();
         let prepared = PreparedPackage::prepare("example.pkg#1.2.3", input).unwrap();
         assert_eq!(
-            prepared.semantic_payload_sha256,
-            hex::encode(Sha256::digest(&normalized.payload))
-        );
-        assert_eq!(
-            prepared.semantic_payload_bytes,
-            normalized.payload.len() as u64
+            prepared.key.cache_key(),
+            format!(
+                "pp3-sha256-{}-n1-d{}-a1",
+                prepared.key.source_sha256,
+                derived_index::DERIVED_INDEX_FORMAT_VERSION
+            )
         );
         let expanded: usize = prepared
             .files
@@ -1196,6 +1222,8 @@ mod tests {
             .map(|member| member.raw_len as usize)
             .sum();
         let encoded = prepared.encode();
+        let expected_artifact_sha256 = hex::encode(Sha256::digest(&encoded));
+        assert_eq!(prepared.artifact_sha256(), expected_artifact_sha256);
         assert_eq!(encoded, prepared.encode());
         assert!(encoded.len() < expanded / 4);
 
@@ -1203,16 +1231,24 @@ mod tests {
         assert!(decoded.files.is_blob_backed());
         assert_eq!(decoded, prepared);
         assert_eq!(decoded.encode(), encoded);
+        assert_eq!(decoded.artifact_bytes().as_slice(), encoded);
+        assert_eq!(decoded.artifact_sha256(), expected_artifact_sha256);
         assert_eq!(decoded.declared_dependencies["dep.pkg"], "2.0.0");
 
         // Structural decode/mount did not create a decompressed cache entry.
         let PreparedFileStorage::Compressed(compressed) = &decoded.files.0 else {
             panic!("decoded files are not compressed")
         };
+        assert!(Rc::ptr_eq(
+            &decoded.artifact_bytes(),
+            &compressed.backing.0.bytes
+        ));
         assert!(compressed.backing.0.cache.borrow().entries.is_empty());
 
         let mut source = BundleSource::new();
         let mounted = decoded.mount_into(&mut source);
+        assert_eq!(mounted.artifact_bytes().as_slice(), encoded);
+        assert_eq!(mounted.artifact_sha256(), expected_artifact_sha256);
         let package_dir = source.cache_root().join(&mounted.label).join("package");
         let before = source.compression_metrics();
         assert!(before.compressed_retained_bytes > 0);
@@ -1270,16 +1306,13 @@ mod tests {
     }
 
     #[test]
-    fn rejects_corruption_stale_keys_and_wrong_identity() {
+    fn rejects_stale_keys_and_wrong_identity() {
         let prepared = PreparedPackage::prepare("example.pkg#1.2.3", entries()).unwrap();
-        let mut corrupted = prepared.encode();
-        let middle = corrupted.len() / 2;
-        corrupted[middle] ^= 1;
-        assert!(PreparedPackage::decode(&corrupted)
-            .unwrap_err()
-            .to_string()
-            .contains("checksum"));
-
+        let key_text = prepared.key.cache_key();
+        assert_eq!(
+            key_text.parse::<PreparedPackageKey>().unwrap(),
+            prepared.key
+        );
         let mut other_entries = entries();
         other_entries.insert("extra.txt".into(), b"extra".to_vec());
         let other = PreparedPackage::prepare("example.pkg#1.2.3", other_entries).unwrap();
@@ -1298,26 +1331,19 @@ mod tests {
             .contains("canonical lowercase hex"));
     }
 
-    fn resign(bytes: &mut [u8]) {
-        let checksum = bytes.len() - CHECKSUM_LEN;
-        let digest = Sha256::digest(&bytes[..checksum]);
-        bytes[checksum..].copy_from_slice(&digest);
-    }
-
     #[test]
-    fn metadata_roots_reject_a_re_signed_member_hash_and_body_checks_are_lazy() {
+    fn metadata_roots_reject_changed_member_identity_and_body_checks_are_lazy() {
         let source = entries();
         let prepared = PreparedPackage::prepare("example.pkg#1.2.3", source.clone()).unwrap();
         let encoded = prepared.encode();
 
         let member_sha = Sha256::digest(&source["template/config.json"]);
         let mut forged_metadata = encoded.clone();
-        let metadata_sha_offset = forged_metadata[..forged_metadata.len() - CHECKSUM_LEN]
+        let metadata_sha_offset = forged_metadata
             .windows(32)
             .position(|window| window == member_sha.as_slice())
             .expect("member SHA is present in the canonical directory");
         forged_metadata[metadata_sha_offset] ^= 1;
-        resign(&mut forged_metadata);
         assert!(
             PreparedPackage::decode_expected(&forged_metadata, &prepared.key)
                 .unwrap_err()
@@ -1326,12 +1352,11 @@ mod tests {
         );
 
         let mut forged_label = encoded.clone();
-        let label_offset = forged_label[..forged_label.len() - CHECKSUM_LEN]
+        let label_offset = forged_label
             .windows(b"example.pkg#1.2.3".len())
             .position(|window| window == b"example.pkg#1.2.3")
             .expect("package label is present in the header");
         forged_label[label_offset] = b'f';
-        resign(&mut forged_label);
         assert!(
             PreparedPackage::decode_expected(&forged_label, &prepared.key)
                 .unwrap_err()
@@ -1340,14 +1365,15 @@ mod tests {
         );
 
         let decoded = PreparedPackage::decode_expected(&encoded, &prepared.key).unwrap();
+        let original_sha256 = decoded.artifact_sha256().to_string();
         let PreparedFileStorage::Compressed(files) = decoded.files.0 else {
             panic!("decoded files are not compressed")
         };
         let compressed_offset = files.members["template/config.json"].chunk.compressed.start;
         let mut forged_body = encoded;
         forged_body[compressed_offset] ^= 1;
-        resign(&mut forged_body);
         let decoded = PreparedPackage::decode_expected(&forged_body, &prepared.key).unwrap();
+        assert_ne!(decoded.artifact_sha256(), original_sha256);
         assert!(decoded.files.read("template/config.json").is_err());
     }
 
@@ -1372,9 +1398,8 @@ mod tests {
     fn rejects_impossible_counts_before_allocating_directory_vectors() {
         let prepared = PreparedPackage::prepare("example.pkg#1.2.3", entries()).unwrap();
         let mut encoded = prepared.encode();
-        let payload_end = encoded.len() - CHECKSUM_LEN;
-        let mut reader = Reader::new(&encoded[..payload_end]);
-        reader.take(MAGIC.len() + 4 * 4 + 32 + 32 + 8).unwrap();
+        let mut reader = Reader::new(&encoded);
+        reader.take(MAGIC.len() + 4 * 4 + 32).unwrap();
         reader.counted_string("package label").unwrap();
         let dependencies = reader.u32().unwrap();
         for _ in 0..dependencies {
@@ -1383,8 +1408,6 @@ mod tests {
         }
         let file_count_offset = reader.position();
         encoded[file_count_offset..file_count_offset + 4].copy_from_slice(&u32::MAX.to_be_bytes());
-        resign(&mut encoded);
-
         let error = PreparedPackage::decode_expected(&encoded, &prepared.key).unwrap_err();
         assert!(error
             .to_string()

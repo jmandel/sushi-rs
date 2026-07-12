@@ -49,13 +49,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use package_store::{BundleSource, PackageSource};
+use package_store::BundleSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use site_engine::PackageView as SharedBundle;
 use site_engine::{
     ExternalFinalizeInput, GeneratorSpec as SharedGeneratorSpec,
-    OutputCatalog as OutputCatalogResult, PackageEnvironment, PackageMaterial, ProjectRevision,
+    OutputCatalog as OutputCatalogResult, PackageEnvironment, ProjectRevision,
     RenderedOutput as RenderSiteResult, ResolvedPackageClosure as ResolvedPackages, SiteEngine,
 };
 use wasm_bindgen::prelude::*;
@@ -84,9 +84,8 @@ struct Engine {
     /// The `<id>#<ver>` labels of the packages mounted, in mount order — the
     /// package list a `PackageContext` loads.
     packages: Vec<String>,
-    /// Content-addressed metadata for the exact normalized bytes mounted under
-    /// each package label. The mutable BundleSource is an execution cache; this
-    /// map is the immutable package material used to construct a SiteBuild lock.
+    /// Exact prepared carriers from which both the resolver view and every
+    /// SiteBuild PackageEnvironment are derived.
     package_materials: BTreeMap<String, MountedPackage>,
     /// Short-lived direct-binary exports produced by `prepareAndMount`. The JS
     /// host removes each with `takePrepared` immediately after persisting it.
@@ -120,7 +119,7 @@ struct PreparedMountTransaction {
 
 #[derive(Clone, Debug)]
 struct MountedPackage {
-    material: PackageMaterial,
+    prepared: package_store::PreparedPackage,
 }
 
 fn set_panic_hook() {
@@ -461,7 +460,6 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| format!("{operation}: engine not initialized; call init() first"))?;
         let mut transaction = BTreeSet::new();
-        let mut contents = Vec::with_capacity(prepared.len());
         for package in &prepared {
             if !transaction.insert(package.label.clone()) {
                 return Err(format!(
@@ -469,10 +467,9 @@ impl Engine {
                     package.label
                 ));
             }
-            let content = prepared_content(package, operation)?;
             if let Some(existing) = self.package_materials.get(&package.label) {
-                if existing.material.content() != &content
-                    || existing.material.declared_dependencies() != &package.declared_dependencies
+                if existing.prepared.key != package.key
+                    || existing.prepared.artifact_sha256() != package.artifact_sha256()
                 {
                     return Err(format!(
                         "{operation}: package label {} is already mounted with different content",
@@ -480,31 +477,33 @@ impl Engine {
                     ));
                 }
             }
-            contents.push(content);
         }
 
         let mut source = (**base).clone(); // shallow: immutable layer Rc clones only
         let mut added = 0u32;
-        for (package, content) in prepared.into_iter().zip(contents) {
+        let mut mounted_packages = Vec::new();
+        for package in prepared {
             if self.package_materials.contains_key(&package.label) {
                 continue;
             }
+            let retained = package.clone();
             let mounted = package.mount_into(&mut source);
-            let content_bytes = Rc::new(normalized_package_payload(&source, &mounted.label)?);
-            let material =
-                PackageMaterial::new(content, mounted.declared_dependencies, content_bytes)
-                    .map_err(|error| {
-                        format!("{operation}: mounted package {}: {error}", mounted.label)
-                    })?;
-            self.packages.push(mounted.label.clone());
-            self.package_materials
-                .insert(mounted.label, MountedPackage { material });
+            debug_assert_eq!(mounted.label, retained.label);
+            mounted_packages.push(retained);
             added += 1;
         }
         if added > 0 {
+            let source = Rc::new(source);
+            let root = source.cache_root().to_path_buf();
+            for prepared in mounted_packages {
+                let label = prepared.label.clone();
+                self.packages.push(label.clone());
+                self.package_materials
+                    .insert(label, MountedPackage { prepared });
+            }
             self.package_generation = self.package_generation.wrapping_add(1);
-            self.cache_root = source.cache_root().to_path_buf();
-            self.bundle = Some(Rc::new(source));
+            self.cache_root = root;
+            self.bundle = Some(source);
             self.resolved_packages = None;
         }
         Ok(added)
@@ -525,21 +524,17 @@ impl Engine {
     }
 
     fn package_environment(&self) -> Result<PackageEnvironment, String> {
-        let (packages, labels) = match self.source() {
-            Ok((packages, _, labels)) => (packages, labels),
-            Err(_) if self.bundle.is_none() => {
-                let empty = Rc::new(BundleSource::new());
-                let root = empty.cache_root().to_path_buf();
-                (SharedBundle::new(empty, root, None), Vec::new())
-            }
-            Err(error) => return Err(error),
-        };
-        let materials = self
-            .package_materials
+        let prepared = self
+            .packages
             .iter()
-            .map(|(label, material)| (label.clone(), material.material.clone()))
-            .collect();
-        PackageEnvironment::new(packages, labels, materials)
+            .map(|label| {
+                self.package_materials
+                    .get(label)
+                    .map(|mounted| mounted.prepared.clone())
+                    .ok_or_else(|| format!("mounted package {label} has no prepared carrier"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        PackageEnvironment::new(prepared)
     }
 
     /// A read-only package view containing exactly one previously resolved
@@ -946,6 +941,7 @@ mod prepare_project_wire_tests {
                 message: "compiled before generator failed".into(),
                 file: Some("input/fsh/demo.fsh".into()),
                 line: Some(3),
+                owner_definition: None,
             }],
         };
         let wire = prepared_project_wire(Err(site_engine::PrepareProjectError::Site {
@@ -966,6 +962,36 @@ mod prepare_project_wire_tests {
     }
 
     #[test]
+    fn diagnostic_owner_definition_uses_the_existing_definition_wire_shape() {
+        let result = CompileResult::from(site_engine::CompilationOutcome {
+            resources: Vec::new(),
+            diagnostics: vec![site_engine::CompilationDiagnostic {
+                severity: "error".into(),
+                message: "broken insert".into(),
+                file: Some("input/fsh/demo.fsh".into()),
+                line: Some(3),
+                owner_definition: Some(site_engine::CompilationDefinition {
+                    kind: site_engine::CompilationDefinitionKind::FshDeclaration,
+                    path: "input/fsh/demo.fsh".into(),
+                    line: 1,
+                    column: 0,
+                }),
+            }],
+        });
+        let wire = serde_json::to_value(result).unwrap();
+        assert_eq!(
+            wire["diagnostics"][0]["ownerDefinition"],
+            serde_json::json!({
+                "kind": "fsh-declaration",
+                "path": "input/fsh/demo.fsh",
+                "line": 1,
+                "column": 0
+            })
+        );
+        assert!(wire["diagnostics"][0].get("owner_definition").is_none());
+    }
+
+    #[test]
     fn compile_failure_remains_an_outer_error_without_fake_compile_result() {
         let error = match prepared_project_wire(Err(site_engine::PrepareProjectError::Compile(
             "compiler failed".into(),
@@ -974,6 +1000,85 @@ mod prepare_project_wire_tests {
             Ok(_) => panic!("compile failure must remain an outer error"),
         };
         assert_eq!(error, "compiler failed");
+    }
+}
+
+#[cfg(test)]
+mod prepared_mount_tests {
+    use super::*;
+
+    #[test]
+    fn compact_prepared_mount_does_not_inflate_package_bodies() {
+        let package = package_store::PreparedPackage::prepare(
+            "demo.package#1.0.0",
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"demo.package","version":"1.0.0"}"#.to_vec(),
+                ),
+                (
+                    "StructureDefinition-large.json".into(),
+                    vec![b'x'; 2 * 1024 * 1024],
+                ),
+            ]),
+        )
+        .unwrap();
+        let key = package.key.cache_key();
+        let bytes = package.encode();
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(1).unwrap();
+        engine.stage_prepared_mount(bytes, &key).unwrap();
+        let mounted = engine.commit_prepared_mount().unwrap();
+        assert_eq!(mounted.added, 1);
+        assert_eq!(mounted.compression.chunks_inflated, 0);
+        assert_eq!(mounted.compression.raw_inflated_bytes, 0);
+    }
+
+    #[test]
+    fn prepared_remount_rejects_nested_only_source_drift_atomically() {
+        fn package(nested: &[u8]) -> package_store::PreparedPackage {
+            package_store::PreparedPackage::prepare(
+                "demo.package#1.0.0",
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        br#"{"name":"demo.package","version":"1.0.0"}"#.to_vec(),
+                    ),
+                    ("StructureDefinition-demo.json".into(), b"semantic".to_vec()),
+                    ("template/private.txt".into(), nested.to_vec()),
+                ]),
+            )
+            .unwrap()
+        }
+
+        let first = package(b"first");
+        let second = package(b"second");
+        assert_ne!(first.artifact_bytes(), second.artifact_bytes());
+        assert_ne!(first.key.source_sha256, second.key.source_sha256);
+
+        let first_key = first.key.clone();
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(1).unwrap();
+        engine
+            .stage_prepared_mount(first.encode(), &first.key.cache_key())
+            .unwrap();
+        engine.commit_prepared_mount().unwrap();
+
+        engine.begin_prepared_mount(1).unwrap();
+        engine
+            .stage_prepared_mount(second.encode(), &second.key.cache_key())
+            .unwrap();
+        assert!(engine
+            .commit_prepared_mount()
+            .unwrap_err()
+            .contains("already mounted with different content"));
+        assert_eq!(engine.packages, vec!["demo.package#1.0.0"]);
+        assert_eq!(
+            &engine.package_materials["demo.package#1.0.0"].prepared.key,
+            &first_key
+        );
     }
 }
 
@@ -999,6 +1104,7 @@ struct CompileResult {
 /// A SUSHI-exact diagnostic, shaped for the editor worker → Monaco markers.
 /// `file`/`line` are present when the compiler had a source span in scope.
 #[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DiagnosticJs {
     severity: String,
     message: String,
@@ -1006,6 +1112,8 @@ struct DiagnosticJs {
     file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     line: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner_definition: Option<DefinitionJs>,
 }
 
 #[derive(Clone, Serialize)]
@@ -1047,14 +1155,7 @@ impl From<site_engine::CompilationResource> for CompiledResourceJs {
             .map(str::to_string);
         let id = body.get("id").and_then(Value::as_str).map(str::to_string);
         let url = body.get("url").and_then(Value::as_str).map(str::to_string);
-        let definition = definition.map(|definition| DefinitionJs {
-            kind: match definition.kind {
-                site_engine::CompilationDefinitionKind::FshDeclaration => "fsh-declaration",
-            },
-            path: definition.path,
-            line: definition.line,
-            column: definition.column,
-        });
+        let definition = definition.map(definition_js);
         Self {
             filename,
             text,
@@ -1063,6 +1164,17 @@ impl From<site_engine::CompilationResource> for CompiledResourceJs {
             url,
             definition,
         }
+    }
+}
+
+fn definition_js(definition: site_engine::CompilationDefinition) -> DefinitionJs {
+    DefinitionJs {
+        kind: match definition.kind {
+            site_engine::CompilationDefinitionKind::FshDeclaration => "fsh-declaration",
+        },
+        path: definition.path,
+        line: definition.line,
+        column: definition.column,
     }
 }
 
@@ -1078,6 +1190,7 @@ impl From<site_engine::CompilationOutcome> for CompileResult {
                     message: diagnostic.message,
                     file: diagnostic.file,
                     line: diagnostic.line,
+                    owner_definition: diagnostic.owner_definition.map(definition_js),
                 })
                 .collect(),
             timings: Timings::default(),
@@ -1626,26 +1739,6 @@ fn version_json() -> String {
     v.to_string()
 }
 
-/// Decode + mount each bundle's base64 files under its label. Appends newly
-/// mounted labels to `labels`.
-fn normalized_package_payload(source: &BundleSource, label: &str) -> Result<Vec<u8>, String> {
-    let root = source.cache_root().join(label).join("package");
-    let entries = source
-        .read_dir(&root)
-        .map_err(|error| format!("package payload: list {label}: {error}"))?;
-    let mut files = BTreeMap::new();
-    for entry in entries {
-        if !entry.is_file {
-            continue;
-        }
-        let bytes = source.read(&root.join(&entry.file_name)).map_err(|error| {
-            format!("package payload: read {label}/{}: {error}", entry.file_name)
-        })?;
-        files.insert(entry.file_name, bytes);
-    }
-    Ok(package_store::encode_normalized_package(&files))
-}
-
 fn mount_into(
     src: &mut BundleSource,
     parsed: &[BundleInput],
@@ -1668,40 +1761,15 @@ fn mount_into(
                 base64_decode(b64).map_err(|e| format!("{who}: bad base64 for {name}: {e}"))?;
             entries.insert(name.clone(), bytes);
         }
-        let material = package_store::normalize_package_material(&pkg.label, entries)
+        let package = package_store::PreparedPackage::prepare(&pkg.label, entries)
             .map_err(|error| format!("{who}: invalid package {}: {error:#}", pkg.label))?;
-        let content = site_build::ContentRef::of_bytes(
-            &material.payload,
-            Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE),
-        );
-        let content_bytes = Rc::new(material.payload);
-        src.mount_package(&pkg.label, material.files);
+        let retained = package.clone();
+        let mounted = package.mount_into(src);
+        debug_assert_eq!(mounted.label, retained.label);
         labels.push(pkg.label.clone());
-        package_materials.insert(
-            pkg.label.clone(),
-            MountedPackage {
-                material: PackageMaterial::new(
-                    content,
-                    material.declared_dependencies,
-                    content_bytes,
-                )
-                .map_err(|error| format!("{who}: authenticate package {}: {error}", pkg.label))?,
-            },
-        );
+        package_materials.insert(pkg.label.clone(), MountedPackage { prepared: retained });
     }
     Ok(())
-}
-
-fn prepared_content(
-    package: &package_store::PreparedPackage,
-    operation: &str,
-) -> Result<site_build::ContentRef, String> {
-    Ok(site_build::ContentRef {
-        sha256: site_build::Sha256Digest::parse(&package.semantic_payload_sha256)
-            .map_err(|error| format!("{operation}: invalid semantic digest: {error}"))?,
-        byte_length: package.semantic_payload_bytes,
-        media_type: Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE.to_string()),
-    })
 }
 
 fn compression_delta(

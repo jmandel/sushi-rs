@@ -60,13 +60,27 @@ pub struct PreparedOutput {
     pub owner: Option<site_build::OutputPath>,
 }
 
+/// Recipe-identical immutable Publisher implementation assets shared only
+/// through the already bounded current/previous runtimes. This is not a build
+/// handoff or an independent cache: every successor still constructs its own
+/// current model, render state, SiteBuild, catalog, and object closure.
+pub(crate) struct PublisherRecipeAssets {
+    pub key: Option<site_build::Sha256Digest>,
+    pub template_files: Rc<BTreeMap<String, Vec<u8>>>,
+    pub publisher: Rc<site_producer::publisher_runtime::PublisherRuntime>,
+    pub ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
+    pub objects: ObjectMap,
+    pub artifact_records: Rc<Vec<site_build::ArtifactRecord>>,
+    pub artifact_roots: Rc<BTreeSet<site_build::ArtifactKey>>,
+}
+
 /// Complete immutable Publisher runtime installed only after preparation has
 /// succeeded. Path rendering may memoize addressed output bytes, but can never
 /// change the SiteBuild named by the handle.
 pub(crate) struct PublisherRuntime {
     pub preparation_key: Option<site_build::Sha256Digest>,
+    pub recipe_assets: Rc<PublisherRecipeAssets>,
     pub state: Rc<RenderState>,
-    pub publisher: site_producer::publisher_runtime::PublisherRuntime,
     pub build: site_build::ClosedSiteBuild,
     pub catalog: Vec<OutputDescriptor>,
     pub ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
@@ -80,7 +94,53 @@ struct CycleRuntime {
     objects: ObjectMap,
 }
 
-pub(crate) type ObjectMap = BTreeMap<site_build::Sha256Digest, Rc<Vec<u8>>>;
+#[derive(Clone)]
+pub(crate) struct AuthenticatedObject {
+    content: site_build::ContentRef,
+    bytes: Rc<Vec<u8>>,
+}
+
+impl AuthenticatedObject {
+    pub(crate) fn eager_authenticated(
+        content: site_build::ContentRef,
+        bytes: Rc<Vec<u8>>,
+    ) -> Result<Self, String> {
+        if content.byte_length != bytes.len() as u64 {
+            return Err(format!(
+                "content {} length {} differs from authenticated bytes {}",
+                content.sha256,
+                content.byte_length,
+                bytes.len()
+            ));
+        }
+        Ok(Self { content, bytes })
+    }
+
+    pub(crate) fn content(&self) -> &site_build::ContentRef {
+        &self.content
+    }
+
+    /// Confirm that this already-authenticated allocation is the object named
+    /// by `expected`. Bytes are hashed exactly once, at admission; closing a
+    /// build checks the retained proof instead of re-hashing the same object.
+    pub(crate) fn authenticates(&self, expected: &site_build::ContentRef) -> Result<(), String> {
+        if self.content.sha256 != expected.sha256
+            || self.content.byte_length != expected.byte_length
+        {
+            return Err(format!(
+                "authenticated object {} does not match requested content {}",
+                self.content.sha256, expected.sha256
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn materialize(&self) -> Result<Rc<Vec<u8>>, String> {
+        Ok(self.bytes.clone())
+    }
+}
+
+pub(crate) type ObjectMap = BTreeMap<site_build::Sha256Digest, AuthenticatedObject>;
 
 enum Runtime {
     Publisher(PublisherRuntime),
@@ -214,6 +274,26 @@ impl SiteEngine {
         Some((handle, build))
     }
 
+    /// Borrow immutable template/runtime assets from a retained Publisher
+    /// runtime without refreshing that build's recency. Installing the new
+    /// complete successor is the only operation that changes retention order.
+    pub(crate) fn reuse_publisher_recipe_assets(
+        &self,
+        key: &site_build::Sha256Digest,
+    ) -> Option<Rc<PublisherRecipeAssets>> {
+        self.generations
+            .iter()
+            .rev()
+            .find_map(|handle| match self.runtimes.get(handle) {
+                Some(Runtime::Publisher(runtime))
+                    if runtime.recipe_assets.key.as_ref() == Some(key) =>
+                {
+                    Some(runtime.recipe_assets.clone())
+                }
+                _ => None,
+            })
+    }
+
     pub fn outputs(&self, handle: &str) -> Result<OutputCatalog, String> {
         let runtime = self
             .runtimes
@@ -264,13 +344,14 @@ impl SiteEngine {
             .state
             .render_page_by_name(path.as_str())
             .map_err(|error| format!("render {path}: {error}"))?;
-        let html = runtime.publisher.finish_html(&html);
+        let html = runtime.recipe_assets.publisher.finish_html(&html);
         let bytes = html.into_bytes();
         let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
+        let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))?;
         runtime
             .objects
             .entry(content.sha256.clone())
-            .or_insert_with(|| Rc::new(bytes));
+            .or_insert(object);
         runtime.ready.insert(
             path.clone(),
             PreparedOutput {
@@ -297,16 +378,12 @@ impl SiteEngine {
             .runtimes
             .get(handle)
             .ok_or_else(|| format!("readContent: unknown build handle {handle}"))?;
-        let bytes = match runtime {
+        let object = match runtime {
             Runtime::Publisher(runtime) => runtime.objects.get(&digest).cloned(),
             Runtime::Cycle(runtime) => runtime.objects.get(&digest).cloned(),
         }
         .ok_or_else(|| format!("readContent: object {digest} is absent from build {handle}"))?;
-        if site_build::Sha256Digest::of_bytes(&bytes) != digest {
-            return Err(format!(
-                "readContent: object {digest} failed digest verification"
-            ));
-        }
+        let bytes = object.materialize()?;
         Ok(bytes.as_ref().clone())
     }
 
@@ -373,12 +450,13 @@ impl SiteEngine {
             .verify_for(&runtime.build)
             .map_err(|error| format!("finalize: verify: {error}"))?;
         for file in output.files() {
-            let bytes = runtime
+            let object = runtime
                 .objects
                 .get(&file.content.sha256)
                 .ok_or_else(|| format!("finalize: content object for {} is absent", file.path))?;
+            let bytes = object.materialize()?;
             file.content
-                .verify(bytes)
+                .verify(bytes.as_ref())
                 .map_err(|error| format!("finalize: verify {} bytes: {error}", file.path))?;
         }
         Ok(output)

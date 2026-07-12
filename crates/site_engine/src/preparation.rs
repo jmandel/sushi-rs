@@ -8,8 +8,8 @@ use serde_json::Value;
 
 use crate::render_surface::RenderSemantics;
 use crate::runtime::{
-    ObjectMap, OutputDescriptor, OutputResourceSubject, OutputSubjectPage, PreparedOutput,
-    PublisherRuntime,
+    AuthenticatedObject, ObjectMap, OutputDescriptor, OutputResourceSubject, OutputSubjectPage,
+    PreparedOutput, PublisherRecipeAssets, PublisherRuntime,
 };
 use crate::{
     build_render_semantics, build_render_state_from_semantics, PackageView, RenderState,
@@ -27,12 +27,11 @@ const PUBLISHER_RUNTIME_PREPARATION_SCHEMA: &str = "publisher-runtime-preparatio
 const PUBLISHER_RUNTIME_PREPARATION_RECIPE: &str =
     "publisher-template-rust.runtime+model+render+catalog/v1";
 const PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA: &str = "publisher-render-semantics-cache/v1";
+const PUBLISHER_RECIPE_ASSETS_SCHEMA: &str = "publisher-recipe-assets/v1";
+const PUBLISHER_RECIPE_ASSETS_RECIPE: &str =
+    "package-store.template-loader+site-producer.publisher-runtime/v1";
 
 const PUBLISHER_AUTHORED_NAMESPACE_PREFIX: &str = "publisher.authored";
-const PUBLISHER_RENDER_PACKAGE_NAMESPACE: &str = "publisher.render-package/v1";
-const PUBLISHER_RENDER_PACKAGE_RECIPE: &str = "publisher.render-package/v1";
-const PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE: &str =
-    "application/vnd.fhir.publisher.render-package.v1";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "generator", rename_all = "camelCase", deny_unknown_fields)]
@@ -59,35 +58,48 @@ pub enum GeneratorSpec {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct PackageMaterial {
-    content: site_build::ContentRef,
+#[derive(Clone)]
+struct PackageMaterial {
+    object: AuthenticatedObject,
     declared_dependencies: BTreeMap<String, String>,
-    content_bytes: Rc<Vec<u8>>,
 }
 
 impl PackageMaterial {
-    pub fn new(
-        content: site_build::ContentRef,
-        declared_dependencies: BTreeMap<String, String>,
-        content_bytes: Rc<Vec<u8>>,
-    ) -> Result<Self, String> {
-        content
-            .verify(content_bytes.as_ref())
-            .map_err(|error| format!("package material is not authenticated: {error}"))?;
+    /// Admit the exact deterministic prepared-package carrier consumed by the
+    /// mounted view. The carrier itself is the package-lock object; members
+    /// remain compressed and are verified lazily by `BundleSource` when read.
+    fn from_prepared(mount: package_store::PreparedPackageMount) -> Result<Self, String> {
+        let artifact = mount.artifact_bytes();
+        let content = site_build::ContentRef {
+            sha256: site_build::Sha256Digest::parse(mount.artifact_sha256())
+                .map_err(|error| format!("prepared package carrier digest: {error}"))?,
+            byte_length: artifact.len() as u64,
+            media_type: Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE.into()),
+        };
+        let declared_dependencies = mount.declared_dependencies.clone();
         Ok(Self {
-            content,
+            object: AuthenticatedObject::eager_authenticated(content, artifact)
+                .map_err(|error| format!("prepared package carrier: {error}"))?,
             declared_dependencies,
-            content_bytes,
         })
     }
 
-    pub fn content(&self) -> &site_build::ContentRef {
-        &self.content
+    fn content(&self) -> &site_build::ContentRef {
+        self.object.content()
     }
 
-    pub fn declared_dependencies(&self) -> &BTreeMap<String, String> {
-        &self.declared_dependencies
+    fn object(&self) -> AuthenticatedObject {
+        self.object.clone()
+    }
+}
+
+impl std::fmt::Debug for PackageMaterial {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PackageMaterial")
+            .field("content", self.content())
+            .field("declared_dependencies", &self.declared_dependencies)
+            .finish_non_exhaustive()
     }
 }
 
@@ -99,24 +111,27 @@ pub struct PackageEnvironment {
 }
 
 impl PackageEnvironment {
+    /// Construct the package view and its closed carrier material from the same
+    /// typed packages. Callers cannot pair a same-label carrier with unrelated
+    /// execution bytes.
     pub fn new(
-        packages: PackageView,
-        mounted_labels: Vec<String>,
-        materials: BTreeMap<String, PackageMaterial>,
+        prepared: impl IntoIterator<Item = package_store::PreparedPackage>,
     ) -> Result<Self, String> {
-        let distinct = mounted_labels.iter().collect::<BTreeSet<_>>();
-        if distinct.len() != mounted_labels.len() {
-            return Err("package environment repeats a mounted label".into());
-        }
-        for label in &mounted_labels {
-            if !materials.contains_key(label) {
-                return Err(format!(
-                    "mounted package {label} has no authenticated material"
-                ));
+        let mut source = package_store::BundleSource::new();
+        let mut mounted_labels = Vec::new();
+        let mut materials = BTreeMap::new();
+        for package in prepared {
+            let label = package.label.clone();
+            if materials.contains_key(&label) {
+                return Err(format!("package environment repeats mounted label {label}"));
             }
+            let material = PackageMaterial::from_prepared(package.mount_into(&mut source))?;
+            mounted_labels.push(label.clone());
+            materials.insert(label, material);
         }
+        let root = source.cache_root().to_path_buf();
         Ok(Self {
-            packages,
+            packages: PackageView::new(Rc::new(source), root, None),
             mounted_labels,
             materials,
         })
@@ -136,7 +151,7 @@ impl PackageEnvironment {
         })
     }
 
-    fn scoped(&self, labels: &[String], operation: &str) -> Result<PackageView, String> {
+    pub fn scoped(&self, labels: &[String], operation: &str) -> Result<PackageView, String> {
         let mut allowed = BTreeSet::new();
         for label in labels {
             if !self.mounted_labels.contains(label) || !self.materials.contains_key(label) {
@@ -220,11 +235,16 @@ pub struct PrepareMetrics {
     pub snapshot_completed_local_cache_hit: bool,
     pub prepared_guide_cache_hit: bool,
     pub site_build_cache_hit: bool,
+    pub publisher_recipe_assets_cache_hit: bool,
     pub template_materialize_ms: f64,
     pub publisher_runtime_ms: f64,
     pub publisher_model_ms: f64,
     pub render_semantics_cache_hit: bool,
     pub render_model_ms: f64,
+    pub output_catalog_ms: f64,
+    pub publisher_artifacts_ms: f64,
+    pub site_build_close_ms: f64,
+    pub closure_verify_ms: f64,
     pub catalog_ms: f64,
 }
 
@@ -241,7 +261,6 @@ pub(crate) struct PreparationState {
 struct PublisherRenderSemanticsCacheEntry {
     key: site_build::Sha256Digest,
     semantics: Rc<RenderSemantics>,
-    render_package_artifacts: BTreeMap<String, Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -271,6 +290,24 @@ struct PublisherRenderSemanticsCachePayload<'a> {
     txcache: BTreeMap<String, site_build::Sha256Digest>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRecipeAssetsCachePayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    engine_api: u32,
+    template: &'a site_build::PackageCoordinate,
+    template_chain: Vec<PublisherRecipePackage<'a>>,
+    core: PublisherRecipePackage<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRecipePackage<'a> {
+    coordinate: &'a site_build::PackageCoordinate,
+    content: &'a site_build::ContentRef,
+}
+
 #[derive(Clone)]
 struct ClosedSiteBuildCacheEntry {
     key: site_build::Sha256Digest,
@@ -284,6 +321,7 @@ struct DerivedCacheHits {
     prepared_guide: u64,
     closed_site_build: u64,
     retained_publisher_runtime: u64,
+    publisher_recipe_artifact_builds: u64,
 }
 
 #[derive(Clone)]
@@ -682,20 +720,13 @@ fn insert_authenticated_object(
     content: &site_build::ContentRef,
     bytes: Rc<Vec<u8>>,
 ) -> Result<(), String> {
-    if content.byte_length != bytes.len() as u64 {
-        return Err(format!(
-            "content {} length {} differs from authenticated bytes {}",
-            content.sha256,
-            content.byte_length,
-            bytes.len()
-        ));
-    }
+    let incoming = AuthenticatedObject::eager_authenticated(content.clone(), bytes)?;
     if let Some(existing) = objects.get(&content.sha256) {
-        if existing.as_ref() != bytes.as_ref() {
-            return Err(format!("conflicting bytes for digest {}", content.sha256));
+        if existing.content().byte_length != content.byte_length {
+            return Err(format!("conflicting length for digest {}", content.sha256));
         }
     } else {
-        objects.insert(content.sha256.clone(), bytes);
+        objects.insert(content.sha256.clone(), incoming);
     }
     Ok(())
 }
@@ -712,6 +743,19 @@ fn merge_objects<T: Into<Rc<Vec<u8>>>>(
             media_type: None,
         };
         insert_object(target, &content, bytes)?;
+    }
+    Ok(())
+}
+
+fn merge_authenticated_objects(target: &mut ObjectMap, source: &ObjectMap) -> Result<(), String> {
+    for (digest, object) in source {
+        if let Some(existing) = target.get(digest) {
+            if existing.content().byte_length != object.content().byte_length {
+                return Err(format!("conflicting length for digest {digest}"));
+            }
+        } else {
+            target.insert(digest.clone(), object.clone());
+        }
     }
     Ok(())
 }
@@ -1164,11 +1208,7 @@ fn publisher_artifacts(
     prepared: &site_build::PreparedGuide,
     project: &site_build::ProjectRevision,
     package_lock: &site_build::PackageLock,
-    template_chain: &[String],
-    core: &site_build::PackageCoordinate,
-    template_files: &BTreeMap<String, Vec<u8>>,
-    runtime: &site_producer::publisher_runtime::PublisherRuntime,
-    render_package_artifacts: &BTreeMap<String, Vec<u8>>,
+    recipe_assets: &PublisherRecipeAssets,
 ) -> Result<
     (
         site_build::ArtifactCatalog,
@@ -1234,9 +1274,13 @@ fn publisher_artifacts(
             site_build::cycle_semantic::CONFIG_SCHEMA,
         ),
     ];
-    let mut records = Vec::new();
-    let mut roots = BTreeSet::new();
-    let mut objects = BTreeMap::new();
+    let mut records = recipe_assets.artifact_records.as_ref().clone();
+    let mut roots = recipe_assets.artifact_roots.as_ref().clone();
+    // Recipe-asset objects were already admitted into the current build's
+    // authenticated object map. Only return objects created for this exact
+    // successor so callers never hash the immutable template/runtime bytes
+    // again.
+    let mut objects = ObjectMap::new();
     for (key, bytes, recipe, schema) in semantic {
         push_artifact(
             &mut records,
@@ -1286,6 +1330,27 @@ fn publisher_artifacts(
             reads,
         )?;
     }
+    let catalog = site_build::ArtifactCatalog::from_records(records)
+        .map_err(|error| format!("prepare(publisher): artifact catalog: {error}"))?;
+    Ok((catalog, site_build::RenderPlan::new(roots), objects))
+}
+
+fn publisher_recipe_artifacts(
+    template_chain: &[String],
+    core: &site_build::PackageCoordinate,
+    template_files: &BTreeMap<String, Vec<u8>>,
+    runtime: &site_producer::publisher_runtime::PublisherRuntime,
+) -> Result<
+    (
+        Vec<site_build::ArtifactRecord>,
+        BTreeSet<site_build::ArtifactKey>,
+        ObjectMap,
+    ),
+    String,
+> {
+    let mut records = Vec::new();
+    let mut roots = BTreeSet::new();
+    let mut objects = ObjectMap::new();
     let template_reads = template_chain
         .iter()
         .map(|label| {
@@ -1347,34 +1412,7 @@ fn publisher_artifacts(
             }]),
         )?;
     }
-    for (label, render_package_bytes) in render_package_artifacts {
-        let coordinate = site_build::PackageCoordinate::parse(label).map_err(|error| {
-            format!("prepare(publisher): invalid render package {label}: {error}")
-        })?;
-        if package_lock.get(&coordinate).is_none() {
-            return Err(format!(
-                "prepare(publisher): render package {label} is absent from package lock"
-            ));
-        }
-        push_artifact(
-            &mut records,
-            &mut roots,
-            &mut objects,
-            site_build::ArtifactKey::Data {
-                namespace: PUBLISHER_RENDER_PACKAGE_NAMESPACE.into(),
-                name: label.clone(),
-            },
-            render_package_bytes.clone(),
-            Some(PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE),
-            "site-engine.publisher",
-            PUBLISHER_RENDER_PACKAGE_RECIPE,
-            BTreeMap::from([("coordinate".into(), label.clone())]),
-            BTreeSet::from([site_build::ReadDependency::Package { coordinate }]),
-        )?;
-    }
-    let catalog = site_build::ArtifactCatalog::from_records(records)
-        .map_err(|error| format!("prepare(publisher): artifact catalog: {error}"))?;
-    Ok((catalog, site_build::RenderPlan::new(roots), objects))
+    Ok((records, roots, objects))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1458,24 +1496,24 @@ fn read_store_content(
         .map_err(|error| format!("{operation}: read content {}: {error}", content.sha256))
 }
 
-fn authenticated_object_bytes<'a>(
-    objects: &'a ObjectMap,
+fn authenticated_object_bytes(
+    objects: &ObjectMap,
     content: &site_build::ContentRef,
     operation: &str,
-) -> Result<&'a [u8], String> {
-    let bytes = objects.get(&content.sha256).ok_or_else(|| {
+) -> Result<Rc<Vec<u8>>, String> {
+    let object = objects.get(&content.sha256).ok_or_else(|| {
         format!(
             "{operation}: authenticated object {} is absent",
             content.sha256
         )
     })?;
-    if bytes.len() as u64 != content.byte_length {
+    if object.content().byte_length != content.byte_length {
         return Err(format!(
             "{operation}: authenticated object {} has the wrong length",
             content.sha256
         ));
     }
-    Ok(bytes.as_slice())
+    object.materialize()
 }
 
 fn read_json_artifact<T: serde::de::DeserializeOwned>(
@@ -1706,8 +1744,7 @@ fn package_view_from_closed_build(
             .package_lock()
             .get(&coordinate)
             .ok_or_else(|| format!("{operation}: compile package {label} is absent from lock"))?;
-        if locked.content.media_type.as_deref()
-            != Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE)
+        if locked.content.media_type.as_deref() != Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE)
         {
             return Err(format!(
                 "{operation}: package {label} has unsupported material type {:?}",
@@ -1715,135 +1752,49 @@ fn package_view_from_closed_build(
             ));
         }
         let bytes = authenticated_object_bytes(objects, &locked.content, operation)?;
-        let decoded = package_store::decode_normalized_package(&bytes)
+        let package = package_store::PreparedPackage::decode(bytes.as_ref())
             .map_err(|error| format!("{operation}: decode package {label}: {error:#}"))?;
-        let material = package_store::normalize_package_material(label, decoded)
-            .map_err(|error| format!("{operation}: authenticate package {label}: {error:#}"))?;
-        if material.payload != bytes {
+        if package.label != *label {
             return Err(format!(
-                "{operation}: package {label} is not the canonical material for its declared identity"
+                "{operation}: package lock {label} selected carrier for {}",
+                package.label
             ));
         }
-        let render_key = site_build::ArtifactKey::Data {
-            namespace: PUBLISHER_RENDER_PACKAGE_NAMESPACE.into(),
-            name: label.clone(),
-        };
-        let (record, content) = ready_artifact_content(build, &render_key, operation)?;
-        if record.provenance.producer.id != "site-engine.publisher"
-            || record.provenance.recipe != PUBLISHER_RENDER_PACKAGE_RECIPE
-            || record
-                .provenance
-                .attributes
-                .get("coordinate")
-                .map(String::as_str)
-                != Some(label.as_str())
-            || content.media_type.as_deref() != Some(PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE)
-            || record.reads
-                != BTreeSet::from([site_build::ReadDependency::Package {
-                    coordinate: coordinate.clone(),
-                }])
-        {
-            return Err(format!(
-                "{operation}: render-package artifact for {label} has incompatible provenance"
-            ));
-        }
-        let render_bytes = authenticated_object_bytes(objects, content, operation)?;
-        let render_files =
-            package_store::decode_normalized_package(&render_bytes).map_err(|error| {
-                format!("{operation}: decode renderer inputs for {label}: {error:#}")
-            })?;
-        if render_files.len() > 1
-            || render_files
-                .keys()
-                .any(|path| path != "other/spec.internals")
-        {
-            return Err(format!(
-                "{operation}: renderer inputs for {label} contain an unsupported path"
-            ));
-        }
-        let mut files = material.files;
-        for (path, bytes) in render_files {
-            if let Some(existing) = files.insert(path.clone(), bytes.clone()) {
-                if existing != bytes {
-                    return Err(format!(
-                        "{operation}: renderer input {label}/{path} conflicts with locked package material"
-                    ));
-                }
-            }
-        }
-        source.mount_package(label, files);
+        package.mount_into(&mut source);
     }
     let root = source.cache_root().to_path_buf();
-    Ok(PackageView::new(Rc::new(source), root, Some(expected)))
+    let packages = PackageView::new(Rc::new(source), root, Some(expected));
+    publisher_render_package_view(packages, labels, operation)
 }
 
 fn publisher_render_package_view(
-    environment: &PackageEnvironment,
+    packages: PackageView,
     labels: &[String],
     operation: &str,
-) -> Result<(PackageView, BTreeMap<String, Vec<u8>>), String> {
-    let expected = labels.iter().cloned().collect::<BTreeSet<_>>();
-    if expected.len() != labels.len() {
-        return Err(format!(
-            "{operation}: compile package order repeats a label"
-        ));
-    }
-    let mut source = package_store::BundleSource::new();
-    let mut artifacts = BTreeMap::new();
+) -> Result<PackageView, String> {
+    let mut allowed_files = BTreeSet::new();
     for label in labels {
-        let material = environment.materials.get(label).ok_or_else(|| {
-            format!("{operation}: compile package {label} has no authenticated material")
-        })?;
-        let decoded = package_store::decode_normalized_package(&material.content_bytes)
-            .map_err(|error| format!("{operation}: decode package {label}: {error:#}"))?;
-        let normalized = package_store::normalize_package_material(label, decoded)
-            .map_err(|error| format!("{operation}: authenticate package {label}: {error:#}"))?;
-        if normalized.payload.as_slice() != material.content_bytes.as_slice() {
-            return Err(format!(
-                "{operation}: package {label} is not canonical for its declared identity"
-            ));
-        }
-        let package_root = environment.packages.root().join(label);
-        let normalized_path = package_root.join("package/other/spec.internals");
-        let native_path = package_root.join("other/spec.internals");
-        let spec_internals = if environment.packages.exists(&normalized_path) {
-            Some(
-                environment
-                    .packages
-                    .read(&normalized_path)
-                    .map_err(|error| {
-                        format!("{operation}: read {label}/package/other/spec.internals: {error}")
-                    })?,
-            )
-        } else if environment.packages.exists(&native_path) {
-            Some(environment.packages.read(&native_path).map_err(|error| {
-                format!("{operation}: read {label}/other/spec.internals: {error}")
-            })?)
-        } else {
-            None
-        };
-        let render_files = spec_internals
-            .map(|bytes| BTreeMap::from([("other/spec.internals".into(), bytes)]))
-            .unwrap_or_default();
-        let render_bytes = package_store::encode_normalized_package(&render_files);
-        let mut files = normalized.files;
-        for (path, bytes) in render_files {
-            if let Some(existing) = files.insert(path.clone(), bytes.clone()) {
-                if existing != bytes {
-                    return Err(format!(
-                        "{operation}: renderer input {label}/{path} conflicts with package material"
-                    ));
-                }
+        let package_root = packages.root().join(label);
+        let semantic_root = package_root.join("package");
+        for entry in packages
+            .read_dir(&semantic_root)
+            .map_err(|error| format!("{operation}: list semantic package {label}: {error}"))?
+        {
+            if entry.is_file {
+                allowed_files.insert(semantic_root.join(entry.file_name));
             }
         }
-        source.mount_package(label, files);
-        artifacts.insert(label.clone(), render_bytes);
+        let normalized_path = package_root.join("package/other/spec.internals");
+        let native_path = package_root.join("other/spec.internals");
+        if packages.exists(&normalized_path) {
+            allowed_files.insert(normalized_path.clone());
+        } else if packages.exists(&native_path) {
+            allowed_files.insert(native_path.clone());
+        }
     }
-    let root = source.cache_root().to_path_buf();
-    Ok((
-        PackageView::new(Rc::new(source), root, Some(expected)),
-        artifacts,
-    ))
+    // Both live and restored execution receive the same exact projection of
+    // the rooted carrier: top-level semantic members plus spec.internals.
+    packages.restricted_to_files(allowed_files)
 }
 
 fn verify_closed_package_materials(
@@ -1852,8 +1803,7 @@ fn verify_closed_package_materials(
     operation: &str,
 ) -> Result<(), String> {
     for (coordinate, locked) in build.site_build().package_lock().iter() {
-        if locked.content.media_type.as_deref()
-            != Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE)
+        if locked.content.media_type.as_deref() != Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE)
         {
             return Err(format!(
                 "{operation}: package {coordinate} has unsupported material type {:?}",
@@ -1861,15 +1811,12 @@ fn verify_closed_package_materials(
             ));
         }
         let bytes = authenticated_object_bytes(objects, &locked.content, operation)?;
-        let decoded = package_store::decode_normalized_package(&bytes)
+        let package = package_store::PreparedPackage::decode(bytes.as_ref())
             .map_err(|error| format!("{operation}: decode package {coordinate}: {error:#}"))?;
-        let material = package_store::normalize_package_material(coordinate.as_str(), decoded)
-            .map_err(|error| {
-                format!("{operation}: authenticate package {coordinate}: {error:#}")
-            })?;
-        if material.payload != bytes {
+        if package.label != coordinate.as_str() {
             return Err(format!(
-                "{operation}: package {coordinate} is not canonical for its declared identity"
+                "{operation}: package lock {coordinate} selected carrier for {}",
+                package.label
             ));
         }
     }
@@ -1898,7 +1845,6 @@ fn validate_closed_publisher_artifact_inventory(
         site_build::cycle_semantic::navigation_key(),
         site_build::cycle_semantic::config_key(),
     ]);
-    let mut render_packages = BTreeSet::new();
     for key in &all_keys {
         if semantic.contains(key) {
             continue;
@@ -1928,15 +1874,6 @@ fn validate_closed_publisher_artifact_inventory(
                     })?;
                 authored_role_from_name(role)?;
             }
-            site_build::ArtifactKey::Data { namespace, name }
-                if namespace == PUBLISHER_RENDER_PACKAGE_NAMESPACE =>
-            {
-                if !render_packages.insert(name.clone()) {
-                    return Err(format!(
-                        "{operation}: duplicate render-package artifact {name}"
-                    ));
-                }
-            }
             other => {
                 return Err(format!(
                     "{operation}: unsupported rooted Publisher artifact {other:?}"
@@ -1944,10 +1881,10 @@ fn validate_closed_publisher_artifact_inventory(
             }
         }
     }
-    let expected = package_order.iter().cloned().collect::<BTreeSet<_>>();
-    if expected.len() != package_order.len() || render_packages != expected {
+    let expected = package_order.iter().collect::<BTreeSet<_>>();
+    if expected.len() != package_order.len() {
         return Err(format!(
-            "{operation}: render-package artifacts do not exactly match compilePackageOrder"
+            "{operation}: compilePackageOrder repeats a package"
         ));
     }
     Ok(())
@@ -1974,7 +1911,7 @@ fn cycle_semantic_artifact<T: serde::de::DeserializeOwned>(
             "{operation}: Cycle semantic artifact {key:?} has incompatible provenance or reads"
         ));
     }
-    serde_json::from_slice(authenticated_object_bytes(objects, content, operation)?)
+    serde_json::from_slice(&authenticated_object_bytes(objects, content, operation)?)
         .map_err(|error| format!("{operation}: decode Cycle semantic artifact {key:?}: {error}"))
 }
 
@@ -2312,18 +2249,10 @@ fn verify_ready_artifacts(
 }
 
 fn verify_object(objects: &ObjectMap, content: &site_build::ContentRef) -> Result<(), String> {
-    let bytes = objects
+    let object = objects
         .get(&content.sha256)
         .ok_or_else(|| format!("object {} is absent", content.sha256))?;
-    if bytes.len() as u64 != content.byte_length {
-        return Err(format!(
-            "object {} length {} differs from {}",
-            content.sha256,
-            bytes.len(),
-            content.byte_length
-        ));
-    }
-    Ok(())
+    object.authenticates(content)
 }
 
 #[cfg(test)]
@@ -2332,15 +2261,131 @@ mod tests {
     use content_store::ContentStore;
 
     #[test]
-    fn package_material_authenticates_immutable_bytes_once() {
-        let content = site_build::ContentRef::of_bytes(b"expected", None::<String>);
-        assert!(PackageMaterial::new(
-            content.clone(),
-            BTreeMap::new(),
-            Rc::new(b"different".to_vec()),
+    fn prepared_package_carrier_closes_without_inflating_members() {
+        let label = "demo.package#1.0.0";
+        let semantic_files = BTreeMap::from([
+            (
+                "package.json".into(),
+                br#"{"name":"demo.package","version":"1.0.0"}"#.to_vec(),
+            ),
+            (
+                "StructureDefinition-demo.json".into(),
+                vec![b'x'; 1024 * 1024],
+            ),
+        ]);
+        let package =
+            package_store::PreparedPackage::prepare(label, semantic_files.clone()).unwrap();
+        let key = package.key.clone();
+        let encoded = package.encode();
+        let package = package_store::PreparedPackage::decode_expected(&encoded, &key).unwrap();
+        let mut source = package_store::BundleSource::new();
+        let mounted = package.mount_into(&mut source);
+        let source = Rc::new(source);
+        let material = PackageMaterial::from_prepared(mounted).unwrap();
+        assert_eq!(source.compression_metrics().chunks_inflated, 0);
+        let bytes = material.object().materialize().unwrap();
+        material.content().verify(bytes.as_ref()).unwrap();
+        assert_eq!(bytes.as_ref(), &encoded);
+        assert_eq!(source.compression_metrics().chunks_inflated, 0);
+        for (path, expected) in semantic_files {
+            assert_eq!(
+                source
+                    .read(&source.cache_root().join(label).join("package").join(path))
+                    .unwrap(),
+                expected
+            );
+        }
+        let first = source.compression_metrics();
+        assert!(first.chunks_inflated > 0);
+        assert_eq!(material.object().materialize().unwrap(), bytes);
+        assert_eq!(source.compression_metrics(), first);
+    }
+
+    #[test]
+    fn package_environment_derives_view_and_lock_material_from_one_carrier() {
+        let label = "demo.package#1.0.0";
+        let package = |body: &[u8]| {
+            package_store::PreparedPackage::prepare(
+                label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        br#"{"name":"demo.package","version":"1.0.0"}"#.to_vec(),
+                    ),
+                    ("StructureDefinition-demo.json".into(), body.to_vec()),
+                ]),
+            )
+            .unwrap()
+        };
+        let a = package(b"carrier-a");
+        let a_digest = a.artifact_sha256().to_string();
+        let environment = PackageEnvironment::new([a.clone()]).unwrap();
+        assert_eq!(
+            environment
+                .packages
+                .read(
+                    &environment
+                        .packages
+                        .root()
+                        .join(label)
+                        .join("package/StructureDefinition-demo.json"),
+                )
+                .unwrap(),
+            b"carrier-a"
+        );
+        assert_eq!(
+            environment.materials[label].content().sha256.as_str(),
+            a_digest
+        );
+        assert!(PackageEnvironment::new([a, package(b"carrier-b")])
+            .err()
+            .unwrap()
+            .contains("repeats mounted label"));
+    }
+
+    #[test]
+    fn live_publisher_package_view_matches_closed_restoration_authority() {
+        let label = "demo.package#1.0.0";
+        let package = package_store::PreparedPackage::prepare(
+            label,
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"demo.package","version":"1.0.0"}"#.to_vec(),
+                ),
+                ("StructureDefinition-demo.json".into(), b"semantic".to_vec()),
+                ("other/spec.internals".into(), b"spec".to_vec()),
+                ("template/private.txt".into(), b"must-not-leak".to_vec()),
+            ]),
         )
-        .is_err());
-        PackageMaterial::new(content, BTreeMap::new(), Rc::new(b"expected".to_vec())).unwrap();
+        .unwrap();
+        let environment = PackageEnvironment::new([package]).unwrap();
+        let root = environment.packages.root().to_path_buf();
+
+        let view = publisher_render_package_view(
+            environment.scoped(&[label.into()], "test").unwrap(),
+            &[label.into()],
+            "test",
+        )
+        .unwrap();
+        assert_eq!(
+            view.read(
+                &root
+                    .join(label)
+                    .join("package/StructureDefinition-demo.json")
+            )
+            .unwrap(),
+            b"semantic"
+        );
+        assert_eq!(
+            view.read(&root.join(label).join("package/other/spec.internals"))
+                .unwrap(),
+            b"spec"
+        );
+        assert!(!view.exists(&root.join(label).join("package/template/private.txt")));
+        assert!(view
+            .read(&root.join(label).join("package/template/private.txt"))
+            .is_err());
     }
 
     #[test]
@@ -2714,31 +2759,37 @@ mod tests {
         let lock = site_build::PackageLock::from_packages([
             site_build::LockedPackage {
                 coordinate: core.clone(),
-                content: site_build::ContentRef::of_bytes(b"core", None::<String>),
+                content: site_build::ContentRef::of_bytes(
+                    b"core",
+                    Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                ),
                 dependencies: BTreeSet::new(),
             },
             site_build::LockedPackage {
                 coordinate: template.clone(),
-                content: site_build::ContentRef::of_bytes(b"template", None::<String>),
+                content: site_build::ContentRef::of_bytes(
+                    b"template",
+                    Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                ),
                 dependencies: BTreeSet::new(),
             },
         ])
         .unwrap();
-        let render_packages = BTreeMap::from([(
-            core_label.to_string(),
-            package_store::encode_normalized_package(&BTreeMap::new()),
-        )]);
-        let (artifacts, plan, mut objects) = publisher_artifacts(
-            &prepared,
-            &project,
-            &lock,
-            &[template_label.into()],
-            &core,
-            tree.files(),
-            &runtime,
-            &render_packages,
-        )
-        .unwrap();
+        let (artifact_records, artifact_roots, recipe_objects) =
+            publisher_recipe_artifacts(&[template_label.into()], &core, tree.files(), &runtime)
+                .unwrap();
+        let recipe_assets = PublisherRecipeAssets {
+            key: None,
+            template_files: Rc::new(tree.files().clone()),
+            publisher: Rc::new(runtime),
+            ready: BTreeMap::new(),
+            objects: recipe_objects,
+            artifact_records: Rc::new(artifact_records),
+            artifact_roots: Rc::new(artifact_roots),
+        };
+        let (artifacts, plan, mut objects) =
+            publisher_artifacts(&prepared, &project, &lock, &recipe_assets).unwrap();
+        merge_authenticated_objects(&mut objects, &recipe_assets.objects).unwrap();
         for (_, package) in lock.iter() {
             let bytes = if package.coordinate == core {
                 b"core".to_vec()
@@ -2756,7 +2807,8 @@ mod tests {
             };
             objects
                 .get(&content.sha256)
-                .is_some_and(|bytes| content.verify(bytes).is_ok())
+                .and_then(|object| object.materialize().ok())
+                .is_some_and(|bytes| content.verify(bytes.as_ref()).is_ok())
         }));
         let build = site_build::SiteBuild::new(
             project,
@@ -2797,7 +2849,7 @@ mod tests {
     fn typed_prepare_constructs_and_retains_complete_publisher_build() {
         let core_label = "hl7.fhir.r4.core#4.0.1";
         let template_label = "demo.template#1.0.0";
-        let core = package_store::normalize_package_material(
+        let core = package_store::PreparedPackage::prepare(
             core_label,
             BTreeMap::from([
                 (
@@ -2811,7 +2863,7 @@ mod tests {
             ]),
         )
         .unwrap();
-        let template = package_store::normalize_package_material(
+        let template = package_store::PreparedPackage::prepare(
             template_label,
             BTreeMap::from([
                 (
@@ -2829,39 +2881,7 @@ mod tests {
             ]),
         )
         .unwrap();
-        let mut source = package_store::BundleSource::new();
-        source.mount_package(core_label, core.files.clone());
-        source.mount_package(template_label, template.files.clone());
-        let root = source.cache_root().to_path_buf();
-        let environment = PackageEnvironment::new(
-            PackageView::new(Rc::new(source), root, None),
-            vec![core_label.into(), template_label.into()],
-            BTreeMap::from([
-                (
-                    core_label.into(),
-                    PackageMaterial {
-                        content: site_build::ContentRef::of_bytes(
-                            &core.payload,
-                            Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE),
-                        ),
-                        content_bytes: Rc::new(core.payload.clone()),
-                        declared_dependencies: core.declared_dependencies,
-                    },
-                ),
-                (
-                    template_label.into(),
-                    PackageMaterial {
-                        content: site_build::ContentRef::of_bytes(
-                            &template.payload,
-                            Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE),
-                        ),
-                        content_bytes: Rc::new(template.payload.clone()),
-                        declared_dependencies: template.declared_dependencies,
-                    },
-                ),
-            ]),
-        )
-        .unwrap();
+        let environment = PackageEnvironment::new([core, template]).unwrap();
         let config = "id: demo.ig\ncanonical: https://example.org/demo\nname: Demo\nstatus: draft\nversion: 1.0.0\nfhirVersion: 4.0.1\n";
         let resolved = crate::ResolvedPackageClosure {
             config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
@@ -2909,6 +2929,13 @@ mod tests {
         let prepared = engine
             .prepare(publisher_spec.clone(), environment.clone())
             .unwrap();
+        assert_eq!(
+            engine
+                .preparation
+                .cache_hits
+                .publisher_recipe_artifact_builds,
+            1
+        );
         let closed = prepared.site_build.clone();
         let live_catalog = engine.outputs(&prepared.handle).unwrap();
         assert!(!live_catalog.outputs.is_empty());
@@ -3021,8 +3048,27 @@ mod tests {
             .prepare(publisher_spec.clone(), environment.clone())
             .unwrap();
         assert_ne!(second.handle, prepared.handle);
+        assert!(second.metrics.publisher_recipe_assets_cache_hit);
         assert!(second.metrics.render_semantics_cache_hit);
         assert!(!second.metrics.site_build_cache_hit);
+        assert_eq!(second.metrics.template_materialize_ms, 0.0);
+        assert_eq!(second.metrics.publisher_runtime_ms, 0.0);
+        let prose_path = site_build::SourcePath::parse("input/pagecontent/index.md").unwrap();
+        let prose_ref = second
+            .site_build
+            .site_build()
+            .project()
+            .sources
+            .get(&prose_path)
+            .unwrap()
+            .content
+            .clone();
+        assert_eq!(
+            engine
+                .read_content(&second.handle, prose_ref.sha256.as_str())
+                .unwrap(),
+            b"# Second narrative"
+        );
 
         // Runtime retention is exactly current + previous. Refreshing an exact
         // predecessor changes recency; the next distinct success evicts the
@@ -3031,6 +3077,7 @@ mod tests {
         let third = engine
             .prepare(publisher_spec.clone(), environment.clone())
             .unwrap();
+        assert!(third.metrics.publisher_recipe_assets_cache_hit);
         assert!(third.metrics.render_semantics_cache_hit);
         assert!(engine.outputs(&prepared.handle).is_err());
         assert!(engine.outputs(&second.handle).is_ok());
@@ -3047,6 +3094,7 @@ mod tests {
         let fourth = engine
             .prepare(publisher_spec.clone(), environment.clone())
             .unwrap();
+        assert!(fourth.metrics.publisher_recipe_assets_cache_hit);
         assert!(fourth.metrics.render_semantics_cache_hit);
         assert!(engine.outputs(&third.handle).is_err());
         assert!(engine.outputs(&second.handle).is_ok());
@@ -3065,8 +3113,71 @@ mod tests {
                 environment,
             )
             .unwrap();
+        assert!(option_miss.metrics.publisher_recipe_assets_cache_hit);
         assert!(!option_miss.metrics.render_semantics_cache_hit);
         assert!(!option_miss.metrics.site_build_cache_hit);
+        assert_eq!(
+            engine
+                .preparation
+                .cache_hits
+                .publisher_recipe_artifact_builds,
+            1,
+            "prose/options successors must reuse exact template/runtime artifact records"
+        );
+    }
+
+    #[test]
+    fn publisher_recipe_assets_key_binds_only_exact_runtime_inputs() {
+        fn locked(label: &str, bytes: &[u8]) -> site_build::LockedPackage {
+            site_build::LockedPackage {
+                coordinate: site_build::PackageCoordinate::parse(label).unwrap(),
+                content: site_build::ContentRef::of_bytes(
+                    bytes,
+                    Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                ),
+                dependencies: BTreeSet::new(),
+            }
+        }
+        fn package_lock(
+            template: &[u8],
+            base: &[u8],
+            core: &[u8],
+            unrelated: &[u8],
+        ) -> site_build::PackageLock {
+            site_build::PackageLock::from_packages([
+                locked("demo.template#1.0.0", template),
+                locked("demo.base#1.0.0", base),
+                locked("hl7.fhir.r4.core#4.0.1", core),
+                locked("example.unrelated#1.0.0", unrelated),
+            ])
+            .unwrap()
+        }
+        let template = site_build::PackageCoordinate::parse("demo.template#1.0.0").unwrap();
+        let core = site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap();
+        let chain = vec!["demo.template#1.0.0".into(), "demo.base#1.0.0".into()];
+        let base = package_lock(b"template-a", b"base-a", b"core-a", b"unrelated-a");
+        let key = publisher_recipe_assets_key(&template, &chain, &core, &base, "test").unwrap();
+
+        let unrelated = package_lock(b"template-a", b"base-a", b"core-a", b"unrelated-b");
+        assert_eq!(
+            publisher_recipe_assets_key(&template, &chain, &core, &unrelated, "test").unwrap(),
+            key
+        );
+        for changed in [
+            package_lock(b"template-b", b"base-a", b"core-a", b"unrelated-a"),
+            package_lock(b"template-a", b"base-b", b"core-a", b"unrelated-a"),
+            package_lock(b"template-a", b"base-a", b"core-b", b"unrelated-a"),
+        ] {
+            assert_ne!(
+                publisher_recipe_assets_key(&template, &chain, &core, &changed, "test").unwrap(),
+                key
+            );
+        }
+        let reversed = vec!["demo.base#1.0.0".into(), "demo.template#1.0.0".into()];
+        assert_ne!(
+            publisher_recipe_assets_key(&template, &reversed, &core, &base, "test").unwrap(),
+            key
+        );
     }
 }
 
@@ -3470,7 +3581,7 @@ fn site_build_package_lock(
             .collect::<Result<BTreeSet<_>, _>>()?;
         packages.push(site_build::LockedPackage {
             coordinate,
-            content: material.content.clone(),
+            content: material.content().clone(),
             dependencies,
         });
     }
@@ -3500,8 +3611,18 @@ fn environment_objects(
             .materials
             .get(label)
             .ok_or_else(|| format!("{operation}: package material for {label} is absent"))?;
-        let bytes = material.content_bytes.clone();
-        insert_authenticated_object(&mut objects, &material.content, bytes)?;
+        let content = material.content();
+        let object = material.object();
+        if let Some(existing) = objects.get(&content.sha256) {
+            if existing.content().byte_length != content.byte_length {
+                return Err(format!(
+                    "{operation}: conflicting package-object length for {}",
+                    content.sha256
+                ));
+            }
+        } else {
+            objects.insert(content.sha256.clone(), object);
+        }
     }
     Ok(objects)
 }
@@ -3870,7 +3991,7 @@ fn with_template_chain(
         }
         let mut locked = site_build::LockedPackage {
             coordinate: coordinate.clone(),
-            content: material.content.clone(),
+            content: material.content().clone(),
             dependencies,
         };
         if let Some(existing) = packages.get(coordinate) {
@@ -3901,6 +4022,42 @@ fn closed_site_build_cache_key(
         render_target,
         diagnostics,
     })
+}
+
+fn publisher_recipe_assets_key(
+    template: &site_build::PackageCoordinate,
+    template_chain: &[String],
+    core: &site_build::PackageCoordinate,
+    package_lock: &site_build::PackageLock,
+    operation: &str,
+) -> Result<site_build::Sha256Digest, String> {
+    let mut chain = Vec::with_capacity(template_chain.len());
+    for label in template_chain {
+        let coordinate = site_build::PackageCoordinate::parse(label)
+            .map_err(|error| format!("{operation}: invalid template-chain coordinate: {error}"))?;
+        let package = package_lock.get(&coordinate).ok_or_else(|| {
+            format!("{operation}: template-chain package {coordinate} is absent from lock")
+        })?;
+        chain.push(PublisherRecipePackage {
+            coordinate: &package.coordinate,
+            content: &package.content,
+        });
+    }
+    let core_package = package_lock
+        .get(core)
+        .ok_or_else(|| format!("{operation}: core package {core} is absent from lock"))?;
+    site_build::sha256_canonical(&PublisherRecipeAssetsCachePayload {
+        schema: PUBLISHER_RECIPE_ASSETS_SCHEMA,
+        recipe: PUBLISHER_RECIPE_ASSETS_RECIPE,
+        engine_api: ENGINE_API,
+        template,
+        template_chain: chain,
+        core: PublisherRecipePackage {
+            coordinate: &core_package.coordinate,
+            content: &core_package.content,
+        },
+    })
+    .map_err(|error| format!("{operation}: hash Publisher recipe assets: {error}"))
 }
 
 impl SiteEngine {
@@ -4019,32 +4176,76 @@ impl SiteEngine {
             run_uuid: run_uuid.clone(),
             ..Default::default()
         };
-        let started = self.timer();
-        let tree = package_store::template_loader::materialize(
-            &environment.packages,
-            &package_store::TemplatePaths::new(environment.packages.root()),
-            template_coordinate,
-        )
-        .map_err(|error| format!("{operation}: materialize {template_coordinate}: {error}"))?;
-        metrics.template_materialize_ms = elapsed_ms(started);
         let core = target_core_from_package_lock(&package_lock, &fhir_version, operation)?;
-        let started = self.timer();
-        let publisher = site_producer::publisher_runtime::PublisherRuntime::assemble(
-            &environment.packages,
-            environment.packages.root(),
+        let recipe_assets_key = publisher_recipe_assets_key(
+            &template,
+            &resolution.chain,
             &core,
-            &tree,
-        )
-        .map_err(|error| format!("{operation}: Publisher runtime: {error:#}"))?;
+            &package_lock,
+            operation,
+        )?;
+        let recipe_assets = match self.reuse_publisher_recipe_assets(&recipe_assets_key) {
+            Some(assets) => {
+                metrics.publisher_recipe_assets_cache_hit = true;
+                assets
+            }
+            None => {
+                let started = self.timer();
+                let tree = package_store::template_loader::materialize(
+                    &environment.packages,
+                    &package_store::TemplatePaths::new(environment.packages.root()),
+                    template_coordinate,
+                )
+                .map_err(|error| {
+                    format!("{operation}: materialize {template_coordinate}: {error}")
+                })?;
+                metrics.template_materialize_ms = elapsed_ms(started);
+                let started = self.timer();
+                let publisher = Rc::new(
+                    site_producer::publisher_runtime::PublisherRuntime::assemble(
+                        &environment.packages,
+                        environment.packages.root(),
+                        &core,
+                        &tree,
+                    )
+                    .map_err(|error| format!("{operation}: Publisher runtime: {error:#}"))?,
+                );
+                let mut runtime_objects = ObjectMap::new();
+                let runtime_ready =
+                    publisher_runtime_outputs(publisher.as_ref(), &mut runtime_objects)?;
+                let template_files = Rc::new(tree.into_files());
+                let (artifact_records, artifact_roots, artifact_objects) =
+                    publisher_recipe_artifacts(
+                        &resolution.chain,
+                        &core,
+                        template_files.as_ref(),
+                        publisher.as_ref(),
+                    )?;
+                #[cfg(test)]
+                {
+                    self.preparation.cache_hits.publisher_recipe_artifact_builds += 1;
+                }
+                merge_authenticated_objects(&mut runtime_objects, &artifact_objects)?;
+                metrics.publisher_runtime_ms = elapsed_ms(started);
+                Rc::new(PublisherRecipeAssets {
+                    key: Some(recipe_assets_key),
+                    template_files,
+                    publisher,
+                    ready: runtime_ready,
+                    objects: runtime_objects,
+                    artifact_records: Rc::new(artifact_records),
+                    artifact_roots: Rc::new(artifact_roots),
+                })
+            }
+        };
         let mut objects = environment_objects(&project, &package_lock, environment, operation)?;
-        let mut ready = publisher_runtime_outputs(&publisher, &mut objects)?;
-        metrics.publisher_runtime_ms = elapsed_ms(started);
+        merge_authenticated_objects(&mut objects, &recipe_assets.objects)?;
+        let mut ready = recipe_assets.ready.clone();
 
         let started = self.timer();
-        let template_files = tree.files().clone();
         let model = publisher_model(
             &prepared,
-            &template_files,
+            recipe_assets.template_files.as_ref(),
             &mut ready,
             &mut objects,
             &project_id,
@@ -4059,7 +4260,7 @@ impl SiteEngine {
             &options,
             operation,
         )?;
-        let (render_semantics, render_package_artifacts) = match self
+        let render_semantics = match self
             .preparation
             .publisher_render_semantics
             .as_ref()
@@ -4067,14 +4268,11 @@ impl SiteEngine {
         {
             Some(entry) => {
                 metrics.render_semantics_cache_hit = true;
-                (
-                    entry.semantics.clone(),
-                    entry.render_package_artifacts.clone(),
-                )
+                entry.semantics.clone()
             }
             None => {
-                let (render_packages, render_package_artifacts) = publisher_render_package_view(
-                    environment,
+                let render_packages = publisher_render_package_view(
+                    environment.scoped(&project.resolved_packages().labels, operation)?,
                     &project.resolved_packages().labels,
                     operation,
                 )?;
@@ -4088,16 +4286,17 @@ impl SiteEngine {
                     Some(PublisherRenderSemanticsCacheEntry {
                         key: render_semantics_key,
                         semantics: semantics.clone(),
-                        render_package_artifacts: render_package_artifacts.clone(),
                     });
-                (semantics, render_package_artifacts)
+                semantics
             }
         };
         let state = publisher_render_state(&render_semantics, &model, &options)?;
         metrics.render_model_ms = elapsed_ms(started);
 
+        let catalog_total_started = self.timer();
         let started = self.timer();
         let (catalog, tree_digest) = publisher_catalog(&state, &mut ready, &model, operation)?;
+        metrics.output_catalog_ms = elapsed_ms(started);
         let mut parameters = BTreeMap::from([
             ("contract".into(), "publisher-site/v1".into()),
             (
@@ -4116,7 +4315,7 @@ impl SiteEngine {
             ),
             (
                 "publisherRuntimeRecipeSha256".into(),
-                publisher.recipe_sha256().to_string(),
+                recipe_assets.publisher.recipe_sha256().to_string(),
             ),
             (
                 "buildEpochSecs".into(),
@@ -4127,17 +4326,16 @@ impl SiteEngine {
         if let Some(run_uuid) = &run_uuid {
             parameters.insert("runUuid".into(), run_uuid.clone());
         }
+        let started = self.timer();
         let (artifacts, plan, artifact_objects) = publisher_artifacts(
             &prepared,
             &project_revision,
             &package_lock,
-            &resolution.chain,
-            &core,
-            &template_files,
-            &publisher,
-            &render_package_artifacts,
+            recipe_assets.as_ref(),
         )?;
-        merge_objects(&mut objects, artifact_objects)?;
+        merge_authenticated_objects(&mut objects, &artifact_objects)?;
+        metrics.publisher_artifacts_ms = elapsed_ms(started);
+        let started = self.timer();
         let build = site_build::SiteBuild::new(
             project_revision,
             package_lock,
@@ -4155,7 +4353,10 @@ impl SiteEngine {
         .map_err(|error| format!("{operation}: SiteBuild: {error}"))?
         .close()
         .map_err(|error| format!("{operation}: close SiteBuild: {error}"))?;
+        metrics.site_build_close_ms = elapsed_ms(started);
+        let started = self.timer();
         verify_ready_artifacts(&build, &objects, operation)?;
+        metrics.closure_verify_ms = elapsed_ms(started);
         let renderer = site_build::RendererImplementation {
             id: "publisher-template-rust".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -4165,8 +4366,8 @@ impl SiteEngine {
         let handle = build.site_build().build_id().to_string();
         let installed = self.install_publisher(PublisherRuntime {
             preparation_key: Some(preparation_key),
+            recipe_assets,
             state,
-            publisher,
             build: build.clone(),
             catalog,
             ready,
@@ -4175,7 +4376,7 @@ impl SiteEngine {
             output_options: parameters,
         });
         debug_assert_eq!(installed, handle);
-        metrics.catalog_ms = elapsed_ms(started);
+        metrics.catalog_ms = elapsed_ms(catalog_total_started);
         metrics.total_ms = elapsed_ms(total_started);
         Ok(PrepareResult {
             handle: handle.clone(),
@@ -4303,10 +4504,12 @@ impl SiteEngine {
             "template.materialize/v1",
             operation,
         )?;
-        let template_files = template_artifacts
-            .into_iter()
-            .map(|(path, (_, _, bytes))| (path, bytes))
-            .collect::<BTreeMap<_, _>>();
+        let template_files = Rc::new(
+            template_artifacts
+                .into_iter()
+                .map(|(path, (_, _, bytes))| (path, bytes))
+                .collect::<BTreeMap<_, _>>(),
+        );
         let runtime_artifacts = closed_artifact_files(
             &build,
             &objects,
@@ -4362,16 +4565,30 @@ impl SiteEngine {
                 "{operation}: target core {core} is absent from compilePackageOrder"
             ));
         }
-        let publisher = site_producer::publisher_runtime::PublisherRuntime::from_closed_files(
-            runtime_files,
-            &core,
-            &expected_runtime_recipe,
-        )
-        .map_err(|error| format!("{operation}: reconstruct Publisher runtime: {error:#}"))?;
-        let mut ready = publisher_runtime_outputs(&publisher, &mut objects)?;
+        let publisher = Rc::new(
+            site_producer::publisher_runtime::PublisherRuntime::from_closed_files(
+                runtime_files,
+                &core,
+                &expected_runtime_recipe,
+            )
+            .map_err(|error| format!("{operation}: reconstruct Publisher runtime: {error:#}"))?,
+        );
+        let mut runtime_objects = ObjectMap::new();
+        let runtime_ready = publisher_runtime_outputs(publisher.as_ref(), &mut runtime_objects)?;
+        merge_authenticated_objects(&mut objects, &runtime_objects)?;
+        let recipe_assets = Rc::new(PublisherRecipeAssets {
+            key: None,
+            template_files,
+            publisher,
+            ready: runtime_ready,
+            objects: runtime_objects,
+            artifact_records: Rc::new(Vec::new()),
+            artifact_roots: Rc::new(BTreeSet::new()),
+        });
+        let mut ready = recipe_assets.ready.clone();
         let model = publisher_model(
             &prepared,
-            &template_files,
+            recipe_assets.template_files.as_ref(),
             &mut ready,
             &mut objects,
             &prepared.guide.package_id,
@@ -4401,8 +4618,8 @@ impl SiteEngine {
         let handle = build.site_build().build_id().to_string();
         let installed = self.install_publisher(PublisherRuntime {
             preparation_key: None,
+            recipe_assets,
             state,
-            publisher,
             build,
             catalog,
             ready,

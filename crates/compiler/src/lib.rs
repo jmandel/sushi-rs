@@ -183,11 +183,12 @@ fn expand_ruleset(
     docs: &mut Vec<FshDocument>,
     loc: RsLoc,
     seen: &[String],
+    owner: Option<&DefinitionLocation>,
     diag: &mut Vec<CompileDiagnostic>,
 ) {
     // Take the rules out so the borrow of `docs` is free for recursion/fishing.
     let mut rules = std::mem::take(rs_rules_mut(docs, loc));
-    expand_rules(docs, &mut rules, DefKind::RuleSet, seen, diag);
+    expand_rules(docs, &mut rules, DefKind::RuleSet, seen, owner, diag);
     *rs_rules_mut(docs, loc) = rules;
 }
 
@@ -199,6 +200,7 @@ fn expand_rules(
     rules: &mut Vec<Rule>,
     def_kind: DefKind,
     seen: &[String],
+    owner: Option<&DefinitionLocation>,
     diag: &mut Vec<CompileDiagnostic>,
 ) {
     let original = std::mem::take(rules);
@@ -239,7 +241,8 @@ fn expand_rules(
         // location; capture it once for every push in this iteration.
         let d_file = insert_file.clone();
         let d_line = insert_loc.as_ref().map(|l| l.start_line);
-        let mk = |msg: String| CompileDiagnostic::error(msg, d_file.clone(), d_line);
+        let mk =
+            |msg: String| CompileDiagnostic::error(msg, d_file.clone(), d_line, owner.cloned());
 
         let Some(loc) = loc else {
             diag.push(mk(format!(
@@ -259,7 +262,7 @@ fn expand_rules(
         // Recurse first: expand the RuleSet (in place, shared) before consuming it.
         let mut new_seen = seen.to_vec();
         new_seen.push(identifier.clone());
-        expand_ruleset(docs, loc, &new_seen, diag);
+        expand_ruleset(docs, loc, &new_seen, owner, diag);
 
         let mut context = insert_path.clone();
         let mut first_rule = true;
@@ -439,6 +442,20 @@ impl Field {
             Field::Mapping => &mut doc.mappings[i].1.rules,
         }
     }
+
+    fn source_info(self, doc: &FshDocument, i: usize) -> &SourceInfo {
+        match self {
+            Field::Invariant => &doc.invariants[i].1.source_info,
+            Field::Profile => &doc.profiles[i].1.source_info,
+            Field::Extension => &doc.extensions[i].1.source_info,
+            Field::Logical => &doc.logicals[i].1.source_info,
+            Field::Resource => &doc.resources[i].1.source_info,
+            Field::CodeSystem => &doc.code_systems[i].1.source_info,
+            Field::ValueSet => &doc.value_sets[i].1.source_info,
+            Field::Instance => &doc.instances[i].1.source_info,
+            Field::Mapping => &doc.mappings[i].1.source_info,
+        }
+    }
 }
 
 /// Run `applyInsertRules` over every entity in `FHIRExporter.export` order
@@ -469,9 +486,17 @@ fn run_global_expansion(docs: &mut Vec<FshDocument>, diag: &mut Vec<CompileDiagn
     }
 
     for (field, d, i) in work {
+        let owner = DefinitionLocation::from_source_info(field.source_info(&docs[d], i));
         // Take the entity's rules out so `docs` is free for fishing/recursion.
         let mut rules = std::mem::take(field.rules_mut(&mut docs[d], i));
-        expand_rules(docs, &mut rules, field.def_kind(), &[], diag);
+        expand_rules(
+            docs,
+            &mut rules,
+            field.def_kind(),
+            &[],
+            owner.as_ref(),
+            diag,
+        );
         *field.rules_mut(&mut docs[d], i) = rules;
     }
 }
@@ -630,15 +655,25 @@ pub struct CompileDiagnostic {
     pub file: Option<String>,
     /// 1-based start line, when known.
     pub line: Option<u32>,
+    /// Exact authored entity whose compiled/rendered consequence is affected,
+    /// when the compiler still has that owner in scope. This is deliberately
+    /// absent rather than guessed for unattributable exporter diagnostics.
+    pub owner_definition: Option<DefinitionLocation>,
 }
 
 impl CompileDiagnostic {
-    fn error(message: impl Into<String>, file: Option<String>, line: Option<u32>) -> Self {
+    fn error(
+        message: impl Into<String>,
+        file: Option<String>,
+        line: Option<u32>,
+        owner_definition: Option<DefinitionLocation>,
+    ) -> Self {
         Self {
             severity: "error",
             message: message.into(),
             file,
             line,
+            owner_definition,
         }
     }
 }
@@ -822,7 +857,7 @@ pub fn compile_conformance(
     // reports these without a precise FSH span through this path, so file/line
     // are unattributed; the wording is byte-identical to what SUSHI logs.
     for msg in &ctx.diag {
-        diagnostics.push(CompileDiagnostic::error(msg.clone(), None, None));
+        diagnostics.push(CompileDiagnostic::error(msg.clone(), None, None, None));
     }
 
     // Instances (Phase 7).
@@ -1030,4 +1065,34 @@ fn resolve_cache_dir(explicit: Option<&str>) -> anyhow::Result<String> {
     anyhow::bail!(
         "FHIR package cache not found. Set FHIR_CACHE or create {default} (never use ~/.fhir)."
     )
+}
+
+#[cfg(test)]
+mod diagnostic_owner_tests {
+    use super::*;
+
+    #[test]
+    fn insert_diagnostic_retains_exact_affected_entity_declaration() {
+        let mut importer = parser::Importer::new();
+        importer.import(&[(
+            "input/fsh/Broken.fsh",
+            "Profile: Broken\nParent: Patient\n* insert MissingRuleSet\n",
+        )]);
+        let mut documents = importer.docs;
+        let mut diagnostics = Vec::new();
+        run_global_expansion(&mut documents, &mut diagnostics);
+        assert_eq!(diagnostics.len(), 1);
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.file.as_deref(), Some("input/fsh/Broken.fsh"));
+        assert_eq!(diagnostic.line, Some(3));
+        assert_eq!(
+            diagnostic.owner_definition,
+            Some(DefinitionLocation {
+                kind: DefinitionKind::FshDeclaration,
+                path: "input/fsh/Broken.fsh".into(),
+                line: 1,
+                column: 0,
+            })
+        );
+    }
 }

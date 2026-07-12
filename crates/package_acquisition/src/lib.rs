@@ -1517,7 +1517,7 @@ fn now_unix() -> u64 {
 // set of bundles is pinned by a `BundleManifest` lockfile. On a cache miss the
 // browser fetches one blob per package, authenticates/inflates it in the host,
 // and passes the entries through shared Rust normalization into a compact
-// PreparedPackage v2-backed `package_store::BundleSource`; direct owned-file
+// PreparedPackage v3-backed `package_store::BundleSource`; direct owned-file
 // mounting remains a supported compatibility path. See
 // `docs/package-derived-index.md` (Bundle format section) and
 // `package_store::bundle`.
@@ -1525,7 +1525,7 @@ fn now_unix() -> u64 {
 use package_store::{BundleManifest, BundleManifestEntry};
 
 /// Version of the small manifest emitted beside a prepared-package set.
-pub const PREPARED_PACKAGE_MANIFEST_VERSION: u32 = 2;
+pub const PREPARED_PACKAGE_MANIFEST_VERSION: u32 = 3;
 
 /// One exact prepared package artifact in a [`PreparedPackageManifest`].
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -1706,6 +1706,70 @@ pub fn build_prepared_package(
         .with_context(|| format!("prepare package {label}"))
 }
 
+/// Prepare one exact package from its complete native cache coordinate.
+/// Compiler metadata lives below `package/`; Publisher templates and core
+/// runtime assets may be siblings such as `config.json`, `content/`, or
+/// `other/`. All safe files are folded into the one canonical carrier.
+pub fn build_prepared_package_coordinate(
+    label: &str,
+    coordinate_dir: &Path,
+) -> anyhow::Result<package_store::PreparedPackage> {
+    if !coordinate_dir.is_dir() {
+        bail!(
+            "prepare package: coordinate dir does not exist: {}",
+            coordinate_dir.display()
+        );
+    }
+    let mut package = build_prepared_package(label, &coordinate_dir.join("package"))?;
+    let mut files = package.files.materialize_all()?;
+    let root = coordinate_dir
+        .canonicalize()
+        .with_context(|| format!("resolve package coordinate {}", coordinate_dir.display()))?;
+    for entry in walkdir::WalkDir::new(&root)
+        .min_depth(1)
+        .follow_links(false)
+    {
+        let entry = entry.with_context(|| format!("walk package coordinate {}", root.display()))?;
+        let relative = entry
+            .path()
+            .strip_prefix(&root)
+            .expect("walked member is below package coordinate");
+        if relative.starts_with("package") {
+            continue;
+        }
+        if entry.file_type().is_symlink() {
+            bail!(
+                "prepare package rejects nested symlink {}",
+                entry.path().display()
+            );
+        }
+        if entry.file_type().is_dir() {
+            continue;
+        }
+        if !entry.file_type().is_file() {
+            bail!(
+                "prepare package rejects non-file member {}",
+                entry.path().display()
+            );
+        }
+        let name = relative
+            .components()
+            .map(|component| component.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| anyhow!("package member path is not UTF-8: {}", relative.display()))?
+            .join("/");
+        if files
+            .insert(name.clone(), fs::read(entry.path())?)
+            .is_some()
+        {
+            bail!("duplicate package member {name:?}");
+        }
+    }
+    package = package_store::PreparedPackage::prepare(label, files)
+        .with_context(|| format!("prepare complete package coordinate {label}"))?;
+    Ok(package)
+}
+
 /// Decode a prepared artifact and require the exact cache key selected by its
 /// caller. This is the shared API used by native verification and WASM mounting.
 pub fn read_prepared_package(
@@ -1735,7 +1799,7 @@ pub fn build_prepared_package_set(
         if !seen.insert(label.clone()) {
             bail!("duplicate prepared package label {label}");
         }
-        let prepared = build_prepared_package(label, &cache_dir.join(label).join("package"))?;
+        let prepared = build_prepared_package_coordinate(label, &cache_dir.join(label))?;
         let bytes = prepared.encode();
         let artifact = format!("{label}.fpp");
         write_bytes_atomically(&out_dir.join(&artifact), &bytes)?;
@@ -1933,7 +1997,17 @@ mod tests {
             br#"{"resourceType":"Patient","id":"p"}"#,
         )
         .unwrap();
-        fs::write(package.join("template/config.json"), br#"{"name":"x"}"#).unwrap();
+        fs::write(
+            cache.join("example.pkg#1.0.0/config.json"),
+            br#"{"name":"x"}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(cache.join("example.pkg#1.0.0/content")).unwrap();
+        fs::write(
+            cache.join("example.pkg#1.0.0/content/page.html"),
+            b"publisher sibling",
+        )
+        .unwrap();
 
         let out = temp.path().join("prepared");
         let manifest =
@@ -1941,7 +2015,8 @@ mod tests {
         let entry = &manifest.packages[0];
         let bytes = fs::read(out.join(&entry.artifact)).unwrap();
         let decoded = read_prepared_package(&bytes, &entry.key).unwrap();
-        assert!(decoded.files.contains_key("template/config.json"));
+        assert!(decoded.files.contains_key("config.json"));
+        assert!(decoded.files.contains_key("content/page.html"));
         assert!(decoded.files.contains_key(derived_index::SIDECAR_NAME));
         assert_eq!(entry.artifact_sha256, sha256_hex(&bytes));
         assert!(out.join("prepared-package-manifest.json").is_file());

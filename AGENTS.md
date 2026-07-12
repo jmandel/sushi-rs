@@ -7,6 +7,29 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**SITEBUILD V2 / EXACT PREPARED CARRIER ACTIVE (UNCOMMITTED 2026-07-12):**
+SiteBuild v2 now roots the exact deterministic PreparedPackage carrier consumed
+by execution. The v3 semantic-payload attestation, deferred normalized closure
+object, checksum footer, and Publisher render-package artifacts are deleted.
+One typed mount owns the carrier identity and lazy file view; carrier SHA is
+computed once at encode/decode, closing expands no members, and fresh restore
+mounts the same object. Live/restored rendering receive the identical restricted
+top-level + `other/spec.internals` view. V1 builds are explicitly rejected, not
+adapted; Cycle's one closed-build parser is migrated to v2.
+
+Focused package-store/SiteEngine/WASM/Fig/SiteBuild/Cycle/app gates are green at
+this checkpoint. Final exact browser performance is
+`/tmp/uscore-v2-bound-final.json`: prior UI/page 659/765 ms, exact Ready
+8.432 s, zero body inflation and 0 ms closure verification, plus 1.250 s US Core
+-> Cycle -> US Core with the retained runtime and no Worker recycle. The strict
+v1 close-time materialization alternative measured 20.638 s and was rejected.
+The final Pages-subpath browser receipt is `/tmp/fhir-v2-bound-full.log` (`E2E
+GATE: PASS`), including complete US Core image/asset closure, one-shell CarePlan,
+real mCODE, persistence/restart/scroll/mobile, and exact diagnostic navigation.
+Fresh-process native Publisher passes at `/tmp/fhir-v2-bound-fig-gate.log` with
+the unchanged 1,799-file receipt. Commit/push engine, Cycle, and editor pins in
+dependency order, then certify Pages and the live origin.
+
 **POST-LANDING COMPLETION AUDIT COMPLETE LOCALLY (UNCOMMITTED 2026-07-12):** the deployed
 SiteEngine/Fig architecture passed independent code review, but the audit found
 one leaked private observation and several certification/doc gaps. The active
@@ -628,14 +651,18 @@ Focused gates: `cargo test -p content_store -p site_build --no-default-features`
 `cargo test -p site_build`, and Cycle renderer tests.
 
 **COMPACT PREPARED PACKAGES V2 — LANDED (2026-07-10).**
+This historical checkpoint is superseded by the active v3 block at the top;
+v3 retains the compact layout while binding the exact semantic object and full
+source identity into the key. The current v3/v2 contract at the top supersedes
+that intermediate semantic-object design: v3 now roots the exact carrier.
 `package_store::PreparedPackage` defines a deterministic compact `.fpp`
 artifact keyed by canonical member-digest root plus binary/normalization/
 derived-index/engine-ABI versions. Its canonical directory addresses complete
 package contents in independent 1 MiB raw-DEFLATE chunks. Decode validates the
-outer checksum, host-selected key, paths/order, metadata root, and exact chunk
+host-selected key, paths/order, metadata root, and exact chunk
 partition without inflating bodies. First read bounded-inflates one chunk and
 checks chunk/member SHA-256 behind an 8 MiB per-artifact LRU. Native/browser
-semantic payload SHA/length remain identical. Shared builders emit `.fpp` via both
+carrier bytes are deterministic and content-addressed. Shared builders emit `.fpp` via both
 `fig packages prepare` and `rust_sushi packages prepare`; both commands use the
 same strict `PreparedPackageSetRequest` parser/executor and reject unsafe labels
 before constructing cache/output paths. Their ordinary manifest output and `.fpp`

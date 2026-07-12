@@ -8,12 +8,17 @@ use crate::{
     canonical_json_bytes, sha256_canonical, BuildId, CanonicalError, ContentRef, Sha256Digest,
 };
 
+/// Required media type for every package carrier rooted by SiteBuild v2.
+pub const PREPARED_PACKAGE_MEDIA_TYPE: &str = "application/vnd.fhir.package.prepared.v3";
+
 /// Wire-format discriminator. A new incompatible contract requires a new enum
-/// variant and migration rather than silently changing v1 hashing semantics.
+/// variant rather than silently changing existing hashing semantics.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SchemaVersion {
     #[serde(rename = "site-build/v1")]
     V1,
+    #[serde(rename = "site-build/v2")]
+    V2,
 }
 
 /// Canonical project-relative path. Paths are POSIX-style even on native hosts.
@@ -209,8 +214,9 @@ impl<'de> Deserialize<'de> for PackageCoordinate {
 #[serde(rename_all = "camelCase")]
 pub struct LockedPackage {
     pub coordinate: PackageCoordinate,
-    /// Digest of the exact normalized package payload, not merely its registry
-    /// name/version.
+    /// Exact deterministic prepared-package carrier. This content-addressed
+    /// value binds the complete package representation consumed by execution,
+    /// not merely its registry name/version or a normalized semantic subset.
     pub content: ContentRef,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub dependencies: BTreeSet<PackageCoordinate>,
@@ -528,10 +534,17 @@ impl<'de> Deserialize<'de> for ArtifactCatalog {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ContractError {
+    #[error("unsupported site build schema {0:?}")]
+    UnsupportedSchemaVersion(SchemaVersion),
     #[error("duplicate source path {0}")]
     DuplicateSource(SourcePath),
     #[error("duplicate package {0}")]
     DuplicatePackage(PackageCoordinate),
+    #[error("package {package} has unsupported carrier media type {media_type:?}")]
+    UnsupportedPackageMediaType {
+        package: PackageCoordinate,
+        media_type: Option<String>,
+    },
     #[error("package lock key {key} does not match embedded coordinate {embedded}")]
     PackageKeyMismatch {
         key: PackageCoordinate,
@@ -637,7 +650,7 @@ impl fmt::Display for SealError {
 
 impl std::error::Error for SealError {}
 
-/// Immutable v1 build handoff. Fields are private so mutation cannot invalidate
+/// Immutable v2 build handoff. Fields are private so mutation cannot invalidate
 /// the content-derived `build_id`; create a new value when an artifact resolves.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -687,7 +700,7 @@ impl SiteBuild {
         diagnostics: BTreeSet<BuildDiagnostic>,
     ) -> Result<Self, SiteBuildError> {
         let mut build = Self {
-            schema_version: SchemaVersion::V1,
+            schema_version: SchemaVersion::V2,
             build_id: BuildId::from_digest(Sha256Digest::of_bytes(&[])),
             project,
             package_lock,
@@ -770,6 +783,9 @@ impl SiteBuild {
     }
 
     fn validate_contract(&self) -> Result<(), ContractError> {
+        if self.schema_version != SchemaVersion::V2 {
+            return Err(ContractError::UnsupportedSchemaVersion(self.schema_version));
+        }
         if self.project.project_id.trim().is_empty()
             || self.project.revision.trim().is_empty()
             || self.render_target.renderer.id.trim().is_empty()
@@ -791,6 +807,12 @@ impl SiteBuild {
                 });
             }
             validate_content(&package.content)?;
+            if package.content.media_type.as_deref() != Some(PREPARED_PACKAGE_MEDIA_TYPE) {
+                return Err(ContractError::UnsupportedPackageMediaType {
+                    package: coordinate.clone(),
+                    media_type: package.content.media_type.clone(),
+                });
+            }
             for dependency in &package.dependencies {
                 if self.package_lock.get(dependency).is_none() {
                     return Err(ContractError::MissingPackageDependency {

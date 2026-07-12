@@ -105,9 +105,9 @@ pub(crate) fn finish_normalized_package_material(
 }
 
 /// Validate package identity and dependency metadata at the shared canonical
-/// preparation boundary. PreparedPackage v2 commits the resulting label,
-/// dependencies, and `package.json` member digest; warm decode authenticates
-/// that metadata without reparsing or inflating the body.
+/// preparation boundary. PreparedPackage v3 commits the resulting label,
+/// dependencies, and complete member metadata in the exact carrier rooted by
+/// PackageLock; warm decode validates that directory without inflating bodies.
 pub(crate) fn validate_package_identity(
     label: &str,
     files: &BTreeMap<String, Vec<u8>>,
