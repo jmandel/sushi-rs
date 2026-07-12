@@ -16,17 +16,10 @@ compiler = { workspace = true }
 snapshot_gen = { workspace = true }
 package_store = { workspace = true }
 site_build = { workspace = true }
-prepared_guide.workspace = true
-site_producer = { workspace = true }
-render_sd = { workspace = true }
-render_page = { workspace = true }
+site_engine = { workspace = true }
 api_envelope = { workspace = true }
-render_liquid = { workspace = true }
-render_md = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
-anyhow = { workspace = true }
 
 # wasm-bindgen is only linked into the wasm build. On native it still compiles
 # (the macros expand to inert code) so the workspace builds/tests as one unit.
@@ -36,6 +29,3 @@ wasm-bindgen = "0.2"
 # (P2 asks for this). Cheap, wasm-only in effect.
 [target.'cfg(target_family = "wasm")'.dependencies]
 console_error_panic_hook = "0.1"
-
-[dev-dependencies]
-package_store = { workspace = true }

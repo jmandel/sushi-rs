@@ -14,6 +14,7 @@ members = [
     "crates/prepared_guide",
     "crates/content_store",
     "crates/site_build",
+    "crates/site_engine",
     "crates/wasm_api",
     "crates/render_xhtml",
     "crates/render_liquid",
@@ -46,6 +47,7 @@ snapshot_gen = { path = "crates/snapshot_gen" }
 prepared_guide = { path = "crates/prepared_guide" }
 content_store = { path = "crates/content_store" }
 site_build = { path = "crates/site_build" }
+site_engine = { path = "crates/site_engine" }
 render_xhtml = { path = "crates/render_xhtml" }
 render_liquid = { path = "crates/render_liquid" }
 render_md = { path = "crates/render_md" }

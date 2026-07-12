@@ -11,8 +11,8 @@ use std::rc::Rc;
 
 use render_sd::engine::{FragmentEngine, PER_RESOURCE_KINDS, SINGLETON_KINDS};
 use site_build::{
-    ArtifactKey, ArtifactState, BuildDiagnostic, ClosedSiteBuild, ContentRef, DiagnosticSeverity,
-    FragmentKind, FragmentScope, ResourceKey, SourcePath,
+    ArtifactKey, ArtifactState, BuildDiagnostic, DiagnosticSeverity, FragmentKind, FragmentScope,
+    ResourceKey, SourcePath,
 };
 
 /// Parameter containing the exact HL7 Publisher fragment kind understood by
@@ -404,110 +404,8 @@ impl PageArtifactReadSet {
     }
 }
 
-/// Callback-free artifact replay over a sealed build and an explicit CAS read
-/// function. Only artifacts reachable from the sealed render plan are served;
-/// a ready but unrelated catalog entry is not covered by that closure proof.
-/// The loader receives the complete `ContentRef`; bytes are checked for digest,
-/// length, and UTF-8 before use. Media type remains manifest metadata.
-pub struct ClosedBuildArtifactResolver<'a, F> {
-    build: &'a ClosedSiteBuild,
-    reachable: BTreeSet<ArtifactKey>,
-    load: F,
-}
-
-impl<'a, F> ClosedBuildArtifactResolver<'a, F> {
-    pub fn new(build: &'a ClosedSiteBuild, load: F) -> Self {
-        let mut pending = build
-            .site_build()
-            .render_plan()
-            .required_artifacts()
-            .clone();
-        let mut reachable = BTreeSet::new();
-        while let Some(key) = pending.pop_first() {
-            if !reachable.insert(key.clone()) {
-                continue;
-            }
-            if let Some(record) = build.site_build().artifacts().get(&key) {
-                for dependency in &record.reads {
-                    if let site_build::ReadDependency::Artifact { key } = dependency {
-                        pending.insert(key.clone());
-                    }
-                }
-            }
-        }
-        Self {
-            build,
-            reachable,
-            load,
-        }
-    }
-}
-
-impl<F> ArtifactResolver for ClosedBuildArtifactResolver<'_, F>
-where
-    F: Fn(&ContentRef) -> Option<Vec<u8>>,
-{
-    fn resolve(&self, key: &ArtifactKey) -> Result<String, ArtifactResolveError> {
-        if !self.reachable.contains(key) {
-            return Err(ArtifactResolveError::failed(
-                "site_build.artifact_outside_plan",
-                format!("artifact {key:?} is outside the sealed render-plan closure"),
-            ));
-        }
-        let record = self
-            .build
-            .site_build()
-            .artifacts()
-            .get(key)
-            .ok_or_else(|| {
-                ArtifactResolveError::failed(
-                    "site_build.artifact_missing",
-                    format!("sealed build has no artifact {key:?}"),
-                )
-            })?;
-        let ArtifactState::Ready { content } = &record.state else {
-            // Unreachable for records in the sealed plan closure, but a caller
-            // may ask this resolver for an unrelated catalog entry.
-            return Err(match &record.state {
-                ArtifactState::Deferred { reason } => ArtifactResolveError::deferred(reason),
-                ArtifactState::Unsupported { capability, reason } => {
-                    ArtifactResolveError::unsupported(capability, reason)
-                }
-                ArtifactState::Failed { diagnostics } => {
-                    let diagnostic = diagnostics.iter().next().expect("validated failed state");
-                    ArtifactResolveError::failed(&diagnostic.code, &diagnostic.message)
-                }
-                ArtifactState::Ready { .. } => unreachable!(),
-            });
-        };
-        let bytes = (self.load)(content).ok_or_else(|| {
-            ArtifactResolveError::failed(
-                "site_build.content_missing",
-                format!("CAS is missing {}", content.sha256),
-            )
-        })?;
-        let actual = ContentRef::of_bytes(&bytes, content.media_type.clone());
-        if actual != *content {
-            return Err(ArtifactResolveError::failed(
-                "site_build.content_mismatch",
-                format!(
-                    "CAS bytes for {} do not match length/digest",
-                    content.sha256
-                ),
-            ));
-        }
-        String::from_utf8(bytes).map_err(|error| {
-            ArtifactResolveError::failed(
-                "site_build.content_not_utf8",
-                format!("artifact {key:?} is not UTF-8: {error}"),
-            )
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
     use std::path::Path;
 
     use render_sd::context::IgContext;
@@ -607,91 +505,5 @@ mod tests {
         };
         *scope = FragmentScope::WholeIg;
         assert!(resolver.resolve(&invalid).is_err());
-    }
-
-    fn closed_fragment(bytes: &[u8]) -> (ClosedSiteBuild, ArtifactKey, ArtifactKey) {
-        let key = legacy_include_to_artifact_key("StructureDefinition-test-history.xhtml")
-            .expect("registered fragment");
-        let unrelated = legacy_include_to_artifact_key("StructureDefinition-other-history.xhtml")
-            .expect("registered fragment");
-        let provenance = site_build::ArtifactProvenance {
-            producer: site_build::ProducerRef::new("test", "1"),
-            recipe: "fixture".into(),
-            attributes: BTreeMap::new(),
-        };
-        let records = [
-            site_build::ArtifactRecord {
-                key: key.clone(),
-                state: ArtifactState::Ready {
-                    content: ContentRef::of_bytes(bytes, Some("text/html")),
-                },
-                provenance: provenance.clone(),
-                reads: BTreeSet::new(),
-            },
-            site_build::ArtifactRecord {
-                key: unrelated.clone(),
-                state: ArtifactState::Ready {
-                    content: ContentRef::of_bytes(b"unrelated", Some("text/html")),
-                },
-                provenance,
-                reads: BTreeSet::new(),
-            },
-        ];
-        let build = site_build::SiteBuild::new(
-            site_build::ProjectRevision {
-                project_id: "test".into(),
-                revision: "rev".into(),
-                sources: site_build::SourceManifest::default(),
-            },
-            site_build::PackageLock::default(),
-            site_build::RenderTarget {
-                renderer: site_build::ProducerRef::new("test", "1"),
-                mode: site_build::RenderMode::ExternalBuilder,
-                fhir_version: "4.0.1".into(),
-                template: None,
-                parameters: BTreeMap::new(),
-            },
-            site_build::RenderPlan::new([key.clone()]),
-            site_build::ArtifactCatalog::from_records(records).unwrap(),
-            BTreeSet::new(),
-        )
-        .unwrap();
-        (build.close().unwrap(), key, unrelated)
-    }
-
-    #[test]
-    fn sealed_cas_replay_rejects_missing_tampered_non_utf8_and_outside_plan_content() {
-        let (closed, key, unrelated) = closed_fragment(b"good");
-        let missing = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| None);
-        assert!(matches!(
-            missing.resolve(&key).unwrap_err().failure(),
-            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_missing"
-        ));
-
-        let tampered = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| {
-            Some(b"bad".to_vec())
-        });
-        assert!(matches!(
-            tampered.resolve(&key).unwrap_err().failure(),
-            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_mismatch"
-        ));
-
-        let outside = ClosedBuildArtifactResolver::new(&closed, |_content: &ContentRef| {
-            Some(b"unrelated".to_vec())
-        });
-        assert!(matches!(
-            outside.resolve(&unrelated).unwrap_err().failure(),
-            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.artifact_outside_plan"
-        ));
-
-        let non_utf8_bytes = [0xff, 0xfe];
-        let (closed, key, _) = closed_fragment(&non_utf8_bytes);
-        let non_utf8 = ClosedBuildArtifactResolver::new(&closed, move |_content: &ContentRef| {
-            Some(non_utf8_bytes.to_vec())
-        });
-        assert!(matches!(
-            non_utf8.resolve(&key).unwrap_err().failure(),
-            ArtifactResolveFailure::Failed { code, .. } if code == "site_build.content_not_utf8"
-        ));
     }
 }

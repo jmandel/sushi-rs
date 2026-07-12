@@ -41,46 +41,6 @@ fails with typed blockers unless the whole closure is `ready`. A callback-free
 external builder should accept this proof-bearing wrapper, not an open
 `SiteBuild`.
 
-## Internal native revision machinery
-
-The transition APIs in this section support native Fig capture, renderer tests,
-and closure verification. They are not a browser hosting protocol. The browser
-does not expose predecessor/successor choreography: its sole facade prepares one
-immutable handle, declares its outputs, renders independent paths, and finalizes
-one `SiteOutput`.
-
-`render_page::collect_stock_revision` is the stock renderer's thin collector
-over the transition API. Its plan roots are every advertised final page and
-every file in the `stock.assembled` asset namespace. Actual page-source,
-`site.data`, staged-include, template-include, and successful fragment reads are
-artifact dependencies, so sealing checks them transitively. A failed fragment
-attempt is retained as `deferred`, `unsupported`, or `failed`, but is not added
-to a successfully rendered page's reads when an ordinary staged/template file
-provided the fallback.
-
-`render_page::ClosedBuildArtifactResolver` replays generated includes from an
-explicit CAS with no fragment callback. It serves only artifacts reachable from
-the sealed plan (unrelated ready catalog entries are outside the closure proof)
-and rechecks digest, length, and UTF-8 before returning content.
-
-Fig's publication entry point is
-`render_site_for_revision(predecessor, root, options)`. It recursively captures
-the public staged tree, renders from the captured bytes, repeats the capture to
-detect mutation, and returns an opaque value bound to the predecessor and
-root/options, with a canonical seal over HTML, complete read sets, fragment
-observations, asset bytes, counters, and inventory.
-`collect_site_build_revision` accepts only that bound value. Plain `render_site` is intentionally a direct-write API,
-not an alternative revision handoff. The strict path rejects unreadable or
-non-regular public-tree entries, symlinks, unsupported Markdown page sources,
-and malformed or unreadable `_data` rather than silently publishing an
-incomplete inventory.
-
-The initial predecessor/root association is a trusted native-producer
-assertion, not a proof derived from the ambient F0 filesystem. The seal prevents
-changing or relabeling an outcome after capture. A future native closed-input
-adapter should reconstruct the own-resource/package/tx-cache trees from the
-predecessor and CAS, eliminating this remaining trust edge.
-
 ## Cycle typed projection
 
 `PreparedGuide` is the renderer-neutral semantic preparation result: guide

@@ -24,22 +24,16 @@ use render_liquid::{DataProvider, Options, Value};
 
 pub mod artifact;
 pub mod sitedata;
-pub mod stock;
 pub use artifact::{
     is_safe_stock_relative_path, legacy_include_to_artifact_key,
     publisher_reference_to_resource_key, stock_input_artifact, ArtifactCacheEntry,
     ArtifactObservation, ArtifactResolveError, ArtifactResolveFailure, ArtifactResolver,
-    ClosedBuildArtifactResolver, FragmentEngineArtifactResolver, PageArtifactReadSet,
-    SharedArtifactCache, PUBLISHER_KIND_PARAMETER, PUBLISHER_REFERENCE_PARAMETER,
-    STOCK_PAGE_SOURCE_NAMESPACE, STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
-    STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
+    FragmentEngineArtifactResolver, PageArtifactReadSet, SharedArtifactCache,
+    PUBLISHER_KIND_PARAMETER, PUBLISHER_REFERENCE_PARAMETER, STOCK_PAGE_SOURCE_NAMESPACE,
+    STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE, STOCK_STAGED_INCLUDE_NAMESPACE,
+    STOCK_TEMPLATE_INCLUDE_NAMESPACE,
 };
 pub use sitedata::{SiteData, SiteDataLoadError};
-pub use stock::{
-    all_compile_inputs, assembled_asset_key, collect_stock_revision, StockAsset,
-    StockFragmentPolicy, StockInput, StockPage, StockPageOutcome, StockPlanError,
-    STOCK_ASSEMBLED_ASSET_NAMESPACE,
-};
 
 /// The kramdown hook for `markdownify`. Uses render_md (the F1b kramdown engine)
 /// with `rouge_wrappers` ON — reproducing Jekyll's markdownify, which post-

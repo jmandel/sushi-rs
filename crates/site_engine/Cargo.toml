@@ -1,0 +1,27 @@
+[package]
+name = "site_engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Target-neutral FHIR IG site execution shared by native and WASM hosts"
+
+[features]
+test-support = []
+
+[dependencies]
+compiler = { workspace = true }
+package_store = { workspace = true }
+prepared_guide = { workspace = true }
+render_page = { workspace = true }
+render_sd = { workspace = true }
+snapshot_gen = { workspace = true }
+site_build = { workspace = true }
+site_producer = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+[dev-dependencies]
+render_liquid = { workspace = true }

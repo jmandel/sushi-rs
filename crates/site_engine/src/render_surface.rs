@@ -48,13 +48,13 @@ use render_sd::engine::{FragmentEngine, IgFacts};
 use render_sd::tree::{DirEntry, MemTree, TreeSource};
 use serde_json::Value;
 
-use crate::SharedBundle;
+use crate::PackageView;
 
 /// TreeSource over the session state: package paths (under the bundle cache
 /// root) go to the BundleSource; everything else to the MemTree.
 struct SessionTree {
     mem: MemTree,
-    pkg: Option<SharedBundle>,
+    pkg: Option<PackageView>,
     pkg_root: PathBuf,
 }
 
@@ -139,7 +139,7 @@ impl Default for SiteOptions {
 pub struct RenderSemantics {
     pub engine: Rc<FragmentEngine>,
     compiled: Vec<(PathBuf, Value)>,
-    packages: Option<SharedBundle>,
+    packages: Option<PackageView>,
 }
 
 /// The per-generation render state.
@@ -178,10 +178,10 @@ fn insert_compiled(mem: &mut MemTree, compiled: &[(PathBuf, Value)]) -> Result<(
     Ok(())
 }
 
-fn package_root(bundle: &Option<SharedBundle>) -> PathBuf {
+fn package_root(bundle: &Option<PackageView>) -> PathBuf {
     bundle
         .as_ref()
-        .map(|b| b.root.clone())
+        .map(|bundle| bundle.root().to_path_buf())
         .unwrap_or_else(|| PathBuf::from("/__no_bundle__"))
 }
 
@@ -189,7 +189,7 @@ fn package_root(bundle: &Option<SharedBundle>) -> PathBuf {
 /// files, making reuse across page/template overlays correct by construction.
 pub fn build_render_semantics(
     compiled: Vec<(PathBuf, Value)>,
-    bundle: Option<SharedBundle>,
+    bundle: Option<PackageView>,
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderSemantics, String> {
@@ -355,10 +355,9 @@ pub fn build_render_state(
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderState, String> {
-    let bundle = bundle.map(|source| SharedBundle {
-        root: source.cache_root().to_path_buf(),
-        source,
-        allowed_labels: None,
+    let bundle = bundle.map(|source| {
+        let root = source.cache_root().to_path_buf();
+        PackageView::new(source, root, None)
     });
     let semantics = build_render_semantics(compiled.to_vec(), bundle, site_files, options)?;
     build_render_state_from_semantics(&semantics, site_files, options)

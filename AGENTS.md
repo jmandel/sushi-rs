@@ -7,6 +7,33 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**CANONICAL SITEENGINE EXTRACTION + FIRST DELETION PASS (CHECKPOINT COMPLETE,
+2026-07-11):** the target-neutral `site_engine` crate now owns the exact
+resolver-scoped `PackageView`, semantic compilation, PreparedGuide construction,
+Cycle projection, Publisher template/runtime/model/render/catalog preparation,
+bounded current+previous runtimes, complete output catalogs, independent path
+rendering, verified reads, Publisher `SiteOutput` finalization, and typed Cycle
+external finalization. One typed `SiteEngine::prepare` constructs and installs
+runtimes atomically; install/reuse and PublisherRuntime seams are crate-private.
+`wasm_api` is a 1,537-line parse/transport facade and has no duplicate active
+preparation path.
+
+Publisher ClosedSiteBuild now roots ready artifacts for the four existing
+semantic documents, all six authored roles, every materialized template file,
+and every assembled runtime file with provenance/reads. Its object set includes
+and verifies the exact source revision, package lock including template chain,
+and all ready artifacts before installation. Fresh-process RenderState
+rehydration from that closed build + ContentStore is explicitly next; current
+handles do not claim replay of opaque Rc state. Current gates: SiteEngine 11
+pass/1 ignored, WASM 5+8, site-build 29, site-producer 16, workspace all-target
+check, and documented-toolchain wasm32 check. Separately, the dead
+predecessor-bound Fig revision promotion, orphaned `render_page::stock`
+collector, and closed-CAS replay adapter are deleted: 1,349 lines removed.
+Fig 17/17 + envelope 4/4, render_page 8/8, site_build 29/29, fmt, and diff-check
+are green. Legacy staged
+`fig render`/`watch` remain only until native Fig consumes SiteEngine, then must
+be deleted rather than wrapped.
+
 **RECENT EXACT SEMANTIC COMPILATION REOPENS A -> B -> A (2026-07-11):**
 `compileProject` now retains exactly the active successful semantic compilation
 and one previous distinct payload. A previous hit atomically swaps the two;
@@ -457,22 +484,12 @@ explicit across Cycle v2, stock production, native Fig, and render context;
 additional guides remain ordinary resources. A compiled revision retains the exact resolved
 package-label allow-list used for compilation, snapshot completion, and fragment rendering
 even after later mounts; a fresh mount invalidates resolution for the next compile.
-`SiteBuild::successor` is now the pure, order-independent
-revision transition: an explicit predecessor + resolution batch produces a validated new
-build and its new CAS objects while leaving the predecessor untouched. The stock collector
-makes every rendered page and assembled static asset a plan root, records page/data/staged-
-include/template-include/fragment reads transitively, preserves typed failed attempts, and
-can close only when all successful dependencies are ready.
-`fig::engine::render_site_for_revision` recursively captures the complete public tree and
-binds its complete HTML/read-set/fragment/asset payload, predecessor, render root/options, and
-output inventory behind a canonical seal;
-only that opaque outcome can be promoted by `collect_site_build_revision`. Plain `render_site`
-is a direct-write path and is deliberately not promotable. Strict public-tree and `_data`
-loading fail closed on unreadable entries, symlinks, unsupported Markdown, and concurrent
-inventory changes. The initial predecessor/F0-root association remains an explicit trusted-producer
-assertion until native inputs are reconstructed from a closed build/CAS. `ClosedBuildArtifactResolver` replays only the sealed plan closure and verifies CAS
-digest/length/UTF-8 without callbacks. Focused gates now also
-include `cargo test -p render_page --lib` and `cargo test -p fig`.
+`SiteBuild::successor` remains the pure, order-independent revision transition:
+an explicit predecessor + resolution batch produces a validated new build and
+its new CAS objects while leaving the predecessor untouched. The unused native
+staged-tree promotion bridge that tried to manufacture such a successor after
+rendering was deleted in the SiteEngine convergence pass; it was not a host API
+and had no production caller.
 The browser-adapter portion of this 2026-07-10 checkpoint is superseded.
 `openStockBuild`, `renderStockPage`, and the ambient render calls were deleted;
 the browser now uses only `prepare -> outputs -> render -> finalize` over one

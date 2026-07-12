@@ -878,6 +878,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "site_engine"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "compiler",
+ "package_store",
+ "prepared_guide",
+ "render_liquid",
+ "render_page",
+ "render_sd",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "site_build",
+ "site_producer",
+ "snapshot_gen",
+]
+
+[[package]]
 name = "site_producer"
 version = "0.1.0"
 dependencies = [
@@ -1140,21 +1159,14 @@ dependencies = [
 name = "wasm_api"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "api_envelope",
  "compiler",
  "console_error_panic_hook",
  "package_store",
- "prepared_guide",
- "render_liquid",
- "render_md",
- "render_page",
- "render_sd",
  "serde",
  "serde_json",
- "serde_yaml",
  "site_build",
- "site_producer",
+ "site_engine",
  "snapshot_gen",
  "wasm-bindgen",
 ]

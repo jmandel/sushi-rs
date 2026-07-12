@@ -21,15 +21,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use render_page::{
-    all_compile_inputs, collect_stock_revision, render_page, stock_input_artifact,
-    ArtifactObservation, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider,
-    SiteData, StockAsset, StockFragmentPolicy, StockInput, StockPage, StockPageOutcome,
-    STOCK_PAGE_SOURCE_NAMESPACE, STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
-    STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
+    render_page, stock_input_artifact, FragmentEngineArtifactResolver, PageArtifactReadSet,
+    PageProvider, SiteData, STOCK_RUNTIME_INPUT_NAMESPACE,
 };
 use render_sd::context::{IgContext, ResourceIdentity};
 use render_sd::engine::{FragmentEngine, IgFacts};
-use serde::Serialize;
 
 /// A resolved render root — the four input trees the page pass composes over.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,54 +164,6 @@ pub struct RenderOutcome {
     pub fragment_misses: usize,
     /// Static asset files copied (name -> byte length), see [`copy_assets`].
     pub assets_copied: usize,
-    /// Present only when [`render_site_for_revision`] bound this capture to an
-    /// explicit predecessor, root, options, and complete output inventory. The
-    /// private field prevents callers from fabricating a promotable outcome.
-    revision_capture: Option<RevisionCapture>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct RevisionCapture {
-    predecessor: site_build::BuildId,
-    root: RenderRoot,
-    options: RenderOptions,
-    outcome_seal: site_build::Sha256Digest,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RevisionOutcomeSeal {
-    pages: Vec<RevisionPageSeal>,
-    assets: Vec<RevisionAssetSeal>,
-    fragment_misses: usize,
-    assets_copied: usize,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RevisionPageSeal {
-    page_path: String,
-    html: site_build::ContentRef,
-    is_static: bool,
-    requested: std::collections::BTreeSet<site_build::ArtifactKey>,
-    read: std::collections::BTreeSet<site_build::ArtifactKey>,
-    input_reads: std::collections::BTreeSet<site_build::ArtifactKey>,
-    input_objects: Vec<(site_build::ArtifactKey, Vec<site_build::ContentRef>)>,
-    observations: Vec<(site_build::ArtifactKey, RevisionObservationSeal)>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RevisionAssetSeal {
-    output_path: String,
-    content: site_build::ContentRef,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-enum RevisionObservationSeal {
-    Ready { content: site_build::ContentRef },
-    NotReady { state: site_build::ArtifactState },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -360,117 +308,7 @@ pub fn render_site(root: &RenderRoot, opts: &RenderOptions) -> Result<RenderOutc
         assets,
         fragment_misses,
         assets_copied,
-        revision_capture: None,
     })
-}
-
-/// Render and bind the immutable capture to the explicit predecessor that may
-/// later be passed to [`collect_site_build_revision`]. Ordinary `render_site`
-/// remains useful for direct writes but cannot be promoted accidentally.
-pub fn render_site_for_revision(
-    predecessor: &site_build::SiteBuild,
-    root: &RenderRoot,
-    opts: &RenderOptions,
-) -> Result<RenderOutcome> {
-    if predecessor.render_target().mode != site_build::RenderMode::NativeTemplate {
-        bail!("stock revision capture requires a native-template predecessor");
-    }
-    let mut outcome = render_site(root, opts)?;
-    let page_paths = outcome
-        .pages
-        .iter()
-        .map(|page| page.page_path.clone())
-        .collect::<Vec<_>>();
-    let asset_paths = outcome
-        .assets
-        .iter()
-        .map(|asset| asset.output_path.clone())
-        .collect::<Vec<_>>();
-    assert_unique_inventory("page", &page_paths)?;
-    assert_unique_inventory("asset", &asset_paths)?;
-    let outcome_seal = seal_revision_outcome(&outcome)?;
-    outcome.revision_capture = Some(RevisionCapture {
-        predecessor: predecessor.build_id().clone(),
-        root: root.clone(),
-        options: opts.clone(),
-        outcome_seal,
-    });
-    Ok(outcome)
-}
-
-fn seal_revision_outcome(outcome: &RenderOutcome) -> Result<site_build::Sha256Digest> {
-    let pages = outcome
-        .pages
-        .iter()
-        .map(|page| {
-            let input_objects = page
-                .reads
-                .input_objects()
-                .iter()
-                .map(|(key, values)| {
-                    (
-                        key.clone(),
-                        values
-                            .iter()
-                            .map(|bytes| site_build::ContentRef::of_bytes(bytes, None::<String>))
-                            .collect(),
-                    )
-                })
-                .collect();
-            let observations = page
-                .reads
-                .observations()
-                .iter()
-                .map(|(key, observation)| {
-                    let sealed = match observation {
-                        ArtifactObservation::Ready { bytes } => RevisionObservationSeal::Ready {
-                            content: site_build::ContentRef::of_bytes(bytes, Some("text/html")),
-                        },
-                        ArtifactObservation::NotReady { error } => {
-                            RevisionObservationSeal::NotReady {
-                                state: error.artifact_state(),
-                            }
-                        }
-                    };
-                    (key.clone(), sealed)
-                })
-                .collect();
-            RevisionPageSeal {
-                page_path: page.page_path.clone(),
-                html: site_build::ContentRef::of_bytes(page.html.as_bytes(), Some("text/html")),
-                is_static: page.is_static,
-                requested: page.reads.requested().clone(),
-                read: page.reads.read().clone(),
-                input_reads: page.reads.input_reads().clone(),
-                input_objects,
-                observations,
-            }
-        })
-        .collect();
-    let assets = outcome
-        .assets
-        .iter()
-        .map(|asset| RevisionAssetSeal {
-            output_path: asset.output_path.clone(),
-            content: site_build::ContentRef::of_bytes(&asset.bytes, None::<String>),
-        })
-        .collect();
-    Ok(site_build::sha256_canonical(&RevisionOutcomeSeal {
-        pages,
-        assets,
-        fragment_misses: outcome.fragment_misses,
-        assets_copied: outcome.assets_copied,
-    })?)
-}
-
-fn assert_unique_inventory(kind: &str, paths: &[String]) -> Result<()> {
-    let mut seen = std::collections::BTreeSet::new();
-    for path in paths {
-        if !seen.insert(path) {
-            bail!("stock {kind} inventory repeats {path}");
-        }
-    }
-    Ok(())
 }
 
 /// Write a render outcome to `out_dir`, preserving the page.path layout
@@ -607,171 +445,6 @@ fn relative_path(path: &Path) -> Result<String> {
         })?);
     }
     Ok(parts.join("/"))
-}
-
-/// Promote an already-captured native render outcome into a complete immutable
-/// SiteBuild revision. The predecessor is explicit; this function has no
-/// process-global or "last session" identity.
-pub fn collect_site_build_revision(
-    predecessor: &site_build::SiteBuild,
-    root: &RenderRoot,
-    outcome: &RenderOutcome,
-) -> Result<site_build::SiteBuildSuccessor> {
-    let capture = outcome.revision_capture.as_ref().ok_or_else(|| {
-        anyhow::anyhow!(
-            "render outcome is not predecessor-bound; use render_site_for_revision before promotion"
-        )
-    })?;
-    if capture.predecessor != *predecessor.build_id() {
-        bail!(
-            "render outcome belongs to predecessor {}, not {}",
-            capture.predecessor,
-            predecessor.build_id()
-        );
-    }
-    if &capture.root != root {
-        bail!("render outcome was captured from a different RenderRoot");
-    }
-    if seal_revision_outcome(outcome)? != capture.outcome_seal {
-        bail!("render outcome payload changed after its predecessor-bound capture");
-    }
-    let producer = site_build::ProducerRef::new("fig.stock-template", env!("CARGO_PKG_VERSION"));
-    let render_attributes = std::collections::BTreeMap::from([
-        (
-            "activeTables".into(),
-            capture.options.active_tables.to_string(),
-        ),
-        ("engine".into(), capture.options.engine.to_string()),
-        (
-            "engineFirst".into(),
-            capture.options.engine_first.to_string(),
-        ),
-        (
-            "includeDumps".into(),
-            capture.options.include_dumps.to_string(),
-        ),
-        ("runUuid".into(), capture.options.run_uuid.clone()),
-    ]);
-    let provenance = |recipe: &str| site_build::ArtifactProvenance {
-        producer: producer.clone(),
-        recipe: recipe.to_string(),
-        attributes: render_attributes.clone(),
-    };
-    let semantic_reads = all_compile_inputs(predecessor);
-
-    // Resolve every non-generated key observed by pages to the exact captured
-    // bytes. Only actual reads enter the manifest; an unused mounted template
-    // file is not a hidden dependency.
-    let mut captured_inputs: std::collections::BTreeMap<site_build::ArtifactKey, Vec<u8>> =
-        std::collections::BTreeMap::new();
-    for page in &outcome.pages {
-        for (key, values) in page.reads.input_objects() {
-            if values.len() != 1 {
-                bail!("stock input {key:?} changed while one page was rendering");
-            }
-            let bytes = values.iter().next().expect("one captured value");
-            if let Some(existing) = captured_inputs.get(key) {
-                if existing != bytes {
-                    bail!("stock input {key:?} changed between rendered pages");
-                }
-            } else {
-                captured_inputs.insert(key.clone(), bytes.clone());
-            }
-        }
-        for key in page.reads.input_reads() {
-            if !page.reads.input_objects().contains_key(key) {
-                bail!("stock input {key:?} was read without captured bytes");
-            }
-        }
-    }
-    let mut inputs = Vec::new();
-    for (key, bytes) in captured_inputs {
-        let site_build::ArtifactKey::Data { namespace, name } = &key else {
-            bail!("stock page recorded non-Data input key {key:?}");
-        };
-        let media_type = match namespace.as_str() {
-            STOCK_PAGE_SOURCE_NAMESPACE
-            | STOCK_SITE_DATA_NAMESPACE
-            | STOCK_STAGED_INCLUDE_NAMESPACE
-            | STOCK_TEMPLATE_INCLUDE_NAMESPACE => media_type_for(name),
-            STOCK_RUNTIME_INPUT_NAMESPACE if name == "release-header.html" => {
-                "text/html".to_string()
-            }
-            _ => bail!("unknown stock input namespace {namespace} for {name}"),
-        };
-        inputs.push(StockInput {
-            key,
-            bytes,
-            media_type,
-            provenance: provenance("capture-page-input"),
-            reads: semantic_reads.clone(),
-        });
-    }
-
-    let pages = outcome
-        .pages
-        .iter()
-        .map(|page| {
-            Ok(StockPage {
-                path: site_build::SourcePath::parse(page.page_path.clone())?,
-                outcome: StockPageOutcome::Ready {
-                    bytes: page.html.as_bytes().to_vec(),
-                    reads: page.reads.clone(),
-                },
-                provenance: provenance("render-page"),
-            })
-        })
-        .collect::<std::result::Result<Vec<_>, site_build::SourcePathError>>()?;
-
-    let assets = outcome
-        .assets
-        .iter()
-        .map(|asset| {
-            Ok(StockAsset {
-                path: site_build::SourcePath::parse(asset.output_path.clone())?,
-                bytes: asset.bytes.clone(),
-                media_type: media_type_for(&asset.output_path),
-                provenance: provenance("assemble-static-asset"),
-                reads: semantic_reads.clone(),
-            })
-        })
-        .collect::<std::result::Result<Vec<_>, site_build::SourcePathError>>()?;
-
-    collect_stock_revision(
-        predecessor,
-        inputs,
-        pages,
-        assets,
-        StockFragmentPolicy {
-            provenance: provenance("render-publisher-fragment"),
-            reads: semantic_reads,
-        },
-    )
-    .map_err(anyhow::Error::from)
-}
-
-fn media_type_for(path: &str) -> String {
-    match Path::new(path)
-        .extension()
-        .and_then(|extension| extension.to_str())
-    {
-        Some("html" | "xhtml") => "text/html",
-        Some("md") => "text/markdown",
-        Some("json") => "application/json",
-        Some("xml") => "application/xml",
-        Some("yaml" | "yml") => "application/yaml",
-        Some("csv") => "text/csv",
-        Some("css") => "text/css",
-        Some("js") => "text/javascript",
-        Some("svg") => "image/svg+xml",
-        Some("png") => "image/png",
-        Some("gif") => "image/gif",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("woff") => "font/woff",
-        Some("woff2") => "font/woff2",
-        _ => "application/octet-stream",
-    }
-    .to_string()
 }
 
 /// The ImplementationGuide.version from the own resource dir (facts input).
@@ -996,13 +669,6 @@ pub fn render_page_tracked(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    use site_build::{
-        ArtifactCatalog, PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderPlan,
-        RenderTarget, SiteBuild, SourceManifest,
-    };
-
     use super::*;
 
     fn root(temp: &tempfile::TempDir) -> RenderRoot {
@@ -1027,28 +693,6 @@ mod tests {
             template_includes_dir: None,
             flat: true,
         }
-    }
-
-    fn predecessor_build(project_id: &str) -> SiteBuild {
-        SiteBuild::new(
-            ProjectRevision {
-                project_id: project_id.into(),
-                revision: "fixture".into(),
-                sources: SourceManifest::from_entries(Vec::new()).unwrap(),
-            },
-            PackageLock::default(),
-            RenderTarget {
-                renderer: ProducerRef::new("stock-template", "1"),
-                mode: RenderMode::NativeTemplate,
-                fhir_version: "4.0.1".into(),
-                template: None,
-                parameters: BTreeMap::new(),
-            },
-            RenderPlan::default(),
-            ArtifactCatalog::from_records(Vec::new()).unwrap(),
-            BTreeSet::new(),
-        )
-        .unwrap()
     }
 
     fn options() -> RenderOptions {
@@ -1084,63 +728,5 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Markdown staged page source"));
-    }
-
-    #[test]
-    fn revision_promotion_requires_the_bound_predecessor_root_and_inventory() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = root(&temp);
-        std::fs::write(root.pages_root.join("index.html"), b"<p>home</p>").unwrap();
-        std::fs::write(root.pages_root.join("site.css"), b"body{}").unwrap();
-        let predecessor = predecessor_build("fixture.ig");
-
-        let mut outcome = render_site_for_revision(&predecessor, &root, &options()).unwrap();
-        let successor = collect_site_build_revision(&predecessor, &root, &outcome).unwrap();
-        successor.site_build().clone().close().unwrap();
-
-        let other = predecessor_build("other.ig");
-        assert!(collect_site_build_revision(&other, &root, &outcome)
-            .unwrap_err()
-            .to_string()
-            .contains("belongs to predecessor"));
-
-        let mut other_root = root.clone();
-        other_root.input_dir = temp.path().join("other-pages");
-        assert!(
-            collect_site_build_revision(&predecessor, &other_root, &outcome)
-                .unwrap_err()
-                .to_string()
-                .contains("different RenderRoot")
-        );
-
-        outcome.pages[0].html.push_str("changed");
-        assert!(collect_site_build_revision(&predecessor, &root, &outcome)
-            .unwrap_err()
-            .to_string()
-            .contains("payload changed"));
-
-        let mut changed_reads = render_site_for_revision(&predecessor, &root, &options()).unwrap();
-        changed_reads.pages[0].reads = PageArtifactReadSet::default();
-        assert!(
-            collect_site_build_revision(&predecessor, &root, &changed_reads)
-                .unwrap_err()
-                .to_string()
-                .contains("payload changed")
-        );
-
-        let mut changed_asset = render_site_for_revision(&predecessor, &root, &options()).unwrap();
-        changed_asset.assets[0].bytes.push(b'!');
-        assert!(
-            collect_site_build_revision(&predecessor, &root, &changed_asset)
-                .unwrap_err()
-                .to_string()
-                .contains("payload changed")
-        );
-
-        let unbound = render_site(&root, &options()).unwrap();
-        assert!(collect_site_build_revision(&predecessor, &root, &unbound)
-            .unwrap_err()
-            .to_string()
-            .contains("not predecessor-bound"));
     }
 }
