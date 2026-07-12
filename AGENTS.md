@@ -23,9 +23,10 @@ this checkpoint. Final exact browser performance is
 8.432 s, zero body inflation and 0 ms closure verification, plus 1.250 s US Core
 -> Cycle -> US Core with the retained runtime and no Worker recycle. The strict
 v1 close-time materialization alternative measured 20.638 s and was rejected.
-The final Pages-subpath browser receipt is `/tmp/fhir-v2-bound-full.log` (`E2E
-GATE: PASS`), including complete US Core image/asset closure, one-shell CarePlan,
-real mCODE, persistence/restart/scroll/mobile, and exact diagnostic navigation.
+The exact `e0d3a217`-stamped Pages-subpath browser receipt is
+`/tmp/fhir-v2-bound-stamped-full.log` (`E2E GATE: PASS`), including complete US
+Core image/asset closure, one-shell CarePlan, real mCODE,
+persistence/restart/scroll/mobile, and exact diagnostic navigation.
 Fresh-process native Publisher passes at `/tmp/fhir-v2-bound-fig-gate.log` with
 the unchanged 1,799-file receipt. Commit/push engine, Cycle, and editor pins in
 dependency order, then certify Pages and the live origin.
