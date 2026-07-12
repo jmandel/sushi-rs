@@ -24,7 +24,7 @@ and every assembled runtime file with provenance/reads. Its object set includes
 and verifies the exact source revision, package lock including template chain,
 and all ready artifacts before installation. Fresh-process RenderState
 rehydration from that closed build + ContentStore is explicitly next; current
-handles do not claim replay of opaque Rc state. Current gates: SiteEngine 11
+handles do not claim replay of opaque Rc state. Current gates: SiteEngine 13
 pass/1 ignored, WASM 5+8, site-build 29, site-producer 16, workspace all-target
 check, and documented-toolchain wasm32 check. Separately, the dead
 predecessor-bound Fig revision promotion, orphaned `render_page::stock`
@@ -33,6 +33,18 @@ Fig 17/17 + envelope 4/4, render_page 8/8, site_build 29/29, fmt, and diff-check
 are green. Legacy staged
 `fig render`/`watch` remain only until native Fig consumes SiteEngine, then must
 be deleted rather than wrapped.
+
+The exact fresh Pages-subpath browser receipt is
+`/tmp/fhir-site-engine-workspace-full-final.log` (`E2E GATE: PASS`) against
+engine `1fc84f51`. Chromium caught two native-only blind spots before landing:
+`std::time::Instant` panics on this WASM target, so SiteEngine now accepts a
+host monotonic clock for observational metrics; and predefined JSON plus its
+exact authored raw bytes are one source, not duplicate channels. Package
+material authenticates immutable shared bytes once at mount, object admission
+preserves that proof, and closure verification checks the complete addressed
+set without repeatedly hashing the same allocations. Stock warm edit is
+1,443 ms (590 ms Rust prepare), while US Core image/asset closure, CarePlan
+one-shell, real mCODE, restart persistence, scroll, and mobile gates all pass.
 
 **RECENT EXACT SEMANTIC COMPILATION REOPENS A -> B -> A (2026-07-11):**
 `compileProject` now retains exactly the active successful semantic compilation
