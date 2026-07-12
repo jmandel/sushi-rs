@@ -6,9 +6,6 @@ license.workspace = true
 rust-version.workspace = true
 description = "Target-neutral FHIR IG site execution shared by native and WASM hosts"
 
-[features]
-test-support = []
-
 [dependencies]
 compiler = { workspace = true }
 content_store = { workspace = true }

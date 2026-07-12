@@ -35,10 +35,12 @@ render(handle, path)            -> path + media type + ContentRef
 finalize(handle)                -> canonical SiteOutput
 ```
 
-The worker mounts the exact package closure, compiles the project once, and
-calls Rust preparation inside that single public request. Project bytes cross
-the worker boundary once. Rendering is independent by path: it memoizes bytes
-but neither consumes nor advances the handle.
+Before the public call, a private config/template handshake asks Rust which
+exact packages the host must acquire and mount. The complete project revision—
+FSH, parsed predefined resources, and authored site bytes—then crosses once in
+`prepare`; Rust compiles and prepares it in one executor transaction. Rendering
+is independent by path: it memoizes bytes but neither consumes nor advances the
+handle.
 
 Cycle and Publisher use that facade without pretending their execution models
 are identical. Cycle receives a closed `cycle-site/v2` build and renders it with

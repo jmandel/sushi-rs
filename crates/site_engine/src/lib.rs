@@ -26,8 +26,7 @@ mod runtime;
 
 pub use compilation::{
     CompilationDefinition, CompilationDefinitionKind, CompilationDiagnostic, CompilationOutcome,
-    CompilationResource, CompilationTransition, ProjectInputs, ProjectRevision,
-    ResolvedPackageClosure,
+    CompilationResource, CompilationTransition, ProjectRevision, ResolvedPackageClosure,
 };
 pub use preparation::{
     GeneratorSpec, PackageEnvironment, PackageMaterial, PrepareMetrics, PrepareProjectError,

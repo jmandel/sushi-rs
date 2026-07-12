@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
-use render_page::ArtifactObservation;
 use serde::{Deserialize, Serialize};
 
 use crate::RenderState;
@@ -51,7 +50,6 @@ pub struct RenderedOutput {
     pub path: site_build::OutputPath,
     pub media_type: String,
     pub content: site_build::ContentRef,
-    pub non_ready_fragments: usize,
 }
 
 #[derive(Clone)]
@@ -257,22 +255,16 @@ impl SiteEngine {
                     .clone()
                     .ok_or_else(|| "render: prepared output has no media type".to_string())?,
                 content: output.content.clone(),
-                non_ready_fragments: 0,
             });
         }
         if !runtime.catalog.iter().any(|output| output.path == path) {
             return Err(format!("render: path {path} is not declared by outputs"));
         }
-        let (html, reads) = runtime
+        let html = runtime
             .state
-            .render_page_tracked_by_name(path.as_str())
+            .render_page_by_name(path.as_str())
             .map_err(|error| format!("render {path}: {error}"))?;
         let html = runtime.publisher.finish_html(&html);
-        let non_ready_fragments = reads
-            .observations()
-            .values()
-            .filter(|observation| matches!(observation, ArtifactObservation::NotReady { .. }))
-            .count();
         let bytes = html.into_bytes();
         let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
         runtime
@@ -295,7 +287,6 @@ impl SiteEngine {
             path,
             media_type: "text/html".into(),
             content,
-            non_ready_fragments,
         })
     }
 

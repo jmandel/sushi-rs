@@ -11,7 +11,7 @@ model, this crate operates inside the `PreparedGuide -> SiteBuild` transition:
 ```text
 PreparedGuide + exact PackageEnvironment + selected template coordinate
                               |
-                    SiteEngine::prepare
+                SiteEngine::prepare_project
                               |
              +----------------+----------------+
              |                                 |
@@ -126,7 +126,7 @@ Run:
 cargo test -p site_producer
 cargo test -p site_engine
 cargo test -p package_store template_loader
-cargo test -p wasm_api site_facade_tests --lib
+cargo test -p wasm_api --lib
 ```
 
 The gates cover complete pre-render catalogs, collision handling, independent

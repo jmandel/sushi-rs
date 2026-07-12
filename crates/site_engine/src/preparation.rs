@@ -407,7 +407,7 @@ impl SiteEngine {
     /// this boundary over composing a host-side compile-then-prepare flow.
     pub fn prepare_project(
         &mut self,
-        inputs: crate::ProjectInputs,
+        inputs: crate::ProjectRevision,
         resolved: crate::ResolvedPackageClosure,
         spec: GeneratorSpec,
         environment: PackageEnvironment,
@@ -2348,8 +2348,8 @@ mod tests {
         let config = "id: overlap.ig\nfhirVersion: 4.0.1\n";
         let path = "input/resources/Patient-example.json";
         let raw = br#"{ "resourceType": "Patient", "id": "example" }"#.to_vec();
-        let project = crate::ProjectRevision::new(
-            crate::ProjectInputs {
+        let project = crate::compilation::CompiledProjectRevision::new(
+            crate::ProjectRevision {
                 config: config.into(),
                 fsh: BTreeMap::new(),
                 predefined: BTreeMap::from([(path.into(), serde_json::from_slice(&raw).unwrap())]),
@@ -2868,14 +2868,17 @@ mod tests {
             resolution_support: BTreeSet::new(),
             labels: vec![core_label.into()],
         };
-        let project = crate::ProjectRevision::new(
-            crate::ProjectInputs {
+        let project = crate::compilation::CompiledProjectRevision::new(
+            crate::ProjectRevision {
                 config: config.into(),
                 fsh: BTreeMap::new(),
                 predefined: BTreeMap::new(),
-                site_files: BTreeMap::new(),
+                site_files: BTreeMap::from([(
+                    "input/pagecontent/index.md".into(),
+                    b"# First narrative".to_vec(),
+                )]),
             },
-            resolved,
+            resolved.clone(),
         )
         .unwrap();
         let ig = serde_json::json!({
@@ -2892,18 +2895,19 @@ mod tests {
         let mut engine = SiteEngine::default();
         engine.install_compilation_for_test(
             project,
-            vec![(PathBuf::from("/__ig__/ImplementationGuide-demo.json"), ig)],
+            vec![(
+                PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+                ig.clone(),
+            )],
         );
+        let publisher_spec = GeneratorSpec::Publisher {
+            template_coordinate: template_label.into(),
+            build_epoch_secs: 1,
+            active_tables: true,
+            run_uuid: None,
+        };
         let prepared = engine
-            .prepare(
-                GeneratorSpec::Publisher {
-                    template_coordinate: template_label.into(),
-                    build_epoch_secs: 1,
-                    active_tables: true,
-                    run_uuid: None,
-                },
-                environment,
-            )
+            .prepare(publisher_spec.clone(), environment.clone())
             .unwrap();
         let closed = prepared.site_build.clone();
         let live_catalog = engine.outputs(&prepared.handle).unwrap();
@@ -2978,6 +2982,91 @@ mod tests {
             live_output.canonical_bytes().unwrap(),
             restored_output.canonical_bytes().unwrap()
         );
+
+        // Exact preparation reuses the retained immutable runtime, including
+        // already rendered pages, without manufacturing another handle.
+        let repeated = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert_eq!(repeated.handle, prepared.handle);
+        assert!(repeated.metrics.site_build_cache_hit);
+
+        let install_prose_revision = |engine: &mut SiteEngine, narrative: &str| {
+            let project = crate::compilation::CompiledProjectRevision::new(
+                crate::ProjectRevision {
+                    config: config.into(),
+                    fsh: BTreeMap::new(),
+                    predefined: BTreeMap::new(),
+                    site_files: BTreeMap::from([(
+                        "input/pagecontent/index.md".into(),
+                        narrative.as_bytes().to_vec(),
+                    )]),
+                },
+                resolved.clone(),
+            )
+            .unwrap();
+            engine.install_compilation_for_test(
+                project,
+                vec![(
+                    PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+                    ig.clone(),
+                )],
+            );
+        };
+
+        // A prose-only successor constructs a distinct complete build while
+        // reusing only the exact semantic half of Publisher rendering.
+        install_prose_revision(&mut engine, "# Second narrative");
+        let second = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert_ne!(second.handle, prepared.handle);
+        assert!(second.metrics.render_semantics_cache_hit);
+        assert!(!second.metrics.site_build_cache_hit);
+
+        // Runtime retention is exactly current + previous. Refreshing an exact
+        // predecessor changes recency; the next distinct success evicts the
+        // other runtime, not the refreshed one.
+        install_prose_revision(&mut engine, "# Third narrative");
+        let third = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(third.metrics.render_semantics_cache_hit);
+        assert!(engine.outputs(&prepared.handle).is_err());
+        assert!(engine.outputs(&second.handle).is_ok());
+        assert!(engine.outputs(&third.handle).is_ok());
+
+        install_prose_revision(&mut engine, "# Second narrative");
+        let second_again = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert_eq!(second_again.handle, second.handle);
+        assert!(second_again.metrics.site_build_cache_hit);
+
+        install_prose_revision(&mut engine, "# Fourth narrative");
+        let fourth = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(fourth.metrics.render_semantics_cache_hit);
+        assert!(engine.outputs(&third.handle).is_err());
+        assert!(engine.outputs(&second.handle).is_ok());
+        assert!(engine.outputs(&fourth.handle).is_ok());
+
+        // Renderer-semantic options are identity, so changing one deliberately
+        // misses the semantic reuse rather than borrowing incompatible state.
+        let option_miss = engine
+            .prepare(
+                GeneratorSpec::Publisher {
+                    template_coordinate: template_label.into(),
+                    build_epoch_secs: 1,
+                    active_tables: false,
+                    run_uuid: None,
+                },
+                environment,
+            )
+            .unwrap();
+        assert!(!option_miss.metrics.render_semantics_cache_hit);
+        assert!(!option_miss.metrics.site_build_cache_hit);
     }
 }
 
@@ -3242,7 +3331,7 @@ fn assemble_prepared_model(
 }
 
 fn site_build_project_revision(
-    project: &crate::ProjectRevision,
+    project: &crate::compilation::CompiledProjectRevision,
     project_id: &str,
 ) -> Result<site_build::ProjectRevision, String> {
     let mut entries = BTreeMap::new();
@@ -3318,7 +3407,7 @@ fn site_build_project_revision(
 }
 
 fn site_build_package_lock(
-    project: &crate::ProjectRevision,
+    project: &crate::compilation::CompiledProjectRevision,
     environment: &PackageEnvironment,
 ) -> Result<site_build::PackageLock, String> {
     let resolved = project.resolved_packages();
@@ -3390,7 +3479,7 @@ fn site_build_package_lock(
 }
 
 fn environment_objects(
-    project: &crate::ProjectRevision,
+    project: &crate::compilation::CompiledProjectRevision,
     package_lock: &site_build::PackageLock,
     environment: &PackageEnvironment,
     operation: &str,
@@ -3418,7 +3507,7 @@ fn environment_objects(
 }
 
 fn project_source_bytes(
-    project: &crate::ProjectRevision,
+    project: &crate::compilation::CompiledProjectRevision,
 ) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut bytes = BTreeMap::from([(
         "sushi-config.yaml".into(),
@@ -3442,7 +3531,7 @@ fn project_source_bytes(
 }
 
 fn compiled_ig_identity_from_project(
-    project: &crate::ProjectRevision,
+    project: &crate::compilation::CompiledProjectRevision,
 ) -> Result<(String, String), String> {
     let config: Value = serde_yaml::from_str(project.config())
         .map_err(|error| format!("prepare: parse config identity: {error}"))?;

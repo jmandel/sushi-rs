@@ -56,7 +56,10 @@ fn site_engine_inputs(
     sources: &SourceSnapshot,
     packages: &PackageSnapshot,
     closure: &ResolvedClosure,
-) -> Result<(site_engine::ProjectInputs, site_engine::PackageEnvironment)> {
+) -> Result<(
+    site_engine::ProjectRevision,
+    site_engine::PackageEnvironment,
+)> {
     let config_path = SourcePath::parse("sushi-config.yaml").expect("static path");
     let config_ref = sources
         .manifest
@@ -153,7 +156,7 @@ fn site_engine_inputs(
     )
     .map_err(anyhow::Error::msg)?;
     Ok((
-        site_engine::ProjectInputs {
+        site_engine::ProjectRevision {
             config,
             fsh,
             predefined,

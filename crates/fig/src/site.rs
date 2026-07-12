@@ -22,7 +22,6 @@ pub struct RenderOutcome {
     pub path: site_build::OutputPath,
     pub media_type: String,
     pub content: site_build::ContentRef,
-    pub non_ready_fragments: usize,
     #[serde(skip)]
     pub bytes: Vec<u8>,
 }
@@ -104,7 +103,6 @@ pub fn render(bundle: &Path, path: &str) -> Result<RenderOutcome> {
         path: rendered.path,
         media_type: rendered.media_type,
         content: rendered.content,
-        non_ready_fragments: rendered.non_ready_fragments,
         bytes,
     })
 }

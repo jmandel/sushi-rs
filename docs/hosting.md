@@ -49,10 +49,14 @@ its addressed bytes, but it neither mutates build identity nor creates a
 successor handle. Rendering A/B/A must produce the same bytes as B/A/B.
 
 The host captures one complete project revision and supplies one exact,
-resolver-scoped `PackageEnvironment`. `SiteEngine::prepare_project` owns the
-single semantic compile and target preparation transaction. A failure installs
-neither a partial project nor a partial runtime. `wasm_api` parses and
-serializes transport; it does not assemble a second site model.
+resolver-scoped `PackageEnvironment`. A private preflight may send only config
+and template identity to Rust so the host can acquire missing exact package
+bytes; dependency and template decisions remain Rust-owned. The complete FSH,
+predefined-resource, and authored-site payload crosses once in
+`SiteEngine::prepare_project`, which owns the single semantic compile and target
+preparation transaction. A failure installs neither a partial project nor a
+partial runtime. `wasm_api` parses and serializes transport; it does not
+assemble a second site model.
 
 The browser worker exposes these four operations. Lower-level binary reads and
 the external-renderer branch of finalization are private transport plumbing:
@@ -126,8 +130,10 @@ output schema, and options. A cache hit reconstructs that same `SiteOutput`; it
 does not authorize a parallel cached representation.
 
 For an external renderer, Rust verifies exact catalog equality, safe paths,
-media types, content digests and lengths, and the complete private staging-tree
-inventory before constructing the receipt. Renderer code cannot seal a second
+media types, and content references before constructing the receipt. Native Fig
+also re-reads and authenticates the complete private staging tree. In the
+browser, the host has already put and verified each referenced body in its
+ContentStore before calling Rust. Renderer code cannot seal a second
 authoritative receipt.
 
 ## Template acquisition

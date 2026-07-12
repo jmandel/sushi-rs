@@ -56,10 +56,11 @@ impl ResolvedPackageClosure {
     }
 }
 
-/// One complete authored project revision. Site bytes are captured here even
-/// though only their normalized page listing affects semantic compilation.
+/// One complete immutable project input captured by a `prepare` request. Site
+/// bytes are carried here even though only their normalized page listing
+/// affects semantic compilation.
 #[derive(Clone, Debug)]
-pub struct ProjectInputs {
+pub struct ProjectRevision {
     pub config: String,
     pub fsh: BTreeMap<String, String>,
     pub predefined: BTreeMap<String, Value>,
@@ -68,7 +69,7 @@ pub struct ProjectInputs {
 
 /// Immutable authored revision installed by the last successful compile call.
 #[derive(Clone, Debug)]
-pub struct ProjectRevision {
+pub(crate) struct CompiledProjectRevision {
     config: String,
     fsh: BTreeMap<String, String>,
     predefined: BTreeMap<String, Value>,
@@ -76,16 +77,17 @@ pub struct ProjectRevision {
     resolved_packages: ResolvedPackageClosure,
 }
 
-impl ProjectRevision {
-    pub fn new(
-        inputs: ProjectInputs,
+impl CompiledProjectRevision {
+    #[cfg(test)]
+    pub(crate) fn new(
+        inputs: ProjectRevision,
         resolved_packages: ResolvedPackageClosure,
     ) -> Result<Self, String> {
         Self::capture(inputs, resolved_packages, "project revision")
     }
 
     fn capture(
-        inputs: ProjectInputs,
+        inputs: ProjectRevision,
         resolved_packages: ResolvedPackageClosure,
         operation: &str,
     ) -> Result<Self, String> {
@@ -106,44 +108,24 @@ impl ProjectRevision {
         })
     }
 
-    pub fn config(&self) -> &str {
+    pub(crate) fn config(&self) -> &str {
         &self.config
     }
 
-    pub fn fsh(&self) -> &BTreeMap<String, String> {
+    pub(crate) fn fsh(&self) -> &BTreeMap<String, String> {
         &self.fsh
     }
 
-    pub fn predefined(&self) -> &BTreeMap<String, Value> {
+    pub(crate) fn predefined(&self) -> &BTreeMap<String, Value> {
         &self.predefined
     }
 
-    pub fn site_files(&self) -> &BTreeMap<String, Vec<u8>> {
+    pub(crate) fn site_files(&self) -> &BTreeMap<String, Vec<u8>> {
         &self.site_files
     }
 
-    pub fn resolved_packages(&self) -> &ResolvedPackageClosure {
+    pub(crate) fn resolved_packages(&self) -> &ResolvedPackageClosure {
         &self.resolved_packages
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn config_mut_for_test(&mut self) -> &mut String {
-        &mut self.config
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn fsh_mut_for_test(&mut self) -> &mut BTreeMap<String, String> {
-        &mut self.fsh
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn predefined_mut_for_test(&mut self) -> &mut BTreeMap<String, Value> {
-        &mut self.predefined
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn site_files_mut_for_test(&mut self) -> &mut BTreeMap<String, Vec<u8>> {
-        &mut self.site_files
     }
 }
 
@@ -224,7 +206,7 @@ struct SemanticCompilationKeyPayload<'a> {
 pub(crate) struct CompilationState {
     active: Option<SemanticCompilation>,
     previous: Option<SemanticCompilation>,
-    project: Option<ProjectRevision>,
+    project: Option<CompiledProjectRevision>,
     #[cfg(test)]
     cache_hits: u64,
 }
@@ -285,7 +267,7 @@ impl SiteEngine {
     /// are committed together; failures leave both retained generations intact.
     pub fn compile_project(
         &mut self,
-        inputs: ProjectInputs,
+        inputs: ProjectRevision,
         packages: PackageView,
         resolved: ResolvedPackageClosure,
     ) -> Result<CompilationTransition, String> {
@@ -313,7 +295,8 @@ impl SiteEngine {
                 .collect(),
         };
         let key = semantic_compilation_key(&semantic_inputs, &resolved, operation)?;
-        let project = ProjectRevision::capture(inputs.clone(), resolved.clone(), operation)?;
+        let project =
+            CompiledProjectRevision::capture(inputs.clone(), resolved.clone(), operation)?;
         if let Some(outcome) = self.compilation.restore(&key) {
             self.compilation.project = Some(project);
             return Ok(CompilationTransition {
@@ -350,7 +333,7 @@ impl SiteEngine {
             .unwrap_or_default()
     }
 
-    pub fn compile_diagnostics(&self) -> &[CompilationDiagnostic] {
+    pub(crate) fn compile_diagnostics(&self) -> &[CompilationDiagnostic] {
         self.compilation
             .active
             .as_ref()
@@ -358,14 +341,22 @@ impl SiteEngine {
             .unwrap_or_default()
     }
 
-    pub fn project_revision(&self) -> Option<&ProjectRevision> {
+    pub(crate) fn project_revision(&self) -> Option<&CompiledProjectRevision> {
         self.compilation.project.as_ref()
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn install_compilation_for_test(
+    /// Exact resolver closure bound to the current successful project. Hosts
+    /// may use this to construct a snapshot PackageContext without exposing the
+    /// executor's private compiled-revision state.
+    pub fn resolved_packages(&self) -> Option<&ResolvedPackageClosure> {
+        self.project_revision()
+            .map(CompiledProjectRevision::resolved_packages)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn install_compilation_for_test(
         &mut self,
-        project: ProjectRevision,
+        project: CompiledProjectRevision,
         compiled: Vec<(PathBuf, Value)>,
     ) {
         let semantic_inputs = RenderSemanticInputs {
@@ -377,7 +368,7 @@ impl SiteEngine {
                 .collect(),
         };
         let key =
-            semantic_compilation_key(&semantic_inputs, &project.resolved_packages, "test-support")
+            semantic_compilation_key(&semantic_inputs, &project.resolved_packages, "test fixture")
                 .expect("test project semantic key");
         self.compilation.active = Some(SemanticCompilation {
             key,
@@ -390,25 +381,10 @@ impl SiteEngine {
         self.compilation.previous = None;
         self.compilation.project = Some(project);
     }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn project_revision_mut_for_test(&mut self) -> Option<&mut ProjectRevision> {
-        self.compilation.project.as_mut()
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn compiled_resources_mut_for_test(&mut self) -> &mut Vec<(PathBuf, Value)> {
-        &mut self
-            .compilation
-            .active
-            .as_mut()
-            .expect("test compilation is installed")
-            .compiled
-    }
 }
 
 fn compile(
-    inputs: ProjectInputs,
+    inputs: ProjectRevision,
     packages: PackageView,
     page_listing: &HashMap<String, Vec<String>>,
     key: SemanticCompilationKey,
@@ -618,8 +594,8 @@ mod tests {
         PackageView::new(source, root, Some(resolved().labels.into_iter().collect()))
     }
 
-    fn inputs_for(parent: &str, site_body: &[u8]) -> ProjectInputs {
-        ProjectInputs {
+    fn inputs_for(parent: &str, site_body: &[u8]) -> ProjectRevision {
+        ProjectRevision {
             config: CONFIG.into(),
             fsh: BTreeMap::from([(
                 "input/fsh/test.fsh".into(),
@@ -673,7 +649,7 @@ mod tests {
             .compilation
             .replace_active(compilation("Test", "Patient"));
         engine.compilation.previous = None;
-        engine.compilation.project = Some(ProjectRevision {
+        engine.compilation.project = Some(CompiledProjectRevision {
             config: inputs.config,
             fsh: inputs.fsh,
             predefined: inputs.predefined,
@@ -744,13 +720,13 @@ mod tests {
     fn project_capture_rejects_split_or_divergent_local_resource_channels() {
         let path = "input/resources/Patient-p.json";
         let parsed = serde_json::json!({"resourceType":"Patient","id":"p"});
-        let base = ProjectInputs {
+        let base = ProjectRevision {
             config: CONFIG.into(),
             fsh: BTreeMap::new(),
             predefined: BTreeMap::from([(path.into(), parsed)]),
             site_files: BTreeMap::new(),
         };
-        assert!(ProjectRevision::new(base.clone(), resolved())
+        assert!(CompiledProjectRevision::new(base.clone(), resolved())
             .unwrap_err()
             .contains("only parsed"));
 
@@ -759,7 +735,7 @@ mod tests {
             path.into(),
             br#"{"resourceType":"Patient","id":"other"}"#.to_vec(),
         );
-        assert!(ProjectRevision::new(divergent, resolved())
+        assert!(CompiledProjectRevision::new(divergent, resolved())
             .unwrap_err()
             .contains("differs from the raw authored site file"));
 
@@ -768,7 +744,7 @@ mod tests {
             ..resolved()
         };
         assert!(
-            ProjectRevision::new(inputs_for("Patient", b"prose"), wrong_closure)
+            CompiledProjectRevision::new(inputs_for("Patient", b"prose"), wrong_closure)
                 .unwrap_err()
                 .contains("different config bytes")
         );

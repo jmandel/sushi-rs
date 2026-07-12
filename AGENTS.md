@@ -7,6 +7,30 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**POST-LANDING COMPLETION AUDIT COMPLETE LOCALLY (UNCOMMITTED 2026-07-12):** the deployed
+SiteEngine/Fig architecture passed independent code review, but the audit found
+one leaked private observation and several certification/doc gaps. The active
+follow-up deletes `nonReadyFragments` from `RenderedOutput` and Fig; exposes one
+public input `site_engine::ProjectRevision` while keeping the installed
+`CompiledProjectRevision` private; deletes the unused `test-support` feature and
+mutators; adds exact Publisher runtime retention/recency and render-semantics
+reuse/invalidation assertions; adds `prepared_guide` + `site_engine` to Pages
+CI; and adds a package-backed native Publisher four-process lifecycle gate.
+Config/template identities still cross a private Rust resolver handshake so the
+host can fetch exact missing packages; the complete FSH/predefined/authored
+project payload crosses only through `prepare_project`. Focused gates are green:
+SiteEngine 17 pass/1 explicit oracle-fixture ignore, Fig 17+4, WASM 3+5+8, app
+78/78 and production build, Cycle 236/236 plus renderer typecheck, all-target
+workspace and wasm32 checks, plus the native 1,799-file Publisher receipt
+`so1-sha256:f082806d...`. Rebuilt-WASM Pages-subpath Chromium is green at
+`/tmp/fhir-architecture-completion-audit.log`: US Core has 1,535/1,535 images
+and one CarePlan shell, mCODE is a real Publisher preview without fallback,
+dirty workspace bytes survive A -> B/C -> A and editor reload, and scroll,
+protocol-5 persistence, and mobile geometry pass. The follow-up is complete
+locally and intentionally uncommitted. Older “uncommitted/still running”
+checkpoint prose below records the pre-landing sequence and is superseded by
+this block.
+
 **ARCHITECTURE CERTIFIED LOCALLY (UNCOMMITTED 2026-07-12):** the complete
 four-operation Fig/SiteEngine migration and Cycle v2 external-finalize path are
 green in `/tmp/fhir-architecture-overhaul-browser-final18.log`. Browser-only

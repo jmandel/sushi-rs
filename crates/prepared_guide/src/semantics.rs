@@ -1,5 +1,5 @@
 //! Complete renderer-neutral guide preparation over snapshot-complete resources
-//! and captured authored inputs. Relational rows are downstream projections.
+//! and captured authored inputs.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

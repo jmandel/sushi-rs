@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# examples-gate — execute every docs example against the real fig binary so the
-# docs in docs/hosting.md and README.md cannot rot. Each example
-# lives in examples/ and is run here; a failure fails CI.
+# examples-gate — execute the self-contained transport examples against the
+# real fig binary. The package-backed Publisher lifecycle is certified by the
+# integration gate in the editor's Pages workflow; placeholder paths in prose
+# are deliberately not misreported as executable examples here.
 #
 # Env:
 #   FIG_BIN        fig binary (default: target/release/fig; built if absent)

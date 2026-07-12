@@ -2,8 +2,8 @@
 //!
 //! This is the filesystem adapter for [`crate::semantics`]. It deliberately
 //! returns the domain handoff itself, [`crate::PreparedGuide`], rather than a
-//! pipeline-specific wrapper. Relational rows and renderer output are downstream
-//! projections and do not belong in this preparation path.
+//! pipeline-specific wrapper. Renderer output belongs downstream and no
+//! compatibility projection belongs in this preparation path.
 
 use std::path::{Path, PathBuf};
 

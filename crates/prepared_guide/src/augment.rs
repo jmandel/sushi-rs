@@ -387,8 +387,7 @@ fn capture_root(
     Ok(count)
 }
 
-/// Run S6 once and return renderer-neutral semantics. Compatibility rows are
-/// projected later from the completed PreparedGuide.
+/// Run authored augmentation once and return renderer-neutral semantics.
 fn capture_augmentation(input: &AugmentInputs) -> Result<PreparedAugmentation> {
     // ---- Pages ----
     let mut page_include_names: BTreeSet<String> = BTreeSet::new();

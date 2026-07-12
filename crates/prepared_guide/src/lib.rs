@@ -1,8 +1,8 @@
 //! Renderer-neutral semantic result of FHIR guide preparation.
 //!
-//! This crate deliberately does not depend on `site_build`, so the
-//! same prepared value can feed renderer manifests and optional relational
-//! compatibility projections without reversing the dependency direction.
+//! This crate deliberately does not depend on `site_build`: `PreparedGuide` is
+//! the complete renderer-neutral value consumed by target projection, never a
+//! database-shaped compatibility view.
 
 pub mod augment;
 pub mod native;
@@ -330,8 +330,7 @@ pub struct AugmentInputs<'a> {
 }
 
 /// Renderer-neutral authored navigation/config/files captured during guide
-/// preparation. Relational compatibility rows, when requested, are projected
-/// only after this value is complete.
+/// preparation before target projection.
 pub struct PreparedAugmentation {
     pub pages: Vec<PageNode>,
     pub menu: Vec<MenuNode>,

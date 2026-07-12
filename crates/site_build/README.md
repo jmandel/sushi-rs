@@ -82,8 +82,9 @@ usable only after both manifest identities and every referenced byte verify.
 `FileSiteOutputCache` provides the native implementation: canonical manifests
 are atomically published under `OutputCacheKey`, hits re-read every object, and
 different outputs under the same derivation key are rejected as renderer
-nondeterminism rather than overwritten. Browser hosts implement the same
-`SiteOutputCache` contract over OPFS.
+nondeterminism rather than overwritten. The browser currently persists verified
+content and preview publications in OPFS; it does not expose a second
+SiteOutput-cache representation.
 
 ```sh
 cargo test -p site_build

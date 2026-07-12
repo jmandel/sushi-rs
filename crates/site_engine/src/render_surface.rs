@@ -493,15 +493,14 @@ impl RenderState {
     /// in a flat layout) — the same string is the Jekyll `page.path`. A source
     /// without front matter is a static file: returned verbatim (the
     /// publisher's Jekyll copies those unrendered).
-    #[cfg(test)]
-    pub fn render_page_by_name(&self, name: &str) -> Result<String, String> {
+    pub(crate) fn render_page_by_name(&self, name: &str) -> Result<String, String> {
         self.render_page_tracked_by_name(name).map(|(html, _)| html)
     }
 
     /// Render one page and retain its typed artifact read set for diagnostics
     /// and closure tests. The immutable SiteBuild never changes while outputs
     /// are rendered or memoized.
-    pub fn render_page_tracked_by_name(
+    pub(crate) fn render_page_tracked_by_name(
         &self,
         name: &str,
     ) -> Result<(String, PageArtifactReadSet), String> {

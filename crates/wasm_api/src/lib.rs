@@ -55,7 +55,7 @@ use serde_json::Value;
 use site_engine::PackageView as SharedBundle;
 use site_engine::{
     ExternalFinalizeInput, GeneratorSpec as SharedGeneratorSpec,
-    OutputCatalog as OutputCatalogResult, PackageEnvironment, PackageMaterial, ProjectInputs,
+    OutputCatalog as OutputCatalogResult, PackageEnvironment, PackageMaterial, ProjectRevision,
     RenderedOutput as RenderSiteResult, ResolvedPackageClosure as ResolvedPackages, SiteEngine,
 };
 use wasm_bindgen::prelude::*;
@@ -576,8 +576,8 @@ impl Engine {
     /// Internal non-project revisions have no such certificate and retain the
     /// historical all-mounted behavior for snapshot-only operations.
     fn source_for_current_revision(&self) -> Result<(SharedBundle, PathBuf, Vec<String>), String> {
-        match self.sites.project_revision() {
-            Some(project) => self.source_for_resolved(project.resolved_packages()),
+        match self.sites.resolved_packages() {
+            Some(resolved) => self.source_for_resolved(resolved),
             None => self.source(),
         }
     }
@@ -613,7 +613,7 @@ impl Engine {
         predefined_json: &str,
         site_files_json: &str,
         operation: &str,
-    ) -> Result<(ProjectInputs, ResolvedPackages, SharedBundle), String> {
+    ) -> Result<(ProjectRevision, ResolvedPackages, SharedBundle), String> {
         let fsh: BTreeMap<String, String> = serde_json::from_str(files_json)
             .map_err(|e| format!("{operation}: bad FSH files JSON: {e}"))?;
         let predefined: BTreeMap<String, Value> = if predefined_json.trim().is_empty() {
@@ -643,7 +643,7 @@ impl Engine {
             })?;
         let (packages, _, _) = self.source_for_resolved(&resolved_packages)?;
         Ok((
-            ProjectInputs {
+            ProjectRevision {
                 config: config.to_string(),
                 fsh,
                 predefined,
