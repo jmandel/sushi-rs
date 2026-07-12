@@ -220,3 +220,92 @@ fn prepared_example_metadata_drives_its_exact_renderer_subject_and_page() {
     assert_eq!(page.id, "example");
     assert_eq!(page.role, site_producer::ResourcePageRole::Primary);
 }
+
+#[test]
+fn from_memory_orders_resources_and_reads_captured_template_relative_layouts() {
+    let resources = vec![
+        site_producer::Resource::from_value(
+            json!({"resourceType":"ValueSet","id":"second"}),
+            "ValueSet-second.json",
+            false,
+        )
+        .unwrap(),
+        site_producer::Resource::from_value(
+            json!({"resourceType":"CodeSystem","id":"first"}),
+            "CodeSystem-first.json",
+            false,
+        )
+        .unwrap(),
+    ];
+    let ig = json!({
+        "resourceType": "ImplementationGuide",
+        "id": "memory",
+        "url": "https://example.org/memory/ImplementationGuide/memory",
+        "definition": {"resource": [
+            {"reference": {"reference": "CodeSystem/first"}},
+            {"reference": {"reference": "ValueSet/second"}}
+        ]}
+    });
+    let inputs = site_producer::ProducerInputs::from_memory(
+        resources,
+        &json!({
+            "defaults": {
+                "Any": {
+                    "template-base": "template/layouts/resource.html",
+                    "base": "{{[type]}}-{{[id]}}.html"
+                }
+            }
+        }),
+        HashMap::from([("layouts/resource.html".into(), "{{[type]}}/{{[id]}}".into())]),
+        &ig,
+        HashSet::from(["CodeSystem-first-intro.md".into()]),
+        "en/",
+    )
+    .unwrap();
+
+    assert_eq!(
+        inputs
+            .resources
+            .iter()
+            .map(|resource| format!("{}/{}", resource.rt, resource.id))
+            .collect::<Vec<_>>(),
+        vec!["CodeSystem/first", "ValueSet/second"]
+    );
+    assert_eq!(inputs.ig.id.as_deref(), Some("memory"));
+    assert_eq!(
+        inputs.ig.canonical.as_deref(),
+        Some("https://example.org/memory")
+    );
+    assert_eq!(
+        inputs.page_includes,
+        HashSet::from(["CodeSystem-first-intro.md".into()])
+    );
+
+    let output = site_producer::produce(&inputs).unwrap();
+    assert_eq!(output.pages["en/CodeSystem-first.html"], "CodeSystem/first");
+    assert_eq!(output.pages["en/ValueSet-second.html"], "ValueSet/second");
+}
+
+#[test]
+fn duplicate_explicit_primary_fails_instead_of_projecting_ambiguously() {
+    let mut prepared = fixture();
+    let primary = prepared
+        .resources
+        .iter()
+        .find(|resource| resource.key == prepared.guide.implementation_guide)
+        .unwrap()
+        .clone();
+    prepared.resources.push(primary);
+
+    let error = site_producer::ProducerInputs::from_prepared(
+        &prepared,
+        &json!({"defaults":{}}),
+        HashMap::new(),
+        "",
+    )
+    .err()
+    .expect("duplicate primary must fail");
+    assert!(error
+        .to_string()
+        .contains("duplicate primary ImplementationGuides"));
+}

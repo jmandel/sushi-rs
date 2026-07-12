@@ -304,6 +304,67 @@ impl PublisherRuntime {
         })
     }
 
+    /// Reconstitute the exact runtime already committed as Publisher-runtime
+    /// artifacts in a closed `SiteBuild`.
+    ///
+    /// This does not reselect or regenerate assets. It validates the closed
+    /// inventory, recomputes the same compatibility-transform recipe, and
+    /// refuses a build whose claimed recipe does not match its bytes and
+    /// provenance. Fresh-process executors use this constructor so HTML
+    /// finishing is identical to the live preparation that created the build.
+    pub fn from_closed_files(
+        files: impl IntoIterator<Item = PublisherRuntimeFile>,
+        core: &PackageCoordinate,
+        expected_recipe_sha256: &Sha256Digest,
+    ) -> Result<Self> {
+        let mut indexed = BTreeMap::new();
+        for file in files {
+            if file.path.is_empty()
+                || file.path.starts_with('/')
+                || file.path.contains(['\\', '\0'])
+                || file
+                    .path
+                    .split('/')
+                    .any(|part| part.is_empty() || part == "." || part == "..")
+            {
+                bail!("closed Publisher runtime has unsafe path {:?}", file.path);
+            }
+            if file.media_type != mime_for(&file.path) {
+                bail!(
+                    "closed Publisher runtime {} has media type {:?}, expected {:?}",
+                    file.path,
+                    file.media_type,
+                    mime_for(&file.path)
+                );
+            }
+            if file.provenance.source.trim().is_empty()
+                || file.provenance.license.trim().is_empty()
+                || file.provenance.source_path.trim().is_empty()
+            {
+                bail!(
+                    "closed Publisher runtime {} has incomplete provenance",
+                    file.path
+                );
+            }
+            let path = file.path.clone();
+            if indexed.insert(path.clone(), file).is_some() {
+                bail!("closed Publisher runtime repeats {path}");
+            }
+        }
+        let recipe_sha256 = recipe_digest(&indexed, core);
+        if &recipe_sha256 != expected_recipe_sha256 {
+            bail!(
+                "closed Publisher runtime recipe mismatch: expected {}, reconstructed {}",
+                expected_recipe_sha256,
+                recipe_sha256
+            );
+        }
+        Ok(Self {
+            files: indexed,
+            recipe_sha256,
+        })
+    }
+
     pub fn files(&self) -> impl Iterator<Item = &PublisherRuntimeFile> {
         self.files.values()
     }

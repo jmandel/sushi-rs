@@ -1,10 +1,10 @@
-//! Native production of a callback-free external-builder bundle.
+//! Native production of a callback-free closed SiteBuild bundle.
 //!
 //! This module is deliberately library composition rather than CLI business
 //! logic. It resolves one exact package closure from an explicit cache, runs the
 //! native renderer-neutral preparation pipeline once, derives the project
-//! identity from its PreparedGuide, closes the shared SiteBuild projection
-//! projection, and atomically emits a filesystem CAS bundle.
+//! identity from its PreparedGuide, closes the selected SiteBuild projection,
+//! and atomically emits a filesystem CAS bundle.
 //!
 //! The bundle layout is intentionally small and transport-neutral:
 //!
@@ -14,15 +14,13 @@
 //! ```
 //!
 //! `site-build.json` is the canonical `ClosedSiteBuild` value. Every content
-//! reference it contains (authored source, normalized package payload, and the
-//! Cycle row projection) is present in `objects/sha256/` and is verified before
-//! publication. Compilation never re-reads the live project/cache after capture:
-//! both are reconstructed in a private staged filesystem from those exact CAS
-//! bytes, closing the A→B→A/TOCTOU gap between identity and execution.
+//! reference it contains is present in `objects/sha256/` and is verified before
+//! publication. Compilation and target preparation consume only the captured
+//! project/package values. Postchecks additionally diagnose concurrent source or
+//! package mutation before publication.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -32,24 +30,137 @@ use serde::Serialize;
 use serde_json::Value;
 use site_build::{
     cycle_semantic, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage, PackageCoordinate,
-    PackageLock, ProducerRef, ProjectRevision, RenderMode, RenderTarget, Sha256Digest, SourceEntry,
-    SourceKind, SourceManifest, SourcePath,
+    PackageLock, Sha256Digest, SourceEntry, SourceKind, SourceManifest, SourcePath,
 };
 use walkdir::WalkDir;
 
-/// Typed external-builder contract.
+/// Supported closed SiteBuild contracts.
 pub const CYCLE_SITE_TARGET: &str = cycle_semantic::TARGET;
+pub const PUBLISHER_SITE_TARGET: &str = "publisher-site/v1";
 
 /// All host inputs for one closed bundle. Every path is explicit; this API never
 /// consults a default package cache and never performs package acquisition.
 #[derive(Clone, Debug)]
 pub struct PrepareConfig {
     pub ig_dir: PathBuf,
-    pub sushi_out: PathBuf,
     pub cache_dir: PathBuf,
     pub out_dir: PathBuf,
     pub target: String,
+    pub template_coordinate: Option<String>,
+    pub active_tables: bool,
+    pub run_uuid: Option<String>,
     pub build_epoch_secs: i64,
+}
+
+fn site_engine_inputs(
+    sources: &SourceSnapshot,
+    packages: &PackageSnapshot,
+    closure: &ResolvedClosure,
+) -> Result<(site_engine::ProjectInputs, site_engine::PackageEnvironment)> {
+    let config_path = SourcePath::parse("sushi-config.yaml").expect("static path");
+    let config_ref = sources
+        .manifest
+        .get(&config_path)
+        .ok_or_else(|| anyhow!("authored source manifest has no sushi-config.yaml"))?;
+    let config_bytes = addressed_bytes(&sources.objects, &config_ref.content, "source")?;
+    let config = std::str::from_utf8(config_bytes)
+        .context("sushi-config.yaml must be UTF-8")?
+        .to_string();
+
+    let scoped_labels = closure
+        .resolved
+        .labels
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let (package_source, package_root) = captured_package_source(packages)?;
+    let compile_view = site_engine::PackageView::new(
+        package_source.clone(),
+        package_root.clone(),
+        Some(scoped_labels),
+    );
+    let store = package_store::PackageStore::for_project_with_config(
+        compile_view,
+        &config,
+        package_root.to_string_lossy().as_ref(),
+    )?;
+    let config_yaml: serde_yaml::Value = serde_yaml::from_str(&config)?;
+    let captured = sources
+        .manifest
+        .iter()
+        .map(|(path, entry)| {
+            addressed_bytes(&sources.objects, &entry.content, "source")
+                .map(|bytes| (PathBuf::from(path.as_str()), bytes.to_vec()))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let predefined = compiler::predefined::PredefinedPackage::load_from_project_bytes(
+        &config_yaml,
+        &captured,
+        &store,
+    );
+    let predefined = predefined
+        .resources()
+        .iter()
+        .map(|resource| {
+            (
+                resource.path.to_string_lossy().replace('\\', "/"),
+                resource.body.as_ref().clone(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut fsh = BTreeMap::new();
+    let mut site_files = BTreeMap::new();
+    for (path, entry) in sources.manifest.iter() {
+        if path.as_str() == "sushi-config.yaml" {
+            continue;
+        }
+        let bytes = addressed_bytes(&sources.objects, &entry.content, "source")?;
+        if matches!(entry.kind, SourceKind::Fsh) {
+            let text = std::str::from_utf8(bytes)
+                .with_context(|| format!("FSH source {path} must be UTF-8"))?;
+            fsh.insert(path.as_str().to_string(), text.to_string());
+        } else {
+            site_files.insert(path.as_str().to_string(), bytes.to_vec());
+        }
+    }
+    let materials = packages
+        .lock
+        .iter()
+        .map(|(coordinate, locked)| {
+            let label = coordinate.to_string();
+            let bytes = packages
+                .objects
+                .get(&locked.content.sha256)
+                .ok_or_else(|| anyhow!("package object for {label} is absent"))?;
+            let material = site_engine::PackageMaterial::new(
+                locked.content.clone(),
+                packages
+                    .declared_dependencies
+                    .get(&label)
+                    .cloned()
+                    .unwrap_or_default(),
+                std::rc::Rc::new(bytes.clone()),
+            )
+            .map_err(anyhow::Error::msg)?;
+            Ok((label, material))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    let labels = materials.keys().cloned().collect::<Vec<_>>();
+    let environment = site_engine::PackageEnvironment::new(
+        site_engine::PackageView::new(package_source, package_root, None),
+        labels,
+        materials,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok((
+        site_engine::ProjectInputs {
+            config,
+            fsh,
+            predefined,
+            site_files,
+        },
+        environment,
+    ))
 }
 
 /// Stable summary returned by the library and the CLI JSON envelope.
@@ -80,43 +191,52 @@ struct ResolvedClosure {
     /// an exact transitive dependency select different releases.
     coordinates: BTreeSet<PackageCoordinate>,
     core: PackageCoordinate,
+    resolved: site_engine::ResolvedPackageClosure,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PackageSnapshot {
     lock: PackageLock,
     objects: BTreeMap<Sha256Digest, Vec<u8>>,
+    declared_dependencies: BTreeMap<String, BTreeMap<String, String>>,
+    /// Complete validated files mounted for compilation/template preparation.
+    /// The package lock addresses the canonical semantic payload separately;
+    /// nested template/runtime inputs become explicit target artifacts.
+    mounted_files: BTreeMap<String, BTreeMap<String, Vec<u8>>>,
 }
 
-/// Private filesystem view reconstructed only from captured content. Keeping
-/// the `TempDir` owned here guarantees the paths remain valid for the build and
-/// are removed afterward.
-struct StagedBuildInputs {
-    _root: tempfile::TempDir,
-    ig_dir: PathBuf,
-    cache_dir: PathBuf,
-}
-
-impl Drop for StagedBuildInputs {
-    fn drop(&mut self) {
-        // Restore owner-write permission so TempDir can remove the private tree.
-        // Failure here is intentionally best-effort during cleanup only.
-        let _ = set_tree_read_only(&self.ig_dir, false);
-        let _ = set_tree_read_only(&self.cache_dir, false);
+fn captured_package_source(
+    packages: &PackageSnapshot,
+) -> Result<(std::rc::Rc<dyn package_store::PackageSource>, PathBuf)> {
+    let mut source = package_store::BundleSource::new();
+    for (label, files) in &packages.mounted_files {
+        if packages
+            .lock
+            .get(&PackageCoordinate::parse(label)?)
+            .is_none()
+        {
+            bail!("captured mounted package {label} is absent from its package lock");
+        }
+        source.mount_package(label, files.clone());
     }
+    if packages.mounted_files.len() != packages.lock.iter().count() {
+        bail!("captured mounted package inventory differs from its package lock");
+    }
+    let root = source.cache_root().to_path_buf();
+    Ok((std::rc::Rc::new(source), root))
 }
 
-/// Compile and project an IG exactly once, then publish a sealed Cycle bundle.
+/// Compile and project an IG exactly once, then publish its sealed target bundle.
 ///
-/// Authored and package bytes are captured once, reconstructed into a private
-/// staged filesystem, and only that staged view is compiled. Live source/cache
-/// comparisons after compilation remain useful mutation diagnostics, but are
-/// not relied on for correctness: even an A→B→A live mutation cannot influence
-/// the rows while retaining A's manifest.
+/// Authored and package bytes are captured once and mounted into private
+/// in-memory project/package views. Live source/cache comparisons after
+/// compilation remain useful mutation diagnostics, but are not relied on for
+/// correctness: even an A→B→A live mutation cannot influence the result while
+/// retaining A's manifest.
 pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
-    if config.target != CYCLE_SITE_TARGET {
+    if config.target != CYCLE_SITE_TARGET && config.target != PUBLISHER_SITE_TARGET {
         bail!(
-            "unsupported prepare target {:?}; supported target is {CYCLE_SITE_TARGET}",
+            "unsupported prepare target {:?}; supported targets are {CYCLE_SITE_TARGET} and {PUBLISHER_SITE_TARGET}",
             config.target
         );
     }
@@ -124,16 +244,14 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     let ig_dir = canonical_existing_dir(&config.ig_dir, "IG directory")?;
     let cache_dir = canonical_existing_dir(&config.cache_dir, "package cache")?;
     reject_ambient_liquid_asset_dirs()?;
-    require_new_sushi_output(&config.sushi_out)?;
-    ensure_output_trees_are_disjoint(&config.sushi_out, &config.out_dir)?;
     // Resolve and reject an authored-tree destination before creating output
     // parents; otherwise a symlinked parent could mutate input/ on an error path.
     let intended_output = resolved_destination(&config.out_dir)?;
-    ensure_no_source_output_overlap(&ig_dir, &config.sushi_out, &intended_output)?;
-    let output = output_destination(&config.out_dir)?;
+    ensure_no_source_output_overlap(&ig_dir, &intended_output)?;
+    let output = crate::publication::new_directory_destination(&config.out_dir)?;
     // Recheck the actual canonical parent after creation to close the race as
     // far as the portable filesystem API permits.
-    ensure_no_source_output_overlap(&ig_dir, &config.sushi_out, &output)?;
+    ensure_no_source_output_overlap(&ig_dir, &output)?;
 
     let source_before = collect_authored_sources(&ig_dir)?;
     let config_path = SourcePath::parse("sushi-config.yaml").expect("static path");
@@ -148,49 +266,45 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     let config_text =
         std::str::from_utf8(config_bytes).context("sushi-config.yaml must be UTF-8")?;
 
-    let closure_before = resolve_exact_closure(config_text, &cache_dir)?;
+    let closure_before = resolve_prepare_closure(config, config_text, &cache_dir)?;
     let packages_before = collect_package_snapshot(&cache_dir, &closure_before)?;
-    let staged = stage_build_inputs(&source_before, &packages_before)?;
-    verify_staged_inputs(
-        &staged,
-        config_text,
-        &source_before,
-        &closure_before,
-        &packages_before,
-    )?;
-    // Recheck after package/source preparation so a concurrently-created output
-    // cannot introduce stale generated resources.
-    require_new_sushi_output(&config.sushi_out)?;
-
-    let prepared_guide = prepared_guide::native::prepare(&prepared_guide::native::PrepareInputs {
-        ig_dir: staged.ig_dir.clone(),
-        sushi_out: config.sushi_out.clone(),
-        cache_dir: staged.cache_dir.clone(),
-        build_epoch_secs: config.build_epoch_secs,
-        branch: None,
-        revision: None,
-        run_sushi: true,
-        core_package: closure_before.core.to_string(),
-        layer_b: snapshot_gen::LayerBOptions::default(),
-        liquid_asset_dirs: vec![staged.ig_dir.join("input/includes")],
-    })
-    .context("native renderer-neutral guide preparation")?;
-    // Detect any unexpected mutation by the pipeline itself. This is not a live
-    // ABA defense (the staged paths already provide that); it asserts the staged
-    // filesystem remained the exact value reconstructed from the manifest/lock.
-    verify_staged_inputs(
-        &staged,
-        config_text,
-        &source_before,
-        &closure_before,
-        &packages_before,
-    )?;
+    let (inputs, environment) =
+        site_engine_inputs(&source_before, &packages_before, &closure_before)?;
+    let mut engine = site_engine::SiteEngine::default();
+    let generator = match config.target.as_str() {
+        CYCLE_SITE_TARGET => site_engine::GeneratorSpec::Cycle {
+            build_epoch_secs: config.build_epoch_secs,
+            liquid_asset_dirs: vec!["input/includes".into()],
+            branch: None,
+            revision: None,
+        },
+        PUBLISHER_SITE_TARGET => site_engine::GeneratorSpec::Publisher {
+            template_coordinate: config
+                .template_coordinate
+                .clone()
+                .expect("Publisher template was checked"),
+            build_epoch_secs: config.build_epoch_secs,
+            active_tables: config.active_tables,
+            run_uuid: config.run_uuid.clone(),
+        },
+        _ => unreachable!("target validated"),
+    };
+    let prepared = engine
+        .prepare_project(
+            inputs,
+            closure_before.resolved.clone(),
+            generator,
+            environment,
+        )
+        .map_err(anyhow::Error::msg)?;
+    let handle = prepared.site.handle.clone();
+    let site_build = prepared.site.site_build;
 
     let source_after = collect_authored_sources(&ig_dir)?;
     if source_before != source_after {
         bail!("authored inputs changed while fig prepare was compiling; no bundle was emitted");
     }
-    let closure_after = resolve_exact_closure(config_text, &cache_dir)?;
+    let closure_after = resolve_prepare_closure(config, config_text, &cache_dir)?;
     if closure_before != closure_after {
         bail!("resolved package closure changed while fig prepare was compiling; no bundle was emitted");
     }
@@ -200,51 +314,15 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     }
     drop(packages_after);
 
-    let project_id = prepared_guide.guide.package_id.clone();
-    let fhir_version = prepared_guide.guide.fhir_version.clone();
+    let project_id = site_build.site_build().project().project_id.clone();
+    let fhir_version = site_build.site_build().render_target().fhir_version.clone();
     validate_core_for_fhir_version(&closure_before.core, &fhir_version)?;
-    let revision = format!(
-        "sources-sha256:{}",
-        site_build::sha256_canonical(&source_before.manifest)?
-    );
-    let project = ProjectRevision {
-        project_id: project_id.clone(),
-        revision,
-        sources: source_before.manifest.clone(),
-    };
-    let render_target = RenderTarget {
-        renderer: ProducerRef::new("cycle-site", "2"),
-        mode: RenderMode::ExternalBuilder,
-        fhir_version: fhir_version.clone(),
-        template: None,
-        parameters: BTreeMap::from([
-            ("buildEpochSecs".into(), config.build_epoch_secs.to_string()),
-            ("contract".into(), config.target.clone()),
-            ("liquidAssetDirs".into(), "input/includes".into()),
-        ]),
-    };
-    let input = cycle_semantic::CycleProjectionInput {
-        project,
-        package_lock: packages_before.lock.clone(),
-        render_target,
-        diagnostics: BTreeSet::new(),
-    };
-    let projection = cycle_semantic::close_prepared(&prepared_guide, input)
-        .context("close typed Cycle semantic projection")?;
-    let (site_build, projected_objects) = (projection.site_build, projection.objects);
-
-    let mut objects = source_before.objects;
-    merge_objects(&mut objects, packages_before.objects)?;
-    for (digest, bytes) in projected_objects {
-        insert_object(
-            &mut objects,
-            ContentRef {
-                sha256: digest,
-                byte_length: bytes.len() as u64,
-                media_type: None,
-            },
-            bytes,
-        )?;
+    let mut objects = BTreeMap::new();
+    for content in bundle_content_refs(&site_build) {
+        let bytes = engine
+            .read_content(&handle, content.sha256.as_str())
+            .map_err(anyhow::Error::msg)?;
+        insert_object(&mut objects, content.clone(), bytes)?;
     }
     verify_bundle_objects(&site_build, &objects)?;
     let site_build_bytes = site_build.site_build().canonical_bytes()?;
@@ -266,6 +344,35 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
         objects: objects.len(),
         object_bytes: objects.values().map(|bytes| bytes.len() as u64).sum(),
     })
+}
+
+fn resolve_prepare_closure(
+    config: &PrepareConfig,
+    config_text: &str,
+    cache_dir: &Path,
+) -> Result<ResolvedClosure> {
+    let mut closure = resolve_exact_closure(config_text, cache_dir)?;
+    if config.target != PUBLISHER_SITE_TARGET {
+        return Ok(closure);
+    }
+    let template = config
+        .template_coordinate
+        .as_deref()
+        .ok_or_else(|| anyhow!("Publisher prepare requires --template <id#version>"))?;
+    let resolution = package_store::resolve_template_base_chain(
+        &package_store::DiskSource,
+        &package_store::TemplatePaths::new(cache_dir),
+        template,
+    )?;
+    if let Some(missing) = resolution.missing {
+        bail!("explicit package cache does not contain template dependency {missing}");
+    }
+    for label in resolution.chain {
+        closure
+            .coordinates
+            .insert(PackageCoordinate::parse(&label)?);
+    }
+    Ok(closure)
 }
 
 fn canonical_existing_dir(path: &Path, description: &str) -> Result<PathBuf> {
@@ -290,80 +397,8 @@ fn reject_ambient_liquid_asset_dirs() -> Result<()> {
     Ok(())
 }
 
-fn require_new_sushi_output(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("inspect --sushi-out {}", path.display())),
-        Ok(_) => bail!(
-            "--sushi-out must name a new, nonexistent directory so stale generated resources cannot enter the build: {}",
-            path.display()
-        ),
-    }
-}
-
-fn ensure_output_trees_are_disjoint(sushi_out: &Path, bundle_out: &Path) -> Result<()> {
-    let sushi = resolved_destination(sushi_out)?;
-    let bundle = resolved_destination(bundle_out)?;
-    if sushi.starts_with(&bundle) || bundle.starts_with(&sushi) {
-        bail!(
-            "--sushi-out and --out must be disjoint directories: {} and {}",
-            sushi.display(),
-            bundle.display()
-        );
-    }
-    Ok(())
-}
-
-/// Resolve the destination's parent now, reject any existing entry (including a
-/// broken symlink), and return the actual path the final atomic rename will use.
-fn output_destination(path: &Path) -> Result<PathBuf> {
-    if fs::symlink_metadata(path).is_ok() {
-        bail!("output already exists: {}", path.display());
-    }
-    let name = path
-        .file_name()
-        .filter(|name| !name.is_empty())
-        .ok_or_else(|| anyhow!("output must name a new directory: {}", path.display()))?;
-    if Path::new(name)
-        .components()
-        .any(|component| !matches!(component, Component::Normal(_)))
-    {
-        bail!("unsafe output directory name: {}", path.display());
-    }
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    fs::create_dir_all(parent)
-        .with_context(|| format!("create output parent {}", parent.display()))?;
-    let parent = parent
-        .canonicalize()
-        .with_context(|| format!("canonicalize output parent {}", parent.display()))?;
-    let output = parent.join(name);
-    if fs::symlink_metadata(&output).is_ok() {
-        bail!("output already exists: {}", output.display());
-    }
-    Ok(output)
-}
-
-fn ensure_no_source_output_overlap(
-    ig_dir: &Path,
-    sushi_out: &Path,
-    bundle_out: &Path,
-) -> Result<()> {
+fn ensure_no_source_output_overlap(ig_dir: &Path, bundle_out: &Path) -> Result<()> {
     let input = ig_dir.join("input");
-    for destination in [
-        resolved_destination(sushi_out)?,
-        resolved_destination(&sushi_out.join("fsh-generated"))?,
-    ] {
-        if destination.starts_with(&input) {
-            bail!(
-                "--sushi-out resolves inside authored input/: {} -> {}",
-                sushi_out.display(),
-                destination.display()
-            );
-        }
-    }
     if bundle_out.starts_with(&input) {
         bail!(
             "bundle output may not be inside authored input/: {}",
@@ -555,12 +590,15 @@ fn closure_from_step(
     config_text: &str,
     step: &package_store::ResolutionStep,
 ) -> Result<ResolvedClosure> {
+    let resolved = site_engine::ResolvedPackageClosure::from_resolution_step(config_text, step)
+        .map_err(anyhow::Error::msg)?;
     let mut coordinates = BTreeSet::new();
-    for request in step.compile_set.iter().chain(&step.context_closure) {
-        validate_package_component(&request.package_id, "package id")?;
-        validate_package_component(&request.version, "package version")?;
-        let coordinate = PackageCoordinate::new(&request.package_id, &request.version)?;
-        coordinates.insert(coordinate);
+    for label in resolved
+        .labels
+        .iter()
+        .chain(resolved.resolution_support.iter())
+    {
+        coordinates.insert(PackageCoordinate::parse(label)?);
     }
     if coordinates.is_empty() {
         bail!("resolved package closure is empty");
@@ -572,7 +610,11 @@ fn closure_from_step(
     if !coordinates.contains(&core) {
         bail!("resolved closure has no expected core package {core}");
     }
-    Ok(ResolvedClosure { coordinates, core })
+    Ok(ResolvedClosure {
+        coordinates,
+        core,
+        resolved,
+    })
 }
 
 fn canonical_core_version<'a>(core_id: &str, fhir_version: &'a str) -> &'a str {
@@ -633,6 +675,8 @@ fn collect_package_snapshot(
 ) -> Result<PackageSnapshot> {
     let mut packages = Vec::with_capacity(closure.coordinates.len());
     let mut objects = BTreeMap::new();
+    let mut declared_dependencies = BTreeMap::new();
+    let mut mounted_files = BTreeMap::new();
     let mut closure_versions = package_store::VersionIndex::new();
     let mut versions_by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for coordinate in &closure.coordinates {
@@ -676,11 +720,72 @@ fn collect_package_snapshot(
             );
         }
         let material = read_normalized_package_material(&package_root, &label)?;
+        let mut files = material.files;
+        // Native FHIR caches put compiler metadata under `package/`, while
+        // template content and core `other/` assets may be siblings of that
+        // directory. BundleSource has one normalized `<label>/package/` root, so
+        // capture and mount every safe sibling at its same relative name there.
+        // This is the complete immutable environment that preparation consumes.
+        for entry in WalkDir::new(&label_dir)
+            .min_depth(1)
+            .follow_links(false)
+            .sort_by_file_name()
+        {
+            let entry =
+                entry.with_context(|| format!("walk resolved package coordinate {label}"))?;
+            let relative = entry
+                .path()
+                .strip_prefix(&label_dir)
+                .expect("package entry is below coordinate root");
+            if relative.starts_with("package") {
+                continue;
+            }
+            let file_type = entry.file_type();
+            if file_type.is_symlink() {
+                bail!(
+                    "package coordinate contains a symlink: {}",
+                    entry.path().display()
+                );
+            }
+            if file_type.is_dir() {
+                continue;
+            }
+            if !file_type.is_file() {
+                bail!(
+                    "package coordinate contains a non-regular file: {}",
+                    entry.path().display()
+                );
+            }
+            let canonical = entry.path().canonicalize().with_context(|| {
+                format!(
+                    "canonicalize package coordinate file {}",
+                    entry.path().display()
+                )
+            })?;
+            if !canonical.starts_with(&label_dir) {
+                bail!(
+                    "package coordinate file escapes its root: {}",
+                    entry.path().display()
+                );
+            }
+            let relative = normalized_relative_path(&label_dir, &canonical)?;
+            let bytes = fs::read(&canonical)
+                .with_context(|| format!("read package coordinate file {relative}"))?;
+            if files.contains_key(&relative) {
+                // Metadata under native `package/` is the compiler-visible
+                // meaning of a colliding name (notably `.index.db`). Top-level
+                // cache sidecars are neither template content nor renderer input.
+                continue;
+            }
+            files.insert(relative, bytes);
+        }
+        declared_dependencies.insert(label.clone(), material.declared_dependencies.clone());
         let content = ContentRef::of_bytes(
             &material.payload,
             Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE),
         );
         insert_object(&mut objects, content.clone(), material.payload)?;
+        mounted_files.insert(label.clone(), files);
         let dependencies = material
             .declared_dependencies
             .iter()
@@ -700,6 +805,8 @@ fn collect_package_snapshot(
     Ok(PackageSnapshot {
         lock: PackageLock::from_packages(packages)?,
         objects,
+        declared_dependencies,
+        mounted_files,
     })
 }
 
@@ -707,8 +814,7 @@ fn read_normalized_package_material(
     root: &Path,
     label: &str,
 ) -> Result<package_store::NormalizedPackageMaterial> {
-    // Security scan the entire tree even though the shared browser bundle shape
-    // intentionally consumes only package/ top-level files.
+    let mut files = BTreeMap::new();
     for entry in WalkDir::new(root).follow_links(false).sort_by_file_name() {
         let entry = entry.with_context(|| format!("walk package payload {}", root.display()))?;
         if entry.path() == root {
@@ -740,71 +846,15 @@ fn read_normalized_package_material(
                 entry.path().display()
             );
         }
-        normalized_relative_path(root, &canonical)?;
-    }
-
-    // Fig's current Cycle lock intentionally captures the compiler-visible
-    // top-level package projection. The browser transport may additionally
-    // retain validated nested template content for the native-template path;
-    // that content is not an implicit input to this Cycle target.
-    let bundle = package_acquisition::build_bundle(root)
-        .with_context(|| format!("build browser-equivalent package bundle {}", root.display()))?;
-    package_acquisition::read_normalized_bundle(label, &bundle)
-        .with_context(|| format!("normalize browser-equivalent package bundle {label}"))
-}
-
-/// Inverse of [`package_store::encode_normalized_package`]. The decoder rejects non-canonical
-/// order and duplicate/unsafe names so the bytes cannot stage a different tree
-/// from the one whose digest appears in the package lock.
-fn decode_package_payload(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
-    fn take_len(bytes: &[u8], cursor: &mut usize, label: &str) -> Result<usize> {
-        let end = cursor
-            .checked_add(8)
-            .ok_or_else(|| anyhow!("normalized package {label} length overflow"))?;
-        let raw: [u8; 8] = bytes
-            .get(*cursor..end)
-            .ok_or_else(|| anyhow!("truncated normalized package {label} length"))?
-            .try_into()
-            .expect("eight-byte slice");
-        *cursor = end;
-        usize::try_from(u64::from_be_bytes(raw))
-            .map_err(|_| anyhow!("normalized package {label} length exceeds this host"))
-    }
-
-    fn take<'a>(bytes: &'a [u8], cursor: &mut usize, len: usize, label: &str) -> Result<&'a [u8]> {
-        let end = cursor
-            .checked_add(len)
-            .ok_or_else(|| anyhow!("normalized package {label} length overflow"))?;
-        let value = bytes
-            .get(*cursor..end)
-            .ok_or_else(|| anyhow!("truncated normalized package {label}"))?;
-        *cursor = end;
-        Ok(value)
-    }
-
-    let mut cursor = 0usize;
-    let mut files = BTreeMap::new();
-    let mut prior: Option<String> = None;
-    while cursor < bytes.len() {
-        let name_len = take_len(bytes, &mut cursor, "name")?;
-        let name = std::str::from_utf8(take(bytes, &mut cursor, name_len, "name")?)
-            .context("normalized package filename is not UTF-8")?
-            .to_string();
-        validate_package_component(&name, "normalized package filename")?;
-        if prior.as_ref().is_some_and(|prior| prior >= &name) {
-            bail!("normalized package filenames are not in strict sorted order");
+        let relative = normalized_relative_path(root, &canonical)?;
+        let bytes = fs::read(&canonical)
+            .with_context(|| format!("read package file {}", canonical.display()))?;
+        if files.insert(relative.clone(), bytes).is_some() {
+            bail!("package repeats normalized path {relative:?}");
         }
-        let body_len = take_len(bytes, &mut cursor, "body")?;
-        let body = take(bytes, &mut cursor, body_len, "body")?.to_vec();
-        if files.insert(name.clone(), body).is_some() {
-            bail!("duplicate normalized package filename: {name}");
-        }
-        prior = Some(name);
     }
-    if package_store::encode_normalized_package(&files) != bytes {
-        bail!("normalized package payload is not canonical");
-    }
-    Ok(files)
+    package_store::normalize_package_material(label, files)
+        .with_context(|| format!("normalize captured package material {label}"))
 }
 
 fn addressed_bytes<'a>(
@@ -823,135 +873,6 @@ fn addressed_bytes<'a>(
         );
     }
     Ok(bytes)
-}
-
-fn write_staged_file(root: &Path, relative: &str, bytes: &[u8]) -> Result<()> {
-    let relative = SourcePath::parse(relative.to_string())?;
-    let path = root.join(relative.as_str());
-    let parent = path
-        .parent()
-        .ok_or_else(|| anyhow!("staged file has no parent: {relative}"))?;
-    fs::create_dir_all(parent)
-        .with_context(|| format!("create staged directory {}", parent.display()))?;
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .with_context(|| format!("create staged file {}", path.display()))?;
-    file.write_all(bytes)
-        .with_context(|| format!("write staged file {}", path.display()))?;
-    file.sync_all()
-        .with_context(|| format!("sync staged file {}", path.display()))?;
-    let mut permissions = file.metadata()?.permissions();
-    permissions.set_readonly(true);
-    file.set_permissions(permissions)
-        .with_context(|| format!("make staged file read-only {}", path.display()))?;
-    Ok(())
-}
-
-fn set_tree_read_only(root: &Path, read_only: bool) -> Result<()> {
-    for entry in WalkDir::new(root).contents_first(read_only) {
-        let entry = entry.with_context(|| format!("walk staged tree {}", root.display()))?;
-        let metadata = entry
-            .metadata()
-            .with_context(|| format!("inspect staged path {}", entry.path().display()))?;
-        let mut permissions = metadata.permissions();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = permissions.mode();
-            permissions.set_mode(if read_only {
-                mode & !0o222
-            } else {
-                mode | 0o200
-            });
-        }
-        #[cfg(not(unix))]
-        permissions.set_readonly(read_only);
-        fs::set_permissions(entry.path(), permissions).with_context(|| {
-            format!(
-                "make staged path {}read-only {}",
-                if read_only { "" } else { "not " },
-                entry.path().display()
-            )
-        })?;
-    }
-    Ok(())
-}
-
-/// Reconstruct the exact captured source and package values as a private disk
-/// view for native crates that still take filesystem paths. No live input path
-/// is carried into the returned value.
-fn stage_build_inputs(
-    sources: &SourceSnapshot,
-    packages: &PackageSnapshot,
-) -> Result<StagedBuildInputs> {
-    let root = tempfile::Builder::new()
-        .prefix("fig-prepare-inputs-")
-        .tempdir()
-        .context("create private staged build inputs")?;
-    let ig_dir = root.path().join("ig");
-    let cache_dir = root.path().join("cache");
-    fs::create_dir_all(&ig_dir)?;
-    fs::create_dir_all(&cache_dir)?;
-
-    for (path, entry) in sources.manifest.iter() {
-        let bytes = addressed_bytes(&sources.objects, &entry.content, "source")?;
-        write_staged_file(&ig_dir, path.as_str(), bytes)?;
-    }
-
-    for (coordinate, package) in packages.lock.iter() {
-        validate_package_component(&coordinate.to_string(), "package coordinate")?;
-        let normalized = addressed_bytes(&packages.objects, &package.content, "package")?;
-        let files = decode_package_payload(normalized)
-            .with_context(|| format!("decode captured package {coordinate}"))?;
-        let package_dir = cache_dir.join(coordinate.to_string()).join("package");
-        fs::create_dir_all(&package_dir)?;
-        for (name, bytes) in files {
-            // Browser bundle material is top-level by contract. Keeping the
-            // staged representation equally narrow prevents a host-dependent
-            // directory interpretation.
-            validate_package_component(&name, "staged package filename")?;
-            write_staged_file(&package_dir, &name, &bytes)?;
-        }
-    }
-
-    // The pipeline receives a filesystem-shaped compatibility view, but it is
-    // immutable in the OS as well as detached from live paths. Every derived
-    // package sidecar is already present in the captured payload.
-    set_tree_read_only(&ig_dir, true)?;
-    set_tree_read_only(&cache_dir, true)?;
-
-    Ok(StagedBuildInputs {
-        _root: root,
-        ig_dir,
-        cache_dir,
-    })
-}
-
-fn verify_staged_inputs(
-    staged: &StagedBuildInputs,
-    config_text: &str,
-    expected_sources: &SourceSnapshot,
-    expected_closure: &ResolvedClosure,
-    expected_packages: &PackageSnapshot,
-) -> Result<()> {
-    let sources =
-        collect_authored_sources(&staged.ig_dir).context("verify reconstructed staged project")?;
-    if &sources != expected_sources {
-        bail!("reconstructed staged project differs from captured source objects");
-    }
-    let closure = resolve_exact_closure(config_text, &staged.cache_dir)
-        .context("verify reconstructed staged package closure")?;
-    if &closure != expected_closure {
-        bail!("reconstructed staged package closure differs from captured closure");
-    }
-    let packages = collect_package_snapshot(&staged.cache_dir, &closure)
-        .context("verify reconstructed staged package payloads")?;
-    if &packages != expected_packages {
-        bail!("reconstructed staged package payloads differ from captured package objects");
-    }
-    Ok(())
 }
 
 fn validate_core_for_fhir_version(core: &PackageCoordinate, fhir_version: &str) -> Result<()> {
@@ -1052,24 +973,6 @@ fn insert_object(
                 content.sha256
             );
         }
-    }
-    Ok(())
-}
-
-fn merge_objects(
-    target: &mut BTreeMap<Sha256Digest, Vec<u8>>,
-    additions: BTreeMap<Sha256Digest, Vec<u8>>,
-) -> Result<()> {
-    for (digest, bytes) in additions {
-        insert_object(
-            target,
-            ContentRef {
-                sha256: digest,
-                byte_length: bytes.len() as u64,
-                media_type: None,
-            },
-            bytes,
-        )?;
     }
     Ok(())
 }
@@ -1180,76 +1083,9 @@ fn emit_bundle(
             output.display()
         );
     }
-    rename_no_replace(temp.path(), output)
+    crate::publication::rename_no_replace(temp.path(), output)
         .with_context(|| format!("publish bundle atomically at {}", output.display()))?;
     Ok(())
-}
-
-/// Atomically publish without replacing a destination that appeared after the
-/// last userspace check. Linux and macOS use their exclusive rename primitives;
-/// Windows rename already refuses an existing destination. Unknown platforms
-/// fail closed instead of weakening the no-clobber guarantee.
-#[cfg(target_os = "linux")]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let source = CString::new(source.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let destination = CString::new(destination.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    // SAFETY: both pointers are live NUL-terminated path strings for the call;
-    // AT_FDCWD makes them process-relative exactly like std::fs::rename.
-    let result = unsafe {
-        libc::renameat2(
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            destination.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let source = CString::new(source.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let destination = CString::new(destination.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    // SAFETY: both pointers remain live NUL-terminated path strings throughout
-    // the call; RENAME_EXCL makes destination creation atomic and no-clobber.
-    let result =
-        unsafe { libc::renamex_np(source.as_ptr(), destination.as_ptr(), libc::RENAME_EXCL) };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    if fs::symlink_metadata(destination).is_ok() {
-        return Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists));
-    }
-    fs::rename(source, destination)
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-fn rename_no_replace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "atomic no-replace directory publication is unsupported on this platform",
-    ))
 }
 
 #[cfg(test)]
@@ -1273,6 +1109,22 @@ mod tests {
             &cache.join(format!("{id}#{version}/package/package.json")),
             serde_json::to_string(&body).unwrap().as_bytes(),
         );
+    }
+
+    fn closure(
+        coordinates: BTreeSet<PackageCoordinate>,
+        core: PackageCoordinate,
+    ) -> ResolvedClosure {
+        let labels = coordinates.iter().map(ToString::to_string).collect();
+        ResolvedClosure {
+            coordinates,
+            core,
+            resolved: site_engine::ResolvedPackageClosure {
+                config_sha256: Sha256Digest::of_bytes(b""),
+                resolution_support: BTreeSet::new(),
+                labels,
+            },
+        }
     }
 
     #[test]
@@ -1323,60 +1175,113 @@ mod tests {
     }
 
     #[test]
-    fn package_payload_hash_matches_the_wasm_normalization() {
+    fn package_payload_separates_semantic_lock_from_complete_mounted_files() {
         let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().canonicalize().unwrap();
         package(&cache, "example", "1.0.0", serde_json::json!({}));
         write(&cache.join("example#1.0.0/package/nested/a.txt"), b"alpha");
+        write(
+            &cache.join("example#1.0.0/content/layouts/page.html"),
+            b"template layout",
+        );
+        write(
+            &cache.join("example#1.0.0/other/spec.internals"),
+            b"renderer facts",
+        );
         let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
-        let closure = ResolvedClosure {
-            coordinates: BTreeSet::from([coordinate.clone()]),
-            core: coordinate,
-        };
+        let closure = closure(BTreeSet::from([coordinate.clone()]), coordinate);
         let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
         let package_root = cache.join("example#1.0.0/package");
         let material = read_normalized_package_material(&package_root, "example#1.0.0").unwrap();
         let files = material.files;
-        let shared_bundle = package_acquisition::build_bundle(&package_root).unwrap();
-        let shared_files: BTreeMap<String, Vec<u8>> =
-            package_acquisition::read_bundle(&shared_bundle)
-                .unwrap()
-                .into_iter()
-                .collect();
-        assert_eq!(files, shared_files);
         assert!(files.contains_key(package_store::derived_index::SIDECAR_NAME));
-        assert!(!files.contains_key("nested/a.txt"));
-        let expected = package_store::encode_normalized_package(&files);
+        assert_eq!(files["nested/a.txt"], b"alpha");
         let locked = snapshot.lock.iter().next().unwrap().1;
-        assert_eq!(locked.content.sha256, Sha256Digest::of_bytes(&expected));
+        assert_eq!(
+            locked.content.sha256,
+            Sha256Digest::of_bytes(&material.payload)
+        );
         assert_eq!(
             snapshot.objects.get(&locked.content.sha256),
-            Some(&expected)
+            Some(&material.payload)
         );
+        for (path, bytes) in &files {
+            assert_eq!(&snapshot.mounted_files["example#1.0.0"][path], bytes);
+        }
+        assert_eq!(
+            snapshot.mounted_files["example#1.0.0"]["content/layouts/page.html"],
+            b"template layout"
+        );
+        assert_eq!(
+            snapshot.mounted_files["example#1.0.0"]["other/spec.internals"],
+            b"renderer facts"
+        );
+        assert!(!package_store::decode_normalized_package(&material.payload)
+            .unwrap()
+            .contains_key("nested/a.txt"));
     }
 
     #[test]
-    fn normalized_package_payload_round_trips_to_the_exact_file_map() {
-        let files = BTreeMap::from([
-            (
-                ".derived-index.json".to_string(),
-                b"{\"files\":[]}".to_vec(),
-            ),
-            ("package.json".to_string(), b"{\"name\":\"demo\"}".to_vec()),
-            (
-                "StructureDefinition-Demo.json".to_string(),
-                vec![0, 1, 2, 255],
-            ),
-        ]);
-        let encoded = package_store::encode_normalized_package(&files);
-        assert_eq!(decode_package_payload(&encoded).unwrap(), files);
+    fn captured_package_view_is_detached_from_live_cache_mutation() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().canonicalize().unwrap();
+        package(&cache, "example", "1.0.0", serde_json::json!({}));
+        let resource_path = cache.join("example#1.0.0/package/StructureDefinition-demo.json");
+        let resource = |name: &str| {
+            serde_json::to_vec(&serde_json::json!({
+                "resourceType": "StructureDefinition",
+                "id": "demo",
+                "url": "https://example.org/StructureDefinition/demo",
+                "name": name,
+                "kind": "resource",
+                "type": "Patient",
+                "derivation": "constraint"
+            }))
+            .unwrap()
+        };
+        write(&resource_path, &resource("CapturedDefinition"));
+        write(
+            &cache.join("example#1.0.0/content/layouts/page.html"),
+            b"captured layout",
+        );
+        let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
+        let closure = closure(BTreeSet::from([coordinate.clone()]), coordinate);
+        let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
 
-        let mut truncated = encoded;
-        truncated.pop();
-        assert!(decode_package_payload(&truncated)
-            .unwrap_err()
-            .to_string()
-            .contains("truncated"));
+        // The live package changes after capture. Both the semantic compiler
+        // view and nested template view must remain bound to captured A.
+        write(&resource_path, &resource("LiveMutation"));
+        write(
+            &cache.join("example#1.0.0/content/layouts/page.html"),
+            b"live mutation",
+        );
+
+        let (source, root) = captured_package_source(&snapshot).unwrap();
+        let view = site_engine::PackageView::new(
+            source.clone(),
+            root.clone(),
+            Some(BTreeSet::from(["example#1.0.0".into()])),
+        );
+        let config = "fhirVersion: 4.0.1\ndependencies:\n  example: 1.0.0\n";
+        let store = package_store::PackageStore::for_project_with_config(
+            view,
+            config,
+            root.to_str().unwrap(),
+        )
+        .unwrap();
+        let found = store
+            .fish_for_fhir(
+                "https://example.org/StructureDefinition/demo",
+                package_store::ALL_FISH_TYPES,
+            )
+            .unwrap();
+        assert_eq!(found["name"], "CapturedDefinition");
+        assert_eq!(
+            source
+                .read(&root.join("example#1.0.0/package/content/layouts/page.html"))
+                .unwrap(),
+            b"captured layout"
+        );
     }
 
     #[test]
@@ -1401,15 +1306,15 @@ mod tests {
         let current = PackageCoordinate::new("current-root", "1.0.0").unwrap();
         let terminology_71 = PackageCoordinate::new("hl7.terminology.r4", "7.1.0").unwrap();
         let terminology_72 = PackageCoordinate::new("hl7.terminology.r4", "7.2.0").unwrap();
-        let closure = ResolvedClosure {
-            coordinates: BTreeSet::from([
+        let closure = closure(
+            BTreeSet::from([
                 legacy.clone(),
                 current.clone(),
                 terminology_71.clone(),
                 terminology_72.clone(),
             ]),
-            core: legacy.clone(),
-        };
+            legacy.clone(),
+        );
 
         let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
         assert_eq!(
@@ -1421,56 +1326,6 @@ mod tests {
             BTreeSet::from([terminology_72])
         );
         assert_eq!(snapshot.lock.iter().count(), 4);
-    }
-
-    #[test]
-    fn staged_inputs_are_detached_from_post_capture_live_mutations() {
-        let live = tempfile::tempdir().unwrap();
-        let ig = live.path().join("ig");
-        let cache = live.path().join("cache");
-        write(
-            &ig.join("sushi-config.yaml"),
-            b"id: staged.demo\nfhirVersion: 4.0.1\n",
-        );
-        write(&ig.join("input/fsh/demo.fsh"), b"Profile: Captured\n");
-        package(&cache, "example", "1.0.0", serde_json::json!({}));
-
-        let ig = ig.canonicalize().unwrap();
-        let cache = cache.canonicalize().unwrap();
-        let sources = collect_authored_sources(&ig).unwrap();
-        let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
-        let closure = ResolvedClosure {
-            coordinates: BTreeSet::from([coordinate.clone()]),
-            core: coordinate,
-        };
-        let packages = collect_package_snapshot(&cache, &closure).unwrap();
-        let staged = stage_build_inputs(&sources, &packages).unwrap();
-
-        // Mutate both live inputs after capture. A native build is handed only
-        // staged.ig_dir/staged.cache_dir, so these B values cannot affect it.
-        fs::write(ig.join("input/fsh/demo.fsh"), b"Profile: LiveMutation\n").unwrap();
-        write(
-            &cache.join("example#1.0.0/package/live-only.txt"),
-            b"live mutation",
-        );
-
-        let staged_sources = collect_authored_sources(&staged.ig_dir).unwrap();
-        let staged_packages = collect_package_snapshot(&staged.cache_dir, &closure).unwrap();
-        assert_eq!(staged_sources, sources);
-        assert_eq!(staged_packages, packages);
-        assert_ne!(collect_authored_sources(&ig).unwrap(), sources);
-        assert_ne!(
-            collect_package_snapshot(&cache, &closure).unwrap(),
-            packages
-        );
-        assert_eq!(
-            fs::read_to_string(staged.ig_dir.join("input/fsh/demo.fsh")).unwrap(),
-            "Profile: Captured\n"
-        );
-        assert!(fs::metadata(staged.ig_dir.join("input/fsh/demo.fsh"))
-            .unwrap()
-            .permissions()
-            .readonly());
     }
 
     #[test]
@@ -1560,10 +1415,7 @@ mod tests {
         )
         .unwrap();
         let coordinate = PackageCoordinate::new("example", "1.0.0").unwrap();
-        let closure = ResolvedClosure {
-            coordinates: BTreeSet::from([coordinate.clone()]),
-            core: coordinate,
-        };
+        let closure = closure(BTreeSet::from([coordinate.clone()]), coordinate);
         let error = collect_package_snapshot(&cache_temp.path().canonicalize().unwrap(), &closure)
             .unwrap_err();
         assert!(error.to_string().contains("escapes the explicit cache"));
@@ -1607,7 +1459,7 @@ mod tests {
         fs::create_dir(&destination).unwrap();
         fs::write(destination.join("prior"), b"prior").unwrap();
 
-        let error = rename_no_replace(&staging, &destination).unwrap_err();
+        let error = crate::publication::rename_no_replace(&staging, &destination).unwrap_err();
         assert!(matches!(
             error.kind(),
             std::io::ErrorKind::AlreadyExists
@@ -1621,7 +1473,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn sushi_output_cannot_reach_authored_input_through_a_symlink_parent() {
+    fn bundle_output_cannot_reach_authored_input_through_a_symlink_parent() {
         use std::os::unix::fs::symlink;
 
         let temp = tempfile::tempdir().unwrap();
@@ -1629,27 +1481,8 @@ mod tests {
         fs::create_dir_all(ig.join("input")).unwrap();
         symlink(ig.join("input"), temp.path().join("redirect")).unwrap();
         let ig = ig.canonicalize().unwrap();
-        let error = ensure_no_source_output_overlap(
-            &ig,
-            &temp.path().join("redirect/generated"),
-            &temp.path().join("bundle"),
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("resolves inside authored input"));
-    }
-
-    #[test]
-    fn sushi_output_must_be_new_and_disjoint_from_the_bundle() {
-        let temp = tempfile::tempdir().unwrap();
-        let existing = temp.path().join("old-sushi-output");
-        fs::create_dir(&existing).unwrap();
-        let error = require_new_sushi_output(&existing).unwrap_err();
-        assert!(error.to_string().contains("new, nonexistent directory"));
-
-        let new_sushi = temp.path().join("new-sushi-output");
-        require_new_sushi_output(&new_sushi).unwrap();
-        let nested_bundle = new_sushi.join("closed-build");
-        let error = ensure_output_trees_are_disjoint(&new_sushi, &nested_bundle).unwrap_err();
-        assert!(error.to_string().contains("must be disjoint"));
+        let output = resolved_destination(&temp.path().join("redirect/generated")).unwrap();
+        let error = ensure_no_source_output_overlap(&ig, &output).unwrap_err();
+        assert!(error.to_string().contains("inside authored input"));
     }
 }

@@ -7,7 +7,7 @@
 //! JSON is serialized with `serde_json` (the Java `JsonParser.compose` pretty
 //! layout is byte-parity only — the `_data` files are PARSED by the Liquid
 //! engine, never rendered as text, so their formatting does not affect page
-//! output. `artifacts.json` stays byte-exact for `producer_gate.rs`).
+//! output. `artifacts.json` remains byte-exact with the captured Publisher oracle.
 //!
 //! Cited gaps (do not affect the load-bearing rendered content, or are
 //! classified run-context):

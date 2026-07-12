@@ -2,11 +2,10 @@
 """Non-JS host: shell out to the `fig` CLI and consume its --json envelope.
 
 Any language that can run a subprocess and parse JSON drives the engine this way
-— no wasm, no FFI. Here we ask fig for its version and render one fragment from a
-completed build tree, checking the shared apiVersion envelope exactly as the
-wasm Session's callers do.
+— no wasm, no FFI. Here we ask Fig for its version and exercise the shared
+success/error envelope used by WASM Session callers.
 
-Usage: render.py <fig-binary> [<build-dir> <ref> <kind>]
+Usage: render.py <fig-binary>
 """
 import json
 import subprocess
@@ -31,17 +30,11 @@ def main():
     ver = fig_json(fig, "version")
     print(f"engine: {ver['engine']} (apiVersion {ver['apiVersion']})")
 
-    if len(sys.argv) >= 5:
-        build, ref, kind = sys.argv[2], sys.argv[3], sys.argv[4]
-        frag = fig_json(fig, "fragment", build, ref, kind)
-        html = frag["html"]
-        print(f"fragment {ref}-{kind}: {len(html)} bytes, starts with {html[:40]!r}")
-    else:
-        # Prove the error path is an ok:false envelope, not a crash.
-        try:
-            fig_json(fig, "snapshot")  # missing required arg
-        except RuntimeError as e:
-            print(f"error path is an envelope (not a crash): {e}")
+    # Prove the error path is an ok:false envelope, not a crash.
+    try:
+        fig_json(fig, "snapshot")  # missing required arg
+    except RuntimeError as e:
+        print(f"error path is an envelope (not a crash): {e}")
 
 
 if __name__ == "__main__":

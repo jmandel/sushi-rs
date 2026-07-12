@@ -21,19 +21,12 @@ every other field using recursively key-sorted canonical JSON. Deserialization
 recomputes that id and rejects tampering or accidental partial rewrites.
 
 Artifact content is addressed but not embedded. A host is responsible for
-putting referenced bytes in a CAS and verifying their digest and length. A
-demand-driven renderer records a typed `Need<ArtifactKey>` and answers it with
-an atomic `ResolutionBatch`; `SiteBuild::successor_batch` applies that batch to
-an explicit predecessor. The lower-level `SiteBuild::successor` transition
-remains available for producers that already have a complete set of
-`ArtifactResolution` values. Ready
-resolutions carry their exact bytes; the result contains the re-hashed successor
-and a digest-keyed set of newly introduced `ContentObject`s for CAS publication.
-Non-ready resolutions carry no stale object. Batch order cannot change the
-successor id or object set, identical bytes are stored once even when records
-use different media types, and the predecessor is never mutated. This is an
-additive Rust API: the `site-build/v1` JSON shape and hashing semantics did not
-change.
+putting referenced bytes in a CAS and verifying their digest and length.
+Preparation constructs one complete immutable build atomically. Path rendering
+may memoize output objects inside its bounded handle, but it never promotes
+artifacts into a successor build. The removed `Need`, `ResolutionBatch`,
+`ArtifactResolution`, and `SiteBuildSuccessor` API was an unused parallel
+handoff architecture.
 
 A `RenderPlan` declares the roots a renderer needs. Converting to
 `ClosedSiteBuild` follows their artifact read dependencies transitively and
@@ -64,10 +57,10 @@ FHIR/config object order is intentionally retained: artifact identity hashes the
 exact serialized bytes through `ContentRef`, while only the SiteBuild manifest
 uses recursively key-sorted canonical JSON.
 
-The `prepared_guide` crate owns both native and in-memory preparation. Fig and
-WASM pass its `PreparedGuide` result directly to
-`cycle_semantic::close_prepared`; relational rows and reverse adapters are not
-part of the contract.
+`site_engine` owns native and in-memory preparation. Fig and WASM both call
+`SiteEngine::prepare_project`, which constructs the `PreparedGuide` and projects
+the same Cycle closure; relational rows and reverse adapters are not part of
+the contract.
 
 ## Exact rendered-output caching
 

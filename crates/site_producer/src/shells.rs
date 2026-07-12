@@ -1,5 +1,5 @@
-//! Page-shell emission — the validated core (1297/1297 byte-identical vs the
-//! publisher's raw `temp/pages/*.html` for US Core F0).
+//! Page-shell emission — historically validated 1297/1297 byte-identical
+//! against the publisher's raw `temp/pages/*.html` for US Core F0.
 //!
 //! Port of `PublisherGenerator.makeTemplates` (PublisherGenerator.java:1019) +
 //! `genWrapperInner` (PublisherGenerator.java:1378) + `doReplacements`
@@ -80,7 +80,7 @@ fn emit_one(
         });
     let out = do_replacements(&out, r, fmt);
     // The shell FILE location carries the page-dir prefix (must equal the render
-    // surface's page.path); FLAT for native/producer_gate, `en/` for the editor.
+    // surface's page.path); empty for a flat tree, `en/` for localized output.
     let path = format!("{}{out}", inputs.page_prefix);
     if let Some(existing) = resource_pages.get(&path) {
         bail!(

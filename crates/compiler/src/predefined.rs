@@ -117,6 +117,98 @@ impl PredefinedPackage {
         pkg
     }
 
+    /// Parse the exact captured authored project bytes without reconstructing a
+    /// temporary filesystem. Fixed SUSHI predefined roots and configured
+    /// `path-resource` roots use the same deterministic directory order as the
+    /// native disk loader; JSON and StructureDefinition-guided XML therefore
+    /// feed the same semantic channel in native SiteEngine and WASM hosts.
+    pub fn load_from_project_bytes(
+        cfg_yaml: &Y,
+        entries: &[(PathBuf, Vec<u8>)],
+        store: &PackageStore,
+    ) -> PredefinedPackage {
+        let mut roots = PREDEFINED_INPUT_DIRS
+            .iter()
+            .map(|name| (PathBuf::from("input").join(name), false))
+            .collect::<Vec<_>>();
+        if let Some(Y::Mapping(parameters)) = yget(cfg_yaml, "parameters") {
+            for (key, value) in parameters {
+                if ystr(key).as_deref() != Some("path-resource") {
+                    continue;
+                }
+                for value in norm_array(value) {
+                    let Some(raw) = ystr(&value) else { continue };
+                    let recursive = raw.ends_with("/*");
+                    let raw = raw.trim_end_matches("/*").replace('\\', "/");
+                    let Ok(path) = safe_project_path(&raw) else {
+                        continue;
+                    };
+                    if !roots.iter().any(|(existing, _)| existing == &path) {
+                        roots.push((path, recursive));
+                    }
+                }
+            }
+        }
+
+        let fish = |name: &str| store.fish_for_fhir(name, package_store::ALL_FISH_TYPES);
+        let reader = FhirXmlReader::new(&fish);
+        let mut pkg = PredefinedPackage::default();
+        let mut seen = std::collections::BTreeSet::new();
+        for (root, recursive) in roots {
+            let mut matching = entries
+                .iter()
+                .filter(|(path, _)| {
+                    if !is_safe_project_entry(path) {
+                        return false;
+                    }
+                    let parent = path.parent();
+                    let in_root = if recursive {
+                        path.starts_with(&root)
+                    } else {
+                        parent == Some(root.as_path())
+                    };
+                    in_root
+                        && matches!(
+                            path.extension()
+                                .map(|value| value.to_string_lossy().to_ascii_lowercase()),
+                            Some(extension) if extension == "json" || extension == "xml"
+                        )
+                })
+                .collect::<Vec<_>>();
+            matching.sort_by(|(left, _), (right, _)| {
+                let left = left
+                    .strip_prefix(&root)
+                    .expect("matching project path is below its root");
+                let right = right
+                    .strip_prefix(&root)
+                    .expect("matching project path is below its root");
+                left.parent()
+                    .cmp(&right.parent())
+                    .then_with(|| left.file_name().cmp(&right.file_name()))
+            });
+            for (path, bytes) in matching {
+                if !seen.insert(path.clone()) {
+                    continue;
+                }
+                let body = match path
+                    .extension()
+                    .map(|value| value.to_string_lossy().to_ascii_lowercase())
+                    .as_deref()
+                {
+                    Some("json") => serde_json::from_slice::<J>(bytes).ok(),
+                    Some("xml") => std::str::from_utf8(bytes)
+                        .ok()
+                        .and_then(|text| reader.parse(text)),
+                    _ => None,
+                };
+                if let Some(body) = body {
+                    pkg.push(path.clone(), body);
+                }
+            }
+        }
+        pkg
+    }
+
     pub fn resources(&self) -> &[PredefinedResource] {
         &self.resources
     }
@@ -264,6 +356,27 @@ impl PredefinedPackage {
                 .then_with(|| eb.seq.cmp(&ea.seq))
         })
     }
+}
+
+fn safe_project_path(value: &str) -> Result<PathBuf, ()> {
+    if value.is_empty()
+        || value.starts_with('/')
+        || value.contains('\0')
+        || value
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(());
+    }
+    Ok(PathBuf::from(value))
+}
+
+fn is_safe_project_entry(path: &Path) -> bool {
+    let mut components = path.components();
+    let Some(std::path::Component::Normal(_)) = components.next() else {
+        return false;
+    };
+    components.all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
 impl PredefinedPackage {
@@ -1145,6 +1258,25 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn test_store(root: &Path, config: &str) -> PackageStore {
+        let cache = root.join("cache");
+        std::fs::create_dir_all(&cache).unwrap();
+        PackageStore::for_project_with_config(
+            package_store::DiskSource,
+            config,
+            cache.to_str().unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn resource_bodies(package: &PredefinedPackage) -> Vec<J> {
+        package
+            .resources()
+            .iter()
+            .map(|resource| resource.body.as_ref().clone())
+            .collect()
+    }
+
     fn test_resource_sd() -> Rc<J> {
         Rc::new(json!({
             "resourceType": "StructureDefinition",
@@ -1279,5 +1411,210 @@ mod tests {
             input_path_rank(Path::new("/ig/input/examples/Patient-example.json")),
             7
         );
+    }
+
+    #[test]
+    fn project_bytes_matches_disk_loading_for_json_and_xml() {
+        let temp = tempfile::tempdir().unwrap();
+        let ig = temp.path().join("ig");
+        let resources = ig.join("input/resources");
+        std::fs::create_dir_all(&resources).unwrap();
+        let config = "fhirVersion: 4.0.1\n";
+        let config_yaml: Y = serde_yaml::from_str(config).unwrap();
+        let store = test_store(temp.path(), config);
+
+        let json_bytes = serde_json::to_vec(&json!({
+            "resourceType": "ValueSet",
+            "id": "json-resource",
+            "url": "https://example.org/ValueSet/json-resource",
+            "name": "JsonResource",
+            "status": "draft"
+        }))
+        .unwrap();
+        let xml_bytes = br#"<Requirements xmlns="http://hl7.org/fhir">
+          <id value="xml-resource"/>
+          <url value="https://example.org/Requirements/xml-resource"/>
+          <name value="XmlResource"/>
+          <status value="draft"/>
+        </Requirements>"#
+            .to_vec();
+        std::fs::write(resources.join("ValueSet-json-resource.json"), &json_bytes).unwrap();
+        std::fs::write(resources.join("Requirements-xml-resource.xml"), &xml_bytes).unwrap();
+
+        let disk = PredefinedPackage::load(ig.to_str().unwrap(), &config_yaml, &store);
+        let memory = PredefinedPackage::load_from_project_bytes(
+            &config_yaml,
+            &[
+                (
+                    PathBuf::from("input/resources/ValueSet-json-resource.json"),
+                    json_bytes,
+                ),
+                (
+                    PathBuf::from("input/resources/Requirements-xml-resource.xml"),
+                    xml_bytes,
+                ),
+            ],
+            &store,
+        );
+
+        assert_eq!(resource_bodies(&memory), resource_bodies(&disk));
+        assert_eq!(
+            memory
+                .resources()
+                .iter()
+                .map(|resource| (resource.folder.as_str(), resource.file_stem.as_str()))
+                .collect::<Vec<_>>(),
+            disk.resources()
+                .iter()
+                .map(|resource| (resource.folder.as_str(), resource.file_stem.as_str()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn project_bytes_honors_configured_path_resource_roots() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = r#"fhirVersion: 4.0.1
+parameters:
+  path-resource:
+    - custom/direct
+    - custom/tree/*
+"#;
+        let config_yaml: Y = serde_yaml::from_str(config).unwrap();
+        let store = test_store(temp.path(), config);
+        let resource = |id: &str| {
+            serde_json::to_vec(&json!({
+                "resourceType": "Patient",
+                "id": id
+            }))
+            .unwrap()
+        };
+        let package = PredefinedPackage::load_from_project_bytes(
+            &config_yaml,
+            &[
+                (
+                    PathBuf::from("custom/direct/direct.json"),
+                    resource("direct"),
+                ),
+                (
+                    PathBuf::from("custom/direct/nested/excluded.json"),
+                    resource("excluded"),
+                ),
+                (PathBuf::from("custom/tree/root.json"), resource("root")),
+                (
+                    PathBuf::from("custom/tree/nested/child.json"),
+                    resource("child"),
+                ),
+                (
+                    PathBuf::from("unconfigured/ignored.json"),
+                    resource("ignored"),
+                ),
+            ],
+            &store,
+        );
+
+        assert_eq!(
+            package
+                .resources()
+                .iter()
+                .map(|resource| resource.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["direct", "root", "child"]
+        );
+    }
+
+    #[test]
+    fn project_bytes_uses_stock_root_precedence_independent_of_entry_order() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = "fhirVersion: 4.0.1\n";
+        let config_yaml: Y = serde_yaml::from_str(config).unwrap();
+        let store = test_store(temp.path(), config);
+        let same_identity = |marker: &str| {
+            serde_json::to_vec(&json!({
+                "resourceType": "Patient",
+                "id": "shared",
+                "active": marker == "example"
+            }))
+            .unwrap()
+        };
+        let entries = [
+            (
+                PathBuf::from("input/examples/Patient-shared.json"),
+                same_identity("example"),
+            ),
+            (
+                PathBuf::from("input/resources/Patient-shared.json"),
+                same_identity("resource"),
+            ),
+        ];
+
+        let package = PredefinedPackage::load_from_project_bytes(&config_yaml, &entries, &store);
+        assert_eq!(
+            package
+                .resources()
+                .iter()
+                .map(|resource| resource.path.as_path())
+                .collect::<Vec<_>>(),
+            vec![
+                Path::new("input/resources/Patient-shared.json"),
+                Path::new("input/examples/Patient-shared.json")
+            ]
+        );
+        assert_eq!(
+            package
+                .fish_for_fhir("shared", package_store::ALL_FISH_TYPES)
+                .unwrap()["active"],
+            true,
+            "the later stock examples root must retain stock SUSHI precedence"
+        );
+    }
+
+    #[test]
+    fn project_bytes_ignores_unsafe_paths_and_deduplicates_exact_inputs() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = r#"fhirVersion: 4.0.1
+parameters:
+  path-resource:
+    - custom/tree/*
+    - custom/tree/*
+    - ../outside/*
+    - /absolute/*
+    - input/../resources/*
+"#;
+        let config_yaml: Y = serde_yaml::from_str(config).unwrap();
+        let store = test_store(temp.path(), config);
+        let resource = |id: &str, marker: &str| {
+            serde_json::to_vec(&json!({
+                "resourceType": "Patient",
+                "id": id,
+                "gender": marker
+            }))
+            .unwrap()
+        };
+        let duplicate = PathBuf::from("custom/tree/Patient-duplicate.json");
+        let package = PredefinedPackage::load_from_project_bytes(
+            &config_yaml,
+            &[
+                (duplicate.clone(), resource("duplicate", "first")),
+                (duplicate, resource("duplicate", "second")),
+                (
+                    PathBuf::from("custom/tree/../escape/Patient-unsafe.json"),
+                    resource("unsafe", "unsafe"),
+                ),
+                (
+                    PathBuf::from("../outside/Patient-outside.json"),
+                    resource("outside", "unsafe"),
+                ),
+                (
+                    PathBuf::from("/absolute/Patient-absolute.json"),
+                    resource("absolute", "unsafe"),
+                ),
+            ],
+            &store,
+        );
+
+        assert_eq!(package.resources().len(), 1);
+        assert_eq!(package.resources()[0].id, "duplicate");
+        assert_eq!(package.resources()[0].body["gender"], "first");
     }
 }

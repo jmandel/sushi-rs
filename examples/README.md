@@ -1,24 +1,55 @@
-# examples/ — runnable, CI-executed hosting examples
+# Examples
 
-Every example here is run by [`scripts/examples-gate.sh`](../scripts/examples-gate.sh)
-so the docs in [`docs/hosting.md`](../docs/hosting.md) and
-[`README.md`](../README.md) can't rot. Run them all:
+The supported site example is the same closed lifecycle used by WASM and native
+hosts. The editor's [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) is normative;
+examples do not define a second host API.
+
+## Publisher from a fresh process
 
 ```sh
-scripts/examples-gate.sh
-#   FIG_BIN and F0_DIR override the fig binary and the F0 build root. Examples
-#   needing an absent input SKIP with a note.
+SOURCE_DATE_EPOCH=1783555200 fig prepare <ig-dir> \
+  --target publisher-site/v1 \
+  --template hl7.fhir.template#1.0.0 \
+  --cache <package-cache> \
+  --out <closed-bundle>
+
+fig outputs <closed-bundle>
+fig render <closed-bundle> en/index.html -o index.html
+fig finalize <closed-bundle> -o <new-site-directory>
 ```
 
-| Example | Skin | What it shows | Needs |
-|---|---|---|---|
-| `envelope/` | any | The shared apiVersion envelope schema + a validator | fig, python3 |
-| `shell-to-fig/` | non-JS | Drive `fig --json` from Python; parse the envelope | fig, python3 |
-| `cli-quickstart` (in the gate) | CLI | `fig render` a build tree → byte-checked vs the golden | fig, an F0 build |
-| `template-as-data` (in the gate) | CLI | Same render path, different template — zero code | fig, an F0 build |
+`prepare` writes only the canonical `site-build.json` and its addressed
+`objects/sha256` closure. Each following command may run in a fresh process:
+it authenticates that closure, calls `SiteEngine::restore`, and then uses the
+same handle-scoped `outputs`, `render`, or `finalize` operation. No staged page
+tree or prior renderer process is an input.
 
-See `docs/hosting.md` for the prose. The external-builder example lives with its
-real consumer in Cycle's `site-gen/README.md`: native `fig prepare`
-emits the closed filesystem bundle and Cycle consumes it through
-`SITE_BUILD_DIR`. The retired callback shim over a second WASM session is not a
-supported example.
+## External Cycle renderer
+
+```sh
+SOURCE_DATE_EPOCH=1783555200 fig prepare <ig-dir> \
+  --target cycle-site/v2 \
+  --cache <package-cache> \
+  --out <closed-bundle>
+
+# Cycle LiquidJS renders the closed build into a private staging directory and
+# emits a typed declaration for that complete inventory.
+fig finalize <closed-bundle> \
+  --site <private-staging> \
+  --external-plan <plan.json> \
+  --cache <optional-site-output-cache>
+```
+
+Cycle intentionally uses LiquidJS while Publisher templates use Rust Liquid.
+They share `PreparedGuide -> SiteBuild -> SiteOutput`, exact `ContentRef` bytes,
+and Rust-owned final validation; they do not share renderer implementation.
+
+## Transport examples
+
+| Example | What it demonstrates |
+| --- | --- |
+| `envelope/` | Validate the shared `apiVersion` success/error envelope. |
+| `shell-to-fig/` | Invoke Fig from a non-JavaScript process and parse envelopes. |
+
+The old F0 build-root, fragment-materialization, and staged-render examples and
+their skippable harness branches are deleted rather than retained as aliases.

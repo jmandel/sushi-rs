@@ -120,9 +120,9 @@ impl<'a> PageProvider<'a> {
         self
     }
 
-    /// Add the materialized template's `includes/` dir as a fallback include
-    /// source (consulted after staged `_includes/`, before the resolver). Enables
-    /// the driven `fig render --template` path.
+    /// Add a materialized template's `includes/` directory as a fallback
+    /// include source, consulted after staged `_includes/` and before the
+    /// semantic resolver.
     pub fn with_template_includes(mut self, dir: &Path) -> Self {
         self.template_includes = Some(dir.to_path_buf());
         self

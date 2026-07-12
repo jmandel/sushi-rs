@@ -1,9 +1,8 @@
 //! `site_producer` — the missing IG-Publisher piece: synthesize a stock-template
 //! site's per-artifact **page shells** and the **`_data/*.json` site-data model**
-//! from an IG's source (compiled + predefined resources) + the template's
-//! `config.json`. This is what lets the stock template be *produced* from a repo
-//! dir tree instead of mounting a pre-baked Java `temp/pages` tree
-//! (`-stock.json`), and makes `fig render <ig-source-dir>` work from source.
+//! from a renderer-neutral prepared guide + the template's `config.json` and
+//! addressed layout bytes. Filesystem capture and publication belong to host
+//! adapters; this crate is a deterministic in-memory projection.
 //!
 //! Fragment BODIES (`_includes/*-snapshot.xhtml` etc.) are NOT produced here —
 //! registered generated includes cross the page renderer's typed artifact
@@ -36,13 +35,14 @@
 //!   — resource's own config, then `StructureDefinition:<flavor>`, then the
 //!   type default, then `Any`.
 //!
-//! Validated: for the US Core F0 build, this reproduces **1297/1297** page
-//! shells byte-identical to the publisher's raw `temp/pages/*.html`.
+//! Historical oracle validation: for the US Core F0 build, this reproduced
+//! **1297/1297** page shells byte-identically against the publisher's raw
+//! `temp/pages/*.html`. Current execution enters through an in-memory
+//! `PreparedGuide`.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use serde_json::Value;
 
 pub mod config;
@@ -53,7 +53,7 @@ pub mod resource;
 pub mod shells;
 
 pub use config::Defaults;
-pub use resource::{enumerate_resources, Resource};
+pub use resource::Resource;
 
 /// Renderer-owned presentation metadata for one emitted resource page. This is
 /// adjacent to the shell bytes, not inferred later from an output filename.
@@ -71,9 +71,8 @@ pub enum ResourcePageRole {
     Companion,
 }
 
-/// The full producer output: the `temp/pages` shell + `_data` tree, as an
-/// in-memory file map (relative path → bytes). Native callers write it to disk;
-/// the wasm/Session surface merges it into the site tree.
+/// The full producer output as deterministic in-memory maps. SiteEngine assigns
+/// output paths and addresses the bytes in its ContentStore.
 #[derive(Debug, Default)]
 pub struct SiteProducerOutput {
     /// Page shells, keyed by output filename (e.g. `StructureDefinition-us-core-patient.html`).
@@ -88,68 +87,33 @@ pub struct SiteProducerOutput {
     pub includes: BTreeMap<String, String>,
 }
 
-impl SiteProducerOutput {
-    /// Write the produced tree under `<pages_root>` (typically `<build>/temp/pages`):
-    /// shells at the root, `_data/*` under `_data/`. Existing files are overwritten.
-    pub fn write_to(&self, pages_root: &Path) -> Result<usize> {
-        let data_dir = pages_root.join("_data");
-        let includes_dir = pages_root.join("_includes");
-        std::fs::create_dir_all(&data_dir)
-            .with_context(|| format!("mkdir {}", data_dir.display()))?;
-        let mut n = 0;
-        for (name, body) in &self.pages {
-            std::fs::write(pages_root.join(name), body)?;
-            n += 1;
-        }
-        for (name, body) in &self.data {
-            std::fs::write(data_dir.join(name), body)?;
-            n += 1;
-        }
-        if !self.includes.is_empty() {
-            std::fs::create_dir_all(&includes_dir)
-                .with_context(|| format!("mkdir {}", includes_dir.display()))?;
-        }
-        for (name, body) in &self.includes {
-            std::fs::write(includes_dir.join(name), body)?;
-            n += 1;
-        }
-        Ok(n)
-    }
-}
-
-/// Where layout files are read from. `Dir` resolves `template/layouts/...`
-/// paths against a build root (native / `fig`); `Map` serves them from an
-/// in-memory `relpath -> contents` table (the wasm / `Session` surface, where
-/// the materialized template tree already lives in memory).
-pub enum LayoutSource {
-    Dir(std::path::PathBuf),
-    Map(std::collections::HashMap<String, String>),
-}
+/// Address-free view of the template layout bytes captured for one immutable
+/// project revision.
+pub struct LayoutSource(std::collections::HashMap<String, String>);
 
 impl LayoutSource {
+    fn new(layouts: std::collections::HashMap<String, String>) -> Self {
+        Self(layouts)
+    }
+
     pub fn read(&self, rel: &str) -> Option<String> {
-        match self {
-            LayoutSource::Dir(root) => std::fs::read_to_string(root.join(rel)).ok(),
-            LayoutSource::Map(m) => m
-                .get(rel)
-                // Config paths are build-root-relative (`template/layouts/x`); an
-                // in-memory template tree may be keyed template-root-relative
-                // (`layouts/x`). Accept either.
-                .or_else(|| m.get(rel.strip_prefix("template/").unwrap_or(rel)))
-                .cloned(),
-        }
+        self.0
+            .get(rel)
+            // Config paths are build-root-relative (`template/layouts/x`); a
+            // captured template tree may be keyed template-root-relative
+            // (`layouts/x`). Accept either spelling without consulting a host.
+            .or_else(|| self.0.get(rel.strip_prefix("template/").unwrap_or(rel)))
+            .cloned()
     }
 }
 
-/// Inputs to the producer, gathered from a repo/source dir tree.
+/// Complete in-memory inputs to the Publisher projection.
 pub struct ProducerInputs {
-    /// Every resource that gets a page. `from_prepared` receives the complete
-    /// local resource set from `PreparedGuide`; native filesystem gathering
-    /// also recognizes the Publisher's generated, resource, and example roots.
+    /// Every non-primary resource that gets a page.
     pub resources: Vec<Resource>,
     /// The template's merged `config.json` `defaults` + `extraTemplates`.
     pub defaults: Defaults,
-    /// Where layout files come from (build dir or in-memory template map).
+    /// Captured template layout bytes.
     pub layouts: LayoutSource,
     /// IG-level fields used as fallbacks / for the `_data` model (publisher, etc.).
     pub ig: IgContext,
@@ -171,9 +135,8 @@ pub struct ProducerInputs {
     pub menu: Vec<site_build::MenuNode>,
     /// Output page-directory prefix for the shell file locations AND the
     /// `pages.json` KEYS — these two must be equal to the render surface's
-    /// `page.path` (`site.data.pages[page.path]`). Empty (native `fig`,
-    /// `producer_gate`: FLAT, byte-exact vs the F0 oracle); `"en/"` for the
-    /// editor's `hl7.fhir.template` render (its staged pages live under `en/`).
+    /// `page.path` (`site.data.pages[page.path]`). Empty produces a flat output
+    /// tree; `"en/"` produces the standard localized Publisher page tree.
     /// Only the shell key + `pages.json` key carry it — `artifacts.json` keys,
     /// `structuredefinitions.json.path`, breadcrumb/prev/next/example hrefs stay
     /// FLAT (in-site relative links).
@@ -181,10 +144,9 @@ pub struct ProducerInputs {
 }
 
 impl ProducerInputs {
-    /// In-memory constructor for the wasm / Session surface: resources already
-    /// parsed, the template's `config.json` as a `Value`, its `layouts/*` as a
-    /// `relpath -> contents` map, and the IG resource. `resources` should already
-    /// be in the IG `definition.resource[]` order (see [`order_resources`]).
+    /// Construct from already-captured resources, template configuration and
+    /// layouts, and the primary IG resource. Resources are normalized into the
+    /// IG `definition.resource[]` order (see [`order_resources`]).
     pub fn from_memory(
         resources: Vec<Resource>,
         config_json: &Value,
@@ -200,7 +162,7 @@ impl ProducerInputs {
         Ok(ProducerInputs {
             resources,
             defaults: Defaults::from_value(config_json)?,
-            layouts: LayoutSource::Map(layouts),
+            layouts: LayoutSource::new(layouts),
             ig: IgContext::from_ig(ig),
             ig_json: ig.clone(),
             page_includes,
@@ -289,7 +251,7 @@ impl ProducerInputs {
         Ok(ProducerInputs {
             resources,
             defaults: Defaults::from_value(config_json)?,
-            layouts: LayoutSource::Map(layouts),
+            layouts: LayoutSource::new(layouts),
             ig: IgContext::from_ig(ig),
             ig_json: ig.clone(),
             page_includes,
@@ -343,133 +305,6 @@ impl IgContext {
             publisher: s("publisher"),
         }
     }
-}
-
-/// Gather producer inputs from a source dir tree. Looks for resources under
-/// `fsh-generated/resources`, `input/resources`, `input/examples` and the
-/// template config at `template/config.json`, resolving layout paths against the
-/// build root (matching the publisher's config-file-relative resolution).
-pub fn gather_inputs(build_dir: &Path) -> Result<ProducerInputs> {
-    let cfg_path = build_dir.join("template/config.json");
-    let defaults = Defaults::load(&cfg_path)
-        .with_context(|| format!("load template config {}", cfg_path.display()))?;
-
-    let mut resources = Vec::new();
-    let mut implementation_guides = Vec::new();
-    let mut ig = IgContext::default();
-    let mut ig_json = Value::Null;
-    let mut ig_order: Option<Vec<(String, String)>> = None;
-    for (sub, is_example) in [
-        ("input/resources", false),
-        ("input/examples", true),
-        ("fsh-generated/resources", false),
-    ] {
-        let dir = build_dir.join(sub);
-        if !dir.is_dir() {
-            continue;
-        }
-        for r in enumerate_resources(&dir, is_example)? {
-            if r.rt == "ImplementationGuide" {
-                implementation_guides.push(r);
-                continue;
-            }
-            resources.push(r);
-        }
-    }
-
-    let configured_id = configured_implementation_guide_id(build_dir)?;
-    let primary_index = if implementation_guides.is_empty() {
-        None
-    } else if let Some(id) = configured_id.as_deref() {
-        let filename = format!("ImplementationGuide-{id}.json");
-        let mut matches: Vec<usize> = implementation_guides
-            .iter()
-            .enumerate()
-            .filter(|(_, guide)| {
-                guide.file.file_name().and_then(|name| name.to_str()) == Some(filename.as_str())
-            })
-            .map(|(index, _)| index)
-            .collect();
-        if matches.len() > 1 {
-            let generated_root = build_dir.join("fsh-generated/resources");
-            matches.retain(|index| {
-                implementation_guides[*index]
-                    .file
-                    .starts_with(&generated_root)
-            });
-        }
-        match matches.as_slice() {
-            [index] => Some(*index),
-            [] if implementation_guides.len() == 1 => Some(0),
-            [] => bail!("no ImplementationGuide-{id}.json matches sushi-config id"),
-            _ => bail!("multiple ImplementationGuide-{id}.json primary candidates"),
-        }
-    } else if implementation_guides.len() == 1 {
-        Some(0)
-    } else {
-        bail!("multiple ImplementationGuides without a sushi-config id primary marker")
-    };
-    if let Some(index) = primary_index {
-        let primary = implementation_guides.remove(index);
-        let primary_id = primary.id.clone();
-        ig = IgContext::from_ig(&primary.json);
-        ig_order = ig_resource_order(&primary.json);
-        ig_json = primary.json;
-        // The same primary may be visible through both generated and authored
-        // trees. It is one identity, not an additional IG resource.
-        implementation_guides.retain(|guide| guide.id != primary_id);
-    }
-    // Only the selected primary guide owns index.html. Additional IG instances
-    // are ordinary resources and receive their normal resource pages/data rows.
-    resources.extend(implementation_guides);
-
-    // The publisher processes resources in the ImplementationGuide's
-    // `definition.resource[]` order; artifacts.json key order and the
-    // structuredefinitions.json `index` both follow it. Reorder to match.
-    if let Some(order) = &ig_order {
-        order_resources(&mut resources, order);
-    }
-
-    // Page-fragment includes present in source (for pages.json intro/notes gating).
-    let mut page_includes = std::collections::HashSet::new();
-    for sub in ["input/pagecontent", "input/intro-notes", "input/includes"] {
-        let dir = build_dir.join(sub);
-        if let Ok(rd) = std::fs::read_dir(&dir) {
-            for e in rd.flatten() {
-                if let Some(name) = e.file_name().to_str() {
-                    page_includes.insert(name.to_string());
-                }
-            }
-        }
-    }
-
-    Ok(ProducerInputs {
-        resources,
-        defaults,
-        layouts: LayoutSource::Dir(build_dir.to_path_buf()),
-        ig,
-        ig_json,
-        page_includes,
-        menu: Vec::new(),
-        page_prefix: String::new(),
-    })
-}
-
-fn configured_implementation_guide_id(build_dir: &Path) -> Result<Option<String>> {
-    let path = ["sushi-config.yaml", "sushi-config.yml"]
-        .into_iter()
-        .map(|name| build_dir.join(name))
-        .find(|path| path.is_file());
-    let Some(path) = path else { return Ok(None) };
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let yaml: serde_yaml::Value =
-        serde_yaml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-    Ok(yaml
-        .get("id")
-        .and_then(serde_yaml::Value::as_str)
-        .map(str::to_string)
-        .filter(|id| !id.trim().is_empty()))
 }
 
 /// The canonical resource processing order = the IG `definition.resource[]`

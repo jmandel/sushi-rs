@@ -185,6 +185,64 @@ pub fn encode_normalized_package(files: &BTreeMap<String, Vec<u8>>) -> Vec<u8> {
     encoded
 }
 
+/// Decode the canonical package-lock payload produced by
+/// [`encode_normalized_package`].
+///
+/// This is the trust-boundary inverse used when a closed `SiteBuild` is opened
+/// in a fresh process. It rejects truncation, unsafe names, duplicate or
+/// non-canonical ordering, host-size overflows, and any byte stream that does
+/// not round-trip to the one canonical encoding.
+pub fn decode_normalized_package(bytes: &[u8]) -> Result<BTreeMap<String, Vec<u8>>> {
+    fn take_len(bytes: &[u8], cursor: &mut usize, field: &str) -> Result<usize> {
+        let end = cursor
+            .checked_add(8)
+            .ok_or_else(|| anyhow!("normalized package {field} length overflow"))?;
+        let raw: [u8; 8] = bytes
+            .get(*cursor..end)
+            .ok_or_else(|| anyhow!("truncated normalized package {field} length"))?
+            .try_into()
+            .expect("eight-byte slice");
+        *cursor = end;
+        usize::try_from(u64::from_be_bytes(raw))
+            .map_err(|_| anyhow!("normalized package {field} length exceeds this host"))
+    }
+
+    fn take<'a>(bytes: &'a [u8], cursor: &mut usize, len: usize, field: &str) -> Result<&'a [u8]> {
+        let end = cursor
+            .checked_add(len)
+            .ok_or_else(|| anyhow!("normalized package {field} length overflow"))?;
+        let value = bytes
+            .get(*cursor..end)
+            .ok_or_else(|| anyhow!("truncated normalized package {field}"))?;
+        *cursor = end;
+        Ok(value)
+    }
+
+    let mut cursor = 0usize;
+    let mut files = BTreeMap::new();
+    let mut prior: Option<String> = None;
+    while cursor < bytes.len() {
+        let name_len = take_len(bytes, &mut cursor, "name")?;
+        let name = std::str::from_utf8(take(bytes, &mut cursor, name_len, "name")?)
+            .context("normalized package filename is not UTF-8")?
+            .to_string();
+        validate_member_name(&name)?;
+        if prior.as_ref().is_some_and(|prior| prior >= &name) {
+            bail!("normalized package filenames are not in strict sorted order");
+        }
+        let body_len = take_len(bytes, &mut cursor, "body")?;
+        let body = take(bytes, &mut cursor, body_len, "body")?.to_vec();
+        if files.insert(name.clone(), body).is_some() {
+            bail!("duplicate normalized package filename: {name}");
+        }
+        prior = Some(name);
+    }
+    if encode_normalized_package(&files) != bytes {
+        bail!("normalized package payload is not canonical");
+    }
+    Ok(files)
+}
+
 /// Parse and validate the exact `<id>#<version>` label used as a package-cache
 /// directory name. Call this before joining an untrusted label to a filesystem
 /// or OPFS root; package identity validation alone is too late for that use.
@@ -269,6 +327,39 @@ mod tests {
             Some(&"2.0.0".into())
         );
         assert!(derived_index::parse(&raw.files[derived_index::SIDECAR_NAME]).is_some());
+    }
+
+    #[test]
+    fn normalized_package_decoder_is_strict_and_canonical() {
+        let files = BTreeMap::from([
+            (
+                "Patient-p.json".into(),
+                br#"{"resourceType":"Patient","id":"p"}"#.to_vec(),
+            ),
+            (
+                "package.json".into(),
+                package_json("example.pkg", "1.2.3", Value::Null),
+            ),
+        ]);
+        let encoded = encode_normalized_package(&files);
+        assert_eq!(decode_normalized_package(&encoded).unwrap(), files);
+
+        let mut truncated = encoded.clone();
+        truncated.pop();
+        assert!(decode_normalized_package(&truncated).is_err());
+
+        let unsafe_files = BTreeMap::from([("../escape".into(), b"x".to_vec())]);
+        assert!(decode_normalized_package(&encode_normalized_package(&unsafe_files)).is_err());
+
+        let mut reversed = Vec::new();
+        for name in ["package.json", "Patient-p.json"] {
+            let body = files.get(name).unwrap();
+            reversed.extend_from_slice(&(name.len() as u64).to_be_bytes());
+            reversed.extend_from_slice(name.as_bytes());
+            reversed.extend_from_slice(&(body.len() as u64).to_be_bytes());
+            reversed.extend_from_slice(body);
+        }
+        assert!(decode_normalized_package(&reversed).is_err());
     }
 
     #[test]

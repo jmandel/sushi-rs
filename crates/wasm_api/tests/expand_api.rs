@@ -16,10 +16,11 @@
 #![allow(deprecated)]
 
 use serde_json::{json, Value};
+use std::cell::RefCell;
 use wasm_api::Session;
 
 thread_local! {
-    static TEST_SESSION: Session = Session::new();
+    static TEST_SESSION: RefCell<Session> = RefCell::new(Session::new());
 }
 
 /// Session-envelope helpers: every op returns `{apiVersion, ok, op, result|error}`.
@@ -38,14 +39,22 @@ fn expand_enumerable(vs: &str, resources: &str) -> Result<String, String> {
     }
 }
 fn init(bundles: &str) -> Result<u32, String> {
-    TEST_SESSION.with(|session| Ok(call(session.init(bundles))["mounted"].as_u64().unwrap() as u32))
+    TEST_SESSION.with(|session| {
+        Ok(call(session.borrow_mut().init(bundles))["mounted"]
+            .as_u64()
+            .unwrap() as u32)
+    })
 }
 fn mount_bundles(bundles: &str) -> Result<u32, String> {
-    TEST_SESSION
-        .with(|session| Ok(call(session.mount(bundles))["mounted"].as_u64().unwrap() as u32))
+    TEST_SESSION.with(|session| {
+        Ok(call(session.borrow_mut().mount(bundles))["mounted"]
+            .as_u64()
+            .unwrap() as u32)
+    })
 }
 fn wasm_resolve(config: &str, index: &str) -> Result<String, String> {
-    TEST_SESSION.with(|session| Ok(call(session.resolve_project(config, index)).to_string()))
+    TEST_SESSION
+        .with(|session| Ok(call(session.borrow_mut().resolve_project(config, index)).to_string()))
 }
 
 fn ok(r: Result<String, String>) -> Value {

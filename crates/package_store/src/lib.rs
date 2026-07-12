@@ -28,8 +28,8 @@ pub use bundle::{
     BUNDLE_FORMAT_VERSION,
 };
 pub use material::{
-    encode_normalized_package, normalize_package_material, parse_exact_package_label,
-    NormalizedPackageMaterial, NORMALIZED_PACKAGE_MEDIA_TYPE,
+    decode_normalized_package, encode_normalized_package, normalize_package_material,
+    parse_exact_package_label, NormalizedPackageMaterial, NORMALIZED_PACKAGE_MEDIA_TYPE,
 };
 pub use prepared::{
     PreparedArtifactBacking, PreparedFiles, PreparedPackage, PreparedPackageBuilder,

@@ -8,7 +8,7 @@ use crate::RenderState;
 
 const RETAINED_SITE_BUILD_LIMIT: usize = 2;
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputDescriptor {
     pub path: site_build::OutputPath,
@@ -38,14 +38,14 @@ pub enum OutputSubjectPage {
     Companion,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputCatalog {
     pub build_id: String,
     pub outputs: Vec<OutputDescriptor>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderedOutput {
     pub path: site_build::OutputPath,
@@ -66,9 +66,9 @@ pub struct PreparedOutput {
 /// succeeded. Path rendering may memoize addressed output bytes, but can never
 /// change the SiteBuild named by the handle.
 pub(crate) struct PublisherRuntime {
-    pub preparation_key: site_build::Sha256Digest,
+    pub preparation_key: Option<site_build::Sha256Digest>,
     pub state: Rc<RenderState>,
-    pub publisher: Option<site_producer::publisher_runtime::PublisherRuntime>,
+    pub publisher: site_producer::publisher_runtime::PublisherRuntime,
     pub build: site_build::ClosedSiteBuild,
     pub catalog: Vec<OutputDescriptor>,
     pub ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
@@ -205,7 +205,7 @@ impl SiteEngine {
                 .rev()
                 .find_map(|handle| match self.runtimes.get(handle) {
                     Some(Runtime::Publisher(runtime))
-                        if &runtime.preparation_key == preparation_key =>
+                        if runtime.preparation_key.as_ref() == Some(preparation_key) =>
                     {
                         Some((handle.clone(), runtime.build.clone()))
                     }
@@ -267,11 +267,7 @@ impl SiteEngine {
             .state
             .render_page_tracked_by_name(path.as_str())
             .map_err(|error| format!("render {path}: {error}"))?;
-        let html = runtime
-            .publisher
-            .as_ref()
-            .map(|publisher| publisher.finish_html(&html))
-            .unwrap_or(html);
+        let html = runtime.publisher.finish_html(&html);
         let non_ready_fragments = reads
             .observations()
             .values()
@@ -323,14 +319,34 @@ impl SiteEngine {
         Ok(bytes.as_ref().clone())
     }
 
-    pub fn finalize(&self, handle: &str) -> Result<site_build::SiteOutput, String> {
+    pub fn finalize(
+        &self,
+        handle: &str,
+        external: Option<ExternalFinalizeInput>,
+    ) -> Result<site_build::SiteOutput, String> {
         let runtime = self
             .runtimes
             .get(handle)
             .ok_or_else(|| format!("finalize: unknown build handle {handle}"))?;
-        let Runtime::Publisher(runtime) = runtime else {
-            return Err("finalize: Cycle finalization uses the external-renderer binding".into());
-        };
+        match runtime {
+            Runtime::Publisher(runtime) => {
+                if external.is_some() {
+                    return Err(
+                        "finalize: Publisher build does not accept external renderer output".into(),
+                    );
+                }
+                Self::finalize_publisher(runtime)
+            }
+            Runtime::Cycle(runtime) => {
+                let input = external.ok_or_else(|| {
+                    "finalize: Cycle build requires external renderer output".to_string()
+                })?;
+                Self::finalize_cycle(runtime, input)
+            }
+        }
+    }
+
+    fn finalize_publisher(runtime: &PublisherRuntime) -> Result<site_build::SiteOutput, String> {
         let missing = runtime
             .catalog
             .iter()
@@ -377,23 +393,14 @@ impl SiteEngine {
         Ok(output)
     }
 
-    pub fn finalize_external(
-        &self,
-        handle: &str,
+    fn finalize_cycle(
+        runtime: &CycleRuntime,
         input: ExternalFinalizeInput,
     ) -> Result<site_build::SiteOutput, String> {
-        let runtime = self
-            .runtimes
-            .get(handle)
-            .ok_or_else(|| format!("finalizeExternal: unknown build handle {handle}"))?;
-        let Runtime::Cycle(runtime) = runtime else {
-            return Err("finalizeExternal: handle does not name an external Cycle build".into());
-        };
         let catalog = input.catalog.into_iter().collect::<BTreeSet<_>>();
         if catalog.len() != input.files.len() {
             return Err(
-                "finalizeExternal: catalog/file cardinality differs or catalog contains duplicates"
-                    .into(),
+                "finalize: catalog/file cardinality differs or catalog contains duplicates".into(),
             );
         }
         let file_paths = input
@@ -402,13 +409,13 @@ impl SiteEngine {
             .map(|file| file.path.clone())
             .collect::<BTreeSet<_>>();
         if file_paths.len() != input.files.len() {
-            return Err("finalizeExternal: output files contain duplicate paths".into());
+            return Err("finalize: output files contain duplicate paths".into());
         }
         let missing = catalog.difference(&file_paths).cloned().collect::<Vec<_>>();
         let undeclared = file_paths.difference(&catalog).cloned().collect::<Vec<_>>();
         if !missing.is_empty() || !undeclared.is_empty() {
             return Err(format!(
-                "finalizeExternal: incomplete catalog (missing: {}; undeclared: {})",
+                "finalize: incomplete catalog (missing: {}; undeclared: {})",
                 missing
                     .iter()
                     .map(ToString::to_string)
@@ -428,10 +435,10 @@ impl SiteEngine {
             input.options,
             input.files,
         )
-        .map_err(|error| format!("finalizeExternal: {error}"))?;
+        .map_err(|error| format!("finalize: {error}"))?;
         output
             .verify_for(&runtime.build)
-            .map_err(|error| format!("finalizeExternal: verify: {error}"))?;
+            .map_err(|error| format!("finalize: verify: {error}"))?;
         Ok(output)
     }
 }

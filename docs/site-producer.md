@@ -1,35 +1,78 @@
 # Publisher site production
 
-`crates/site_producer` is the Publisher-compatible assembly layer between a
-prepared guide and Rust Liquid rendering. It owns two related jobs:
+`crates/site_producer` is an internal Publisher-compatible assembly component
+used by `site_engine`. It derives page shells and `_data`, and it assembles the
+fixed Publisher runtime namespace. It does not define a host handoff, site
+database, staged page tree, or alternate build lifecycle.
 
-1. derive Publisher page shells and the `_data` model from the current guide;
-2. assemble the fixed Publisher runtime namespace from the exact core package,
-   selected template chain, and a small audited embedded payload.
-
-It does not define another handoff value. Its results are private inputs while
-the facade prepares a `SiteBuild`; final bytes are described by `SiteOutput`.
-
-## Data flow
+The editor's [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) is normative. In that
+model, this crate operates inside the `PreparedGuide -> SiteBuild` transition:
 
 ```text
-PreparedGuide + exact PackageLock
-              + materialized TemplateTree
-              |
-              +-> produce() -> page shells + _data
-              |
-              +-> PublisherRuntime::assemble()
-                    -> runtime/core/template assets
-                    -> deterministic HTML finishing rules
-              |
-              +-> authored overlays
-              v
-       immutable RenderState + complete output catalog
-              |
-       render(handle, path)
-              v
-         ContentRef in ContentStore
+PreparedGuide + exact PackageEnvironment + selected template coordinate
+                              |
+                    SiteEngine::prepare
+                              |
+             +----------------+----------------+
+             |                                 |
+       produce()                         PublisherRuntime::assemble()
+       page shells + _data               core/template/runtime files
+             |                                 |
+             +----------- authored files ------+
+                              |
+                  immutable RenderState
+                  complete output catalog
+                  closed SiteBuild + objects
+                              |
+              outputs -> render -> finalize
+                              |
+                  SiteOutput + ContentStore
 ```
+
+The shell/data/runtime results are private preparation artifacts. Every byte
+needed to reconstruct Publisher execution is rooted in the closed `SiteBuild`
+and stored by `ContentRef`; hosts never exchange these pieces individually.
+
+## Shell and `_data` production
+
+The production path constructs `ProducerInputs` with
+`ProducerInputs::from_prepared`. It selects the compiler's explicit primary
+ImplementationGuide, verifies resource identity, preserves the primary guide's
+`definition.resource[]` order, and consumes prepared navigation and authored
+roles.
+
+`produce(&ProducerInputs)` emits resource page shells and the derivable `_data`
+model. Shell layout selection and output names follow Publisher configuration
+fallback rules. The historical F0 US Core oracle established byte parity for
+1,297 page shells and `artifacts.json`; current tests cover the in-memory
+`PreparedGuide` boundary and the full browser gate exercises US Core through
+the canonical SiteEngine path. Other data files explicitly classify Publisher
+run-context gaps where source semantics are insufficient, such as
+Publisher-assigned OIDs, validation counters, tooling strings, and global
+previous/next interleaving.
+
+There is no production `produce -> write temp/pages -> reopen` transition.
+Shells and data move directly into the immutable render model and closed build.
+
+## Generated fragments are renderer-private
+
+Generated fragment bodies are not an output directory produced by this crate.
+During Publisher Liquid evaluation, `render_page` maps a registered include
+name to a typed `ArtifactKey` and resolves it synchronously through the captured
+immutable `ArtifactResolver`. Authored and template includes are ordinary
+mounted inputs with exact provenance.
+
+This late discovery remains inside one Publisher runtime. A ready value or typed
+terminal observation is recorded in the page's reads; the host never receives a
+file-miss callback and never materializes a fragment escape-hatch directory.
+
+## Publisher runtime assembly
+
+`publisher_runtime::PublisherRuntime::assemble` consumes:
+
+- the exact resolved FHIR core coordinate and renderer-visible package view;
+- the fully materialized, authenticated template base chain;
+- the small audited irreducible embedded runtime payload.
 
 Precedence is explicit and collision checked:
 
@@ -37,65 +80,43 @@ Precedence is explicit and collision checked:
 embedded runtime < exact FHIR core < selected template < authored files
 ```
 
-The producer selects the compiler's explicit primary ImplementationGuide.
-Additional ImplementationGuide resources remain ordinary artifacts and cannot
-replace project identity through traversal order.
-
-## Shell and `_data` production
-
-`produce(&ProducerInputs)` emits resource page shells and eight derivable data
-files. Shell layout selection and output names follow the Publisher's config
-fallback rules. Resource ordering follows the primary IG's
-`definition.resource[]` order. The focused corpus gates preserve byte parity for
-all page shells and `artifacts.json`.
-
-Generated fragment bodies are not files made by this crate. During Publisher
-Liquid evaluation, `render_page` maps a registered include name to a typed
-`ArtifactKey` and resolves it synchronously through the captured
-`ArtifactResolver`. Authored and template includes are ordinary mounted files.
-This distinction keeps late Publisher compatibility internal without making the
-host participate in a file-miss protocol.
-
-The other `_data` files intentionally expose known Publisher run-context gaps
-where source data is insufficient, such as Publisher-assigned OIDs, validation
-counters, tooling strings, and exact global previous/next interleaving. Those
-are classified model gaps, not claims of byte parity.
-
-## Publisher runtime assembly
-
-`publisher_runtime::PublisherRuntime::assemble` consumes:
-
-- the exact resolved FHIR core coordinate and package source;
-- the fully materialized template tree;
-- 25 audited irreducible embedded runtime files (150,112 bytes).
-
 Standard tree icons, fixed table images, and FHIR CSS come from the exact core
 package. Template-owned fonts and scripts come from the selected template.
-Only irreducible files are embedded, with their license notices. Generated
-`tbl_bck*` backgrounds use deterministic inline SVG rather than a hidden editor
-asset bundle. The narrow jQuery compatibility transform is gated by exact input
-byte pairs and order, then applied after Liquid and before content addressing.
+Only irreducible files are embedded, with license notices. Generated
+`tbl_bck*` backgrounds use deterministic inline SVG rather than an editor-only
+asset side channel. The narrow jQuery compatibility transform is gated by exact
+input bytes and order, then applied after Liquid and before content addressing.
 
-The runtime exposes a recipe digest binding all selected bytes, provenance,
-licenses, transform versions, and the core coordinate. That digest participates
-in the renderer recipe and output lookup identity.
+The runtime recipe binds selected bytes, provenance, licenses, transform
+versions, and core coordinate. It participates in renderer and output identity.
+Page-relative aliases such as `en/assets/app.css` may point to the same
+`ContentRef` as a canonical asset, so URL closure does not duplicate bytes.
 
-Publisher pages commonly use relative asset URLs under `en/`. Preparation
-therefore declares page-relative aliases (for example `en/assets/app.css`) that
-point to the same `ContentRef` as the canonical asset. The private ContentStore
-keeps one body per digest, so URL closure does not duplicate bytes.
+## Fresh-process restoration
 
-## Public Rust entry points
+Publisher preparation closes the semantic documents, authored roles,
+materialized template files, runtime files, and renderer package evidence into
+the `SiteBuild` object closure. `SiteEngine::restore` verifies those objects and
+recipes, reconstructs the same producer/runtime/model/render state, and installs
+an ordinary handle. The restored host then uses only `outputs`, `render`, and
+`finalize`.
 
-The crate's reusable typed APIs are:
+The original project tree, package cache, and preparing process are not runtime
+dependencies. Forward and reverse render orders must yield identical content
+references and canonical `SiteOutput` bytes.
 
-- `ProducerInputs::from_prepared`, `from_memory`, and `gather_inputs`;
-- `produce` and `SiteProducerOutput::write_to`;
+## Rust API scope
+
+The production composition points are:
+
+- `ProducerInputs::from_prepared`;
+- `produce`;
 - `PublisherRuntime::assemble`, `files`, `recipe_sha256`, and `finish_html`.
 
-The WASM facade composes these internally during Publisher `prepare`. Hosts do
-not mount page shells, runtime assets, or templates through separate site APIs.
-Native `fig render` composes the same producer/rendering crates directly.
+`from_memory` remains useful for focused captured-value fixtures. The former
+filesystem `gather_inputs`, `LayoutSource::Dir`, and
+`SiteProducerOutput::write_to` seams and their staged-tree tests are deleted.
+Oracle harvesting is separate tooling and cannot become a production host API.
 
 ## Verification
 
@@ -103,11 +124,12 @@ Run:
 
 ```sh
 cargo test -p site_producer
+cargo test -p site_engine
 cargo test -p package_store template_loader
 cargo test -p wasm_api site_facade_tests --lib
 ```
 
-The facade tests require a complete pre-render catalog, independent render
-order, handle isolation, exact external finalization, synthetic end-to-end
-template/core/authored assembly, relative asset closure, and verified canonical
-`SiteOutput` creation.
+The gates cover complete pre-render catalogs, collision handling, independent
+render order, exact subject metadata, Publisher closure and fresh-process
+restore, relative asset closure, external finalization, and verified canonical
+`SiteOutput` construction.

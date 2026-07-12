@@ -2,8 +2,9 @@
 
 This repository is the Rust semantic and native-template engine for the FHIR IG
 browser toolchain. It compiles FHIR Shorthand, resolves packages, generates
-snapshots, projects Cycle-compatible data, produces Publisher fragments and page
-shells, and renders stock Publisher templates without Java or Jekyll.
+snapshots, closes callback-free Cycle renderer inputs, and assembles and renders
+Publisher templates without Java or Jekyll. Generated Publisher fragments stay
+inside the immutable renderer runtime rather than becoming a host API.
 
 It is a compatibility stack: when stock SUSHI or the Java IG Publisher and the
 spec disagree, the pinned tool output is the oracle unless an intentional break
@@ -79,29 +80,76 @@ editor's `ARCHITECTURE.md` is the normative cross-repository contract.
 | Fragments | full used-fragment set byte-parity across cycle/plan-net/us-core |
 | Package resolver | 8/8 IG-closure gate |
 
-`fig render` reproduces those page numbers byte-for-byte — it composes the same
-F5/F6 machinery the page corpora gate (`crates/render_page/src/bin/pagecorpus.rs`).
+Those figures are regression-oracle results from the focused snapshot,
+fragment, and page-corpus harnesses. The supported host path is the closed
+SiteEngine lifecycle below; it does not consume an oracle's mutable build tree.
 
-## Quickstart — `fig render`
+## Native quickstart — the canonical lifecycle
 
-Render a completed build tree to a static site at Publisher parity:
+Build a Publisher site from authored project bytes and an explicit materialized
+package cache:
 
 ```sh
 cargo build --release -p fig
-target/release/fig render <build-dir> -o site/
-#   build-dir = a staged build (temp/pages + output/ + .home/.fhir/packages +
-#   input-cache/txcache), e.g. an F0 build. Byte-identical to the Java Publisher's
-#   Jekyll output; 678 plan-net pages render in ~0.6s.
 
-target/release/fig render <build-dir> -o site/ --template hl7.fhir.template#1.0.0
-#   --template <id#ver> is the DRIVEN default: fetch + materialize any template
-#   chain (walk `base`, union-copy, _append concat, config deep-merge) in pure
-#   Rust — ZERO XSLT/ant. Byte-exact vs the Java Publisher's template/ tree
-#   (gate: crates/package_store/tests/template_materialization_gate.rs).
-#   --template-dir <dir> uses a pre-materialized tree (escape hatch).
+SOURCE_DATE_EPOCH=1783555200 target/release/fig prepare <ig-dir> \
+  --target publisher-site/v1 \
+  --template hl7.fhir.template#1.0.0 \
+  --cache <package-cache> \
+  --out publisher-build
+
+target/release/fig outputs publisher-build
+target/release/fig render publisher-build en/index.html -o index.html
+target/release/fig finalize publisher-build -o site
 ```
 
-Other subcommands (add `--json` to any for the shared envelope):
+`prepare` captures one immutable project revision and exact resolver-scoped
+package environment, calls `SiteEngine::prepare_project`, and atomically writes
+a closed bundle:
+
+```text
+publisher-build/site-build.json
+publisher-build/objects/sha256/<digest>
+```
+
+The object store contains every byte addressed by the `ClosedSiteBuild`, not
+only source files: package material, prepared semantic documents, authored
+roles, the materialized template, Publisher runtime inputs, and render-package
+evidence are all in the verified closure. The live project and package cache
+are not consulted by later operations.
+
+Each native `outputs`, `render`, or `finalize` invocation can start in a fresh
+process. It authenticates the closed build and object closure, reconstructs an
+ordinary SiteEngine runtime with `SiteEngine::restore`, and then invokes the
+corresponding host operation. `restore` is lifecycle construction, not a fifth
+host operation or another domain value. `finalize` renders any remaining
+declared Publisher paths and atomically publishes the canonical `SiteOutput`
+and its exact files.
+
+Cycle uses the same preparation boundary but intentionally keeps its external
+renderer:
+
+```sh
+SOURCE_DATE_EPOCH=1783555200 target/release/fig prepare <ig-dir> \
+  --target cycle-site/v2 \
+  --cache <package-cache> \
+  --out cycle-build
+
+# LiquidJS consumes cycle-build and writes a private complete staging tree
+# plus its typed external-finalization plan. The plan's required inputBuildId
+# is the exact build id LiquidJS opened; Fig rejects a changed/replaced bundle.
+target/release/fig finalize cycle-build \
+  --site <private-staging> \
+  --external-plan <plan.json> \
+  --cache <optional-site-output-cache>
+```
+
+The external builder owns Cycle's catalog and output bytes, while Rust verifies
+the complete staged inventory and remains the sole constructor of the canonical
+`SiteOutput`. This is the intended second Liquid implementation, not a second
+build model.
+
+Other subcommands (add `--json` to any command for the shared envelope):
 
 ```sh
 fig build <ig-dir> -o fsh-generated       # FSH -> resources (SUSHI)
@@ -110,61 +158,17 @@ fig resolve --cache <dir> --project <ig>   # dependency closure
 fig packages bundle --cache <d> -o <d> id#v   # CDN-mountable package bundles
 fig packages prepare --cache <d> -o <d> id#v  # versioned binary warm-mount artifacts
 fig expand <valueset.json>                 # tier-1 enumerable expansion
-fig prepare <ig> --target cycle-site/v2 --sushi-out <new> \
-  --cache <d> --out <new> --build-date <epoch>  # sealed external-builder bundle
-fig output-cache load <bundle> --cache <d> \
-  --renderer-id <id> --renderer-version <v> --recipe-sha256 <digest> \
-  --output-schema <schema> [--option key=value] [--into <empty-staging>]
-fig output-cache publish <bundle> --cache <d> --site <sealed-site>
-fig fragment <build-dir> <ref> <kind>      # ONE publisher-parity fragment
-fig fragments <build-dir> -o _includes/    # materialize fragment files (escape hatch)
-fig watch <build-dir> --serve :8080        # legacy staged-tree watcher
+fig prepare <ig> --target <publisher-site/v1|cycle-site/v2> ...
+fig outputs <publisher-bundle>             # complete declared output catalog
+fig render <publisher-bundle> <path>       # one independently rendered output
+fig finalize <bundle> ...                  # one canonical SiteOutput
 ```
 
-The former `fig render --generator ts:<adapter.mjs>` runner has been removed.
-It loaded a stale editor callback API, required a second Node-target WASM host,
-and could compile inputs independently of the native build. Portable external
-builders instead consume a verified `ClosedSiteBuild` and addressed objects.
-Cycle uses that boundary in the browser, and `fig prepare` emits the sole
-`cycle-site/v2` contract natively as `site-build.json` plus
-`objects/sha256/<digest>`. Its roots are prepared FHIR resources, terminology, recursive
-navigation, parsed config, and raw authored assets. Fig compiles once through
-the current prepared-site pipeline, derives identity from the produced IG, and
-gives the build only a private filesystem reconstructed from captured source
-objects and normalized package objects.
-The live authored tree/cache are never compile inputs after capture, so even an
-A→B→A mutation cannot pair rows for B with A's manifest. Post-build live and
-staged comparisons remain fail-closed diagnostics.
-Both `--sushi-out` and `--out` must be new, disjoint directories; the package
-cache is always explicit, no network or `~/.fhir` fallback is used, and a build
-timestamp is required (`--build-date` or `SOURCE_DATE_EPOCH`).
-Cycle's native consumer is then
-`SITE_BUILD_DIR=<bundle> bun site-gen/build.tsx`; it verifies the manifest,
-reachable artifact closure, digest, and byte length before rendering through
-the same `CycleSiteRenderer` used in the browser.
-
-That consumer composes [`fig::output_cache`](crates/fig/src/output_cache.rs)
-around the canonical render. Before opening the generator it supplies the exact
-closed build, renderer id/version/recipe, output schema, and options to
-`fig output-cache load`; a hit verifies the cached `SiteOutput` and every
-addressed byte, then fills Cycle's private atomic-publication staging tree.
-After a miss, Cycle seals the ordinary `site-output.json` and calls
-`fig output-cache publish` before publishing the tree. The cache root contains
-only a `FileSiteOutputCache` under `manifests/` and a `FileContentStore` under
-`objects/sha256/`. Set `FIG_OUTPUT_CACHE` to choose the root (Cycle defaults to
-`temp/fig-output-cache`).
-
-This does not wrap legacy `fig render`: that staged Publisher-tree command has
-no canonical `ClosedSiteBuild`, so it cannot compute a truthful pre-render
-`sok1` key. A path, mtime, or mutable tree hash is not substituted for the
-missing domain input.
-
-`fig watch --serve` is a legacy watcher for an already-staged Publisher tree.
-It neither compiles FSH nor follows `prepare -> outputs -> render -> finalize`,
-so it is not the native twin of the browser editor and its old page-only timing
-must not be compared with an editable build. It remains only while its useful
-read-set/dirty-cone machinery is moved behind the canonical host flow, then it
-is a deletion target rather than a second architecture.
+The deleted fragment/materialization commands, mutable page-tree producer,
+build-root renderer, template-directory escape hatch, and staged watcher are
+not compatibility APIs. Generated Publisher fragments are private reads of one
+immutable render runtime. Template resolution is package-coordinate based, and
+all public output paths come from `outputs(handle)`.
 
 ## Where to look
 
@@ -172,14 +176,14 @@ is a deletion target rather than a second architecture.
 | --- | --- |
 | Cross-repository editor/renderer contract | editor [`ARCHITECTURE.md`](../../ARCHITECTURE.md) |
 | `SiteBuild`, artifact states, hashing, render plans, and closure | [`crates/site_build/README.md`](crates/site_build/README.md) |
-| Native exact compile → closed external-builder bundle | [`crates/fig/src/prepare.rs`](crates/fig/src/prepare.rs) |
+| Native exact compile → closed target bundle | [`crates/fig/src/prepare.rs`](crates/fig/src/prepare.rs) |
 | Canonical package identity, binary warm artifacts, and derived index shared by native/WASM | [`crates/package_store/src/material.rs`](crates/package_store/src/material.rs), [`prepared.rs`](crates/package_store/src/prepared.rs) |
 | Hosting `Session`, `fig`, native templates, or external builders | [`docs/hosting.md`](docs/hosting.md) |
 | Source-driven page-shell and `_data` production | [`docs/site-producer.md`](docs/site-producer.md) |
 | Current versus historical engine documents | [`docs/README.md`](docs/README.md) |
 | Runnable examples | [`examples/`](examples/) and `scripts/examples-gate.sh` |
 
-Obsolete v1 plans and worklogs were deleted with their APIs. The remaining
+Obsolete Cycle v1 plans and worklogs were deleted with their APIs. The remaining
 dated audits preserve oracle or measurement evidence, not alternate contracts.
 
 ## Package Acquisition Tutorial

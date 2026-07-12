@@ -1,6 +1,12 @@
 # Hosting the engine
 
-The supported site-generation model has three domain values:
+The editor's [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) is the normative
+cross-repository contract. This document explains how the Rust, WASM, and
+native Fig hosts implement it; it does not define another build flow.
+
+## Domain values and byte storage
+
+There are three site-generation domain values:
 
 ```text
 PreparedGuide -> SiteBuild -> SiteOutput
@@ -8,44 +14,56 @@ PreparedGuide -> SiteBuild -> SiteOutput
                  ContentStore
 ```
 
-`ContentStore` is digest-addressed byte plumbing, not a fourth model. Compiler
-revisions, template trees, package locks, fragment observations, and opaque
-handles are private implementation details or inputs to those values.
+- `PreparedGuide` is the complete renderer-neutral guide: prepared FHIR
+  resources, terminology products, navigation, parsed configuration, and
+  authored-content references.
+- `SiteBuild` is one immutable target-specific renderer input. A
+  `ClosedSiteBuild` proves that every required artifact is ready.
+- `SiteOutput` is the authenticated complete mapping from safe output paths to
+  content, media type, producer, ownership, and exact renderer/input identity.
 
-The editor's [`ARCHITECTURE.md`](../../../ARCHITECTURE.md) is authoritative for
-the cross-repository boundary. This document describes the Rust/WASM side.
+`ContentStore` contains immutable bytes addressed by digest and length. It is
+storage plumbing, not a fourth domain value, site database, or serialized
+renderer model. Project revisions, package locks, caches, template trees,
+fragment observations, output catalogs, and handles are inputs or scoped
+execution details.
 
-## The one site host facade
+For Publisher, the closed object set includes the exact project sources and
+package lock plus prepared semantic documents, every authored role, the
+materialized template tree, assembled runtime inputs, and the package evidence
+needed by rendering. Closure verification authenticates those bytes before a
+runtime is installed.
 
-The public worker API is deliberately four operations:
+## The only host API
 
-```ts
-prepare(project, generatorSpec): Promise<BuildHandle>
-outputs(handle): Promise<OutputDescriptor[]>
-render(handle, path): Promise<{ path: string; mediaType: string; content: ContentRef }>
-finalize(handle): Promise<SiteOutput>
+```text
+prepare(project, generatorSpec) -> BuildHandle
+outputs(handle)                 -> OutputCatalog
+render(handle, path)            -> Output
+finalize(handle)                -> SiteOutput
 ```
 
-The worker serializes `prepare`, mounts the exact resolved package closure,
-calls `compileProject` once, and immediately calls Rust `prepare`. Project bytes
-cross the worker boundary once. A handle is opaque and immutable: rendering a
-path does not create a successor handle, and A/B/A render order must produce the
-same bytes as B/A/B.
+`BuildHandle`, `OutputCatalog`, and `Output` are scoped views, not stored domain
+values. A handle names one immutable `SiteBuild`. Rendering a path can memoize
+its addressed bytes, but it neither mutates build identity nor creates a
+successor handle. Rendering A/B/A must produce the same bytes as B/A/B.
 
-The Rust `Session` binding exposes the same generation verbs as `prepare`,
-`outputs`, `render`, and `finalize`. At this lower boundary compilation has
-already installed the exact `ProjectRevision`, so Rust `prepare` accepts only a
-generator specification. It rejects config, FSH, predefined resources, and
-site-file bodies rather than allowing the host to resend or override a project.
+The host captures one complete project revision and supplies one exact,
+resolver-scoped `PackageEnvironment`. `SiteEngine::prepare_project` owns the
+single semantic compile and target preparation transaction. A failure installs
+neither a partial project nor a partial runtime. `wasm_api` parses and
+serializes transport; it does not assemble a second site model.
 
-Every ordinary `Session::new()` owns an independent `Engine`; there is no
-process-global Session. Session calls use the shared result envelope:
+The browser worker exposes these four operations. Lower-level binary reads and
+the external-renderer branch of finalization are private transport plumbing:
 
-```json
-{ "apiVersion": 1, "ok": true, "op": "prepare", "result": {} }
-```
+- `readContent(handle, digest)` returns verified bytes for a `ContentRef`;
+- `finalize(handle, externalInput?)` uses the optional typed external input only
+  for an external-builder handle; it admits a complete catalog and verified
+  file references so Rust can construct the canonical `SiteOutput`.
 
-Hosts must reject `ok:false`; `Session.version()` is the static exception.
+Neither is another semantic handoff. Every ordinary WASM Session owns an
+independent engine; there is no process-global Session.
 
 ## Generator specifications
 
@@ -65,99 +83,134 @@ Generator specifications are closed tagged objects. Unknown fields fail.
 ```
 
 Cycle preparation creates a callback-free closed `cycle-site/v2` build and
-retains its addressed objects. Cycle's LiquidJS renderer owns its output
-catalog and path rendering. Publisher preparation materializes the exact base
-template chain, assembles runtime/template/authored files, produces page shells
-and `_data`, captures an immutable Rust render state, and declares its complete
-output catalog before any page is rendered.
+roots every semantic and authored object needed by the external renderer.
+Publisher preparation resolves and materializes the exact template base chain,
+assembles page shells, `_data`, runtime/template/authored files, captures an
+immutable Rust render state, and declares its complete output catalog before
+any page is rendered.
 
-## ContentStore and finalization
+## Fresh-process restoration
+
+`SiteEngine::restore(closedBuild, contentStore)` reconstructs an executor from
+an authenticated closed handoff. It is a lifecycle constructor, not a fifth
+host operation and not a new domain value. Once restored, callers use only the
+same handle-scoped `outputs`, `render`, and `finalize` operations.
+
+Publisher restoration verifies the full object closure and recipe identities,
+reconstructs the `PreparedGuide`, materialized template/runtime trees,
+renderer-visible package view, Publisher model, render state, and output
+catalog, then installs an ordinary immutable handle. It does not require the
+original authored directory, package cache, process, or an opaque serialized
+Rust runtime.
+
+Cycle restoration verifies and installs the same closed external-builder
+handle and addressed objects. Cycle remains callback-free; its LiquidJS host
+owns catalog construction and rendering, then submits the complete result for
+Rust finalization.
+
+Restoration correctness requires identical catalogs, output `ContentRef`s and
+bytes regardless of render order, and identical canonical `SiteOutput` bytes
+after the original preparing engine has been dropped.
+
+## Content references and finalization
 
 `ContentRef` contains a SHA-256 digest, byte length, and optional media type.
-JSON carries references and metadata, never file bodies. Two private worker
-plumbing calls are intentional:
+Transport JSON carries references and metadata, never base64 site bodies.
+Aliases may share one stored object.
 
-- `readContent(handle, digest)` returns a direct `Uint8Array` after digest
-  verification.
-- `finalizeExternal(handle, metadata)` lets the Cycle host submit only its
-  complete catalog, file metadata, and verified `ContentRef`s. Rust checks exact
-  catalog equality and constructs the canonical `SiteOutput`.
+Publisher `finalize` succeeds only when every declared output is ready and
+verified. A host must publish all referenced objects before atomically
+publishing the `SiteOutput` receipt. A `SiteOutputCache` may index a complete
+verified output by the exact closed build, renderer implementation and recipe,
+output schema, and options. A cache hit reconstructs that same `SiteOutput`; it
+does not authorize a parallel cached representation.
 
-Publisher `finalize` succeeds only when every declared page is rendered.
-Already-prepared assets are content-addressed during `prepare`; aliases share a
-single stored body. A host publishes all referenced objects before publishing
-the `SiteOutput` receipt.
+For an external renderer, Rust verifies exact catalog equality, safe paths,
+media types, content digests and lengths, and the complete private staging-tree
+inventory before constructing the receipt. Renderer code cannot seal a second
+authoritative receipt.
 
 ## Template acquisition
 
-Rust, not JavaScript, interprets template manifests. Private
-`resolveTemplate(coordinate)` walks `package.json.base` and exact parent
-dependencies. If it returns one missing exact coordinate, the host acquires and
-mounts that ordinary package and retries. Malformed bases, missing dependency
-versions, and cycles fail loudly.
+Rust owns template semantics. `resolveTemplate(coordinate)` walks
+`package.json.base` and its exact dependency versions. The host may acquire a
+reported missing coordinate as an ordinary package and retry. Malformed bases,
+missing versions, and cycles fail loudly.
 
-This keeps package acquisition in the host while preserving one authoritative
-template-chain algorithm in `package_store::template_loader`.
+There is no pre-materialized template-directory host escape hatch. The selected
+coordinate and complete base chain belong to the authenticated
+`PackageEnvironment` and participate in build identity.
 
-## Why the two renderer paths differ
+## Why there are two Liquid implementations
 
-There are two Liquid implementations, intentionally:
+The host contract is shared; the renderer implementations intentionally differ:
 
 | Architecture | Liquid engine | Resolution behavior |
 | --- | --- | --- |
-| Publisher-compatible native template | Rust `render_liquid` | registered generated fragments resolve synchronously through the captured typed `ArtifactResolver` |
+| Publisher-compatible native template | Rust `render_liquid` | registered generated fragments resolve synchronously inside the captured immutable `ArtifactResolver` |
 | Cycle external builder | Cycle LiquidJS | all semantic and authored requirements are closed before execution; no Rust callback |
 
-Publisher templates can name a generated include only while evaluating Liquid.
-The Rust facade keeps that discovery internal: registered names map to typed
-artifact keys, the immutable resolver returns a ready value or a typed terminal
-failure, and the page records its reads. There is no host callback, ambient
-Session lookup, or affine "next handle". Cycle needs none of this because its
-v2 contract is closed before LiquidJS runs.
+Publisher templates discover some generated includes only while evaluating
+Liquid. Registered names map to typed artifact keys; the immutable resolver
+returns a ready value or typed terminal observation and records the read. This
+is private renderer behavior, not a public fragment API, file-miss callback, or
+affine successor-handle protocol.
 
-## Native hosting
+Cycle needs no callback because `cycle-site/v2` is eagerly closed. Its browser
+and native hosts use the same LiquidJS renderer. Both paths end in the same
+Rust-validated `SiteOutput` contract.
 
-Rust callers should prefer typed crate APIs. `prepared_guide` owns source
-preparation; `site_build` owns `SiteBuild`, closure proofs, `ContentRef`, and
-`SiteOutput`; `site_producer` owns Publisher page/data/runtime assembly. `fig
-prepare --target cycle-site/v2` publishes a native closed bundle for external
-builders. `fig render` is the direct Publisher-template path.
+## Native Fig hosting
 
-Native complete-output reuse is the host composition in
-`fig::output_cache`. `load` accepts a `ClosedSiteBuild` plus the exact renderer
-implementation/recipe, output schema, and options; it returns only a fully
-verified canonical `SiteOutput` or an ordinary miss. `publish_tree` accepts the
-same closed input and a renderer-sealed tree containing canonical
-`site-output.json`, imports its declared bytes into `FileContentStore`, and
-atomically publishes the receipt through `FileSiteOutputCache`. The thin
-`fig output-cache load|publish` commands expose those library calls to Cycle's
-native Bun host; they do not define another manifest.
+Fig is a transport over the same engine, not a staged-tree renderer:
 
-Cycle materializes a hit into its existing private
-`AtomicOutputPublication` staging directory, validates the receipt and all
-files through its independent SiteOutput implementation, and re-verifies them
-immediately before the normal atomic rename. On a miss it renders as before,
-seals the same receipt, imports it into the cache, and publishes. Browser Cycle
-continues to use the four-operation worker facade and is unaffected.
+```sh
+# Publisher
+fig prepare <ig-dir> \
+  --target publisher-site/v1 \
+  --template hl7.fhir.template#1.0.0 \
+  --cache <package-cache> \
+  --out <closed-bundle> \
+  --build-date <epoch-or-RFC3339>
+fig outputs <closed-bundle>
+fig render <closed-bundle> en/index.html -o index.html
+fig finalize <closed-bundle> -o <new-site-directory>
 
-The legacy staged-tree `fig render` path is deliberately not cached this way:
-it has no `ClosedSiteBuild`, and filesystem paths or mtimes cannot stand in for
-the canonical input identity.
+# Cycle: an external LiquidJS renderer fills a private staging tree and plan.
+fig prepare <ig-dir> \
+  --target cycle-site/v2 \
+  --cache <package-cache> \
+  --out <closed-bundle> \
+  --build-date <epoch-or-RFC3339>
+fig finalize <closed-bundle> \
+  --site <private-staging> \
+  --external-plan <plan.json> \
+  --cache <optional-site-output-cache>
+```
 
-Package acquisition and warm mounting remain separate from generation. Package
-coordinates are exact, a compiled revision retains the resolution closure used
-for compilation, and later mounts affect only a later compile.
+The bundle is exactly `site-build.json` plus `objects/sha256/<digest>`. Native
+`outputs`, `render`, and `finalize` may each open it in a new process and invoke
+`SiteEngine::restore`; no mutable `temp/pages`, generated include directory,
+ambient package home, or prior Fig process is required.
+
+Package acquisition remains separate from generation. Coordinates are exact,
+and a compiled revision retains the resolver closure used for compilation.
+Later package mounts affect only a later preparation.
 
 ## Removed surfaces
 
 The following are not compatibility APIs and must not be restored:
 
-- `site.db`, `cycle-site/v1`, row-shaped Cycle projections, and base64 object
-  batches;
-- `buildSiteBuildFromCompile`, `mountSite`, `mountTemplate`,
-  `produceStockSite`, `openStockBuild`, and `renderStockPage`;
-- ambient `renderPage`, `renderFragment`, `listPages`, `renderLiquid`,
-  `renderMarkdown`, and `Session.global`.
+- `site.db`, `cycle-site/v1`, row projections, and base64 object batches;
+- public `mountSite -> mountTemplate -> produceStockSite -> openStockBuild`
+  choreography;
+- ambient `renderPage`, `renderFragment`, `listPages`, mutable renderer globals,
+  and successor handles;
+- staged Fig `fragment`, `fragments`, `produce`, build-root `render`, and `watch`;
+- Fig's mutable `temp/pages` handoff, standalone template materializer,
+  `--template-dir`, and page-only watch benchmark;
+- host-authored Publisher fragments, runtime assets, or `SiteOutput` receipts.
 
-The facade replaces that choreography with one compile, one preparation, a
-complete catalog, independent path reads, and one canonical output receipt.
+The replacement is one captured project, one preparation, a complete catalog,
+independent path rendering, verified content reads, and one canonical output
+receipt.

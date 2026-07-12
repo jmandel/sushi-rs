@@ -31,16 +31,11 @@ path = "src/bin/snapshot_gen.rs"
 # The engine core — fig subcommands are arg-parse -> engine-core call -> output.
 compiler = { workspace = true }
 snapshot_gen = { workspace = true }
-prepared_guide = { workspace = true }
 package_store = { workspace = true }
 package_acquisition = { workspace = true }
-render_sd = { workspace = true }
-render_page = { workspace = true }
 site_build = { workspace = true }
+site_engine = { workspace = true }
 content_store = { workspace = true }
-site_producer = { workspace = true }
-render_liquid = { workspace = true }
-render_md = { workspace = true }
 json_emit = { workspace = true }
 api_envelope = { workspace = true }
 
@@ -50,11 +45,6 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tempfile = { workspace = true }
 walkdir = { workspace = true }
-
-# watch --serve: a tiny blocking HTTP server for live-reload preview. File
-# watching is a dependency-free mtime poll (see src/watch.rs) — robust and
-# offline, and the dirty-cone recompute is the real cost, not event latency.
-tiny_http = "0.12"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mimalloc = { workspace = true }

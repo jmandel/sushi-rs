@@ -9,10 +9,9 @@
 //! WASM and native hosts provide only explicit project/package environments and
 //! transport the typed results; no host-side preparation facade exists.
 //!
-//! Publisher `ClosedSiteBuild` now addresses every external renderer input.
-//! Rehydrating a fresh in-process `RenderState` from only that closed build and
-//! its `ContentStore` is the next executor step; current handles are constructed
-//! atomically by [`SiteEngine::prepare`] and never claim opaque-runtime replay.
+//! `ClosedSiteBuild` addresses every external renderer input.
+//! [`SiteEngine::restore`] authenticates its complete `ContentStore` closure and
+//! admits an ordinary bounded Publisher or Cycle handle in a fresh process.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -31,12 +30,11 @@ pub use compilation::{
     ResolvedPackageClosure,
 };
 pub use preparation::{
-    GeneratorSpec, PackageEnvironment, PackageMaterial, PrepareMetrics, PrepareResult,
-    TemplateResolution,
+    GeneratorSpec, PackageEnvironment, PackageMaterial, PrepareMetrics, PrepareProjectError,
+    PrepareResult, PreparedProjectResult, TemplateResolution,
 };
-pub use render_surface::{
-    build_render_semantics, build_render_state_from_semantics, RenderSemantics, RenderState,
-    SiteOptions,
+pub(crate) use render_surface::{
+    build_render_semantics, build_render_state_from_semantics, RenderState, SiteOptions,
 };
 pub use runtime::{
     ExternalFinalizeInput, OutputCatalog, OutputDescriptor, OutputResourceSubject,

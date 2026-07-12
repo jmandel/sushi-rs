@@ -7,6 +7,64 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
 
+**ARCHITECTURE CERTIFIED LOCALLY (UNCOMMITTED 2026-07-12):** the complete
+four-operation Fig/SiteEngine migration and Cycle v2 external-finalize path are
+green in `/tmp/fhir-architecture-overhaul-browser-final18.log`. Browser-only
+limits fixed during certification: package normalization runs outside the
+Session borrow; cold closures prepare one compact export at a time but commit
+through one atomic prepared-mount transaction; and Publisher prose edits reuse
+exact RenderSemantics plus captured render-package artifacts, layering the site
+map by `Rc`. Warm render-model work fell from ~1.35s to 2ms. The metric is
+`renderSemanticsCacheHit`; Worker recycling remains a host lifecycle concern,
+not a SiteEngine domain operation.
+
+**NATIVE FIG IS NOW ON SITEENGINE (UNCOMMITTED 2026-07-12):** Fig `prepare`
+calls the atomic `SiteEngine::prepare_project`; Publisher bundles reopen in a
+fresh executor from their authenticated closed closure and use only
+`outputs/render/finalize`. The staged Fig engine, fragment/fragments/produce,
+template materializer, watch server/benchmark, and their direct dependencies
+are deleted. The real four-resource Tiny guide gate prepared a complete
+Publisher bundle, reopened it independently for catalog and one page, then
+finalized 1,799 files / 36,752,344 bytes with canonical output id
+`so1-sha256:5409669b6530631b08aac32bfcf6dafffa968031439e6bcff331d3a7d28b4f19`.
+Native target re-resolution now includes the template chain both before and
+after compilation. The captured predefined parser has disk-parity JSON/XML,
+recursive-root order, stock precedence, and unsafe-path tests (4/4 green).
+Generic strict restore now admits Cycle v2. LiquidJS remains the external
+outputs/render implementation, while Rust `finalize` is the only SiteOutput
+constructor/cache publisher for the ordinary and outer Cycle sites. Public
+`output-cache publish`, TypeScript receipt constructors/sealing, site-producer
+filesystem staging, and the unused SiteBuild successor/resolution protocol are
+deleted. The real two-pass native receipt is `so1-sha256:d5fb41f4...` with 91
+files; the second pass verified the same cache entry and skipped Liquid. Full
+current-WASM Chromium certification is still running.
+
+External finalization now requires the renderer-opened `inputBuildId` in its
+typed plan. Fig compares it to the independently restored SiteEngine handle
+before authenticating staged bytes, and Cycle validates the returned build id;
+the base renderer passes its generator id and the outer wrapper passes the
+inherited receipt id. This closes the bundle-path A-to-B replacement window.
+
+**PUBLISHER CLOSED-BUILD REHYDRATION (COMPLETED IN CURRENT ROUND, 2026-07-12):** the current
+worktree adds generic `SiteEngine::restore(ClosedSiteBuild, ContentStore)` as
+an executor lifecycle constructor, not a fifth host operation. It authenticates
+the closure once, reconstructs the complete PreparedGuide from the four
+semantic documents plus all six authored roles, rebuilds template/runtime and
+the exact render package view, validates the mounted-tree/runtime/executor
+recipes, and installs an ordinary handle for `outputs -> render -> finalize`.
+Live preparation and restoration now share the same focused runtime-output,
+Publisher-model, RenderState, and catalog helpers. The focused fixture proves
+identical initial catalogs, page ContentRefs/bytes under forward-vs-reverse
+render order, and canonical SiteOutput bytes after the original engine is
+dropped. A closure audit found that locked normalized packages contain only
+top-level files while `render_sd` reads `other/spec.internals`; Publisher builds
+now root one exact empty-or-single-file render-package artifact per compile
+coordinate and live rendering uses that same narrowed reconstructed view. The
+strict normalized-package decoder moved from Fig into package_store. Native Fig
+now consumes this seam; legacy engine/watch/fragment/materialization paths and
+their stale docs are deleted. The current round remains uncommitted pending the
+complete browser/CI-equivalent gate.
+
 **CANONICAL SITEENGINE EXTRACTION + FIRST DELETION PASS (CHECKPOINT COMPLETE,
 2026-07-11):** the target-neutral `site_engine` crate now owns the exact
 resolver-scoped `PackageView`, semantic compilation, PreparedGuide construction,
@@ -95,7 +153,11 @@ documented-toolchain wasm32 check is green. In the real rebuilt browser receipt
 Rust preparation 182 ms with `siteBuildCacheHit=1`; template materialization,
 Publisher runtime/model, render model, and catalog reconstruction are all zero.
 
-**NATIVE CYCLE REUSES EXACT COMPLETE SITEOUTPUT (2026-07-11):** Fig's new
+**NATIVE CYCLE CACHE PROTOTYPE (SUPERSEDED 2026-07-12):** This checkpoint's
+public `fig output-cache load|publish` and TypeScript receipt sealing were
+deleted by the current native four-operation migration above. The retained
+facts are exact `SiteOutputCache` identity, verified materialization, and the
+measured cache opportunity. Fig's earlier
 library-first `output_cache` module composes the existing `ClosedSiteBuild`,
 `SiteOutput`, `FileSiteOutputCache`, and `FileContentStore` without another
 manifest or cached value. The thin `fig output-cache load|publish` exposure lets

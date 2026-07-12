@@ -2,9 +2,8 @@
 //! publisher needs to (a) place a resource in the config table and (b) fill
 //! `{{[...]}}` layout placeholders — no full FHIR typing required.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use anyhow::Result;
 use serde_json::Value;
 
 /// One artifact that gets a page. Fields mirror what
@@ -27,7 +26,7 @@ pub struct Resource {
     pub is_example: bool,
     /// The full parsed JSON (for `_data` derivation: status/description/etc.).
     pub json: Value,
-    /// Absolute source path (predefined/example/compiled origin).
+    /// Logical source path used by the Publisher data model.
     pub file: PathBuf,
 }
 
@@ -70,51 +69,4 @@ impl Resource {
             file: PathBuf::from(file_name),
         })
     }
-}
-
-/// Enumerate every resource JSON directly under `dir` (non-recursive, matching
-/// the publisher's flat resource folders). Files are visited in sorted order for
-/// determinism.
-pub fn enumerate_resources(dir: &Path, is_example: bool) -> Result<Vec<Resource>> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-        .collect();
-    files.sort();
-
-    let mut out = Vec::new();
-    for f in files {
-        let bytes = match std::fs::read(&f) {
-            Ok(b) => b,
-            Err(_) => continue,
-        };
-        let v: Value = match serde_json::from_slice(&bytes) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let Some(rt) = v.get("resourceType").and_then(Value::as_str) else {
-            continue;
-        };
-        let Some(id) = v.get("id").and_then(Value::as_str) else {
-            continue;
-        };
-        let name = v.get("name").and_then(Value::as_str).map(str::to_string);
-        out.push(Resource {
-            rt: rt.to_string(),
-            id: id.to_string(),
-            name,
-            url: v.get("url").and_then(Value::as_str).map(str::to_string),
-            kind: v.get("kind").and_then(Value::as_str).map(str::to_string),
-            derivation: v
-                .get("derivation")
-                .and_then(Value::as_str)
-                .map(str::to_string),
-            type_: v.get("type").and_then(Value::as_str).map(str::to_string),
-            abstract_: v.get("abstract").and_then(Value::as_bool).unwrap_or(false),
-            is_example,
-            json: v,
-            file: f,
-        });
-    }
-    Ok(out)
 }

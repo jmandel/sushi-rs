@@ -4,14 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "Site-producer: synthesizes the stock template's per-artifact page SHELLS + the _data/*.json site-data model from an IG's source + compiled resources + the template config.json — the IG-Publisher piece that lets the stock template be produced from a repo dir tree (kills the pre-baked -stock.json)."
+description = "Publisher projection: synthesize stock-template page shells, data, includes, and runtime assets from a prepared FHIR guide."
 
 [lib]
 name = "site_producer"
 
 [dependencies]
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 package_store = { workspace = true }
 site_build = { workspace = true }

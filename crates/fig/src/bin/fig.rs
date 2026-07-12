@@ -1,14 +1,14 @@
 //! `fig` — the unified FHIR IG CLI. ONE binary; subcommands map onto the SAME
-//! engine core used by the wasm Session.
+//! target-neutral SiteEngine core used by the WASM Session.
 //!
-//! IRON RULE: subcommands contain NO logic — each is arg-parse → engine-core
-//! call → output. Any composition the engine lacks lives in `fig::engine` (a
-//! native engine module the Session can grow later), not here.
+//! Subcommands are transport adapters: parse arguments, call a typed library
+//! operation, and serialize its result. They do not assemble renderer state.
 //!
 //! `--json` on every subcommand emits the shared `api_envelope` envelope,
 //! schema-identical to the Session's.
 
 use std::collections::BTreeMap;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -33,12 +33,9 @@ fn main() {
         Some("packages") => cmd_packages(&args),
         Some("expand") => cmd_expand(&args),
         Some("prepare") => cmd_prepare(&args),
-        Some("output-cache") => cmd_output_cache(&args),
-        Some("fragment") => cmd_fragment(&args),
-        Some("fragments") => cmd_fragments(&args),
-        Some("produce") => cmd_produce(&args),
+        Some("outputs") => cmd_outputs(&args),
         Some("render") => cmd_render(&args),
-        Some("watch") => cmd_watch(&args),
+        Some("finalize") => cmd_finalize(&args),
         Some("version") | Some("--version") => {
             let v = fig::version_payload();
             if !json {
@@ -261,10 +258,9 @@ fn cmd_expand(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_prepare(args: &[String]) -> Result<Value> {
     let ig = positional(args, 2).context(
-        "usage: fig prepare <ig-dir> --target cycle-site/v2 --sushi-out <new-dir> --cache <dir> --out <new-dir> --build-date <epoch|RFC3339>",
+        "usage: fig prepare <ig-dir> --target <cycle-site/v2|publisher-site/v1> --cache <dir> --out <new-dir> --build-date <epoch|RFC3339> [--template <id#version>]",
     )?;
-    let target = opt(args, "--target").context("--target cycle-site/v2 is required")?;
-    let sushi_out = opt(args, "--sushi-out").context("--sushi-out <new-dir> is required")?;
+    let target = opt(args, "--target").context("--target is required")?;
     let cache = opt(args, "--cache").context("--cache <dir> is required")?;
     let out = opt(args, "--out")
         .or_else(|| opt(args, "-o"))
@@ -272,10 +268,12 @@ fn cmd_prepare(args: &[String]) -> Result<Value> {
     let build_epoch_secs = resolve_build_epoch(opt(args, "--build-date"))?;
     let outcome = fig::prepare::prepare(&fig::prepare::PrepareConfig {
         ig_dir: PathBuf::from(ig),
-        sushi_out: PathBuf::from(sushi_out),
         cache_dir: PathBuf::from(cache),
         out_dir: PathBuf::from(out),
         target: target.to_string(),
+        template_coordinate: opt(args, "--template").map(str::to_string),
+        active_tables: has(args, "--active-tables"),
+        run_uuid: opt(args, "--run-uuid").map(str::to_string),
         build_epoch_secs,
     })?;
     if !has(args, "--json") {
@@ -288,102 +286,117 @@ fn cmd_prepare(args: &[String]) -> Result<Value> {
 }
 
 // ===========================================================================
-// output-cache — exact native SiteOutput lookup/publication
+// outputs/render/finalize — native transport over the canonical SiteEngine
 // ===========================================================================
-fn cmd_output_cache(args: &[String]) -> Result<Value> {
-    let action = positional(args, 2)
-        .context("usage: fig output-cache <load|publish> <closed-bundle> --cache <dir> ...")?;
-    let bundle = positional(args, 3).context("output-cache needs <closed-bundle>")?;
-    let cache = opt(args, "--cache").context("output-cache needs --cache <dir>")?;
-    let total_started = Instant::now();
-    let verify_started = Instant::now();
-    let closed = fig::output_cache::open_closed_bundle(Path::new(bundle))?;
-    let verify_input_ms = millis(verify_started.elapsed());
-
-    match action {
-        "load" => {
-            let (renderer, output_schema, options) = output_cache_derivation(args)?;
-            let lookup_started = Instant::now();
-            let loaded = fig::output_cache::load(
-                &closed,
-                Path::new(cache),
-                &renderer,
-                &output_schema,
-                &options,
-            )?;
-            let lookup_ms = millis(lookup_started.elapsed());
-            let materialize_started = Instant::now();
-            if let (Some(output), Some(destination)) = (&loaded.output, opt(args, "--into")) {
-                fig::output_cache::materialize(output, Path::new(cache), Path::new(destination))?;
-            }
-            let materialize_ms = millis(materialize_started.elapsed());
-            let payload = json!({
-                "cacheHit": loaded.output.is_some(),
-                "cacheKey": loaded.cache_key,
-                "outputId": loaded.output.as_ref().map(|output| output.output_id()),
-                "files": loaded.output.as_ref().map_or(0, |output| output.files().len()),
-                "out": loaded.output.as_ref().and_then(|_| opt(args, "--into")),
-                "timings": {
-                    "verifyInputMs": verify_input_ms,
-                    "lookupMs": lookup_ms,
-                    "materializeMs": materialize_ms,
-                    "totalMs": millis(total_started.elapsed()),
-                },
-            });
-            if !has(args, "--json") {
-                if loaded.output.is_some() {
-                    eprintln!(
-                        "fig output-cache: verified hit {} ({} files, {:.1} ms)",
-                        loaded.cache_key,
-                        loaded
-                            .output
-                            .as_ref()
-                            .map_or(0, |output| output.files().len()),
-                        millis(total_started.elapsed()),
-                    );
-                } else {
-                    eprintln!(
-                        "fig output-cache: miss {} ({:.1} ms)",
-                        loaded.cache_key,
-                        millis(total_started.elapsed()),
-                    );
-                }
-            }
-            Ok(payload)
+fn cmd_outputs(args: &[String]) -> Result<Value> {
+    let bundle = positional(args, 2).context("usage: fig outputs <closed-bundle>")?;
+    if let Some(cache) = opt(args, "--cache") {
+        let total_started = Instant::now();
+        let verify_started = Instant::now();
+        let closed = fig::output_cache::admit(
+            Path::new(bundle),
+            Path::new(cache),
+            opt(args, "--into").map(Path::new),
+        )?;
+        let verify_input_ms = millis(verify_started.elapsed());
+        let (renderer, output_schema, options) = output_cache_derivation(args)?;
+        let lookup_started = Instant::now();
+        let loaded = fig::output_cache::load(
+            &closed,
+            Path::new(cache),
+            &renderer,
+            &output_schema,
+            &options,
+        )?;
+        let lookup_ms = millis(lookup_started.elapsed());
+        let materialize_started = Instant::now();
+        if let (Some(output), Some(destination)) = (&loaded.output, opt(args, "--into")) {
+            fig::output_cache::materialize(output, Path::new(cache), Path::new(destination))?;
         }
-        "publish" => {
-            let site = opt(args, "--site").context("output-cache publish needs --site <dir>")?;
-            let publish_started = Instant::now();
-            let (output, already_present) =
-                fig::output_cache::publish_tree(&closed, Path::new(cache), Path::new(site))?;
-            let payload = json!({
-                "cacheKey": output.cache_key(),
-                "outputId": output.output_id(),
-                "files": output.files().len(),
-                "alreadyPresent": already_present,
-                "timings": {
-                    "verifyInputMs": verify_input_ms,
-                    "importAndPublishMs": millis(publish_started.elapsed()),
-                    "totalMs": millis(total_started.elapsed()),
-                },
-            });
-            if !has(args, "--json") {
-                eprintln!(
-                    "fig output-cache: {} {} ({} files, {:.1} ms)",
-                    if already_present {
-                        "verified"
-                    } else {
-                        "published"
-                    },
-                    output.cache_key(),
-                    output.files().len(),
-                    millis(total_started.elapsed()),
-                );
-            }
-            Ok(payload)
-        }
-        other => bail!("output-cache action must be load or publish, got {other}"),
+        return Ok(json!({
+            "cacheHit": loaded.output.is_some(),
+            "cacheKey": loaded.cache_key,
+            "outputId": loaded.output.as_ref().map(|output| output.output_id()),
+            "files": loaded.output.as_ref().map_or(0, |output| output.files().len()),
+            "out": loaded.output.as_ref().and_then(|_| opt(args, "--into")),
+            "timings": {
+                "verifyInputMs": verify_input_ms,
+                "lookupMs": lookup_ms,
+                "materializeMs": millis(materialize_started.elapsed()),
+                "totalMs": millis(total_started.elapsed()),
+            },
+        }));
     }
+    let catalog = fig::site::outputs(Path::new(bundle))?;
+    let payload = serde_json::to_value(&catalog)?;
+    if !has(args, "--json") {
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    }
+    Ok(payload)
+}
+
+fn cmd_render(args: &[String]) -> Result<Value> {
+    let bundle =
+        positional(args, 2).context("usage: fig render <closed-bundle> <path> [-o <file>]")?;
+    let path = positional(args, 3).context("render needs one path declared by fig outputs")?;
+    let outcome = fig::site::render(Path::new(bundle), path)?;
+    if let Some(output) = opt(args, "-o").or_else(|| opt(args, "--out")) {
+        std::fs::write(output, &outcome.bytes)
+            .with_context(|| format!("write rendered output {output}"))?;
+    } else if !has(args, "--json") {
+        std::io::stdout().write_all(&outcome.bytes)?;
+    }
+    Ok(serde_json::to_value(outcome)?)
+}
+
+fn cmd_finalize(args: &[String]) -> Result<Value> {
+    let bundle = positional(args, 2).context(
+        "usage: fig finalize <closed-bundle> (-o <new-site-dir> | --site <staging> --external-plan <file|->)",
+    )?;
+    if let Some(site) = opt(args, "--site") {
+        let plan_path = opt(args, "--external-plan")
+            .context("external finalize needs --external-plan <file|->")?;
+        let mut bytes = Vec::new();
+        if plan_path == "-" {
+            std::io::stdin().read_to_end(&mut bytes)?;
+        } else {
+            bytes = std::fs::read(plan_path)
+                .with_context(|| format!("read external finalize plan {plan_path}"))?;
+        }
+        let plan: fig::site::ExternalFinalizePlan = serde_json::from_slice(&bytes)
+            .with_context(|| format!("parse external finalize plan {plan_path}"))?;
+        let outcome = fig::site::finalize(
+            Path::new(bundle),
+            fig::site::FinalizeRequest::External {
+                site: Path::new(site),
+                plan,
+                cache_root: opt(args, "--cache").map(Path::new),
+            },
+        )?;
+        if !has(args, "--json") {
+            eprintln!(
+                "fig finalize: authenticated {} external files ({} bytes) at {} ({})",
+                outcome.files, outcome.bytes, outcome.out, outcome.output_id
+            );
+        }
+        return Ok(serde_json::to_value(outcome)?);
+    }
+    let output = opt(args, "-o")
+        .or_else(|| opt(args, "--out"))
+        .context("finalize needs -o <new-site-dir>")?;
+    let outcome = fig::site::finalize(
+        Path::new(bundle),
+        fig::site::FinalizeRequest::Publisher {
+            destination: Path::new(output),
+        },
+    )?;
+    if !has(args, "--json") {
+        eprintln!(
+            "fig finalize: {} files ({} bytes) -> {} ({})",
+            outcome.files, outcome.bytes, outcome.out, outcome.output_id
+        );
+    }
+    Ok(serde_json::to_value(outcome)?)
 }
 
 fn output_cache_derivation(
@@ -394,20 +407,20 @@ fn output_cache_derivation(
     BTreeMap<String, String>,
 )> {
     let renderer_id =
-        opt(args, "--renderer-id").context("output-cache load needs --renderer-id")?;
+        opt(args, "--renderer-id").context("outputs cache probe needs --renderer-id")?;
     let renderer_version =
-        opt(args, "--renderer-version").context("output-cache load needs --renderer-version")?;
+        opt(args, "--renderer-version").context("outputs cache probe needs --renderer-version")?;
     let recipe = opt(args, "--recipe-sha256")
-        .context("output-cache load needs --recipe-sha256 <64 lowercase hex>")?;
+        .context("outputs cache probe needs --recipe-sha256 <64 lowercase hex>")?;
     let output_schema =
-        opt(args, "--output-schema").context("output-cache load needs --output-schema")?;
+        opt(args, "--output-schema").context("outputs cache probe needs --output-schema")?;
     let mut options = BTreeMap::new();
     for option in collect(args, "--option") {
         let (key, value) = option
             .split_once('=')
-            .with_context(|| format!("output-cache option must be key=value, got {option}"))?;
+            .with_context(|| format!("outputs option must be key=value, got {option}"))?;
         if options.insert(key.to_string(), value.to_string()).is_some() {
-            bail!("output-cache option repeats key {key}");
+            bail!("outputs option repeats key {key}");
         }
     }
     Ok((
@@ -423,223 +436,6 @@ fn output_cache_derivation(
 
 fn millis(duration: std::time::Duration) -> f64 {
     duration.as_secs_f64() * 1000.0
-}
-
-// ===========================================================================
-// fragment — render ONE typed Publisher fragment
-// ===========================================================================
-fn cmd_fragment(args: &[String]) -> Result<Value> {
-    // fig fragment <build-dir> <ref> <kind> [--active-tables] [--run-uuid <u>]
-    let build = positional(args, 2).context("usage: fig fragment <build-dir> <ref> <kind>")?;
-    let ref_ = positional(args, 3).context("fragment needs <ref>")?;
-    let kind = positional(args, 4).context("fragment needs <kind>")?;
-    let root = fig::engine::RenderRoot::detect(Path::new(build))?;
-    let opts = render_opts(args);
-    let body = fig::engine::render_one_fragment(&root, &opts, ref_, kind)?;
-    if !has(args, "--json") {
-        print!("{body}");
-    }
-    Ok(json!({ "ref": ref_, "kind": kind, "html": body }))
-}
-
-// ===========================================================================
-// fragments -o — the files escape hatch (§3b)
-// ===========================================================================
-fn cmd_fragments(args: &[String]) -> Result<Value> {
-    // fig fragments <build-dir> -o <dir> [--kinds k1,k2,...] [--ref R]
-    let build = positional(args, 2)
-        .context("usage: fig fragments <build-dir> -o <dir> [--kinds k1,k2] [--ref R]")?;
-    let out = opt(args, "-o")
-        .or_else(|| opt(args, "--out"))
-        .context("fragments needs -o <dir>")?;
-    let root = fig::engine::RenderRoot::detect(Path::new(build))?;
-    let opts = render_opts(args);
-    let kinds: Vec<String> = opt(args, "--kinds")
-        .map(|s| s.split(',').map(str::to_string).collect())
-        .unwrap_or_else(|| vec!["snapshot".to_string()]);
-    let refs: Vec<String> = match opt(args, "--ref") {
-        Some(r) => vec![r.to_string()],
-        None => fig::engine::own_structure_definitions(&root)?,
-    };
-    let pairs: Vec<(String, String)> = refs
-        .iter()
-        .flat_map(|r| kinds.iter().map(move |k| (r.clone(), k.clone())))
-        .collect();
-    let emitted = fig::engine::emit_fragment_files(&root, &opts, &pairs, Path::new(out))?;
-    if !has(args, "--json") {
-        eprintln!("fig fragments: emitted {} files to {out}", emitted.len());
-    }
-    Ok(json!({ "out": out, "emitted": emitted }))
-}
-
-// ===========================================================================
-// produce — synthesize the stock template's page SHELLS + _data model from an
-// IG source dir tree (the missing IG-Publisher piece; site_producer crate). This
-// is what lets `fig render` run from source without a pre-baked temp/pages tree.
-// ===========================================================================
-fn cmd_produce(args: &[String]) -> Result<Value> {
-    let build =
-        positional(args, 2).context("usage: fig produce <ig-source-dir> [-o <pages-root>]")?;
-    let build_path = Path::new(build);
-    // Default output is the build's own temp/pages (where RenderRoot::detect looks).
-    let pages_root = opt(args, "-o")
-        .or_else(|| opt(args, "--out"))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| build_path.join("temp/pages"));
-
-    let inputs = site_producer::gather_inputs(build_path)?;
-    let output = site_producer::produce(&inputs)?;
-    let written = output.write_to(&pages_root)?;
-    if !has(args, "--json") {
-        eprintln!(
-            "fig produce: {} page shells + {} _data files -> {}",
-            output.pages.len(),
-            output.data.len(),
-            pages_root.display()
-        );
-    }
-    Ok(json!({
-        "pagesRoot": pages_root.display().to_string(),
-        "shells": output.pages.len(),
-        "dataFiles": output.data.keys().collect::<Vec<_>>(),
-        "filesWritten": written,
-    }))
-}
-
-// render — THE headline: full static site at Publisher parity
-// ===========================================================================
-fn cmd_render(args: &[String]) -> Result<Value> {
-    let build = positional(args, 2)
-        .context("usage: fig render <build-dir> -o <site/> [--template <id#version>]")?;
-    let out = opt(args, "-o")
-        .or_else(|| opt(args, "--out"))
-        .context("render needs -o <site/>")?;
-
-    if has(args, "--generator") {
-        bail!(
-            "fig render --generator was removed: it loaded a stale editor callback API and could recompile different inputs. Run `fig prepare <ig> --target cycle-site/v2 --sushi-out <new> --cache <dir> --out <bundle> --build-date <time>`, then invoke the generator's closed-bundle entry (for Cycle: `SITE_BUILD_DIR=<bundle> bun site-gen/build.tsx`)"
-        );
-    }
-
-    // Source-driven render (task #44): when there is no staged temp/pages but the
-    // dir IS an IG source tree (template/config.json present), synthesize the
-    // shells + _data model first via the producer, then render over them. This is
-    // what makes `fig render <ig-source-dir>` work without a pre-baked tree.
-    let build_path = Path::new(build);
-    if !build_path.join("temp/pages").is_dir() && build_path.join("template/config.json").is_file()
-    {
-        let inputs = site_producer::gather_inputs(build_path)?;
-        let output = site_producer::produce(&inputs)?;
-        let n = output.write_to(&build_path.join("temp/pages"))?;
-        // Stage the IG's OWN includes into _includes/ so layouts resolve them —
-        // most importantly `menu.xml` (SUSHI-generated from the sushi-config
-        // `menu:` into fsh-generated/includes/), plus any IG-authored
-        // input/includes/*. The publisher stages these into temp/pages/_includes/;
-        // the pre-baked tree already carries them, so the source-driven path must
-        // reproduce that staging or every page renders with an empty nav menu.
-        let inc_dst = build_path.join("temp/pages/_includes");
-        let mut staged = 0usize;
-        for sub in ["fsh-generated/includes", "input/includes"] {
-            let src = build_path.join(sub);
-            if let Ok(rd) = std::fs::read_dir(&src) {
-                std::fs::create_dir_all(&inc_dst).ok();
-                for e in rd.flatten() {
-                    if e.file_type().map(|t| t.is_file()).unwrap_or(false) {
-                        if std::fs::copy(e.path(), inc_dst.join(e.file_name())).is_ok() {
-                            staged += 1;
-                        }
-                    }
-                }
-            }
-        }
-        if !has(args, "--json") {
-            eprintln!(
-                "fig render: produced {} shells + {} _data files + {staged} includes from source ({n} files)",
-                output.pages.len(),
-                output.data.len()
-            );
-        }
-    }
-
-    let mut root = fig::engine::RenderRoot::detect(Path::new(build))?;
-
-    // Template story (task #39): `--template <id#ver>` is the DRIVEN default —
-    // acquire the chain via the SAME acquisition machinery regular packages use and
-    // materialize it with the loader; `--template-dir <dir>` is the explicit
-    // pre-materialized escape hatch. Neither → the staged `_includes/` (frozen
-    // fallback). The materialize composition lives in `fig::template` (iron rule).
-    let template_dir = fig::template::materialized_dir_or_acquire(
-        opt(args, "--template"),
-        opt(args, "--template-dir"),
-        Path::new(build),
-        opt(args, "--template-cache").map(Path::new),
-        has(args, "--offline"),
-    )?;
-    if let Some(td) = &template_dir {
-        root = root.with_template_dir(td);
-    }
-
-    let opts = render_opts(args);
-    let outcome = fig::engine::render_site(&root, &opts)?;
-    let assets = fig::engine::write_site(&root, &outcome, Path::new(out))?;
-    let pages = outcome.pages.len();
-    if !has(args, "--json") {
-        eprintln!(
-            "fig render: {pages} pages, {} fragment materializations, {} total files -> {out}{}",
-            outcome.fragment_misses,
-            assets,
-            template_dir
-                .as_ref()
-                .map(|d| format!(" (template: {})", d.display()))
-                .unwrap_or_default(),
-        );
-    }
-    Ok(json!({
-        "out": out,
-        "pages": pages,
-        "fragmentMisses": outcome.fragment_misses,
-        "filesWritten": assets,
-        "template": template_dir.as_ref().map(|d| d.display().to_string()),
-    }))
-}
-
-// ===========================================================================
-// watch — legacy watcher for an already-staged Publisher tree
-// ===========================================================================
-fn cmd_watch(args: &[String]) -> Result<Value> {
-    let build = positional(args, 2).context("usage: fig watch <build-dir> [--serve <addr>]")?;
-    let root = fig::engine::RenderRoot::detect(Path::new(build))?;
-    let opts = render_opts(args);
-    let state = fig::watch::WatchState::initial(root, opts)?;
-    let addr = opt(args, "--serve").map(|a| {
-        // Allow ":8080" shorthand -> "127.0.0.1:8080".
-        if let Some(rest) = a.strip_prefix(':') {
-            format!("127.0.0.1:{rest}")
-        } else {
-            a.to_string()
-        }
-    });
-    let poll = opt(args, "--poll-ms")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(300);
-    // Blocks until Ctrl-C.
-    fig::watch::serve(state, addr.as_deref(), poll)?;
-    Ok(json!({ "watched": build }))
-}
-
-// ===========================================================================
-// helpers
-// ===========================================================================
-fn render_opts(args: &[String]) -> fig::engine::RenderOptions {
-    let mut o = fig::engine::RenderOptions::default();
-    if let Some(u) = opt(args, "--run-uuid") {
-        o.run_uuid = u.to_string();
-    }
-    o.active_tables = has(args, "--active-tables");
-    o.engine = !has(args, "--no-engine");
-    o.engine_first = has(args, "--engine-first");
-    o.include_dumps = has(args, "--dumps");
-    o
 }
 
 fn positional<'a>(args: &'a [String], i: usize) -> Option<&'a str> {
@@ -733,15 +529,14 @@ fn print_usage() {
          \x20 resolve --cache <dir> (--root i#v | --project d) Dependency closure\n\
          \x20 packages fetch <i#v> | bundle|prepare --cache -o <dir> Package artifacts\n\
          \x20 expand <vs.json> [--resources <r.json>]          Tier-1 VS expansion\n\
-         \x20 prepare <ig> --target cycle-site/v2              Closed external-build bundle\n\
-         \x20         --sushi-out <new> --cache <d> --out <new>\n\
-         \x20         --build-date <epoch|RFC3339>\n\
-         \x20 output-cache load|publish <bundle> --cache <d>   Exact SiteOutput reuse\n\
-         \x20 fragment <build-dir> <ref> <kind>                Render ONE fragment\n\
-         \x20 fragments <build-dir> -o <dir> [--kinds k1,k2]   Materialize fragment files\n\
-         \x20 render <build-dir> -o <site/> [--template i#v]  Full static site (Publisher parity)\n\
-         \x20                              [--template-dir d]\n\
-         \x20 watch <build-dir> [--serve :port]                Incremental dev loop + live-reload\n\
+         \x20 prepare <ig> --target <cycle-site/v2|publisher-site/v1>\n\
+         \x20         --cache <d> --out <new> --build-date <time>\n\
+         \x20         [--template <id#version>]                Closed SiteBuild bundle\n\
+         \x20 outputs <bundle>                                 Output catalog/cache probe\n\
+         \x20 render <bundle> <path> [-o <file>]               Render one declared output\n\
+         \x20 finalize <bundle> -o <new-site-dir>              Canonical Publisher site\n\
+         \x20 finalize <bundle> --site <staging>               Canonical external receipt\n\
+         \x20         --external-plan <file|-> [--cache <d>]\n\
          \x20 version                                          Engine + pins\n\
          \n\
          Add --json to any command for the apiVersion result envelope.",

@@ -1,28 +1,23 @@
 //! Native host integration for exact complete-site output reuse.
 //!
-//! This module deliberately does not wrap the legacy staged-tree `fig render`
-//! path: that path has no canonical [`ClosedSiteBuild`] input and therefore
-//! cannot compute a truthful pre-render cache key. Native renderers use these
-//! two transitions around their canonical flow instead:
-//!
-//! 1. [`load`] verifies an exact cache hit before rendering; and
-//! 2. [`publish_tree`] imports a renderer's canonical `SiteOutput` and addressed
-//!    bytes, verifies them against the same closed build, then atomically
-//!    publishes the manifest through [`FileSiteOutputCache`].
+//! Rust finalization publishes verified receipts. This module performs the
+//! read side only: [`load`] verifies an exact cache hit and [`materialize`]
+//! fills a caller-owned private staging tree.
 //!
 //! The cache root contains only the existing native implementations:
 //! `manifests/` is a `FileSiteOutputCache`, and `objects/sha256/` is a
 //! `FileContentStore`. No additional manifest or cached domain value exists.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use content_store::{ContentStore, FileContentStore};
 use site_build::{
-    ArtifactState, ClosedSiteBuild, FileSiteOutputCache, OutputCacheKey, RendererImplementation,
-    SiteOutput, SiteOutputCache, SITE_OUTPUT_MANIFEST_PATH,
+    ClosedSiteBuild, FileSiteOutputCache, OutputCacheKey, RendererImplementation, SiteOutput,
+    SiteOutputCache, SITE_OUTPUT_MANIFEST_PATH,
 };
 
 /// Result of one verified native output-cache lookup.
@@ -32,9 +27,25 @@ pub struct LoadOutcome {
     pub output: Option<SiteOutput>,
 }
 
-/// Open a native closed-build bundle and re-verify its canonical manifest plus
-/// every content object addressed by the build.
-pub fn open_closed_bundle(bundle: &Path) -> Result<ClosedSiteBuild> {
+/// Admit a cache lookup through the target-specific SiteEngine lifecycle after
+/// proving that lookup/materialization paths cannot mutate one another.
+pub fn admit(
+    bundle: &Path,
+    cache_root: &Path,
+    destination: Option<&Path>,
+) -> Result<ClosedSiteBuild> {
+    let mut protected = vec![bundle, cache_root];
+    if let Some(destination) = destination {
+        protected.push(destination);
+    }
+    require_disjoint_paths(&protected)?;
+    crate::site::admit(bundle)
+}
+
+/// Parse and authenticate the canonical manifest and bundle layout. The caller
+/// must then authenticate and admit the object closure exactly once through
+/// `SiteEngine::restore`.
+pub(crate) fn open_closed_bundle_manifest(bundle: &Path) -> Result<ClosedSiteBuild> {
     require_real_dir(bundle, "closed-build bundle")?;
     let manifest_path = bundle.join("site-build.json");
     require_real_file(&manifest_path, "closed-build manifest")?;
@@ -51,12 +62,6 @@ pub fn open_closed_bundle(bundle: &Path) -> Result<ClosedSiteBuild> {
 
     let object_root = bundle.join("objects/sha256");
     require_real_dir(&object_root, "closed-build object store")?;
-    let store = FileContentStore::create(&object_root).context("open closed-build object store")?;
-    for content in closed_build_refs(&closed) {
-        store
-            .read(&content)
-            .with_context(|| format!("verify closed-build object {}", content.sha256))?;
-    }
     Ok(closed)
 }
 
@@ -90,75 +95,13 @@ pub fn load(
     })
 }
 
-/// Import and verify a renderer's complete published tree, then publish its
-/// canonical receipt under the exact pre-render key. The site directory must
-/// contain exactly the receipt's files plus `site-output.json`.
-pub fn publish_tree(
-    input: &ClosedSiteBuild,
-    cache_root: &Path,
-    site_root: &Path,
-) -> Result<(SiteOutput, bool)> {
-    require_real_dir(site_root, "site output")?;
-    let manifest_path = site_root.join(SITE_OUTPUT_MANIFEST_PATH);
-    require_real_file(&manifest_path, "SiteOutput manifest")?;
-    let manifest_bytes = fs::read(&manifest_path)
-        .with_context(|| format!("read SiteOutput manifest {}", manifest_path.display()))?;
-    let output: SiteOutput = serde_json::from_slice(&manifest_bytes)
-        .with_context(|| format!("parse SiteOutput manifest {}", manifest_path.display()))?;
-    if output.canonical_bytes()? != manifest_bytes {
-        bail!(
-            "SiteOutput manifest is not in canonical form: {}",
-            manifest_path.display()
-        );
-    }
-    output.verify_for(input)?;
-
-    let expected = output
-        .files()
-        .iter()
-        .map(|file| file.path.as_str().to_string())
-        .collect::<BTreeSet<_>>();
-    let before = list_site_files(site_root)?;
-    if before != expected {
-        report_inventory_mismatch(&expected, &before)?;
-    }
-
-    let (manifests, objects) = open_output_cache(cache_root)?;
-    for file in output.files() {
-        let path = site_root.join(file.path.as_str());
-        require_real_file(&path, "declared site output")?;
-        let bytes = fs::read(&path)
-            .with_context(|| format!("read declared site output {}", path.display()))?;
-        objects
-            .put(&file.content, &bytes)
-            .with_context(|| format!("import declared site output {}", file.path))?;
-    }
-    let after = list_site_files(site_root)?;
-    if after != before {
-        bail!("site output inventory changed while it was being imported");
-    }
-    let after_manifest = fs::read(&manifest_path)
-        .with_context(|| format!("re-read SiteOutput manifest {}", manifest_path.display()))?;
-    if after_manifest != manifest_bytes {
-        bail!("SiteOutput manifest changed while its files were being imported");
-    }
-
-    let already_present = manifests
-        .load(output.cache_key(), input, &objects)
-        .context("check existing verified SiteOutput cache entry")?
-        .is_some();
-    manifests
-        .publish(&output, input, &objects)
-        .context("publish verified SiteOutput cache entry")?;
-    Ok((output, already_present))
-}
-
 /// Materialize a verified hit into a caller-owned, existing empty staging
 /// directory. This is the composition point for native hosts that already own
 /// an atomic publication transaction (Cycle's `AtomicOutputPublication`). A
 /// failure may leave partial files only in that private staging directory; the
 /// caller must abort its transaction.
 pub fn materialize(output: &SiteOutput, cache_root: &Path, destination: &Path) -> Result<()> {
+    require_disjoint_paths(&[cache_root, destination])?;
     require_real_dir(destination, "output staging directory")?;
     if fs::read_dir(destination)?.next().is_some() {
         bail!(
@@ -174,13 +117,20 @@ pub fn materialize(output: &SiteOutput, cache_root: &Path, destination: &Path) -
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::write(&path, bytes.bytes())
+        let mut output_file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+            .with_context(|| format!("create cached output {}", file.path))?;
+        output_file
+            .write_all(bytes.bytes())
             .with_context(|| format!("materialize cached output {}", file.path))?;
     }
-    fs::write(
-        destination.join(SITE_OUTPUT_MANIFEST_PATH),
-        output.canonical_bytes()?,
-    )?;
+    let mut receipt = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(destination.join(SITE_OUTPUT_MANIFEST_PATH))?;
+    receipt.write_all(&output.canonical_bytes()?)?;
     let expected = output
         .files()
         .iter()
@@ -192,36 +142,72 @@ pub fn materialize(output: &SiteOutput, cache_root: &Path, destination: &Path) -
     Ok(())
 }
 
+pub(crate) fn require_disjoint_paths(paths: &[&Path]) -> Result<()> {
+    let normalized = paths
+        .iter()
+        .map(|path| canonical_existing_or_future(path))
+        .collect::<Result<Vec<_>>>()?;
+    for left in 0..normalized.len() {
+        for right in (left + 1)..normalized.len() {
+            if normalized[left].starts_with(&normalized[right])
+                || normalized[right].starts_with(&normalized[left])
+            {
+                bail!(
+                    "protected paths overlap: {} and {}",
+                    paths[left].display(),
+                    paths[right].display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+fn canonical_existing_or_future(path: &Path) -> Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut cursor = absolute.as_path();
+    let mut missing = Vec::new();
+    loop {
+        match fs::symlink_metadata(cursor) {
+            Ok(_) => {
+                let mut resolved = cursor
+                    .canonicalize()
+                    .with_context(|| format!("canonicalize protected path {}", cursor.display()))?;
+                for component in missing.iter().rev() {
+                    resolved.push(component);
+                }
+                return Ok(resolved);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let name = cursor.file_name().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "protected path has no existing ancestor: {}",
+                        path.display()
+                    )
+                })?;
+                missing.push(name.to_os_string());
+                cursor = cursor.parent().ok_or_else(|| {
+                    anyhow::anyhow!("protected path has no parent: {}", path.display())
+                })?;
+            }
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("inspect protected path {}", cursor.display()));
+            }
+        }
+    }
+}
+
 fn open_output_cache(cache_root: &Path) -> Result<(FileSiteOutputCache, FileContentStore)> {
     let manifests = FileSiteOutputCache::create(cache_root.join("manifests"))
         .context("open SiteOutput manifest cache")?;
     let objects = FileContentStore::create(cache_root.join("objects/sha256"))
         .context("open SiteOutput object store")?;
     Ok((manifests, objects))
-}
-
-fn closed_build_refs(closed: &ClosedSiteBuild) -> Vec<site_build::ContentRef> {
-    let build = closed.site_build();
-    let mut refs = build
-        .project()
-        .sources
-        .iter()
-        .map(|(_, source)| source.content.clone())
-        .collect::<Vec<_>>();
-    refs.extend(
-        build
-            .package_lock()
-            .iter()
-            .map(|(_, package)| package.content.clone()),
-    );
-    refs.extend(build.artifacts().iter().filter_map(|(_, artifact)| {
-        if let ArtifactState::Ready { content } = &artifact.state {
-            Some(content.clone())
-        } else {
-            None
-        }
-    }));
-    refs
 }
 
 fn require_real_dir(path: &Path, label: &str) -> Result<()> {
@@ -291,16 +277,6 @@ fn list_site_files(root: &Path) -> Result<BTreeSet<String>> {
         }
     }
     Ok(files)
-}
-
-fn report_inventory_mismatch(expected: &BTreeSet<String>, actual: &BTreeSet<String>) -> Result<()> {
-    let missing = expected.difference(actual).cloned().collect::<Vec<_>>();
-    let extra = actual.difference(expected).cloned().collect::<Vec<_>>();
-    bail!(
-        "site output inventory does not match SiteOutput; missing=[{}], extra=[{}]",
-        missing.join(", "),
-        extra.join(", ")
-    )
 }
 
 #[cfg(test)]
@@ -383,24 +359,28 @@ mod tests {
         .unwrap();
     }
 
+    fn seed_cache(cache: &Path, closed: &ClosedSiteBuild, output: &SiteOutput) {
+        let (manifests, objects) = open_output_cache(cache).unwrap();
+        objects
+            .put(&output.files()[0].content, b"<h1>Demo</h1>")
+            .unwrap();
+        manifests.publish(output, closed, &objects).unwrap();
+    }
+
     #[test]
-    fn miss_publish_verified_hit_and_atomic_materialization_share_one_site_output() {
+    fn miss_verified_hit_and_atomic_materialization_share_one_site_output() {
         let (temp, closed, renderer, output) = fixture();
         let bundle = temp.path().join("bundle");
         let cache = temp.path().join("cache");
-        let site = temp.path().join("site");
         write_bundle(&bundle, &closed);
-        write_site(&site, &output);
-        let opened = open_closed_bundle(&bundle).unwrap();
+        let opened = closed.clone();
         let options = BTreeMap::from([("minify".into(), "true".into())]);
 
         let miss = load(&opened, &cache, &renderer, "cycle-static-site/v1", &options).unwrap();
         assert!(miss.output.is_none());
         assert_eq!(miss.cache_key, output.cache_key().clone());
 
-        let (published, already_present) = publish_tree(&opened, &cache, &site).unwrap();
-        assert!(!already_present);
-        assert_eq!(published, output);
+        seed_cache(&cache, &opened, &output);
 
         let hit = load(&opened, &cache, &renderer, "cycle-static-site/v1", &options).unwrap();
         assert_eq!(hit.output.as_ref(), Some(&output));
@@ -417,8 +397,6 @@ mod tests {
             output.canonical_bytes().unwrap()
         );
 
-        let (_, repeated) = publish_tree(&opened, &cache, &site).unwrap();
-        assert!(repeated);
         assert!(materialize(&output, &cache, &restored)
             .unwrap_err()
             .to_string()
@@ -433,8 +411,8 @@ mod tests {
         let site = temp.path().join("site");
         write_bundle(&bundle, &closed);
         write_site(&site, &output);
-        let opened = open_closed_bundle(&bundle).unwrap();
-        publish_tree(&opened, &cache, &site).unwrap();
+        let opened = closed.clone();
+        seed_cache(&cache, &opened, &output);
         let object = cache
             .join("objects/sha256")
             .join(output.files()[0].content.sha256.as_str());
@@ -453,26 +431,20 @@ mod tests {
     }
 
     #[test]
-    fn publication_rejects_extra_files_and_noncanonical_receipts() {
-        let (temp, closed, _renderer, output) = fixture();
+    fn cache_probe_uses_strict_site_engine_admission_and_disjoint_paths() {
+        let (temp, closed, _renderer, _output) = fixture();
         let bundle = temp.path().join("bundle");
         let cache = temp.path().join("cache");
-        let site = temp.path().join("site");
         write_bundle(&bundle, &closed);
-        write_site(&site, &output);
-        let opened = open_closed_bundle(&bundle).unwrap();
-        fs::write(site.join("extra.txt"), b"extra").unwrap();
-        assert!(publish_tree(&opened, &cache, &site)
+
+        let error = admit(&bundle, &cache, None).unwrap_err().to_string();
+        assert!(
+            error.contains("Cycle") || error.contains("cycle") || error.contains("artifact"),
+            "unexpected strict-admission error: {error}"
+        );
+        assert!(require_disjoint_paths(&[&bundle, &bundle.join("cache")])
             .unwrap_err()
             .to_string()
-            .contains("extra=[extra.txt]"));
-        fs::remove_file(site.join("extra.txt")).unwrap();
-        let mut noncanonical = output.canonical_bytes().unwrap();
-        noncanonical.push(b'\n');
-        fs::write(site.join(SITE_OUTPUT_MANIFEST_PATH), noncanonical).unwrap();
-        assert!(publish_tree(&opened, &cache, &site)
-            .unwrap_err()
-            .to_string()
-            .contains("not in canonical form"));
+            .contains("overlap"));
     }
 }

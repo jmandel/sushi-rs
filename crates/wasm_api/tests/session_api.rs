@@ -257,22 +257,28 @@ fn project_compile_and_site_projection_fail_loud_without_hidden_fallbacks() {
         .unwrap()
         .contains("bad site-files JSON"));
 
-    // prepare accepts generator choices only and cannot silently invoke a
-    // compile or accept replacement project sources.
-    let closed =
-        parse(session.prepare_site(&json!({"generator":"cycle", "buildEpochSecs":1}).to_string()));
+    // Site generation has one atomic project boundary; there is no public
+    // compile-then-prepare successor operation or hidden fallback.
+    let closed = parse(session.prepare_project_site(
+        "{}",
+        "id: demo\nfhirVersion: 4.0.1\n",
+        "{}",
+        "{}",
+        &json!({"generator":"cycle", "buildEpochSecs":1}).to_string(),
+    ));
     assert_eq!(closed["ok"], false);
-    assert_eq!(closed["op"], "prepare");
-    assert!(
-        closed["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("complete source revision"),
-        "{closed}"
-    );
+    assert_eq!(closed["op"], "prepareProject");
+    assert!(closed["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("resolver"));
 
     let resent = parse(
-        session.prepare_site(
+        session.prepare_project_site(
+            "{}",
+            "id: demo\nfhirVersion: 4.0.1\n",
+            "{}",
+            "{}",
             &json!({
                 "generator":"cycle",
                 "buildEpochSecs":1,

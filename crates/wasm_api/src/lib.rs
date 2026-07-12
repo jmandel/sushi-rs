@@ -18,7 +18,7 @@
 //! s.stagePreparedMount(bytes, key);      // one checked artifact at a time
 //! s.commitPreparedMount();               // publish only after all stages validate
 //! s.snapshot(urlOrInlineSd);
-//! s.prepare(generatorSpecJson);
+//! s.prepareProject(filesJson, config, predefinedJson, siteFilesJson, generatorSpecJson);
 //! s.expandValueSet(vsJson, resourcesJson);
 //! s.resolveProject(config, versionIndexJson);
 //! Session.version();                     // static
@@ -44,7 +44,7 @@
 //! `cargo test --workspace` links it. The real entry points are only meaningful
 //! under `wasm32-unknown-unknown` + wasm-bindgen.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -354,97 +354,91 @@ impl Engine {
             .unwrap_or_default()
     }
 
-    /// Cold path: turn the existing inflated JSON/base64 input into the exact
-    /// binary cache artifact while mounting the same prepared material once.
-    /// `takePrepared(label)` transfers each artifact to JS without base64.
-    fn prepare_and_mount(&mut self, bundles_json: &str) -> Result<PrepareMountResult, String> {
+    /// Commit a package batch prepared without holding the Session's mutable
+    /// engine borrow. Keeping decode/normalize/encode outside this short commit
+    /// lets package-resolution callbacks observe the prior complete generation
+    /// instead of recursively borrowing a half-built transaction.
+    fn commit_prepared_batch(
+        &mut self,
+        batch: PreparedMountBatch,
+        base_generation: u64,
+    ) -> Result<PrepareMountResult, String> {
         if self.bundle.is_none() {
             return Err("prepareAndMount: engine not initialized; call init() first".into());
         }
-        let started = clock_ms();
-        let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
-            .map_err(|error| format!("prepareAndMount: bad bundles JSON: {error}"))?;
-        let parsed_at = clock_ms();
-        if parsed.is_empty() {
-            return Err("prepareAndMount: no packages supplied".into());
+        if self.package_generation != base_generation {
+            return Err(
+                "prepareAndMount: package generation changed while artifacts were prepared".into(),
+            );
         }
-        let mut transaction = BTreeSet::new();
-        let mut artifacts = Vec::with_capacity(parsed.len());
-        let mut prepared = Vec::with_capacity(parsed.len());
-        let mut pending = BTreeMap::new();
-        let mut prepared_members = 0u64;
-        let mut base64_bytes = 0u64;
-        let mut decoded_source_bytes = 0u64;
-        let mut normalized_bytes = 0u64;
-        let mut artifact_bytes = 0u64;
-        let mut base64_decode_ms = 0.0f64;
-        let mut normalization_ms = 0.0f64;
-        let mut indexing_ms = 0.0f64;
-        let mut artifact_encode_ms = 0.0f64;
-        for package in parsed {
-            if !transaction.insert(package.label.clone()) {
-                return Err(format!(
-                    "prepareAndMount: duplicate package label in one transaction: {}",
-                    package.label
-                ));
-            }
-            let mut entries = BTreeMap::new();
-            for (name, b64) in package.files {
-                base64_bytes = base64_bytes.saturating_add(b64.len() as u64);
-                let decode_started = clock_ms();
-                let body = base64_decode(&b64)
-                    .map_err(|error| format!("prepareAndMount: bad base64 for {name}: {error}"))?;
-                base64_decode_ms += (clock_ms() - decode_started).max(0.0);
-                decoded_source_bytes = decoded_source_bytes.saturating_add(body.len() as u64);
-                entries.insert(name, body);
-            }
-            let normalize_started = clock_ms();
-            let builder = package_store::PreparedPackage::normalize(&package.label, entries)
-                .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
-            normalization_ms += (clock_ms() - normalize_started).max(0.0);
-            let index_started = clock_ms();
-            let package = builder
-                .build()
-                .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
-            indexing_ms += (clock_ms() - index_started).max(0.0);
-            normalized_bytes = normalized_bytes.saturating_add(package.files.raw_bytes());
-            let encode_started = clock_ms();
-            let bytes = package.encode();
-            artifact_encode_ms += (clock_ms() - encode_started).max(0.0);
-            prepared_members += package.files.len() as u64;
-            artifact_bytes += bytes.len() as u64;
-            artifacts.push(PreparedExport {
-                label: package.label.clone(),
-                cache_key: package.key.cache_key(),
-                artifact_sha256: site_build::Sha256Digest::of_bytes(&bytes).to_string(),
-                bytes: bytes.len() as u64,
-            });
-            prepared.push(package);
-            pending.insert(artifacts.last().unwrap().label.clone(), bytes);
-        }
-        let decoded = clock_ms();
         // Do not expose artifacts from a transaction whose mount fails.
-        let added = self.commit_prepared(prepared, "prepareAndMount")?;
-        self.prepared_exports.extend(pending);
-        let finished = clock_ms();
+        let added = self.commit_prepared(batch.prepared, "prepareAndMount")?;
+        self.prepared_exports.extend(batch.pending);
         Ok(PrepareMountResult {
             mounted: self.packages.len() as u32,
             added,
-            artifacts,
-            artifact_bytes,
-            prepared_members,
-            input_json_bytes: bundles_json.len() as u64,
-            base64_bytes,
-            decoded_source_bytes,
-            normalized_bytes,
+            artifacts: batch.artifacts,
+            artifact_bytes: batch.artifact_bytes,
+            prepared_members: batch.prepared_members,
+            input_json_bytes: batch.input_json_bytes,
+            base64_bytes: batch.base64_bytes,
+            decoded_source_bytes: batch.decoded_source_bytes,
+            normalized_bytes: batch.normalized_bytes,
             mount_member_body_copies: 0,
-            json_parse_ms: (parsed_at - started).max(0.0),
-            base64_decode_ms,
-            normalization_ms,
-            indexing_ms,
-            artifact_encode_ms,
-            decode_validate_prepare_ms: (decoded - started).max(0.0),
-            mount_ms: (finished - decoded).max(0.0),
+            json_parse_ms: batch.json_parse_ms,
+            base64_decode_ms: batch.base64_decode_ms,
+            normalization_ms: batch.normalization_ms,
+            indexing_ms: batch.indexing_ms,
+            artifact_encode_ms: batch.artifact_encode_ms,
+            decode_validate_prepare_ms: batch.decode_validate_prepare_ms,
+            mount_ms: 0.0,
+        })
+    }
+
+    /// Retain only the compact exports from a package batch. The normalized
+    /// package values are deliberately dropped; the host feeds each exported
+    /// artifact into the existing multi-package prepared-mount transaction so
+    /// a closure is still committed atomically without a closure-sized JSON
+    /// string or duplicate decoded package graph.
+    fn retain_prepared_artifacts(
+        &mut self,
+        batch: PreparedMountBatch,
+        base_generation: u64,
+    ) -> Result<PrepareMountResult, String> {
+        if self.bundle.is_none() {
+            return Err("prepareArtifacts: engine not initialized; call init() first".into());
+        }
+        if self.package_generation != base_generation {
+            return Err(
+                "prepareArtifacts: package generation changed while artifacts were prepared".into(),
+            );
+        }
+        for label in batch.pending.keys() {
+            if self.prepared_exports.contains_key(label) {
+                return Err(format!(
+                    "prepareArtifacts: pending artifact already exists for {label}"
+                ));
+            }
+        }
+        self.prepared_exports.extend(batch.pending);
+        Ok(PrepareMountResult {
+            mounted: self.packages.len() as u32,
+            added: 0,
+            artifacts: batch.artifacts,
+            artifact_bytes: batch.artifact_bytes,
+            prepared_members: batch.prepared_members,
+            input_json_bytes: batch.input_json_bytes,
+            base64_bytes: batch.base64_bytes,
+            decoded_source_bytes: batch.decoded_source_bytes,
+            normalized_bytes: batch.normalized_bytes,
+            mount_member_body_copies: 0,
+            json_parse_ms: batch.json_parse_ms,
+            base64_decode_ms: batch.base64_decode_ms,
+            normalization_ms: batch.normalization_ms,
+            indexing_ms: batch.indexing_ms,
+            artifact_encode_ms: batch.artifact_encode_ms,
+            decode_validate_prepare_ms: batch.decode_validate_prepare_ms,
+            mount_ms: 0.0,
         })
     }
 
@@ -599,22 +593,43 @@ impl Engine {
         predefined_json: &str,
         site_files_json: &str,
     ) -> Result<CompileResult, String> {
+        let (inputs, resolved_packages, packages) = self.project_request(
+            files_json,
+            config,
+            predefined_json,
+            site_files_json,
+            "compileProject",
+        )?;
+        let transition = self
+            .sites
+            .compile_project(inputs, packages, resolved_packages)?;
+        Ok(CompileResult::from(transition.outcome))
+    }
+
+    fn project_request(
+        &self,
+        files_json: &str,
+        config: &str,
+        predefined_json: &str,
+        site_files_json: &str,
+        operation: &str,
+    ) -> Result<(ProjectInputs, ResolvedPackages, SharedBundle), String> {
         let fsh: BTreeMap<String, String> = serde_json::from_str(files_json)
-            .map_err(|e| format!("compileProject: bad FSH files JSON: {e}"))?;
+            .map_err(|e| format!("{operation}: bad FSH files JSON: {e}"))?;
         let predefined: BTreeMap<String, Value> = if predefined_json.trim().is_empty() {
             BTreeMap::new()
         } else {
             serde_json::from_str(predefined_json)
-                .map_err(|e| format!("compileProject: bad predefined JSON: {e}"))?
+                .map_err(|e| format!("{operation}: bad predefined JSON: {e}"))?
         };
         let encoded_site_files: BTreeMap<String, String> = serde_json::from_str(site_files_json)
-            .map_err(|e| format!("compileProject: bad site-files JSON: {e}"))?;
+            .map_err(|e| format!("{operation}: bad site-files JSON: {e}"))?;
         let site_files = encoded_site_files
             .into_iter()
             .map(|(path, encoded)| {
                 base64_decode(&encoded)
                     .map(|bytes| (path.clone(), bytes))
-                    .map_err(|error| format!("compileProject: invalid base64 in {path}: {error}"))
+                    .map_err(|error| format!("{operation}: invalid base64 in {path}: {error}"))
             })
             .collect::<Result<BTreeMap<_, _>, _>>()?;
         let config_digest = site_build::Sha256Digest::of_bytes(config.as_bytes());
@@ -624,21 +639,19 @@ impl Engine {
             .filter(|resolved| resolved.config_sha256 == config_digest)
             .cloned()
             .ok_or_else(|| {
-                "compileProject: no satisfied package resolver fixpoint for these config bytes; call resolveProject after the latest mount"
-                    .to_string()
+                format!("{operation}: no satisfied package resolver fixpoint for these config bytes; call resolveProject after the latest mount")
             })?;
         let (packages, _, _) = self.source_for_resolved(&resolved_packages)?;
-        let transition = self.sites.compile_project(
+        Ok((
             ProjectInputs {
                 config: config.to_string(),
                 fsh,
                 predefined,
                 site_files,
             },
-            packages,
             resolved_packages,
-        )?;
-        Ok(CompileResult::from(transition.outcome))
+            packages,
+        ))
     }
 
     /// Build a fresh `PackageContext` over the last complete project's exact
@@ -817,33 +830,158 @@ impl Engine {
     }
 }
 
+struct PreparedMountBatch {
+    prepared: Vec<package_store::PreparedPackage>,
+    pending: BTreeMap<String, Vec<u8>>,
+    artifacts: Vec<PreparedExport>,
+    artifact_bytes: u64,
+    prepared_members: u64,
+    input_json_bytes: u64,
+    base64_bytes: u64,
+    decoded_source_bytes: u64,
+    normalized_bytes: u64,
+    json_parse_ms: f64,
+    base64_decode_ms: f64,
+    normalization_ms: f64,
+    indexing_ms: f64,
+    artifact_encode_ms: f64,
+    decode_validate_prepare_ms: f64,
+}
+
+/// Decode, normalize, index, and encode packages without borrowing the mutable
+/// engine. This work can take seconds for large packages and invokes the host
+/// clock for metrics; only the resulting immutable batch enters the commit.
+fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, String> {
+    let started = clock_ms();
+    let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
+        .map_err(|error| format!("prepareAndMount: bad bundles JSON: {error}"))?;
+    let parsed_at = clock_ms();
+    if parsed.is_empty() {
+        return Err("prepareAndMount: no packages supplied".into());
+    }
+    let mut transaction = BTreeSet::new();
+    let mut artifacts = Vec::with_capacity(parsed.len());
+    let mut prepared = Vec::with_capacity(parsed.len());
+    let mut pending = BTreeMap::new();
+    let mut prepared_members = 0u64;
+    let mut base64_bytes = 0u64;
+    let mut decoded_source_bytes = 0u64;
+    let mut normalized_bytes = 0u64;
+    let mut artifact_bytes = 0u64;
+    let mut base64_decode_ms = 0.0f64;
+    let mut normalization_ms = 0.0f64;
+    let mut indexing_ms = 0.0f64;
+    let mut artifact_encode_ms = 0.0f64;
+    for package in parsed {
+        if !transaction.insert(package.label.clone()) {
+            return Err(format!(
+                "prepareAndMount: duplicate package label in one transaction: {}",
+                package.label
+            ));
+        }
+        let mut entries = BTreeMap::new();
+        for (name, b64) in package.files {
+            base64_bytes = base64_bytes.saturating_add(b64.len() as u64);
+            let decode_started = clock_ms();
+            let body = base64_decode(&b64)
+                .map_err(|error| format!("prepareAndMount: bad base64 for {name}: {error}"))?;
+            base64_decode_ms += (clock_ms() - decode_started).max(0.0);
+            decoded_source_bytes = decoded_source_bytes.saturating_add(body.len() as u64);
+            entries.insert(name, body);
+        }
+        let normalize_started = clock_ms();
+        let builder = package_store::PreparedPackage::normalize(&package.label, entries)
+            .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+        normalization_ms += (clock_ms() - normalize_started).max(0.0);
+        let index_started = clock_ms();
+        let package = builder
+            .build()
+            .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+        indexing_ms += (clock_ms() - index_started).max(0.0);
+        normalized_bytes = normalized_bytes.saturating_add(package.files.raw_bytes());
+        let encode_started = clock_ms();
+        let bytes = package.encode();
+        artifact_encode_ms += (clock_ms() - encode_started).max(0.0);
+        prepared_members += package.files.len() as u64;
+        artifact_bytes += bytes.len() as u64;
+        artifacts.push(PreparedExport {
+            label: package.label.clone(),
+            cache_key: package.key.cache_key(),
+            artifact_sha256: site_build::Sha256Digest::of_bytes(&bytes).to_string(),
+            bytes: bytes.len() as u64,
+        });
+        prepared.push(package);
+        pending.insert(artifacts.last().unwrap().label.clone(), bytes);
+    }
+    let decoded = clock_ms();
+    Ok(PreparedMountBatch {
+        prepared,
+        pending,
+        artifacts,
+        artifact_bytes,
+        prepared_members,
+        input_json_bytes: bundles_json.len() as u64,
+        base64_bytes,
+        decoded_source_bytes,
+        normalized_bytes,
+        json_parse_ms: (parsed_at - started).max(0.0),
+        base64_decode_ms,
+        normalization_ms,
+        indexing_ms,
+        artifact_encode_ms,
+        decode_validate_prepare_ms: (decoded - started).max(0.0),
+    })
+}
+
+#[cfg(test)]
+mod prepare_project_wire_tests {
+    use super::*;
+
+    #[test]
+    fn site_failure_is_a_typed_result_with_the_successful_compilation() {
+        let compilation = site_engine::CompilationOutcome {
+            resources: Vec::new(),
+            diagnostics: vec![site_engine::CompilationDiagnostic {
+                severity: "warning".into(),
+                message: "compiled before generator failed".into(),
+                file: Some("input/fsh/demo.fsh".into()),
+                line: Some(3),
+            }],
+        };
+        let wire = prepared_project_wire(Err(site_engine::PrepareProjectError::Site {
+            message: "generator failed".into(),
+            compilation,
+            compile_ms: 12.5,
+        }))
+        .unwrap();
+        let value = serde_json::to_value(wire).unwrap();
+
+        assert_eq!(value["status"], "siteFailed");
+        assert_eq!(value["error"], "generator failed");
+        assert_eq!(value["compileMs"], 12.5);
+        assert_eq!(
+            value["compiled"]["diagnostics"][0]["message"],
+            "compiled before generator failed"
+        );
+    }
+
+    #[test]
+    fn compile_failure_remains_an_outer_error_without_fake_compile_result() {
+        let error = match prepared_project_wire(Err(site_engine::PrepareProjectError::Compile(
+            "compiler failed".into(),
+        ))) {
+            Err(error) => error,
+            Ok(_) => panic!("compile failure must remain an outer error"),
+        };
+        assert_eq!(error, "compiler failed");
+    }
+}
+
 fn resolved_packages_from_step(
     config: &str,
     step: &package_store::ResolutionStep,
 ) -> Result<ResolvedPackages, String> {
-    if !step.satisfied {
-        return Err("package resolver step is not satisfied".into());
-    }
-    let mut labels = Vec::new();
-    for request in step.compile_set.iter().chain(&step.context_closure) {
-        let label = format!("{}#{}", request.package_id, request.version);
-        if !labels.contains(&label) {
-            labels.push(label);
-        }
-    }
-    if labels.is_empty() {
-        return Err("package resolver produced an empty satisfied closure".into());
-    }
-    let resolution_support = step
-        .resolution_support
-        .iter()
-        .map(|request| format!("{}#{}", request.package_id, request.version))
-        .collect();
-    Ok(ResolvedPackages {
-        config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
-        resolution_support,
-        labels,
-    })
+    ResolvedPackages::from_resolution_step(config, step)
 }
 
 // ---------------------------------------------------------------------------
@@ -1037,6 +1175,45 @@ struct TemplateResolutionWire {
     missing: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+enum PreparedProjectWire {
+    Prepared {
+        compiled: CompileResult,
+        site: site_engine::PrepareResult,
+        #[serde(rename = "compileMs")]
+        compile_ms: f64,
+    },
+    SiteFailed {
+        compiled: CompileResult,
+        #[serde(rename = "compileMs")]
+        compile_ms: f64,
+        error: String,
+    },
+}
+
+fn prepared_project_wire(
+    result: Result<site_engine::PreparedProjectResult, site_engine::PrepareProjectError>,
+) -> Result<PreparedProjectWire, String> {
+    match result {
+        Ok(prepared) => Ok(PreparedProjectWire::Prepared {
+            compiled: CompileResult::from(prepared.compilation),
+            site: prepared.site,
+            compile_ms: prepared.compile_ms,
+        }),
+        Err(site_engine::PrepareProjectError::Compile(message)) => Err(message),
+        Err(site_engine::PrepareProjectError::Site {
+            message,
+            compilation,
+            compile_ms,
+        }) => Ok(PreparedProjectWire::SiteFailed {
+            compiled: CompileResult::from(compilation),
+            compile_ms,
+            error: message,
+        }),
+    }
+}
+
 // The result/error envelope helpers now live in the shared `api_envelope` crate
 // (imported above) — one implementation for the Session and the `fig` CLI.
 // ===========================================================================
@@ -1051,6 +1228,7 @@ struct TemplateResolutionWire {
 #[wasm_bindgen]
 pub struct Session {
     engine: RefCell<Engine>,
+    active_operation: Cell<Option<&'static str>>,
 }
 
 impl Default for Session {
@@ -1060,8 +1238,39 @@ impl Default for Session {
 }
 
 impl Session {
-    fn with_engine<T>(&self, f: impl FnOnce(&mut Engine) -> T) -> T {
-        f(&mut self.engine.borrow_mut())
+    fn with_engine<T>(
+        &self,
+        operation: &'static str,
+        f: impl FnOnce(&mut Engine) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let mut engine = self.engine.try_borrow_mut().map_err(|_| {
+            format!(
+                "{operation}: engine session is busy with reentrant operation {}",
+                self.active_operation.get().unwrap_or("unknown")
+            )
+        })?;
+        self.active_operation.set(Some(operation));
+        let result = f(&mut engine);
+        self.active_operation.set(None);
+        result
+    }
+}
+
+#[cfg(test)]
+mod session_reentry_tests {
+    use super::*;
+
+    #[test]
+    fn reentrant_session_use_is_a_typed_error_not_a_panic() {
+        let session = Session::new();
+        let _active = session.engine.borrow_mut();
+        let envelope: Value = serde_json::from_str(&session.resolve_project("id: demo", ""))
+            .expect("typed resolver envelope");
+        assert_eq!(envelope["ok"], false);
+        assert!(envelope["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("engine session is busy with reentrant operation unknown"));
     }
 }
 
@@ -1075,6 +1284,7 @@ impl Session {
         engine.sites.set_clock(clock_ms);
         Session {
             engine: RefCell::new(engine),
+            active_operation: Cell::new(None),
         }
     }
 
@@ -1085,7 +1295,7 @@ impl Session {
         set_panic_hook();
         envelope(
             "init",
-            self.with_engine(|e| e.init(bundles_json))
+            self.with_engine("init", |engine| engine.init(bundles_json))
                 .map(|n| serde_json::json!({ "mounted": n })),
         )
     }
@@ -1096,7 +1306,7 @@ impl Session {
         set_panic_hook();
         envelope(
             "mount",
-            self.with_engine(|e| e.mount(bundles_json))
+            self.with_engine("mount", |engine| engine.mount(bundles_json))
                 .map(|n| serde_json::json!({ "mounted": n })),
         )
     }
@@ -1108,8 +1318,10 @@ impl Session {
         set_panic_hook();
         envelope(
             "mountPrepared",
-            self.with_engine(|engine| engine.mount_prepared(bytes, expected_key))
-                .map(|mounted| serde_json::json!({ "mounted": mounted })),
+            self.with_engine("mountPrepared", |engine| {
+                engine.mount_prepared(bytes, expected_key)
+            })
+            .map(|mounted| serde_json::json!({ "mounted": mounted })),
         )
     }
 
@@ -1120,8 +1332,10 @@ impl Session {
         set_panic_hook();
         envelope(
             "beginPreparedMount",
-            self.with_engine(|engine| engine.begin_prepared_mount(expected_packages))
-                .map(|()| serde_json::json!({ "expectedPackages": expected_packages })),
+            self.with_engine("beginPreparedMount", |engine| {
+                engine.begin_prepared_mount(expected_packages)
+            })
+            .map(|()| serde_json::json!({ "expectedPackages": expected_packages })),
         )
     }
 
@@ -1130,7 +1344,9 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "stagePreparedMount",
-            self.with_engine(|engine| engine.stage_prepared_mount(bytes, expected_key)),
+            self.with_engine("stagePreparedMount", |engine| {
+                engine.stage_prepared_mount(bytes, expected_key)
+            }),
         )
     }
 
@@ -1139,7 +1355,7 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "commitPreparedMount",
-            self.with_engine(Engine::commit_prepared_mount),
+            self.with_engine("commitPreparedMount", Engine::commit_prepared_mount),
         )
     }
 
@@ -1148,8 +1364,10 @@ impl Session {
         set_panic_hook();
         envelope(
             "abortPreparedMount",
-            self.with_engine(|engine| Ok(engine.abort_prepared_mount()))
-                .map(|aborted| serde_json::json!({ "aborted": aborted })),
+            self.with_engine("abortPreparedMount", |engine| {
+                Ok(engine.abort_prepared_mount())
+            })
+            .map(|aborted| serde_json::json!({ "aborted": aborted })),
         )
     }
 
@@ -1160,7 +1378,9 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "packageStorageMetrics",
-            self.with_engine(|engine| Ok::<_, String>(engine.package_storage_metrics())),
+            self.with_engine("packageStorageMetrics", |engine| {
+                Ok(engine.package_storage_metrics())
+            }),
         )
     }
 
@@ -1170,10 +1390,52 @@ impl Session {
     #[wasm_bindgen(js_name = prepareAndMount)]
     pub fn prepare_and_mount(&self, bundles_json: &str) -> String {
         set_panic_hook();
-        envelope_ser(
-            "prepareAndMount",
-            self.with_engine(|engine| engine.prepare_and_mount(bundles_json)),
-        )
+        let result = (|| {
+            let base_generation = self.with_engine("prepareAndMount.preflight", |engine| {
+                if engine.bundle.is_none() {
+                    return Err("prepareAndMount: engine not initialized; call init() first".into());
+                }
+                Ok(engine.package_generation)
+            })?;
+
+            // Package parsing, decoding, normalization, indexing, and encoding
+            // deliberately run without a mutable Session borrow. In the browser
+            // these phases invoke host clocks and may permit package-resolution
+            // work to re-enter this Session; that work must see the previous
+            // complete generation, never a half-built mount.
+            let batch = prepare_package_batch(bundles_json)?;
+            let mount_started = clock_ms();
+            let mut result = self.with_engine("prepareAndMount.commit", move |engine| {
+                engine.commit_prepared_batch(batch, base_generation)
+            })?;
+            result.mount_ms = (clock_ms() - mount_started).max(0.0);
+            Ok(result)
+        })();
+        envelope_ser("prepareAndMount", result)
+    }
+
+    /// Convert one or a few cold raw packages into compact authenticated
+    /// artifacts without mounting them. Hosts stage the one-shot exports into
+    /// `beginPreparedMount`/`stagePreparedMount` and commit the complete closure
+    /// once, preserving atomicity while bounding JSON and decoded-package memory.
+    #[wasm_bindgen(js_name = prepareArtifacts)]
+    pub fn prepare_artifacts(&self, bundles_json: &str) -> String {
+        set_panic_hook();
+        let result = (|| {
+            let base_generation = self.with_engine("prepareArtifacts.preflight", |engine| {
+                if engine.bundle.is_none() {
+                    return Err(
+                        "prepareArtifacts: engine not initialized; call init() first".into(),
+                    );
+                }
+                Ok(engine.package_generation)
+            })?;
+            let batch = prepare_package_batch(bundles_json)?;
+            self.with_engine("prepareArtifacts.retain", move |engine| {
+                engine.retain_prepared_artifacts(batch, base_generation)
+            })
+        })();
+        envelope_ser("prepareArtifacts", result)
     }
 
     /// Move one artifact staged by `prepareAndMount` into a JS `Uint8Array`.
@@ -1181,7 +1443,7 @@ impl Session {
     /// a missing/twice-taken binary is surfaced as a JS exception.
     #[wasm_bindgen(js_name = takePrepared)]
     pub fn take_prepared(&self, label: &str) -> Result<Vec<u8>, wasm_bindgen::JsValue> {
-        self.with_engine(|engine| engine.take_prepared(label))
+        self.with_engine("takePrepared", |engine| engine.take_prepared(label))
             .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
 
@@ -1200,8 +1462,35 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "compileProject",
-            self.with_engine(|e| {
-                e.compile_project(files_json, config, predefined_json, site_files_json)
+            self.with_engine("compileProject", |engine| {
+                engine.compile_project(files_json, config, predefined_json, site_files_json)
+            }),
+        )
+    }
+
+    /// Capture, compile, and prepare one project revision through the canonical
+    /// Rust SiteEngine boundary. This is the normal site-generation entry;
+    /// `compileProject` remains only for explicit compiler inspection callers.
+    #[wasm_bindgen(js_name = prepareProject)]
+    pub fn prepare_project_site(
+        &self,
+        files_json: &str,
+        config: &str,
+        predefined_json: &str,
+        site_files_json: &str,
+        generator_spec_json: &str,
+    ) -> String {
+        set_panic_hook();
+        envelope_ser(
+            "prepareProject",
+            self.with_engine("prepareProject", |engine| {
+                engine.prepare_project_site(
+                    files_json,
+                    config,
+                    predefined_json,
+                    site_files_json,
+                    generator_spec_json,
+                )
             }),
         )
     }
@@ -1210,18 +1499,9 @@ impl Session {
     /// Envelope result: `{ snapshot, messages }`.
     pub fn snapshot(&self, input: &str) -> String {
         set_panic_hook();
-        envelope_ser("snapshot", self.with_engine(|e| e.snapshot(input)))
-    }
-
-    /// Prepare one generator against the exact project captured by the preceding
-    /// `compileProject`. The specification contains generator choices only;
-    /// authored project bytes are never accepted a second time.
-    #[wasm_bindgen(js_name = prepare)]
-    pub fn prepare_site(&self, generator_spec_json: &str) -> String {
-        set_panic_hook();
         envelope_ser(
-            "prepare",
-            self.with_engine(|engine| engine.prepare_site(generator_spec_json)),
+            "snapshot",
+            self.with_engine("snapshot", |engine| engine.snapshot(input)),
         )
     }
 
@@ -1231,7 +1511,7 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "outputs",
-            self.with_engine(|engine| engine.site_outputs(handle)),
+            self.with_engine("outputs", |engine| engine.site_outputs(handle)),
         )
     }
 
@@ -1241,17 +1521,21 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "render",
-            self.with_engine(|engine| engine.render_site_output(handle, path)),
+            self.with_engine("render", |engine| engine.render_site_output(handle, path)),
         )
     }
 
-    /// Return the canonical Rust SiteOutput after every catalog path is ready.
+    /// Return the canonical Rust SiteOutput. Native Publisher handles need no
+    /// second argument; external Cycle handles supply their verified catalog
+    /// and ContentRefs through the same `finalize` host operation.
     #[wasm_bindgen(js_name = finalize)]
-    pub fn finalize_site(&self, handle: &str) -> String {
+    pub fn finalize_site(&self, handle: &str, external_input_json: Option<String>) -> String {
         set_panic_hook();
         envelope_ser(
             "finalize",
-            self.with_engine(|engine| engine.finalize_site(handle)),
+            self.with_engine("finalize", |engine| {
+                engine.finalize_site(handle, external_input_json.as_deref())
+            }),
         )
     }
 
@@ -1264,20 +1548,10 @@ impl Session {
         handle: &str,
         sha256: &str,
     ) -> Result<Vec<u8>, wasm_bindgen::JsValue> {
-        self.with_engine(|engine| engine.read_site_content(handle, sha256))
-            .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
-    }
-
-    /// Internal external-renderer receipt authority. The worker's public Cycle
-    /// `finalize(handle)` supplies only its already-verified ContentRefs and
-    /// metadata; Rust checks catalog equality and emits canonical SiteOutput.
-    #[wasm_bindgen(js_name = finalizeExternal)]
-    pub fn finalize_external_site(&self, handle: &str, input_json: &str) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "finalizeExternal",
-            self.with_engine(|engine| engine.finalize_external_site(handle, input_json)),
-        )
+        self.with_engine("readContent", |engine| {
+            engine.read_site_content(handle, sha256)
+        })
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
 
     /// Tier-1 in-engine ValueSet expansion. Envelope result is the expansion
@@ -1287,7 +1561,9 @@ impl Session {
         set_panic_hook();
         envelope(
             "expandValueSet",
-            self.with_engine(|e| e.expand_valueset(valueset_json, resources_json)),
+            self.with_engine("expandValueSet", |engine| {
+                engine.expand_valueset(valueset_json, resources_json)
+            }),
         )
     }
 
@@ -1300,7 +1576,9 @@ impl Session {
     pub fn resolve_project(&self, config: &str, version_index_json: &str) -> String {
         set_panic_hook();
         let payload = self
-            .with_engine(|e| e.resolve_project(config, version_index_json))
+            .with_engine("resolveProject", |engine| {
+                engine.resolve_project(config, version_index_json)
+            })
             .and_then(|s| {
                 serde_json::from_str::<Value>(&s)
                     .map_err(|e| format!("resolveProject: reparse: {e}"))
@@ -1317,7 +1595,9 @@ impl Session {
         set_panic_hook();
         envelope_ser(
             "resolveTemplate",
-            self.with_engine(|engine| engine.resolve_template(coordinate)),
+            self.with_engine("resolveTemplate", |engine| {
+                engine.resolve_template(coordinate)
+            }),
         )
     }
 
@@ -1520,11 +1800,28 @@ impl Engine {
         })
     }
 
-    fn prepare_site(&mut self, spec_json: &str) -> Result<site_engine::PrepareResult, String> {
+    fn prepare_project_site(
+        &mut self,
+        files_json: &str,
+        config: &str,
+        predefined_json: &str,
+        site_files_json: &str,
+        spec_json: &str,
+    ) -> Result<PreparedProjectWire, String> {
         let spec: SharedGeneratorSpec = serde_json::from_str(spec_json)
-            .map_err(|error| format!("prepare: invalid generator specification: {error}"))?;
+            .map_err(|error| format!("prepareProject: invalid generator specification: {error}"))?;
+        let (inputs, resolved, _packages) = self.project_request(
+            files_json,
+            config,
+            predefined_json,
+            site_files_json,
+            "prepareProject",
+        )?;
         let environment = self.package_environment()?;
-        self.sites.prepare(spec, environment)
+        prepared_project_wire(
+            self.sites
+                .prepare_project(inputs, resolved, spec, environment),
+        )
     }
 
     fn site_outputs(&self, handle: &str) -> Result<OutputCatalogResult, String> {
@@ -1539,17 +1836,17 @@ impl Engine {
         self.sites.read_content(handle, digest)
     }
 
-    fn finalize_site(&self, handle: &str) -> Result<site_build::SiteOutput, String> {
-        self.sites.finalize(handle)
-    }
-
-    fn finalize_external_site(
+    fn finalize_site(
         &self,
         handle: &str,
-        input_json: &str,
+        external_input_json: Option<&str>,
     ) -> Result<site_build::SiteOutput, String> {
-        let input: ExternalFinalizeInput = serde_json::from_str(input_json)
-            .map_err(|error| format!("finalizeExternal: invalid input: {error}"))?;
-        self.sites.finalize_external(handle, input)
+        let input = external_input_json
+            .map(|input_json| {
+                serde_json::from_str::<ExternalFinalizeInput>(input_json)
+                    .map_err(|error| format!("finalize: invalid external input: {error}"))
+            })
+            .transpose()?;
+        self.sites.finalize(handle, input)
     }
 }

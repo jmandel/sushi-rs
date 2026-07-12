@@ -3,8 +3,6 @@
 //! (`getConfig`, Template.java:539) and `IGKnowledgeProvider.getProperty`
 //! (IGKnowledgeProvider.java:255) precedence.
 
-use std::path::Path;
-
 use anyhow::{Context, Result};
 use serde_json::Value;
 
@@ -23,13 +21,6 @@ pub struct Defaults {
 }
 
 impl Defaults {
-    pub fn load(config_json: &Path) -> Result<Defaults> {
-        let bytes = std::fs::read(config_json)
-            .with_context(|| format!("read {}", config_json.display()))?;
-        let v: Value = serde_json::from_slice(&bytes)?;
-        Self::from_value(&v)
-    }
-
     pub fn from_value(cfg: &Value) -> Result<Defaults> {
         let table = cfg
             .get("defaults")

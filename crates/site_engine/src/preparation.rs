@@ -2,15 +2,18 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use package_store::PackageSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::render_surface::RenderSemantics;
 use crate::runtime::{
     ObjectMap, OutputDescriptor, OutputResourceSubject, OutputSubjectPage, PreparedOutput,
     PublisherRuntime,
 };
 use crate::{
-    build_render_semantics, build_render_state_from_semantics, PackageView, SiteEngine, SiteOptions,
+    build_render_semantics, build_render_state_from_semantics, PackageView, RenderState,
+    SiteEngine, SiteOptions,
 };
 
 const ENGINE_API: u32 = 1;
@@ -23,8 +26,13 @@ const CYCLE_PROJECTION_RECIPE: &str = "site-build.cycle-projection/v2";
 const PUBLISHER_RUNTIME_PREPARATION_SCHEMA: &str = "publisher-runtime-preparation-key/v1";
 const PUBLISHER_RUNTIME_PREPARATION_RECIPE: &str =
     "publisher-template-rust.runtime+model+render+catalog/v1";
+const PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA: &str = "publisher-render-semantics-cache/v1";
 
 const PUBLISHER_AUTHORED_NAMESPACE_PREFIX: &str = "publisher.authored";
+const PUBLISHER_RENDER_PACKAGE_NAMESPACE: &str = "publisher.render-package/v1";
+const PUBLISHER_RENDER_PACKAGE_RECIPE: &str = "publisher.render-package/v1";
+const PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE: &str =
+    "application/vnd.fhir.publisher.render-package.v1";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "generator", rename_all = "camelCase", deny_unknown_fields)]
@@ -165,6 +173,42 @@ pub struct PrepareResult {
     pub metrics: PrepareMetrics,
 }
 
+#[derive(Clone, Debug)]
+pub struct PreparedProjectResult {
+    pub compilation: crate::CompilationOutcome,
+    pub site: PrepareResult,
+    pub compile_ms: f64,
+}
+
+/// Failure from the atomic project-preparation boundary. A generator failure
+/// occurs only after compilation has succeeded, so it retains that exact typed
+/// result for presentation without installing a partial site runtime.
+#[derive(Clone, Debug)]
+pub enum PrepareProjectError {
+    Compile(String),
+    Site {
+        message: String,
+        compilation: crate::CompilationOutcome,
+        compile_ms: f64,
+    },
+}
+
+impl std::fmt::Display for PrepareProjectError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Compile(message) | Self::Site { message, .. } => formatter.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for PrepareProjectError {}
+
+impl From<PrepareProjectError> for String {
+    fn from(error: PrepareProjectError) -> Self {
+        error.to_string()
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrepareMetrics {
@@ -179,6 +223,7 @@ pub struct PrepareMetrics {
     pub template_materialize_ms: f64,
     pub publisher_runtime_ms: f64,
     pub publisher_model_ms: f64,
+    pub render_semantics_cache_hit: bool,
     pub render_model_ms: f64,
     pub catalog_ms: f64,
 }
@@ -188,8 +233,15 @@ pub(crate) struct PreparationState {
     prepared_guide: Option<PreparedGuideCacheEntry>,
     snapshot_completed_local: Option<SnapshotCompletedLocalCacheEntry>,
     closed_cycle: Option<ClosedSiteBuildCacheEntry>,
+    publisher_render_semantics: Option<PublisherRenderSemanticsCacheEntry>,
     #[cfg(test)]
     cache_hits: DerivedCacheHits,
+}
+
+struct PublisherRenderSemanticsCacheEntry {
+    key: site_build::Sha256Digest,
+    semantics: Rc<RenderSemantics>,
+    render_package_artifacts: BTreeMap<String, Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -207,6 +259,16 @@ struct SnapshotCompletedLocalCacheEntry {
 struct PreparationCacheKeys {
     prepared_guide: site_build::Sha256Digest,
     snapshot_completed_local: site_build::Sha256Digest,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRenderSemanticsCachePayload<'a> {
+    schema: &'static str,
+    snapshot_completed_local_key: &'a site_build::Sha256Digest,
+    active_tables: bool,
+    run_uuid: Option<&'a str>,
+    txcache: BTreeMap<String, site_build::Sha256Digest>,
 }
 
 #[derive(Clone)]
@@ -300,7 +362,7 @@ impl SiteEngine {
         environment.resolve_template(coordinate)
     }
 
-    pub fn prepare(
+    pub(crate) fn prepare(
         &mut self,
         spec: GeneratorSpec,
         environment: PackageEnvironment,
@@ -338,6 +400,42 @@ impl SiteEngine {
                 &environment,
             ),
         }
+    }
+
+    /// Capture/compile one immutable project revision and prepare its target in
+    /// one canonical executor call. Native and WASM transports should prefer
+    /// this boundary over composing a host-side compile-then-prepare flow.
+    pub fn prepare_project(
+        &mut self,
+        inputs: crate::ProjectInputs,
+        resolved: crate::ResolvedPackageClosure,
+        spec: GeneratorSpec,
+        environment: PackageEnvironment,
+    ) -> Result<PreparedProjectResult, PrepareProjectError> {
+        let packages = environment
+            .scoped(&resolved.labels, "prepare(project)")
+            .map_err(PrepareProjectError::Compile)?;
+        let compile_started = self.timer();
+        let compilation = self
+            .compile_project(inputs, packages, resolved)
+            .map_err(PrepareProjectError::Compile)?
+            .outcome;
+        let compile_ms = elapsed_ms(compile_started);
+        let site = match self.prepare(spec, environment) {
+            Ok(site) => site,
+            Err(message) => {
+                return Err(PrepareProjectError::Site {
+                    message,
+                    compilation,
+                    compile_ms,
+                })
+            }
+        };
+        Ok(PreparedProjectResult {
+            compilation,
+            site,
+            compile_ms,
+        })
     }
 
     fn prepare_cycle(
@@ -447,7 +545,7 @@ impl SiteEngine {
             environment,
             operation,
             keys.prepared_guide.clone(),
-            keys.snapshot_completed_local,
+            keys.snapshot_completed_local.clone(),
         )?;
         metrics.prepared_guide_ms = elapsed_ms(started);
         let started = self.timer();
@@ -880,6 +978,188 @@ fn output_catalog(
     Ok(catalog)
 }
 
+struct PublisherModel {
+    site_files: Rc<HashMap<PathBuf, Vec<u8>>>,
+    resource_pages: BTreeMap<String, site_producer::ResourcePageMetadata>,
+}
+
+fn publisher_runtime_outputs(
+    publisher: &site_producer::publisher_runtime::PublisherRuntime,
+    objects: &mut ObjectMap,
+) -> Result<BTreeMap<site_build::OutputPath, PreparedOutput>, String> {
+    let mut ready = BTreeMap::new();
+    for file in publisher.files() {
+        let transformation = file
+            .provenance
+            .transformation
+            .as_deref()
+            .map(|value| format!("; transformation={value}"))
+            .unwrap_or_default();
+        insert_prepared_output(
+            &mut ready,
+            objects,
+            &file.path,
+            file.bytes.clone(),
+            &file.media_type,
+            site_build::OutputProducer {
+                id: "publisher-runtime".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+            Some(format!(
+                "{}; license={}; source={}{}",
+                file.provenance.source,
+                file.provenance.license,
+                file.provenance.source_path,
+                transformation
+            )),
+            PreparedOutputCollision::Reject,
+        )?;
+    }
+    Ok(ready)
+}
+
+fn publisher_model(
+    prepared: &site_build::PreparedGuide,
+    template_files: &BTreeMap<String, Vec<u8>>,
+    ready: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    objects: &mut ObjectMap,
+    project_id: &str,
+    operation: &str,
+) -> Result<PublisherModel, String> {
+    let config_json: Value = serde_json::from_slice(
+        template_files
+            .get("config.json")
+            .ok_or_else(|| format!("{operation}: template artifacts contain no config.json"))?,
+    )
+    .map_err(|error| format!("{operation}: bad template config.json: {error}"))?;
+    let layouts = template_files
+        .iter()
+        .filter_map(|(relative, bytes)| {
+            relative
+                .strip_prefix("layouts/")
+                .and_then(|_| String::from_utf8(bytes.clone()).ok())
+                .map(|text| (format!("template/{relative}"), text))
+        })
+        .collect::<HashMap<_, _>>();
+    if layouts.is_empty() {
+        return Err(format!(
+            "{operation}: template artifacts contain no layouts"
+        ));
+    }
+    let producer_inputs =
+        site_producer::ProducerInputs::from_prepared(prepared, &config_json, layouts, "en/")
+            .map_err(|error| format!("{operation}: {error:#}"))?;
+    let produced = site_producer::produce(&producer_inputs)
+        .map_err(|error| format!("{operation}: {error:#}"))?;
+    let resource_pages = produced.resource_pages;
+    let mut site_files = HashMap::new();
+    for (relative, bytes) in template_files {
+        let mounted = match relative.strip_prefix("includes/") {
+            Some(name) => format!("_includes/{name}"),
+            None => format!("template/{relative}"),
+        };
+        site_files.insert(PathBuf::from(format!("/site/{mounted}")), bytes.clone());
+    }
+    for (name, body) in produced.pages {
+        site_files.insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
+    }
+    for (name, body) in produced.data {
+        site_files.insert(
+            PathBuf::from(format!("/site/_data/{name}")),
+            body.into_bytes(),
+        );
+    }
+    for (name, body) in produced.includes {
+        site_files.insert(
+            PathBuf::from(format!("/site/_includes/{name}")),
+            body.into_bytes(),
+        );
+    }
+    stage_prepared_authored_files(prepared, &mut site_files, ready, objects, project_id)?;
+    Ok(PublisherModel {
+        site_files: Rc::new(site_files),
+        resource_pages,
+    })
+}
+
+fn publisher_render_semantics(
+    prepared: &site_build::PreparedGuide,
+    packages: PackageView,
+    model: &PublisherModel,
+    options: &SiteOptions,
+) -> Result<RenderSemantics, String> {
+    build_render_semantics(
+        prepared_render_set(prepared)?,
+        Some(packages),
+        &model.site_files,
+        options,
+    )
+}
+
+fn publisher_render_state(
+    semantics: &RenderSemantics,
+    model: &PublisherModel,
+    options: &SiteOptions,
+) -> Result<Rc<RenderState>, String> {
+    Ok(Rc::new(build_render_state_from_semantics(
+        semantics,
+        model.site_files.clone(),
+        options,
+    )?))
+}
+
+fn publisher_render_semantics_cache_key(
+    snapshot_completed_local_key: &site_build::Sha256Digest,
+    model: &PublisherModel,
+    options: &SiteOptions,
+    operation: &str,
+) -> Result<site_build::Sha256Digest, String> {
+    let txcache_root = PathBuf::from("/site/txcache");
+    let txcache = model
+        .site_files
+        .iter()
+        .filter(|(path, _)| path.starts_with(&txcache_root))
+        .map(|(path, bytes)| {
+            (
+                path.to_string_lossy().into_owned(),
+                site_build::Sha256Digest::of_bytes(bytes),
+            )
+        })
+        .collect();
+    site_build::sha256_canonical(&PublisherRenderSemanticsCachePayload {
+        schema: PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA,
+        snapshot_completed_local_key,
+        active_tables: options.active_tables,
+        run_uuid: options.run_uuid.as_deref(),
+        txcache,
+    })
+    .map_err(|error| format!("{operation}: hash Publisher render semantics key: {error}"))
+}
+
+fn publisher_catalog(
+    state: &RenderState,
+    ready: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    model: &PublisherModel,
+    operation: &str,
+) -> Result<(Vec<OutputDescriptor>, site_build::Sha256Digest), String> {
+    let pages = state.list_pages();
+    add_page_relative_output_aliases(ready, &pages)?;
+    let tree_manifest = model
+        .site_files
+        .iter()
+        .map(|(path, bytes)| {
+            (
+                path.to_string_lossy().into_owned(),
+                site_build::ContentRef::of_bytes(bytes, None::<String>),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let tree_digest = site_build::sha256_canonical(&tree_manifest)
+        .map_err(|error| format!("{operation}: hash mounted tree: {error}"))?;
+    let catalog = output_catalog(ready, pages, &model.resource_pages, operation)?;
+    Ok((catalog, tree_digest))
+}
+
 fn publisher_artifacts(
     prepared: &site_build::PreparedGuide,
     project: &site_build::ProjectRevision,
@@ -888,6 +1168,7 @@ fn publisher_artifacts(
     core: &site_build::PackageCoordinate,
     template_files: &BTreeMap<String, Vec<u8>>,
     runtime: &site_producer::publisher_runtime::PublisherRuntime,
+    render_package_artifacts: &BTreeMap<String, Vec<u8>>,
 ) -> Result<
     (
         site_build::ArtifactCatalog,
@@ -1066,6 +1347,31 @@ fn publisher_artifacts(
             }]),
         )?;
     }
+    for (label, render_package_bytes) in render_package_artifacts {
+        let coordinate = site_build::PackageCoordinate::parse(label).map_err(|error| {
+            format!("prepare(publisher): invalid render package {label}: {error}")
+        })?;
+        if package_lock.get(&coordinate).is_none() {
+            return Err(format!(
+                "prepare(publisher): render package {label} is absent from package lock"
+            ));
+        }
+        push_artifact(
+            &mut records,
+            &mut roots,
+            &mut objects,
+            site_build::ArtifactKey::Data {
+                namespace: PUBLISHER_RENDER_PACKAGE_NAMESPACE.into(),
+                name: label.clone(),
+            },
+            render_package_bytes.clone(),
+            Some(PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE),
+            "site-engine.publisher",
+            PUBLISHER_RENDER_PACKAGE_RECIPE,
+            BTreeMap::from([("coordinate".into(), label.clone())]),
+            BTreeSet::from([site_build::ReadDependency::Package { coordinate }]),
+        )?;
+    }
     let catalog = site_build::ArtifactCatalog::from_records(records)
         .map_err(|error| format!("prepare(publisher): artifact catalog: {error}"))?;
     Ok((catalog, site_build::RenderPlan::new(roots), objects))
@@ -1109,6 +1415,873 @@ fn authored_role_name(role: site_build::AuthoredFileRole) -> &'static str {
         site_build::AuthoredFileRole::Image => "image",
         site_build::AuthoredFileRole::ImageSource => "image-source",
     }
+}
+
+fn authored_role_from_name(name: &str) -> Result<site_build::AuthoredFileRole, String> {
+    match name {
+        "page-content" => Ok(site_build::AuthoredFileRole::PageContent),
+        "resource-content" => Ok(site_build::AuthoredFileRole::ResourceContent),
+        "data" => Ok(site_build::AuthoredFileRole::Data),
+        "include" => Ok(site_build::AuthoredFileRole::Include),
+        "image" => Ok(site_build::AuthoredFileRole::Image),
+        "image-source" => Ok(site_build::AuthoredFileRole::ImageSource),
+        other => Err(format!("unknown closed Publisher authored role {other:?}")),
+    }
+}
+
+fn ready_artifact_content<'a>(
+    build: &'a site_build::ClosedSiteBuild,
+    key: &site_build::ArtifactKey,
+    operation: &str,
+) -> Result<(&'a site_build::ArtifactRecord, &'a site_build::ContentRef), String> {
+    let record = build
+        .site_build()
+        .artifacts()
+        .get(key)
+        .ok_or_else(|| format!("{operation}: required artifact {key:?} is absent"))?;
+    let site_build::ArtifactState::Ready { content } = &record.state else {
+        return Err(format!(
+            "{operation}: required artifact {key:?} is not ready"
+        ));
+    };
+    Ok((record, content))
+}
+
+fn read_store_content(
+    store: &dyn content_store::ContentStore,
+    content: &site_build::ContentRef,
+    operation: &str,
+) -> Result<Vec<u8>, String> {
+    store
+        .read(content)
+        .map(content_store::VerifiedContent::into_bytes)
+        .map_err(|error| format!("{operation}: read content {}: {error}", content.sha256))
+}
+
+fn authenticated_object_bytes<'a>(
+    objects: &'a ObjectMap,
+    content: &site_build::ContentRef,
+    operation: &str,
+) -> Result<&'a [u8], String> {
+    let bytes = objects.get(&content.sha256).ok_or_else(|| {
+        format!(
+            "{operation}: authenticated object {} is absent",
+            content.sha256
+        )
+    })?;
+    if bytes.len() as u64 != content.byte_length {
+        return Err(format!(
+            "{operation}: authenticated object {} has the wrong length",
+            content.sha256
+        ));
+    }
+    Ok(bytes.as_slice())
+}
+
+fn read_json_artifact<T: serde::de::DeserializeOwned>(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    key: &site_build::ArtifactKey,
+    expected_recipe: &str,
+    expected_schema: &str,
+    operation: &str,
+) -> Result<T, String> {
+    let (record, content) = ready_artifact_content(build, key, operation)?;
+    if record.provenance.producer.id != "site-semantics"
+        || record.provenance.recipe != expected_recipe
+        || record
+            .provenance
+            .attributes
+            .get("schema")
+            .map(String::as_str)
+            != Some(expected_schema)
+        || content.media_type.as_deref() != Some("application/json")
+    {
+        return Err(format!(
+            "{operation}: semantic artifact {key:?} has incompatible provenance"
+        ));
+    }
+    let bytes = authenticated_object_bytes(objects, content, operation)?;
+    serde_json::from_slice(&bytes)
+        .map_err(|error| format!("{operation}: decode semantic artifact {key:?}: {error}"))
+}
+
+fn prepared_from_closed_publisher(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    operation: &str,
+) -> Result<site_build::PreparedGuide, String> {
+    let resources: site_build::cycle_semantic::ResourcesDocument = read_json_artifact(
+        build,
+        objects,
+        &site_build::cycle_semantic::resources_key(),
+        "site_semantics.resources",
+        site_build::cycle_semantic::RESOURCES_SCHEMA,
+        operation,
+    )?;
+    let terminology: site_build::cycle_semantic::TerminologyDocument = read_json_artifact(
+        build,
+        objects,
+        &site_build::cycle_semantic::terminology_key(),
+        "site_semantics.terminology",
+        site_build::cycle_semantic::TERMINOLOGY_SCHEMA,
+        operation,
+    )?;
+    let navigation: site_build::cycle_semantic::NavigationDocument = read_json_artifact(
+        build,
+        objects,
+        &site_build::cycle_semantic::navigation_key(),
+        "site_semantics.navigation",
+        site_build::cycle_semantic::NAVIGATION_SCHEMA,
+        operation,
+    )?;
+    let config: site_build::cycle_semantic::ConfigDocument = read_json_artifact(
+        build,
+        objects,
+        &site_build::cycle_semantic::config_key(),
+        "site_semantics.config",
+        site_build::cycle_semantic::CONFIG_SCHEMA,
+        operation,
+    )?;
+    if resources.schema != site_build::cycle_semantic::RESOURCES_SCHEMA
+        || terminology.schema != site_build::cycle_semantic::TERMINOLOGY_SCHEMA
+        || navigation.schema != site_build::cycle_semantic::NAVIGATION_SCHEMA
+        || config.schema != site_build::cycle_semantic::CONFIG_SCHEMA
+    {
+        return Err(format!("{operation}: semantic document schema mismatch"));
+    }
+
+    let mut authored_files = Vec::new();
+    for (key, record) in build.site_build().artifacts().iter() {
+        let site_build::ArtifactKey::Asset { namespace, path } = key else {
+            continue;
+        };
+        let role = match namespace {
+            site_build::AssetNamespace::Authored => site_build::AuthoredFileRole::Image,
+            site_build::AssetNamespace::Other { name } => {
+                let Some(role) = name
+                    .strip_prefix(&format!("{PUBLISHER_AUTHORED_NAMESPACE_PREFIX}."))
+                    .and_then(|name| name.strip_suffix("/v1"))
+                else {
+                    continue;
+                };
+                authored_role_from_name(role)?
+            }
+            _ => continue,
+        };
+        if record.provenance.producer.id != "prepared-guide"
+            || record.provenance.recipe != "publisher.authored-file/v1"
+            || record.provenance.attributes.get("role").map(String::as_str)
+                != Some(authored_role_name(role.clone()))
+        {
+            return Err(format!(
+                "{operation}: authored artifact {key:?} has incompatible provenance"
+            ));
+        }
+        let site_build::ArtifactState::Ready { content } = &record.state else {
+            return Err(format!(
+                "{operation}: authored artifact {key:?} is not ready"
+            ));
+        };
+        let mime = content
+            .media_type
+            .clone()
+            .ok_or_else(|| format!("{operation}: authored artifact {key:?} has no media type"))?;
+        let source_reads = record
+            .reads
+            .iter()
+            .map(|read| match read {
+                site_build::ReadDependency::Source { path } => {
+                    site_build::PreparedPath::parse(path.as_str().to_string()).map_err(|error| {
+                        format!("{operation}: authored artifact source {path}: {error}")
+                    })
+                }
+                other => Err(format!(
+                    "{operation}: authored artifact {key:?} has non-source read {other:?}"
+                )),
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        authored_files.push(site_build::AuthoredFile {
+            role,
+            path: site_build::PreparedPath::parse(path.as_str().to_string())
+                .map_err(|error| format!("{operation}: authored artifact path {path}: {error}"))?,
+            mime,
+            content: authenticated_object_bytes(objects, content, operation)?.to_vec(),
+            source_reads,
+        });
+    }
+    authored_files.sort_by(|left, right| {
+        left.role
+            .cmp(&right.role)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    Ok(site_build::PreparedGuide {
+        guide: resources.guide,
+        resources: resources.resources,
+        publisher_compatibility: resources.publisher_compatibility,
+        expansions: terminology.expansions,
+        pages: navigation.pages,
+        menu: navigation.menu,
+        sushi_config: config.sushi_config,
+        authored_files,
+    })
+}
+
+fn closed_artifact_files(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    namespace: &site_build::AssetNamespace,
+    expected_producer: &str,
+    expected_recipe: &str,
+    operation: &str,
+) -> Result<BTreeMap<String, (site_build::ArtifactProvenance, String, Vec<u8>)>, String> {
+    let mut files = BTreeMap::new();
+    for (key, record) in build.site_build().artifacts().iter() {
+        let site_build::ArtifactKey::Asset {
+            namespace: actual,
+            path,
+        } = key
+        else {
+            continue;
+        };
+        if actual != namespace {
+            continue;
+        }
+        if record.provenance.producer.id != expected_producer
+            || record.provenance.recipe != expected_recipe
+        {
+            return Err(format!(
+                "{operation}: artifact {key:?} has incompatible provenance"
+            ));
+        }
+        let site_build::ArtifactState::Ready { content } = &record.state else {
+            return Err(format!("{operation}: artifact {key:?} is not ready"));
+        };
+        if namespace == &site_build::AssetNamespace::PublisherRuntime
+            && content.media_type.is_none()
+        {
+            return Err(format!(
+                "{operation}: Publisher runtime artifact {key:?} has no media type"
+            ));
+        }
+        let media_type = content
+            .media_type
+            .clone()
+            .unwrap_or_else(|| "application/octet-stream".into());
+        let value = (
+            record.provenance.clone(),
+            media_type,
+            authenticated_object_bytes(objects, content, operation)?.to_vec(),
+        );
+        if files.insert(path.as_str().to_string(), value).is_some() {
+            return Err(format!("{operation}: duplicate artifact file {path}"));
+        }
+    }
+    if files.is_empty() {
+        return Err(format!(
+            "{operation}: closed build has no {expected_producer} artifacts"
+        ));
+    }
+    Ok(files)
+}
+
+fn package_view_from_closed_build(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    labels: &[String],
+    operation: &str,
+) -> Result<PackageView, String> {
+    let expected = labels.iter().cloned().collect::<BTreeSet<_>>();
+    if expected.len() != labels.len() {
+        return Err(format!(
+            "{operation}: compile package order repeats a label"
+        ));
+    }
+    let mut source = package_store::BundleSource::new();
+    for label in labels {
+        let coordinate = site_build::PackageCoordinate::parse(label)
+            .map_err(|error| format!("{operation}: invalid compile package {label}: {error}"))?;
+        let locked = build
+            .site_build()
+            .package_lock()
+            .get(&coordinate)
+            .ok_or_else(|| format!("{operation}: compile package {label} is absent from lock"))?;
+        if locked.content.media_type.as_deref()
+            != Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE)
+        {
+            return Err(format!(
+                "{operation}: package {label} has unsupported material type {:?}",
+                locked.content.media_type
+            ));
+        }
+        let bytes = authenticated_object_bytes(objects, &locked.content, operation)?;
+        let decoded = package_store::decode_normalized_package(&bytes)
+            .map_err(|error| format!("{operation}: decode package {label}: {error:#}"))?;
+        let material = package_store::normalize_package_material(label, decoded)
+            .map_err(|error| format!("{operation}: authenticate package {label}: {error:#}"))?;
+        if material.payload != bytes {
+            return Err(format!(
+                "{operation}: package {label} is not the canonical material for its declared identity"
+            ));
+        }
+        let render_key = site_build::ArtifactKey::Data {
+            namespace: PUBLISHER_RENDER_PACKAGE_NAMESPACE.into(),
+            name: label.clone(),
+        };
+        let (record, content) = ready_artifact_content(build, &render_key, operation)?;
+        if record.provenance.producer.id != "site-engine.publisher"
+            || record.provenance.recipe != PUBLISHER_RENDER_PACKAGE_RECIPE
+            || record
+                .provenance
+                .attributes
+                .get("coordinate")
+                .map(String::as_str)
+                != Some(label.as_str())
+            || content.media_type.as_deref() != Some(PUBLISHER_RENDER_PACKAGE_MEDIA_TYPE)
+            || record.reads
+                != BTreeSet::from([site_build::ReadDependency::Package {
+                    coordinate: coordinate.clone(),
+                }])
+        {
+            return Err(format!(
+                "{operation}: render-package artifact for {label} has incompatible provenance"
+            ));
+        }
+        let render_bytes = authenticated_object_bytes(objects, content, operation)?;
+        let render_files =
+            package_store::decode_normalized_package(&render_bytes).map_err(|error| {
+                format!("{operation}: decode renderer inputs for {label}: {error:#}")
+            })?;
+        if render_files.len() > 1
+            || render_files
+                .keys()
+                .any(|path| path != "other/spec.internals")
+        {
+            return Err(format!(
+                "{operation}: renderer inputs for {label} contain an unsupported path"
+            ));
+        }
+        let mut files = material.files;
+        for (path, bytes) in render_files {
+            if let Some(existing) = files.insert(path.clone(), bytes.clone()) {
+                if existing != bytes {
+                    return Err(format!(
+                        "{operation}: renderer input {label}/{path} conflicts with locked package material"
+                    ));
+                }
+            }
+        }
+        source.mount_package(label, files);
+    }
+    let root = source.cache_root().to_path_buf();
+    Ok(PackageView::new(Rc::new(source), root, Some(expected)))
+}
+
+fn publisher_render_package_view(
+    environment: &PackageEnvironment,
+    labels: &[String],
+    operation: &str,
+) -> Result<(PackageView, BTreeMap<String, Vec<u8>>), String> {
+    let expected = labels.iter().cloned().collect::<BTreeSet<_>>();
+    if expected.len() != labels.len() {
+        return Err(format!(
+            "{operation}: compile package order repeats a label"
+        ));
+    }
+    let mut source = package_store::BundleSource::new();
+    let mut artifacts = BTreeMap::new();
+    for label in labels {
+        let material = environment.materials.get(label).ok_or_else(|| {
+            format!("{operation}: compile package {label} has no authenticated material")
+        })?;
+        let decoded = package_store::decode_normalized_package(&material.content_bytes)
+            .map_err(|error| format!("{operation}: decode package {label}: {error:#}"))?;
+        let normalized = package_store::normalize_package_material(label, decoded)
+            .map_err(|error| format!("{operation}: authenticate package {label}: {error:#}"))?;
+        if normalized.payload.as_slice() != material.content_bytes.as_slice() {
+            return Err(format!(
+                "{operation}: package {label} is not canonical for its declared identity"
+            ));
+        }
+        let package_root = environment.packages.root().join(label);
+        let normalized_path = package_root.join("package/other/spec.internals");
+        let native_path = package_root.join("other/spec.internals");
+        let spec_internals = if environment.packages.exists(&normalized_path) {
+            Some(
+                environment
+                    .packages
+                    .read(&normalized_path)
+                    .map_err(|error| {
+                        format!("{operation}: read {label}/package/other/spec.internals: {error}")
+                    })?,
+            )
+        } else if environment.packages.exists(&native_path) {
+            Some(environment.packages.read(&native_path).map_err(|error| {
+                format!("{operation}: read {label}/other/spec.internals: {error}")
+            })?)
+        } else {
+            None
+        };
+        let render_files = spec_internals
+            .map(|bytes| BTreeMap::from([("other/spec.internals".into(), bytes)]))
+            .unwrap_or_default();
+        let render_bytes = package_store::encode_normalized_package(&render_files);
+        let mut files = normalized.files;
+        for (path, bytes) in render_files {
+            if let Some(existing) = files.insert(path.clone(), bytes.clone()) {
+                if existing != bytes {
+                    return Err(format!(
+                        "{operation}: renderer input {label}/{path} conflicts with package material"
+                    ));
+                }
+            }
+        }
+        source.mount_package(label, files);
+        artifacts.insert(label.clone(), render_bytes);
+    }
+    let root = source.cache_root().to_path_buf();
+    Ok((
+        PackageView::new(Rc::new(source), root, Some(expected)),
+        artifacts,
+    ))
+}
+
+fn verify_closed_package_materials(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    operation: &str,
+) -> Result<(), String> {
+    for (coordinate, locked) in build.site_build().package_lock().iter() {
+        if locked.content.media_type.as_deref()
+            != Some(package_store::NORMALIZED_PACKAGE_MEDIA_TYPE)
+        {
+            return Err(format!(
+                "{operation}: package {coordinate} has unsupported material type {:?}",
+                locked.content.media_type
+            ));
+        }
+        let bytes = authenticated_object_bytes(objects, &locked.content, operation)?;
+        let decoded = package_store::decode_normalized_package(&bytes)
+            .map_err(|error| format!("{operation}: decode package {coordinate}: {error:#}"))?;
+        let material = package_store::normalize_package_material(coordinate.as_str(), decoded)
+            .map_err(|error| {
+                format!("{operation}: authenticate package {coordinate}: {error:#}")
+            })?;
+        if material.payload != bytes {
+            return Err(format!(
+                "{operation}: package {coordinate} is not canonical for its declared identity"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_closed_publisher_artifact_inventory(
+    build: &site_build::ClosedSiteBuild,
+    package_order: &[String],
+    operation: &str,
+) -> Result<(), String> {
+    let all_keys = build
+        .site_build()
+        .artifacts()
+        .iter()
+        .map(|(key, _)| key.clone())
+        .collect::<BTreeSet<_>>();
+    if build.site_build().render_plan().required_artifacts() != &all_keys {
+        return Err(format!(
+            "{operation}: Publisher render plan does not root its exact artifact inventory"
+        ));
+    }
+    let semantic = BTreeSet::from([
+        site_build::cycle_semantic::resources_key(),
+        site_build::cycle_semantic::terminology_key(),
+        site_build::cycle_semantic::navigation_key(),
+        site_build::cycle_semantic::config_key(),
+    ]);
+    let mut render_packages = BTreeSet::new();
+    for key in &all_keys {
+        if semantic.contains(key) {
+            continue;
+        }
+        match key {
+            site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::Authored,
+                ..
+            }
+            | site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::Template,
+                ..
+            }
+            | site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::PublisherRuntime,
+                ..
+            } => {}
+            site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::Other { name },
+                ..
+            } => {
+                let role = name
+                    .strip_prefix(&format!("{PUBLISHER_AUTHORED_NAMESPACE_PREFIX}."))
+                    .and_then(|name| name.strip_suffix("/v1"))
+                    .ok_or_else(|| {
+                        format!("{operation}: unknown Publisher artifact namespace {name:?}")
+                    })?;
+                authored_role_from_name(role)?;
+            }
+            site_build::ArtifactKey::Data { namespace, name }
+                if namespace == PUBLISHER_RENDER_PACKAGE_NAMESPACE =>
+            {
+                if !render_packages.insert(name.clone()) {
+                    return Err(format!(
+                        "{operation}: duplicate render-package artifact {name}"
+                    ));
+                }
+            }
+            other => {
+                return Err(format!(
+                    "{operation}: unsupported rooted Publisher artifact {other:?}"
+                ));
+            }
+        }
+    }
+    let expected = package_order.iter().cloned().collect::<BTreeSet<_>>();
+    if expected.len() != package_order.len() || render_packages != expected {
+        return Err(format!(
+            "{operation}: render-package artifacts do not exactly match compilePackageOrder"
+        ));
+    }
+    Ok(())
+}
+
+fn cycle_semantic_artifact<T: serde::de::DeserializeOwned>(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    key: &site_build::ArtifactKey,
+    producer: &str,
+    recipe: &str,
+    reads: BTreeSet<site_build::ReadDependency>,
+    operation: &str,
+) -> Result<T, String> {
+    let (record, content) = ready_artifact_content(build, key, operation)?;
+    if record.provenance.producer
+        != site_build::ProducerRef::new(producer, env!("CARGO_PKG_VERSION"))
+        || record.provenance.recipe != recipe
+        || !record.provenance.attributes.is_empty()
+        || record.reads != reads
+        || content.media_type.as_deref() != Some("application/json")
+    {
+        return Err(format!(
+            "{operation}: Cycle semantic artifact {key:?} has incompatible provenance or reads"
+        ));
+    }
+    serde_json::from_slice(authenticated_object_bytes(objects, content, operation)?)
+        .map_err(|error| format!("{operation}: decode Cycle semantic artifact {key:?}: {error}"))
+}
+
+fn validate_cycle_page_sources(
+    pages: &[site_build::PageNode],
+    project: &site_build::ProjectRevision,
+    operation: &str,
+) -> Result<(), String> {
+    for page in pages {
+        match (&page.body, &page.source) {
+            (Some(_), Some(source)) => {
+                let source = site_build::SourcePath::parse(source.as_str().to_string())
+                    .map_err(|error| format!("{operation}: page source {source}: {error}"))?;
+                if project.sources.get(&source).is_none() {
+                    return Err(format!(
+                        "{operation}: page {} reads absent source {source}",
+                        page.name_url
+                    ));
+                }
+            }
+            (None, None) => {}
+            _ => {
+                return Err(format!(
+                    "{operation}: page {} must have both an authored body and source, or neither",
+                    page.name_url
+                ));
+            }
+        }
+        validate_cycle_page_sources(&page.children, project, operation)?;
+    }
+    Ok(())
+}
+
+fn validate_closed_cycle(
+    build: &site_build::ClosedSiteBuild,
+    objects: &ObjectMap,
+    operation: &str,
+) -> Result<(), String> {
+    let site = build.site_build();
+    let target = site.render_target();
+    if target.mode != site_build::RenderMode::ExternalBuilder
+        || target.renderer != site_build::ProducerRef::new("cycle-site", "2")
+        || target.template.is_some()
+        || target.parameters.get("contract").map(String::as_str)
+            != Some(site_build::cycle_semantic::TARGET)
+    {
+        return Err(format!(
+            "{operation}: build targets an incompatible Cycle executor"
+        ));
+    }
+    let required_parameters = ["contract", "buildEpochSecs", "liquidAssetDirs"];
+    let allowed_parameters = [
+        "contract",
+        "buildEpochSecs",
+        "liquidAssetDirs",
+        "branch",
+        "revision",
+    ];
+    if required_parameters
+        .iter()
+        .any(|key| !target.parameters.contains_key(*key))
+        || target
+            .parameters
+            .keys()
+            .any(|key| !allowed_parameters.contains(&key.as_str()))
+    {
+        return Err(format!(
+            "{operation}: Cycle target parameters do not match cycle-site/v2"
+        ));
+    }
+    let build_epoch = target
+        .parameters
+        .get("buildEpochSecs")
+        .expect("required Cycle parameter")
+        .parse::<i64>()
+        .map_err(|error| format!("{operation}: invalid buildEpochSecs: {error}"))?;
+    const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
+    if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&build_epoch) {
+        return Err(format!(
+            "{operation}: buildEpochSecs is outside the JavaScript safe-integer range"
+        ));
+    }
+
+    let all_keys = site
+        .artifacts()
+        .iter()
+        .map(|(key, _)| key.clone())
+        .collect::<BTreeSet<_>>();
+    if site.render_plan().required_artifacts() != &all_keys {
+        return Err(format!(
+            "{operation}: Cycle render plan does not root its exact artifact inventory"
+        ));
+    }
+
+    let resources_key = site_build::cycle_semantic::resources_key();
+    let terminology_key = site_build::cycle_semantic::terminology_key();
+    let navigation_key = site_build::cycle_semantic::navigation_key();
+    let config_key = site_build::cycle_semantic::config_key();
+    let semantic_keys = BTreeSet::from([
+        resources_key.clone(),
+        terminology_key.clone(),
+        navigation_key.clone(),
+        config_key.clone(),
+    ]);
+    if !semantic_keys.is_subset(&all_keys) {
+        return Err(format!(
+            "{operation}: Cycle build is missing a required semantic artifact"
+        ));
+    }
+
+    let all_inputs = site
+        .project()
+        .sources
+        .iter()
+        .map(|(path, _)| site_build::ReadDependency::Source { path: path.clone() })
+        .chain(site.package_lock().iter().map(|(coordinate, _)| {
+            site_build::ReadDependency::Package {
+                coordinate: coordinate.clone(),
+            }
+        }))
+        .collect::<BTreeSet<_>>();
+    let resources: site_build::cycle_semantic::ResourcesDocument = cycle_semantic_artifact(
+        build,
+        objects,
+        &resources_key,
+        "site_semantics.resources",
+        site_build::cycle_semantic::RESOURCES_SCHEMA,
+        all_inputs,
+        operation,
+    )?;
+    let terminology_reads = site
+        .package_lock()
+        .iter()
+        .map(|(coordinate, _)| site_build::ReadDependency::Package {
+            coordinate: coordinate.clone(),
+        })
+        .chain([site_build::ReadDependency::Artifact {
+            key: resources_key.clone(),
+        }])
+        .collect();
+    let terminology: site_build::cycle_semantic::TerminologyDocument = cycle_semantic_artifact(
+        build,
+        objects,
+        &terminology_key,
+        "site_semantics.terminology",
+        site_build::cycle_semantic::TERMINOLOGY_SCHEMA,
+        terminology_reads,
+        operation,
+    )?;
+    let navigation_reads = site
+        .project()
+        .sources
+        .iter()
+        .filter(|(_, entry)| {
+            matches!(
+                entry.kind,
+                site_build::SourceKind::Config | site_build::SourceKind::Page
+            )
+        })
+        .map(|(path, _)| site_build::ReadDependency::Source { path: path.clone() })
+        .chain([site_build::ReadDependency::Artifact {
+            key: resources_key.clone(),
+        }])
+        .collect();
+    let navigation: site_build::cycle_semantic::NavigationDocument = cycle_semantic_artifact(
+        build,
+        objects,
+        &navigation_key,
+        "site_semantics.navigation",
+        site_build::cycle_semantic::NAVIGATION_SCHEMA,
+        navigation_reads,
+        operation,
+    )?;
+    let config_reads = site
+        .project()
+        .sources
+        .iter()
+        .filter(|(_, entry)| matches!(entry.kind, site_build::SourceKind::Config))
+        .map(|(path, _)| site_build::ReadDependency::Source { path: path.clone() })
+        .collect();
+    let config: site_build::cycle_semantic::ConfigDocument = cycle_semantic_artifact(
+        build,
+        objects,
+        &config_key,
+        "site_semantics.config",
+        site_build::cycle_semantic::CONFIG_SCHEMA,
+        config_reads,
+        operation,
+    )?;
+    if resources.schema != site_build::cycle_semantic::RESOURCES_SCHEMA
+        || terminology.schema != site_build::cycle_semantic::TERMINOLOGY_SCHEMA
+        || navigation.schema != site_build::cycle_semantic::NAVIGATION_SCHEMA
+        || config.schema != site_build::cycle_semantic::CONFIG_SCHEMA
+        || resources.guide.package_id != site.project().project_id
+        || resources.guide.fhir_version != target.fhir_version
+        || resources.guide.generated.epoch_seconds != build_epoch
+        || !config.sushi_config.is_object()
+    {
+        return Err(format!(
+            "{operation}: Cycle semantic documents disagree with the target or project"
+        ));
+    }
+
+    let mut resource_keys = BTreeSet::new();
+    for resource in &resources.resources {
+        if resource
+            .resource
+            .get("resourceType")
+            .and_then(Value::as_str)
+            != Some(resource.key.resource_type.as_str())
+            || resource.resource.get("id").and_then(Value::as_str) != Some(resource.key.id.as_str())
+            || !resource_keys.insert(resource.key.clone())
+        {
+            return Err(format!(
+                "{operation}: Cycle semantic resource identity is invalid or duplicated"
+            ));
+        }
+    }
+    if resources.guide.implementation_guide.resource_type != "ImplementationGuide"
+        || !resource_keys.contains(&resources.guide.implementation_guide)
+        || terminology.expansions.iter().any(|expansion| {
+            expansion.value_set.resource_type != "ValueSet"
+                || !resource_keys.contains(&expansion.value_set)
+        })
+    {
+        return Err(format!(
+            "{operation}: Cycle guide or terminology references an absent resource"
+        ));
+    }
+    validate_cycle_page_sources(&navigation.pages, site.project(), operation)?;
+
+    for key in all_keys.difference(&semantic_keys) {
+        let (expected_recipe, path) = match key {
+            site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::Authored,
+                path,
+            } => ("authored-image/v1", path),
+            site_build::ArtifactKey::Asset {
+                namespace: site_build::AssetNamespace::Other { name },
+                path,
+            } if name == site_build::cycle_semantic::AUTHORED_INCLUDE_NAMESPACE => {
+                ("authored-include/v1", path)
+            }
+            other => {
+                return Err(format!(
+                    "{operation}: unsupported rooted Cycle artifact {other:?}"
+                ));
+            }
+        };
+        let (record, content) = ready_artifact_content(build, key, operation)?;
+        if record.provenance.producer
+            != site_build::ProducerRef::new("site_semantics.asset", env!("CARGO_PKG_VERSION"))
+            || record.provenance.recipe != expected_recipe
+            || !record.provenance.attributes.is_empty()
+            || record
+                .reads
+                .iter()
+                .any(|read| !matches!(read, site_build::ReadDependency::Source { .. }))
+            || content.media_type.is_none()
+            || record.reads.iter().any(|read| match read {
+                site_build::ReadDependency::Source { path } => {
+                    site.project().sources.get(path).is_none()
+                }
+                _ => true,
+            })
+        {
+            return Err(format!(
+                "{operation}: authored Cycle artifact {path} has incompatible provenance or reads"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn all_closed_objects(
+    build: &site_build::ClosedSiteBuild,
+    store: &dyn content_store::ContentStore,
+    operation: &str,
+) -> Result<ObjectMap, String> {
+    let mut refs = Vec::new();
+    refs.extend(
+        build
+            .site_build()
+            .project()
+            .sources
+            .iter()
+            .map(|(_, entry)| &entry.content),
+    );
+    refs.extend(
+        build
+            .site_build()
+            .package_lock()
+            .iter()
+            .map(|(_, package)| &package.content),
+    );
+    refs.extend(build.site_build().artifacts().iter().filter_map(
+        |(_, record)| match &record.state {
+            site_build::ArtifactState::Ready { content } => Some(content),
+            _ => None,
+        },
+    ));
+    let mut objects = BTreeMap::new();
+    for content in refs {
+        let bytes = Rc::new(read_store_content(store, content, operation)?);
+        insert_authenticated_object(&mut objects, content, bytes)?;
+    }
+    Ok(objects)
 }
 
 fn verify_ready_artifacts(
@@ -1156,6 +2329,7 @@ fn verify_object(objects: &ObjectMap, content: &site_build::ContentRef) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use content_store::ContentStore;
 
     #[test]
     fn package_material_authenticates_immutable_bytes_once() {
@@ -1262,6 +2436,209 @@ mod tests {
         }
     }
 
+    fn closed_cycle_fixture() -> (
+        site_build::ClosedSiteBuild,
+        BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+    ) {
+        let prepared = prepared_with_all_roles();
+        let mut object_bytes = BTreeMap::new();
+        let sources =
+            site_build::SourceManifest::from_entries(prepared.authored_files.iter().map(|file| {
+                let path = site_build::SourcePath::parse(
+                    file.source_reads
+                        .iter()
+                        .next()
+                        .expect("fixture authored source")
+                        .as_str()
+                        .to_string(),
+                )
+                .unwrap();
+                let content =
+                    site_build::ContentRef::of_bytes(&file.content, Some(file.mime.clone()));
+                object_bytes.insert(content.sha256.clone(), file.content.clone());
+                (
+                    path,
+                    site_build::SourceEntry {
+                        kind: site_build::SourceKind::Other {
+                            name: "fixture".into(),
+                        },
+                        content,
+                    },
+                )
+            }))
+            .unwrap();
+        let projection = site_build::cycle_semantic::close_prepared(
+            &prepared,
+            site_build::cycle_semantic::CycleProjectionInput {
+                project: site_build::ProjectRevision {
+                    project_id: prepared.guide.package_id.clone(),
+                    revision: "cycle-restore-fixture".into(),
+                    sources,
+                },
+                package_lock: site_build::PackageLock::default(),
+                render_target: site_build::RenderTarget {
+                    renderer: site_build::ProducerRef::new("cycle-site", "2"),
+                    mode: site_build::RenderMode::ExternalBuilder,
+                    fhir_version: prepared.guide.fhir_version.clone(),
+                    template: None,
+                    parameters: BTreeMap::from([
+                        ("contract".into(), site_build::cycle_semantic::TARGET.into()),
+                        ("buildEpochSecs".into(), "1".into()),
+                        ("liquidAssetDirs".into(), "input/includes".into()),
+                    ]),
+                },
+                diagnostics: BTreeSet::new(),
+            },
+        )
+        .unwrap();
+        object_bytes.extend(projection.objects);
+        (projection.site_build, object_bytes)
+    }
+
+    fn populate_store(
+        store: &content_store::FileContentStore,
+        build: &site_build::ClosedSiteBuild,
+        objects: &BTreeMap<site_build::Sha256Digest, Vec<u8>>,
+        omitted: Option<&site_build::Sha256Digest>,
+    ) {
+        let refs =
+            build
+                .site_build()
+                .project()
+                .sources
+                .iter()
+                .map(|(_, source)| &source.content)
+                .chain(
+                    build
+                        .site_build()
+                        .package_lock()
+                        .iter()
+                        .map(|(_, package)| &package.content),
+                )
+                .chain(
+                    build.site_build().artifacts().iter().filter_map(
+                        |(_, artifact)| match &artifact.state {
+                            site_build::ArtifactState::Ready { content } => Some(content),
+                            _ => None,
+                        },
+                    ),
+                );
+        for content in refs {
+            if omitted == Some(&content.sha256) {
+                continue;
+            }
+            store
+                .put(
+                    content,
+                    objects
+                        .get(&content.sha256)
+                        .expect("fixture has every addressed object"),
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn generic_restore_admits_a_fresh_closed_cycle_runtime() {
+        let (closed, objects) = closed_cycle_fixture();
+        let serialized = closed.site_build().canonical_bytes().unwrap();
+        let closed: site_build::ClosedSiteBuild = serde_json::from_slice(&serialized).unwrap();
+        let expected_handle = closed.site_build().build_id().to_string();
+        let temp = tempfile::tempdir().unwrap();
+        let store = content_store::FileContentStore::create(temp.path()).unwrap();
+        populate_store(&store, &closed, &objects, None);
+
+        let resources = closed
+            .site_build()
+            .artifacts()
+            .get(&site_build::cycle_semantic::resources_key())
+            .unwrap();
+        let site_build::ArtifactState::Ready { content } = &resources.state else {
+            panic!("fixture resources are ready")
+        };
+        let resources_digest = content.sha256.clone();
+        let mut engine = SiteEngine::default();
+        let handle = engine.restore(closed, &store).unwrap();
+        assert_eq!(handle, expected_handle);
+        assert_eq!(
+            engine
+                .read_content(&handle, resources_digest.as_str())
+                .unwrap(),
+            objects[&resources_digest]
+        );
+        assert!(engine
+            .outputs(&handle)
+            .unwrap_err()
+            .contains("external LiquidJS"));
+        assert_eq!(
+            engine.finalize(&handle, None).unwrap_err(),
+            "finalize: Cycle build requires external renderer output"
+        );
+    }
+
+    #[test]
+    fn generic_restore_rejects_a_non_cycle_external_target() {
+        let (closed, objects) = closed_cycle_fixture();
+        let site = closed.site_build();
+        let wrong = site_build::SiteBuild::new(
+            site.project().clone(),
+            site.package_lock().clone(),
+            site_build::RenderTarget {
+                renderer: site_build::ProducerRef::new("not-cycle", "2"),
+                mode: site_build::RenderMode::ExternalBuilder,
+                fhir_version: site.render_target().fhir_version.clone(),
+                template: None,
+                parameters: site.render_target().parameters.clone(),
+            },
+            site.render_plan().clone(),
+            site.artifacts().clone(),
+            site.diagnostics().clone(),
+        )
+        .unwrap()
+        .close()
+        .unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let store = content_store::FileContentStore::create(temp.path()).unwrap();
+        populate_store(&store, &wrong, &objects, None);
+
+        let error = SiteEngine::default().restore(wrong, &store).unwrap_err();
+        assert!(error.contains("incompatible Cycle executor"), "{error}");
+    }
+
+    #[test]
+    fn generic_restore_rejects_missing_and_corrupt_cycle_objects() {
+        let (closed, objects) = closed_cycle_fixture();
+        let resources = closed
+            .site_build()
+            .artifacts()
+            .get(&site_build::cycle_semantic::resources_key())
+            .unwrap();
+        let site_build::ArtifactState::Ready { content } = &resources.state else {
+            panic!("fixture resources are ready")
+        };
+        let digest = content.sha256.clone();
+
+        let missing_temp = tempfile::tempdir().unwrap();
+        let missing_store = content_store::FileContentStore::create(missing_temp.path()).unwrap();
+        populate_store(&missing_store, &closed, &objects, Some(&digest));
+        let missing = SiteEngine::default()
+            .restore(closed.clone(), &missing_store)
+            .unwrap_err();
+        assert!(missing.contains("absent"), "{missing}");
+
+        let corrupt_temp = tempfile::tempdir().unwrap();
+        let corrupt_store = content_store::FileContentStore::create(corrupt_temp.path()).unwrap();
+        populate_store(&corrupt_store, &closed, &objects, None);
+        std::fs::write(corrupt_store.object_path(&digest), b"corrupt").unwrap();
+        let corrupt = SiteEngine::default()
+            .restore(closed, &corrupt_store)
+            .unwrap_err();
+        assert!(
+            corrupt.contains("length mismatch") || corrupt.contains("digest mismatch"),
+            "{corrupt}"
+        );
+    }
+
     #[test]
     fn publisher_closed_input_roots_and_verifies_every_external_artifact() {
         let core_label = "hl7.fhir.r4.core#4.0.1";
@@ -1347,6 +2724,10 @@ mod tests {
             },
         ])
         .unwrap();
+        let render_packages = BTreeMap::from([(
+            core_label.to_string(),
+            package_store::encode_normalized_package(&BTreeMap::new()),
+        )]);
         let (artifacts, plan, mut objects) = publisher_artifacts(
             &prepared,
             &project,
@@ -1355,6 +2736,7 @@ mod tests {
             &core,
             tree.files(),
             &runtime,
+            &render_packages,
         )
         .unwrap();
         for (_, package) in lock.iter() {
@@ -1523,44 +2905,79 @@ mod tests {
                 environment,
             )
             .unwrap();
-        let build = prepared.site_build.site_build();
-        assert!(!build.render_plan().is_empty());
-        assert!(!build.artifacts().is_empty());
-        assert_eq!(prepared.handle, build.build_id().to_string());
-        let outputs = engine.outputs(&prepared.handle).unwrap();
-        assert!(!outputs.outputs.is_empty());
-        for (_, source) in build.project().sources.iter() {
-            source
-                .content
-                .verify(
-                    &engine
-                        .read_content(&prepared.handle, source.content.sha256.as_str())
-                        .unwrap(),
-                )
-                .unwrap();
+        let closed = prepared.site_build.clone();
+        let live_catalog = engine.outputs(&prepared.handle).unwrap();
+        assert!(!live_catalog.outputs.is_empty());
+        let mut content_refs = Vec::new();
+        {
+            let build = closed.site_build();
+            assert!(!build.render_plan().is_empty());
+            assert!(!build.artifacts().is_empty());
+            assert_eq!(prepared.handle, build.build_id().to_string());
+            content_refs.extend(
+                build
+                    .project()
+                    .sources
+                    .iter()
+                    .map(|(_, source)| source.content.clone()),
+            );
+            content_refs.extend(
+                build
+                    .package_lock()
+                    .iter()
+                    .map(|(_, package)| package.content.clone()),
+            );
+            content_refs.extend(build.artifacts().iter().map(|(_, artifact)| {
+                let site_build::ArtifactState::Ready { content } = &artifact.state else {
+                    panic!("closed Publisher artifact is not ready")
+                };
+                content.clone()
+            }));
         }
-        for (_, package) in build.package_lock().iter() {
-            package
-                .content
-                .verify(
-                    &engine
-                        .read_content(&prepared.handle, package.content.sha256.as_str())
-                        .unwrap(),
-                )
+        content_refs.sort_by(|left, right| left.sha256.cmp(&right.sha256));
+        content_refs.dedup_by(|left, right| left.sha256 == right.sha256);
+        let temp = tempfile::tempdir().unwrap();
+        let store = content_store::FileContentStore::create(temp.path()).unwrap();
+        for content in &content_refs {
+            let bytes = engine
+                .read_content(&prepared.handle, content.sha256.as_str())
                 .unwrap();
+            content.verify(&bytes).unwrap();
+            store.put(content, &bytes).unwrap();
         }
-        for (_, artifact) in build.artifacts().iter() {
-            let site_build::ArtifactState::Ready { content } = &artifact.state else {
-                panic!("closed Publisher artifact is not ready")
-            };
-            content
-                .verify(
-                    &engine
-                        .read_content(&prepared.handle, content.sha256.as_str())
-                        .unwrap(),
-                )
+
+        let mut restored = SiteEngine::default();
+        let restored_handle = restored.restore(closed, &store).unwrap();
+        assert_eq!(restored_handle, prepared.handle);
+        assert_eq!(restored.outputs(&restored_handle).unwrap(), live_catalog);
+
+        let page_paths = live_catalog
+            .outputs
+            .iter()
+            .filter(|output| output.content.is_none())
+            .map(|output| output.path.to_string())
+            .collect::<Vec<_>>();
+        let mut live_pages = BTreeMap::new();
+        for path in &page_paths {
+            let output = engine.render(&prepared.handle, path).unwrap();
+            let bytes = engine
+                .read_content(&prepared.handle, output.content.sha256.as_str())
                 .unwrap();
+            live_pages.insert(path.clone(), (output, bytes));
         }
+        for path in page_paths.iter().rev() {
+            let output = restored.render(&restored_handle, path).unwrap();
+            let bytes = restored
+                .read_content(&restored_handle, output.content.sha256.as_str())
+                .unwrap();
+            assert_eq!(Some(&(output, bytes)), live_pages.get(path));
+        }
+        let live_output = engine.finalize(&prepared.handle, None).unwrap();
+        let restored_output = restored.finalize(&restored_handle, None).unwrap();
+        assert_eq!(
+            live_output.canonical_bytes().unwrap(),
+            restored_output.canonical_bytes().unwrap()
+        );
     }
 }
 
@@ -2500,7 +3917,7 @@ impl SiteEngine {
             environment,
             operation,
             keys.prepared_guide.clone(),
-            keys.snapshot_completed_local,
+            keys.snapshot_completed_local.clone(),
         )?;
         metrics.prepared_guide_ms = elapsed_ms(started);
         if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
@@ -2530,127 +3947,79 @@ impl SiteEngine {
             &tree,
         )
         .map_err(|error| format!("{operation}: Publisher runtime: {error:#}"))?;
-        let mut ready = BTreeMap::new();
         let mut objects = environment_objects(&project, &package_lock, environment, operation)?;
-        for file in publisher.files() {
-            let transformation = file
-                .provenance
-                .transformation
-                .as_deref()
-                .map(|value| format!("; transformation={value}"))
-                .unwrap_or_default();
-            insert_prepared_output(
-                &mut ready,
-                &mut objects,
-                &file.path,
-                file.bytes.clone(),
-                &file.media_type,
-                site_build::OutputProducer {
-                    id: "publisher-runtime".into(),
-                    version: env!("CARGO_PKG_VERSION").into(),
-                },
-                Some(format!(
-                    "{}; license={}; source={}{}",
-                    file.provenance.source,
-                    file.provenance.license,
-                    file.provenance.source_path,
-                    transformation
-                )),
-                PreparedOutputCollision::Reject,
-            )?;
-        }
+        let mut ready = publisher_runtime_outputs(&publisher, &mut objects)?;
         metrics.publisher_runtime_ms = elapsed_ms(started);
 
         let started = self.timer();
-        let config_json: Value = serde_json::from_slice(tree.get("config.json").ok_or_else(|| {
-            format!("{operation}: no template config.json; Publisher template assembly is incomplete")
-        })?)
-        .map_err(|error| format!("{operation}: bad template config.json: {error}"))?;
-        let layouts = tree
-            .files()
-            .iter()
-            .filter_map(|(relative, bytes)| {
-                relative
-                    .strip_prefix("layouts/")
-                    .and_then(|_| String::from_utf8(bytes.clone()).ok())
-                    .map(|text| (format!("template/{relative}"), text))
-            })
-            .collect::<HashMap<_, _>>();
-        if layouts.is_empty() {
-            return Err(format!(
-                "{operation}: no template layouts; Publisher template assembly is incomplete"
-            ));
-        }
-        let producer_inputs =
-            site_producer::ProducerInputs::from_prepared(&prepared, &config_json, layouts, "en/")
-                .map_err(|error| format!("{operation}: {error:#}"))?;
-        let produced = site_producer::produce(&producer_inputs)
-            .map_err(|error| format!("{operation}: {error:#}"))?;
-        let resource_pages = produced.resource_pages;
         let template_files = tree.files().clone();
-        let mut site_files = HashMap::new();
-        for (relative, bytes) in tree.into_files() {
-            let mounted = match relative.strip_prefix("includes/") {
-                Some(name) => format!("_includes/{name}"),
-                None => format!("template/{relative}"),
-            };
-            site_files.insert(PathBuf::from(format!("/site/{mounted}")), bytes);
-        }
-        for (name, body) in produced.pages {
-            site_files.insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
-        }
-        for (name, body) in produced.data {
-            site_files.insert(
-                PathBuf::from(format!("/site/_data/{name}")),
-                body.into_bytes(),
-            );
-        }
-        for (name, body) in produced.includes {
-            site_files.insert(
-                PathBuf::from(format!("/site/_includes/{name}")),
-                body.into_bytes(),
-            );
-        }
-        stage_prepared_authored_files(
+        let model = publisher_model(
             &prepared,
-            &mut site_files,
+            &template_files,
             &mut ready,
             &mut objects,
             &project_id,
+            operation,
         )?;
         metrics.publisher_model_ms = elapsed_ms(started);
 
         let started = self.timer();
-        let render_packages = environment.scoped(&project.resolved_packages().labels, operation)?;
-        let semantics = build_render_semantics(
-            prepared_render_set(&prepared)?,
-            Some(render_packages),
-            &site_files,
+        let render_semantics_key = publisher_render_semantics_cache_key(
+            &keys.snapshot_completed_local,
+            &model,
             &options,
+            operation,
         )?;
-        let state = Rc::new(build_render_state_from_semantics(
-            &semantics,
-            &site_files,
-            &options,
-        )?);
+        let (render_semantics, render_package_artifacts) = match self
+            .preparation
+            .publisher_render_semantics
+            .as_ref()
+            .filter(|entry| entry.key == render_semantics_key)
+        {
+            Some(entry) => {
+                metrics.render_semantics_cache_hit = true;
+                (
+                    entry.semantics.clone(),
+                    entry.render_package_artifacts.clone(),
+                )
+            }
+            None => {
+                let (render_packages, render_package_artifacts) = publisher_render_package_view(
+                    environment,
+                    &project.resolved_packages().labels,
+                    operation,
+                )?;
+                let semantics = Rc::new(publisher_render_semantics(
+                    &prepared,
+                    render_packages,
+                    &model,
+                    &options,
+                )?);
+                self.preparation.publisher_render_semantics =
+                    Some(PublisherRenderSemanticsCacheEntry {
+                        key: render_semantics_key,
+                        semantics: semantics.clone(),
+                        render_package_artifacts: render_package_artifacts.clone(),
+                    });
+                (semantics, render_package_artifacts)
+            }
+        };
+        let state = publisher_render_state(&render_semantics, &model, &options)?;
         metrics.render_model_ms = elapsed_ms(started);
 
         let started = self.timer();
-        let pages = state.list_pages();
-        add_page_relative_output_aliases(&mut ready, &pages)?;
-        let tree_manifest = site_files
-            .iter()
-            .map(|(path, bytes)| {
-                (
-                    path.to_string_lossy().into_owned(),
-                    site_build::ContentRef::of_bytes(bytes, None::<String>),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let tree_digest = site_build::sha256_canonical(&tree_manifest)
-            .map_err(|error| format!("{operation}: hash mounted tree: {error}"))?;
+        let (catalog, tree_digest) = publisher_catalog(&state, &mut ready, &model, operation)?;
         let mut parameters = BTreeMap::from([
             ("contract".into(), "publisher-site/v1".into()),
+            (
+                "executorRecipe".into(),
+                PUBLISHER_RUNTIME_PREPARATION_RECIPE.into(),
+            ),
+            (
+                "compilePackageOrder".into(),
+                serde_json::to_string(&project.resolved_packages().labels)
+                    .map_err(|error| format!("{operation}: package order: {error}"))?,
+            ),
             ("mountedTreeSha256".into(), tree_digest.to_string()),
             (
                 "preparedGuideSha256".into(),
@@ -2677,6 +4046,7 @@ impl SiteEngine {
             &core,
             &template_files,
             &publisher,
+            &render_package_artifacts,
         )?;
         merge_objects(&mut objects, artifact_objects)?;
         let build = site_build::SiteBuild::new(
@@ -2697,7 +4067,6 @@ impl SiteEngine {
         .close()
         .map_err(|error| format!("{operation}: close SiteBuild: {error}"))?;
         verify_ready_artifacts(&build, &objects, operation)?;
-        let catalog = output_catalog(&ready, pages, &resource_pages, operation)?;
         let renderer = site_build::RendererImplementation {
             id: "publisher-template-rust".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -2706,9 +4075,9 @@ impl SiteEngine {
         };
         let handle = build.site_build().build_id().to_string();
         let installed = self.install_publisher(PublisherRuntime {
-            preparation_key,
+            preparation_key: Some(preparation_key),
             state,
-            publisher: Some(publisher),
+            publisher,
             build: build.clone(),
             catalog,
             ready,
@@ -2726,5 +4095,233 @@ impl SiteEngine {
             site_build: build,
             metrics,
         })
+    }
+}
+
+impl SiteEngine {
+    /// Admit a closed build into a fresh executor from only its authenticated
+    /// `ContentStore` objects.
+    ///
+    /// This is lifecycle reconstruction, not a fifth host operation: callers
+    /// still interact with the resulting immutable handle exclusively through
+    /// `outputs`, `render`, and `finalize`. Native-template Publisher builds
+    /// reconstruct their private renderer state; callback-free Cycle builds
+    /// restore the same external-builder handle and authenticated closure.
+    pub fn restore(
+        &mut self,
+        build: site_build::ClosedSiteBuild,
+        store: &dyn content_store::ContentStore,
+    ) -> Result<String, String> {
+        match build.site_build().render_target().mode {
+            site_build::RenderMode::NativeTemplate => self.restore_publisher_runtime(build, store),
+            site_build::RenderMode::ExternalBuilder => self.restore_cycle_runtime(build, store),
+        }
+    }
+
+    fn restore_cycle_runtime(
+        &mut self,
+        build: site_build::ClosedSiteBuild,
+        store: &dyn content_store::ContentStore,
+    ) -> Result<String, String> {
+        let operation = "restore(cycle)";
+        build
+            .site_build()
+            .verify()
+            .map_err(|error| format!("{operation}: verify SiteBuild: {error}"))?;
+        let objects = all_closed_objects(&build, store, operation)?;
+        validate_closed_cycle(&build, &objects, operation)?;
+        verify_closed_package_materials(&build, &objects, operation)?;
+        Ok(self.install_cycle(build, objects))
+    }
+
+    fn restore_publisher_runtime(
+        &mut self,
+        build: site_build::ClosedSiteBuild,
+        store: &dyn content_store::ContentStore,
+    ) -> Result<String, String> {
+        let operation = "restore(publisher)";
+        build
+            .site_build()
+            .verify()
+            .map_err(|error| format!("{operation}: verify SiteBuild: {error}"))?;
+        let mut objects = all_closed_objects(&build, store, operation)?;
+        let target = build.site_build().render_target();
+        let expected_renderer =
+            site_build::ProducerRef::new("publisher-template-rust", env!("CARGO_PKG_VERSION"));
+        if target.mode != site_build::RenderMode::NativeTemplate
+            || target.renderer != expected_renderer
+            || target.parameters.get("contract").map(String::as_str) != Some("publisher-site/v1")
+            || target.parameters.get("executorRecipe").map(String::as_str)
+                != Some(PUBLISHER_RUNTIME_PREPARATION_RECIPE)
+        {
+            return Err(format!(
+                "{operation}: build targets an incompatible Publisher executor"
+            ));
+        }
+        let template = target
+            .template
+            .clone()
+            .ok_or_else(|| format!("{operation}: Publisher build has no template coordinate"))?;
+        let active_tables = target
+            .parameters
+            .get("activeTables")
+            .ok_or_else(|| format!("{operation}: missing activeTables"))?
+            .parse::<bool>()
+            .map_err(|error| format!("{operation}: invalid activeTables: {error}"))?;
+        let run_uuid = target.parameters.get("runUuid").cloned();
+        let package_order = target
+            .parameters
+            .get("compilePackageOrder")
+            .ok_or_else(|| format!("{operation}: missing compilePackageOrder"))
+            .and_then(|value| {
+                serde_json::from_str::<Vec<String>>(value)
+                    .map_err(|error| format!("{operation}: invalid compilePackageOrder: {error}"))
+            })?;
+        let expected_tree = target
+            .parameters
+            .get("mountedTreeSha256")
+            .ok_or_else(|| format!("{operation}: missing mountedTreeSha256"))
+            .and_then(|value| {
+                site_build::Sha256Digest::parse(value.clone())
+                    .map_err(|error| format!("{operation}: invalid mountedTreeSha256: {error}"))
+            })?;
+        let expected_runtime_recipe = target
+            .parameters
+            .get("publisherRuntimeRecipeSha256")
+            .ok_or_else(|| format!("{operation}: missing publisherRuntimeRecipeSha256"))
+            .and_then(|value| {
+                site_build::Sha256Digest::parse(value.clone()).map_err(|error| {
+                    format!("{operation}: invalid publisherRuntimeRecipeSha256: {error}")
+                })
+            })?;
+
+        validate_closed_publisher_artifact_inventory(&build, &package_order, operation)?;
+        verify_closed_package_materials(&build, &objects, operation)?;
+
+        let prepared = prepared_from_closed_publisher(&build, &objects, operation)?;
+        if prepared.guide.package_id != build.site_build().project().project_id
+            || prepared.guide.fhir_version != target.fhir_version
+        {
+            return Err(format!(
+                "{operation}: PreparedGuide identity disagrees with SiteBuild"
+            ));
+        }
+        let template_artifacts = closed_artifact_files(
+            &build,
+            &objects,
+            &site_build::AssetNamespace::Template,
+            "package-store.template-loader",
+            "template.materialize/v1",
+            operation,
+        )?;
+        let template_files = template_artifacts
+            .into_iter()
+            .map(|(path, (_, _, bytes))| (path, bytes))
+            .collect::<BTreeMap<_, _>>();
+        let runtime_artifacts = closed_artifact_files(
+            &build,
+            &objects,
+            &site_build::AssetNamespace::PublisherRuntime,
+            "publisher-runtime",
+            "publisher-runtime.assemble/v1",
+            operation,
+        )?;
+        let runtime_files = runtime_artifacts
+            .into_iter()
+            .map(|(path, (provenance, media_type, bytes))| {
+                let source = provenance
+                    .attributes
+                    .get("source")
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("{operation}: runtime {path} has no source provenance")
+                    })?;
+                let license = provenance
+                    .attributes
+                    .get("license")
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("{operation}: runtime {path} has no license provenance")
+                    })?;
+                let source_path = provenance
+                    .attributes
+                    .get("sourcePath")
+                    .cloned()
+                    .ok_or_else(|| {
+                        format!("{operation}: runtime {path} has no sourcePath provenance")
+                    })?;
+                Ok(site_producer::publisher_runtime::PublisherRuntimeFile {
+                    path,
+                    bytes,
+                    media_type,
+                    provenance: site_producer::publisher_runtime::PublisherRuntimeProvenance {
+                        source,
+                        license,
+                        source_path,
+                        transformation: provenance.attributes.get("transformation").cloned(),
+                    },
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let core = target_core_from_package_lock(
+            build.site_build().package_lock(),
+            &target.fhir_version,
+            operation,
+        )?;
+        if !package_order.iter().any(|label| label == core.as_str()) {
+            return Err(format!(
+                "{operation}: target core {core} is absent from compilePackageOrder"
+            ));
+        }
+        let publisher = site_producer::publisher_runtime::PublisherRuntime::from_closed_files(
+            runtime_files,
+            &core,
+            &expected_runtime_recipe,
+        )
+        .map_err(|error| format!("{operation}: reconstruct Publisher runtime: {error:#}"))?;
+        let mut ready = publisher_runtime_outputs(&publisher, &mut objects)?;
+        let model = publisher_model(
+            &prepared,
+            &template_files,
+            &mut ready,
+            &mut objects,
+            &prepared.guide.package_id,
+            operation,
+        )?;
+        let options = SiteOptions {
+            active_tables,
+            run_uuid,
+            ..Default::default()
+        };
+        let packages = package_view_from_closed_build(&build, &objects, &package_order, operation)?;
+        let semantics = publisher_render_semantics(&prepared, packages, &model, &options)?;
+        let state = publisher_render_state(&semantics, &model, &options)?;
+        let (catalog, actual_tree) = publisher_catalog(&state, &mut ready, &model, operation)?;
+        if actual_tree != expected_tree {
+            return Err(format!(
+                "{operation}: mounted tree mismatch: expected {expected_tree}, reconstructed {actual_tree}"
+            ));
+        }
+        let parameters = target.parameters.clone();
+        let renderer = site_build::RendererImplementation {
+            id: target.renderer.id.clone(),
+            version: target.renderer.version.clone(),
+            recipe_sha256: site_build::sha256_canonical(&(template, &parameters))
+                .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
+        };
+        let handle = build.site_build().build_id().to_string();
+        let installed = self.install_publisher(PublisherRuntime {
+            preparation_key: None,
+            state,
+            publisher,
+            build,
+            catalog,
+            ready,
+            objects,
+            renderer,
+            output_options: parameters,
+        });
+        debug_assert_eq!(installed, handle);
+        Ok(handle)
     }
 }

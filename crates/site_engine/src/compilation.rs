@@ -23,6 +23,39 @@ pub struct ResolvedPackageClosure {
     pub labels: Vec<String>,
 }
 
+impl ResolvedPackageClosure {
+    /// Convert the package resolver's satisfied fixpoint into the exact
+    /// execution certificate shared by native and WASM hosts.
+    pub fn from_resolution_step(
+        config: &str,
+        step: &package_store::ResolutionStep,
+    ) -> Result<Self, String> {
+        if !step.satisfied {
+            return Err("package resolver step is not satisfied".into());
+        }
+        let mut labels = Vec::new();
+        for request in step.compile_set.iter().chain(&step.context_closure) {
+            let label = format!("{}#{}", request.package_id, request.version);
+            if !labels.contains(&label) {
+                labels.push(label);
+            }
+        }
+        if labels.is_empty() {
+            return Err("package resolver produced an empty satisfied closure".into());
+        }
+        let resolution_support = step
+            .resolution_support
+            .iter()
+            .map(|request| format!("{}#{}", request.package_id, request.version))
+            .collect();
+        Ok(Self {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support,
+            labels,
+        })
+    }
+}
+
 /// One complete authored project revision. Site bytes are captured here even
 /// though only their normalized page listing affects semantic compilation.
 #[derive(Clone, Debug)]
@@ -490,8 +523,9 @@ fn validate_local_resource_inputs(
     site_files: &BTreeMap<String, Vec<u8>>,
     operation: &str,
 ) -> Result<(), String> {
-    let predefined_paths = predefined
+    let expected_browser_paths = predefined
         .keys()
+        .filter(|path| is_local_resource_json(path))
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
     let raw_paths = site_files
@@ -499,13 +533,13 @@ fn validate_local_resource_inputs(
         .filter(|path| is_local_resource_json(path))
         .map(String::as_str)
         .collect::<BTreeSet<_>>();
-    if predefined_paths != raw_paths {
-        let only_predefined = predefined_paths
+    if expected_browser_paths != raw_paths {
+        let only_predefined = expected_browser_paths
             .difference(&raw_paths)
             .copied()
             .collect::<Vec<_>>();
         let only_raw = raw_paths
-            .difference(&predefined_paths)
+            .difference(&expected_browser_paths)
             .copied()
             .collect::<Vec<_>>();
         return Err(format!(
@@ -513,14 +547,22 @@ fn validate_local_resource_inputs(
         ));
     }
     for (path, compiled_value) in predefined {
-        let bytes = site_files
-            .get(path)
-            .expect("equal resource path sets were checked above");
-        let authored_value = serde_json::from_slice::<Value>(bytes)
-            .map_err(|error| format!("{operation}: invalid JSON in {path}: {error}"))?;
-        if &authored_value != compiled_value {
+        let bytes = site_files.get(path).ok_or_else(|| {
+            format!(
+                "{operation}: parsed predefined resource {path} has no exact raw authored bytes"
+            )
+        })?;
+        if path.to_ascii_lowercase().ends_with(".json") {
+            let authored_value = serde_json::from_slice::<Value>(bytes)
+                .map_err(|error| format!("{operation}: invalid JSON in {path}: {error}"))?;
+            if &authored_value != compiled_value {
+                return Err(format!(
+                    "{operation}: predefined resource {path} differs from the raw authored site file at the same path"
+                ));
+            }
+        } else if !path.to_ascii_lowercase().ends_with(".xml") {
             return Err(format!(
-                "{operation}: predefined resource {path} differs from the raw authored site file at the same path"
+                "{operation}: predefined resource {path} is neither JSON nor XML"
             ));
         }
     }
@@ -838,6 +880,54 @@ mod tests {
         );
         assert_eq!(engine.project_revision().unwrap().site_files(), &prior_site);
         assert_eq!(engine.compilation.cache_hits, 0);
+    }
+
+    #[test]
+    fn atomic_prepare_preserves_typed_compilation_on_generator_failure() {
+        let mut engine = reuse_engine();
+        let package_bytes = Rc::new(b"authenticated core fixture".to_vec());
+        let core_label = "hl7.fhir.r4.core#4.0.1";
+        let environment = crate::PackageEnvironment::new(
+            package_view(),
+            vec![core_label.into()],
+            BTreeMap::from([(
+                core_label.into(),
+                crate::PackageMaterial::new(
+                    site_build::ContentRef::of_bytes(package_bytes.as_ref(), None::<String>),
+                    BTreeMap::new(),
+                    package_bytes,
+                )
+                .unwrap(),
+            )]),
+        )
+        .unwrap();
+
+        let error = engine
+            .prepare_project(
+                inputs_for("Patient", b"new prose"),
+                resolved(),
+                crate::GeneratorSpec::Cycle {
+                    build_epoch_secs: 1,
+                    liquid_asset_dirs: Vec::new(),
+                    branch: None,
+                    revision: None,
+                },
+                environment,
+            )
+            .unwrap_err();
+        let crate::PrepareProjectError::Site {
+            message,
+            compilation,
+            ..
+        } = error
+        else {
+            panic!("successful exact compilation must make this a site failure")
+        };
+        assert!(message.contains("ImplementationGuide"), "{message}");
+        assert_eq!(
+            compilation.resources[0].filename,
+            "StructureDefinition-Test.json"
+        );
     }
 
     #[test]

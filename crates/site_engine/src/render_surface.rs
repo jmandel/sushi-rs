@@ -56,35 +56,119 @@ struct SessionTree {
     mem: MemTree,
     pkg: Option<PackageView>,
     pkg_root: PathBuf,
+    base: Option<Rc<dyn TreeSource>>,
+}
+
+/// Immutable per-generation site overlay. Publisher preparation already owns
+/// the exact file map; retaining it by `Rc` avoids copying every template,
+/// asset, page, include, and data byte into a second MemTree on prose edits.
+struct SiteMapTree {
+    files: Rc<HashMap<PathBuf, Vec<u8>>>,
+    base: Rc<dyn TreeSource>,
+    pkg_root: PathBuf,
+}
+
+impl TreeSource for SiteMapTree {
+    fn read(&self, path: &Path) -> Option<String> {
+        self.files
+            .get(path)
+            .and_then(|bytes| String::from_utf8(bytes.clone()).ok())
+            .or_else(|| self.base.read(path))
+    }
+
+    fn read_bytes(&self, path: &Path) -> Option<Vec<u8>> {
+        self.files
+            .get(path)
+            .cloned()
+            .or_else(|| self.base.read_bytes(path))
+    }
+
+    fn read_dir(&self, path: &Path) -> Option<Vec<DirEntry>> {
+        if path.starts_with(&self.pkg_root) {
+            return self.base.read_dir(path);
+        }
+        let inherited = self.base.read_dir(path);
+        let mut merged = std::collections::BTreeMap::new();
+        for (name, is_file) in inherited.into_iter().flatten() {
+            merged.insert(name, is_file);
+        }
+        let mut found_local = false;
+        for candidate in self.files.keys() {
+            let Ok(rest) = candidate.strip_prefix(path) else {
+                continue;
+            };
+            let mut components = rest.components();
+            let Some(first) = components.next() else {
+                continue;
+            };
+            found_local = true;
+            let name = first.as_os_str().to_string_lossy().into_owned();
+            let is_file = components.next().is_none();
+            merged
+                .entry(name)
+                .and_modify(|existing| *existing = *existing && is_file)
+                .or_insert(is_file);
+        }
+        if merged.is_empty() && !found_local {
+            None
+        } else {
+            Some(merged.into_iter().collect())
+        }
+    }
 }
 
 impl TreeSource for SessionTree {
     fn read(&self, path: &Path) -> Option<String> {
         if path.starts_with(&self.pkg_root) {
-            let src = self.pkg.as_ref()?;
-            let bytes = src.read(path).ok()?;
-            return String::from_utf8(bytes).ok();
+            if let Some(src) = &self.pkg {
+                let bytes = src.read(path).ok()?;
+                return String::from_utf8(bytes).ok();
+            }
+            return self.base.as_ref()?.read(path);
         }
-        self.mem.read(path)
+        self.mem
+            .read(path)
+            .or_else(|| self.base.as_ref()?.read(path))
     }
     fn read_bytes(&self, path: &Path) -> Option<Vec<u8>> {
         if path.starts_with(&self.pkg_root) {
-            return self.pkg.as_ref()?.read(path).ok();
+            return match &self.pkg {
+                Some(src) => src.read(path).ok(),
+                None => self.base.as_ref()?.read_bytes(path),
+            };
         }
-        self.mem.read_bytes(path)
+        self.mem
+            .read_bytes(path)
+            .or_else(|| self.base.as_ref()?.read_bytes(path))
     }
     fn read_dir(&self, path: &Path) -> Option<Vec<DirEntry>> {
         if path.starts_with(&self.pkg_root) {
-            let src = self.pkg.as_ref()?;
-            let entries = src.read_dir(path).ok()?;
-            let mut out: Vec<DirEntry> = entries
-                .into_iter()
-                .map(|e| (e.file_name, e.is_file))
-                .collect();
-            out.sort();
-            return Some(out);
+            return match &self.pkg {
+                Some(src) => {
+                    let entries = src.read_dir(path).ok()?;
+                    let mut out: Vec<DirEntry> = entries
+                        .into_iter()
+                        .map(|e| (e.file_name, e.is_file))
+                        .collect();
+                    out.sort();
+                    Some(out)
+                }
+                None => self.base.as_ref()?.read_dir(path),
+            };
         }
-        self.mem.read_dir(path)
+        let local = self.mem.read_dir(path);
+        let inherited = self.base.as_ref().and_then(|base| base.read_dir(path));
+        if local.is_none() && inherited.is_none() {
+            return None;
+        }
+        let mut merged = std::collections::BTreeMap::new();
+        for (name, is_file) in inherited.into_iter().flatten() {
+            merged.insert(name, is_file);
+        }
+        for (name, is_file) in local.into_iter().flatten() {
+            merged.insert(name, is_file);
+        }
+        Some(merged.into_iter().collect())
     }
 }
 
@@ -133,13 +217,13 @@ impl Default for SiteOptions {
 
 /// The expensive, reusable semantic half of rendering.
 ///
-/// `compiled` is snapshot-complete and retained so rebuilding a page tree after
-/// a site-only overlay neither repeats snapshot completion nor reloads the
-/// FragmentEngine's `IgContext`.
+/// The snapshot-complete semantic tree is retained so rebuilding a page tree
+/// after a site-only overlay neither reserializes compiled resources nor
+/// reloads the FragmentEngine's `IgContext`.
 pub struct RenderSemantics {
     pub engine: Rc<FragmentEngine>,
-    compiled: Vec<(PathBuf, Value)>,
     packages: Option<PackageView>,
+    tree: Rc<dyn TreeSource>,
 }
 
 /// The per-generation render state.
@@ -233,6 +317,7 @@ pub fn build_render_semantics(
         mem,
         pkg: bundle.clone(),
         pkg_root: pkg_root.clone(),
+        base: None,
     });
 
     let txcache_dir = if has_txcache {
@@ -282,27 +367,23 @@ pub fn build_render_semantics(
 
     Ok(RenderSemantics {
         engine,
-        compiled,
         packages: bundle,
+        tree,
     })
 }
 
 /// Build the cheap page/template half over an already-loaded semantic core.
 pub fn build_render_state_from_semantics(
     semantics: &RenderSemantics,
-    site_files: &HashMap<PathBuf, Vec<u8>>,
+    site_files: Rc<HashMap<PathBuf, Vec<u8>>>,
     options: &SiteOptions,
 ) -> Result<RenderState, String> {
-    let mut mem = MemTree::new();
-    insert_compiled(&mut mem, &semantics.compiled)?;
-
     // /site: the mounted tree, verbatim. Page sources = every .md/.html not
     // under the non-page dirs; key = output rel path (.md maps to .html), which
     // is ALSO the Jekyll page.path (`en/<name>` in multi-language layouts,
     // `<name>` in flat ones — the tree shape carries it).
     let mut pages: Vec<(String, PathBuf)> = Vec::new();
-    for (p, bytes) in site_files {
-        mem.insert(p.clone(), bytes.clone());
+    for p in site_files.keys() {
         let Ok(rest) = p.strip_prefix(SITE_DIR) else {
             continue;
         };
@@ -327,9 +408,9 @@ pub fn build_render_state_from_semantics(
     pages.sort();
 
     let pkg_root = package_root(&semantics.packages);
-    let tree: Rc<dyn TreeSource> = Rc::new(SessionTree {
-        mem,
-        pkg: semantics.packages.clone(),
+    let tree: Rc<dyn TreeSource> = Rc::new(SiteMapTree {
+        files: site_files,
+        base: semantics.tree.clone(),
         pkg_root,
     });
 
@@ -360,7 +441,7 @@ pub fn build_render_state(
         PackageView::new(source, root, None)
     });
     let semantics = build_render_semantics(compiled.to_vec(), bundle, site_files, options)?;
-    build_render_state_from_semantics(&semantics, site_files, options)
+    build_render_state_from_semantics(&semantics, Rc::new(site_files.clone()), options)
 }
 
 impl RenderState {
@@ -417,9 +498,9 @@ impl RenderState {
         self.render_page_tracked_by_name(name).map(|(html, _)| html)
     }
 
-    /// Render one page and retain the same typed read set the native Fig path
-    /// promotes into a SiteBuild successor. The JS compatibility surface still
-    /// returns HTML only; Rust hosts use this method when publishing revisions.
+    /// Render one page and retain its typed artifact read set for diagnostics
+    /// and closure tests. The immutable SiteBuild never changes while outputs
+    /// are rendered or memoized.
     pub fn render_page_tracked_by_name(
         &self,
         name: &str,
