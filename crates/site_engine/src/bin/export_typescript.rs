@@ -6,7 +6,12 @@
 use ts_rs::{Config, TS};
 
 fn declaration<T: TS>(config: &Config) -> String {
-    format!("export {}\n", T::decl(config))
+    let declaration = T::decl(config)
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("export {declaration}\n")
 }
 
 fn schema<T: schemars::JsonSchema>(serialize: bool) -> schemars::Schema {
