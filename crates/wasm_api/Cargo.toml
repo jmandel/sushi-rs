@@ -29,3 +29,7 @@ wasm-bindgen = "0.2"
 # (P2 asks for this). Cheap, wasm-only in effect.
 [target.'cfg(target_family = "wasm")'.dependencies]
 console_error_panic_hook = "0.1"
+
+[dev-dependencies]
+flate2 = { workspace = true }
+tar = { workspace = true }

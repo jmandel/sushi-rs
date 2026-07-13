@@ -546,6 +546,7 @@ name = "package_store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "flate2",
  "hex",
  "miniz_oxide",
  "rustc-hash",
@@ -554,6 +555,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
+ "tar",
  "ts-rs",
 ]
 
@@ -1231,12 +1233,14 @@ dependencies = [
  "api_envelope",
  "compiler",
  "console_error_panic_hook",
+ "flate2",
  "package_store",
  "serde",
  "serde_json",
  "site_build",
  "site_engine",
  "snapshot_gen",
+ "tar",
  "wasm-bindgen",
 ]
 

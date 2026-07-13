@@ -858,10 +858,64 @@ fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, Strin
     })
 }
 
+/// Decode one npm/FHIR `.tgz` carrier directly in Rust. Baked callers
+/// authenticate the compressed bytes before this boundary; registry carriers
+/// are untrusted and are validated here by the bounded parser and package
+/// normalization. The
+/// browser previously inflated the archive into a base64 object, serialized
+/// that object as JSON, and cloned hundreds of megabytes into the Worker. This
+/// path preserves the exact same package normalization boundary while keeping
+/// the compressed carrier binary end-to-end.
+fn prepare_tgz_package(label: &str, tgz: &[u8]) -> Result<PreparedMountBatch, String> {
+    let started = clock_ms();
+    let entries = package_store::read_package_tgz(tgz)
+        .map_err(|error| format!("prepareTgzArtifact: decode {label}: {error:#}"))?;
+    let decoded_source_bytes = entries.values().map(|body| body.len() as u64).sum();
+
+    let normalize_started = clock_ms();
+    let builder = package_store::PreparedPackage::normalize(label, entries)
+        .map_err(|error| format!("prepareTgzArtifact: invalid package {label}: {error:#}"))?;
+    let normalization_ms = (clock_ms() - normalize_started).max(0.0);
+    let index_started = clock_ms();
+    let package = builder
+        .build()
+        .map_err(|error| format!("prepareTgzArtifact: invalid package {label}: {error:#}"))?;
+    let indexing_ms = (clock_ms() - index_started).max(0.0);
+    let normalized_bytes = package.files.raw_bytes();
+    let prepared_members = package.files.len() as u64;
+    let encode_started = clock_ms();
+    let bytes = package.encode();
+    let artifact_encode_ms = (clock_ms() - encode_started).max(0.0);
+    let artifact = PreparedExport {
+        label: package.label.clone(),
+        cache_key: package.key.cache_key(),
+        artifact_sha256: site_build::Sha256Digest::of_bytes(&bytes).to_string(),
+        bytes: bytes.len() as u64,
+    };
+    let artifact_bytes = bytes.len() as u64;
+    let mut pending = BTreeMap::new();
+    pending.insert(package.label.clone(), bytes);
+    Ok(PreparedMountBatch {
+        prepared: vec![package],
+        pending,
+        artifacts: vec![artifact],
+        artifact_bytes,
+        prepared_members,
+        input_json_bytes: 0,
+        base64_bytes: 0,
+        decoded_source_bytes,
+        normalized_bytes,
+        json_parse_ms: 0.0,
+        base64_decode_ms: 0.0,
+        normalization_ms,
+        indexing_ms,
+        artifact_encode_ms,
+        decode_validate_prepare_ms: (clock_ms() - started).max(0.0),
+    })
+}
+
 #[cfg(test)]
 mod prepare_project_wire_tests {
-    use super::*;
-
     #[test]
     fn site_failure_is_a_typed_error_with_the_successful_compilation() {
         let compilation = site_engine::CompilationOutcome {
@@ -951,6 +1005,111 @@ mod prepare_project_wire_tests {
 #[cfg(test)]
 mod prepared_mount_tests {
     use super::*;
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::{Cursor, Write};
+    use tar::{Builder, Header};
+
+    fn tgz(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let encoder = GzEncoder::new(Vec::new(), Compression::default());
+        let mut archive = Builder::new(encoder);
+        for (path, bytes) in files {
+            let mut header = Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_mtime(0);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, path, Cursor::new(*bytes))
+                .unwrap();
+        }
+        archive.finish().unwrap();
+        archive.into_inner().unwrap().finish().unwrap()
+    }
+
+    fn tgz_with_declared_member(path: &str, declared_bytes: u64) -> Vec<u8> {
+        let mut header = Header::new_gnu();
+        header.set_path(path).unwrap();
+        header.set_size(declared_bytes);
+        header.set_mode(0o644);
+        header.set_mtime(0);
+        header.set_cksum();
+        let mut tar = Vec::from(header.as_bytes());
+        tar.extend_from_slice(&[0; 1024]);
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&tar).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn compressed_carrier_produces_the_canonical_prepared_artifact() {
+        let package_json = br#"{"name":"demo.package","version":"1.0.0"}"#;
+        let profile = br#"{"resourceType":"StructureDefinition","id":"demo"}"#;
+        let carrier = tgz(&[
+            ("package/package.json", package_json),
+            ("package/nested/StructureDefinition-demo.json", profile),
+        ]);
+        let batch = prepare_tgz_package("demo.package#1.0.0", &carrier).unwrap();
+        let expected = package_store::PreparedPackage::prepare(
+            "demo.package#1.0.0",
+            BTreeMap::from([
+                ("package.json".into(), package_json.to_vec()),
+                (
+                    "nested/StructureDefinition-demo.json".into(),
+                    profile.to_vec(),
+                ),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(batch.artifacts.len(), 1);
+        assert_eq!(batch.artifacts[0].cache_key, expected.key.cache_key());
+        assert_eq!(batch.pending["demo.package#1.0.0"], expected.encode());
+        assert_eq!(batch.input_json_bytes, 0);
+        assert_eq!(batch.base64_bytes, 0);
+    }
+
+    #[test]
+    fn compressed_carrier_rejects_duplicate_normalized_paths() {
+        let carrier = tgz(&[
+            (
+                "package/package.json",
+                br#"{"name":"demo.package","version":"1.0.0"}"#,
+            ),
+            ("package/duplicate.txt", b"first"),
+            ("duplicate.txt", b"second"),
+        ]);
+        let error = match prepare_tgz_package("demo.package#1.0.0", &carrier) {
+            Ok(_) => panic!("duplicate normalized paths must be rejected"),
+            Err(error) => error,
+        };
+        assert!(error.contains("duplicate package bundle member"));
+    }
+
+    #[test]
+    fn oversized_compressed_carrier_does_not_mutate_the_session() {
+        let session = Session::new();
+        let initialized: Value = serde_json::from_str(&session.init("[]")).unwrap();
+        assert_eq!(initialized["ok"], true);
+        let before_generation = session.engine.borrow().package_generation;
+        let carrier = tgz_with_declared_member(
+            "package/huge.bin",
+            package_store::bundle::MAX_PACKAGE_TGZ_MEMBER_BYTES + 1,
+        );
+
+        let result: Value =
+            serde_json::from_str(&session.prepare_tgz_artifact("demo.package#1.0.0", &carrier))
+                .unwrap();
+        assert_eq!(result["ok"], false);
+        assert!(result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("limit is"));
+
+        let engine = session.engine.borrow();
+        assert_eq!(engine.package_generation, before_generation);
+        assert!(engine.packages.is_empty());
+        assert!(engine.package_materials.is_empty());
+        assert!(engine.prepared_exports.is_empty());
+    }
 
     #[test]
     fn compact_prepared_mount_does_not_inflate_package_bodies() {
@@ -1326,6 +1485,31 @@ impl Session {
             })
         })();
         envelope_ser("prepareArtifacts", result)
+    }
+
+    /// Convert one compressed package carrier into the same PreparedPackage
+    /// artifact as `prepareArtifacts`, without an inflated base64/JSON
+    /// representation crossing the browser Worker boundary. Callers may supply
+    /// either pre-authenticated baked bytes or untrusted registry bytes; this
+    /// method always applies the bounded parser and package normalization.
+    #[wasm_bindgen(js_name = prepareTgzArtifact)]
+    pub fn prepare_tgz_artifact(&self, label: &str, tgz: &[u8]) -> String {
+        set_panic_hook();
+        let result = (|| {
+            let base_generation = self.with_engine("prepareTgzArtifact.preflight", |engine| {
+                if engine.bundle.is_none() {
+                    return Err(
+                        "prepareTgzArtifact: engine not initialized; call init() first".into(),
+                    );
+                }
+                Ok(engine.package_generation)
+            })?;
+            let batch = prepare_tgz_package(label, tgz)?;
+            self.with_engine("prepareTgzArtifact.retain", move |engine| {
+                engine.retain_prepared_artifacts(batch, base_generation)
+            })
+        })();
+        envelope_ser("prepareTgzArtifact", result)
     }
 
     /// Move one artifact staged by `prepareAndMount` into a JS `Uint8Array`.

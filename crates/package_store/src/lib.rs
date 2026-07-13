@@ -25,7 +25,7 @@ pub mod template_loader;
 pub mod wire;
 
 pub use bundle::{
-    BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
+    read_package_tgz, BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
     BUNDLE_FORMAT_VERSION,
 };
 pub use material::{

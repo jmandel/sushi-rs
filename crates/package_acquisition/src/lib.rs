@@ -1884,43 +1884,9 @@ pub fn build_bundle(package_dir: &Path) -> anyhow::Result<Vec<u8>> {
 /// Call [`read_normalized_bundle`] before mounting; this low-level parser alone
 /// does not validate package identity, dependency metadata, or path semantics.
 pub fn read_bundle(bytes: &[u8]) -> anyhow::Result<Vec<(String, Vec<u8>)>> {
-    let gz = GzDecoder::new(Cursor::new(bytes));
-    let mut archive = Archive::new(gz);
-    let mut out = Vec::new();
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        // Mount regular files only. Symlink/hardlink/device entries are not
-        // package bytes and the browser transport applies the same rule.
-        if !entry.header().entry_type().is_file() {
-            continue;
-        }
-        // Normalize the member name to the package-relative filename the
-        // BundleSource mounts: strip a leading `./`, then a leading `package/`.
-        // Our repacked bundles store bare filenames (no `package/`); RAW REGISTRY
-        // npm tarballs root every file under `package/`. Stripping it here makes
-        // `read_bundle` mount a raw tgz identically to a repacked bundle — matching
-        // the browser inflate (`app/src/worker/inflate.ts` strips the same prefixes).
-        let path = entry.path()?;
-        let raw_name = path
-            .to_str()
-            .ok_or_else(|| anyhow!("package bundle member name is not UTF-8"))?
-            .trim_start_matches("./")
-            .to_string();
-        // Strip the npm package root exactly once. Repeated stripping would
-        // promote `package/package/foo` to top-level `foo`, disagreeing with the
-        // browser and with ordinary extraction semantics.
-        let name = raw_name
-            .strip_prefix("package/")
-            .unwrap_or(&raw_name)
-            .to_string();
-        if name.is_empty() {
-            continue;
-        }
-        let mut data = Vec::new();
-        entry.read_to_end(&mut data)?;
-        out.push((name, data));
-    }
-    Ok(out)
+    Ok(package_store::read_package_tgz(bytes)?
+        .into_iter()
+        .collect())
 }
 
 /// Inflate and pass one exact package through the authoritative shared
@@ -1930,12 +1896,7 @@ pub fn read_normalized_bundle(
     label: &str,
     bytes: &[u8],
 ) -> anyhow::Result<package_store::NormalizedPackageMaterial> {
-    let mut entries = BTreeMap::new();
-    for (name, body) in read_bundle(bytes)? {
-        if entries.insert(name.clone(), body).is_some() {
-            bail!("duplicate package bundle member after root normalization: {name}");
-        }
-    }
+    let entries = package_store::read_package_tgz(bytes)?;
     package_store::normalize_package_material(label, entries)
         .with_context(|| format!("normalize package bundle {label}"))
 }

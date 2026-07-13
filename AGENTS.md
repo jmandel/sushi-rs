@@ -7,6 +7,21 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-12)
 
+**BINARY TGZ PACKAGE INGRESS (UNCOMMITTED 2026-07-12):** browser cold package
+preparation now calls `Session.prepareTgzArtifact(label, Uint8Array)` instead of
+receiving an inflated base64/JSON file map. The method parses outside the
+Session borrow, normalizes/builds the canonical PreparedPackage, then retains
+it through the existing take/stage/atomic-commit path. Native acquisition and
+WASM share the single `package_store::read_package_tgz` parser. It mounts only
+regular files, normalizes the npm `package/` root exactly once, rejects unsafe
+or duplicate normalized paths, and bounds untrusted input at 65,536 entries,
+128 MiB per entry, and 256 MiB total declared expansion before allocating or
+reading a member. A failed oversized carrier does not change generation,
+packages, materials, or pending exports. Full `cargo test --workspace
+--release`, workspace all-target check, documented-toolchain wasm32 check,
+fmt, and diff checks are green. Land this engine first, rebuild WASM with its
+committed stamp, then rerun the editor's complete Pages-subpath browser gate.
+
 **FINAL BUILD-FACADE IMPLEMENTATION AND LOCAL CERTIFICATION (LANDING
 2026-07-12):** the three
 platform seams are now literal: ProjectSource captures the immutable revision

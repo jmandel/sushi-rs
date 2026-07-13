@@ -2,8 +2,9 @@
 //! prebuilt package bundles.
 //!
 //! This is the package-source shape the browser mounts. Cold material arrives as
-//! one fetched/inflated bundle per package and uses owned in-memory files; warm
-//! PreparedPackage v3 material keeps compact chunks and inflates members lazily.
+//! one fetched compressed carrier per package, parsed here into owned in-memory
+//! files; warm PreparedPackage v3 material keeps compact chunks and inflates
+//! members lazily.
 //! Neither path needs `std::fs`, so both compile and run on
 //! `wasm32-unknown-unknown`. Native tests exercise the source directly (the P1
 //! BundleSource fixture-ladder gate).
@@ -28,15 +29,123 @@
 
 use crate::prepared::PreparedCompressedFiles;
 use crate::source::{DirEntry, PackageSource};
+use anyhow::{anyhow, bail, Context};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::io;
+use std::io::{self, Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 /// The bundle format version. Bump on any incompatible change to the container or
 /// manifest shape so a reader can reject a stale bundle.
 pub const BUNDLE_FORMAT_VERSION: u32 = 1;
+
+/// Browser-safe ceilings for an untrusted npm/FHIR package carrier. The
+/// largest bundle currently exercised by the editor is R5 core at about 89 MB
+/// expanded, so these bounds retain substantial headroom without allowing a
+/// small gzip bomb or forged tar size to grow a WASM worker without limit.
+pub const MAX_PACKAGE_TGZ_MEMBERS: u64 = 65_536;
+pub const MAX_PACKAGE_TGZ_MEMBER_BYTES: u64 = 128 * 1024 * 1024;
+pub const MAX_PACKAGE_TGZ_EXPANDED_BYTES: u64 = 256 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct PackageTgzLimits {
+    members: u64,
+    member_bytes: u64,
+    expanded_bytes: u64,
+}
+
+const PACKAGE_TGZ_LIMITS: PackageTgzLimits = PackageTgzLimits {
+    members: MAX_PACKAGE_TGZ_MEMBERS,
+    member_bytes: MAX_PACKAGE_TGZ_MEMBER_BYTES,
+    expanded_bytes: MAX_PACKAGE_TGZ_EXPANDED_BYTES,
+};
+
+/// Inflate one npm/FHIR `.tgz` into its package-relative regular files. This is
+/// the single native/WASM carrier parser: package acquisition and browser cold
+/// preparation therefore agree on root and path normalization. Identity,
+/// dependencies, and derived indexes remain the PreparedPackage boundary's job.
+pub fn read_package_tgz(bytes: &[u8]) -> anyhow::Result<BTreeMap<String, Vec<u8>>> {
+    read_package_tgz_with_limits(bytes, PACKAGE_TGZ_LIMITS)
+}
+
+fn read_package_tgz_with_limits(
+    bytes: &[u8],
+    limits: PackageTgzLimits,
+) -> anyhow::Result<BTreeMap<String, Vec<u8>>> {
+    let decoder = GzDecoder::new(Cursor::new(bytes));
+    let mut archive = tar::Archive::new(decoder);
+    let mut result = BTreeMap::new();
+    let mut member_count = 0u64;
+    let mut expanded_bytes = 0u64;
+    for candidate in archive.entries().context("read gzip/tar entries")? {
+        let mut entry = candidate.context("read tar entry")?;
+        member_count = member_count
+            .checked_add(1)
+            .ok_or_else(|| anyhow!("package bundle member count overflow"))?;
+        if member_count > limits.members {
+            bail!("package bundle has more than {} members", limits.members);
+        }
+        let member_bytes = entry.size();
+        if member_bytes > limits.member_bytes {
+            bail!(
+                "package bundle member is {member_bytes} bytes; limit is {} bytes",
+                limits.member_bytes
+            );
+        }
+        expanded_bytes = expanded_bytes
+            .checked_add(member_bytes)
+            .ok_or_else(|| anyhow!("package bundle expanded byte count overflow"))?;
+        if expanded_bytes > limits.expanded_bytes {
+            bail!(
+                "package bundle expands past {} bytes",
+                limits.expanded_bytes
+            );
+        }
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let path = entry.path().context("read tar member path")?;
+        let raw_name = path
+            .to_str()
+            .ok_or_else(|| anyhow!("package bundle member name is not UTF-8"))?
+            .trim_start_matches("./")
+            .to_string();
+        let name = raw_name
+            .strip_prefix("package/")
+            .unwrap_or(&raw_name)
+            .to_string();
+        if name.is_empty()
+            || name.starts_with('/')
+            || name.contains('\\')
+            || name.contains('\0')
+            || name
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            bail!("unsafe package bundle member path: {raw_name:?}");
+        }
+        let member_len = usize::try_from(member_bytes)
+            .map_err(|_| anyhow!("package bundle member is too large for this host"))?;
+        let mut body = Vec::new();
+        body.try_reserve_exact(member_len)
+            .with_context(|| format!("reserve package bundle member {name}"))?;
+        entry
+            .read_to_end(&mut body)
+            .with_context(|| format!("read package bundle member {name}"))?;
+        if body.len() != member_len {
+            bail!(
+                "package bundle member {name} declared {member_len} bytes but yielded {}",
+                body.len()
+            );
+        }
+        if result.insert(name.clone(), body).is_some() {
+            bail!("duplicate package bundle member after root normalization: {name}");
+        }
+    }
+    Ok(result)
+}
 
 /// One entry in a [`BundleManifest`]: a pinned package and the bundle blob that
 /// carries it. `bundle` is the name/URL of the blob the browser fetches (the
@@ -375,6 +484,130 @@ impl Default for BundleSource {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::Write;
+    use tar::{Builder, Header};
+
+    fn tgz(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let encoder = GzEncoder::new(Vec::new(), Compression::default());
+        let mut archive = Builder::new(encoder);
+        for (path, bytes) in files {
+            let mut header = Header::new_gnu();
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o644);
+            header.set_mtime(0);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, path, Cursor::new(*bytes))
+                .unwrap();
+        }
+        archive.finish().unwrap();
+        archive.into_inner().unwrap().finish().unwrap()
+    }
+
+    fn tgz_with_declared_member(path: &str, declared_bytes: u64) -> Vec<u8> {
+        let mut header = Header::new_gnu();
+        header.set_path(path).unwrap();
+        header.set_size(declared_bytes);
+        header.set_mode(0o644);
+        header.set_mtime(0);
+        header.set_cksum();
+        let mut tar = Vec::from(header.as_bytes());
+        tar.extend_from_slice(&[0; 1024]);
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&tar).unwrap();
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn tgz_reader_normalizes_registry_and_baked_roots_once() {
+        let bytes = tgz(&[
+            ("package/package.json", b"registry-root"),
+            ("package/nested/template.txt", b"nested"),
+            ("baked.txt", b"baked-root"),
+        ]);
+        let entries = read_package_tgz(&bytes).unwrap();
+        assert_eq!(entries["package.json"], b"registry-root");
+        assert_eq!(entries["nested/template.txt"], b"nested");
+        assert_eq!(entries["baked.txt"], b"baked-root");
+    }
+
+    #[test]
+    fn tgz_reader_rejects_malformed_and_duplicate_normalized_carriers() {
+        assert!(read_package_tgz(b"not gzip").is_err());
+        let duplicate = tgz(&[("package/same.txt", b"first"), ("same.txt", b"second")]);
+        assert!(read_package_tgz(&duplicate)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate package bundle member"));
+    }
+
+    #[test]
+    fn tgz_reader_enforces_member_count_and_expanded_byte_limits() {
+        let exact = tgz(&[("first", b"12"), ("second", b"345")]);
+        let exact_limits = PackageTgzLimits {
+            members: 2,
+            member_bytes: 3,
+            expanded_bytes: 5,
+        };
+        assert_eq!(
+            read_package_tgz_with_limits(&exact, exact_limits)
+                .unwrap()
+                .values()
+                .map(Vec::len)
+                .sum::<usize>(),
+            5
+        );
+
+        let member_count_error = read_package_tgz_with_limits(
+            &exact,
+            PackageTgzLimits {
+                members: 1,
+                ..exact_limits
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(member_count_error.contains("more than 1 members"));
+
+        let member_size_error = read_package_tgz_with_limits(
+            &exact,
+            PackageTgzLimits {
+                member_bytes: 2,
+                ..exact_limits
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(member_size_error.contains("limit is 2 bytes"));
+
+        let total_size_error = read_package_tgz_with_limits(
+            &exact,
+            PackageTgzLimits {
+                expanded_bytes: 4,
+                ..exact_limits
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(total_size_error.contains("expands past 4 bytes"));
+    }
+
+    #[test]
+    fn tgz_reader_rejects_oversized_declaration_before_reading_its_body() {
+        let carrier = tgz_with_declared_member("package/huge.bin", 11);
+        let error = read_package_tgz_with_limits(
+            &carrier,
+            PackageTgzLimits {
+                members: 1,
+                member_bytes: 10,
+                expanded_bytes: 10,
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("limit is 10 bytes"), "{error}");
+    }
 
     #[test]
     fn manifest_roundtrips_and_rejects_wrong_version() {
