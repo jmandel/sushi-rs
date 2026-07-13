@@ -9,13 +9,13 @@
 //!     SiteBuild plus addressed objects.
 //!   - [`site`] restores a Publisher build and delegates directly to
 //!     `SiteEngine::outputs`, `render`, and `finalize`.
-//!   - [`output_cache`] performs verified pre-render SiteOutput lookup and
-//!     materialization; Rust finalization owns cache publication.
+//! Native cache lookup is a private renderer-adapter optimization and never a
+//! distinct Fig operation or result shape.
 //!
 //! `--json` on every subcommand emits the shared [`api_envelope`] envelope —
 //! schema-identical to the WASM Session's transport envelope.
 
-pub mod output_cache;
+mod output_cache;
 pub mod prepare;
 mod publication;
 pub mod site;

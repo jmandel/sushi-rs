@@ -14,7 +14,7 @@ use thiserror::Error;
 use crate::{
     ArtifactCatalog, ArtifactKey, ArtifactProvenance, ArtifactRecord, ArtifactState,
     AssetNamespace, AuthoredFileRole, BuildDiagnostic, ClosedSiteBuild, ContentRef, ContractError,
-    PackageLock, PreparedGuide, ProducerRef, ProjectRevision, ReadDependency, RenderMode,
+    PackageLock, PreparedGuide, ProducerRef, ProjectIdentity, ReadDependency, RenderMode,
     RenderPlan, RenderTarget, SealError, Sha256Digest, SiteBuild, SiteBuildError, SourceKind,
     SourcePath,
 };
@@ -80,7 +80,7 @@ pub fn include_key(path: SourcePath) -> ArtifactKey {
 
 #[derive(Clone, Debug)]
 pub struct CycleProjectionInput {
-    pub project: ProjectRevision,
+    pub project: ProjectIdentity,
     pub package_lock: PackageLock,
     pub render_target: RenderTarget,
     pub diagnostics: BTreeSet<BuildDiagnostic>,
@@ -432,7 +432,7 @@ fn validate_prepared(
 
 fn validate_page_sources(
     pages: &[PageNode],
-    project: &ProjectRevision,
+    project: &ProjectIdentity,
 ) -> Result<(), CycleProjectionError> {
     for page in pages {
         match (&page.body, &page.source) {

@@ -139,19 +139,17 @@ SOURCE_DATE_EPOCH=1783555200 target/release/fig prepare <ig-dir> \
   --cache <package-cache> \
   --out cycle-build
 
-# LiquidJS consumes cycle-build and writes a private complete staging tree
-# plus its typed external-finalization plan. The plan's required inputBuildId
-# is the exact build id LiquidJS opened; Fig rejects a changed/replaced bundle.
-target/release/fig finalize cycle-build \
-  --site <private-staging> \
-  --external-plan <plan.json> \
-  --cache <optional-site-output-cache>
+# LiquidJS opens the closed bundle with the shared Cycle Build facade, renders
+# directly into ContentStore, and invokes ordinary no-argument finalization.
+SITE_BUILD_DIR=cycle-build SITE_GEN_REPLACE_OUTPUT=1 \
+  bun /path/to/cycle/site-gen/build.tsx
 ```
 
-The external builder owns Cycle's catalog and output bytes, while Rust verifies
-the complete staged inventory and remains the sole constructor of the canonical
-`SiteOutput`. This is the intended second Liquid implementation, not a second
-build model.
+The external builder owns Cycle's catalog and output bytes, while Rust binds
+the exact catalog, verifies each admitted ContentRef, and remains the sole
+constructor of canonical `SiteOutput`. The native process bridge is hidden
+transport, not a Fig command or serialized plan. This is the intended second
+Liquid implementation, not a second build model.
 
 Other subcommands (add `--json` to any command for the shared envelope):
 

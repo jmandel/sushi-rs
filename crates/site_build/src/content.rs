@@ -6,6 +6,10 @@ use thiserror::Error;
 
 /// Deterministic identity of the complete SiteBuild document (except this field).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
 pub struct BuildId(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]

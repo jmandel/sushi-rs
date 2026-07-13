@@ -5,7 +5,104 @@
 > as facts change — it must survive context compaction. When you discover a new
 > command, gotcha, or finish a phase, edit this file in the same turn.
 
-## 0. HANDOFF — current state (read FIRST, updated 2026-07-11)
+## 0. HANDOFF — current state (read FIRST, updated 2026-07-12)
+
+**FINAL BUILD-FACADE IMPLEMENTATION AND LOCAL CERTIFICATION (LANDING
+2026-07-12):** the three
+platform seams are now literal: ProjectSource captures the immutable revision
+and owns the operation lease, PackageProvider transports Rust-selected exact
+coordinates without a second cancellation callback, and ContentStore carries
+verified bytes. Five preparation cancellation checkpoints remain. The app's
+public Build barrel fell from 52 exports to 13; transport code imports generated
+Rust declarations directly. Cycle consolidated four store interfaces into one
+read capability plus one writable refinement and drives cache-hit/fresh native
+execution through the same private immutable outputs/render/finalize facade.
+Cache hits re-open and verify the exact renderer catalog before skipping Liquid.
+
+Current complete gates are green: Rust workspace, all targets, documented-
+toolchain wasm32, fmt; SiteEngine 24 pass/1 explicit fixture ignore; generated
+wire drift and four schema-exactness cases; Fig 14+4 and a fresh-process
+1,799-file Publisher finalization; Cycle 240/240 plus renderer typecheck and both
+bundles; editor 104/104 plus TypeScript and the Pages build; native/WASM byte
+parity 10/10; and the terminology consistency self-tests. The rebuilt complete
+browser receipt is `/tmp/fhir-api-convergence-browser-final.log` (`E2E GATE:
+PASS`) with Tiny/Cycle, US Core full image/asset closure and one shell, real
+mCODE, restart/persistence/scroll, and mobile geometry. Performance receipt
+`/tmp/fhir-api-convergence-uscore.json` measures 78.398 s cold, 8.999 s hard
+reload (prior verified page at 1.089 s), 1.562 s same-worker reopen with 155 ms
+retained SiteBuild preparation, and a 5.702 s semantic profile edit. The latter
+remains compile/preparation-bound and is not claimed as an improvement. This
+engine change is ready to land first; then land Cycle and editor, rebuild WASM
+from the committed engine, monitor Pages, and verify the live origin before
+declaring completion. Older “UNCOMMITTED” labels immediately below are
+superseded pre-landing checkpoints, not current instructions.
+
+**NO-ARG FINALIZE + PRIVATE CACHE CHECKPOINT (UNCOMMITTED 2026-07-12):**
+SiteEngine has one no-argument `finalize(handle)` for Publisher and Cycle. A
+Cycle renderer privately binds its exact output paths once, then admits each
+authenticated `SiteOutputFile`; the public `RendererOutput` bulk plan and
+optional finalize argument are deleted from SiteEngine/WASM. Fig's normal CLI
+exposes only `prepare/outputs/render/finalize`; the Bun process receipt is a
+hidden IPC command. `site_build` no longer defines or exports OutputCacheKey,
+SiteOutputCache, FileSiteOutputCache, cache accessors, or cache verification.
+Its canonical SiteOutput is purely functional; Fig owns the private native
+optimization pointer. Concrete Fig filesystem project/package adapters are
+private behind a path-based `prepare` composition. Web/Fig/Cycle Build facades
+also no longer expose lifecycle ids or generator identity. Focused gates are
+green: SiteEngine 23 pass/1 ignored, SiteBuild 16+4+4, WASM 6+8, Fig 10+4,
+editor 102/102 plus TypeScript, schema generation drift, and diff integrity.
+Native Cycle, rebuilt WASM, and full browser gates remain pending.
+
+A follow-up wire/documentation audit reran only the generated-contract drift
+check, the four exporter schema-exactness tests, the four shared Fig/Session
+envelope tests, and editor TypeScript; all passed. Generated
+`PrepareResult.generator` is the closed `GeneratorKind`, and generated
+SiteOutput/TypeScript/schema contain no cache
+field/type, bulk renderer plan, or optional-finalize payload. This follow-up did
+not rerun app tests or production build, WASM, native Cycle, browser, or
+deployment gates.
+
+**EVENT/ERROR/CACHE CONTRACT CHECKPOINT (SUPERSEDED 2026-07-12):**
+The former `SiteOutput.cacheKey` field is deleted. Fig may derive a private host
+lookup pointer, but it is absent from canonical JSON, generated TypeScript, and
+schema; the cross-language `so1` fixture hashes only functional receipt fields
+and files. All four SiteEngine
+operations return typed `BuildError`, WASM uses `envelope_typed`, and the Worker
+preserves those errors with `unwrapBuild`. The unused public WASM
+`compileProject` route is deleted; atomic `prepareProject` is the sole project
+compile/site boundary.
+
+Generated `BuildEvent` is now the only observation plane for Rust preparation,
+package storage, Worker init/mount, and browser operation timings. The old
+PrepareMetrics/PreparedMountMetrics/packageStorage/compile-time sidecars and
+ambient browser progress callback are deleted; functional events carry optional
+operation/build identity. The browser registry is bounded to current+previous.
+Focused gates are green: SiteEngine 21 pass/1 ignored, WASM 6+5+8, Fig 10+4,
+SiteBuild 16+4+6, app 102/102 plus TypeScript, Cycle 60/60 plus native entrypoint
+bundles. This older checkpoint is superseded by “NO-ARG FINALIZE + PRIVATE
+CACHE” above; its named deletion work is complete. Generated-WASM/full Chromium
+certification is pending.
+
+**GENERATED CONTRACT + BUILD FACADE CHECKPOINT (SUPERSEDED 2026-07-12):** optional
+`wire-contract` features on existing crates use ts-rs/schemars without entering
+production or WASM dependency graphs. `site_engine/export_typescript` generates
+canonical ProjectRevision, GeneratorSpec, ContentRef, output/SiteOutput,
+BuildEvent, and typed BuildError TypeScript plus Draft 2020-12 schema roots.
+The real prepare input serde-encodes site bytes as base64 and WASM accepts one
+ProjectRevision JSON plus one GeneratorSpec JSON instead of five arguments. The
+SiteBuild component formerly colliding as `site_build::ProjectRevision` is now
+`ProjectIdentity`.
+
+Render returns only ContentRef, PrepareResult no longer duplicates
+handle/buildId, and Fig owns an immutable `site::Build` facade over a restored
+closed build. The web facade likewise owns outputs/render/finalize and preview
+protocol 6 persists buildId only. Generated BuildEvent replaces the handwritten
+progress shape; generated BuildError replaces worker string/detail errors.
+Focused SiteEngine/WASM/Fig checks and editor TypeScript plus 102/102 tests pass.
+The external staging plan named by this older checkpoint has since been removed;
+current Cycle writes renderer results to ContentStore and admits only verified
+references before the shared no-argument finalization path. Full rebuilt-WASM/
+browser certification for the current checkpoint remains pending.
 
 **SITEBUILD V2 / EXACT PREPARED CARRIER ACTIVE (UNCOMMITTED 2026-07-12):**
 SiteBuild v2 now roots the exact deterministic PreparedPackage carrier consumed
@@ -56,7 +153,7 @@ checkpoint prose below records the pre-landing sequence and is superseded by
 this block.
 
 **ARCHITECTURE CERTIFIED LOCALLY (UNCOMMITTED 2026-07-12):** the complete
-four-operation Fig/SiteEngine migration and Cycle v2 external-finalize path are
+four-operation Fig/SiteEngine migration and Cycle v2 renderer-completion path are
 green in `/tmp/fhir-architecture-overhaul-browser-final18.log`. Browser-only
 limits fixed during certification: package normalization runs outside the
 Session borrow; cold closures prepare one compact export at a time but commit
@@ -202,21 +299,19 @@ Rust preparation 182 ms with `siteBuildCacheHit=1`; template materialization,
 Publisher runtime/model, render model, and catalog reconstruction are all zero.
 
 **NATIVE CYCLE CACHE PROTOTYPE (SUPERSEDED 2026-07-12):** This checkpoint's
-public `fig output-cache load|publish` and TypeScript receipt sealing were
-deleted by the current native four-operation migration above. The retained
-facts are exact `SiteOutputCache` identity, verified materialization, and the
-measured cache opportunity. Fig's earlier
-library-first `output_cache` module composes the existing `ClosedSiteBuild`,
-`SiteOutput`, `FileSiteOutputCache`, and `FileContentStore` without another
-manifest or cached value. The thin `fig output-cache load|publish` exposure lets
-Cycle probe before opening its generator and import its ordinary sealed tree
-after a miss. Hits verify the canonical build manifest and all build objects,
-the exact `sok1` derivation, the `SiteOutput`, and every output CAS object; Cycle
+public `fig output-cache load|publish`, public cache types, and TypeScript
+receipt sealing were deleted by the current native four-operation migration
+above. The retained facts are the measured reuse opportunity and the need to
+bind any private lookup pointer to the exact closed input, renderer recipe,
+output schema, and options. Current Fig storage contains ordinary canonical
+`SiteOutput` receipts and `FileContentStore` objects behind a private pointer;
+it exposes no cache operation or cache value. Hits verify the canonical build,
+the private derivation, the `SiteOutput`, and every output CAS object; Cycle
 materializes into its existing private `AtomicOutputPublication`, independently
 re-verifies receipt/tree bytes, and uses the same atomic replacement path.
-Corrupt cache entries fail loudly rather than becoming false misses. Browser
-Cycle is unchanged. Legacy `fig render` is intentionally not wrapped because
-its mutable staged tree has no `ClosedSiteBuild`; paths/mtimes are not cache
+Corrupt entries fail loudly rather than becoming false misses. Browser Cycle is
+unchanged. Legacy `fig render` is intentionally not wrapped because its mutable
+staged tree has no `ClosedSiteBuild`; paths/mtimes are not cache
 identity. Focused Fig tests are 18/18 plus 4/4 envelope tests; Cycle core is
 54/54 and renderer typecheck is green. Real release two-pass Cycle evidence:
 first render/import 1.588 s; unchanged second invocation 0.487 s wall with Fig

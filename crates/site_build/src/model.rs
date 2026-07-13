@@ -14,15 +14,19 @@ pub const PREPARED_PACKAGE_MEDIA_TYPE: &str = "application/vnd.fhir.package.prep
 /// Wire-format discriminator. A new incompatible contract requires a new enum
 /// variant rather than silently changing existing hashing semantics.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub enum SchemaVersion {
-    #[serde(rename = "site-build/v1")]
-    V1,
     #[serde(rename = "site-build/v2")]
     V2,
 }
 
 /// Canonical project-relative path. Paths are POSIX-style even on native hosts.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
 pub struct SourcePath(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -71,6 +75,8 @@ impl<'de> Deserialize<'de> for SourcePath {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SourceKind {
     Fsh,
@@ -83,6 +89,8 @@ pub enum SourceKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SourceEntry {
     pub kind: SourceKind,
@@ -91,6 +99,16 @@ pub struct SourceEntry {
 
 /// Exact source bytes that define a project revision.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "wire-contract",
+    ts(type = "{ [key in string]: SourceEntry }")
+)]
+#[cfg_attr(
+    feature = "wire-contract",
+    schemars(with = "BTreeMap<String, SourceEntry>")
+)]
 #[serde(transparent)]
 pub struct SourceManifest(BTreeMap<SourcePath, SourceEntry>);
 
@@ -121,8 +139,10 @@ impl SourceManifest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct ProjectRevision {
+pub struct ProjectIdentity {
     pub project_id: String,
     /// An SCM revision when available; otherwise a caller-defined immutable
     /// revision label. Exact source hashes remain authoritative.
@@ -132,6 +152,10 @@ pub struct ProjectRevision {
 
 /// An exact FHIR package coordinate (`package.id#version`).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
 pub struct PackageCoordinate(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -211,6 +235,8 @@ impl<'de> Deserialize<'de> for PackageCoordinate {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct LockedPackage {
     pub coordinate: PackageCoordinate,
@@ -225,6 +251,16 @@ pub struct LockedPackage {
 /// Exact package closure. Keys are repeated in each value so a key/value mismatch
 /// cannot be hidden by a serialization adapter.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    feature = "wire-contract",
+    ts(type = "{ [key in string]: LockedPackage }")
+)]
+#[cfg_attr(
+    feature = "wire-contract",
+    schemars(with = "BTreeMap<String, LockedPackage>")
+)]
 #[serde(transparent)]
 pub struct PackageLock(BTreeMap<PackageCoordinate, LockedPackage>);
 
@@ -252,6 +288,8 @@ impl PackageLock {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ProducerRef {
     pub id: String,
@@ -268,6 +306,8 @@ impl ProducerRef {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RenderMode {
     NativeTemplate,
@@ -275,18 +315,24 @@ pub enum RenderMode {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RenderTarget {
     pub renderer: ProducerRef,
     pub mode: RenderMode,
     pub fhir_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", ts(optional))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "PackageCoordinate"))]
     pub template: Option<PackageCoordinate>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub parameters: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ResourceKey {
     pub resource_type: String,
@@ -294,6 +340,8 @@ pub struct ResourceKey {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FragmentKind {
     Narrative,
@@ -308,6 +356,8 @@ pub enum FragmentKind {
 /// guide as a whole (for example dependency/summary material) rather than one
 /// resource, so resource scope must not be fabricated for them.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FragmentScope {
     WholeIg,
@@ -318,6 +368,8 @@ pub enum FragmentScope {
 /// authored input, Publisher runtime, and generator are distinct artifacts until
 /// an explicit assembly policy chooses which one is served.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AssetNamespace {
     Authored,
@@ -329,6 +381,8 @@ pub enum AssetNamespace {
 
 /// Typed identity of one semantic or rendered artifact.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ArtifactKey {
     SemanticModel {
@@ -357,6 +411,8 @@ pub enum ArtifactKey {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReadDependency {
     Source { path: SourcePath },
@@ -366,6 +422,8 @@ pub enum ReadDependency {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactProvenance {
     pub producer: ProducerRef,
@@ -375,6 +433,8 @@ pub struct ArtifactProvenance {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticSeverity {
     Information,
@@ -383,6 +443,8 @@ pub enum DiagnosticSeverity {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SourceLocation {
     pub path: SourcePath,
@@ -393,6 +455,8 @@ pub struct SourceLocation {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct BuildDiagnostic {
     /// Stable producer-assigned emission order. Keeping it in the value preserves
@@ -403,6 +467,8 @@ pub struct BuildDiagnostic {
     pub code: String,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", ts(optional))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "SourceLocation"))]
     pub location: Option<SourceLocation>,
 }
 
@@ -430,6 +496,8 @@ impl BuildDiagnostic {
 /// State is exhaustive on purpose. There is no absent/null state that a consumer
 /// could accidentally interpret as either "not requested" or "failed".
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum ArtifactState {
     Ready {
@@ -448,6 +516,8 @@ pub enum ArtifactState {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ArtifactRecord {
     pub key: ArtifactKey,
@@ -460,6 +530,10 @@ pub struct ArtifactRecord {
 /// Sorted typed artifact catalog. The wire shape is a list because complex enum
 /// keys cannot be represented faithfully as JSON object property names.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "Array<ArtifactRecord>"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "Vec<ArtifactRecord>"))]
 pub struct ArtifactCatalog(BTreeMap<ArtifactKey, ArtifactRecord>);
 
 impl ArtifactCatalog {
@@ -498,6 +572,8 @@ impl ArtifactCatalog {
 /// so this set contains roots rather than requiring callers to duplicate the
 /// transitive closure manually.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RenderPlan {
     required_artifacts: BTreeSet<ArtifactKey>,
@@ -534,8 +610,6 @@ impl<'de> Deserialize<'de> for ArtifactCatalog {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ContractError {
-    #[error("unsupported site build schema {0:?}")]
-    UnsupportedSchemaVersion(SchemaVersion),
     #[error("duplicate source path {0}")]
     DuplicateSource(SourcePath),
     #[error("duplicate package {0}")]
@@ -653,11 +727,13 @@ impl std::error::Error for SealError {}
 /// Immutable v2 build handoff. Fields are private so mutation cannot invalidate
 /// the content-derived `build_id`; create a new value when an artifact resolves.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SiteBuild {
     schema_version: SchemaVersion,
     build_id: BuildId,
-    project: ProjectRevision,
+    project: ProjectIdentity,
     package_lock: PackageLock,
     render_target: RenderTarget,
     render_plan: RenderPlan,
@@ -669,7 +745,7 @@ pub struct SiteBuild {
 #[serde(rename_all = "camelCase")]
 struct HashPayload<'a> {
     schema_version: SchemaVersion,
-    project: &'a ProjectRevision,
+    project: &'a ProjectIdentity,
     package_lock: &'a PackageLock,
     render_target: &'a RenderTarget,
     render_plan: &'a RenderPlan,
@@ -682,7 +758,7 @@ struct HashPayload<'a> {
 struct SiteBuildWire {
     schema_version: SchemaVersion,
     build_id: BuildId,
-    project: ProjectRevision,
+    project: ProjectIdentity,
     package_lock: PackageLock,
     render_target: RenderTarget,
     render_plan: RenderPlan,
@@ -692,7 +768,7 @@ struct SiteBuildWire {
 
 impl SiteBuild {
     pub fn new(
-        project: ProjectRevision,
+        project: ProjectIdentity,
         package_lock: PackageLock,
         render_target: RenderTarget,
         render_plan: RenderPlan,
@@ -722,7 +798,7 @@ impl SiteBuild {
         &self.build_id
     }
 
-    pub fn project(&self) -> &ProjectRevision {
+    pub fn project(&self) -> &ProjectIdentity {
         &self.project
     }
 
@@ -783,9 +859,6 @@ impl SiteBuild {
     }
 
     fn validate_contract(&self) -> Result<(), ContractError> {
-        if self.schema_version != SchemaVersion::V2 {
-            return Err(ContractError::UnsupportedSchemaVersion(self.schema_version));
-        }
         if self.project.project_id.trim().is_empty()
             || self.project.revision.trim().is_empty()
             || self.render_target.renderer.id.trim().is_empty()
@@ -909,6 +982,10 @@ impl SiteBuild {
 /// wrapper is the value an external builder should accept when callbacks are not
 /// part of its architecture.
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "SiteBuild"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "SiteBuild"))]
 #[serde(transparent)]
 pub struct ClosedSiteBuild(SiteBuild);
 

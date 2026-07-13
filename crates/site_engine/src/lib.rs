@@ -20,24 +20,29 @@ use std::rc::Rc;
 use package_store::{DirEntry, PackageSource};
 
 mod compilation;
+mod events;
 mod preparation;
 mod render_surface;
 mod runtime;
 
 pub use compilation::{
-    CompilationDefinition, CompilationDefinitionKind, CompilationDiagnostic, CompilationOutcome,
-    CompilationResource, CompilationTransition, ProjectRevision, ResolvedPackageClosure,
+    CompilationDefinition, CompilationDefinitionKind, CompilationDiagnostic,
+    CompilationDiagnosticSeverity, CompilationOutcome, CompilationResource, ProjectRevision,
+    ResolvedPackageClosure,
+};
+pub use events::{
+    BuildError, BuildErrorCode, BuildErrorPhase, BuildEvent, BuildOperation, BuildStage,
 };
 pub use preparation::{
-    GeneratorSpec, PackageEnvironment, PrepareMetrics, PrepareProjectError, PrepareResult,
-    PreparedProjectResult, TemplateResolution,
+    GeneratorKind, GeneratorSpec, PackageEnvironment, PackageProvider, PrepareResult,
+    PreparedProjectResult, ProjectSource, TemplateResolution,
 };
 pub(crate) use render_surface::{
     build_render_semantics, build_render_state_from_semantics, RenderState, SiteOptions,
 };
 pub use runtime::{
-    ExternalFinalizeInput, OutputCatalog, OutputDescriptor, OutputResourceSubject,
-    OutputSubjectPage, PreparedOutput, RenderedOutput, SiteEngine,
+    OutputCatalog, OutputDescriptor, OutputKind, OutputPageKind, OutputResourceSubject,
+    OutputSubjectPage, SiteEngine,
 };
 
 /// Cloneable, resolver-scoped view of one immutable package source.

@@ -1,10 +1,9 @@
 //! Exact, renderer-neutral identity for one complete materialized site tree.
 //!
-//! [`OutputCacheKey`] is known before rendering and is therefore suitable for
-//! cache lookup. It binds a closed SiteBuild to the renderer implementation and
-//! recipe digest, output schema, and explicit options. [`SiteOutputId`] also
-//! binds the sorted path/content inventory and is the post-render integrity
-//! identity. Neither identity contains a host path or mutable project alias.
+//! [`SiteOutputId`] binds the sorted path/content inventory and is the
+//! post-render integrity identity. Private hosts may derive optimization keys
+//! from the functional fields, but no cache identity is part of this contract.
+//! The identity contains no host path or mutable project alias.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -17,6 +16,22 @@ use crate::{canonical_json_bytes, CanonicalError, ClosedSiteBuild, ContentRef, S
 
 pub const SITE_OUTPUT_SCHEMA: &str = "site-output/v1";
 pub const SITE_OUTPUT_MANIFEST_PATH: &str = "site-output.json";
+
+#[cfg(feature = "wire-contract")]
+#[derive(schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct RequiredMediaContentRefSchema {
+    sha256: String,
+    byte_length: u64,
+    media_type: String,
+}
+
+#[cfg(feature = "wire-contract")]
+#[derive(schemars::JsonSchema)]
+enum SiteOutputSchemaVersion {
+    #[serde(rename = "site-output/v1")]
+    V1,
+}
 
 /// Exact closed SiteBuild input identity.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -119,16 +134,22 @@ impl<'de> Deserialize<'de> for OutputPath {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RendererImplementation {
     pub id: String,
     pub version: String,
     /// Digest of the exact renderer code/assets/toolchain recipe used for this
     /// invocation. Human version labels alone are not cache-safe.
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub recipe_sha256: Sha256Digest,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OutputProducer {
     pub id: String,
@@ -136,14 +157,30 @@ pub struct OutputProducer {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(optional_fields))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SiteOutputFile {
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub path: OutputPath,
+    #[cfg_attr(
+        feature = "wire-contract",
+        ts(type = "ContentRef & { mediaType: string }")
+    )]
+    #[cfg_attr(
+        feature = "wire-contract",
+        schemars(with = "RequiredMediaContentRefSchema")
+    )]
     pub content: ContentRef,
     pub producer: OutputProducer,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", ts(optional, type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub owner: Option<OutputPath>,
 }
 
@@ -196,12 +233,6 @@ macro_rules! prefixed_id {
 }
 
 prefixed_id!(
-    OutputCacheKey,
-    OutputCacheKeyError,
-    "sok1-sha256:",
-    "output cache key must be 'sok1-sha256:' followed by 64 lowercase hexadecimal characters"
-);
-prefixed_id!(
     SiteOutputId,
     SiteOutputIdError,
     "so1-sha256:",
@@ -209,15 +240,22 @@ prefixed_id!(
 );
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SiteOutput {
+    #[cfg_attr(feature = "wire-contract", ts(type = "\"site-output/v1\""))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "SiteOutputSchemaVersion"))]
     schema_version: String,
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     input_build_id: OutputInputId,
     renderer: RendererImplementation,
     output_schema: String,
     options: BTreeMap<String, String>,
-    cache_key: OutputCacheKey,
     files: Vec<SiteOutputFile>,
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     output_id: SiteOutputId,
 }
 
@@ -229,19 +267,8 @@ struct SiteOutputWire {
     renderer: RendererImplementation,
     output_schema: String,
     options: BTreeMap<String, String>,
-    cache_key: OutputCacheKey,
     files: Vec<SiteOutputFile>,
     output_id: SiteOutputId,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CacheKeyPayload<'a> {
-    schema_version: &'a str,
-    input_build_id: &'a OutputInputId,
-    renderer: &'a RendererImplementation,
-    output_schema: &'a str,
-    options: &'a BTreeMap<String, String>,
 }
 
 #[derive(Serialize)]
@@ -252,7 +279,6 @@ struct OutputIdPayload<'a> {
     renderer: &'a RendererImplementation,
     output_schema: &'a str,
     options: &'a BTreeMap<String, String>,
-    cache_key: &'a OutputCacheKey,
     files: &'a [SiteOutputFile],
 }
 
@@ -270,13 +296,6 @@ pub enum SiteOutputError {
     MissingOwner { path: OutputPath, owner: OutputPath },
     #[error("invalid content reference for output {0}")]
     InvalidContent(OutputPath),
-    #[error(
-        "output cache key mismatch: document has {actual}, canonical inputs require {expected}"
-    )]
-    CacheKeyMismatch {
-        actual: OutputCacheKey,
-        expected: OutputCacheKey,
-    },
     #[error(
         "site output id mismatch: document has {actual}, canonical content requires {expected}"
     )]
@@ -312,12 +331,10 @@ impl SiteOutput {
             renderer,
             output_schema: output_schema.into(),
             options,
-            cache_key: OutputCacheKey::from_digest(placeholder.clone()),
             files,
             output_id: SiteOutputId::from_digest(placeholder),
         };
         output.validate_contract()?;
-        output.cache_key = output.expected_cache_key()?;
         output.output_id = output.expected_output_id()?;
         Ok(output)
     }
@@ -337,9 +354,6 @@ impl SiteOutput {
     pub fn options(&self) -> &BTreeMap<String, String> {
         &self.options
     }
-    pub fn cache_key(&self) -> &OutputCacheKey {
-        &self.cache_key
-    }
     pub fn files(&self) -> &[SiteOutputFile] {
         &self.files
     }
@@ -358,13 +372,6 @@ impl SiteOutput {
             ));
         }
         self.validate_contract()?;
-        let expected_cache_key = self.expected_cache_key()?;
-        if self.cache_key != expected_cache_key {
-            return Err(SiteOutputError::CacheKeyMismatch {
-                actual: self.cache_key.clone(),
-                expected: expected_cache_key,
-            });
-        }
         let expected_output_id = self.expected_output_id()?;
         if self.output_id != expected_output_id {
             return Err(SiteOutputError::OutputIdMismatch {
@@ -395,30 +402,6 @@ impl SiteOutput {
         Ok(())
     }
 
-    /// Complete cache-hit gate: exact closed input plus every addressed byte.
-    pub fn verify_cached(
-        &self,
-        input: &ClosedSiteBuild,
-        store: &dyn ContentStore,
-    ) -> Result<(), SiteOutputError> {
-        self.verify_for(input)?;
-        for file in &self.files {
-            store.read(&file.content)?;
-        }
-        Ok(())
-    }
-
-    fn expected_cache_key(&self) -> Result<OutputCacheKey, CanonicalError> {
-        let bytes = canonical_json_bytes(&CacheKeyPayload {
-            schema_version: &self.schema_version,
-            input_build_id: &self.input_build_id,
-            renderer: &self.renderer,
-            output_schema: &self.output_schema,
-            options: &self.options,
-        })?;
-        Ok(OutputCacheKey::from_digest(Sha256Digest::of_bytes(&bytes)))
-    }
-
     fn expected_output_id(&self) -> Result<SiteOutputId, CanonicalError> {
         let bytes = canonical_json_bytes(&OutputIdPayload {
             schema_version: &self.schema_version,
@@ -426,7 +409,6 @@ impl SiteOutput {
             renderer: &self.renderer,
             output_schema: &self.output_schema,
             options: &self.options,
-            cache_key: &self.cache_key,
             files: &self.files,
         })?;
         Ok(SiteOutputId::from_digest(Sha256Digest::of_bytes(&bytes)))
@@ -485,36 +467,6 @@ impl SiteOutput {
     }
 }
 
-impl OutputCacheKey {
-    /// Derive the lookup key before rendering any output bytes.
-    pub fn for_closed(
-        input: &ClosedSiteBuild,
-        renderer: &RendererImplementation,
-        output_schema: &str,
-        options: &BTreeMap<String, String>,
-    ) -> Result<Self, SiteOutputError> {
-        fn valid(value: &str) -> bool {
-            !value.is_empty() && value == value.trim() && !value.contains('\0')
-        }
-        if !valid(&renderer.id)
-            || !valid(&renderer.version)
-            || !valid(output_schema)
-            || options.keys().any(|key| !valid(key))
-        {
-            return Err(SiteOutputError::EmptyIdentity);
-        }
-        let input_build_id = OutputInputId::from_closed(input);
-        let bytes = canonical_json_bytes(&CacheKeyPayload {
-            schema_version: SITE_OUTPUT_SCHEMA,
-            input_build_id: &input_build_id,
-            renderer,
-            output_schema,
-            options,
-        })?;
-        Ok(Self::from_digest(Sha256Digest::of_bytes(&bytes)))
-    }
-}
-
 impl<'de> Deserialize<'de> for SiteOutput {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let wire = SiteOutputWire::deserialize(deserializer)?;
@@ -524,7 +476,6 @@ impl<'de> Deserialize<'de> for SiteOutput {
             renderer: wire.renderer,
             output_schema: wire.output_schema,
             options: wire.options,
-            cache_key: wire.cache_key,
             files: wire.files,
             output_id: wire.output_id,
         };

@@ -5,7 +5,7 @@ use site_build::*;
 
 fn closed(project: &str) -> ClosedSiteBuild {
     SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: project.into(),
             revision: "exact-sources".into(),
             sources: SourceManifest::default(),
@@ -49,7 +49,7 @@ fn file(path: &str, bytes: &[u8]) -> SiteOutputFile {
 }
 
 #[test]
-fn cache_key_binds_exact_derivation_and_output_id_adds_bytes() {
+fn output_id_binds_exact_derivation_and_bytes() {
     let input = closed("example.ig");
     let options = BTreeMap::from([("minify".into(), "true".into())]);
     let original = SiteOutput::new(
@@ -60,11 +60,6 @@ fn cache_key_binds_exact_derivation_and_output_id_adds_bytes() {
         [file("index.html", b"first")],
     )
     .unwrap();
-    assert_eq!(
-        OutputCacheKey::for_closed(&input, &renderer(b"recipe-a"), "static-site/v1", &options)
-            .unwrap(),
-        original.cache_key().clone()
-    );
     let changed_bytes = SiteOutput::new(
         &input,
         renderer(b"recipe-a"),
@@ -73,7 +68,6 @@ fn cache_key_binds_exact_derivation_and_output_id_adds_bytes() {
         [file("index.html", b"second")],
     )
     .unwrap();
-    assert_eq!(original.cache_key(), changed_bytes.cache_key());
     assert_ne!(original.output_id(), changed_bytes.output_id());
 
     let changed_recipe = SiteOutput::new(
@@ -100,9 +94,9 @@ fn cache_key_binds_exact_derivation_and_output_id_adds_bytes() {
         [file("index.html", b"first")],
     )
     .unwrap();
-    assert_ne!(original.cache_key(), changed_recipe.cache_key());
-    assert_ne!(original.cache_key(), changed_options.cache_key());
-    assert_ne!(original.cache_key(), changed_input.cache_key());
+    assert_ne!(original.output_id(), changed_recipe.output_id());
+    assert_ne!(original.output_id(), changed_options.output_id());
+    assert_ne!(original.output_id(), changed_input.output_id());
 }
 
 #[test]
@@ -155,18 +149,13 @@ fn wire_roundtrip_rechecks_ids() {
         [file("index.html", b"hello")],
     )
     .unwrap();
-    assert!(output.cache_key().as_str().starts_with("sok1-sha256:"));
     assert!(output.output_id().as_str().starts_with("so1-sha256:"));
     let bytes = output.canonical_bytes().unwrap();
     // Fixed independently in Cycle's browser implementation. This catches
     // UTF-8 ordering or canonical-field drift across Rust and JavaScript.
     assert_eq!(
-        output.cache_key().as_str(),
-        "sok1-sha256:5ef64273facec16ccebeeadfef049984a2fc77ae17e7aff1f1d5230274141b43"
-    );
-    assert_eq!(
         output.output_id().as_str(),
-        "so1-sha256:01a26ca9b48d01f109b0cc4e67c32e9c57b626c5a1de551bb5861f9487395bf3"
+        "so1-sha256:b7b26edb6f91cba0e2da1c2c1c550e6a0f47cf2ea0a6faa19dda9d483cb7a8b5"
     );
     assert_eq!(
         serde_json::from_slice::<SiteOutput>(&bytes).unwrap(),
@@ -195,95 +184,6 @@ fn store_verification_reads_every_addressed_byte() {
     assert!(output.verify_store(&store).is_err());
     store.put(&output.files()[0].content, index).unwrap();
     output.verify_store(&store).unwrap();
-    output.verify_cached(&input, &store).unwrap();
+    output.verify_for(&input).unwrap();
     assert!(output.verify_for(&closed("other.ig")).is_err());
-}
-
-#[test]
-fn filesystem_output_cache_is_exact_verified_and_no_clobber() {
-    let input = closed("example.ig");
-    let first_bytes = b"first";
-    let first = SiteOutput::new(
-        &input,
-        renderer(b"recipe"),
-        "static-site/v1",
-        BTreeMap::new(),
-        [file("index.html", first_bytes)],
-    )
-    .unwrap();
-    let temp = tempfile::tempdir().unwrap();
-    let objects = FileContentStore::create(temp.path().join("objects")).unwrap();
-    let cache = FileSiteOutputCache::create(temp.path().join("outputs")).unwrap();
-    assert!(cache
-        .load(first.cache_key(), &input, &objects)
-        .unwrap()
-        .is_none());
-
-    objects.put(&first.files()[0].content, first_bytes).unwrap();
-    cache.publish(&first, &input, &objects).unwrap();
-    cache.publish(&first, &input, &objects).unwrap();
-    assert_eq!(
-        cache
-            .load(first.cache_key(), &input, &objects)
-            .unwrap()
-            .unwrap()
-            .output_id(),
-        first.output_id()
-    );
-
-    // The lookup key deliberately excludes output bytes. A renderer producing
-    // different bytes under the same exact recipe is nondeterministic and must
-    // not replace the already-published cache entry.
-    let second_bytes = b"second";
-    let second = SiteOutput::new(
-        &input,
-        renderer(b"recipe"),
-        "static-site/v1",
-        BTreeMap::new(),
-        [file("index.html", second_bytes)],
-    )
-    .unwrap();
-    assert_eq!(first.cache_key(), second.cache_key());
-    objects
-        .put(&second.files()[0].content, second_bytes)
-        .unwrap();
-    assert!(matches!(
-        cache.publish(&second, &input, &objects),
-        Err(SiteOutputCacheError::Collision { .. })
-    ));
-    assert_eq!(
-        cache
-            .load(first.cache_key(), &input, &objects)
-            .unwrap()
-            .unwrap()
-            .output_id(),
-        first.output_id()
-    );
-}
-
-#[test]
-fn filesystem_output_cache_rejects_missing_or_corrupt_objects() {
-    let input = closed("example.ig");
-    let bytes = b"body";
-    let output = SiteOutput::new(
-        &input,
-        renderer(b"recipe"),
-        "static-site/v1",
-        BTreeMap::new(),
-        [file("index.html", bytes)],
-    )
-    .unwrap();
-    let temp = tempfile::tempdir().unwrap();
-    let objects = FileContentStore::create(temp.path().join("objects")).unwrap();
-    let cache = FileSiteOutputCache::create(temp.path().join("outputs")).unwrap();
-    assert!(cache.publish(&output, &input, &objects).is_err());
-
-    objects.put(&output.files()[0].content, bytes).unwrap();
-    cache.publish(&output, &input, &objects).unwrap();
-    std::fs::write(
-        objects.object_path(&output.files()[0].content.sha256),
-        b"bad!",
-    )
-    .unwrap();
-    assert!(cache.load(output.cache_key(), &input, &objects).is_err());
 }

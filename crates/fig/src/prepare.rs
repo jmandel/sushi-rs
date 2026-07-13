@@ -29,8 +29,8 @@ use serde::Serialize;
 #[cfg(test)]
 use serde_json::Value;
 use site_build::{
-    cycle_semantic, ArtifactState, ClosedSiteBuild, ContentRef, LockedPackage, PackageCoordinate,
-    PackageLock, Sha256Digest, SourceEntry, SourceKind, SourceManifest, SourcePath,
+    cycle_semantic, ArtifactState, ClosedSiteBuild, ContentRef, PackageCoordinate, Sha256Digest,
+    SourceEntry, SourceKind, SourceManifest, SourcePath,
 };
 use walkdir::WalkDir;
 
@@ -38,13 +38,10 @@ use walkdir::WalkDir;
 pub const CYCLE_SITE_TARGET: &str = cycle_semantic::TARGET;
 pub const PUBLISHER_SITE_TARGET: &str = "publisher-site/v1";
 
-/// All host inputs for one closed bundle. Every path is explicit; this API never
-/// consults a default package cache and never performs package acquisition.
+/// Target options shared by filesystem and future native adapters. Paths live
+/// only on ProjectSource/PackageProvider/destination adapters.
 #[derive(Clone, Debug)]
-pub struct PrepareConfig {
-    pub ig_dir: PathBuf,
-    pub cache_dir: PathBuf,
-    pub out_dir: PathBuf,
+pub struct PrepareOptions {
     pub target: String,
     pub template_coordinate: Option<String>,
     pub active_tables: bool,
@@ -52,14 +49,11 @@ pub struct PrepareConfig {
     pub build_epoch_secs: i64,
 }
 
-fn site_engine_inputs(
-    sources: &SourceSnapshot,
-    packages: &PackageSnapshot,
-    closure: &ResolvedClosure,
-) -> Result<(
-    site_engine::ProjectRevision,
-    site_engine::PackageEnvironment,
-)> {
+fn capture_project_revision(
+    sources: &CapturedProjectFiles,
+    environment: &site_engine::PackageEnvironment,
+    resolved: &site_engine::ResolvedPackageClosure,
+) -> Result<site_engine::ProjectRevision> {
     let config_path = SourcePath::parse("sushi-config.yaml").expect("static path");
     let config_ref = sources
         .manifest
@@ -70,26 +64,8 @@ fn site_engine_inputs(
         .context("sushi-config.yaml must be UTF-8")?
         .to_string();
 
-    let mut prepared = Vec::new();
-    for (coordinate, locked) in packages.lock.iter() {
-        let label = coordinate.to_string();
-        let bytes = packages
-            .objects
-            .get(&locked.content.sha256)
-            .ok_or_else(|| anyhow!("package object for {label} is absent"))?;
-        let package = package_store::PreparedPackage::decode(bytes)
-            .with_context(|| format!("decode prepared package {label}"))?;
-        if package.label != label {
-            bail!(
-                "package lock {label} selected carrier for {}",
-                package.label
-            );
-        }
-        prepared.push(package);
-    }
-    let environment = site_engine::PackageEnvironment::new(prepared).map_err(anyhow::Error::msg)?;
     let compile_view = environment
-        .scoped(&closure.resolved.labels, "fig prepare")
+        .scoped(&resolved.labels, "fig prepare")
         .map_err(anyhow::Error::msg)?;
     let package_root = compile_view.root().to_path_buf();
     let store = package_store::PackageStore::for_project_with_config(
@@ -136,15 +112,12 @@ fn site_engine_inputs(
             site_files.insert(path.as_str().to_string(), bytes.to_vec());
         }
     }
-    Ok((
-        site_engine::ProjectRevision {
-            config,
-            fsh,
-            predefined,
-            site_files,
-        },
-        environment,
-    ))
+    Ok(site_engine::ProjectRevision {
+        config,
+        fsh,
+        predefined,
+        site_files,
+    })
 }
 
 /// Stable summary returned by the library and the CLI JSON envelope.
@@ -163,7 +136,7 @@ pub struct PrepareOutcome {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct SourceSnapshot {
+struct CapturedProjectFiles {
     manifest: SourceManifest,
     objects: BTreeMap<Sha256Digest, Vec<u8>>,
 }
@@ -178,10 +151,151 @@ struct ResolvedClosure {
     resolved: site_engine::ResolvedPackageClosure,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct PackageSnapshot {
-    lock: PackageLock,
+struct CapturedPackages {
+    environment: Option<site_engine::PackageEnvironment>,
+    identities: Vec<(String, String)>,
     objects: BTreeMap<Sha256Digest, Vec<u8>>,
+}
+
+impl std::fmt::Debug for CapturedPackages {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CapturedPackages")
+            .field("identities", &self.identities)
+            .field("object_count", &self.objects.len())
+            .finish()
+    }
+}
+
+struct FilesystemProjectSource {
+    root: PathBuf,
+    captured: Option<CapturedProjectFiles>,
+}
+
+impl FilesystemProjectSource {
+    fn open(root: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            root: canonical_existing_dir(root.as_ref(), "IG directory")?,
+            captured: None,
+        })
+    }
+
+    fn captured(&mut self) -> Result<&CapturedProjectFiles> {
+        if self.captured.is_none() {
+            self.captured = Some(collect_authored_sources(&self.root)?);
+        }
+        Ok(self.captured.as_ref().expect("captured source installed"))
+    }
+
+    fn verify_unchanged(&self) -> Result<()> {
+        let before = self
+            .captured
+            .as_ref()
+            .ok_or_else(|| anyhow!("project source was never captured"))?;
+        if before != &collect_authored_sources(&self.root)? {
+            bail!("authored inputs changed while fig prepare was compiling; no bundle was emitted");
+        }
+        Ok(())
+    }
+}
+
+impl site_engine::ProjectSource for FilesystemProjectSource {
+    fn config(&mut self) -> Result<String, String> {
+        let sources = self.captured().map_err(|error| format!("{error:#}"))?;
+        let path = SourcePath::parse("sushi-config.yaml").expect("static path");
+        let entry = sources
+            .manifest
+            .get(&path)
+            .ok_or_else(|| "authored source manifest has no sushi-config.yaml".to_string())?;
+        let bytes = addressed_bytes(&sources.objects, &entry.content, "source")
+            .map_err(|error| format!("{error:#}"))?;
+        std::str::from_utf8(bytes)
+            .map(str::to_string)
+            .map_err(|error| format!("sushi-config.yaml must be UTF-8: {error}"))
+    }
+
+    fn capture(
+        &mut self,
+        packages: &site_engine::PackageEnvironment,
+        resolved: &site_engine::ResolvedPackageClosure,
+    ) -> Result<site_engine::ProjectRevision, String> {
+        let sources = self
+            .captured()
+            .map_err(|error| format!("{error:#}"))?
+            .clone();
+        capture_project_revision(&sources, packages, resolved).map_err(|error| format!("{error:#}"))
+    }
+}
+
+struct FilesystemPackageProvider {
+    cache: PathBuf,
+    snapshot: Option<CapturedPackages>,
+    closure: Option<ResolvedClosure>,
+}
+
+impl FilesystemPackageProvider {
+    fn open(cache: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            cache: canonical_existing_dir(cache.as_ref(), "package cache")?,
+            snapshot: None,
+            closure: None,
+        })
+    }
+
+    fn core(&self) -> Result<&PackageCoordinate> {
+        self.closure
+            .as_ref()
+            .map(|closure| &closure.core)
+            .ok_or_else(|| anyhow!("package provider was never resolved"))
+    }
+
+    fn verify_unchanged(&self, config: &str, generator: &site_engine::GeneratorSpec) -> Result<()> {
+        let before_closure = self
+            .closure
+            .as_ref()
+            .ok_or_else(|| anyhow!("package provider was never resolved"))?;
+        let after_closure = resolve_prepare_closure(config, &self.cache, generator)?;
+        if before_closure != &after_closure {
+            bail!("resolved package closure changed while fig prepare was compiling; no bundle was emitted");
+        }
+        let before = self
+            .snapshot
+            .as_ref()
+            .ok_or_else(|| anyhow!("package provider was never captured"))?;
+        let after = collect_package_snapshot(&self.cache, &after_closure)?;
+        if before.identities != after.identities || before.objects != after.objects {
+            bail!("package bytes changed while fig prepare was compiling; no bundle was emitted");
+        }
+        Ok(())
+    }
+}
+
+impl site_engine::PackageProvider for FilesystemPackageProvider {
+    fn resolve(
+        &mut self,
+        config: &str,
+        generator: &site_engine::GeneratorSpec,
+    ) -> Result<site_engine::ResolvedPackageClosure, String> {
+        let closure = resolve_prepare_closure(config, &self.cache, generator)
+            .map_err(|error| format!("{error:#}"))?;
+        let resolved = closure.resolved.clone();
+        self.snapshot = Some(
+            collect_package_snapshot(&self.cache, &closure)
+                .map_err(|error| format!("{error:#}"))?,
+        );
+        self.closure = Some(closure);
+        Ok(resolved)
+    }
+
+    fn environment(
+        &mut self,
+        _resolved: &site_engine::ResolvedPackageClosure,
+    ) -> Result<site_engine::PackageEnvironment, String> {
+        self.snapshot
+            .as_mut()
+            .and_then(|snapshot| snapshot.environment.take())
+            .ok_or_else(|| "filesystem package environment was already consumed".into())
+    }
 }
 
 /// Compile and project an IG exactly once, then publish its sealed target bundle.
@@ -191,90 +305,62 @@ struct PackageSnapshot {
 /// compilation remain useful mutation diagnostics, but are not relied on for
 /// correctness: even an A→B→A live mutation cannot influence the result while
 /// retaining A's manifest.
-pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
-    if config.target != CYCLE_SITE_TARGET && config.target != PUBLISHER_SITE_TARGET {
+fn prepare_with_adapters(
+    mut source: FilesystemProjectSource,
+    mut packages: FilesystemPackageProvider,
+    destination: &Path,
+    options: &PrepareOptions,
+) -> Result<PrepareOutcome> {
+    if options.target != CYCLE_SITE_TARGET && options.target != PUBLISHER_SITE_TARGET {
         bail!(
             "unsupported prepare target {:?}; supported targets are {CYCLE_SITE_TARGET} and {PUBLISHER_SITE_TARGET}",
-            config.target
+            options.target
         );
     }
 
-    let ig_dir = canonical_existing_dir(&config.ig_dir, "IG directory")?;
-    let cache_dir = canonical_existing_dir(&config.cache_dir, "package cache")?;
     reject_ambient_liquid_asset_dirs()?;
     // Resolve and reject an authored-tree destination before creating output
     // parents; otherwise a symlinked parent could mutate input/ on an error path.
-    let intended_output = resolved_destination(&config.out_dir)?;
-    ensure_no_source_output_overlap(&ig_dir, &intended_output)?;
-    let output = crate::publication::new_directory_destination(&config.out_dir)?;
+    let intended_output = resolved_destination(destination)?;
+    ensure_no_source_output_overlap(&source.root, &intended_output)?;
+    let output = crate::publication::new_directory_destination(destination)?;
     // Recheck the actual canonical parent after creation to close the race as
     // far as the portable filesystem API permits.
-    ensure_no_source_output_overlap(&ig_dir, &output)?;
+    ensure_no_source_output_overlap(&source.root, &output)?;
 
-    let source_before = collect_authored_sources(&ig_dir)?;
-    let config_path = SourcePath::parse("sushi-config.yaml").expect("static path");
-    let config_ref = source_before
-        .manifest
-        .get(&config_path)
-        .ok_or_else(|| anyhow!("authored source manifest has no sushi-config.yaml"))?;
-    let config_bytes = source_before
-        .objects
-        .get(&config_ref.content.sha256)
-        .ok_or_else(|| anyhow!("sushi-config.yaml content object is absent"))?;
-    let config_text =
-        std::str::from_utf8(config_bytes).context("sushi-config.yaml must be UTF-8")?;
-
-    let closure_before = resolve_prepare_closure(config, config_text, &cache_dir)?;
-    let packages_before = collect_package_snapshot(&cache_dir, &closure_before)?;
-    let (inputs, environment) =
-        site_engine_inputs(&source_before, &packages_before, &closure_before)?;
-    let mut engine = site_engine::SiteEngine::default();
-    let generator = match config.target.as_str() {
+    let generator = match options.target.as_str() {
         CYCLE_SITE_TARGET => site_engine::GeneratorSpec::Cycle {
-            build_epoch_secs: config.build_epoch_secs,
+            build_epoch_secs: options.build_epoch_secs,
             liquid_asset_dirs: vec!["input/includes".into()],
             branch: None,
             revision: None,
         },
         PUBLISHER_SITE_TARGET => site_engine::GeneratorSpec::Publisher {
-            template_coordinate: config
+            template_coordinate: options
                 .template_coordinate
                 .clone()
-                .expect("Publisher template was checked"),
-            build_epoch_secs: config.build_epoch_secs,
-            active_tables: config.active_tables,
-            run_uuid: config.run_uuid.clone(),
+                .ok_or_else(|| anyhow!("Publisher prepare requires --template <id#version>"))?,
+            build_epoch_secs: options.build_epoch_secs,
+            active_tables: options.active_tables,
+            run_uuid: options.run_uuid.clone(),
         },
         _ => unreachable!("target validated"),
     };
+    let config_text =
+        site_engine::ProjectSource::config(&mut source).map_err(anyhow::Error::msg)?;
+    let mut engine = site_engine::SiteEngine::default();
     let prepared = engine
-        .prepare_project(
-            inputs,
-            closure_before.resolved.clone(),
-            generator,
-            environment,
-        )
+        .prepare_project(&mut source, &mut packages, generator.clone())
         .map_err(anyhow::Error::msg)?;
-    let handle = prepared.site.handle.clone();
+    let handle = prepared.site.build_id.clone();
     let site_build = prepared.site.site_build;
 
-    let source_after = collect_authored_sources(&ig_dir)?;
-    if source_before != source_after {
-        bail!("authored inputs changed while fig prepare was compiling; no bundle was emitted");
-    }
-    let closure_after = resolve_prepare_closure(config, config_text, &cache_dir)?;
-    if closure_before != closure_after {
-        bail!("resolved package closure changed while fig prepare was compiling; no bundle was emitted");
-    }
-    let packages_after = collect_package_snapshot(&cache_dir, &closure_after)?;
-    if packages_before != packages_after {
-        bail!("package bytes changed while fig prepare was compiling; no bundle was emitted");
-    }
-    drop(packages_after);
+    source.verify_unchanged()?;
+    packages.verify_unchanged(&config_text, &generator)?;
 
     let project_id = site_build.site_build().project().project_id.clone();
     let fhir_version = site_build.site_build().render_target().fhir_version.clone();
-    validate_core_for_fhir_version(&closure_before.core, &fhir_version)?;
+    validate_core_for_fhir_version(packages.core()?, &fhir_version)?;
     let mut objects = BTreeMap::new();
     for content in bundle_content_refs(&site_build) {
         let bytes = engine
@@ -292,7 +378,7 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     )?;
 
     Ok(PrepareOutcome {
-        target: config.target.clone(),
+        target: options.target.clone(),
         out: output.display().to_string(),
         build_id: site_build.site_build().build_id().to_string(),
         project_id,
@@ -304,19 +390,36 @@ pub fn prepare(config: &PrepareConfig) -> Result<PrepareOutcome> {
     })
 }
 
+/// Filesystem host adapter for the canonical `prepare(project, generatorSpec)`
+/// operation. Paths are captured into immutable project/package values before
+/// SiteEngine observes them; the concrete adapters are deliberately private.
+pub fn prepare(
+    project_root: &Path,
+    package_cache: &Path,
+    destination: &Path,
+    options: &PrepareOptions,
+) -> Result<PrepareOutcome> {
+    prepare_with_adapters(
+        FilesystemProjectSource::open(project_root)?,
+        FilesystemPackageProvider::open(package_cache)?,
+        destination,
+        options,
+    )
+}
+
 fn resolve_prepare_closure(
-    config: &PrepareConfig,
     config_text: &str,
     cache_dir: &Path,
+    generator: &site_engine::GeneratorSpec,
 ) -> Result<ResolvedClosure> {
     let mut closure = resolve_exact_closure(config_text, cache_dir)?;
-    if config.target != PUBLISHER_SITE_TARGET {
+    let site_engine::GeneratorSpec::Publisher {
+        template_coordinate: template,
+        ..
+    } = generator
+    else {
         return Ok(closure);
-    }
-    let template = config
-        .template_coordinate
-        .as_deref()
-        .ok_or_else(|| anyhow!("Publisher prepare requires --template <id#version>"))?;
+    };
     let resolution = package_store::resolve_template_base_chain(
         &package_store::DiskSource,
         &package_store::TemplatePaths::new(cache_dir),
@@ -414,7 +517,7 @@ fn resolved_destination(path: &Path) -> Result<PathBuf> {
     }
 }
 
-fn collect_authored_sources(ig_dir: &Path) -> Result<SourceSnapshot> {
+fn collect_authored_sources(ig_dir: &Path) -> Result<CapturedProjectFiles> {
     let mut entries = Vec::new();
     let mut objects = BTreeMap::new();
 
@@ -466,7 +569,7 @@ fn collect_authored_sources(ig_dir: &Path) -> Result<SourceSnapshot> {
         Err(error) => return Err(error).with_context(|| format!("inspect {}", input.display())),
     }
 
-    Ok(SourceSnapshot {
+    Ok(CapturedProjectFiles {
         manifest: SourceManifest::from_entries(entries)?,
         objects,
     })
@@ -630,20 +733,10 @@ fn validate_package_component(value: &str, description: &str) -> Result<()> {
 fn collect_package_snapshot(
     cache_dir: &Path,
     closure: &ResolvedClosure,
-) -> Result<PackageSnapshot> {
-    let mut packages = Vec::with_capacity(closure.coordinates.len());
+) -> Result<CapturedPackages> {
+    let mut prepared_packages = Vec::with_capacity(closure.coordinates.len());
+    let mut identities = Vec::with_capacity(closure.coordinates.len());
     let mut objects = BTreeMap::new();
-    let mut closure_versions = package_store::VersionIndex::new();
-    let mut versions_by_id: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for coordinate in &closure.coordinates {
-        versions_by_id
-            .entry(coordinate.package_id().to_string())
-            .or_default()
-            .push(coordinate.version().to_string());
-    }
-    for (id, versions) in versions_by_id {
-        closure_versions.insert(id, versions);
-    }
     for coordinate in &closure.coordinates {
         let label = coordinate.to_string();
         validate_package_component(&label, "package coordinate")?;
@@ -744,24 +837,14 @@ fn collect_package_snapshot(
             media_type: Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE.into()),
         };
         insert_object(&mut objects, content.clone(), carrier.as_ref().clone())?;
-        let dependencies = material
-            .declared_dependencies
-            .iter()
-            .filter_map(|(id, requested)| {
-                package_store::resolve_version(Some(&closure_versions), id, requested)
-                    .ok()
-                    .and_then(|version| PackageCoordinate::new(id, &version).ok())
-                    .filter(|dependency| closure.coordinates.contains(dependency))
-            })
-            .collect();
-        packages.push(LockedPackage {
-            coordinate: coordinate.clone(),
-            content,
-            dependencies,
-        });
+        identities.push((label, content.sha256.to_string()));
+        prepared_packages.push(prepared);
     }
-    Ok(PackageSnapshot {
-        lock: PackageLock::from_packages(packages)?,
+    let environment =
+        site_engine::PackageEnvironment::new(prepared_packages).map_err(anyhow::Error::msg)?;
+    Ok(CapturedPackages {
+        environment: Some(environment),
+        identities,
         objects,
     })
 }
@@ -1152,13 +1235,9 @@ mod tests {
         let files = material.files;
         assert!(files.contains_key(package_store::derived_index::SIDECAR_NAME));
         assert_eq!(files["nested/a.txt"], b"alpha");
-        let locked = snapshot.lock.iter().next().unwrap().1;
-        assert_eq!(
-            locked.content.media_type.as_deref(),
-            Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE)
-        );
-        let carrier = &snapshot.objects[&locked.content.sha256];
-        assert_eq!(locked.content.sha256, Sha256Digest::of_bytes(carrier));
+        let digest = Sha256Digest::parse(snapshot.identities[0].1.clone()).unwrap();
+        let carrier = &snapshot.objects[&digest];
+        assert_eq!(digest, Sha256Digest::of_bytes(carrier));
         let prepared = package_store::PreparedPackage::decode(carrier).unwrap();
         let mut source = package_store::BundleSource::new();
         prepared.mount_into(&mut source);
@@ -1216,8 +1295,8 @@ mod tests {
             b"live mutation",
         );
 
-        let locked = snapshot.lock.iter().next().unwrap().1;
-        let carrier = &snapshot.objects[&locked.content.sha256];
+        let digest = Sha256Digest::parse(snapshot.identities[0].1.clone()).unwrap();
+        let carrier = &snapshot.objects[&digest];
         let package = package_store::PreparedPackage::decode(carrier).unwrap();
         let mut captured = package_store::BundleSource::new();
         package.mount_into(&mut captured);
@@ -1283,15 +1362,20 @@ mod tests {
         );
 
         let snapshot = collect_package_snapshot(&cache, &closure).unwrap();
+        let labels = snapshot
+            .identities
+            .iter()
+            .map(|(label, _)| label.clone())
+            .collect::<BTreeSet<_>>();
         assert_eq!(
-            snapshot.lock.get(&legacy).unwrap().dependencies,
-            BTreeSet::from([terminology_71])
+            labels,
+            BTreeSet::from([
+                legacy.to_string(),
+                current.to_string(),
+                terminology_71.to_string(),
+                terminology_72.to_string(),
+            ])
         );
-        assert_eq!(
-            snapshot.lock.get(&current).unwrap().dependencies,
-            BTreeSet::from([terminology_72])
-        );
-        assert_eq!(snapshot.lock.iter().count(), 4);
     }
 
     #[test]
@@ -1401,7 +1485,7 @@ mod tests {
         };
         emit_bundle(
             &output,
-            b"{\"schemaVersion\":\"site-build/v1\"}",
+            b"{\"schemaVersion\":\"site-build/v2\"}",
             &objects,
             &[expected],
         )

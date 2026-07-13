@@ -18,7 +18,6 @@ mod canonical;
 mod content;
 mod model;
 mod site_output;
-mod site_output_cache;
 
 pub mod cycle_semantic;
 
@@ -27,4 +26,3 @@ pub use content::{BuildId, ContentRef, Sha256Digest};
 pub use model::*;
 pub use prepared_guide::*;
 pub use site_output::*;
-pub use site_output_cache::*;

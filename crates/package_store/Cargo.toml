@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+wire-contract = ["dep:schemars", "dep:ts-rs"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
@@ -14,3 +17,5 @@ rustc-hash.workspace = true
 hex.workspace = true
 sha2.workspace = true
 miniz_oxide.workspace = true
+schemars = { workspace = true, optional = true }
+ts-rs = { workspace = true, optional = true }

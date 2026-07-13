@@ -115,7 +115,7 @@ fn fixture(reverse: bool) -> SiteBuild {
     }
 
     SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo.ig".into(),
             revision: "0123456789abcdef".into(),
             sources,
@@ -151,7 +151,7 @@ fn singleton_fragment_build(state: ArtifactState) -> SiteBuild {
         reads: BTreeSet::new(),
     };
     SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo.ig".into(),
             revision: "rev".into(),
             sources: SourceManifest::default(),
@@ -196,7 +196,7 @@ fn non_bmp_object_keys_have_a_cross_host_v2_hash() {
         name: "root".into(),
     };
     let build = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "unicode.ig".into(),
             revision: "unicode-order".into(),
             sources: SourceManifest::from_entries([
@@ -236,7 +236,7 @@ fn non_bmp_object_keys_have_a_cross_host_v2_hash() {
 fn build_id_changes_when_identity_bearing_content_changes() {
     let original = fixture(false);
     let changed = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo.ig".into(),
             revision: "new-revision".into(),
             sources: original.project().sources.clone(),
@@ -266,14 +266,14 @@ fn serialization_roundtrip_checks_integrity() {
 }
 
 #[test]
-fn v1_wire_values_are_recognized_but_rejected_as_unsupported() {
+fn v1_wire_values_are_not_part_of_the_contract() {
     let mut wire = serde_json::to_value(fixture(false)).unwrap();
     wire["schemaVersion"] = serde_json::Value::String("site-build/v1".into());
 
     let error = serde_json::from_value::<SiteBuild>(wire).unwrap_err();
     assert!(error
         .to_string()
-        .contains("unsupported site build schema V1"));
+        .contains("unknown variant `site-build/v1`"));
 }
 
 #[test]
@@ -410,7 +410,7 @@ fn closing_follows_transitive_artifact_reads() {
         reads: BTreeSet::from([ReadDependency::Artifact { key: deferred_key }]),
     };
     let build = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo.ig".into(),
             revision: "rev".into(),
             sources: SourceManifest::default(),
@@ -436,7 +436,7 @@ fn closing_follows_transitive_artifact_reads() {
 
 #[test]
 fn invalid_failed_state_and_dangling_reads_are_rejected() {
-    let project = ProjectRevision {
+    let project = ProjectIdentity {
         project_id: "demo".into(),
         revision: "rev".into(),
         sources: SourceManifest::default(),
@@ -489,7 +489,7 @@ fn dangling_read_dependencies_are_rejected() {
         }]),
     };
     let error = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo".into(),
             revision: "rev".into(),
             sources: SourceManifest::default(),
@@ -533,7 +533,7 @@ fn package_lock_rejects_a_wire_key_coordinate_mismatch() {
     wire["example.a#1.0.0"]["coordinate"] = serde_json::Value::String("example.b#1.0.0".into());
     let mismatched: PackageLock = serde_json::from_value(wire).unwrap();
     let error = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo".into(),
             revision: "rev".into(),
             sources: SourceManifest::default(),
@@ -580,7 +580,7 @@ fn site_build_v2_rejects_a_non_prepared_package_carrier() {
         dependencies: BTreeSet::new(),
     };
     let error = SiteBuild::new(
-        ProjectRevision {
+        ProjectIdentity {
             project_id: "demo".into(),
             revision: "rev".into(),
             sources: SourceManifest::default(),

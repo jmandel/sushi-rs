@@ -133,11 +133,11 @@ preparation inputs, and recipe/API versions. There is intentionally no browser
 cache of the UI `CompileResult`: it cannot restore compiler semantics into a
 new Session and would be a false cache hit.
 
-Native complete output caching uses `FileSiteOutputCache`. It indexes canonical
-`SiteOutput` manifests by the pre-render `sok1` key, verifies the requested
-closed input and every `ContentStore` object on a hit, publishes atomically with
-no clobber, and reports same-key/different-`so1` output as renderer
-nondeterminism.
+Native complete-output reuse is private host storage, not a `site_build` API.
+The host derives a pre-render pointer from the exact closed input and renderer
+recipe. A hit is accepted only after canonical `SiteOutput`, input-build, and
+every `ContentStore` object verify. Publication is pointer-last/no-clobber, and
+same-pointer/different-`so1` output is renderer nondeterminism.
 
 ## Native and CLI flow
 

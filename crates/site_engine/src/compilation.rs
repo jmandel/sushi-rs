@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{PackageView, SiteEngine};
@@ -59,12 +59,55 @@ impl ResolvedPackageClosure {
 /// One complete immutable project input captured by a `prepare` request. Site
 /// bytes are carried here even though only their normalized page listing
 /// affects semantic compilation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProjectRevision {
     pub config: String,
     pub fsh: BTreeMap<String, String>,
+    #[cfg_attr(feature = "wire-contract", ts(type = "{ [key in string]: unknown }"))]
     pub predefined: BTreeMap<String, Value>,
+    #[serde(with = "base64_file_map")]
+    #[cfg_attr(feature = "wire-contract", ts(type = "{ [key in string]: string }"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "BTreeMap<String, String>"))]
     pub site_files: BTreeMap<String, Vec<u8>>,
+}
+
+mod base64_file_map {
+    use std::collections::BTreeMap;
+
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(files: &BTreeMap<String, Vec<u8>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        files
+            .iter()
+            .map(|(path, bytes)| (path, STANDARD.encode(bytes)))
+            .collect::<BTreeMap<_, _>>()
+            .serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<String, Vec<u8>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        BTreeMap::<String, String>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(path, encoded)| {
+                STANDARD
+                    .decode(encoded)
+                    .map(|bytes| (path.clone(), bytes))
+                    .map_err(|error| {
+                        serde::de::Error::custom(format!("invalid base64 in {path}: {error}"))
+                    })
+            })
+            .collect()
+    }
 }
 
 /// Immutable authored revision installed by the last successful compile call.
@@ -129,12 +172,18 @@ impl CompiledProjectRevision {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
 pub enum CompilationDefinitionKind {
     FshDeclaration,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CompilationDefinition {
     pub kind: CompilationDefinitionKind,
     pub path: String,
@@ -142,24 +191,65 @@ pub struct CompilationDefinition {
     pub column: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum CompilationDiagnosticSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(optional_fields))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CompilationResource {
     pub filename: String,
     pub text: String,
+    #[serde(skip)]
+    #[cfg_attr(feature = "wire-contract", ts(skip))]
+    #[cfg_attr(feature = "wire-contract", schemars(skip))]
     pub body: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
+    pub resource_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "CompilationDefinition"))]
     pub definition: Option<CompilationDefinition>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(optional_fields))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CompilationDiagnostic {
-    pub severity: String,
+    pub severity: CompilationDiagnosticSeverity,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "u32"))]
     pub line: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "CompilationDefinition"))]
     pub owner_definition: Option<CompilationDefinition>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CompilationOutcome {
     pub resources: Vec<CompilationResource>,
     pub diagnostics: Vec<CompilationDiagnostic>,
@@ -168,10 +258,8 @@ pub struct CompilationOutcome {
 /// Result plus the private transition facts a composing host needs to
 /// invalidate downstream preparation caches. These facts are not wire fields.
 #[derive(Debug)]
-pub struct CompilationTransition {
-    pub outcome: CompilationOutcome,
-    pub semantic_changed: bool,
-    pub cache_hit: bool,
+pub(crate) struct CompilationTransition {
+    pub(crate) outcome: CompilationOutcome,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -266,7 +354,7 @@ impl SiteEngine {
     /// Compile typed project inputs against one explicit resolver-scoped package
     /// view and closure. The successful authored revision and semantic result
     /// are committed together; failures leave both retained generations intact.
-    pub fn compile_project(
+    pub(crate) fn compile_project(
         &mut self,
         inputs: ProjectRevision,
         packages: PackageView,
@@ -300,11 +388,7 @@ impl SiteEngine {
             CompiledProjectRevision::capture(inputs.clone(), resolved.clone(), operation)?;
         if let Some(outcome) = self.compilation.restore(&key) {
             self.compilation.project = Some(project);
-            return Ok(CompilationTransition {
-                outcome,
-                semantic_changed: false,
-                cache_hit: true,
-            });
+            return Ok(CompilationTransition { outcome });
         }
 
         let next = compile(inputs, packages, &page_listing, key)?;
@@ -314,11 +398,7 @@ impl SiteEngine {
         if semantic_changed {
             self.clear_preparation();
         }
-        Ok(CompilationTransition {
-            outcome,
-            semantic_changed,
-            cache_hit: false,
-        })
+        Ok(CompilationTransition { outcome })
     }
 
     pub fn clear_compilation(&mut self) {
@@ -426,14 +506,26 @@ fn compile(
     let resources = compiled.into_iter().map(compilation_resource).collect();
     let diagnostics = diagnostics
         .into_iter()
-        .map(|diagnostic| CompilationDiagnostic {
-            severity: diagnostic.severity.to_string(),
-            message: diagnostic.message,
-            file: diagnostic.file,
-            line: diagnostic.line,
-            owner_definition: diagnostic.owner_definition.map(compilation_definition),
+        .map(|diagnostic| {
+            let severity = match diagnostic.severity {
+                "error" => CompilationDiagnosticSeverity::Error,
+                "warning" => CompilationDiagnosticSeverity::Warning,
+                "info" => CompilationDiagnosticSeverity::Info,
+                other => {
+                    return Err(format!(
+                        "unsupported compiler diagnostic severity {other:?}"
+                    ))
+                }
+            };
+            Ok(CompilationDiagnostic {
+                severity,
+                message: diagnostic.message,
+                file: diagnostic.file,
+                line: diagnostic.line,
+                owner_definition: diagnostic.owner_definition.map(compilation_definition),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, String>>()?;
     Ok(SemanticCompilation {
         key,
         compiled: render_set,
@@ -452,10 +544,19 @@ fn compilation_resource(resource: compiler::CompiledResource) -> CompilationReso
         definition,
     } = resource;
     let definition = definition.map(compilation_definition);
+    let resource_type = body
+        .get("resourceType")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let id = body.get("id").and_then(Value::as_str).map(str::to_string);
+    let url = body.get("url").and_then(Value::as_str).map(str::to_string);
     CompilationResource {
         filename,
         text,
         body,
+        resource_type,
+        id,
+        url,
         definition,
     }
 }
@@ -636,10 +737,13 @@ mod tests {
                     filename: format!("StructureDefinition-{name}.json"),
                     text: serde_json::to_string(&body).unwrap(),
                     body,
+                    resource_type: Some("StructureDefinition".into()),
+                    id: Some(name.into()),
+                    url: None,
                     definition: None,
                 }],
                 diagnostics: vec![CompilationDiagnostic {
-                    severity: "information".into(),
+                    severity: CompilationDiagnosticSeverity::Info,
                     message: format!("compiled {name}"),
                     file: None,
                     line: None,
@@ -677,8 +781,6 @@ mod tests {
             )
             .unwrap();
 
-        assert!(transition.cache_hit);
-        assert!(!transition.semantic_changed);
         assert_eq!(engine.compilation.cache_hits, 1);
         assert_eq!(
             transition.outcome.resources[0].filename,
@@ -794,9 +896,7 @@ mod tests {
 
         for (label, inputs, closure) in cases {
             let mut engine = reuse_engine();
-            if let Ok(transition) = engine.compile_project(inputs, package_view(), closure) {
-                assert!(!transition.cache_hit, "{label} unexpectedly reused");
-            }
+            let _ = engine.compile_project(inputs, package_view(), closure);
             assert_eq!(engine.compilation.cache_hits, 0, "{label}");
         }
     }
@@ -816,7 +916,6 @@ mod tests {
             )
             .unwrap();
 
-        assert!(transition.cache_hit);
         assert_eq!(engine.compilation.cache_hits, 1);
         assert_eq!(
             transition.outcome.resources[0].filename,
@@ -880,7 +979,7 @@ mod tests {
         let environment = crate::PackageEnvironment::new([package]).unwrap();
 
         let error = engine
-            .prepare_project(
+            .prepare_values(
                 inputs_for("Patient", b"new prose"),
                 resolved(),
                 crate::GeneratorSpec::Cycle {
@@ -892,19 +991,127 @@ mod tests {
                 environment,
             )
             .unwrap_err();
-        let crate::PrepareProjectError::Site {
-            message,
-            compilation,
-            ..
-        } = error
-        else {
-            panic!("successful exact compilation must make this a site failure")
-        };
-        assert!(message.contains("ImplementationGuide"), "{message}");
+        assert_eq!(error.phase, crate::BuildErrorPhase::Preparation);
+        assert!(
+            error.message.contains("ImplementationGuide"),
+            "{}",
+            error.message
+        );
+        let compilation = error
+            .successful_compilation
+            .expect("site failure retains successful compilation");
         assert_eq!(
             compilation.resources[0].filename,
             "StructureDefinition-Test.json"
         );
+    }
+
+    #[test]
+    fn adapter_cancellation_checkpoint_stops_after_config_before_resolution() {
+        struct CancelAfterConfig(std::cell::Cell<bool>);
+        impl crate::ProjectSource for CancelAfterConfig {
+            fn cancelled(&self) -> bool {
+                self.0.get()
+            }
+            fn config(&mut self) -> Result<String, String> {
+                self.0.set(true);
+                Ok("fhirVersion: 4.0.1".into())
+            }
+            fn capture(
+                &mut self,
+                _packages: &crate::PackageEnvironment,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::ProjectRevision, String> {
+                panic!("cancelled source must not be captured")
+            }
+        }
+        struct UnusedPackages;
+        impl crate::PackageProvider for UnusedPackages {
+            fn resolve(
+                &mut self,
+                _config: &str,
+                _generator: &crate::GeneratorSpec,
+            ) -> Result<crate::ResolvedPackageClosure, String> {
+                panic!("cancelled prepare must not resolve packages")
+            }
+            fn environment(
+                &mut self,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::PackageEnvironment, String> {
+                panic!("cancelled prepare must not transport packages")
+            }
+        }
+        let error = SiteEngine::default()
+            .prepare_project(
+                &mut CancelAfterConfig(std::cell::Cell::new(false)),
+                &mut UnusedPackages,
+                crate::GeneratorSpec::Cycle {
+                    build_epoch_secs: 1,
+                    liquid_asset_dirs: Vec::new(),
+                    branch: None,
+                    revision: None,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.code, crate::BuildErrorCode::Cancelled);
+        assert_eq!(error.operation, crate::BuildOperation::Prepare);
+    }
+
+    #[test]
+    fn project_source_cancellation_is_observed_after_package_resolution() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        struct Source(Rc<Cell<bool>>);
+        impl crate::ProjectSource for Source {
+            fn cancelled(&self) -> bool {
+                self.0.get()
+            }
+            fn config(&mut self) -> Result<String, String> {
+                Ok(CONFIG.into())
+            }
+            fn capture(
+                &mut self,
+                _packages: &crate::PackageEnvironment,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::ProjectRevision, String> {
+                panic!("cancelled source must not be captured")
+            }
+        }
+
+        struct CancelDuringResolution(Rc<Cell<bool>>);
+        impl crate::PackageProvider for CancelDuringResolution {
+            fn resolve(
+                &mut self,
+                _config: &str,
+                _generator: &crate::GeneratorSpec,
+            ) -> Result<crate::ResolvedPackageClosure, String> {
+                self.0.set(true);
+                Ok(resolved())
+            }
+            fn environment(
+                &mut self,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::PackageEnvironment, String> {
+                panic!("cancelled prepare must not transport packages")
+            }
+        }
+
+        let cancelled = Rc::new(Cell::new(false));
+        let error = SiteEngine::default()
+            .prepare_project(
+                &mut Source(Rc::clone(&cancelled)),
+                &mut CancelDuringResolution(cancelled),
+                crate::GeneratorSpec::Cycle {
+                    build_epoch_secs: 1,
+                    liquid_asset_dirs: Vec::new(),
+                    branch: None,
+                    revision: None,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.code, crate::BuildErrorCode::Cancelled);
+        assert_eq!(error.phase, crate::BuildErrorPhase::Lifecycle);
     }
 
     #[test]

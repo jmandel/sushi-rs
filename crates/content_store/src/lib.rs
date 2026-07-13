@@ -19,6 +19,10 @@ use thiserror::Error;
 
 /// A validated, lowercase SHA-256 digest.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+#[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
 pub struct Sha256Digest(String);
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -71,12 +75,19 @@ impl<'de> Deserialize<'de> for Sha256Digest {
 
 /// Exact immutable-content reference shared by compilers, renderers, and hosts.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(optional_fields))]
 #[serde(rename_all = "camelCase")]
 pub struct ContentRef {
     /// The algorithm is fixed to SHA-256 and encoded in the field name.
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub sha256: Sha256Digest,
+    #[cfg_attr(feature = "wire-contract", ts(type = "number"))]
     pub byte_length: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub media_type: Option<String>,
 }
 
@@ -201,6 +212,14 @@ impl FileContentStore {
             path: root.to_path_buf(),
             source,
         })?;
+        Self::open(root)
+    }
+
+    /// Open an existing CAS root without manufacturing a missing authority
+    /// directory. Readers should use this at trust boundaries; writers may use
+    /// [`Self::create`] when they explicitly own publication.
+    pub fn open(root: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let root = root.as_ref();
         let metadata = fs::symlink_metadata(root).map_err(|source| StoreError::Io {
             path: root.to_path_buf(),
             source,

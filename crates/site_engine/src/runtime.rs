@@ -1,29 +1,43 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::RenderState;
 
 const RETAINED_SITE_BUILD_LIMIT: usize = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "wire-contract", ts(optional_fields))]
 #[serde(rename_all = "camelCase")]
 pub struct OutputDescriptor {
+    #[cfg_attr(feature = "wire-contract", ts(type = "string"))]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub path: site_build::OutputPath,
-    pub kind: &'static str,
+    pub kind: OutputKind,
     pub media_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "site_build::ContentRef"))]
     pub content: Option<site_build::ContentRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "OutputResourceSubject"))]
     pub subject: Option<OutputResourceSubject>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "OutputSubjectPage"))]
     pub subject_page: Option<OutputSubjectPage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "OutputPageKind"))]
+    pub page_kind: Option<OutputPageKind>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct OutputResourceSubject {
     pub resource_type: String,
@@ -31,29 +45,54 @@ pub struct OutputResourceSubject {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum OutputSubjectPage {
     Primary,
     Companion,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum OutputKind {
+    Page,
+    Asset,
+    Auxiliary,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum OutputPageKind {
+    Narrative,
+    Artifacts,
+    Profile,
+    ProfileCompanion,
+    #[serde(rename = "valueset")]
+    ValueSet,
+    #[serde(rename = "codesystem")]
+    CodeSystem,
+    Example,
+    Toc,
+    Validation,
+    Generic,
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct OutputCatalog {
     pub build_id: String,
     pub outputs: Vec<OutputDescriptor>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RenderedOutput {
-    pub path: site_build::OutputPath,
-    pub media_type: String,
-    pub content: site_build::ContentRef,
-}
-
 #[derive(Clone)]
-pub struct PreparedOutput {
+pub(crate) struct PreparedOutput {
     pub content: site_build::ContentRef,
     pub producer: site_build::OutputProducer,
     pub source: Option<String>,
@@ -92,6 +131,15 @@ pub(crate) struct PublisherRuntime {
 struct CycleRuntime {
     build: site_build::ClosedSiteBuild,
     objects: ObjectMap,
+    renderer: Option<CycleRendererState>,
+}
+
+struct CycleRendererState {
+    renderer: site_build::RendererImplementation,
+    output_schema: String,
+    options: BTreeMap<String, String>,
+    expected: BTreeSet<site_build::OutputPath>,
+    ready: BTreeMap<site_build::OutputPath, site_build::SiteOutputFile>,
 }
 
 #[derive(Clone)]
@@ -147,15 +195,13 @@ enum Runtime {
     Cycle(CycleRuntime),
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExternalFinalizeInput {
-    pub renderer: site_build::RendererImplementation,
-    pub output_schema: String,
-    #[serde(default)]
-    pub options: BTreeMap<String, String>,
-    pub catalog: Vec<site_build::OutputPath>,
-    pub files: Vec<site_build::SiteOutputFile>,
+fn build_failure(
+    operation: crate::BuildOperation,
+    phase: crate::BuildErrorPhase,
+    code: crate::BuildErrorCode,
+    message: impl Into<String>,
+) -> crate::BuildError<()> {
+    crate::BuildError::new(operation, phase, code, message)
 }
 
 /// Canonical in-process executor and bounded immutable handle owner.
@@ -231,7 +277,11 @@ impl SiteEngine {
         let handle = build.site_build().build_id().to_string();
         self.retain(
             handle.clone(),
-            Runtime::Cycle(CycleRuntime { build, objects }),
+            Runtime::Cycle(CycleRuntime {
+                build,
+                objects,
+                renderer: None,
+            }),
         );
         handle
     }
@@ -294,15 +344,22 @@ impl SiteEngine {
             })
     }
 
-    pub fn outputs(&self, handle: &str) -> Result<OutputCatalog, String> {
-        let runtime = self
-            .runtimes
-            .get(handle)
-            .ok_or_else(|| format!("outputs: unknown build handle {handle}"))?;
+    pub fn outputs(&self, handle: &str) -> Result<OutputCatalog, crate::BuildError<()>> {
+        let runtime = self.runtimes.get(handle).ok_or_else(|| {
+            build_failure(
+                crate::BuildOperation::Outputs,
+                crate::BuildErrorPhase::Lifecycle,
+                crate::BuildErrorCode::UnknownBuild,
+                format!("outputs: unknown build handle {handle}"),
+            )
+        })?;
         let Runtime::Publisher(runtime) = runtime else {
-            return Err(
-                "outputs: Cycle output catalog belongs to the external LiquidJS host".into(),
-            );
+            return Err(build_failure(
+                crate::BuildOperation::Outputs,
+                crate::BuildErrorPhase::Renderer,
+                crate::BuildErrorCode::RendererFailed,
+                "outputs: Cycle output catalog belongs to the external LiquidJS host",
+            ));
         };
         let mut outputs = runtime.catalog.clone();
         for output in &mut outputs {
@@ -316,38 +373,69 @@ impl SiteEngine {
         })
     }
 
-    pub fn render(&mut self, handle: &str, path: &str) -> Result<RenderedOutput, String> {
-        let path = site_build::OutputPath::parse(path.to_string())
-            .map_err(|error| format!("render: invalid output path {path}: {error}"))?;
-        let runtime = self
-            .runtimes
-            .get_mut(handle)
-            .ok_or_else(|| format!("render: unknown build handle {handle}"))?;
+    pub fn render(
+        &mut self,
+        handle: &str,
+        path: &str,
+    ) -> Result<site_build::ContentRef, crate::BuildError<()>> {
+        let path = site_build::OutputPath::parse(path.to_string()).map_err(|error| {
+            build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::Input,
+                crate::BuildErrorCode::InvalidInput,
+                format!("render: invalid output path {path}: {error}"),
+            )
+        })?;
+        let runtime = self.runtimes.get_mut(handle).ok_or_else(|| {
+            build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::Lifecycle,
+                crate::BuildErrorCode::UnknownBuild,
+                format!("render: unknown build handle {handle}"),
+            )
+        })?;
         let Runtime::Publisher(runtime) = runtime else {
-            return Err("render: Cycle outputs are rendered by the external LiquidJS host".into());
+            return Err(build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::Renderer,
+                crate::BuildErrorCode::RendererFailed,
+                "render: Cycle outputs are rendered by the external LiquidJS host",
+            ));
         };
         if let Some(output) = runtime.ready.get(&path) {
-            return Ok(RenderedOutput {
-                path,
-                media_type: output
-                    .content
-                    .media_type
-                    .clone()
-                    .ok_or_else(|| "render: prepared output has no media type".to_string())?,
-                content: output.content.clone(),
-            });
+            return Ok(output.content.clone());
         }
         if !runtime.catalog.iter().any(|output| output.path == path) {
-            return Err(format!("render: path {path} is not declared by outputs"));
+            return Err(build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::Input,
+                crate::BuildErrorCode::InvalidInput,
+                format!("render: path {path} is not declared by outputs"),
+            ));
         }
         let html = runtime
             .state
             .render_page_by_name(path.as_str())
-            .map_err(|error| format!("render {path}: {error}"))?;
+            .map_err(|error| {
+                build_failure(
+                    crate::BuildOperation::Render,
+                    crate::BuildErrorPhase::Renderer,
+                    crate::BuildErrorCode::RendererFailed,
+                    format!("render {path}: {error}"),
+                )
+            })?;
         let html = runtime.recipe_assets.publisher.finish_html(&html);
         let bytes = html.into_bytes();
         let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
-        let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))?;
+        let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))
+            .map_err(|message| {
+                build_failure(
+                    crate::BuildOperation::Render,
+                    crate::BuildErrorPhase::ContentStore,
+                    crate::BuildErrorCode::Integrity,
+                    format!("render {path}: {message}"),
+                )
+            })?;
         runtime
             .objects
             .entry(content.sha256.clone())
@@ -364,11 +452,7 @@ impl SiteEngine {
                 owner: None,
             },
         );
-        Ok(RenderedOutput {
-            path,
-            media_type: "text/html".into(),
-            content,
-        })
+        Ok(content)
     }
 
     pub fn read_content(&self, handle: &str, digest: &str) -> Result<Vec<u8>, String> {
@@ -387,30 +471,121 @@ impl SiteEngine {
         Ok(bytes.as_ref().clone())
     }
 
-    pub fn finalize(
-        &self,
+    /// Bind the callback-free renderer opened over this exact closed build.
+    /// This is private renderer transport used by native/WASM adapters; it is
+    /// not a host build operation or a serialized build plan.
+    #[doc(hidden)]
+    pub fn open_renderer(
+        &mut self,
         handle: &str,
-        external: Option<ExternalFinalizeInput>,
-    ) -> Result<site_build::SiteOutput, String> {
+        renderer: site_build::RendererImplementation,
+        output_schema: String,
+        options: BTreeMap<String, String>,
+        paths: Vec<site_build::OutputPath>,
+    ) -> Result<(), String> {
+        let path_count = paths.len();
+        let expected = paths.into_iter().collect::<BTreeSet<_>>();
         let runtime = self
             .runtimes
-            .get(handle)
-            .ok_or_else(|| format!("finalize: unknown build handle {handle}"))?;
+            .get_mut(handle)
+            .ok_or_else(|| format!("openRenderer: unknown build handle {handle}"))?;
+        let Runtime::Cycle(runtime) = runtime else {
+            return Err("openRenderer: Publisher renderer is owned by Rust".into());
+        };
+        if runtime.renderer.is_some() {
+            return Err("openRenderer: Cycle renderer is already open".into());
+        }
+        if expected.is_empty() {
+            return Err("openRenderer: Cycle renderer declared no outputs".into());
+        }
+        if expected.len() != path_count {
+            return Err("openRenderer: Cycle renderer declared duplicate output paths".into());
+        }
+        runtime.renderer = Some(CycleRendererState {
+            renderer,
+            output_schema,
+            options,
+            expected,
+            ready: BTreeMap::new(),
+        });
+        Ok(())
+    }
+
+    /// Admit one completed renderer file and its authenticated bytes into the
+    /// renderer session bound by `open_renderer`.
+    #[doc(hidden)]
+    pub fn admit_output(
+        &mut self,
+        handle: &str,
+        file: site_build::SiteOutputFile,
+        bytes: Vec<u8>,
+    ) -> Result<(), String> {
+        file.content
+            .verify(&bytes)
+            .map_err(|error| format!("admitOutput: verify {}: {error}", file.path))?;
+        let runtime = self
+            .runtimes
+            .get_mut(handle)
+            .ok_or_else(|| format!("admitOutput: unknown build handle {handle}"))?;
+        let Runtime::Cycle(runtime) = runtime else {
+            return Err("admitOutput: Publisher outputs are owned by Rust".into());
+        };
+        let renderer = runtime
+            .renderer
+            .as_mut()
+            .ok_or_else(|| "admitOutput: Cycle renderer is not open".to_string())?;
+        if !renderer.expected.contains(&file.path) {
+            return Err(format!(
+                "admitOutput: renderer did not declare output {}",
+                file.path
+            ));
+        }
+        if let Some(existing) = renderer.ready.get(&file.path) {
+            if existing == &file {
+                return Ok(());
+            }
+            return Err(format!(
+                "admitOutput: renderer changed completed output {}",
+                file.path
+            ));
+        }
+        let object =
+            AuthenticatedObject::eager_authenticated(file.content.clone(), Rc::new(bytes))?;
+        if let Some(existing) = runtime.objects.get(&file.content.sha256) {
+            existing.authenticates(&file.content)?;
+        } else {
+            runtime.objects.insert(file.content.sha256.clone(), object);
+        }
+        renderer.ready.insert(file.path.clone(), file);
+        Ok(())
+    }
+
+    pub fn finalize(&self, handle: &str) -> Result<site_build::SiteOutput, crate::BuildError<()>> {
+        let runtime = self.runtimes.get(handle).ok_or_else(|| {
+            build_failure(
+                crate::BuildOperation::Finalize,
+                crate::BuildErrorPhase::Lifecycle,
+                crate::BuildErrorCode::UnknownBuild,
+                format!("finalize: unknown build handle {handle}"),
+            )
+        })?;
         match runtime {
-            Runtime::Publisher(runtime) => {
-                if external.is_some() {
-                    return Err(
-                        "finalize: Publisher build does not accept external renderer output".into(),
-                    );
-                }
-                Self::finalize_publisher(runtime)
-            }
-            Runtime::Cycle(runtime) => {
-                let input = external.ok_or_else(|| {
-                    "finalize: Cycle build requires external renderer output".to_string()
-                })?;
-                Self::finalize_cycle(runtime, input)
-            }
+            Runtime::Publisher(runtime) => Self::finalize_publisher(runtime).map_err(|message| {
+                build_failure(
+                    crate::BuildOperation::Finalize,
+                    crate::BuildErrorPhase::Finalization,
+                    crate::BuildErrorCode::RendererFailed,
+                    message,
+                )
+            }),
+            Runtime::Cycle(runtime) => Self::finalize_cycle(runtime).map_err(|message| {
+                build_failure(
+                    crate::BuildOperation::Finalize,
+                    crate::BuildErrorPhase::Finalization,
+                    crate::BuildErrorCode::RendererFailed,
+                    message,
+                )
+            }),
         }
     }
 
@@ -462,47 +637,37 @@ impl SiteEngine {
         Ok(output)
     }
 
-    fn finalize_cycle(
-        runtime: &CycleRuntime,
-        input: ExternalFinalizeInput,
-    ) -> Result<site_build::SiteOutput, String> {
-        let catalog = input.catalog.into_iter().collect::<BTreeSet<_>>();
-        if catalog.len() != input.files.len() {
-            return Err(
-                "finalize: catalog/file cardinality differs or catalog contains duplicates".into(),
-            );
-        }
-        let file_paths = input
-            .files
-            .iter()
-            .map(|file| file.path.clone())
-            .collect::<BTreeSet<_>>();
-        if file_paths.len() != input.files.len() {
-            return Err("finalize: output files contain duplicate paths".into());
-        }
-        let missing = catalog.difference(&file_paths).cloned().collect::<Vec<_>>();
-        let undeclared = file_paths.difference(&catalog).cloned().collect::<Vec<_>>();
-        if !missing.is_empty() || !undeclared.is_empty() {
+    fn finalize_cycle(runtime: &CycleRuntime) -> Result<site_build::SiteOutput, String> {
+        let renderer = runtime
+            .renderer
+            .as_ref()
+            .ok_or_else(|| "finalize: Cycle renderer is not open".to_string())?;
+        let ready = renderer.ready.keys().cloned().collect::<BTreeSet<_>>();
+        if ready != renderer.expected {
+            let missing = renderer
+                .expected
+                .difference(&ready)
+                .map(ToString::to_string)
+                .collect::<Vec<_>>();
             return Err(format!(
-                "finalize: incomplete catalog (missing: {}; undeclared: {})",
-                missing
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                undeclared
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "finalize: {} Cycle outputs are not rendered: {}",
+                missing.len(),
+                missing.join(", ")
             ));
+        }
+        for file in renderer.ready.values() {
+            let object = runtime
+                .objects
+                .get(&file.content.sha256)
+                .ok_or_else(|| format!("finalize: content object for {} is absent", file.path))?;
+            object.authenticates(&file.content)?;
         }
         let output = site_build::SiteOutput::new(
             &runtime.build,
-            input.renderer,
-            input.output_schema,
-            input.options,
-            input.files,
+            renderer.renderer.clone(),
+            renderer.output_schema.clone(),
+            renderer.options.clone(),
+            renderer.ready.values().cloned(),
         )
         .map_err(|error| format!("finalize: {error}"))?;
         output

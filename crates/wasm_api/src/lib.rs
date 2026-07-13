@@ -18,7 +18,7 @@
 //! s.stagePreparedMount(bytes, key);      // one checked artifact at a time
 //! s.commitPreparedMount();               // publish only after all stages validate
 //! s.snapshot(urlOrInlineSd);
-//! s.prepareProject(filesJson, config, predefinedJson, siteFilesJson, generatorSpecJson);
+//! s.prepareProject(projectRevisionJson, generatorSpecJson);
 //! s.expandValueSet(vsJson, resourcesJson);
 //! s.resolveProject(config, versionIndexJson);
 //! Session.version();                     // static
@@ -49,20 +49,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use package_store::BundleSource;
-use serde::{Deserialize, Serialize};
+use package_store::{
+    BundleInput, BundleSource, PackageMountResult, PrepareMountResult, PreparedExport,
+    PreparedStageResult,
+};
+use serde::Serialize;
 use serde_json::Value;
 use site_engine::PackageView as SharedBundle;
 use site_engine::{
-    ExternalFinalizeInput, GeneratorSpec as SharedGeneratorSpec,
-    OutputCatalog as OutputCatalogResult, PackageEnvironment, ProjectRevision,
-    RenderedOutput as RenderSiteResult, ResolvedPackageClosure as ResolvedPackages, SiteEngine,
+    GeneratorSpec as SharedGeneratorSpec, OutputCatalog as OutputCatalogResult, PackageEnvironment,
+    ProjectRevision, ResolvedPackageClosure as ResolvedPackages, SiteEngine,
 };
 use wasm_bindgen::prelude::*;
 
 /// The result/error envelope + apiVersion are the SHARED implementation
 /// (`api_envelope`) — one schema for the Session and the `fig` CLI's `--json`.
-use api_envelope::{envelope, envelope_ser, API_VERSION};
+use api_envelope::{envelope, envelope_ser, envelope_typed, API_VERSION};
 
 // ---------------------------------------------------------------------------
 // Engine — the mounted package source + last-compile locals. Each constructed
@@ -206,7 +208,7 @@ impl Engine {
             self.package_generation = self.package_generation.wrapping_add(1);
             // A resolver fixpoint is a statement about the mounted candidate
             // set. Even if a new package looks unrelated, mutable/range
-            // requests must be resolved again before another compileProject.
+            // requests must be resolved again before another project prepare.
             self.resolved_packages = None;
         }
         Ok(total)
@@ -565,8 +567,8 @@ impl Engine {
         ))
     }
 
-    /// Package view for operations derived from the current compile. A complete
-    /// `compileProject` revision remains bound to its captured resolver closure
+    /// Package view for operations derived from the current prepare. A complete
+    /// project revision remains bound to its captured resolver closure
     /// even if unrelated/template/other-version packages are mounted later.
     /// Internal non-project revisions have no such certificate and retain the
     /// historical all-mounted behavior for snapshot-only operations.
@@ -575,78 +577,6 @@ impl Engine {
             Some(resolved) => self.source_for_resolved(resolved),
             None => self.source(),
         }
-    }
-
-    /// Compile with the authored site-file manifest in scope. This is the normal
-    /// editor build entry point: page-folder names must reach IG export during the
-    /// ONE compile, so the later SiteBuild projection can consume `last_compiled`
-    /// without recompiling merely to recover `definition.page`.
-    fn compile_project(
-        &mut self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-        site_files_json: &str,
-    ) -> Result<CompileResult, String> {
-        let (inputs, resolved_packages, packages) = self.project_request(
-            files_json,
-            config,
-            predefined_json,
-            site_files_json,
-            "compileProject",
-        )?;
-        let transition = self
-            .sites
-            .compile_project(inputs, packages, resolved_packages)?;
-        Ok(CompileResult::from(transition.outcome))
-    }
-
-    fn project_request(
-        &self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-        site_files_json: &str,
-        operation: &str,
-    ) -> Result<(ProjectRevision, ResolvedPackages, SharedBundle), String> {
-        let fsh: BTreeMap<String, String> = serde_json::from_str(files_json)
-            .map_err(|e| format!("{operation}: bad FSH files JSON: {e}"))?;
-        let predefined: BTreeMap<String, Value> = if predefined_json.trim().is_empty() {
-            BTreeMap::new()
-        } else {
-            serde_json::from_str(predefined_json)
-                .map_err(|e| format!("{operation}: bad predefined JSON: {e}"))?
-        };
-        let encoded_site_files: BTreeMap<String, String> = serde_json::from_str(site_files_json)
-            .map_err(|e| format!("{operation}: bad site-files JSON: {e}"))?;
-        let site_files = encoded_site_files
-            .into_iter()
-            .map(|(path, encoded)| {
-                base64_decode(&encoded)
-                    .map(|bytes| (path.clone(), bytes))
-                    .map_err(|error| format!("{operation}: invalid base64 in {path}: {error}"))
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-        let config_digest = site_build::Sha256Digest::of_bytes(config.as_bytes());
-        let resolved_packages = self
-            .resolved_packages
-            .as_ref()
-            .filter(|resolved| resolved.config_sha256 == config_digest)
-            .cloned()
-            .ok_or_else(|| {
-                format!("{operation}: no satisfied package resolver fixpoint for these config bytes; call resolveProject after the latest mount")
-            })?;
-        let (packages, _, _) = self.source_for_resolved(&resolved_packages)?;
-        Ok((
-            ProjectRevision {
-                config: config.to_string(),
-                fsh,
-                predefined,
-                site_files,
-            },
-            resolved_packages,
-            packages,
-        ))
     }
 
     /// Build a fresh `PackageContext` over the last complete project's exact
@@ -933,40 +863,47 @@ mod prepare_project_wire_tests {
     use super::*;
 
     #[test]
-    fn site_failure_is_a_typed_result_with_the_successful_compilation() {
+    fn site_failure_is_a_typed_error_with_the_successful_compilation() {
         let compilation = site_engine::CompilationOutcome {
             resources: Vec::new(),
             diagnostics: vec![site_engine::CompilationDiagnostic {
-                severity: "warning".into(),
+                severity: site_engine::CompilationDiagnosticSeverity::Warning,
                 message: "compiled before generator failed".into(),
                 file: Some("input/fsh/demo.fsh".into()),
                 line: Some(3),
                 owner_definition: None,
             }],
         };
-        let wire = prepared_project_wire(Err(site_engine::PrepareProjectError::Site {
-            message: "generator failed".into(),
-            compilation,
-            compile_ms: 12.5,
-        }))
-        .unwrap();
-        let value = serde_json::to_value(wire).unwrap();
+        let result: Result<
+            site_engine::PreparedProjectResult,
+            site_engine::BuildError<site_engine::CompilationOutcome>,
+        > = Err(site_engine::BuildError::new(
+            site_engine::BuildOperation::Prepare,
+            site_engine::BuildErrorPhase::Preparation,
+            site_engine::BuildErrorCode::RendererFailed,
+            "generator failed",
+        )
+        .with_successful_compilation(compilation));
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("site failure must remain an outer typed error"),
+        };
+        let value = serde_json::to_value(error).unwrap();
 
-        assert_eq!(value["status"], "siteFailed");
-        assert_eq!(value["error"], "generator failed");
-        assert_eq!(value["compileMs"], 12.5);
+        assert_eq!(value["phase"], "preparation");
+        assert_eq!(value["message"], "generator failed");
         assert_eq!(
-            value["compiled"]["diagnostics"][0]["message"],
+            value["successfulCompilation"]["diagnostics"][0]["message"],
             "compiled before generator failed"
         );
     }
 
     #[test]
     fn diagnostic_owner_definition_uses_the_existing_definition_wire_shape() {
-        let result = CompileResult::from(site_engine::CompilationOutcome {
+        let result = site_engine::CompilationOutcome {
             resources: Vec::new(),
             diagnostics: vec![site_engine::CompilationDiagnostic {
-                severity: "error".into(),
+                severity: site_engine::CompilationDiagnosticSeverity::Error,
                 message: "broken insert".into(),
                 file: Some("input/fsh/demo.fsh".into()),
                 line: Some(3),
@@ -977,7 +914,7 @@ mod prepare_project_wire_tests {
                     column: 0,
                 }),
             }],
-        });
+        };
         let wire = serde_json::to_value(result).unwrap();
         assert_eq!(
             wire["diagnostics"][0]["ownerDefinition"],
@@ -993,13 +930,21 @@ mod prepare_project_wire_tests {
 
     #[test]
     fn compile_failure_remains_an_outer_error_without_fake_compile_result() {
-        let error = match prepared_project_wire(Err(site_engine::PrepareProjectError::Compile(
-            "compiler failed".into(),
-        ))) {
+        let result: Result<
+            site_engine::PreparedProjectResult,
+            site_engine::BuildError<site_engine::CompilationOutcome>,
+        > = Err(site_engine::BuildError::new(
+            site_engine::BuildOperation::Prepare,
+            site_engine::BuildErrorPhase::Compilation,
+            site_engine::BuildErrorCode::CompileFailed,
+            "compiler failed",
+        ));
+        let error = match result {
             Err(error) => error,
             Ok(_) => panic!("compile failure must remain an outer error"),
         };
-        assert_eq!(error, "compiler failed");
+        assert_eq!(error.code, site_engine::BuildErrorCode::CompileFailed);
+        assert_eq!(error.message, "compiler failed");
     }
 }
 
@@ -1094,236 +1039,58 @@ fn resolved_packages_from_step(
 // simplest robust bindgen contract).
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Serialize)]
-struct CompileResult {
-    resources: Vec<CompiledResourceJs>,
-    diagnostics: Vec<DiagnosticJs>,
-    timings: Timings,
-}
-
-/// A SUSHI-exact diagnostic, shaped for the editor worker → Monaco markers.
-/// `file`/`line` are present when the compiler had a source span in scope.
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DiagnosticJs {
-    severity: String,
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    line: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    owner_definition: Option<DefinitionJs>,
-}
-
-#[derive(Clone, Serialize)]
-struct CompiledResourceJs {
-    filename: String,
-    /// The exact bytes SUSHI writes (already FHIR-canonical JSON as a string).
-    text: String,
-    #[serde(rename = "resourceType")]
-    resource_type: Option<String>,
-    id: Option<String>,
-    url: Option<String>,
-    /// Exact authored declaration that produced this output. Generated
-    /// resources have no declaration, so this key is omitted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    definition: Option<DefinitionJs>,
-}
-
-#[derive(Clone, Serialize, PartialEq, Eq, Debug)]
-struct DefinitionJs {
-    kind: &'static str,
-    path: String,
-    /// 1-based authored line.
-    line: u32,
-    /// 0-based authored column.
-    column: u32,
-}
-
-impl From<site_engine::CompilationResource> for CompiledResourceJs {
-    fn from(resource: site_engine::CompilationResource) -> Self {
-        let site_engine::CompilationResource {
-            filename,
-            text,
-            body,
-            definition,
-        } = resource;
-        let resource_type = body
-            .get("resourceType")
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let id = body.get("id").and_then(Value::as_str).map(str::to_string);
-        let url = body.get("url").and_then(Value::as_str).map(str::to_string);
-        let definition = definition.map(definition_js);
-        Self {
-            filename,
-            text,
-            resource_type,
-            id,
-            url,
-            definition,
-        }
-    }
-}
-
-fn definition_js(definition: site_engine::CompilationDefinition) -> DefinitionJs {
-    DefinitionJs {
-        kind: match definition.kind {
-            site_engine::CompilationDefinitionKind::FshDeclaration => "fsh-declaration",
-        },
-        path: definition.path,
-        line: definition.line,
-        column: definition.column,
-    }
-}
-
-impl From<site_engine::CompilationOutcome> for CompileResult {
-    fn from(outcome: site_engine::CompilationOutcome) -> Self {
-        Self {
-            resources: outcome.resources.into_iter().map(Into::into).collect(),
-            diagnostics: outcome
-                .diagnostics
-                .into_iter()
-                .map(|diagnostic| DiagnosticJs {
-                    severity: diagnostic.severity,
-                    message: diagnostic.message,
-                    file: diagnostic.file,
-                    line: diagnostic.line,
-                    owner_definition: diagnostic.owner_definition.map(definition_js),
-                })
-                .collect(),
-            timings: Timings::default(),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Default)]
-struct Timings {
-    /// Milliseconds for the in-memory compile. Wall clock is unavailable under
-    /// `wasm32-unknown-unknown` without JS help, so the Worker measures the call
-    /// boundary; this field is populated by the caller-supplied timer when given,
-    /// else 0. (See the demo Worker: it wraps calls in `performance.now()`.)
-    compile_ms: f64,
-}
-
 #[derive(Serialize)]
 struct SnapshotResult {
     snapshot: Option<Value>,
     messages: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct BundleInput {
-    label: String,
-    files: std::collections::BTreeMap<String, String>,
+struct CapturedProjectSource(Option<ProjectRevision>);
+
+impl site_engine::ProjectSource for CapturedProjectSource {
+    fn config(&mut self) -> Result<String, String> {
+        self.0
+            .as_ref()
+            .map(|project| project.config.clone())
+            .ok_or_else(|| "prepareProject: project revision was already consumed".into())
+    }
+
+    fn capture(
+        &mut self,
+        _packages: &PackageEnvironment,
+        _resolved: &ResolvedPackages,
+    ) -> Result<ProjectRevision, String> {
+        self.0
+            .take()
+            .ok_or_else(|| "prepareProject: project revision was already consumed".into())
+    }
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PackageMountResult {
-    mounted: u32,
-    added: u32,
-    packages: u32,
-    manifest_json_bytes: u64,
-    artifact_bytes: u64,
-    retained_blob_bytes: u64,
-    indexed_members: u64,
-    member_body_copies: u64,
-    manifest_parse_ms: f64,
-    decode_validate_ms: f64,
-    mount_ms: f64,
-    #[serde(flatten)]
-    compression: package_store::BundleCompressionMetrics,
+struct MountedPackageProvider {
+    resolved: Option<ResolvedPackages>,
+    environment: Option<PackageEnvironment>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedStageResult {
-    label: String,
-    staged: u32,
-    artifact_bytes: u64,
-    indexed_members: u64,
-    decode_validate_ms: f64,
-}
+impl site_engine::PackageProvider for MountedPackageProvider {
+    fn resolve(
+        &mut self,
+        config: &str,
+        _generator: &SharedGeneratorSpec,
+    ) -> Result<ResolvedPackages, String> {
+        let expected = site_build::Sha256Digest::of_bytes(config.as_bytes());
+        self.resolved
+            .as_ref()
+            .filter(|resolved| resolved.config_sha256 == expected)
+            .cloned()
+            .ok_or_else(|| {
+                "prepareProject: no satisfied package resolver fixpoint for these config bytes; resolve after the latest mount".into()
+            })
+    }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedExport {
-    label: String,
-    cache_key: String,
-    artifact_sha256: String,
-    bytes: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PrepareMountResult {
-    mounted: u32,
-    added: u32,
-    artifacts: Vec<PreparedExport>,
-    artifact_bytes: u64,
-    prepared_members: u64,
-    input_json_bytes: u64,
-    base64_bytes: u64,
-    decoded_source_bytes: u64,
-    normalized_bytes: u64,
-    mount_member_body_copies: u64,
-    json_parse_ms: f64,
-    base64_decode_ms: f64,
-    normalization_ms: f64,
-    indexing_ms: f64,
-    artifact_encode_ms: f64,
-    /// Compatibility aggregate for hosts that consumed the initial API.
-    decode_validate_prepare_ms: f64,
-    mount_ms: f64,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TemplateResolutionWire {
-    satisfied: bool,
-    chain: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    missing: Option<String>,
-}
-
-#[derive(Serialize)]
-#[serde(tag = "status", rename_all = "camelCase")]
-enum PreparedProjectWire {
-    Prepared {
-        compiled: CompileResult,
-        site: site_engine::PrepareResult,
-        #[serde(rename = "compileMs")]
-        compile_ms: f64,
-    },
-    SiteFailed {
-        compiled: CompileResult,
-        #[serde(rename = "compileMs")]
-        compile_ms: f64,
-        error: String,
-    },
-}
-
-fn prepared_project_wire(
-    result: Result<site_engine::PreparedProjectResult, site_engine::PrepareProjectError>,
-) -> Result<PreparedProjectWire, String> {
-    match result {
-        Ok(prepared) => Ok(PreparedProjectWire::Prepared {
-            compiled: CompileResult::from(prepared.compilation),
-            site: prepared.site,
-            compile_ms: prepared.compile_ms,
-        }),
-        Err(site_engine::PrepareProjectError::Compile(message)) => Err(message),
-        Err(site_engine::PrepareProjectError::Site {
-            message,
-            compilation,
-            compile_ms,
-        }) => Ok(PreparedProjectWire::SiteFailed {
-            compiled: CompileResult::from(compilation),
-            compile_ms,
-            error: message,
-        }),
+    fn environment(&mut self, _resolved: &ResolvedPackages) -> Result<PackageEnvironment, String> {
+        self.environment
+            .take()
+            .ok_or_else(|| "prepareProject: package environment was already consumed".into())
     }
 }
 
@@ -1360,6 +1127,29 @@ impl Session {
             format!(
                 "{operation}: engine session is busy with reentrant operation {}",
                 self.active_operation.get().unwrap_or("unknown")
+            )
+        })?;
+        self.active_operation.set(Some(operation));
+        let result = f(&mut engine);
+        self.active_operation.set(None);
+        result
+    }
+
+    fn with_build_engine<T>(
+        &self,
+        operation: &'static str,
+        build_operation: site_engine::BuildOperation,
+        f: impl FnOnce(&mut Engine) -> Result<T, site_engine::BuildError<()>>,
+    ) -> Result<T, site_engine::BuildError<()>> {
+        let mut engine = self.engine.try_borrow_mut().map_err(|_| {
+            site_engine::BuildError::new(
+                build_operation,
+                site_engine::BuildErrorPhase::Lifecycle,
+                site_engine::BuildErrorCode::Unavailable,
+                format!(
+                    "{operation}: engine session is busy with reentrant operation {}",
+                    self.active_operation.get().unwrap_or("unknown")
+                ),
             )
         })?;
         self.active_operation.set(Some(operation));
@@ -1484,19 +1274,6 @@ impl Session {
         )
     }
 
-    /// Current compact-package retention and lazy-inflate counters. This is a
-    /// read-only diagnostic surface; it is not part of package authority.
-    #[wasm_bindgen(js_name = packageStorageMetrics)]
-    pub fn package_storage_metrics(&self) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "packageStorageMetrics",
-            self.with_engine("packageStorageMetrics", |engine| {
-                Ok(engine.package_storage_metrics())
-            }),
-        )
-    }
-
     /// Cold-path bridge for the current inflated JSON/base64 package shape.
     /// Normalizes each package once, mounts it transactionally, and stages the
     /// exact `.fpp` artifact for zero-base64 transfer through `takePrepared`.
@@ -1560,52 +1337,34 @@ impl Session {
             .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
 
-    /// Compile one complete project revision, including its authored site-file
-    /// manifest. The latter supplies page-folder names to IG export so downstream
-    /// SiteBuild projections reuse this exact compile instead of rerunning
-    /// the compiler. Envelope result matches `compile()`.
-    #[wasm_bindgen(js_name = compileProject)]
-    pub fn compile_project(
-        &self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-        site_files_json: &str,
-    ) -> String {
-        set_panic_hook();
-        envelope_ser(
-            "compileProject",
-            self.with_engine("compileProject", |engine| {
-                engine.compile_project(files_json, config, predefined_json, site_files_json)
-            }),
-        )
-    }
-
     /// Capture, compile, and prepare one project revision through the canonical
-    /// Rust SiteEngine boundary. This is the normal site-generation entry;
-    /// `compileProject` remains only for explicit compiler inspection callers.
+    /// Rust SiteEngine boundary. This is the one site-generation entry.
     #[wasm_bindgen(js_name = prepareProject)]
     pub fn prepare_project_site(
         &self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-        site_files_json: &str,
+        project_revision_json: &str,
         generator_spec_json: &str,
     ) -> String {
         set_panic_hook();
-        envelope_ser(
-            "prepareProject",
-            self.with_engine("prepareProject", |engine| {
-                engine.prepare_project_site(
-                    files_json,
-                    config,
-                    predefined_json,
-                    site_files_json,
-                    generator_spec_json,
-                )
-            }),
-        )
+        let result = match self.engine.try_borrow_mut() {
+            Ok(mut engine) => {
+                self.active_operation.set(Some("prepareProject"));
+                let result =
+                    engine.prepare_project_site(project_revision_json, generator_spec_json);
+                self.active_operation.set(None);
+                result
+            }
+            Err(_) => Err(site_engine::BuildError::new(
+                site_engine::BuildOperation::Prepare,
+                site_engine::BuildErrorPhase::Lifecycle,
+                site_engine::BuildErrorCode::Unavailable,
+                format!(
+                    "prepareProject: engine session is busy with reentrant operation {}",
+                    self.active_operation.get().unwrap_or("unknown")
+                ),
+            )),
+        };
+        envelope_typed("prepareProject", result)
     }
 
     /// Generate a snapshot for an inline SD JSON or a canonical URL/id/name.
@@ -1622,9 +1381,11 @@ impl Session {
     #[wasm_bindgen(js_name = outputs)]
     pub fn site_outputs(&self, handle: &str) -> String {
         set_panic_hook();
-        envelope_ser(
+        envelope_typed(
             "outputs",
-            self.with_engine("outputs", |engine| engine.site_outputs(handle)),
+            self.with_build_engine("outputs", site_engine::BuildOperation::Outputs, |engine| {
+                engine.site_outputs(handle)
+            }),
         )
     }
 
@@ -1632,23 +1393,27 @@ impl Session {
     #[wasm_bindgen(js_name = render)]
     pub fn render_site_output(&self, handle: &str, path: &str) -> String {
         set_panic_hook();
-        envelope_ser(
+        envelope_typed(
             "render",
-            self.with_engine("render", |engine| engine.render_site_output(handle, path)),
+            self.with_build_engine("render", site_engine::BuildOperation::Render, |engine| {
+                engine.render_site_output(handle, path)
+            }),
         )
     }
 
     /// Return the canonical Rust SiteOutput. Native Publisher handles need no
     /// second argument; external Cycle handles supply their verified catalog
-    /// and ContentRefs through the same `finalize` host operation.
+    /// and ContentRefs through the same no-argument `finalize` host operation.
     #[wasm_bindgen(js_name = finalize)]
-    pub fn finalize_site(&self, handle: &str, external_input_json: Option<String>) -> String {
+    pub fn finalize_site(&self, handle: &str) -> String {
         set_panic_hook();
-        envelope_ser(
+        envelope_typed(
             "finalize",
-            self.with_engine("finalize", |engine| {
-                engine.finalize_site(handle, external_input_json.as_deref())
-            }),
+            self.with_build_engine(
+                "finalize",
+                site_engine::BuildOperation::Finalize,
+                |engine| engine.finalize_site(handle),
+            ),
         )
     }
 
@@ -1663,6 +1428,48 @@ impl Session {
     ) -> Result<Vec<u8>, wasm_bindgen::JsValue> {
         self.with_engine("readContent", |engine| {
             engine.read_site_content(handle, sha256)
+        })
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+    }
+
+    /// Private renderer bridge: bind one callback-free renderer and its exact
+    /// output namespace to the retained Cycle build.
+    #[wasm_bindgen(js_name = openRenderer)]
+    pub fn open_site_renderer(
+        &self,
+        handle: &str,
+        renderer_json: &str,
+        output_schema: &str,
+        options_json: &str,
+        paths_json: &str,
+    ) -> Result<(), wasm_bindgen::JsValue> {
+        self.with_engine("openRenderer", |engine| {
+            let renderer = serde_json::from_str(renderer_json)
+                .map_err(|error| format!("openRenderer: invalid renderer identity: {error}"))?;
+            let options = serde_json::from_str(options_json)
+                .map_err(|error| format!("openRenderer: invalid renderer options: {error}"))?;
+            let paths = serde_json::from_str(paths_json)
+                .map_err(|error| format!("openRenderer: invalid output paths: {error}"))?;
+            engine
+                .sites
+                .open_renderer(handle, renderer, output_schema.to_string(), options, paths)
+        })
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+    }
+
+    /// Private direct-binary renderer bridge. Rust authenticates and records
+    /// the complete output file now; public `finalize` takes no plan.
+    #[wasm_bindgen(js_name = admitOutput)]
+    pub fn admit_site_output(
+        &self,
+        handle: &str,
+        file_json: &str,
+        bytes: Vec<u8>,
+    ) -> Result<(), wasm_bindgen::JsValue> {
+        self.with_engine("admitOutput", |engine| {
+            let file: site_build::SiteOutputFile = serde_json::from_str(file_json)
+                .map_err(|error| format!("admitOutput: invalid SiteOutputFile: {error}"))?;
+            engine.sites.admit_output(handle, file, bytes)
         })
         .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
     }
@@ -1851,52 +1658,108 @@ fn base64_decode(s: &str) -> Result<Vec<u8>, String> {
 // F6 render surface — Engine methods (Session wrappers below in Session impl).
 // ===========================================================================
 impl Engine {
-    fn resolve_template(&self, coordinate: &str) -> Result<TemplateResolutionWire, String> {
+    fn resolve_template(
+        &self,
+        coordinate: &str,
+    ) -> Result<site_engine::TemplateResolution, String> {
         if self.bundle.is_none() {
-            return Ok(TemplateResolutionWire {
+            return Ok(site_engine::TemplateResolution {
                 satisfied: false,
                 chain: Vec::new(),
                 missing: Some(coordinate.to_string()),
             });
         }
         let environment = self.package_environment()?;
-        let resolution = self.sites.resolve_template(&environment, coordinate)?;
-        Ok(TemplateResolutionWire {
-            satisfied: resolution.satisfied,
-            chain: resolution.chain,
-            missing: resolution.missing,
-        })
+        let resolution = environment.resolve_template(coordinate)?;
+        Ok(resolution)
     }
 
     fn prepare_project_site(
         &mut self,
-        files_json: &str,
-        config: &str,
-        predefined_json: &str,
-        site_files_json: &str,
+        project_revision_json: &str,
         spec_json: &str,
-    ) -> Result<PreparedProjectWire, String> {
-        let spec: SharedGeneratorSpec = serde_json::from_str(spec_json)
-            .map_err(|error| format!("prepareProject: invalid generator specification: {error}"))?;
-        let (inputs, resolved, _packages) = self.project_request(
-            files_json,
-            config,
-            predefined_json,
-            site_files_json,
-            "prepareProject",
-        )?;
-        let environment = self.package_environment()?;
-        prepared_project_wire(
-            self.sites
-                .prepare_project(inputs, resolved, spec, environment),
-        )
+    ) -> Result<
+        site_engine::PreparedProjectResult,
+        site_engine::BuildError<site_engine::CompilationOutcome>,
+    > {
+        let inputs: ProjectRevision =
+            serde_json::from_str(project_revision_json).map_err(|error| {
+                site_engine::BuildError::new(
+                    site_engine::BuildOperation::Prepare,
+                    site_engine::BuildErrorPhase::Input,
+                    site_engine::BuildErrorCode::InvalidInput,
+                    format!("prepareProject: invalid project revision: {error}"),
+                )
+            })?;
+        let spec: SharedGeneratorSpec = serde_json::from_str(spec_json).map_err(|error| {
+            site_engine::BuildError::new(
+                site_engine::BuildOperation::Prepare,
+                site_engine::BuildErrorPhase::Input,
+                site_engine::BuildErrorCode::InvalidInput,
+                format!("prepareProject: invalid generator specification: {error}"),
+            )
+        })?;
+        let environment = self.package_environment().map_err(|message| {
+            site_engine::BuildError::new(
+                site_engine::BuildOperation::Prepare,
+                site_engine::BuildErrorPhase::PackageTransport,
+                site_engine::BuildErrorCode::Integrity,
+                message,
+            )
+        })?;
+        let mut source = CapturedProjectSource(Some(inputs));
+        let mut packages = MountedPackageProvider {
+            resolved: self.resolved_packages.clone(),
+            environment: Some(environment),
+        };
+        let mut prepared = self
+            .sites
+            .prepare_project(&mut source, &mut packages, spec)?;
+        let storage = serde_json::to_value(self.package_storage_metrics()).map_err(|error| {
+            site_engine::BuildError::new(
+                site_engine::BuildOperation::Prepare,
+                site_engine::BuildErrorPhase::PackageTransport,
+                site_engine::BuildErrorCode::Internal,
+                format!("prepareProject: serialize package storage observations: {error}"),
+            )
+        })?;
+        let metrics = storage
+            .as_object()
+            .into_iter()
+            .flatten()
+            .filter_map(|(key, value)| value.as_f64().map(|number| (key.clone(), number)))
+            .collect::<BTreeMap<_, _>>();
+        prepared.events.push(site_engine::BuildEvent {
+            operation: Some(site_engine::BuildOperation::Prepare),
+            build_id: Some(prepared.site.build_id.clone()),
+            stage: site_engine::BuildStage::BundleMount,
+            label: None,
+            bytes: None,
+            total_bytes: None,
+            message: "Measured retained package storage.".into(),
+            fraction: None,
+            from_cache: None,
+            duration_ms: None,
+            input_bytes: None,
+            output_bytes: None,
+            file_count: None,
+            metrics: Some(metrics),
+        });
+        Ok(prepared)
     }
 
-    fn site_outputs(&self, handle: &str) -> Result<OutputCatalogResult, String> {
+    fn site_outputs(
+        &self,
+        handle: &str,
+    ) -> Result<OutputCatalogResult, site_engine::BuildError<()>> {
         self.sites.outputs(handle)
     }
 
-    fn render_site_output(&mut self, handle: &str, path: &str) -> Result<RenderSiteResult, String> {
+    fn render_site_output(
+        &mut self,
+        handle: &str,
+        path: &str,
+    ) -> Result<site_build::ContentRef, site_engine::BuildError<()>> {
         self.sites.render(handle, path)
     }
 
@@ -1907,14 +1770,7 @@ impl Engine {
     fn finalize_site(
         &self,
         handle: &str,
-        external_input_json: Option<&str>,
-    ) -> Result<site_build::SiteOutput, String> {
-        let input = external_input_json
-            .map(|input_json| {
-                serde_json::from_str::<ExternalFinalizeInput>(input_json)
-                    .map_err(|error| format!("finalize: invalid external input: {error}"))
-            })
-            .transpose()?;
-        self.sites.finalize(handle, input)
+    ) -> Result<site_build::SiteOutput, site_engine::BuildError<()>> {
+        self.sites.finalize(handle)
     }
 }

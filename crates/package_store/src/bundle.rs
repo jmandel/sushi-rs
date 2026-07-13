@@ -113,6 +113,8 @@ pub struct BundleSource {
 /// Runtime footprint and lazy-inflate counters for all compact prepared layers.
 /// Backings shared by several package layers are counted exactly once.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct BundleCompressionMetrics {
     pub compressed_retained_bytes: u64,

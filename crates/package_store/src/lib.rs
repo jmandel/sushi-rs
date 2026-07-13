@@ -22,6 +22,7 @@ pub mod prepared;
 pub mod resolve;
 pub mod source;
 pub mod template_loader;
+pub mod wire;
 
 pub use bundle::{
     BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
@@ -45,6 +46,9 @@ pub use source::{DirEntry, DiskSource, PackageSource};
 pub use template_loader::{
     materialize as materialize_template, resolve_base_chain as resolve_template_base_chain,
     AntHookError, TemplatePaths, TemplateResolution, TemplateTree,
+};
+pub use wire::{
+    BundleInput, PackageMountResult, PrepareMountResult, PreparedExport, PreparedStageResult,
 };
 
 /// Fishing type (mirrors `sushi-ts/src/utils/Fishable.ts` `Type`).
@@ -160,6 +164,8 @@ struct DepEntry {
 /// `latest`, `current`, and `dev` unresolved so the acquisition layer can resolve
 /// them against registries/CAS and record a lock.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub struct PackageRequest {
     pub package_id: String,
     pub version: String,

@@ -5,7 +5,7 @@ use site_build::{cycle_semantic as cycle, *};
 
 fn fixture() -> (PreparedGuide, cycle::CycleProjectionInput) {
     let config_path = SourcePath::parse("sushi-config.yaml").unwrap();
-    let project = ProjectRevision {
+    let project = ProjectIdentity {
         project_id: "example.ig".into(),
         revision: "source-1".into(),
         sources: SourceManifest::from_entries([(

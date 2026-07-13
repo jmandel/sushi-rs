@@ -19,6 +19,17 @@ fn round_trip_preserves_exact_reference_and_bytes() {
 }
 
 #[test]
+fn read_only_open_does_not_manufacture_a_missing_store() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing = temp.path().join("missing");
+    assert!(matches!(
+        FileContentStore::open(&missing),
+        Err(StoreError::Io { .. })
+    ));
+    assert!(!missing.exists());
+}
+
+#[test]
 fn publication_rejects_digest_length_and_media_mismatches() {
     let temp = tempfile::tempdir().unwrap();
     let store = FileContentStore::create(temp.path()).unwrap();

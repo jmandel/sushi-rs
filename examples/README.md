@@ -32,12 +32,10 @@ SOURCE_DATE_EPOCH=1783555200 fig prepare <ig-dir> \
   --cache <package-cache> \
   --out <closed-bundle>
 
-# Cycle LiquidJS renders the closed build into a private staging directory and
-# emits a typed declaration for that complete inventory.
-fig finalize <closed-bundle> \
-  --site <private-staging> \
-  --external-plan <plan.json> \
-  --cache <optional-site-output-cache>
+# Cycle LiquidJS opens the closed build, renders directly into ContentStore,
+# and uses the same no-argument Build.finalize lifecycle.
+SITE_BUILD_DIR=<closed-bundle> SITE_GEN_REPLACE_OUTPUT=1 \
+  bun /path/to/cycle/site-gen/build.tsx
 ```
 
 Cycle intentionally uses LiquidJS while Publisher templates use Rust Liquid.

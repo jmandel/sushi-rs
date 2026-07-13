@@ -47,6 +47,8 @@ use std::path::Path;
 /// Absent an entry for a package whose request needs resolution, the resolver
 /// reports a precise `missing` reason rather than guessing.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub struct VersionIndex {
     /// package id -> the list of available version strings (order irrelevant; the
     /// resolver sorts).
@@ -71,6 +73,8 @@ impl VersionIndex {
 
 /// One resolvable package coordinate the host must acquire + mount.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub struct MissingPackage {
     pub package_id: String,
     /// The concrete version the resolver selected (if it could resolve one), or the
@@ -84,6 +88,8 @@ pub struct MissingPackage {
 
 /// Which resolution set surfaced a missing package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum RequestedSet {
     /// Needed for the SUSHI compile load (configured/auto deps + core).
@@ -94,6 +100,8 @@ pub enum RequestedSet {
 
 /// The precise reason a package could not be satisfied from the mounted set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum MissingReason {
     /// The coordinate is fully resolved (concrete version) but not yet mounted —
@@ -108,6 +116,8 @@ pub enum MissingReason {
 /// One iteration's answer: the two well-defined sets, what is still missing, and
 /// whether the closure is complete.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub struct ResolutionStep {
     /// Schema for the resolver semantics represented by this result. Hosts may
     /// persist an exact closure as an optimization, but must discard it when
@@ -141,6 +151,8 @@ pub struct ResolutionStep {
 /// A version request whose answer can change without the project config
 /// changing (`latest`, `current`, `dev`, `x`, or `*`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
 pub struct MutableVersionRequest {
     pub package_id: String,
     pub requested: String,

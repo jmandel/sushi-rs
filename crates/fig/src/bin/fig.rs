@@ -7,13 +7,11 @@
 //! `--json` on every subcommand emits the shared `api_envelope` envelope,
 //! schema-identical to the Session's.
 
-use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use api_envelope::{envelope, API_VERSION};
+use api_envelope::{envelope, envelope_typed, API_VERSION};
 use serde_json::{json, Value};
 
 #[cfg(not(target_family = "wasm"))]
@@ -36,6 +34,9 @@ fn main() {
         Some("outputs") => cmd_outputs(&args),
         Some("render") => cmd_render(&args),
         Some("finalize") => cmd_finalize(&args),
+        // Private Bun renderer IPC. Deliberately absent from help and the
+        // public four-operation CLI surface.
+        Some("__complete-renderer") => cmd_complete_renderer_ipc(&args),
         Some("version") | Some("--version") => {
             let v = fig::version_payload();
             if !json {
@@ -67,7 +68,11 @@ fn main() {
         }
         Err(e) => {
             if json {
-                println!("{}", envelope(op, Err(format!("{e:#}"))));
+                if let Some(error) = e.downcast_ref::<site_engine::BuildError<()>>() {
+                    println!("{}", envelope_typed::<Value, _>(op, Err(error)));
+                } else {
+                    println!("{}", envelope(op, Err(format!("{e:#}"))));
+                }
             } else {
                 eprintln!("fig {op}: {e:#}");
                 std::process::exit(1);
@@ -266,16 +271,18 @@ fn cmd_prepare(args: &[String]) -> Result<Value> {
         .or_else(|| opt(args, "-o"))
         .context("--out <new-bundle-dir> is required")?;
     let build_epoch_secs = resolve_build_epoch(opt(args, "--build-date"))?;
-    let outcome = fig::prepare::prepare(&fig::prepare::PrepareConfig {
-        ig_dir: PathBuf::from(ig),
-        cache_dir: PathBuf::from(cache),
-        out_dir: PathBuf::from(out),
-        target: target.to_string(),
-        template_coordinate: opt(args, "--template").map(str::to_string),
-        active_tables: has(args, "--active-tables"),
-        run_uuid: opt(args, "--run-uuid").map(str::to_string),
-        build_epoch_secs,
-    })?;
+    let outcome = fig::prepare::prepare(
+        Path::new(ig),
+        Path::new(cache),
+        Path::new(out),
+        &fig::prepare::PrepareOptions {
+            target: target.to_string(),
+            template_coordinate: opt(args, "--template").map(str::to_string),
+            active_tables: has(args, "--active-tables"),
+            run_uuid: opt(args, "--run-uuid").map(str::to_string),
+            build_epoch_secs,
+        },
+    )?;
     if !has(args, "--json") {
         eprintln!(
             "fig prepare: {} sources + {} packages -> {} objects at {} ({})",
@@ -290,44 +297,7 @@ fn cmd_prepare(args: &[String]) -> Result<Value> {
 // ===========================================================================
 fn cmd_outputs(args: &[String]) -> Result<Value> {
     let bundle = positional(args, 2).context("usage: fig outputs <closed-bundle>")?;
-    if let Some(cache) = opt(args, "--cache") {
-        let total_started = Instant::now();
-        let verify_started = Instant::now();
-        let closed = fig::output_cache::admit(
-            Path::new(bundle),
-            Path::new(cache),
-            opt(args, "--into").map(Path::new),
-        )?;
-        let verify_input_ms = millis(verify_started.elapsed());
-        let (renderer, output_schema, options) = output_cache_derivation(args)?;
-        let lookup_started = Instant::now();
-        let loaded = fig::output_cache::load(
-            &closed,
-            Path::new(cache),
-            &renderer,
-            &output_schema,
-            &options,
-        )?;
-        let lookup_ms = millis(lookup_started.elapsed());
-        let materialize_started = Instant::now();
-        if let (Some(output), Some(destination)) = (&loaded.output, opt(args, "--into")) {
-            fig::output_cache::materialize(output, Path::new(cache), Path::new(destination))?;
-        }
-        return Ok(json!({
-            "cacheHit": loaded.output.is_some(),
-            "cacheKey": loaded.cache_key,
-            "outputId": loaded.output.as_ref().map(|output| output.output_id()),
-            "files": loaded.output.as_ref().map_or(0, |output| output.files().len()),
-            "out": loaded.output.as_ref().and_then(|_| opt(args, "--into")),
-            "timings": {
-                "verifyInputMs": verify_input_ms,
-                "lookupMs": lookup_ms,
-                "materializeMs": millis(materialize_started.elapsed()),
-                "totalMs": millis(total_started.elapsed()),
-            },
-        }));
-    }
-    let catalog = fig::site::outputs(Path::new(bundle))?;
+    let catalog = fig::site::Build::open(Path::new(bundle))?.outputs()?;
     let payload = serde_json::to_value(&catalog)?;
     if !has(args, "--json") {
         println!("{}", serde_json::to_string_pretty(&payload)?);
@@ -339,103 +309,77 @@ fn cmd_render(args: &[String]) -> Result<Value> {
     let bundle =
         positional(args, 2).context("usage: fig render <closed-bundle> <path> [-o <file>]")?;
     let path = positional(args, 3).context("render needs one path declared by fig outputs")?;
-    let outcome = fig::site::render(Path::new(bundle), path)?;
+    let mut build = fig::site::Build::open(Path::new(bundle))?;
+    let content = build.render(path)?;
+    let bytes = build.read(&content)?;
     if let Some(output) = opt(args, "-o").or_else(|| opt(args, "--out")) {
-        std::fs::write(output, &outcome.bytes)
+        std::fs::write(output, &bytes)
             .with_context(|| format!("write rendered output {output}"))?;
     } else if !has(args, "--json") {
-        std::io::stdout().write_all(&outcome.bytes)?;
+        std::io::stdout().write_all(&bytes)?;
     }
-    Ok(serde_json::to_value(outcome)?)
+    Ok(serde_json::to_value(content)?)
 }
 
 fn cmd_finalize(args: &[String]) -> Result<Value> {
-    let bundle = positional(args, 2).context(
-        "usage: fig finalize <closed-bundle> (-o <new-site-dir> | --site <staging> --external-plan <file|->)",
-    )?;
-    if let Some(site) = opt(args, "--site") {
-        let plan_path = opt(args, "--external-plan")
-            .context("external finalize needs --external-plan <file|->")?;
-        let mut bytes = Vec::new();
-        if plan_path == "-" {
-            std::io::stdin().read_to_end(&mut bytes)?;
-        } else {
-            bytes = std::fs::read(plan_path)
-                .with_context(|| format!("read external finalize plan {plan_path}"))?;
-        }
-        let plan: fig::site::ExternalFinalizePlan = serde_json::from_slice(&bytes)
-            .with_context(|| format!("parse external finalize plan {plan_path}"))?;
-        let outcome = fig::site::finalize(
-            Path::new(bundle),
-            fig::site::FinalizeRequest::External {
-                site: Path::new(site),
-                plan,
-                cache_root: opt(args, "--cache").map(Path::new),
-            },
-        )?;
-        if !has(args, "--json") {
-            eprintln!(
-                "fig finalize: authenticated {} external files ({} bytes) at {} ({})",
-                outcome.files, outcome.bytes, outcome.out, outcome.output_id
-            );
-        }
-        return Ok(serde_json::to_value(outcome)?);
-    }
+    let bundle =
+        positional(args, 2).context("usage: fig finalize <closed-bundle> -o <site-dir>")?;
     let output = opt(args, "-o")
         .or_else(|| opt(args, "--out"))
         .context("finalize needs -o <new-site-dir>")?;
-    let outcome = fig::site::finalize(
-        Path::new(bundle),
-        fig::site::FinalizeRequest::Publisher {
-            destination: Path::new(output),
-        },
+    let receipt = fig::site::publish_publisher(
+        fig::site::Build::open(Path::new(bundle))?,
+        Path::new(output),
     )?;
     if !has(args, "--json") {
         eprintln!(
             "fig finalize: {} files ({} bytes) -> {} ({})",
-            outcome.files, outcome.bytes, outcome.out, outcome.output_id
+            receipt.files().len(),
+            receipt
+                .files()
+                .iter()
+                .map(|file| file.content.byte_length)
+                .sum::<u64>(),
+            output,
+            receipt.output_id()
         );
     }
-    Ok(serde_json::to_value(outcome)?)
+    Ok(serde_json::to_value(receipt)?)
 }
 
-fn output_cache_derivation(
-    args: &[String],
-) -> Result<(
-    site_build::RendererImplementation,
-    String,
-    BTreeMap<String, String>,
-)> {
-    let renderer_id =
-        opt(args, "--renderer-id").context("outputs cache probe needs --renderer-id")?;
-    let renderer_version =
-        opt(args, "--renderer-version").context("outputs cache probe needs --renderer-version")?;
-    let recipe = opt(args, "--recipe-sha256")
-        .context("outputs cache probe needs --recipe-sha256 <64 lowercase hex>")?;
-    let output_schema =
-        opt(args, "--output-schema").context("outputs cache probe needs --output-schema")?;
-    let mut options = BTreeMap::new();
-    for option in collect(args, "--option") {
-        let (key, value) = option
-            .split_once('=')
-            .with_context(|| format!("outputs option must be key=value, got {option}"))?;
-        if options.insert(key.to_string(), value.to_string()).is_some() {
-            bail!("outputs option repeats key {key}");
-        }
-    }
-    Ok((
-        site_build::RendererImplementation {
-            id: renderer_id.to_string(),
-            version: renderer_version.to_string(),
-            recipe_sha256: site_build::Sha256Digest::parse(recipe)?,
-        },
+fn cmd_complete_renderer_ipc(args: &[String]) -> Result<Value> {
+    let bundle = positional(args, 2).context("private renderer IPC needs a closed bundle")?;
+    let input_build_id = opt(args, "--input-build-id")
+        .context("private renderer IPC needs --input-build-id <sb1-sha256:...>")?;
+    let renderer_json = opt(args, "--renderer-json")
+        .context("private renderer IPC needs --renderer-json <json>")?;
+    let renderer: site_build::RendererImplementation =
+        serde_json::from_str(renderer_json).context("parse private renderer identity")?;
+    let output_schema = opt(args, "--output-schema")
+        .context("private renderer IPC needs --output-schema <schema>")?;
+    let options_json =
+        opt(args, "--options-json").context("private renderer IPC needs --options-json <json>")?;
+    let options: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(options_json).context("parse private renderer options")?;
+    let content_store = opt(args, "--content-store")
+        .context("private renderer IPC needs --content-store <objects>")?;
+    let receipt = opt(args, "--receipt").context("private renderer IPC needs --receipt <file>")?;
+    let mut bytes = Vec::new();
+    std::io::stdin().read_to_end(&mut bytes)?;
+    let files: Vec<site_build::SiteOutputFile> =
+        serde_json::from_slice(&bytes).context("parse private renderer output files")?;
+    let output = fig::site::complete_renderer_ipc(
+        fig::site::Build::open(Path::new(bundle))?,
+        Path::new(content_store),
+        input_build_id.to_string(),
+        renderer,
         output_schema.to_string(),
         options,
-    ))
-}
-
-fn millis(duration: std::time::Duration) -> f64 {
-    duration.as_secs_f64() * 1000.0
+        files,
+        Path::new(receipt),
+        opt(args, "--cache").map(Path::new),
+    )?;
+    Ok(serde_json::to_value(output)?)
 }
 
 fn positional<'a>(args: &'a [String], i: usize) -> Option<&'a str> {
@@ -532,11 +476,9 @@ fn print_usage() {
          \x20 prepare <ig> --target <cycle-site/v2|publisher-site/v1>\n\
          \x20         --cache <d> --out <new> --build-date <time>\n\
          \x20         [--template <id#version>]                Closed SiteBuild bundle\n\
-         \x20 outputs <bundle>                                 Output catalog/cache probe\n\
+         \x20 outputs <bundle>                                 Output catalog\n\
          \x20 render <bundle> <path> [-o <file>]               Render one declared output\n\
          \x20 finalize <bundle> -o <new-site-dir>              Canonical Publisher site\n\
-         \x20 finalize <bundle> --site <staging>               Canonical external receipt\n\
-         \x20         --external-plan <file|-> [--cache <d>]\n\
          \x20 version                                          Engine + pins\n\
          \n\
          Add --json to any command for the apiVersion result envelope.",

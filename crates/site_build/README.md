@@ -17,9 +17,8 @@ A `SiteBuild` records:
 - the producer, recipe, and actual read dependencies of each artifact; and
 - stable build diagnostics.
 
-New values use the `site-build/v2` schema. The prior `site-build/v1` tag remains
-recognizable on the wire so it can be rejected explicitly as unsupported; it is
-not adapted into the v2 contract.
+The only supported wire value is `site-build/v2`. Older tags are rejected by
+deserialization; there is no compatibility adapter or upgrade path.
 
 The value is immutable once constructed. Its `sb1-sha256:...` build id covers
 every other field using recursively key-sorted canonical JSON. Deserialization
@@ -67,29 +66,21 @@ uses recursively key-sorted canonical JSON.
 the same Cycle closure; relational rows and reverse adapters are not part of
 the contract.
 
-## Exact rendered-output caching
+## SiteOutput
 
 `SiteOutput` is the renderer-neutral, browser-serializable receipt for a
-complete materialized site. Its two identities have different jobs:
-
-- `OutputCacheKey` (`sok1-sha256:`) is computable before rendering. It binds the
-  closed `SiteBuild` id to renderer id/version, an exact renderer recipe digest,
-  output schema, and normalized options. Hosts may use this only as a cache
-  lookup key.
-- `SiteOutputId` (`so1-sha256:`) additionally binds the canonical sorted output
-  inventory: each safe relative path, content digest/length/media type,
-  producer, source recipe, and owner.
+complete materialized site. `SiteOutputId` (`so1-sha256:`) binds the exact
+closed `SiteBuild`, renderer id/version/recipe, output schema/options, and the
+canonical sorted output inventory: each safe relative path, content
+digest/length/media type, producer, source recipe, and owner.
 
 `SiteOutput::verify_for` rejects a receipt from another closed build, while
 `verify_store` reads and verifies every addressed object through the shared
-`ContentStore`. Paths and mutable project names are never cache keys. A hit is
-usable only after both manifest identities and every referenced byte verify.
-`FileSiteOutputCache` provides the native implementation: canonical manifests
-are atomically published under `OutputCacheKey`, hits re-read every object, and
-different outputs under the same derivation key are rejected as renderer
-nondeterminism rather than overwritten. The browser currently persists verified
-content and preview publications in OPFS; it does not expose a second
-SiteOutput-cache representation.
+`ContentStore`. The contract deliberately defines no cache key, cache trait, or
+filesystem cache. A host may privately index an exact derivation, but a hit is
+usable only after parsing an ordinary canonical `SiteOutput`, checking its
+input identity, and verifying every referenced byte. That optimization cannot
+become another serialized build value or functional operation.
 
 ```sh
 cargo test -p site_build

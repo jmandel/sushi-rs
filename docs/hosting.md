@@ -37,14 +37,15 @@ runtime is installed.
 ## The only host API
 
 ```text
-prepare(project, generatorSpec) -> BuildHandle
-outputs(handle)                 -> OutputCatalog
-render(handle, path)            -> Output
-finalize(handle)                -> SiteOutput
+prepare(project, generatorSpec) -> Build
+build.outputs()                 -> OutputCatalog
+build.render(path)              -> ContentRef
+build.finalize()                -> SiteOutput
 ```
 
-`BuildHandle`, `OutputCatalog`, and `Output` are scoped views, not stored domain
-values. A handle names one immutable `SiteBuild`. Rendering a path can memoize
+`Build`, `OutputCatalog`, and `ContentRef` are scoped views, not stored domain
+values. A host may route the facade through a private handle naming one
+immutable `SiteBuild`; the facade does not expose that handle. Rendering a path can memoize
 its addressed bytes, but it neither mutates build identity nor creates a
 successor handle. Rendering A/B/A must produce the same bytes as B/A/B.
 
@@ -59,12 +60,16 @@ partial runtime. `wasm_api` parses and serializes transport; it does not
 assemble a second site model.
 
 The browser worker exposes these four operations. Lower-level binary reads and
-the external-renderer branch of finalization are private transport plumbing:
+the external renderer bridge are private transport plumbing:
 
 - `readContent(handle, digest)` returns verified bytes for a `ContentRef`;
-- `finalize(handle, externalInput?)` uses the optional typed external input only
-  for an external-builder handle; it admits a complete catalog and verified
-  file references so Rust can construct the canonical `SiteOutput`.
+- `openRenderer` binds the callback-free Cycle renderer identity and exact path
+  catalog once;
+- `admitOutput` authenticates one generated `SiteOutputFile` and its direct
+  bytes as rendering completes.
+
+After those private steps, Cycle calls the same no-argument `finalize(handle)`
+as Publisher. No bulk renderer plan crosses into SiteEngine.
 
 Neither is another semantic handoff. Every ordinary WASM Session owns an
 independent engine; there is no process-global Session.
@@ -109,8 +114,8 @@ Rust runtime.
 
 Cycle restoration verifies and installs the same closed external-builder
 handle and addressed objects. Cycle remains callback-free; its LiquidJS host
-owns catalog construction and rendering, then submits the complete result for
-Rust finalization.
+owns catalog construction and rendering, binds the catalog, and admits each
+verified output before ordinary Rust finalization.
 
 Restoration correctness requires identical catalogs, output `ContentRef`s and
 bytes regardless of render order, and identical canonical `SiteOutput` bytes
@@ -124,17 +129,16 @@ Aliases may share one stored object.
 
 Publisher `finalize` succeeds only when every declared output is ready and
 verified. A host must publish all referenced objects before atomically
-publishing the `SiteOutput` receipt. A `SiteOutputCache` may index a complete
-verified output by the exact closed build, renderer implementation and recipe,
-output schema, and options. A cache hit reconstructs that same `SiteOutput`; it
-does not authorize a parallel cached representation.
+publishing the `SiteOutput` receipt. A host may privately index an exact
+derivation, but no cache key/type/operation appears in the functional API or
+receipt. A hit is accepted only after ordinary `SiteOutput` and ContentStore
+verification.
 
 For an external renderer, Rust verifies exact catalog equality, safe paths,
-media types, and content references before constructing the receipt. Native Fig
-also re-reads and authenticates the complete private staging tree. In the
-browser, the host has already put and verified each referenced body in its
-ContentStore before calling Rust. Renderer code cannot seal a second
-authoritative receipt.
+media types, and content references before constructing the receipt. Native
+Cycle renders directly into filesystem CAS; the browser renders directly into
+OPFS CAS. The host has already put and verified each referenced body before
+calling Rust. Renderer code cannot seal a second authoritative receipt.
 
 ## Template acquisition
 
@@ -182,16 +186,14 @@ fig outputs <closed-bundle>
 fig render <closed-bundle> en/index.html -o index.html
 fig finalize <closed-bundle> -o <new-site-directory>
 
-# Cycle: an external LiquidJS renderer fills a private staging tree and plan.
+# Cycle: prepare the closed input, then open the shared LiquidJS Build facade.
 fig prepare <ig-dir> \
   --target cycle-site/v2 \
   --cache <package-cache> \
   --out <closed-bundle> \
   --build-date <epoch-or-RFC3339>
-fig finalize <closed-bundle> \
-  --site <private-staging> \
-  --external-plan <plan.json> \
-  --cache <optional-site-output-cache>
+SITE_BUILD_DIR=<closed-bundle> SITE_GEN_REPLACE_OUTPUT=1 \
+  bun site-gen/build.tsx
 ```
 
 The bundle is exactly `site-build.json` plus `objects/sha256/<digest>`. Native
@@ -213,6 +215,8 @@ The following are not compatibility APIs and must not be restored:
 - ambient `renderPage`, `renderFragment`, `listPages`, mutable renderer globals,
   and successor handles;
 - staged Fig `fragment`, `fragments`, `produce`, build-root `render`, and `watch`;
+- public external-finalization plans/flags and optional finalize payloads;
+- public output-cache keys, traits, implementations, and commands;
 - Fig's mutable `temp/pages` handoff, standalone template materializer,
   `--template-dir`, and page-only watch benchmark;
 - host-authored Publisher fragments, runtime assets, or `SiteOutput` receipts.

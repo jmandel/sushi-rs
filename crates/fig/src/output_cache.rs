@@ -1,46 +1,13 @@
-//! Native host integration for exact complete-site output reuse.
-//!
-//! Rust finalization publishes verified receipts. This module performs the
-//! read side only: [`load`] verifies an exact cache hit and [`materialize`]
-//! fills a caller-owned private staging tree.
-//!
-//! The cache root contains only the existing native implementations:
-//! `manifests/` is a `FileSiteOutputCache`, and `objects/sha256/` is a
-//! `FileContentStore`. No additional manifest or cached domain value exists.
+//! Private native filesystem validation shared by the Fig lifecycle adapters.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use content_store::{ContentStore, FileContentStore};
-use site_build::{
-    ClosedSiteBuild, FileSiteOutputCache, OutputCacheKey, RendererImplementation, SiteOutput,
-    SiteOutputCache, SITE_OUTPUT_MANIFEST_PATH,
-};
-
-/// Result of one verified native output-cache lookup.
-#[derive(Clone, Debug)]
-pub struct LoadOutcome {
-    pub cache_key: OutputCacheKey,
-    pub output: Option<SiteOutput>,
-}
-
-/// Admit a cache lookup through the target-specific SiteEngine lifecycle after
-/// proving that lookup/materialization paths cannot mutate one another.
-pub fn admit(
-    bundle: &Path,
-    cache_root: &Path,
-    destination: Option<&Path>,
-) -> Result<ClosedSiteBuild> {
-    let mut protected = vec![bundle, cache_root];
-    if let Some(destination) = destination {
-        protected.push(destination);
-    }
-    require_disjoint_paths(&protected)?;
-    crate::site::admit(bundle)
-}
+use content_store::ContentStore;
+use serde::Serialize;
+use site_build::ClosedSiteBuild;
 
 /// Parse and authenticate the canonical manifest and bundle layout. The caller
 /// must then authenticate and admit the object closure exactly once through
@@ -65,83 +32,6 @@ pub(crate) fn open_closed_bundle_manifest(bundle: &Path) -> Result<ClosedSiteBui
     Ok(closed)
 }
 
-/// Compute the exact pre-render key for a closed build and renderer recipe.
-pub fn cache_key(
-    input: &ClosedSiteBuild,
-    renderer: &RendererImplementation,
-    output_schema: &str,
-    options: &BTreeMap<String, String>,
-) -> Result<OutputCacheKey> {
-    OutputCacheKey::for_closed(input, renderer, output_schema, options).map_err(Into::into)
-}
-
-/// Load and completely verify one cached `SiteOutput`. `None` is an ordinary
-/// miss. A corrupt manifest or missing/changed object is an error, never a miss.
-pub fn load(
-    input: &ClosedSiteBuild,
-    cache_root: &Path,
-    renderer: &RendererImplementation,
-    output_schema: &str,
-    options: &BTreeMap<String, String>,
-) -> Result<LoadOutcome> {
-    let key = cache_key(input, renderer, output_schema, options)?;
-    let (manifests, objects) = open_output_cache(cache_root)?;
-    let output = manifests
-        .load(&key, input, &objects)
-        .context("load verified SiteOutput cache entry")?;
-    Ok(LoadOutcome {
-        cache_key: key,
-        output,
-    })
-}
-
-/// Materialize a verified hit into a caller-owned, existing empty staging
-/// directory. This is the composition point for native hosts that already own
-/// an atomic publication transaction (Cycle's `AtomicOutputPublication`). A
-/// failure may leave partial files only in that private staging directory; the
-/// caller must abort its transaction.
-pub fn materialize(output: &SiteOutput, cache_root: &Path, destination: &Path) -> Result<()> {
-    require_disjoint_paths(&[cache_root, destination])?;
-    require_real_dir(destination, "output staging directory")?;
-    if fs::read_dir(destination)?.next().is_some() {
-        bail!(
-            "output staging directory is not empty: {}",
-            destination.display()
-        );
-    }
-    let (_, objects) = open_output_cache(cache_root)?;
-    output.verify_store(&objects)?;
-    for file in output.files() {
-        let bytes = objects.read(&file.content)?;
-        let path = destination.join(file.path.as_str());
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let mut output_file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&path)
-            .with_context(|| format!("create cached output {}", file.path))?;
-        output_file
-            .write_all(bytes.bytes())
-            .with_context(|| format!("materialize cached output {}", file.path))?;
-    }
-    let mut receipt = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(destination.join(SITE_OUTPUT_MANIFEST_PATH))?;
-    receipt.write_all(&output.canonical_bytes()?)?;
-    let expected = output
-        .files()
-        .iter()
-        .map(|file| file.path.as_str().to_string())
-        .collect::<BTreeSet<_>>();
-    if list_site_files(destination)? != expected {
-        bail!("materialized cache hit does not match its SiteOutput inventory");
-    }
-    Ok(())
-}
-
 pub(crate) fn require_disjoint_paths(paths: &[&Path]) -> Result<()> {
     let normalized = paths
         .iter()
@@ -161,6 +51,163 @@ pub(crate) fn require_disjoint_paths(paths: &[&Path]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PrivateOutputCacheKey<'a> {
+    schema_version: &'a str,
+    input_build_id: &'a site_build::OutputInputId,
+    renderer: &'a site_build::RendererImplementation,
+    output_schema: &'a str,
+    options: &'a std::collections::BTreeMap<String, String>,
+}
+
+fn output_cache_key(output: &site_build::SiteOutput) -> Result<String> {
+    let bytes = site_build::canonical_json_bytes(&PrivateOutputCacheKey {
+        schema_version: output.schema_version(),
+        input_build_id: output.input_build_id(),
+        renderer: output.renderer(),
+        output_schema: output.output_schema(),
+        options: output.options(),
+    })?;
+    Ok(format!(
+        "sok1-sha256:{}",
+        site_build::Sha256Digest::of_bytes(&bytes)
+    ))
+}
+
+fn cached_manifest_path(root: &Path, key: &str) -> Result<PathBuf> {
+    let digest = key
+        .strip_prefix("sok1-sha256:")
+        .ok_or_else(|| anyhow::anyhow!("invalid private SiteOutput cache key"))?;
+    site_build::Sha256Digest::parse(digest.to_string())?;
+    Ok(root.join(format!("{digest}.json")))
+}
+
+fn read_cached_output(
+    path: &Path,
+    expected_key: &str,
+    input: &ClosedSiteBuild,
+    objects: &dyn ContentStore,
+) -> Result<Option<site_build::SiteOutput>> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error).with_context(|| format!("inspect cache manifest {}", path.display()))
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        bail!(
+            "SiteOutput cache manifest is not a regular file: {}",
+            path.display()
+        );
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .with_context(|| format!("open cache manifest {}", path.display()))?;
+    let opened = file.metadata()?;
+    let after = fs::symlink_metadata(path)?;
+    if after.file_type().is_symlink() || !opened.is_file() || !after.is_file() {
+        bail!(
+            "SiteOutput cache manifest changed while opening: {}",
+            path.display()
+        );
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.dev() != opened.dev()
+            || metadata.ino() != opened.ino()
+            || after.dev() != opened.dev()
+            || after.ino() != opened.ino()
+        {
+            bail!(
+                "SiteOutput cache manifest changed while opening: {}",
+                path.display()
+            );
+        }
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
+    file.read_to_end(&mut bytes)?;
+    let output: site_build::SiteOutput = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse cache manifest {}", path.display()))?;
+    if output.canonical_bytes()? != bytes {
+        bail!(
+            "SiteOutput cache manifest is not canonical: {}",
+            path.display()
+        );
+    }
+    let actual_key = output_cache_key(&output)?;
+    if actual_key != expected_key {
+        bail!("SiteOutput cache manifest is stored under the wrong private key");
+    }
+    output.verify_for(input)?;
+    output.verify_store(objects)?;
+    Ok(Some(output))
+}
+
+/// Private native optimization: publish a verified canonical receipt under a
+/// derivation-only pointer. Neither the key nor this store is part of Fig's
+/// functional Build API.
+pub(crate) fn publish_site_output_cache(
+    cache_root: &Path,
+    output: &site_build::SiteOutput,
+    input: &ClosedSiteBuild,
+    objects: &dyn ContentStore,
+) -> Result<()> {
+    output.verify_for(input)?;
+    output.verify_store(objects)?;
+    let root = cache_root.join("manifests");
+    fs::create_dir_all(&root)
+        .with_context(|| format!("create SiteOutput cache {}", root.display()))?;
+    let metadata = fs::symlink_metadata(&root)?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        bail!(
+            "SiteOutput cache root is not a real directory: {}",
+            root.display()
+        );
+    }
+    let root = root.canonicalize()?;
+    let key = output_cache_key(output)?;
+    let destination = cached_manifest_path(&root, &key)?;
+    if let Some(existing) = read_cached_output(&destination, &key, input, objects)? {
+        if existing.output_id() == output.output_id() {
+            return Ok(());
+        }
+        bail!(
+            "private SiteOutput cache key names different outputs: {} and {}",
+            existing.output_id(),
+            output.output_id()
+        );
+    }
+    let mut temporary = tempfile::NamedTempFile::new_in(&root)?;
+    temporary.write_all(&output.canonical_bytes()?)?;
+    temporary.as_file().sync_all()?;
+    match temporary.persist_noclobber(&destination) {
+        Ok(_) => {
+            #[cfg(unix)]
+            std::fs::File::open(&root)?.sync_all()?;
+            Ok(())
+        }
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = read_cached_output(&destination, &key, input, objects)?
+                .ok_or_else(|| anyhow::anyhow!("cache manifest vanished after collision"))?;
+            if existing.output_id() == output.output_id() {
+                Ok(())
+            } else {
+                bail!(
+                    "private SiteOutput cache key names different outputs: {} and {}",
+                    existing.output_id(),
+                    output.output_id()
+                )
+            }
+        }
+        Err(error) => Err(error.error)
+            .with_context(|| format!("publish cache manifest {}", destination.display())),
+    }
 }
 
 fn canonical_existing_or_future(path: &Path) -> Result<PathBuf> {
@@ -202,14 +249,6 @@ fn canonical_existing_or_future(path: &Path) -> Result<PathBuf> {
     }
 }
 
-fn open_output_cache(cache_root: &Path) -> Result<(FileSiteOutputCache, FileContentStore)> {
-    let manifests = FileSiteOutputCache::create(cache_root.join("manifests"))
-        .context("open SiteOutput manifest cache")?;
-    let objects = FileContentStore::create(cache_root.join("objects/sha256"))
-        .context("open SiteOutput object store")?;
-    Ok((manifests, objects))
-}
-
 fn require_real_dir(path: &Path, label: &str) -> Result<()> {
     let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("inspect {label} {}", path.display()))?;
@@ -228,81 +267,29 @@ fn require_real_file(path: &Path, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn list_site_files(root: &Path) -> Result<BTreeSet<String>> {
-    let mut files = BTreeSet::new();
-    let mut pending = vec![(root.to_path_buf(), PathBuf::new())];
-    while let Some((directory, relative)) = pending.pop() {
-        let mut entries = fs::read_dir(&directory)
-            .with_context(|| format!("enumerate site output {}", directory.display()))?
-            .collect::<std::io::Result<Vec<_>>>()?;
-        entries.sort_by_key(|entry| entry.file_name());
-        for entry in entries {
-            let metadata = entry
-                .file_type()
-                .with_context(|| format!("inspect site output {}", entry.path().display()))?;
-            if metadata.is_symlink() {
-                bail!(
-                    "site output may not contain symlinks: {}",
-                    entry.path().display()
-                );
-            }
-            let child_relative = relative.join(entry.file_name());
-            if metadata.is_dir() {
-                pending.push((entry.path(), child_relative));
-            } else if metadata.is_file() {
-                let normalized = child_relative
-                    .components()
-                    .map(|component| {
-                        let std::path::Component::Normal(value) = component else {
-                            unreachable!("read_dir child path is normalized");
-                        };
-                        value.to_str().ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "site output path is not UTF-8: {}",
-                                entry.path().display()
-                            )
-                        })
-                    })
-                    .collect::<Result<Vec<_>>>()?
-                    .join("/");
-                if normalized != SITE_OUTPUT_MANIFEST_PATH {
-                    files.insert(normalized);
-                }
-            } else {
-                bail!(
-                    "site output member is not a regular file: {}",
-                    entry.path().display()
-                );
-            }
-        }
-    }
-    Ok(files)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use content_store::{ContentStore, FileContentStore};
     use site_build::{
-        ArtifactCatalog, ContentRef, OutputPath, OutputProducer, PackageLock, ProducerRef,
-        ProjectRevision, RenderMode, RenderPlan, RenderTarget, Sha256Digest, SiteBuild,
-        SiteOutputFile, SourceManifest,
+        ArtifactCatalog, ContentRef, OutputPath, OutputProducer, PackageLock, ProjectIdentity,
+        RenderMode, RenderPlan, RenderTarget, RendererImplementation, Sha256Digest, SiteBuild,
+        SiteOutput, SiteOutputFile, SourceManifest,
     };
-    fn fixture() -> (
-        tempfile::TempDir,
-        ClosedSiteBuild,
-        RendererImplementation,
-        SiteOutput,
-    ) {
-        let temp = tempfile::tempdir().unwrap();
-        let closed = SiteBuild::new(
-            ProjectRevision {
-                project_id: "demo.ig".into(),
-                revision: "exact".into(),
+
+    use super::{cached_manifest_path, output_cache_key, publish_site_output_cache};
+
+    fn closed(project: &str) -> site_build::ClosedSiteBuild {
+        SiteBuild::new(
+            ProjectIdentity {
+                project_id: project.into(),
+                revision: "exact-sources".into(),
                 sources: SourceManifest::default(),
             },
             PackageLock::default(),
             RenderTarget {
-                renderer: ProducerRef::new("cycle-site", "2"),
+                renderer: site_build::ProducerRef::new("cycle-site", "2"),
                 mode: RenderMode::ExternalBuilder,
                 fhir_version: "4.0.1".into(),
                 template: None,
@@ -314,137 +301,150 @@ mod tests {
         )
         .unwrap()
         .close()
-        .unwrap();
-        let renderer = RendererImplementation {
+        .unwrap()
+    }
+
+    fn renderer() -> RendererImplementation {
+        RendererImplementation {
             id: "cycle-site".into(),
-            version: "1".into(),
-            recipe_sha256: Sha256Digest::of_bytes(b"renderer recipe"),
-        };
-        let output = SiteOutput::new(
-            &closed,
-            renderer.clone(),
-            "cycle-static-site/v1",
-            BTreeMap::from([("minify".into(), "true".into())]),
+            version: "1.0.0".into(),
+            recipe_sha256: Sha256Digest::of_bytes(b"recipe"),
+        }
+    }
+
+    fn output(input: &site_build::ClosedSiteBuild, bytes: &[u8]) -> SiteOutput {
+        SiteOutput::new(
+            input,
+            renderer(),
+            "static-site/v1",
+            BTreeMap::from([("locale".into(), "en".into())]),
             [SiteOutputFile {
-                path: OutputPath::parse("en/index.html").unwrap(),
-                content: ContentRef::of_bytes(b"<h1>Demo</h1>", Some("text/html")),
+                path: OutputPath::parse("index.html").unwrap(),
+                content: ContentRef::of_bytes(bytes, Some("text/html")),
                 producer: OutputProducer {
-                    id: "cycle-site".into(),
+                    id: "cycle-page".into(),
                     version: "1".into(),
                 },
-                source: Some("render-page".into()),
+                source: Some("page recipe".into()),
                 owner: None,
             }],
         )
-        .unwrap();
-        (temp, closed, renderer, output)
+        .unwrap()
     }
 
-    fn write_bundle(root: &Path, closed: &ClosedSiteBuild) {
-        fs::create_dir_all(root.join("objects/sha256")).unwrap();
-        fs::write(
-            root.join("site-build.json"),
-            closed.site_build().canonical_bytes().unwrap(),
-        )
-        .unwrap();
+    fn store_with(root: &Path, output: &SiteOutput, bytes: &[u8]) -> FileContentStore {
+        let store = FileContentStore::create(root).unwrap();
+        store.put(&output.files()[0].content, bytes).unwrap();
+        store
     }
 
-    fn write_site(root: &Path, output: &SiteOutput) {
-        fs::create_dir_all(root.join("en")).unwrap();
-        fs::write(root.join("en/index.html"), b"<h1>Demo</h1>").unwrap();
-        fs::write(
-            root.join(SITE_OUTPUT_MANIFEST_PATH),
-            output.canonical_bytes().unwrap(),
-        )
-        .unwrap();
-    }
+    use std::path::Path;
 
-    fn seed_cache(cache: &Path, closed: &ClosedSiteBuild, output: &SiteOutput) {
-        let (manifests, objects) = open_output_cache(cache).unwrap();
-        objects
-            .put(&output.files()[0].content, b"<h1>Demo</h1>")
-            .unwrap();
-        manifests.publish(output, closed, &objects).unwrap();
+    #[test]
+    fn private_key_matches_the_independent_cycle_fixture() {
+        let output: SiteOutput = serde_json::from_value(serde_json::json!({
+            "schemaVersion": "site-output/v1",
+            "inputBuildId": "sb1-sha256:5eb1101c55a13f90a6af2ef851eb32705b663caf669dc8b596baad690f15495d",
+            "renderer": {
+                "id": "cycle-site",
+                "version": "1.0.0",
+                "recipeSha256": "e1d8e552330911f9f779f85b6f2c00a15e790dcc3fbb3b28f5da1d660a30c5b8"
+            },
+            "outputSchema": "static-site/v1",
+            "options": { "locale": "en" },
+            "files": [{
+                "path": "index.html",
+                "content": {
+                    "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+                    "byteLength": 5,
+                    "mediaType": "text/html"
+                },
+                "producer": { "id": "cycle-page", "version": "1" },
+                "source": "page recipe"
+            }],
+            "outputId": "so1-sha256:35e7078d4768dd1565de1097e61ec4e09d809a127275a934626eeae09e36eee5"
+        }))
+        .unwrap();
+
+        assert_eq!(
+            output_cache_key(&output).unwrap(),
+            "sok1-sha256:52a6568c5df7d5db15d43a1c5c1ce4eb0a64cffad5f4c2dc53ba09335180af2b"
+        );
     }
 
     #[test]
-    fn miss_verified_hit_and_atomic_materialization_share_one_site_output() {
-        let (temp, closed, renderer, output) = fixture();
-        let bundle = temp.path().join("bundle");
+    fn publication_is_idempotent_and_does_not_replace_the_manifest() {
+        let input = closed("example.ig");
+        let output = output(&input, b"hello");
+        let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().join("cache");
-        write_bundle(&bundle, &closed);
-        let opened = closed.clone();
-        let options = BTreeMap::from([("minify".into(), "true".into())]);
+        let store = store_with(&temp.path().join("objects"), &output, b"hello");
 
-        let miss = load(&opened, &cache, &renderer, "cycle-static-site/v1", &options).unwrap();
-        assert!(miss.output.is_none());
-        assert_eq!(miss.cache_key, output.cache_key().clone());
+        publish_site_output_cache(&cache, &output, &input, &store).unwrap();
+        let root = cache.join("manifests").canonicalize().unwrap();
+        let manifest = cached_manifest_path(&root, &output_cache_key(&output).unwrap()).unwrap();
+        let before = std::fs::metadata(&manifest).unwrap();
+        let bytes = std::fs::read(&manifest).unwrap();
 
-        seed_cache(&cache, &opened, &output);
+        publish_site_output_cache(&cache, &output, &input, &store).unwrap();
 
-        let hit = load(&opened, &cache, &renderer, "cycle-static-site/v1", &options).unwrap();
-        assert_eq!(hit.output.as_ref(), Some(&output));
-
-        let restored = temp.path().join("restored");
-        fs::create_dir(&restored).unwrap();
-        materialize(hit.output.as_ref().unwrap(), &cache, &restored).unwrap();
-        assert_eq!(
-            fs::read(restored.join("en/index.html")).unwrap(),
-            b"<h1>Demo</h1>"
-        );
-        assert_eq!(
-            fs::read(restored.join(SITE_OUTPUT_MANIFEST_PATH)).unwrap(),
-            output.canonical_bytes().unwrap()
-        );
-
-        assert!(materialize(&output, &cache, &restored)
-            .unwrap_err()
-            .to_string()
-            .contains("not empty"));
+        assert_eq!(std::fs::read(&manifest).unwrap(), bytes);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let after = std::fs::metadata(&manifest).unwrap();
+            assert_eq!((after.dev(), after.ino()), (before.dev(), before.ino()));
+        }
     }
 
     #[test]
-    fn corrupt_or_incomplete_cached_output_never_degrades_to_a_miss() {
-        let (temp, closed, renderer, output) = fixture();
-        let bundle = temp.path().join("bundle");
+    fn same_derivation_with_different_output_collides_without_clobbering() {
+        let input = closed("example.ig");
+        let first = output(&input, b"hello");
+        let second = output(&input, b"other");
+        assert_eq!(
+            output_cache_key(&first).unwrap(),
+            output_cache_key(&second).unwrap()
+        );
+        assert_ne!(first.output_id(), second.output_id());
+
+        let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().join("cache");
-        let site = temp.path().join("site");
-        write_bundle(&bundle, &closed);
-        write_site(&site, &output);
-        let opened = closed.clone();
-        seed_cache(&cache, &opened, &output);
-        let object = cache
-            .join("objects/sha256")
-            .join(output.files()[0].content.sha256.as_str());
-        fs::remove_file(object).unwrap();
-        let error = load(
-            &opened,
-            &cache,
-            &renderer,
-            "cycle-static-site/v1",
-            &BTreeMap::from([("minify".into(), "true".into())]),
-        )
-        .unwrap_err();
+        let store = FileContentStore::create(temp.path().join("objects")).unwrap();
+        store.put(&first.files()[0].content, b"hello").unwrap();
+        store.put(&second.files()[0].content, b"other").unwrap();
+        publish_site_output_cache(&cache, &first, &input, &store).unwrap();
+        let root = cache.join("manifests").canonicalize().unwrap();
+        let manifest = cached_manifest_path(&root, &output_cache_key(&first).unwrap()).unwrap();
+        let original = std::fs::read(&manifest).unwrap();
+
+        let error = publish_site_output_cache(&cache, &second, &input, &store).unwrap_err();
         assert!(error
             .to_string()
-            .contains("load verified SiteOutput cache entry"));
+            .contains("private SiteOutput cache key names different outputs"));
+        assert_eq!(std::fs::read(&manifest).unwrap(), original);
     }
 
     #[test]
-    fn cache_probe_uses_strict_site_engine_admission_and_disjoint_paths() {
-        let (temp, closed, _renderer, _output) = fixture();
-        let bundle = temp.path().join("bundle");
+    fn publication_rejects_missing_and_corrupt_objects() {
+        let input = closed("example.ig");
+        let output = output(&input, b"hello");
+        let temp = tempfile::tempdir().unwrap();
         let cache = temp.path().join("cache");
-        write_bundle(&bundle, &closed);
+        let store = FileContentStore::create(temp.path().join("objects")).unwrap();
 
-        let error = admit(&bundle, &cache, None).unwrap_err().to_string();
-        assert!(
-            error.contains("Cycle") || error.contains("cycle") || error.contains("artifact"),
-            "unexpected strict-admission error: {error}"
-        );
-        assert!(require_disjoint_paths(&[&bundle, &bundle.join("cache")])
-            .unwrap_err()
-            .to_string()
-            .contains("overlap"));
+        let missing = publish_site_output_cache(&cache, &output, &input, &store).unwrap_err();
+        assert!(missing.to_string().contains("is absent"));
+        assert!(!cache.join("manifests").exists());
+
+        std::fs::write(
+            store.object_path(&output.files()[0].content.sha256),
+            b"jello",
+        )
+        .unwrap();
+        let corrupt = publish_site_output_cache(&cache, &output, &input, &store).unwrap_err();
+        assert!(corrupt.to_string().contains("digest mismatch"));
+        assert!(!cache.join("manifests").exists());
     }
 }

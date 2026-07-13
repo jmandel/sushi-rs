@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+wire-contract = ["dep:ts-rs"]
+
 # The ONE apiVersion result/error envelope, shared by wasm_api (Session) and the
 # `fig` CLI (`--json`). One implementation, one schema — the shared-schema test
 # lives in `fig` (tests/json_envelope.rs) and pins both against this crate.
@@ -12,3 +15,4 @@ rust-version.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+ts-rs = { workspace = true, optional = true }

@@ -6,12 +6,17 @@ license.workspace = true
 rust-version.workspace = true
 readme = "README.md"
 
+[features]
+wire-contract = ["dep:schemars", "dep:ts-rs"]
+
 [dependencies]
 hex.workspace = true
 serde.workspace = true
+schemars = { workspace = true, optional = true }
 sha2.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
+ts-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

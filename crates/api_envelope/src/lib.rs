@@ -18,25 +18,71 @@ use serde_json::Value;
 /// structure (not to any op's payload contents).
 pub const API_VERSION: u32 = 1;
 
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ApiSuccess<T> {
+    #[cfg_attr(feature = "wire-contract", ts(type = "1"))]
+    pub api_version: u32,
+    #[cfg_attr(feature = "wire-contract", ts(type = "true"))]
+    pub ok: bool,
+    pub op: String,
+    pub result: T,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ApiFailure<E> {
+    #[cfg_attr(feature = "wire-contract", ts(type = "1"))]
+    pub api_version: u32,
+    #[cfg_attr(feature = "wire-contract", ts(type = "false"))]
+    pub ok: bool,
+    pub op: String,
+    pub error: E,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[serde(untagged)]
+pub enum ApiEnvelope<T, E> {
+    Success(ApiSuccess<T>),
+    Failure(ApiFailure<E>),
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+pub struct ApiMessageError {
+    pub message: String,
+}
+
+fn success<T, E>(op: &str, result: T) -> ApiEnvelope<T, E> {
+    ApiEnvelope::Success(ApiSuccess {
+        api_version: API_VERSION,
+        ok: true,
+        op: op.to_string(),
+        result,
+    })
+}
+
+fn failure<T, E>(op: &str, error: E) -> ApiEnvelope<T, E> {
+    ApiEnvelope::Failure(ApiFailure {
+        api_version: API_VERSION,
+        ok: false,
+        op: op.to_string(),
+        error,
+    })
+}
+
 /// Serialize an op result (`Ok(payload)` / `Err(message)`) into the uniform
 /// envelope string. Never panics: a serialize failure degrades to a hand-built
 /// error envelope.
 pub fn envelope(op: &str, result: Result<Value, String>) -> String {
-    let v = match result {
-        Ok(payload) => serde_json::json!({
-            "apiVersion": API_VERSION,
-            "ok": true,
-            "op": op,
-            "result": payload,
-        }),
-        Err(message) => serde_json::json!({
-            "apiVersion": API_VERSION,
-            "ok": false,
-            "op": op,
-            "error": { "message": message },
-        }),
+    let value: ApiEnvelope<Value, ApiMessageError> = match result {
+        Ok(payload) => success(op, payload),
+        Err(message) => failure(op, ApiMessageError { message }),
     };
-    serde_json::to_string(&v).unwrap_or_else(|_| {
+    serde_json::to_string(&value).unwrap_or_else(|_| {
         format!(
             "{{\"apiVersion\":{API_VERSION},\"ok\":false,\"op\":\"{op}\",\
              \"error\":{{\"message\":\"envelope serialize failed\"}}}}"
@@ -50,6 +96,31 @@ pub fn envelope_ser<T: Serialize>(op: &str, result: Result<T, String>) -> String
         serde_json::to_value(&payload).map_err(|e| format!("{op}: serialize: {e}"))
     });
     envelope(op, as_value)
+}
+
+/// Serialize a typed error object without collapsing its phase/code/context to
+/// a message. The outer envelope remains identical; only the operation's error
+/// vocabulary is richer.
+pub fn envelope_typed<T: Serialize, E: Serialize>(op: &str, result: Result<T, E>) -> String {
+    let value: Result<ApiEnvelope<Value, Value>, serde_json::Error> = match result {
+        Ok(payload) => serde_json::to_value(payload).map(|result| success(op, result)),
+        Err(error) => serde_json::to_value(error).map(|error| failure(op, error)),
+    };
+    match value {
+        Ok(value) => serde_json::to_string(&value),
+        Err(_) => serde_json::to_string(&serde_json::json!({
+            "apiVersion": API_VERSION,
+            "ok": false,
+            "op": op,
+            "error": { "message": "envelope serialize failed" },
+        })),
+    }
+    .unwrap_or_else(|_| {
+        format!(
+            "{{\"apiVersion\":{API_VERSION},\"ok\":false,\"op\":\"{op}\",\
+             \"error\":{{\"message\":\"envelope serialize failed\"}}}}"
+        )
+    })
 }
 
 #[cfg(test)]
@@ -76,5 +147,24 @@ mod tests {
         assert_eq!(v["op"], "snapshot");
         assert_eq!(v["error"]["message"], "no such profile");
         assert!(v.get("result").is_none());
+    }
+
+    #[test]
+    fn typed_error_shape_preserves_fields() {
+        #[derive(Serialize)]
+        struct TypedError {
+            message: &'static str,
+            code: &'static str,
+        }
+        let value: Value = serde_json::from_str(&envelope_typed::<Value, _>(
+            "prepare",
+            Err(TypedError {
+                message: "failed",
+                code: "compile-failed",
+            }),
+        ))
+        .unwrap();
+        assert_eq!(value["ok"], false);
+        assert_eq!(value["error"]["code"], "compile-failed");
     }
 }
