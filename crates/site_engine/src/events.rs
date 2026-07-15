@@ -48,6 +48,21 @@ pub struct BuildEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
     pub build_id: Option<String>,
+    /// Stable machine-readable phase within the operation. `message` remains
+    /// presentation text and must not be parsed by benchmarks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
+    pub phase: Option<String>,
+    /// Clock domain which measured this event. Browser hosts align Window and
+    /// Worker clocks through `performance.timeOrigin`; native hosts may omit it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "BuildEventSource"))]
+    pub source: Option<BuildEventSource>,
+    /// Unix-epoch milliseconds at the beginning of this measured span. This is
+    /// observational only and never participates in build identity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "wire-contract", schemars(with = "f64"))]
+    pub start_ms: Option<f64>,
     pub stage: BuildStage,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "wire-contract", schemars(with = "String"))]
@@ -85,6 +100,16 @@ pub struct BuildEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "wire-contract", schemars(with = "BTreeMap<String, f64>"))]
     pub metrics: Option<BTreeMap<String, f64>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
+#[cfg_attr(feature = "wire-contract", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildEventSource {
+    Window,
+    Worker,
+    Rust,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,6 +215,9 @@ mod tests {
         let event = BuildEvent {
             operation: None,
             build_id: None,
+            phase: None,
+            source: None,
+            start_ms: None,
             stage: BuildStage::Compile,
             label: None,
             bytes: None,
@@ -206,6 +234,41 @@ mod tests {
         assert_eq!(
             serde_json::to_value(event).unwrap(),
             serde_json::json!({ "stage": "compile", "message": "Compiling." })
+        );
+    }
+
+    #[test]
+    fn build_event_serializes_aligned_machine_span() {
+        let event = BuildEvent {
+            operation: Some(BuildOperation::Lifecycle),
+            build_id: None,
+            phase: Some("engine.session.init".into()),
+            source: Some(BuildEventSource::Worker),
+            start_ms: Some(1234.5),
+            stage: BuildStage::Wasm,
+            label: None,
+            bytes: None,
+            total_bytes: None,
+            message: "Initialized compiler session.".into(),
+            fraction: None,
+            from_cache: None,
+            duration_ms: Some(7.25),
+            input_bytes: None,
+            output_bytes: None,
+            file_count: None,
+            metrics: None,
+        };
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({
+                "operation": "lifecycle",
+                "phase": "engine.session.init",
+                "source": "worker",
+                "startMs": 1234.5,
+                "stage": "wasm",
+                "message": "Initialized compiler session.",
+                "durationMs": 7.25
+            })
         );
     }
 }

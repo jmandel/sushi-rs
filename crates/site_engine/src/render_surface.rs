@@ -493,6 +493,7 @@ impl RenderState {
     /// in a flat layout) — the same string is the Jekyll `page.path`. A source
     /// without front matter is a static file: returned verbatim (the
     /// publisher's Jekyll copies those unrendered).
+    #[cfg(any(not(feature = "dependency-observation"), test))]
     pub(crate) fn render_page_by_name(&self, name: &str) -> Result<String, String> {
         self.render_page_tracked_by_name(name).map(|(html, _)| html)
     }
@@ -517,7 +518,7 @@ impl RenderState {
         // matter -> verbatim static copy); pass the FULL source.
         let provider = self.provider();
         let html = render_page(&src, key, &provider);
-        Ok((html, provider.page_artifact_reads()))
+        Ok((html, provider.take_page_artifact_reads()))
     }
 
     /// Output page rel paths, sorted.

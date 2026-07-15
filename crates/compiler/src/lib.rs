@@ -971,12 +971,40 @@ pub fn build_project_in_memory_with_ig(
     Vec<CompileDiagnostic>,
 )> {
     let store = package_store::PackageStore::for_project_with_config(source, cfg_text, cache_dir)?;
+    build_project_in_memory_with_ig_from_store(
+        cfg_text,
+        fsh_files,
+        predefined_resources,
+        &store,
+        page_dir_listing,
+    )
+}
+
+/// Canonical in-memory IG compilation over a caller-owned package store.
+///
+/// Long-lived hosts may retain the immutable store's lookup indexes and lazy
+/// successful resource parses across project revisions. The ordinary
+/// [`build_project_in_memory_with_ig`] entry constructs a store and delegates
+/// here, so reuse does not create a second compilation flow or change package
+/// fishing precedence.
+pub fn build_project_in_memory_with_ig_from_store(
+    cfg_text: &str,
+    fsh_files: &[(String, String)],
+    predefined_resources: Vec<(std::path::PathBuf, serde_json::Value)>,
+    store: &package_store::PackageStore,
+    page_dir_listing: std::collections::HashMap<String, Vec<String>>,
+) -> anyhow::Result<(
+    Vec<CompiledResource>,
+    Option<CompiledResource>,
+    Vec<CompileDiagnostic>,
+)> {
+    store.require_compatible_config(cfg_text)?;
     let predefined = predefined::PredefinedPackage::load_from(predefined_resources);
     let refs: Vec<(&str, &str)> = fsh_files
         .iter()
         .map(|(p, c)| (p.as_str(), c.as_str()))
         .collect();
-    let compiled = compile_conformance(cfg_text, &refs, &store, &predefined)?;
+    let compiled = compile_conformance(cfg_text, &refs, store, &predefined)?;
 
     let cfg = config::Config::from_yaml(cfg_text)?;
     let cfg_yaml: serde_yaml::Value = serde_yaml::from_str(cfg_text)?;
@@ -989,7 +1017,7 @@ pub fn build_project_in_memory_with_ig(
             instances: compiled.instance_ig.iter().collect(),
             local_profile_logical: compiled.local_profile_logical,
             has_custom_resources: compiled.has_custom_resources,
-            cache_dir: cache_dir.to_string(),
+            cache_dir: store.cache_root().to_string_lossy().into_owned(),
             ig_dir: String::new(), // unused: page_dir_listing supplies the file names.
             predefined: &predefined,
             page_dir_listing: Some(page_dir_listing),

@@ -10,7 +10,7 @@
 //! footer inside the content-addressed artifact.
 
 use crate::material::{
-    canonicalize_package_material, finish_normalized_package_material, parse_exact_package_label,
+    canonicalize_package_material, finish_prepared_package_material, parse_exact_package_label,
     validate_member_name, CanonicalPackageMaterial,
 };
 use crate::{derived_index, BundleSource};
@@ -199,8 +199,13 @@ enum PreparedFileStorage {
 /// A reusable backing for a whole contiguous prepared-package batch. Hosts that
 /// decode several ranges should create one and call `decode_backing_range`, so
 /// packages share both the compressed allocation and the bounded chunk cache.
+/// Compilation forks can retain the allocation while replacing only the
+/// observational chunk cache.
 #[derive(Clone, Debug)]
-pub struct PreparedArtifactBacking(Rc<CompressedBacking>);
+pub struct PreparedArtifactBacking {
+    bytes: Rc<Vec<u8>>,
+    cache: Rc<RefCell<ChunkCache>>,
+}
 
 impl PreparedArtifactBacking {
     pub fn new(bytes: Vec<u8>) -> Self {
@@ -208,25 +213,29 @@ impl PreparedArtifactBacking {
     }
 
     pub fn from_shared(bytes: Rc<Vec<u8>>) -> Self {
-        Self(Rc::new(CompressedBacking {
+        Self {
             bytes,
-            cache: RefCell::new(ChunkCache::default()),
-        }))
+            cache: Rc::new(RefCell::new(ChunkCache::default())),
+        }
     }
 
     pub fn len(&self) -> usize {
-        self.0.bytes.len()
+        self.bytes.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.bytes.is_empty()
+        self.bytes.is_empty()
     }
-}
 
-#[derive(Debug)]
-struct CompressedBacking {
-    bytes: Rc<Vec<u8>>,
-    cache: RefCell<ChunkCache>,
+    /// Share immutable carrier bytes while starting with independent bounded
+    /// read state. A failed user of the fork cannot change this backing's cache
+    /// contents, recency, or counters.
+    fn fork_read_cache(&self) -> Self {
+        Self {
+            bytes: Rc::clone(&self.bytes),
+            cache: Rc::new(RefCell::new(ChunkCache::default())),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -263,11 +272,11 @@ pub(crate) struct CompressedMember {
 #[derive(Clone, Debug)]
 pub(crate) struct PreparedCompressedFiles {
     backing: PreparedArtifactBacking,
-    members: BTreeMap<String, CompressedMember>,
+    members: Rc<BTreeMap<String, CompressedMember>>,
     artifact_range: Range<usize>,
 }
 
-impl CompressedBacking {
+impl PreparedArtifactBacking {
     fn read_chunk(&self, chunk: &CompressedChunk) -> io::Result<Rc<Vec<u8>>> {
         let key = chunk.compressed.start;
         {
@@ -340,6 +349,40 @@ fn invalid_data(message: String) -> io::Error {
 }
 
 impl PreparedCompressedFiles {
+    /// Fork only mutable decompression state. Immutable carrier bytes and the
+    /// decoded member/chunk index stay shared. `backings` preserves cache
+    /// sharing among package ranges originating in one batch.
+    pub(crate) fn fork_read_cache(
+        &self,
+        backings: &mut BTreeMap<usize, PreparedArtifactBacking>,
+    ) -> Self {
+        let identity = self.backing_identity();
+        let backing = backings
+            .entry(identity)
+            .or_insert_with(|| self.backing.fork_read_cache())
+            .clone();
+        Self {
+            backing,
+            members: Rc::clone(&self.members),
+            artifact_range: self.artifact_range.clone(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_member_index_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.members, &other.members)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_backing_bytes_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.backing.bytes, &other.backing.bytes)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shares_read_cache_with(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.backing.cache, &other.backing.cache)
+    }
+
     pub(crate) fn names(&self) -> impl Iterator<Item = &String> {
         self.members.keys()
     }
@@ -353,7 +396,7 @@ impl PreparedCompressedFiles {
             .members
             .get(name)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no such prepared member"))?;
-        let chunk = self.backing.0.read_chunk(&member.chunk)?;
+        let chunk = self.backing.read_chunk(&member.chunk)?;
         let body = chunk
             .get(member.raw.clone())
             .ok_or_else(|| invalid_data("member range is outside inflated chunk".into()))?;
@@ -365,13 +408,13 @@ impl PreparedCompressedFiles {
     }
 
     pub(crate) fn backing_identity(&self) -> usize {
-        Rc::as_ptr(&self.backing.0) as usize
+        Rc::as_ptr(&self.backing.cache) as usize
     }
 
     pub(crate) fn backing_metrics(&self) -> PreparedBackingMetrics {
-        let cache = self.backing.0.cache.borrow();
+        let cache = self.backing.cache.borrow();
         PreparedBackingMetrics {
-            compressed_retained_bytes: self.backing.0.bytes.len() as u64,
+            compressed_retained_bytes: self.backing.bytes.len() as u64,
             chunks_inflated: cache.chunks_inflated,
             raw_inflated_bytes: cache.raw_inflated_bytes,
             cache_hits: cache.cache_hits,
@@ -458,7 +501,7 @@ impl PreparedFiles {
     pub fn shares_backing_blob_with(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (PreparedFileStorage::Compressed(left), PreparedFileStorage::Compressed(right)) => {
-                Rc::ptr_eq(&left.backing.0.bytes, &right.backing.0.bytes)
+                Rc::ptr_eq(&left.backing.bytes, &right.backing.bytes)
             }
             _ => false,
         }
@@ -468,14 +511,12 @@ impl PreparedFiles {
         let PreparedFileStorage::Compressed(files) = &self.0 else {
             return None;
         };
-        if files.artifact_range.start == 0
-            && files.artifact_range.end == files.backing.0.bytes.len()
+        if files.artifact_range.start == 0 && files.artifact_range.end == files.backing.bytes.len()
         {
-            return Some(files.backing.0.bytes.clone());
+            return Some(files.backing.bytes.clone());
         }
         files
             .backing
-            .0
             .bytes
             .get(files.artifact_range.clone())
             .map(|bytes| Rc::new(bytes.to_vec()))
@@ -550,7 +591,7 @@ pub struct PreparedPackageBuilder {
 
 impl PreparedPackageBuilder {
     pub fn build(self) -> Result<PreparedPackage> {
-        let material = finish_normalized_package_material(&self.label, self.material)?;
+        let material = finish_prepared_package_material(self.material);
         let members = identities_from_files(&material.files);
         let source_digest = source_metadata_digest(
             &self.label,
@@ -835,7 +876,6 @@ fn decode_shared(
     expected: Option<&PreparedPackageKey>,
 ) -> Result<PreparedPackage> {
     let bytes = backing
-        .0
         .bytes
         .get(artifact_range.clone())
         .ok_or_else(|| anyhow!("prepared-package artifact range is out of bounds"))?;
@@ -844,8 +884,8 @@ fn decode_shared(
     }
     let artifact_sha256 = hex::encode(Sha256::digest(bytes));
     let artifact = ExactArtifact {
-        bytes: if artifact_range.start == 0 && artifact_range.end == backing.0.bytes.len() {
-            backing.0.bytes.clone()
+        bytes: if artifact_range.start == 0 && artifact_range.end == backing.bytes.len() {
+            backing.bytes.clone()
         } else {
             Rc::new(bytes.to_vec())
         },
@@ -1069,7 +1109,7 @@ fn decode_shared(
         key,
         files: PreparedFiles(PreparedFileStorage::Compressed(PreparedCompressedFiles {
             backing,
-            members: compressed_members,
+            members: Rc::new(compressed_members),
             artifact_range,
         })),
         declared_dependencies,
@@ -1241,9 +1281,9 @@ mod tests {
         };
         assert!(Rc::ptr_eq(
             &decoded.artifact_bytes(),
-            &compressed.backing.0.bytes
+            &compressed.backing.bytes
         ));
-        assert!(compressed.backing.0.cache.borrow().entries.is_empty());
+        assert!(compressed.backing.cache.borrow().entries.is_empty());
 
         let mut source = BundleSource::new();
         let mounted = decoded.mount_into(&mut source);
@@ -1279,6 +1319,33 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn prepared_builder_files_match_full_normalized_material() {
+        let mut input = entries();
+        input.insert(
+            "ValueSet-valid.json".into(),
+            br#"{"resourceType":"ValueSet","id":"valid","url":"https://example.org/ValueSet/valid","name":"Valid"}"#
+                .to_vec(),
+        );
+        let normalized = crate::normalize_package_material("example.pkg#1.2.3", input.clone())
+            .expect("full normalized material");
+        let prepared =
+            PreparedPackage::prepare("example.pkg#1.2.3", input.clone()).expect("prepared package");
+        let repeated =
+            PreparedPackage::prepare("example.pkg#1.2.3", input).expect("repeated package");
+
+        assert_eq!(prepared.files.materialize_all().unwrap(), normalized.files);
+        let sidecar = normalized
+            .files
+            .get(derived_index::SIDECAR_NAME)
+            .expect("derived sidecar");
+        let rows = derived_index::parse(sidecar).expect("valid derived sidecar");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].filename, "ValueSet-valid.json");
+        assert_eq!(prepared.key, repeated.key);
+        assert_eq!(prepared.encode(), repeated.encode());
     }
 
     #[test]
@@ -1390,7 +1457,7 @@ mod tests {
             raw_len: member.chunk.raw_len.saturating_sub(1),
             ..(*member.chunk).clone()
         };
-        let error = files.backing.0.read_chunk(&forged).unwrap_err();
+        let error = files.backing.read_chunk(&forged).unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 

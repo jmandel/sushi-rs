@@ -28,6 +28,8 @@ const PUBLISHER_FRAGMENT_FAMILY: &str = "hl7.fhir.publisher";
 
 pub const STOCK_PAGE_SOURCE_NAMESPACE: &str = "stock.page_source";
 pub const STOCK_SITE_DATA_NAMESPACE: &str = "stock.site_data";
+pub const STOCK_SITE_DATA_LOOKUP_NAMESPACE: &str = "stock.site_data.lookup";
+pub const STOCK_SITE_NAMESPACE: &str = "stock.site";
 pub const STOCK_STAGED_INCLUDE_NAMESPACE: &str = "stock.include.staged";
 pub const STOCK_TEMPLATE_INCLUDE_NAMESPACE: &str = "stock.include.template";
 pub const STOCK_RUNTIME_INPUT_NAMESPACE: &str = "stock.publisher_runtime";
@@ -378,6 +380,21 @@ impl PageArtifactReadSet {
 
     pub(crate) fn request(&mut self, key: ArtifactKey) {
         self.requested.insert(key);
+    }
+
+    /// Record a non-generated namespace candidate even when it misses. This is
+    /// compiled only into explicit dependency-observation builds at call sites.
+    #[cfg(feature = "dependency-observation")]
+    pub(crate) fn request_input(&mut self, key: ArtifactKey) {
+        self.request(key);
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    pub(crate) fn observe_input_lookup(&mut self, key: ArtifactKey, found: bool) {
+        self.request(key.clone());
+        if found {
+            self.record_read(key);
+        }
     }
 
     pub(crate) fn record_read(&mut self, key: ArtifactKey) {

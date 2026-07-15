@@ -4,6 +4,7 @@ members = [
     "crates/fsh_lexer_parser",
     "crates/fsh_model",
     "crates/fhir_model",
+    "crates/dependency_observation",
     "crates/package_acquisition",
     "crates/package_store",
     "crates/compiler",
@@ -38,6 +39,7 @@ rust-version = "1.90"
 fsh_lexer_parser = { path = "crates/fsh_lexer_parser" }
 fsh_model = { path = "crates/fsh_model" }
 fhir_model = { path = "crates/fhir_model" }
+dependency_observation = { path = "crates/dependency_observation" }
 package_store = { path = "crates/package_store" }
 package_acquisition = { path = "crates/package_acquisition" }
 compiler = { path = "crates/compiler" }

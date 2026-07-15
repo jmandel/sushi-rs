@@ -12,8 +12,11 @@
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use serde_json::{Map, Value};
+#[cfg(feature = "dependency-observation")]
+use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 pub mod bundle;
 pub mod derived_index;
@@ -131,27 +134,375 @@ const R5_FOR_R4_DEFS: &[&str] = &[
     include_str!("../vendor/r5-for-r4/StructureDefinition-DataType.json"),
 ];
 
-/// Reads package `.index.json` files and resolves canonical/id/name → resource.
-pub struct PackageStore {
+/// The immutable `sushi-r5forR4#1.0.0` support definitions bundled with SUSHI.
+///
+/// SUSHI fishes this virtual package before ordinary packages. Snapshot
+/// consumers also need its R5-only datatype definitions, but Publisher's
+/// version-specific synthetic `Base` is a separate concept: an R4 logical model
+/// must never inherit this package's R5 `Base` snapshot.
+///
+/// Keeping the immutable bytes here prevents compiler and snapshot contexts
+/// from growing subtly different copies of the virtual definition set.
+pub fn sushi_r5_for_r4_definitions() -> &'static [&'static str] {
+    R5_FOR_R4_DEFS
+}
+
+/// Immutable package lookup/index corpus shared by revision-local stores.
+struct PackageCatalog {
     entries: Vec<ResEntry>,
     by_id: FxHashMap<String, Vec<usize>>,
     by_url: FxHashMap<String, Vec<usize>>,
     by_name: FxHashMap<String, Vec<usize>>,
-    /// Parse cache: a resource file is read+parsed once, then shared. SUSHI's
-    /// FHIRDefinitions holds all defs in memory; we lazily memoize. Single-threaded
-    /// build, so RefCell is fine. (Avoids re-parsing core SDs hundreds of times.)
-    cache: std::cell::RefCell<FxHashMap<usize, std::rc::Rc<Value>>>,
-    /// The storage backing this store, held for the lazy per-resource `read_value`.
-    /// Native callers get a `DiskSource` (unchanged behavior); a browser/test caller
-    /// can supply a read-only in-memory source.
+}
+
+/// One explicitly weighted parsed-resource entry. `source_bytes` is the original
+/// JSON byte length, a deterministic approximation rather than parsed heap size.
+#[derive(Clone)]
+struct PackageStoreCacheEntry {
+    value: Rc<Value>,
+    source_bytes: usize,
+    last_used: u64,
+}
+
+#[derive(Clone, Default)]
+struct ParsedCache {
+    entries: FxHashMap<usize, PackageStoreCacheEntry>,
+    approximate_source_bytes: usize,
+    next_use: u64,
+    hits: u64,
+    misses: u64,
+    inserts: u64,
+    evictions: u64,
+}
+
+/// Explicit bounds applied only when a successful compilation promotes its
+/// revision-local parsed cache into retained state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PackageStoreCacheLimits {
+    pub max_entries: usize,
+    pub max_approximate_source_bytes: usize,
+}
+
+/// Observation-only parsed-cache state and activity for one compilation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PackageStoreCacheStats {
+    pub entries: usize,
+    pub approximate_source_bytes: usize,
+    pub hits: u64,
+    pub misses: u64,
+    pub inserts: u64,
+    pub evictions: u64,
+}
+
+/// Aggregate retained footprint across semantic generations. `logical` values
+/// sum per-store entries, while `unique` values count shared `Rc<Value>` bodies
+/// once. Source-byte weights remain deterministic approximations; callers must
+/// use process/WASM memory telemetry for actual heap peaks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PackageStoreRetainedStats {
+    pub store_generations: usize,
+    pub catalog_generations: usize,
+    pub catalog_entries: usize,
+    pub parsed_logical_entries: usize,
+    pub parsed_logical_approximate_source_bytes: usize,
+    pub parsed_unique_entries: usize,
+    pub parsed_unique_approximate_source_bytes: usize,
+}
+
+/// Reads package indexes and resolves canonical/id/name → resource. The catalog
+/// is immutable and shared; each compilation owns a forked parsed-body cache so
+/// a failed revision cannot mutate either retained successful generation.
+pub struct PackageStore {
+    catalog: Rc<PackageCatalog>,
+    /// Immutable namespace plus compilation-local observational read caches.
+    /// `fork_for_compile` shares carrier bytes/indexes but receives a fresh
+    /// source cache, so failed work cannot mutate retained decompression state.
     source: Box<dyn PackageSource>,
+    cache_root: PathBuf,
+    package_config: ProjectConfig,
+    cache: std::cell::RefCell<ParsedCache>,
+    #[cfg(feature = "dependency-observation")]
+    dependency_observations: std::cell::RefCell<dependency_observation::PackageLookupTrace>,
+}
+
+#[derive(Clone, Copy)]
+enum PackageLookupOperation {
+    Fhir,
+    Metadata,
+}
+
+struct ResolvedPackageLookup {
+    index: Option<usize>,
+    #[cfg(feature = "dependency-observation")]
+    observation_sequence: Option<u64>,
+}
+
+#[cfg(feature = "dependency-observation")]
+const MAX_DEPENDENCY_LOOKUP_OBSERVATIONS: usize = 100_000;
+#[cfg(feature = "dependency-observation")]
+const MAX_DEPENDENCY_LOOKUP_TRACE_BYTES: usize = 32 * 1024 * 1024;
+
+#[cfg(feature = "dependency-observation")]
+#[derive(Clone, Copy)]
+struct DependencyObservationLimits {
+    max_observations: usize,
+    max_retained_bytes: usize,
+}
+
+#[cfg(feature = "dependency-observation")]
+const DEPENDENCY_OBSERVATION_LIMITS: DependencyObservationLimits = DependencyObservationLimits {
+    max_observations: MAX_DEPENDENCY_LOOKUP_OBSERVATIONS,
+    max_retained_bytes: MAX_DEPENDENCY_LOOKUP_TRACE_BYTES,
+};
+
+#[cfg(feature = "dependency-observation")]
+fn optional_string_capacity(value: &Option<String>) -> usize {
+    value.as_ref().map_or(0, String::capacity)
+}
+
+#[cfg(feature = "dependency-observation")]
+fn lookup_candidate_owned_capacity(candidate: &dependency_observation::LookupCandidate) -> usize {
+    optional_string_capacity(&candidate.package)
+        .saturating_add(optional_string_capacity(&candidate.member))
+        .saturating_add(optional_string_capacity(&candidate.member_digest))
+        .saturating_add(candidate.resource_type.capacity())
+        .saturating_add(candidate.id.capacity())
+        .saturating_add(optional_string_capacity(&candidate.name))
+        .saturating_add(optional_string_capacity(&candidate.url))
+        .saturating_add(optional_string_capacity(&candidate.version))
+        .saturating_add(candidate.fish_type.capacity())
+}
+
+#[cfg(feature = "dependency-observation")]
+fn lookup_candidates_owned_capacity(
+    candidates: &Vec<dependency_observation::LookupCandidate>,
+) -> usize {
+    candidates
+        .capacity()
+        .saturating_mul(std::mem::size_of::<dependency_observation::LookupCandidate>())
+        .saturating_add(candidates.iter().fold(0usize, |bytes, candidate| {
+            bytes.saturating_add(lookup_candidate_owned_capacity(candidate))
+        }))
+}
+
+#[cfg(feature = "dependency-observation")]
+fn dependency_observation_owned_capacity(
+    observation: &dependency_observation::PackageLookupObservation,
+) -> usize {
+    observation
+        .query
+        .capacity()
+        .saturating_add(
+            observation
+                .requested_types
+                .capacity()
+                .saturating_mul(std::mem::size_of::<String>()),
+        )
+        .saturating_add(
+            observation
+                .requested_types
+                .iter()
+                .fold(0usize, |bytes, kind| bytes.saturating_add(kind.capacity())),
+        )
+        .saturating_add(lookup_candidates_owned_capacity(&observation.candidates))
+        .saturating_add(lookup_candidates_owned_capacity(&observation.eligible))
+        .saturating_add(
+            observation
+                .winner
+                .as_ref()
+                .map_or(0, lookup_candidate_owned_capacity),
+        )
+}
+
+/// Exact owned collection capacities retained by one lookup trace. Allocator
+/// headers and rounding are intentionally outside this contract; every byte
+/// addressable through a retained String/Vec capacity is included.
+#[cfg(feature = "dependency-observation")]
+fn dependency_trace_owned_capacity(trace: &dependency_observation::PackageLookupTrace) -> usize {
+    trace
+        .observations
+        .capacity()
+        .saturating_mul(std::mem::size_of::<
+            dependency_observation::PackageLookupObservation,
+        >())
+        .saturating_add(
+            trace
+                .observations
+                .iter()
+                .fold(0usize, |bytes, observation| {
+                    bytes.saturating_add(dependency_observation_owned_capacity(observation))
+                }),
+        )
+}
+
+#[cfg(feature = "dependency-observation")]
+fn overflow_dependency_trace(trace: &mut dependency_observation::PackageLookupTrace) {
+    // Replacing rather than clearing also releases the outer Vec's capacity.
+    trace.observations = Vec::new();
+    trace.retained_bytes = 0;
+    trace.overflowed = true;
+}
+
+#[cfg(feature = "dependency-observation")]
+fn admit_dependency_observation(
+    trace: &mut dependency_observation::PackageLookupTrace,
+    mut observation: dependency_observation::PackageLookupObservation,
+    preflight_bytes: usize,
+    limits: DependencyObservationLimits,
+) -> Option<u64> {
+    if trace.overflowed {
+        return None;
+    }
+    if trace.observations.len() >= limits.max_observations
+        || preflight_bytes > limits.max_retained_bytes
+    {
+        overflow_dependency_trace(trace);
+        return None;
+    }
+
+    let sequence = trace.observations.len() as u64;
+    observation.sequence = sequence;
+    trace.observations.push(observation);
+    let retained_bytes = dependency_trace_owned_capacity(trace);
+    if retained_bytes > limits.max_retained_bytes {
+        overflow_dependency_trace(trace);
+        return None;
+    }
+    trace.retained_bytes = retained_bytes;
+    debug_assert_eq!(trace.retained_bytes, dependency_trace_owned_capacity(trace));
+    debug_assert!(trace.retained_bytes <= limits.max_retained_bytes);
+    Some(sequence)
+}
+
+impl ParsedCache {
+    fn normalize_recency(&mut self) {
+        let mut order = self
+            .entries
+            .iter()
+            .map(|(index, entry)| (*index, entry.last_used))
+            .collect::<Vec<_>>();
+        // Equal recency is resolved exactly as retention resolves it: the
+        // higher catalog index is older, so the lower index wins a tie.
+        order.sort_by(|left, right| left.1.cmp(&right.1).then_with(|| right.0.cmp(&left.0)));
+        for (position, (index, _)) in order.into_iter().enumerate() {
+            if let Some(entry) = self.entries.get_mut(&index) {
+                entry.last_used = position as u64 + 1;
+            }
+        }
+        self.next_use = self.entries.len() as u64;
+    }
+
+    fn next_tick(&mut self) -> u64 {
+        if self.next_use == u64::MAX {
+            self.normalize_recency();
+        }
+        self.next_use += 1;
+        self.next_use
+    }
+
+    fn reset_activity(&mut self) {
+        self.hits = 0;
+        self.misses = 0;
+        self.inserts = 0;
+        self.evictions = 0;
+    }
+
+    fn stats(&self) -> PackageStoreCacheStats {
+        PackageStoreCacheStats {
+            entries: self.entries.len(),
+            approximate_source_bytes: self.approximate_source_bytes,
+            hits: self.hits,
+            misses: self.misses,
+            inserts: self.inserts,
+            evictions: self.evictions,
+        }
+    }
+
+    fn trim_for_retention(&mut self, limits: PackageStoreCacheLimits) {
+        let before = self.entries.len();
+        // Strict LRU means evicting the oldest eligible entry until both
+        // bounds hold. It is not a knapsack: filling spare bytes with an older
+        // small value after rejecting a newer medium value would retain the
+        // wrong working set. Individually oversize values can never fit and
+        // are discarded before applying the oldest-first cut.
+        let mut oldest_first = std::mem::take(&mut self.entries)
+            .into_iter()
+            .filter(|(_, entry)| entry.source_bytes <= limits.max_approximate_source_bytes)
+            .collect::<Vec<_>>();
+        oldest_first.sort_by(|left, right| {
+            left.1
+                .last_used
+                .cmp(&right.1.last_used)
+                // Higher index is evicted first on an exact recency tie, so
+                // lower-index-wins is stable across trimming/normalization.
+                .then_with(|| right.0.cmp(&left.0))
+        });
+        let mut approximate_source_bytes = oldest_first
+            .iter()
+            .map(|(_, entry)| entry.source_bytes as u128)
+            .sum::<u128>();
+        let byte_limit = limits.max_approximate_source_bytes as u128;
+        let mut first_kept = 0usize;
+        while oldest_first.len() - first_kept > limits.max_entries
+            || approximate_source_bytes > byte_limit
+        {
+            approximate_source_bytes -= oldest_first[first_kept].1.source_bytes as u128;
+            first_kept += 1;
+        }
+        let kept = oldest_first
+            .into_iter()
+            .skip(first_kept)
+            .collect::<FxHashMap<_, _>>();
+        self.evictions += (before - kept.len()) as u64;
+        self.entries = kept;
+        self.approximate_source_bytes = approximate_source_bytes as usize;
+        self.normalize_recency();
+    }
+}
+
+/// Observe the exact current set of retained stores without cloning parsed
+/// bodies. Shared catalogs and parsed `Rc<Value>` bodies are deduplicated by
+/// process identity, making current+previous metrics explicit and non-additive.
+pub fn aggregate_retained_stats<'a>(
+    stores: impl IntoIterator<Item = &'a PackageStore>,
+) -> PackageStoreRetainedStats {
+    let mut result = PackageStoreRetainedStats::default();
+    let mut catalogs = FxHashMap::<*const PackageCatalog, ()>::default();
+    let mut bodies = FxHashMap::<*const Value, usize>::default();
+    for store in stores {
+        result.store_generations += 1;
+        let catalog = Rc::as_ptr(&store.catalog);
+        if catalogs.insert(catalog, ()).is_none() {
+            result.catalog_generations += 1;
+            result.catalog_entries = result
+                .catalog_entries
+                .saturating_add(store.catalog.entries.len());
+        }
+        let cache = store.cache.borrow();
+        result.parsed_logical_entries = result
+            .parsed_logical_entries
+            .saturating_add(cache.entries.len());
+        result.parsed_logical_approximate_source_bytes = result
+            .parsed_logical_approximate_source_bytes
+            .saturating_add(cache.approximate_source_bytes);
+        for entry in cache.entries.values() {
+            let identity = Rc::as_ptr(&entry.value);
+            if bodies.insert(identity, entry.source_bytes).is_none() {
+                result.parsed_unique_entries += 1;
+                result.parsed_unique_approximate_source_bytes = result
+                    .parsed_unique_approximate_source_bytes
+                    .saturating_add(entry.source_bytes);
+            }
+        }
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
 // Config parsing (the subset Processing.ts reads: fhirVersion + dependencies)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct DepEntry {
     package_id: String,
     version: Option<String>,
@@ -171,6 +522,7 @@ pub struct PackageRequest {
     pub version: String,
 }
 
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ProjectConfig {
     fhir_version: String,
     dependencies: Vec<DepEntry>,
@@ -802,12 +1154,18 @@ impl PackageStore {
         let load_list = resolve_load_order(&source, &cfg, cache);
 
         let mut store = PackageStore {
-            entries: Vec::new(),
-            by_id: FxHashMap::default(),
-            by_url: FxHashMap::default(),
-            by_name: FxHashMap::default(),
-            cache: std::cell::RefCell::new(FxHashMap::default()),
+            catalog: Rc::new(PackageCatalog {
+                entries: Vec::new(),
+                by_id: FxHashMap::default(),
+                by_url: FxHashMap::default(),
+                by_name: FxHashMap::default(),
+            }),
             source: Box::new(source),
+            cache_root: cache.to_path_buf(),
+            package_config: cfg,
+            cache: std::cell::RefCell::new(ParsedCache::default()),
+            #[cfg(feature = "dependency-observation")]
+            dependency_observations: std::cell::RefCell::new(Default::default()),
         };
         let mut seq = 0usize;
 
@@ -842,9 +1200,137 @@ impl PackageStore {
         Ok(store)
     }
 
+    /// Fork one flat revision-local parsed cache over the same immutable
+    /// catalog/source. Cached values are immutable `Rc<Value>`s, so the fork
+    /// shares their bodies without an overlay chain; all hit/insert/recency
+    /// mutations belong only to the new compilation.
+    ///
+    /// The authenticated package transport supplies a fresh bounded
+    /// decompression LRU while sharing immutable carrier bytes and indexes, so
+    /// even observational source-cache state remains transaction-local.
+    pub fn fork_for_compile(&self) -> anyhow::Result<Self> {
+        let mut cache = self.cache.borrow().clone();
+        cache.reset_activity();
+        Ok(Self {
+            catalog: Rc::clone(&self.catalog),
+            source: self.source.fork_read_cache().map_err(|error| {
+                anyhow::anyhow!("package store source is not safe for retained reuse: {error}")
+            })?,
+            cache_root: self.cache_root.clone(),
+            package_config: self.package_config.clone(),
+            cache: std::cell::RefCell::new(cache),
+            #[cfg(feature = "dependency-observation")]
+            dependency_observations: std::cell::RefCell::new(Default::default()),
+        })
+    }
+
+    /// Convert a successful compilation's unbounded working cache into a
+    /// bounded retained snapshot. Deterministic LRU keeps most-recent entries;
+    /// index breaks ties. Oversize values served during compilation are simply
+    /// absent from the retained snapshot.
+    pub fn into_retained(mut self, limits: PackageStoreCacheLimits) -> anyhow::Result<Self> {
+        self.cache.get_mut().trim_for_retention(limits);
+        #[cfg(feature = "dependency-observation")]
+        {
+            // A trace describes one working compilation, never a reusable
+            // package-store generation. SiteEngine takes it before promotion;
+            // other callers cannot accidentally pin it in retained state.
+            *self.dependency_observations.get_mut() = Default::default();
+        }
+        // Retention keeps parsed immutable values, not the transient inflate
+        // working set used to obtain them. Starting retained state with a fresh
+        // source cache both caps memory and makes the next failed fork unable
+        // to mutate any successful generation's observational state.
+        self.source = self.source.fork_read_cache().map_err(|error| {
+            anyhow::anyhow!("package store source is not safe for retention: {error}")
+        })?;
+        Ok(self)
+    }
+
+    pub fn cache_stats(&self) -> PackageStoreCacheStats {
+        self.cache.borrow().stats()
+    }
+
+    /// Exact package lookup attempts made by this revision-local store. The
+    /// feature is observation-only and absent from production/default builds.
+    #[cfg(feature = "dependency-observation")]
+    #[doc(hidden)]
+    pub fn take_dependency_observations(&self) -> dependency_observation::PackageLookupTrace {
+        std::mem::take(&mut *self.dependency_observations.borrow_mut())
+    }
+
+    #[cfg(test)]
+    fn retained_state_fingerprint(&self) -> Vec<u8> {
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Entry<'a> {
+            index: usize,
+            source_bytes: usize,
+            last_used: u64,
+            value: &'a Value,
+        }
+        #[derive(serde::Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Fingerprint<'a> {
+            approximate_source_bytes: usize,
+            next_use: u64,
+            hits: u64,
+            misses: u64,
+            inserts: u64,
+            evictions: u64,
+            entries: Vec<Entry<'a>>,
+        }
+        let cache = self.cache.borrow();
+        let mut entries = cache
+            .entries
+            .iter()
+            .map(|(index, entry)| Entry {
+                index: *index,
+                source_bytes: entry.source_bytes,
+                last_used: entry.last_used,
+                value: entry.value.as_ref(),
+            })
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.index);
+        serde_json::to_vec(&Fingerprint {
+            approximate_source_bytes: cache.approximate_source_bytes,
+            next_use: cache.next_use,
+            hits: cache.hits,
+            misses: cache.misses,
+            inserts: cache.inserts,
+            evictions: cache.evictions,
+            entries,
+        })
+        .expect("serialize package-store retained-state fingerprint")
+    }
+
+    /// Exact root with which this store's immutable package namespace was
+    /// indexed. Compiler callers must not supply an independent ambient path.
+    pub fn cache_root(&self) -> &Path {
+        &self.cache_root
+    }
+
+    /// Reject pairing this indexed store with a project whose package-affecting
+    /// FHIR version or ordered dependencies differ. Other config fields do not
+    /// affect package lookup and may vary between revisions.
+    pub fn require_compatible_config(&self, cfg_text: &str) -> anyhow::Result<()> {
+        let requested = parse_config_text(cfg_text)?;
+        if requested != self.package_config {
+            anyhow::bail!(
+                "package store was indexed for a different FHIR version or dependency list"
+            );
+        }
+        Ok(())
+    }
+
     /// The storage backing this store (used for the lazy per-resource read).
     fn source(&self) -> &dyn PackageSource {
         self.source.as_ref()
+    }
+
+    fn catalog_mut(&mut self) -> &mut PackageCatalog {
+        Rc::get_mut(&mut self.catalog)
+            .expect("package catalog is mutable only during unique construction")
     }
 
     /// Index a single resolved package directory, mirroring FPL's
@@ -866,7 +1352,7 @@ impl PackageStore {
     fn index_package(&mut self, pkg_dir: &Path, seq: &mut usize) {
         // Compute the listing through the store's own source, then release that
         // borrow before mutating the lookup tables below.
-        let listing = package_resource_listing(self.source.as_ref(), pkg_dir);
+        let listing = package_resource_listing(self.source(), pkg_dir);
         for record in listing.records {
             if classify(&record.entry).is_some() {
                 self.add_entry(
@@ -895,20 +1381,21 @@ impl PackageStore {
         let Some(fish_type) = classify(&ie) else {
             return;
         };
-        let idx = self.entries.len();
+        let catalog = self.catalog_mut();
+        let idx = catalog.entries.len();
         // Insert lookup keys (cloned — maps own their keys), then MOVE the
         // remaining owned fields into the entry to avoid per-field clones.
         let id = ie.id.unwrap_or_default();
         if !id.is_empty() {
-            self.by_id.entry(id.clone()).or_default().push(idx);
+            catalog.by_id.entry(id.clone()).or_default().push(idx);
         }
         if let Some(u) = &ie.url {
-            self.by_url.entry(u.clone()).or_default().push(idx);
+            catalog.by_url.entry(u.clone()).or_default().push(idx);
         }
         if let Some(n) = &name {
-            self.by_name.entry(n.clone()).or_default().push(idx);
+            catalog.by_name.entry(n.clone()).or_default().push(idx);
         }
-        self.entries.push(ResEntry {
+        catalog.entries.push(ResEntry {
             seq,
             resource_type: ie.resource_type.unwrap_or_default(),
             id,
@@ -923,63 +1410,250 @@ impl PackageStore {
         });
     }
 
-    /// Resolve a query (`item` or `item|version`) + requested types to the winning
-    /// entry index, applying `normalizeTypes` (Instance ⇒ wildcard) + `DEFAULT_SORT`
-    /// (byType asc, then reverse load order / LIFO).
-    fn resolve(&self, item: &str, types: &[FishType]) -> Option<usize> {
+    #[cfg(feature = "dependency-observation")]
+    fn lookup_candidate(&self, index: usize) -> dependency_observation::LookupCandidate {
+        let entry = &self.catalog.entries[index];
+        let (package, member) = if entry.embedded.is_some() {
+            (
+                Some("sushi-r5forR4#1.0.0".to_string()),
+                Some(format!("{}-{}.json", entry.resource_type, entry.id)),
+            )
+        } else {
+            let relative = entry.path.strip_prefix(&self.cache_root).ok();
+            let package = relative
+                .and_then(|path| path.components().next())
+                .and_then(|part| part.as_os_str().to_str())
+                .map(str::to_string);
+            let member = relative.and_then(|path| {
+                let mut components = path.components();
+                components.next()?;
+                components
+                    .as_path()
+                    .strip_prefix("package")
+                    .ok()
+                    .and_then(|member| member.to_str())
+                    .filter(|member| !member.is_empty())
+                    .map(str::to_string)
+            });
+            (package, member)
+        };
+        dependency_observation::LookupCandidate {
+            package,
+            member,
+            member_digest: entry
+                .embedded
+                .map(|content| hex::encode(Sha256::digest(content.as_bytes()))),
+            resource_type: entry.resource_type.clone(),
+            id: entry.id.clone(),
+            name: entry.name.clone(),
+            url: entry.url.clone(),
+            version: entry.version.clone(),
+            fish_type: format!("{:?}", entry.fish_type),
+            load_sequence: entry.seq,
+        }
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    fn lookup_candidate_estimated_bytes(&self, index: usize) -> usize {
+        let entry = &self.catalog.entries[index];
+        std::mem::size_of::<dependency_observation::LookupCandidate>()
+            .saturating_add(entry.path.as_os_str().len())
+            .saturating_add(entry.resource_type.len())
+            .saturating_add(entry.id.len())
+            .saturating_add(entry.name.as_ref().map_or(0, String::len))
+            .saturating_add(entry.url.as_ref().map_or(0, String::len))
+            .saturating_add(entry.version.as_ref().map_or(0, String::len))
+            // Package/member spelling, fish-type spelling, digest text, and
+            // allocator slack. The full source path above already overcounts
+            // the first two for ordinary mounted packages.
+            .saturating_add(160)
+    }
+
+    /// One canonical selector for observed and production builds. The feature
+    /// only serializes the already-made decision; it cannot choose a different
+    /// winner.
+    fn resolve(
+        &self,
+        item: &str,
+        types: &[FishType],
+        operation: PackageLookupOperation,
+    ) -> ResolvedPackageLookup {
         let (base, version) = match item.split_once('|') {
-            Some((b, v)) => (b, Some(v)),
+            Some((base, version)) => (base, Some(version)),
             None => (item, None),
         };
-        // normalizeTypes: any Instance ⇒ no type filter (wildcard).
-        let wildcard = types.iter().any(|t| *t == FishType::Instance);
-
-        // Gather candidates matching by id OR name OR url.
-        let mut cands: Vec<usize> = Vec::new();
-        for map in [&self.by_id, &self.by_name, &self.by_url] {
-            if let Some(v) = map.get(base) {
-                cands.extend_from_slice(v);
+        let wildcard = types.iter().any(|kind| *kind == FishType::Instance);
+        let mut eligible = Vec::new();
+        for map in [
+            &self.catalog.by_id,
+            &self.catalog.by_name,
+            &self.catalog.by_url,
+        ] {
+            if let Some(indices) = map.get(base) {
+                eligible.extend_from_slice(indices);
             }
         }
-        cands.sort_unstable();
-        cands.dedup();
-
-        cands.retain(|&i| {
-            let e = &self.entries[i];
-            if let Some(v) = version {
-                if e.version.as_deref() != Some(v) {
-                    return false;
-                }
+        eligible.sort_unstable();
+        eligible.dedup();
+        #[cfg(feature = "dependency-observation")]
+        let observe = {
+            let mut trace = self.dependency_observations.borrow_mut();
+            if trace.overflowed {
+                false
+            } else if trace.observations.len() >= DEPENDENCY_OBSERVATION_LIMITS.max_observations {
+                overflow_dependency_trace(&mut trace);
+                false
+            } else {
+                true
             }
-            wildcard || types.contains(&e.fish_type)
+        };
+        #[cfg(feature = "dependency-observation")]
+        let candidates = observe.then(|| eligible.clone());
+        eligible.retain(|index| {
+            let entry = &self.catalog.entries[*index];
+            if version.is_some_and(|version| entry.version.as_deref() != Some(version)) {
+                return false;
+            }
+            wildcard || types.contains(&entry.fish_type)
         });
-
-        cands.into_iter().min_by(|&a, &b| {
-            let ea = &self.entries[a];
-            let eb = &self.entries[b];
-            ea.fish_type
+        let winner = eligible.iter().copied().min_by(|left, right| {
+            let left = &self.catalog.entries[*left];
+            let right = &self.catalog.entries[*right];
+            left.fish_type
                 .fishing_rank()
-                .cmp(&eb.fish_type.fishing_rank())
-                // LIFO: later-loaded (higher seq) wins.
-                .then_with(|| eb.seq.cmp(&ea.seq))
-        })
+                .cmp(&right.fish_type.fishing_rank())
+                .then_with(|| right.seq.cmp(&left.seq))
+        });
+        #[cfg(not(feature = "dependency-observation"))]
+        let _ = operation;
+        #[cfg(feature = "dependency-observation")]
+        let observation_sequence = if let Some(candidates) = candidates {
+            let requested_types = types
+                .iter()
+                .map(|kind| format!("{kind:?}"))
+                .collect::<Vec<_>>();
+            // Cheap, deliberately over-counting preflight prevents a single
+            // hostile lookup from allocating a record that can never fit. The
+            // admitted trace is then checked against exact owned capacities.
+            let mut preflight_bytes =
+                std::mem::size_of::<dependency_observation::PackageLookupObservation>()
+                    .saturating_add(item.len())
+                    .saturating_add(
+                        requested_types
+                            .iter()
+                            .map(|kind| std::mem::size_of::<String>() + kind.len())
+                            .sum::<usize>(),
+                    )
+                    .saturating_add(64);
+            for index in candidates
+                .iter()
+                .chain(eligible.iter())
+                .chain(winner.iter())
+            {
+                preflight_bytes =
+                    preflight_bytes.saturating_add(self.lookup_candidate_estimated_bytes(*index));
+            }
+            if preflight_bytes > DEPENDENCY_OBSERVATION_LIMITS.max_retained_bytes {
+                overflow_dependency_trace(&mut self.dependency_observations.borrow_mut());
+                None
+            } else {
+                let observation = dependency_observation::PackageLookupObservation {
+                    sequence: 0,
+                    operation: match operation {
+                        PackageLookupOperation::Fhir => {
+                            dependency_observation::LookupOperation::Fhir
+                        }
+                        PackageLookupOperation::Metadata => {
+                            dependency_observation::LookupOperation::Metadata
+                        }
+                    },
+                    query: item.to_string(),
+                    requested_types,
+                    candidates: candidates
+                        .into_iter()
+                        .map(|index| self.lookup_candidate(index))
+                        .collect(),
+                    eligible: eligible
+                        .iter()
+                        .map(|index| self.lookup_candidate(*index))
+                        .collect(),
+                    winner: winner.map(|index| self.lookup_candidate(index)),
+                    body_read: dependency_observation::BodyReadOutcome::NotAttempted,
+                };
+                admit_dependency_observation(
+                    &mut self.dependency_observations.borrow_mut(),
+                    observation,
+                    preflight_bytes,
+                    DEPENDENCY_OBSERVATION_LIMITS,
+                )
+            }
+        } else {
+            None
+        };
+        ResolvedPackageLookup {
+            index: winner,
+            #[cfg(feature = "dependency-observation")]
+            observation_sequence,
+        }
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    fn finish_observed_read(
+        &self,
+        sequence: u64,
+        outcome: dependency_observation::BodyReadOutcome,
+    ) {
+        let mut trace = self.dependency_observations.borrow_mut();
+        let observation = trace
+            .observations
+            .get_mut(sequence as usize)
+            .expect("package lookup observation belongs to this store");
+        debug_assert_eq!(observation.sequence, sequence);
+        observation.body_read = outcome;
     }
 
     /// Read+parse a resource file once, memoized (core SDs are fished hundreds of
     /// times during a build; re-parsing dominated wall time before this cache).
     fn read_value(&self, idx: usize) -> Option<std::rc::Rc<Value>> {
-        if let Some(v) = self.cache.borrow().get(&idx) {
-            return Some(v.clone());
+        {
+            let mut cache = self.cache.borrow_mut();
+            let tick = cache.next_tick();
+            if let Some(entry) = cache.entries.get_mut(&idx) {
+                entry.last_used = tick;
+                let value = entry.value.clone();
+                cache.hits += 1;
+                return Some(value);
+            }
+            cache.misses += 1;
         }
-        let entry = &self.entries[idx];
-        let v = if let Some(content) = entry.embedded {
-            std::rc::Rc::new(serde_json::from_str::<Value>(content).ok()?)
+        let entry = &self.catalog.entries[idx];
+        let (value, source_bytes) = if let Some(content) = entry.embedded {
+            (
+                std::rc::Rc::new(serde_json::from_str::<Value>(content).ok()?),
+                content.len(),
+            )
         } else {
             let bytes = self.source().read(&entry.path).ok()?;
-            std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?)
+            let source_bytes = bytes.len();
+            (
+                std::rc::Rc::new(serde_json::from_slice::<Value>(&bytes).ok()?),
+                source_bytes,
+            )
         };
-        self.cache.borrow_mut().insert(idx, v.clone());
-        Some(v)
+        let mut cache = self.cache.borrow_mut();
+        let tick = cache.next_tick();
+        cache.approximate_source_bytes =
+            cache.approximate_source_bytes.saturating_add(source_bytes);
+        cache.entries.insert(
+            idx,
+            PackageStoreCacheEntry {
+                value: value.clone(),
+                source_bytes,
+                last_used: tick,
+            },
+        );
+        cache.inserts += 1;
+        Some(value)
     }
 
     /// `fishForFHIR(item, ...types)` — returns the full resource JSON.
@@ -989,18 +1663,42 @@ impl PackageStore {
     /// per-fish deep clone of (large) base StructureDefinitions was pure waste.
     /// The rare caller that needs ownership clones at its own site.
     pub fn fish_for_fhir(&self, item: &str, types: &[FishType]) -> Option<std::rc::Rc<Value>> {
-        let idx = self.resolve(item, types)?;
-        self.read_value(idx)
+        let resolved = self.resolve(item, types, PackageLookupOperation::Fhir);
+        let value = self.read_value(resolved.index?);
+        #[cfg(feature = "dependency-observation")]
+        if let Some(sequence) = resolved.observation_sequence {
+            self.finish_observed_read(
+                sequence,
+                if value.is_some() {
+                    dependency_observation::BodyReadOutcome::Ready
+                } else {
+                    dependency_observation::BodyReadOutcome::MissingOrInvalid
+                },
+            );
+        }
+        value
     }
 
     /// `fishForMetadata(item, ...types)` — the `Metadata` object SUSHI emits
     /// (`convertInfoToMetadata`, FHIRDefinitions.ts:233-251). Key order and
     /// falsy-omission match the oracle.
     pub fn fish_for_metadata(&self, item: &str, types: &[FishType]) -> Option<Value> {
-        let idx = self.resolve(item, types)?;
+        let resolved = self.resolve(item, types, PackageLookupOperation::Metadata);
+        let idx = resolved.index?;
         // Read-only here (we only `.get(...)` fields), so hold the Rc, never clone.
         let value: Option<std::rc::Rc<Value>> = self.read_value(idx);
-        let entry = &self.entries[idx];
+        #[cfg(feature = "dependency-observation")]
+        if let Some(sequence) = resolved.observation_sequence {
+            self.finish_observed_read(
+                sequence,
+                if value.is_some() {
+                    dependency_observation::BodyReadOutcome::Ready
+                } else {
+                    dependency_observation::BodyReadOutcome::MissingOrInvalid
+                },
+            );
+        }
+        let entry = &self.catalog.entries[idx];
 
         let mut out = Map::new();
         // id
@@ -1274,6 +1972,8 @@ fn auto_pass(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     fn unique_test_dir(name: &str) -> PathBuf {
@@ -1339,14 +2039,499 @@ mod tests {
     }
 
     fn empty_store() -> PackageStore {
+        let source = BundleSource::new();
+        let cache_root = source.cache_root().to_path_buf();
         PackageStore {
-            entries: Vec::new(),
-            by_id: FxHashMap::default(),
-            by_url: FxHashMap::default(),
-            by_name: FxHashMap::default(),
-            cache: std::cell::RefCell::new(FxHashMap::default()),
-            source: Box::new(DiskSource),
+            catalog: Rc::new(PackageCatalog {
+                entries: Vec::new(),
+                by_id: FxHashMap::default(),
+                by_url: FxHashMap::default(),
+                by_name: FxHashMap::default(),
+            }),
+            source: Box::new(source),
+            cache_root,
+            package_config: ProjectConfig {
+                fhir_version: "4.0.1".into(),
+                dependencies: Vec::new(),
+            },
+            cache: std::cell::RefCell::new(ParsedCache::default()),
+            #[cfg(feature = "dependency-observation")]
+            dependency_observations: std::cell::RefCell::new(Default::default()),
         }
+    }
+
+    fn empty_disk_store(cache_root: &Path) -> PackageStore {
+        let mut store = empty_store();
+        store.source = Box::new(DiskSource);
+        store.cache_root = cache_root.to_path_buf();
+        store
+    }
+
+    fn cached_value(source_bytes: usize, last_used: u64) -> PackageStoreCacheEntry {
+        PackageStoreCacheEntry {
+            value: Rc::new(serde_json::json!({"sourceBytes": source_bytes})),
+            source_bytes,
+            last_used,
+        }
+    }
+
+    #[test]
+    fn compile_fork_shares_catalog_but_not_retained_parsed_cache_state() {
+        assert!(DiskSource.fork_read_cache().is_err());
+        let retained = empty_store();
+        {
+            let mut cache = retained.cache.borrow_mut();
+            cache.entries.insert(0, cached_value(10, 1));
+            cache.approximate_source_bytes = 10;
+            cache.next_use = 1;
+        }
+        let before = retained.cache_stats();
+        let before_fingerprint = retained.retained_state_fingerprint();
+        let retained_cache_identity = retained.cache.as_ptr();
+        let working = retained.fork_for_compile().unwrap();
+        assert!(Rc::ptr_eq(&retained.catalog, &working.catalog));
+        assert_ne!(retained_cache_identity, working.cache.as_ptr());
+        {
+            let mut cache = working.cache.borrow_mut();
+            cache.entries.insert(1, cached_value(20, 2));
+            cache.approximate_source_bytes += 20;
+            cache.inserts += 1;
+        }
+        let aggregate = aggregate_retained_stats([&retained, &working]);
+        assert_eq!(aggregate.store_generations, 2);
+        assert_eq!(aggregate.catalog_generations, 1);
+        assert_eq!(aggregate.parsed_logical_entries, 3);
+        assert_eq!(aggregate.parsed_logical_approximate_source_bytes, 40);
+        assert_eq!(aggregate.parsed_unique_entries, 2);
+        assert_eq!(aggregate.parsed_unique_approximate_source_bytes, 30);
+        // Dropping this working fork models any failed compilation: the prior
+        // successful cache remains the same object with identical values,
+        // recency, counters, keys, and weight.
+        drop(working);
+        assert_eq!(retained.cache.as_ptr(), retained_cache_identity);
+        assert_eq!(retained.cache_stats(), before);
+        assert_eq!(retained.retained_state_fingerprint(), before_fingerprint);
+        assert_eq!(
+            retained
+                .cache
+                .borrow()
+                .entries
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn compile_fork_hits_and_misses_leave_full_retained_fingerprint_unchanged() {
+        let config = "fhirVersion: 4.0.1\n";
+        let definition = |id: &str| {
+            serde_json::to_vec(&serde_json::json!({
+                "resourceType": "StructureDefinition",
+                "id": id,
+                "url": format!("http://hl7.org/fhir/StructureDefinition/{id}"),
+                "version": "4.0.1",
+                "name": id,
+                "kind": "resource",
+                "type": id,
+                "derivation": "specialization"
+            }))
+            .unwrap()
+        };
+        let index_files = ["Patient", "Observation"].map(|id| {
+            serde_json::json!({
+                "filename": format!("StructureDefinition-{id}.json"),
+                "resourceType": "StructureDefinition",
+                "id": id,
+                "url": format!("http://hl7.org/fhir/StructureDefinition/{id}"),
+                "version": "4.0.1",
+                "kind": "resource",
+                "type": id
+            })
+        });
+        let mut source = BundleSource::new();
+        source.mount_package(
+            "hl7.fhir.r4.core#4.0.1",
+            BTreeMap::from([
+                (
+                    "package.json",
+                    br#"{"name":"hl7.fhir.r4.core","version":"4.0.1"}"#.to_vec(),
+                ),
+                (
+                    ".index.json",
+                    serde_json::to_vec(&serde_json::json!({
+                        "index-version": 2,
+                        "files": index_files
+                    }))
+                    .unwrap(),
+                ),
+                ("StructureDefinition-Patient.json", definition("Patient")),
+                (
+                    "StructureDefinition-Observation.json",
+                    definition("Observation"),
+                ),
+            ]),
+        );
+        let root = source.cache_root().to_string_lossy().into_owned();
+        let store = PackageStore::for_project_with_config(source, config, &root).unwrap();
+        assert!(store.fish_for_fhir("Patient", ALL_FISH_TYPES).is_some());
+        let retained = store
+            .into_retained(PackageStoreCacheLimits {
+                max_entries: 1024,
+                max_approximate_source_bytes: 16 * 1024 * 1024,
+            })
+            .unwrap();
+        let before = retained.retained_state_fingerprint();
+        let working = retained.fork_for_compile().unwrap();
+        assert!(working.fish_for_fhir("Patient", ALL_FISH_TYPES).is_some());
+        assert!(working
+            .fish_for_fhir("Observation", ALL_FISH_TYPES)
+            .is_some());
+        let working_stats = working.cache_stats();
+        assert!(working_stats.hits > 0);
+        assert!(working_stats.misses > 0);
+        assert!(working_stats.inserts > 0);
+        assert_eq!(retained.retained_state_fingerprint(), before);
+        drop(working);
+        assert_eq!(retained.retained_state_fingerprint(), before);
+    }
+
+    #[test]
+    fn canonical_selector_deduplicates_filters_ranks_and_uses_lifo() {
+        const RESOURCE_A: &str = r#"{"resourceType":"StructureDefinition","id":"Shared","name":"Shared","url":"http://example.test/Shared","version":"1","kind":"resource","type":"Shared"}"#;
+        const PROFILE: &str = r#"{"resourceType":"StructureDefinition","id":"Shared","name":"Shared","url":"http://example.test/Shared","version":"2","kind":"resource","type":"Patient","derivation":"constraint"}"#;
+        const RESOURCE_B: &str = r#"{"resourceType":"StructureDefinition","id":"Shared","name":"Shared","url":"http://example.test/Shared","version":"1","kind":"resource","type":"Shared"}"#;
+        let mut store = empty_store();
+        for (seq, (content, version, derivation)) in [
+            (RESOURCE_A, "1", None),
+            (PROFILE, "2", Some("constraint")),
+            (RESOURCE_B, "1", None),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            store.add_entry(
+                IndexEntry {
+                    filename: format!("shared-{seq}.json"),
+                    resource_type: Some("StructureDefinition".into()),
+                    id: Some("Shared".into()),
+                    package_id: None,
+                    url: Some("http://example.test/Shared".into()),
+                    version: Some(version.into()),
+                    kind: Some("resource".into()),
+                    sd_type: Some(
+                        if derivation.is_some() {
+                            "Patient"
+                        } else {
+                            "Shared"
+                        }
+                        .into(),
+                    ),
+                    derivation: derivation.map(str::to_string),
+                },
+                Some("Shared".into()),
+                PathBuf::new(),
+                Some(content),
+                seq,
+            );
+        }
+
+        let cases: [(&str, &[FishType], usize); 5] = [
+            ("Shared", ALL_FISH_TYPES, 2),
+            ("Shared|1", ALL_FISH_TYPES, 2),
+            ("Shared", &[FishType::Profile], 1),
+            ("Shared", &[FishType::Instance], 2),
+            ("http://example.test/Shared", ALL_FISH_TYPES, 2),
+        ];
+        for (query, types, expected_sequence) in cases {
+            let selected = store
+                .resolve(query, types, PackageLookupOperation::Fhir)
+                .index
+                .expect("selector winner");
+            assert_eq!(store.catalog.entries[selected].seq, expected_sequence);
+        }
+
+        #[cfg(feature = "dependency-observation")]
+        {
+            let trace = store.take_dependency_observations();
+            assert!(!trace.overflowed);
+            assert_eq!(trace.observations.len(), cases.len());
+            assert_eq!(trace.observations[0].candidates.len(), 3);
+            assert_eq!(trace.observations[1].eligible.len(), 2);
+            assert_eq!(trace.observations[2].eligible.len(), 1);
+            assert_eq!(trace.observations[3].eligible.len(), 3);
+            for (observation, (_, _, expected_sequence)) in trace.observations.iter().zip(cases) {
+                assert_eq!(
+                    observation.winner.as_ref().unwrap().load_sequence,
+                    expected_sequence
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    fn lookup_observation(query: &str) -> dependency_observation::PackageLookupObservation {
+        dependency_observation::PackageLookupObservation {
+            sequence: u64::MAX,
+            operation: dependency_observation::LookupOperation::Fhir,
+            query: query.into(),
+            requested_types: vec!["Resource".into()],
+            candidates: Vec::new(),
+            eligible: Vec::new(),
+            winner: None,
+            body_read: dependency_observation::BodyReadOutcome::NotAttempted,
+        }
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    #[test]
+    fn dependency_trace_enforces_exact_owned_capacity_bound() {
+        let mut trace = dependency_observation::PackageLookupTrace::default();
+        let roomy = DependencyObservationLimits {
+            max_observations: 2,
+            max_retained_bytes: usize::MAX,
+        };
+        assert_eq!(
+            admit_dependency_observation(&mut trace, lookup_observation("first"), 0, roomy),
+            Some(0)
+        );
+        assert_eq!(
+            trace.retained_bytes,
+            dependency_trace_owned_capacity(&trace)
+        );
+
+        let below_current_capacity = DependencyObservationLimits {
+            max_observations: 2,
+            max_retained_bytes: trace.retained_bytes.saturating_sub(1),
+        };
+        assert_eq!(
+            admit_dependency_observation(
+                &mut trace,
+                lookup_observation("cannot-fit"),
+                0,
+                below_current_capacity,
+            ),
+            None
+        );
+        assert!(trace.overflowed);
+        assert!(trace.observations.is_empty());
+        assert_eq!(trace.retained_bytes, 0);
+        assert_eq!(dependency_trace_owned_capacity(&trace), 0);
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    #[test]
+    fn take_is_atomic_and_promotion_never_retains_dependency_trace() {
+        let source = BundleSource::new();
+        let root = source.cache_root().to_string_lossy().into_owned();
+        let store =
+            PackageStore::for_project_with_config(source, "fhirVersion: 4.0.1\n", &root).unwrap();
+        assert!(store.fish_for_fhir("Base", ALL_FISH_TYPES).is_some());
+        let first = store.take_dependency_observations();
+        assert_eq!(first.observations.len(), 1);
+        assert_eq!(
+            store.take_dependency_observations(),
+            dependency_observation::PackageLookupTrace::default()
+        );
+
+        assert!(store.fish_for_fhir("Base", ALL_FISH_TYPES).is_some());
+        let retained = store
+            .into_retained(PackageStoreCacheLimits {
+                max_entries: 16,
+                max_approximate_source_bytes: 1024 * 1024,
+            })
+            .unwrap();
+        assert_eq!(
+            retained.take_dependency_observations(),
+            dependency_observation::PackageLookupTrace::default()
+        );
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    #[test]
+    fn package_lookup_observation_records_candidates_winner_body_and_miss() {
+        use dependency_observation::{BodyReadOutcome, LookupOperation};
+
+        let config = "fhirVersion: 4.0.1\n";
+        let definition = serde_json::to_vec(&serde_json::json!({
+            "resourceType": "StructureDefinition",
+            "id": "Patient",
+            "url": "http://hl7.org/fhir/StructureDefinition/Patient",
+            "version": "4.0.1",
+            "name": "Patient",
+            "kind": "resource",
+            "type": "Patient",
+            "derivation": "specialization"
+        }))
+        .unwrap();
+        let mut source = BundleSource::new();
+        source.mount_package(
+            "hl7.fhir.r4.core#4.0.1",
+            BTreeMap::from([
+                (
+                    "package.json",
+                    br#"{"name":"hl7.fhir.r4.core","version":"4.0.1"}"#.to_vec(),
+                ),
+                (
+                    ".index.json",
+                    serde_json::to_vec(&serde_json::json!({
+                        "index-version": 2,
+                        "files": [
+                            {
+                                "filename": "nested/StructureDefinition-Patient.json",
+                                "resourceType": "StructureDefinition",
+                                "id": "Patient",
+                                "url": "http://hl7.org/fhir/StructureDefinition/Patient",
+                                "version": "4.0.1",
+                                "kind": "resource",
+                                "type": "Patient"
+                            },
+                            {
+                                "filename": "StructureDefinition-Broken.json",
+                                "resourceType": "StructureDefinition",
+                                "id": "Broken",
+                                "url": "http://example.test/StructureDefinition/Broken",
+                                "version": "1.0.0",
+                                "kind": "resource",
+                                "type": "Patient"
+                            }
+                        ]
+                    }))
+                    .unwrap(),
+                ),
+                ("nested/StructureDefinition-Patient.json", definition),
+                ("StructureDefinition-Broken.json", b"not json".to_vec()),
+            ]),
+        );
+        let root = source.cache_root().to_string_lossy().into_owned();
+        let store = PackageStore::for_project_with_config(source, config, &root).unwrap();
+
+        assert!(store
+            .fish_for_fhir("Patient", &[FishType::Resource])
+            .is_some());
+        assert!(store
+            .fish_for_fhir("DefinitelyMissing", ALL_FISH_TYPES)
+            .is_none());
+        assert!(store
+            .fish_for_metadata("Patient", &[FishType::Resource])
+            .is_some());
+        assert!(store
+            .fish_for_fhir("Broken", &[FishType::Resource])
+            .is_none());
+        assert!(store
+            .fish_for_metadata("Broken", &[FishType::Resource])
+            .is_some());
+        assert!(store.fish_for_fhir("Base", ALL_FISH_TYPES).is_some());
+
+        let trace = store.take_dependency_observations();
+        assert!(!trace.overflowed);
+        assert_eq!(
+            trace.retained_bytes,
+            dependency_trace_owned_capacity(&trace)
+        );
+        assert_eq!(
+            store.take_dependency_observations(),
+            dependency_observation::PackageLookupTrace::default()
+        );
+        let observations = trace.observations;
+        assert_eq!(observations.len(), 6);
+        let hit = &observations[0];
+        assert_eq!(hit.operation, LookupOperation::Fhir);
+        assert_eq!(hit.candidates.len(), 1);
+        assert_eq!(hit.eligible.len(), 1);
+        assert_eq!(
+            hit.winner.as_ref().unwrap().package.as_deref(),
+            Some("hl7.fhir.r4.core#4.0.1")
+        );
+        assert_eq!(
+            hit.winner.as_ref().unwrap().member.as_deref(),
+            Some("nested/StructureDefinition-Patient.json")
+        );
+        assert_eq!(hit.body_read, BodyReadOutcome::Ready);
+        let miss = &observations[1];
+        assert!(miss.candidates.is_empty());
+        assert!(miss.winner.is_none());
+        assert_eq!(miss.body_read, BodyReadOutcome::NotAttempted);
+        assert_eq!(observations[2].operation, LookupOperation::Metadata);
+        assert_eq!(observations[2].body_read, BodyReadOutcome::Ready);
+        assert_eq!(observations[3].body_read, BodyReadOutcome::MissingOrInvalid);
+        assert_eq!(observations[4].operation, LookupOperation::Metadata);
+        assert_eq!(observations[4].body_read, BodyReadOutcome::MissingOrInvalid);
+        let embedded = observations[5].winner.as_ref().unwrap();
+        assert_eq!(embedded.package.as_deref(), Some("sushi-r5forR4#1.0.0"));
+        assert!(embedded.member_digest.is_some());
+    }
+
+    #[test]
+    fn successful_cache_promotion_enforces_deterministic_entry_and_source_byte_bounds() {
+        let working = empty_store();
+        {
+            let mut cache = working.cache.borrow_mut();
+            cache.entries.insert(0, cached_value(6, 1));
+            cache.entries.insert(1, cached_value(6, 2));
+            cache.entries.insert(2, cached_value(6, 3));
+            // Most recent but individually over the aggregate limit: served
+            // during compilation, then excluded from retained state.
+            cache.entries.insert(3, cached_value(20, 4));
+            cache.approximate_source_bytes = 38;
+            cache.next_use = 4;
+        }
+        let retained = working
+            .into_retained(PackageStoreCacheLimits {
+                max_entries: 2,
+                max_approximate_source_bytes: 12,
+            })
+            .unwrap();
+        let stats = retained.cache_stats();
+        assert_eq!(stats.entries, 2);
+        assert_eq!(stats.approximate_source_bytes, 12);
+        assert_eq!(stats.evictions, 2);
+        let cache = retained.cache.borrow();
+        assert!(cache.entries.contains_key(&1));
+        assert!(cache.entries.contains_key(&2));
+        assert!(!cache.entries.contains_key(&0));
+        assert!(!cache.entries.contains_key(&3));
+
+        let tied = empty_store();
+        {
+            let mut cache = tied.cache.borrow_mut();
+            cache.entries.insert(9, cached_value(1, 1));
+            cache.entries.insert(4, cached_value(1, 1));
+            cache.approximate_source_bytes = 2;
+            cache.next_use = 1;
+        }
+        let tied = tied
+            .into_retained(PackageStoreCacheLimits {
+                max_entries: 1,
+                max_approximate_source_bytes: 1,
+            })
+            .unwrap();
+        assert!(tied.cache.borrow().entries.contains_key(&4));
+
+        // LRU eviction keeps a newest suffix; it must not solve a byte-budget
+        // knapsack by admitting an older small entry around a rejected newer
+        // one. The 4-byte oldest entry is evicted first, then the 6-byte middle
+        // entry, leaving only the newest 6-byte value under a 10-byte cap.
+        let fragmented = empty_store();
+        {
+            let mut cache = fragmented.cache.borrow_mut();
+            cache.entries.insert(0, cached_value(4, 1));
+            cache.entries.insert(1, cached_value(6, 2));
+            cache.entries.insert(2, cached_value(6, 3));
+            cache.approximate_source_bytes = 16;
+            cache.next_use = 3;
+        }
+        let fragmented = fragmented
+            .into_retained(PackageStoreCacheLimits {
+                max_entries: 3,
+                max_approximate_source_bytes: 10,
+            })
+            .unwrap();
+        let cache = fragmented.cache.borrow();
+        assert_eq!(cache.entries.len(), 1);
+        assert!(cache.entries.contains_key(&2));
+        assert_eq!(cache.approximate_source_bytes, 6);
     }
 
     #[test]
@@ -1419,13 +2604,13 @@ dependencies:
         )
         .unwrap();
 
-        let mut store = empty_store();
+        let mut store = empty_disk_store(&dir);
         let mut seq = 0usize;
         store.index_package(&pkg, &mut seq);
 
         // The empty index yielded nothing; the scan recovered the profile.
         assert_eq!(
-            store.entries.len(),
+            store.catalog.entries.len(),
             1,
             "only the SD profile should be indexed"
         );
@@ -1440,7 +2625,7 @@ dependencies:
 
         // A completely missing `.index.json` must behave identically.
         std::fs::remove_file(pkg.join(".index.json")).unwrap();
-        let mut store2 = empty_store();
+        let mut store2 = empty_disk_store(&dir);
         let mut seq2 = 0usize;
         store2.index_package(&pkg, &mut seq2);
         assert!(store2
@@ -1473,11 +2658,11 @@ dependencies:
         )
         .unwrap();
 
-        let mut store = empty_store();
+        let mut store = empty_disk_store(&dir);
         let mut seq = 0usize;
         store.index_package(&pkg, &mut seq);
         assert_eq!(
-            store.entries.len(),
+            store.catalog.entries.len(),
             1,
             "no double-indexing from the reconcile"
         );

@@ -125,4 +125,23 @@ impl<'a> WalkContext<'a> {
             auto_added_slicing: false,
         });
     }
+
+    /// Insert an emitted element while keeping the annotation sidecar aligned.
+    /// Specialization can add new children after the ordinary base walk and
+    /// must place each child within its parent's contiguous subtree.
+    pub fn insert_into_result(&mut self, index: usize, element: Value, diff_source: Option<usize>) {
+        if let Some(diff) = diff_source {
+            if diff < self.diff_consumed.len() {
+                self.diff_consumed[diff] = true;
+            }
+        }
+        self.output.insert(index, element);
+        self.output_ann.insert(
+            index,
+            Annotation {
+                diff_source,
+                auto_added_slicing: false,
+            },
+        );
+    }
 }

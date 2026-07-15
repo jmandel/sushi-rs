@@ -30,8 +30,8 @@ pub use artifact::{
     ArtifactObservation, ArtifactResolveError, ArtifactResolveFailure, ArtifactResolver,
     FragmentEngineArtifactResolver, PageArtifactReadSet, SharedArtifactCache,
     PUBLISHER_KIND_PARAMETER, PUBLISHER_REFERENCE_PARAMETER, STOCK_PAGE_SOURCE_NAMESPACE,
-    STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_NAMESPACE, STOCK_STAGED_INCLUDE_NAMESPACE,
-    STOCK_TEMPLATE_INCLUDE_NAMESPACE,
+    STOCK_RUNTIME_INPUT_NAMESPACE, STOCK_SITE_DATA_LOOKUP_NAMESPACE, STOCK_SITE_DATA_NAMESPACE,
+    STOCK_SITE_NAMESPACE, STOCK_STAGED_INCLUDE_NAMESPACE, STOCK_TEMPLATE_INCLUDE_NAMESPACE,
 };
 pub use sitedata::{SiteData, SiteDataLoadError};
 
@@ -171,6 +171,14 @@ impl<'a> PageProvider<'a> {
         self.page_artifacts.borrow().clone()
     }
 
+    /// Move the completed page read set out without cloning its captured
+    /// fragment or authored-input bytes. The provider remains usable with a
+    /// fresh empty read set.
+    #[doc(hidden)]
+    pub fn take_page_artifact_reads(&self) -> PageArtifactReadSet {
+        std::mem::take(&mut *self.page_artifacts.borrow_mut())
+    }
+
     /// Translate one registered legacy include name and ask the explicit
     /// resolver for its typed artifact; cache by artifact identity.
     fn try_artifact(&self, name: &str) -> Option<String> {
@@ -248,6 +256,10 @@ impl<'a> PageProvider<'a> {
     /// `_includes/` is consulted.
     fn resolve_include(&self, name: &str) -> Option<String> {
         if !is_safe_stock_relative_path(name) {
+            #[cfg(feature = "dependency-observation")]
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_STAGED_INCLUDE_NAMESPACE, name));
             return None;
         }
         if self.resolver_first {
@@ -257,6 +269,10 @@ impl<'a> PageProvider<'a> {
         }
         // 1. pre-generated file in _includes/ (possibly under en/).
         let p = self.includes_dir.join(name);
+        #[cfg(feature = "dependency-observation")]
+        self.page_artifacts
+            .borrow_mut()
+            .request_input(stock_input_artifact(STOCK_STAGED_INCLUDE_NAMESPACE, name));
         if let Some(s) = self.tree.read(&p) {
             self.page_artifacts.borrow_mut().record_input(
                 stock_input_artifact(STOCK_STAGED_INCLUDE_NAMESPACE, name),
@@ -267,6 +283,10 @@ impl<'a> PageProvider<'a> {
         // 1b. materialized template `includes/` (driven `--template` path). The
         // template's fragment stubs / template-page live here when not pre-staged.
         if let Some(tinc) = &self.template_includes {
+            #[cfg(feature = "dependency-observation")]
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_TEMPLATE_INCLUDE_NAMESPACE, name));
             if let Some(s) = self.tree.read(&tinc.join(name)) {
                 self.page_artifacts.borrow_mut().record_input(
                     stock_input_artifact(STOCK_TEMPLATE_INCLUDE_NAMESPACE, name),
@@ -287,7 +307,31 @@ impl<'a> PageProvider<'a> {
 
 impl<'a> DataProvider for PageProvider<'a> {
     fn site_data(&self, path: &[&str]) -> Option<Value> {
+        #[cfg(feature = "dependency-observation")]
+        if let Some(key) = path.first() {
+            let source = self.site.source_name(key).unwrap_or(key);
+            let mut artifacts = self.page_artifacts.borrow_mut();
+            artifacts.request_input(stock_input_artifact(STOCK_SITE_DATA_NAMESPACE, source));
+            if let Some(bytes) = self.site.source_bytes(key) {
+                artifacts.record_input(
+                    stock_input_artifact(STOCK_SITE_DATA_NAMESPACE, source),
+                    bytes,
+                );
+            }
+        }
         let value = self.site.site_data(path);
+        #[cfg(feature = "dependency-observation")]
+        if let Some(key) = path.first() {
+            let source = self.site.source_name(key).unwrap_or(key);
+            self.page_artifacts.borrow_mut().observe_input_lookup(
+                stock_input_artifact(
+                    STOCK_SITE_DATA_LOOKUP_NAMESPACE,
+                    format!("{source}::{}", path.join(".")),
+                ),
+                value.is_some(),
+            );
+        }
+        #[cfg(not(feature = "dependency-observation"))]
         if value.is_some() {
             if let Some(key) = path.first() {
                 let source = self.site.source_name(key).unwrap_or(key);
@@ -302,6 +346,12 @@ impl<'a> DataProvider for PageProvider<'a> {
         value
     }
     fn site(&self, path: &[&str]) -> Option<Value> {
+        #[cfg(feature = "dependency-observation")]
+        if let Some(key) = path.first() {
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_SITE_NAMESPACE, *key));
+        }
         self.site.site(path)
     }
     fn include_source(&self, name: &str) -> Option<String> {
@@ -309,15 +359,36 @@ impl<'a> DataProvider for PageProvider<'a> {
     }
     fn include_source_relative(&self, name: &str) -> Option<String> {
         if !is_safe_stock_relative_path(name) {
+            #[cfg(feature = "dependency-observation")]
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_PAGE_SOURCE_NAMESPACE, name));
             return None;
         }
-        let root = self.pages_root.as_ref()?;
+        let Some(root) = self.pages_root.as_ref() else {
+            #[cfg(feature = "dependency-observation")]
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_PAGE_SOURCE_NAMESPACE, name));
+            return None;
+        };
         let dir = self.current_page_dir.borrow();
         let p = if dir.is_empty() {
             root.join(name)
         } else {
             root.join(&*dir).join(name)
         };
+        #[cfg(feature = "dependency-observation")]
+        {
+            let rel = p
+                .strip_prefix(root)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
+            self.page_artifacts
+                .borrow_mut()
+                .request_input(stock_input_artifact(STOCK_PAGE_SOURCE_NAMESPACE, rel));
+        }
         let value = self.tree.read(&p);
         if let Some(body) = value.as_ref() {
             let rel = p
@@ -508,7 +579,12 @@ mod tests {
             "template"
         );
         assert_eq!(calls.get(), 0);
-        assert!(provider.page_artifact_reads().requested().is_empty());
+        let reads = provider.page_artifact_reads();
+        assert!(reads.observations().is_empty());
+        #[cfg(not(feature = "dependency-observation"))]
+        assert!(reads.requested().is_empty());
+        #[cfg(feature = "dependency-observation")]
+        assert_eq!(reads.requested().len(), 2);
     }
 
     #[test]
@@ -577,7 +653,56 @@ mod tests {
             "staged fallback"
         );
         let artifacts = provider.page_artifact_reads();
+        #[cfg(not(feature = "dependency-observation"))]
         assert_eq!(artifacts.requested().len(), 1);
+        #[cfg(feature = "dependency-observation")]
+        assert_eq!(artifacts.requested().len(), 2);
         assert!(artifacts.read().is_empty());
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    #[test]
+    fn observation_feature_retains_successful_and_negative_liquid_namespaces() {
+        let tree: Rc<dyn TreeSource> = Rc::new(MemTree::new());
+        let site = SiteData::from_map(&json!({"present": {"value": "yes"}}));
+        let provider = PageProvider::new(&site, Path::new("/staged")).with_tree(tree);
+        let page = "---\n---\n{{ site.data.present.value }}{{ site.data.present.absent }}{{ site.data.missing.value }}{{ site.title }}{% include missing.md %}";
+        assert_eq!(render_page(page, "index.html", &provider), "yes");
+        let reads = provider.page_artifact_reads();
+        let requested = reads
+            .requested()
+            .iter()
+            .map(|key| format!("{key:?}"))
+            .collect::<Vec<_>>();
+        assert!(requested
+            .iter()
+            .any(|key| key.contains(STOCK_SITE_DATA_NAMESPACE) && key.contains("present")));
+        assert!(requested
+            .iter()
+            .any(|key| key.contains(STOCK_SITE_DATA_NAMESPACE) && key.contains("missing")));
+        // Liquid asks the provider for the top-level object, then evaluates
+        // nested properties inside that immutable value. Capturing the exact
+        // top-level source bytes therefore covers both `value` and `absent`.
+        assert!(requested.iter().any(|key| {
+            key.contains(STOCK_SITE_DATA_LOOKUP_NAMESPACE) && key.contains("present::present")
+        }));
+        assert!(requested
+            .iter()
+            .any(|key| key.contains(STOCK_SITE_NAMESPACE) && key.contains("title")));
+        assert!(requested
+            .iter()
+            .any(|key| key.contains(STOCK_STAGED_INCLUDE_NAMESPACE) && key.contains("missing.md")));
+        assert!(reads
+            .input_reads()
+            .iter()
+            .any(|key| format!("{key:?}").contains("present")));
+        let dependencies = reads.dependencies();
+        assert!(dependencies
+            .iter()
+            .any(|key| format!("{key:?}").contains(STOCK_SITE_DATA_NAMESPACE)
+                && format!("{key:?}").contains("present")));
+        assert!(dependencies
+            .iter()
+            .any(|key| format!("{key:?}").contains("present::present")));
     }
 }

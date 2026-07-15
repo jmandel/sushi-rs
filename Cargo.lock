@@ -138,6 +138,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dependency_observation"
+version = "0.1.0"
+
+[[package]]
 name = "diagnostics"
 version = "0.1.0"
 dependencies = [
@@ -546,6 +550,7 @@ name = "package_store"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dependency_observation",
  "flate2",
  "hex",
  "miniz_oxide",
@@ -933,6 +938,7 @@ dependencies = [
  "base64",
  "compiler",
  "content_store",
+ "dependency_observation",
  "package_store",
  "prepared_guide",
  "render_liquid",

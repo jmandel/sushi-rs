@@ -13,13 +13,15 @@
 //! [`SiteEngine::restore`] authenticates its complete `ContentStore` closure and
 //! admits an ordinary bounded Publisher or Cycle handle in a fresh process.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use package_store::{DirEntry, PackageSource};
 
 mod compilation;
+#[cfg(feature = "dependency-observation")]
+mod dependency_observation;
 mod events;
 mod preparation;
 mod render_surface;
@@ -31,7 +33,8 @@ pub use compilation::{
     ResolvedPackageClosure,
 };
 pub use events::{
-    BuildError, BuildErrorCode, BuildErrorPhase, BuildEvent, BuildOperation, BuildStage,
+    BuildError, BuildErrorCode, BuildErrorPhase, BuildEvent, BuildEventSource, BuildOperation,
+    BuildStage,
 };
 pub use preparation::{
     GeneratorKind, GeneratorSpec, PackageEnvironment, PackageProvider, PrepareResult,
@@ -54,6 +57,11 @@ pub use runtime::{
 pub struct PackageView {
     source: Rc<dyn PackageSource>,
     root: PathBuf,
+    /// Exact authenticated carriers mounted in the source which produced this
+    /// view. This is identity evidence only: `allowed_labels` remains the sole
+    /// authority for package visibility, so resolution-support packages cannot
+    /// become compiler inputs merely because their carriers are recorded here.
+    carrier_identities: Option<Rc<BTreeMap<String, site_build::ContentRef>>>,
     allowed_labels: Option<BTreeSet<String>>,
     allowed_files: Option<BTreeSet<PathBuf>>,
     allowed_directories: Option<BTreeSet<PathBuf>>,
@@ -64,6 +72,13 @@ impl std::fmt::Debug for PackageView {
         formatter
             .debug_struct("PackageView")
             .field("root", &self.root)
+            .field(
+                "carrier_identity_count",
+                &self
+                    .carrier_identities
+                    .as_ref()
+                    .map(|entries| entries.len()),
+            )
             .field("allowed_labels", &self.allowed_labels)
             .field(
                 "allowed_file_count",
@@ -82,6 +97,7 @@ impl PackageView {
         Self {
             source,
             root,
+            carrier_identities: None,
             allowed_labels,
             allowed_files: None,
             allowed_directories: None,
@@ -92,10 +108,35 @@ impl PackageView {
         &self.root
     }
 
+    pub(crate) fn with_carrier_identities(
+        mut self,
+        identities: BTreeMap<String, site_build::ContentRef>,
+    ) -> Self {
+        self.carrier_identities = Some(Rc::new(identities));
+        self
+    }
+
+    pub(crate) fn carrier_identity(&self, label: &str) -> Option<&site_build::ContentRef> {
+        self.carrier_identities.as_ref()?.get(label)
+    }
+
+    pub(crate) fn fork_for_compile(&self) -> std::io::Result<Self> {
+        let source: Rc<dyn PackageSource> = Rc::from(self.source.fork_read_cache()?);
+        Ok(Self {
+            source,
+            root: self.root.clone(),
+            carrier_identities: self.carrier_identities.clone(),
+            allowed_labels: self.allowed_labels.clone(),
+            allowed_files: self.allowed_files.clone(),
+            allowed_directories: self.allowed_directories.clone(),
+        })
+    }
+
     pub(crate) fn scoped(&self, labels: impl IntoIterator<Item = String>) -> Self {
         Self {
             source: self.source.clone(),
             root: self.root.clone(),
+            carrier_identities: self.carrier_identities.clone(),
             allowed_labels: Some(labels.into_iter().collect()),
             allowed_files: self.allowed_files.clone(),
             allowed_directories: self.allowed_directories.clone(),
@@ -144,6 +185,7 @@ impl PackageView {
         Ok(Self {
             source: self.source.clone(),
             root: self.root.clone(),
+            carrier_identities: self.carrier_identities.clone(),
             allowed_labels: self.allowed_labels.clone(),
             allowed_files: Some(files),
             allowed_directories: Some(directories),
@@ -221,5 +263,9 @@ impl PackageSource for PackageView {
 
     fn is_dir(&self, path: &Path) -> bool {
         self.permits(path) && self.source.is_dir(path)
+    }
+
+    fn fork_read_cache(&self) -> std::io::Result<Box<dyn PackageSource>> {
+        Ok(Box::new(self.fork_for_compile()?))
     }
 }

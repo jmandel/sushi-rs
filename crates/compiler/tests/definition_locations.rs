@@ -147,6 +147,92 @@ Usage: #example
 }
 
 #[test]
+fn prebuilt_package_store_uses_the_canonical_in_memory_ig_flow() {
+    let config = r#"id: prebuilt-store-test
+canonical: https://example.test/fhir
+name: PrebuiltStoreTest
+status: draft
+version: 0.1.0
+fhirVersion: 4.0.1
+"#;
+    let sources = [(
+        "input/fsh/profile.fsh".to_string(),
+        "Profile: ExactProfile\nParent: Patient\nId: exact-profile\n".to_string(),
+    )];
+
+    let ordinary_source = core_source();
+    let ordinary_root = ordinary_source.cache_root().to_string_lossy().into_owned();
+    let ordinary = compiler::build_project_in_memory_with_ig(
+        config,
+        &sources,
+        Vec::new(),
+        ordinary_source,
+        &ordinary_root,
+        HashMap::new(),
+    )
+    .expect("ordinary compile");
+
+    let retained_source = core_source();
+    let retained_root = retained_source.cache_root().to_string_lossy().into_owned();
+    let store = package_store::PackageStore::for_project_with_config(
+        retained_source,
+        config,
+        &retained_root,
+    )
+    .expect("prebuilt package store");
+    let retained = compiler::build_project_in_memory_with_ig_from_store(
+        config,
+        &sources,
+        Vec::new(),
+        &store,
+        HashMap::new(),
+    )
+    .expect("compile from retained store");
+
+    let resources = |entries: &[compiler::CompiledResource]| {
+        entries
+            .iter()
+            .map(|entry| {
+                (
+                    entry.filename.clone(),
+                    entry.text.clone(),
+                    entry.body.clone(),
+                    entry.definition.clone(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(resources(&ordinary.0), resources(&retained.0));
+    assert_eq!(
+        ordinary
+            .1
+            .as_ref()
+            .map(|entry| (&entry.filename, &entry.text, &entry.body)),
+        retained
+            .1
+            .as_ref()
+            .map(|entry| (&entry.filename, &entry.text, &entry.body))
+    );
+    assert_eq!(ordinary.2, retained.2);
+
+    let incompatible = config.replace("fhirVersion: 4.0.1", "fhirVersion: 5.0.0");
+    let error = compiler::build_project_in_memory_with_ig_from_store(
+        &incompatible,
+        &sources,
+        Vec::new(),
+        &store,
+        HashMap::new(),
+    )
+    .err()
+    .expect("mismatched package-store config must fail")
+    .to_string();
+    assert!(
+        error.contains("different FHIR version or dependency list"),
+        "{error}"
+    );
+}
+
+#[test]
 fn input_examples_are_local_resources_with_example_publication_metadata() {
     let config = r#"id: browser-example-test
 canonical: https://example.test/fhir

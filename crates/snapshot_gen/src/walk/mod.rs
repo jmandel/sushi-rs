@@ -18,6 +18,7 @@ mod simple;
 mod sliced;
 mod slicing;
 mod sort;
+mod specialization;
 mod trace;
 mod types;
 mod types_pred;
@@ -135,8 +136,11 @@ fn generate_snapshot_with_opts(
         .and_then(Value::as_str)
         .context("StructureDefinition.baseDefinition is required")?
         .to_string();
-    let base = resolve::resolve_with_snapshot(ctx, &base_url)?
-        .with_context(|| format!("base not found: {base_url}"))?;
+    let base = match resolve::publisher_base(ctx, &derived, &base_url)? {
+        Some(base) => base,
+        None => resolve::resolve_with_snapshot(ctx, &base_url)?
+            .with_context(|| format!("base not found: {base_url}"))?,
+    };
     let base_version = base
         .get("version")
         .and_then(Value::as_str)
@@ -232,6 +236,18 @@ fn generate_snapshot_with_opts(
     };
     let injected = preprocess::process(ctx, &mut diff_elements, &derived_versioned_url)?;
 
+    // ProfileUtilities.cloneSnapshot (PU:831,1493): specialization defines a
+    // new type, so the inherited snapshot is walked under the derived type's
+    // root id/path. The ElementDefinition.base paths deliberately continue to
+    // name their original base elements.
+    if derived.get("derivation").and_then(Value::as_str) == Some("specialization") {
+        let base_type =
+            specialization::type_name(&base).context("specialization base has no type")?;
+        let derived_type =
+            specialization::type_name(&derived).context("specialization has no type")?;
+        specialization::clone_snapshot(&mut base_elements, base_type, derived_type);
+    }
+
     // P6 fixTypeOfResourceId (PU:1305): for R4+ resource bases, rewrite every
     // element whose base.path == "Resource.id" to System.String with a fhir-type
     // extension of "id".
@@ -289,12 +305,17 @@ fn generate_snapshot_with_opts(
         trim_differential: false,
         redirector: Vec::new(),
         source_sd_url: base_source_url.clone(),
-        spec_url: spec_url_for(&base),
+        spec_url: spec_url_for(&derived, &base),
         slicing: SlicingParams::default(),
     };
     ctx.spec_url = frame.spec_url.clone();
 
     loop_::process_paths(ctx, &mut cur, &frame, None)?;
+
+    if derived.get("derivation").and_then(Value::as_str) == Some("specialization") {
+        specialization::apply_additions(ctx, &derived, &url, &derived_versioned_url)?;
+        specialization::ensure_bases(ctx);
+    }
 
     if trace::active() {
         trace::rec(
@@ -349,8 +370,14 @@ fn fix_type_of_resource_id(elements: &mut [Value]) {
 
 /// context.getSpecUrl() equivalent (SimpleWorkerContext:964 →
 /// VersionUtilities.getSpecUrl + "/"): 4.0→R4, 4.3→R4B, 5.0→R5.
-fn spec_url_for(base: &Value) -> String {
-    match base.get("fhirVersion").and_then(Value::as_str) {
+fn spec_url_for(derived: &Value, base: &Value) -> String {
+    // Prefer the derived definition's configured version so inherited markdown
+    // links are not silently rewritten to a dependency's FHIR release.
+    let version = derived
+        .get("fhirVersion")
+        .and_then(Value::as_str)
+        .or_else(|| base.get("fhirVersion").and_then(Value::as_str));
+    match version {
         Some(v) if v.starts_with("4.0") => "http://hl7.org/fhir/R4/".to_string(),
         Some(v) if v.starts_with("4.3") => "http://hl7.org/fhir/R4B/".to_string(),
         Some(v) if v.starts_with("3.0") => "http://hl7.org/fhir/STU3/".to_string(),

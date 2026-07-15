@@ -14,7 +14,7 @@
 use crate::source::PackageSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 /// Format version of the derived index. Bumping this changes the CAS artifact
 /// filename ([`cas_artifact_name`]) so a stale artifact is never read — entries
@@ -115,6 +115,12 @@ fn entry_from_json(json: &Value, filename: String) -> DerivedEntry {
     }
 }
 
+fn entry_from_bytes(bytes: &[u8], filename: String) -> Option<DerivedEntry> {
+    serde_json::from_slice::<Value>(bytes)
+        .ok()
+        .map(|json| entry_from_json(&json, filename))
+}
+
 /// Build the derived index for a materialized package directory by parsing each
 /// resource file once and lifting the derived columns from its root object. This
 /// is the single builder that both the CAS ingest write and the non-CAS
@@ -123,17 +129,40 @@ pub fn build(source: &dyn PackageSource, package_dir: &Path) -> DerivedIndex {
     let mut files = Vec::new();
     for filename in resource_filenames(source, package_dir) {
         let path = package_dir.join(&filename);
-        let Some(json) = source
+        let Some(entry) = source
             .read(&path)
             .ok()
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .and_then(|bytes| entry_from_bytes(&bytes, filename))
         else {
             // A file FPL would read then reject (unparseable): skip it, exactly
             // like the stock index builder.
             continue;
         };
-        files.push(entry_from_json(&json, filename));
+        files.push(entry);
     }
+    DerivedIndex {
+        version: DERIVED_INDEX_FORMAT_VERSION,
+        files,
+    }
+}
+
+/// Build the same derived index directly from canonical package members.
+///
+/// Callers which already own the exact package map need not clone it into a
+/// temporary `PackageSource` merely to read the top-level JSON files back.
+/// Nested members, dotfiles, and `package.json` remain excluded exactly as they
+/// are by [`build`].
+pub(crate) fn build_from_package_files(package_files: &BTreeMap<String, Vec<u8>>) -> DerivedIndex {
+    let files = package_files
+        .iter()
+        .filter(|(filename, _)| {
+            !filename.contains('/')
+                && !filename.starts_with('.')
+                && filename.to_ascii_lowercase().ends_with(".json")
+                && filename.as_str() != "package.json"
+        })
+        .filter_map(|(filename, bytes)| entry_from_bytes(bytes, filename.clone()))
+        .collect();
     DerivedIndex {
         version: DERIVED_INDEX_FORMAT_VERSION,
         files,
@@ -186,7 +215,7 @@ pub fn load(source: &dyn PackageSource, package_dir: &Path) -> Vec<DerivedEntry>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::DiskSource;
+    use crate::{source::DiskSource, BundleSource};
 
     #[test]
     fn build_covers_content_including_name_and_base() {
@@ -230,5 +259,32 @@ mod tests {
         assert!(parse(bytes).is_none());
         let ok = br#"{"derived-index-version":1,"files":[]}"#;
         assert_eq!(parse(ok), Some(Vec::new()));
+    }
+
+    #[test]
+    fn borrowed_package_map_builder_matches_package_source_builder() {
+        let package_files = BTreeMap::from([
+            (
+                "StructureDefinition-foo.json".into(),
+                br#"{"resourceType":"StructureDefinition","id":"foo","name":"Foo"}"#.to_vec(),
+            ),
+            ("Observation-invalid.json".into(), b"not json".to_vec()),
+            ("package.json".into(), br#"{"name":"example.pkg"}"#.to_vec()),
+            (".index.json".into(), br#"{"files":[]}"#.to_vec()),
+            (
+                "nested/Patient-p.json".into(),
+                br#"{"resourceType":"Patient","id":"nested"}"#.to_vec(),
+            ),
+        ]);
+        let borrowed = build_from_package_files(&package_files);
+        let mut source = BundleSource::new();
+        source.mount_package("example.pkg#1.0.0", package_files);
+        let package_dir = source
+            .cache_root()
+            .join("example.pkg#1.0.0")
+            .join("package");
+        let mounted = build(&source, &package_dir);
+
+        assert_eq!(to_bytes(&borrowed), to_bytes(&mounted));
     }
 }

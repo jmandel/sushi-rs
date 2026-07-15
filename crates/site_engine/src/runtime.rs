@@ -126,6 +126,8 @@ pub(crate) struct PublisherRuntime {
     pub objects: ObjectMap,
     pub renderer: site_build::RendererImplementation,
     pub output_options: BTreeMap<String, String>,
+    #[cfg(feature = "dependency-observation")]
+    pub dependency_observation: crate::dependency_observation::BuildDependencyObservation,
 }
 
 struct CycleRuntime {
@@ -261,6 +263,22 @@ impl SiteEngine {
             clock_ms: self.clock_ms,
             started_ms: (self.clock_ms)(),
         }
+    }
+
+    #[cfg(all(test, feature = "dependency-observation"))]
+    pub(crate) fn dependency_decision_for_page(
+        &self,
+        handle: &str,
+        path: &site_build::OutputPath,
+    ) -> Result<::dependency_observation::RebuildDecision, String> {
+        let runtime = self
+            .runtimes
+            .get(handle)
+            .ok_or_else(|| format!("unknown dependency-observation handle {handle}"))?;
+        let Runtime::Publisher(runtime) = runtime else {
+            return Err("Cycle dependency observation is conservatively whole-build".into());
+        };
+        runtime.dependency_observation.decision_for_page(path)
     }
 
     pub(crate) fn install_publisher(&mut self, runtime: PublisherRuntime) -> String {
@@ -413,6 +431,19 @@ impl SiteEngine {
                 format!("render: path {path} is not declared by outputs"),
             ));
         }
+        #[cfg(feature = "dependency-observation")]
+        let (html, dependency_reads) = runtime
+            .state
+            .render_page_tracked_by_name(path.as_str())
+            .map_err(|error| {
+                build_failure(
+                    crate::BuildOperation::Render,
+                    crate::BuildErrorPhase::Renderer,
+                    crate::BuildErrorCode::RendererFailed,
+                    format!("render {path}: {error}"),
+                )
+            })?;
+        #[cfg(not(feature = "dependency-observation"))]
         let html = runtime
             .state
             .render_page_by_name(path.as_str())
@@ -424,9 +455,50 @@ impl SiteEngine {
                     format!("render {path}: {error}"),
                 )
             })?;
+        #[cfg(feature = "dependency-observation")]
+        runtime
+            .dependency_observation
+            .record_page(&path, dependency_reads)
+            .map_err(|message| {
+                build_failure(
+                    crate::BuildOperation::Render,
+                    crate::BuildErrorPhase::Renderer,
+                    crate::BuildErrorCode::Integrity,
+                    format!("render {path}: dependency observation: {message}"),
+                )
+            })?;
+        #[cfg(feature = "dependency-observation")]
+        let html = {
+            let (html, post_pass) = runtime.recipe_assets.publisher.finish_html_observed(&html);
+            runtime
+                .dependency_observation
+                .record_html_post_pass(&path, &post_pass)
+                .map_err(|message| {
+                    build_failure(
+                        crate::BuildOperation::Render,
+                        crate::BuildErrorPhase::Renderer,
+                        crate::BuildErrorCode::Integrity,
+                        format!("render {path}: HTML dependency observation: {message}"),
+                    )
+                })?;
+            html
+        };
+        #[cfg(not(feature = "dependency-observation"))]
         let html = runtime.recipe_assets.publisher.finish_html(&html);
         let bytes = html.into_bytes();
         let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
+        #[cfg(feature = "dependency-observation")]
+        runtime
+            .dependency_observation
+            .record_page_output(&path, &content)
+            .map_err(|message| {
+                build_failure(
+                    crate::BuildOperation::Render,
+                    crate::BuildErrorPhase::Renderer,
+                    crate::BuildErrorCode::Integrity,
+                    format!("render {path}: output dependency observation: {message}"),
+                )
+            })?;
         let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))
             .map_err(|message| {
                 build_failure(

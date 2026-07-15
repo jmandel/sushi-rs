@@ -1,0 +1,301 @@
+use package_store::BundleSource;
+use serde_json::json;
+use serde_json::Value;
+use std::path::PathBuf;
+
+fn repo() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
+}
+
+fn empty_context() -> anyhow::Result<snapshot_gen::PackageContext> {
+    let source = BundleSource::new();
+    let root = source.cache_root().to_path_buf();
+    snapshot_gen::PackageContext::new_with(source, root, &[])
+}
+
+fn oracle_context(backbone: &Value) -> anyhow::Result<snapshot_gen::PackageContext> {
+    let label = "hl7.fhir.r4.core#4.0.1";
+    let filename = "StructureDefinition-BackboneElement.json";
+    let mut source = BundleSource::new();
+    source.mount_package(
+        label,
+        [
+            (
+                ".index.json",
+                serde_json::to_vec(&json!({
+                    "index-version": 2,
+                    "files": [{
+                        "filename": filename,
+                        "resourceType": "StructureDefinition",
+                        "id": "BackboneElement",
+                        "url": "http://hl7.org/fhir/StructureDefinition/BackboneElement",
+                        "kind": "complex-type",
+                        "type": "BackboneElement"
+                    }]
+                }))?,
+            ),
+            (filename, serde_json::to_vec(backbone)?),
+        ],
+    );
+    let root = source.cache_root().to_path_buf();
+    snapshot_gen::PackageContext::new_with(source, root, &[label.to_string()])
+}
+
+#[test]
+fn r4_logical_model_uses_publishers_versioned_synthetic_base() -> anyhow::Result<()> {
+    let context = empty_context()?;
+
+    let base = context
+        .fetch("http://hl7.org/fhir/StructureDefinition/Base")
+        .expect("PackageContext must expose SUSHI's virtual Base definition");
+    assert_eq!(
+        base.get("id").and_then(|value| value.as_str()),
+        Some("Base")
+    );
+
+    let logical = json!({
+        "resourceType": "StructureDefinition",
+        "id": "Document",
+        "url": "https://example.org/StructureDefinition/Document",
+        "version": "1.0.0",
+        "name": "Document",
+        "status": "draft",
+        "fhirVersion": "4.0.1",
+        "kind": "logical",
+        "abstract": false,
+        "type": "Document",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base|4.0.1",
+        "derivation": "specialization",
+        "differential": {
+            "element": [{
+                "id": "Document",
+                "path": "Document",
+                "short": "Document",
+                "definition": "Abstract model of a document"
+            }]
+        }
+    });
+    let completed = snapshot_gen::generate_snapshot(logical, &context, Default::default())?;
+    let snapshot = completed
+        .pointer("/snapshot/element")
+        .and_then(|value| value.as_array())
+        .expect("logical model snapshot elements");
+    assert_eq!(
+        snapshot,
+        &[json!({
+            "id": "Document",
+            "path": "Document",
+            "short": "Document",
+            "definition": "Abstract model of a document",
+            "min": 0,
+            "max": "*",
+            "base": { "path": "Base", "min": 0, "max": "*" },
+            "isModifier": false
+        })]
+    );
+    assert_eq!(
+        completed
+            .pointer("/snapshot/extension/0/valueString")
+            .and_then(Value::as_str),
+        Some("4.0.1")
+    );
+    assert_eq!(
+        completed
+            .pointer("/snapshot/extension/0/url")
+            .and_then(Value::as_str),
+        Some("http://hl7.org/fhir/tools/StructureDefinition/snapshot-base-version")
+    );
+    Ok(())
+}
+
+#[test]
+fn publisher_base_rejects_a_cross_version_reference() -> anyhow::Result<()> {
+    let context = empty_context()?;
+    let logical = json!({
+        "resourceType": "StructureDefinition",
+        "id": "Document",
+        "url": "https://example.org/StructureDefinition/Document",
+        "name": "Document",
+        "status": "draft",
+        "fhirVersion": "4.0.1",
+        "kind": "logical",
+        "abstract": false,
+        "type": "Document",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base|5.0.0",
+        "derivation": "specialization",
+        "differential": { "element": [{ "id": "Document", "path": "Document" }] }
+    });
+    let error = snapshot_gen::generate_snapshot(logical, &context, Default::default())
+        .expect_err("cross-version Base must not resolve");
+    assert!(error
+        .to_string()
+        .contains("Publisher context FHIR version is 4.0.1"));
+    Ok(())
+}
+
+#[test]
+fn r5_logical_model_keeps_the_real_base_definition() -> anyhow::Result<()> {
+    let context = empty_context()?;
+    let logical = json!({
+        "resourceType": "StructureDefinition",
+        "id": "R5Model",
+        "url": "https://example.org/StructureDefinition/R5Model",
+        "version": "1.0.0",
+        "name": "R5Model",
+        "status": "draft",
+        "fhirVersion": "5.0.0",
+        "kind": "logical",
+        "abstract": false,
+        "type": "R5Model",
+        "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Base|5.0.0",
+        "derivation": "specialization",
+        "differential": { "element": [{ "id": "R5Model", "path": "R5Model" }] }
+    });
+    let completed = snapshot_gen::generate_snapshot(logical, &context, Default::default())?;
+    let root = completed
+        .pointer("/snapshot/element/0")
+        .expect("R5 logical root");
+    assert_eq!(
+        root.pointer("/constraint/0/key").and_then(Value::as_str),
+        Some("ele-1"),
+        "R5 must inherit its real Base, not the minimal pre-R5 synthetic Base"
+    );
+    assert_eq!(
+        completed
+            .pointer("/snapshot/extension/0/valueString")
+            .and_then(Value::as_str),
+        Some("5.0.0")
+    );
+    Ok(())
+}
+
+#[test]
+fn specialization_matches_the_publisher_oracle() -> anyhow::Result<()> {
+    let repo = repo();
+    let backbone: Value = serde_json::from_slice(&std::fs::read(
+        repo.join("sushi-ts/test/testhelpers/testdefs/r4-definitions/package/StructureDefinition-BackboneElement.json"),
+    )?)?;
+    let context = oracle_context(&backbone)?;
+    let input: Value = serde_json::from_slice(&std::fs::read(
+        repo.join("tests/sushi-harvest/logical-026/expected/StructureDefinition-LogicalModel.json"),
+    )?)?;
+    let expected: Value = serde_json::from_slice(&std::fs::read(
+        repo.join("snapshot/goldens/r4-logical-specialization.snapshot.json"),
+    )?)?;
+
+    let actual = snapshot_gen::generate_snapshot(input, &context, Default::default())?;
+    assert_eq!(
+        actual
+            .pointer("/snapshot/element")
+            .expect("actual snapshot"),
+        expected
+            .pointer("/snapshot/element")
+            .expect("Publisher oracle snapshot")
+    );
+    Ok(())
+}
+
+#[test]
+fn local_logical_specialization_chain_keeps_authored_children() -> anyhow::Result<()> {
+    let mut context = empty_context()?;
+    let logical = |id: &str, base: &str, elements: Vec<Value>| {
+        json!({
+            "resourceType": "StructureDefinition",
+            "id": id,
+            "url": format!("https://example.org/StructureDefinition/{id}"),
+            "version": "1.0.0",
+            "name": id,
+            "status": "draft",
+            "fhirVersion": "4.0.1",
+            "kind": "logical",
+            "abstract": false,
+            "type": id,
+            "baseDefinition": base,
+            "derivation": "specialization",
+            "differential": { "element": elements }
+        })
+    };
+    let document = logical(
+        "Document",
+        "http://hl7.org/fhir/StructureDefinition/Base",
+        vec![json!({ "id": "Document", "path": "Document" })],
+    );
+    let section = logical(
+        "DocumentSection",
+        "http://hl7.org/fhir/StructureDefinition/Base",
+        vec![json!({ "id": "DocumentSection", "path": "DocumentSection" })],
+    );
+    let sections = logical(
+        "IPSSectionsLM",
+        "https://example.org/StructureDefinition/Document",
+        vec![
+            json!({ "id": "IPSSectionsLM", "path": "IPSSectionsLM" }),
+            json!({
+                "id": "IPSSectionsLM.sectionProblems",
+                "path": "IPSSectionsLM.sectionProblems",
+                "min": 1,
+                "max": "1",
+                "type": [{ "code": "https://example.org/StructureDefinition/DocumentSection" }]
+            }),
+            json!({
+                "id": "IPSSectionsLM.sectionAllergies",
+                "path": "IPSSectionsLM.sectionAllergies",
+                "min": 1,
+                "max": "1",
+                "type": [{ "code": "https://example.org/StructureDefinition/DocumentSection" }]
+            }),
+            json!({
+                "id": "IPSSectionsLM.sectionNotes",
+                "path": "IPSSectionsLM.sectionNotes",
+                "type": [{ "code": "string" }]
+            }),
+        ],
+    );
+    context.load_local_resources([
+        (
+            PathBuf::from("local/StructureDefinition-Document.json"),
+            document,
+        ),
+        (
+            PathBuf::from("local/StructureDefinition-DocumentSection.json"),
+            section,
+        ),
+        (
+            PathBuf::from("local/StructureDefinition-IPSSectionsLM.json"),
+            sections.clone(),
+        ),
+    ]);
+
+    let completed = snapshot_gen::generate_snapshot(sections, &context, Default::default())?;
+    let elements = completed
+        .pointer("/snapshot/element")
+        .and_then(Value::as_array)
+        .expect("IPS logical-model snapshot");
+    assert_eq!(
+        elements
+            .iter()
+            .filter_map(|element| element.get("path").and_then(Value::as_str))
+            .collect::<Vec<_>>(),
+        [
+            "IPSSectionsLM",
+            "IPSSectionsLM.sectionProblems",
+            "IPSSectionsLM.sectionAllergies",
+            "IPSSectionsLM.sectionNotes",
+        ]
+    );
+    assert_eq!(
+        elements[1].pointer("/base/path").and_then(Value::as_str),
+        Some("IPSSectionsLM.sectionProblems")
+    );
+    assert_eq!(
+        elements[3].pointer("/base/path").and_then(Value::as_str),
+        Some("IPSSectionsLM.sectionNotes")
+    );
+    assert!(elements[3].pointer("/base/max").is_none());
+    Ok(())
+}

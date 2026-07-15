@@ -3,7 +3,8 @@
 //!   - `expand_enumerable(vs, resources)` — the tier-1 in-engine expansion the
 //!     ValueSet tab calls per keystroke (thin wrapper over
 //!     `compiler::terminology`).
-//!   - `mount_bundles(bundles)` — the additive, idempotent lazy-mount seam.
+//!   - the indexed prepared-package transaction — the additive, idempotent
+//!     lazy-mount seam.
 //!
 //! These functions return `Result<String, JsError>`; `JsError` is opaque
 //! natively, so the tests inspect the Ok JSON string and treat any Err as a
@@ -45,9 +46,27 @@ fn init(bundles: &str) -> Result<u32, String> {
             .unwrap() as u32)
     })
 }
-fn mount_bundles(bundles: &str) -> Result<u32, String> {
+fn mount_transaction(bundles: &str) -> Result<u32, String> {
     TEST_SESSION.with(|session| {
-        Ok(call(session.borrow_mut().mount(bundles))["mounted"]
+        let session = session.borrow();
+        let prepared = call(session.prepare_artifacts(bundles));
+        let artifacts = prepared["artifacts"]
+            .as_array()
+            .ok_or("prepareArtifacts returned no artifacts")?;
+        call(session.begin_prepared_mount(artifacts.len() as u32));
+        for (index, artifact) in artifacts.iter().enumerate() {
+            let label = artifact["label"]
+                .as_str()
+                .ok_or("prepared artifact has no label")?;
+            let cache_key = artifact["cacheKey"]
+                .as_str()
+                .ok_or("prepared artifact has no cache key")?;
+            let bytes = session
+                .take_prepared(label)
+                .map_err(|_| format!("takePrepared failed for {label}"))?;
+            call(session.stage_prepared_mount(index as u32, bytes, cache_key, label));
+        }
+        Ok(call(session.commit_prepared_mount())["mounted"]
             .as_u64()
             .unwrap() as u32)
     })
@@ -152,9 +171,10 @@ fn expand_enumerable_accepts_object_resource_map() {
 }
 
 #[test]
-fn mount_bundles_is_additive_and_idempotent() {
-    // init with one synthetic package, then mount_bundles a second, then re-mount
-    // the first (skipped). Package count reflects the union.
+fn indexed_mount_is_additive_and_idempotent() {
+    // Init with one synthetic package, then commit a second through the sole
+    // indexed transaction and re-stage the first (skipped). Package count
+    // reflects the union.
     let pkg = |label: &str| {
         let (name, version) = label.split_once('#').unwrap();
         let package_json = json!({ "name": name, "version": version }).to_string();
@@ -174,29 +194,26 @@ fn mount_bundles_is_additive_and_idempotent() {
     );
     // Add a new package.
     assert_eq!(
-        unwrap_u32(mount_bundles(&json!([pkg("pkg.b#1.0.0")]).to_string())),
+        unwrap_u32(mount_transaction(&json!([pkg("pkg.b#1.0.0")]).to_string())),
         2
     );
     // Re-mount an already-present package → skipped, count unchanged.
     assert_eq!(
-        unwrap_u32(mount_bundles(&json!([pkg("pkg.a#1.0.0")]).to_string())),
+        unwrap_u32(mount_transaction(&json!([pkg("pkg.a#1.0.0")]).to_string())),
         2
     );
     // Mount both (one new, one dup) → only the new one lands.
     assert_eq!(
-        unwrap_u32(mount_bundles(
+        unwrap_u32(mount_transaction(
             &json!([pkg("pkg.a#1.0.0"), pkg("pkg.c#1.0.0")]).to_string()
         )),
         3
     );
 }
 
-// NOTE: the mount_bundles ERROR path (bad base64 → `JsError`) can't be exercised
-// natively — constructing a `JsError` panics off-wasm ("cannot call wasm-bindgen
-// imported functions on non-wasm targets"). The recovery behaviour (a failed
-// mount leaves the engine's existing state intact, because the function mutates a
-// clone and only commits on success) is verified by inspection of `mount_bundles`
-// + covered end-to-end by the editor's error-path handling.
+// Bad artifacts and failed/partial transactions are covered by session_api.rs;
+// package state changes only in commitPreparedMount after every indexed slot has
+// validated.
 
 /// Gate ii (task #32): the wasm `resolve_project` export and the native
 /// `package_store::resolve_project` produce IDENTICAL JSON for the same config +

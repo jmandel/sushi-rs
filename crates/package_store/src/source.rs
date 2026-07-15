@@ -61,6 +61,13 @@ pub trait PackageSource: std::fmt::Debug {
     /// this (`pkg_dir.is_dir()`), so a source must answer it faithfully.
     fn is_dir(&self, path: &Path) -> bool;
 
+    /// Clone an immutable source namespace while replacing any mutable
+    /// observational read/decompression cache. Implementations which cannot
+    /// attest immutability (notably ambient disk directories) must reject this
+    /// operation. This is the isolation seam used by transactional compiler
+    /// cache reuse.
+    fn fork_read_cache(&self) -> io::Result<Box<dyn PackageSource>>;
+
     /// Write `bytes` to `path` if it does not already exist (write-once). Writable
     /// sources create it atomically and return `Ok(())`; read-only sources return
     /// an `Err` so the caller falls back to an in-memory derive. Never overwrites
@@ -74,8 +81,7 @@ pub trait PackageSource: std::fmt::Debug {
     }
 }
 
-// Let `&dyn` / `Box<dyn>` / `Rc<dyn>` transparently be a `PackageSource` too, so
-// callers can hold whichever ownership shape fits without extra glue.
+// Let borrowed trait objects transparently remain a `PackageSource`.
 impl<T: PackageSource + ?Sized> PackageSource for &T {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         (**self).read(path)
@@ -88,6 +94,9 @@ impl<T: PackageSource + ?Sized> PackageSource for &T {
     }
     fn is_dir(&self, path: &Path) -> bool {
         (**self).is_dir(path)
+    }
+    fn fork_read_cache(&self) -> io::Result<Box<dyn PackageSource>> {
+        (**self).fork_read_cache()
     }
     fn write_new(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
         (**self).write_new(path, bytes)
@@ -132,6 +141,13 @@ impl PackageSource for DiskSource {
 
     fn is_dir(&self, path: &Path) -> bool {
         path.is_dir()
+    }
+
+    fn fork_read_cache(&self) -> io::Result<Box<dyn PackageSource>> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "mutable disk package sources cannot back retained compiler reuse",
+        ))
     }
 
     fn write_new(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {

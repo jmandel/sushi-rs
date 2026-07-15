@@ -53,6 +53,16 @@ fn resource_ref(resource: &Value) -> String {
     )
 }
 
+fn push_unique_resource<'a>(
+    ordered: &mut Vec<&'a Value>,
+    seen: &mut HashSet<String>,
+    resource: &'a Value,
+) {
+    if seen.insert(resource_ref(resource)) {
+        ordered.push(resource);
+    }
+}
+
 fn type_rank(resource_type: &str) -> u32 {
     match resource_type {
         "ImplementationGuide" => 0,
@@ -480,7 +490,7 @@ fn base_definition(resource: &Value, config: &Value) -> Option<String> {
 }
 
 fn prepared_resources(
-    resources: &[Value],
+    resources: Vec<Value>,
     metadata: &HashMap<String, Value>,
     config: &Value,
     primary: &SemanticResourceKey,
@@ -495,39 +505,39 @@ fn prepared_resources(
         .and_then(Value::as_str)
         .map(strip_ig_suffix);
     resources
-        .iter()
+        .into_iter()
         .map(|resource| {
             let key = SemanticResourceKey {
-                resource_type: resource_type(resource).into(),
+                resource_type: resource_type(&resource).into(),
                 id: resource
                     .get("id")
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .into(),
             };
-            let publication_metadata = metadata.get(&resource_ref(resource));
+            let publication_metadata = metadata.get(&resource_ref(&resource));
             let canonical =
                 matches!(resource.get("url"), Some(Value::String(value)) if !value.is_empty());
             let publication = ResourcePublication {
                 display_name: if canonical {
-                    field(resource, "name")
+                    field(&resource, "name")
                 } else {
-                    field(resource, "name")
+                    field(&resource, "name")
                         .or_else(|| publication_metadata.and_then(|value| field(value, "name")))
-                        .or_else(|| field(resource, "title"))
+                        .or_else(|| field(&resource, "title"))
                         .or_else(|| Some(key.id.clone()))
                 },
                 description: if canonical {
-                    field(resource, "description")
+                    field(&resource, "description")
                 } else {
                     publication_metadata
                         .and_then(|value| field(value, "description"))
-                        .or_else(|| field(resource, "description"))
+                        .or_else(|| field(&resource, "description"))
                 },
                 standard_status: canonical
                     .then(|| {
                         propagated_status(
-                            resource,
+                            &resource,
                             publication_metadata,
                             guide_status.as_deref(),
                             guide_canonical.as_deref(),
@@ -535,12 +545,12 @@ fn prepared_resources(
                     })
                     .flatten(),
                 base_definition: (key.resource_type == "StructureDefinition")
-                    .then(|| base_definition(resource, config))
+                    .then(|| base_definition(&resource, config))
                     .flatten(),
             };
             SemanticResource {
                 key,
-                resource: resource.clone(),
+                resource,
                 publication: (!publication.is_empty()).then_some(publication),
             }
         })
@@ -549,8 +559,8 @@ fn prepared_resources(
 
 /// Produce complete renderer-neutral guide semantics.
 pub fn prepare(input: &PrepareInputs<'_>) -> Result<PreparedGuide> {
-    let guide = input.primary_implementation_guide.clone();
-    if resource_type(&guide) != "ImplementationGuide" {
+    let guide = input.primary_implementation_guide;
+    if resource_type(guide) != "ImplementationGuide" {
         bail!("primary guide input is not an ImplementationGuide resource");
     }
     if input.augmentation.ig != input.primary_implementation_guide {
@@ -585,17 +595,12 @@ pub fn prepare(input: &PrepareInputs<'_>) -> Result<PreparedGuide> {
         if !resource_type(resource).is_empty()
             && resource.get("id").and_then(Value::as_str).is_some()
         {
-            by_reference.insert(resource_ref(resource), resource.clone());
+            by_reference.insert(resource_ref(resource), resource);
         }
     }
     let mut ordered = Vec::new();
     let mut seen = HashSet::new();
-    let push = |ordered: &mut Vec<Value>, seen: &mut HashSet<String>, resource: Value| {
-        if seen.insert(resource_ref(&resource)) {
-            ordered.push(resource);
-        }
-    };
-    push(&mut ordered, &mut seen, guide.clone());
+    push_unique_resource(&mut ordered, &mut seen, guide);
     if let Some(entries) = guide
         .pointer("/definition/resource")
         .and_then(Value::as_array)
@@ -606,12 +611,12 @@ pub fn prepare(input: &PrepareInputs<'_>) -> Result<PreparedGuide> {
                 .and_then(Value::as_str)
                 .and_then(|reference| by_reference.get(reference))
             {
-                push(&mut ordered, &mut seen, resource.clone());
+                push_unique_resource(&mut ordered, &mut seen, resource);
             }
         }
     }
     for resource in by_reference.into_values() {
-        push(&mut ordered, &mut seen, resource);
+        push_unique_resource(&mut ordered, &mut seen, resource);
     }
     ordered.sort_by(|left, right| {
         type_rank(resource_type(left))
@@ -626,17 +631,17 @@ pub fn prepare(input: &PrepareInputs<'_>) -> Result<PreparedGuide> {
     let generated_at = timefmt::fhir_datetime(input.build_epoch_secs);
     let resources = ordered
         .into_iter()
-        .map(|resource| apply_global_metadata(resource, &config, &generated_at))
+        .map(|resource| apply_global_metadata(resource.clone(), &config, &generated_at))
         .collect::<Vec<_>>();
     let (identity, compatibility) = guide_identity(
         &config,
-        &guide,
+        guide,
         primary.clone(),
         input.build_epoch_secs,
         input.branch.clone(),
         input.revision.clone(),
     );
-    let resources = prepared_resources(&resources, &metadata, &config, &primary);
+    let resources = prepared_resources(resources, &metadata, &config, &primary);
     let augmentation =
         augment::prepare(&input.augmentation).context("authored guide preparation")?;
     Ok(PreparedGuide {

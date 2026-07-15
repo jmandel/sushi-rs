@@ -56,7 +56,7 @@ pub struct PackageContext {
     // their synthetic path. There is no file behind these paths, so `fetch` reads
     // them here instead of from `source`. Empty for the disk path (which reads
     // local-dir files via `source`), so native behavior is untouched.
-    local_bodies: HashMap<PathBuf, Rc<Value>>,
+    in_memory_bodies: HashMap<PathBuf, Rc<Value>>,
     // The mounted package dirs (`<cache>/<pkg>/package`), in load order. Held ONLY
     // for the opt-in Layer-B canonical-version resolver, which needs to see
     // ValueSet/CodeSystem versions (Layer A indexes StructureDefinitions only).
@@ -109,14 +109,44 @@ impl PackageContext {
             by_name: HashMap::new(),
             fetch_cache: RefCell::new(HashMap::new()),
             source: Box::new(source),
-            local_bodies: HashMap::new(),
+            in_memory_bodies: HashMap::new(),
             package_dirs: Vec::new(),
             canonical_versions: RefCell::new(None),
         };
+        // SUSHI fishes these embedded definitions before ordinary packages.
+        // Snapshot generation needs the same R5-only datatype definitions.
+        // Direct inheritance from Base is handled separately by Publisher's
+        // minimal, context-versioned synthetic Base (walk::resolve).
+        ctx.load_sushi_r5_for_r4()?;
         for package in packages {
             ctx.load_package(cache_dir, package)?;
         }
         Ok(ctx)
+    }
+
+    fn load_sushi_r5_for_r4(&mut self) -> anyhow::Result<()> {
+        for (index, content) in package_store::sushi_r5_for_r4_definitions()
+            .iter()
+            .enumerate()
+        {
+            let body: Value = serde_json::from_str(content)
+                .with_context(|| format!("parse bundled sushi-r5forR4 definition {index}"))?;
+            let id = body
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or("definition");
+            let path = PathBuf::from(format!(
+                "__embedded/sushi-r5forR4#1.0.0/package/StructureDefinition-{id}.json"
+            ));
+            self.index_structure_definition(
+                path.clone(),
+                &body,
+                false,
+                Some("sushi-r5forR4".to_string()),
+            );
+            self.in_memory_bodies.insert(path, Rc::new(body));
+        }
+        Ok(())
     }
 
     fn load_package(&mut self, cache_dir: &Path, package: &str) -> anyhow::Result<()> {
@@ -244,7 +274,7 @@ impl PackageContext {
                 // `insert_url` version-precedence), then stash the parsed body under
                 // the synthetic path so `fetch_rc` serves it without a `source` read.
                 self.index_structure_definition(path.clone(), &json, true, None);
-                self.local_bodies.insert(path, Rc::new(json));
+                self.in_memory_bodies.insert(path, Rc::new(json));
             }
         }
     }
@@ -420,7 +450,7 @@ impl PackageContext {
         // bundle), byte-for-byte as before.
         let parsed = path
             .as_deref()
-            .and_then(|p| self.local_bodies.get(p))
+            .and_then(|p| self.in_memory_bodies.get(p))
             .cloned()
             .or_else(|| {
                 path.as_deref()

@@ -1128,6 +1128,9 @@ fn emit_bundle(
 }
 
 #[cfg(test)]
+mod incremental_differential;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use package_store::{PackageRequest, PackageSource, ResolutionStep};

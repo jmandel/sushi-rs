@@ -8,6 +8,8 @@
 //! host-supplied runtime byte bag or browser/editor asset catalog is involved.
 
 use std::collections::BTreeMap;
+#[cfg(feature = "dependency-observation")]
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use anyhow::{bail, Context, Result};
@@ -381,8 +383,50 @@ impl PublisherRuntime {
     /// table-background materialization and the byte-pair-gated jQuery bridge.
     /// Both are idempotent and run after Liquid but before ContentRef creation.
     pub fn finish_html(&self, html: &str) -> String {
-        let tables = materialize_missing_table_backgrounds(html, &self.files);
-        inject_jquery_compatibility(&tables, &self.files)
+        let tables = materialize_missing_table_backgrounds(html, &self.files, None);
+        inject_jquery_compatibility(&tables, &self.files, None)
+    }
+
+    /// Observation-only form of [`Self::finish_html`]. It executes the same
+    /// transforms while retaining exact runtime-path attempts and winning
+    /// bytes. This is absent from default builds and never influences output.
+    #[cfg(feature = "dependency-observation")]
+    pub fn finish_html_observed(&self, html: &str) -> (String, FinishHtmlObservation) {
+        let mut observation = FinishHtmlObservation::default();
+        let tables =
+            materialize_missing_table_backgrounds(html, &self.files, Some(&mut observation));
+        let html = inject_jquery_compatibility(&tables, &self.files, Some(&mut observation));
+        (html, observation)
+    }
+}
+
+#[cfg(feature = "dependency-observation")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FinishHtmlObservation {
+    pub attempted: BTreeSet<String>,
+    pub ready: BTreeMap<String, Sha256Digest>,
+    pub missing: BTreeSet<String>,
+    pub generated_table_backgrounds: BTreeSet<String>,
+}
+
+#[cfg(not(feature = "dependency-observation"))]
+struct FinishHtmlObservation;
+
+#[cfg(feature = "dependency-observation")]
+impl FinishHtmlObservation {
+    fn observe(&mut self, path: &str, file: Option<&PublisherRuntimeFile>) -> Option<Sha256Digest> {
+        self.attempted.insert(path.to_string());
+        match file {
+            Some(file) => {
+                let digest = Sha256Digest::of_bytes(&file.bytes);
+                self.ready.insert(path.to_string(), digest.clone());
+                Some(digest)
+            }
+            None => {
+                self.missing.insert(path.to_string());
+                None
+            }
+        }
     }
 }
 
@@ -652,7 +696,12 @@ fn third_party_notice(core: &PackageCoordinate) -> String {
 fn materialize_missing_table_backgrounds(
     html: &str,
     files: &BTreeMap<String, PublisherRuntimeFile>,
+    observation: Option<&mut FinishHtmlObservation>,
 ) -> String {
+    #[cfg(feature = "dependency-observation")]
+    let mut observation = observation;
+    #[cfg(not(feature = "dependency-observation"))]
+    let _ = observation;
     let lower = html.to_ascii_lowercase();
     let mut out = String::with_capacity(html.len());
     let mut cursor = 0;
@@ -671,7 +720,20 @@ fn materialize_missing_table_backgrounds(
             raw
         };
         let name = raw.rsplit(['/', '\\']).next().unwrap_or(raw);
-        if is_table_background_name(name) && !files.contains_key(name) {
+        let table_background = is_table_background_name(name);
+        #[cfg(feature = "dependency-observation")]
+        if table_background {
+            if let Some(observation) = observation.as_deref_mut() {
+                observation.observe(name, files.get(name));
+            }
+        }
+        if table_background && !files.contains_key(name) {
+            #[cfg(feature = "dependency-observation")]
+            if let Some(observation) = observation.as_deref_mut() {
+                observation
+                    .generated_table_backgrounds
+                    .insert(name.to_string());
+            }
             out.push_str(&html[cursor..start]);
             out.push_str("url(\"");
             out.push_str(&table_background_data_uri(name).expect("validated table background"));
@@ -752,11 +814,13 @@ struct ScriptTag {
 fn inject_jquery_compatibility(
     html: &str,
     files: &BTreeMap<String, PublisherRuntimeFile>,
+    observation: Option<&mut FinishHtmlObservation>,
 ) -> String {
     inject_jquery_compatibility_with_hashes(
         html,
         files,
         [JQUERY_SHA256, JQUERY_UI_SHA256, JQUERY_SHIM_SHA256],
+        observation,
     )
 }
 
@@ -764,7 +828,12 @@ fn inject_jquery_compatibility_with_hashes(
     html: &str,
     files: &BTreeMap<String, PublisherRuntimeFile>,
     expected_hashes: [&str; 3],
+    observation: Option<&mut FinishHtmlObservation>,
 ) -> String {
+    #[cfg(feature = "dependency-observation")]
+    let mut observation = observation;
+    #[cfg(not(feature = "dependency-observation"))]
+    let _ = observation;
     if html.contains(&format!(
         "data-fhir-ig-editor-preview-compat=\"{JQUERY_COMPAT_ID}\""
     )) {
@@ -779,9 +848,19 @@ fn inject_jquery_compatibility_with_hashes(
     .zip(expected_hashes)
     {
         let Some(file) = files.get(path) else {
+            #[cfg(feature = "dependency-observation")]
+            if let Some(observation) = observation.as_deref_mut() {
+                observation.observe(path, None);
+            }
             return html.to_string();
         };
-        if Sha256Digest::of_bytes(&file.bytes).as_str() != expected {
+        let digest = Sha256Digest::of_bytes(&file.bytes);
+        #[cfg(feature = "dependency-observation")]
+        if let Some(observation) = observation.as_deref_mut() {
+            observation.attempted.insert(path.to_string());
+            observation.ready.insert(path.to_string(), digest.clone());
+        }
+        if digest.as_str() != expected {
             return html.to_string();
         }
     }
@@ -1030,7 +1109,7 @@ mod tests {
             },
         );
         let html = "<i style='background:url(tbl_bck1.png)'></i><i style='background:url(assets/tbl_bck134.png)'></i>";
-        let out = materialize_missing_table_backgrounds(html, &files);
+        let out = materialize_missing_table_backgrounds(html, &files, None);
         assert!(out.contains("url(tbl_bck1.png)"));
         assert!(out.contains("data:image/svg+xml;base64,"));
         assert!(!out.contains("assets/tbl_bck134.png"));
@@ -1063,21 +1142,64 @@ mod tests {
         ];
         let expected = [hashes[0].as_str(), hashes[1].as_str(), hashes[2].as_str()];
         let html = "<script src='./assets/js/jquery.js?v=3'></script><script src='assets/js/jquery-ui.min.js'></script>";
-        let out = inject_jquery_compatibility_with_hashes(html, &files, expected);
+        let out = inject_jquery_compatibility_with_hashes(html, &files, expected, None);
         assert!(out.contains(JQUERY_SHIM_PATH));
         assert_eq!(
             out,
-            inject_jquery_compatibility_with_hashes(&out, &files, expected)
+            inject_jquery_compatibility_with_hashes(&out, &files, expected, None)
         );
         files.get_mut(JQUERY_PATH).unwrap().bytes.push(b'!');
         assert_eq!(
             html,
-            inject_jquery_compatibility_with_hashes(html, &files, expected)
+            inject_jquery_compatibility_with_hashes(html, &files, expected, None)
         );
         let reversed = "<script src='assets/js/jquery-ui.min.js'></script><script src='assets/js/jquery.js'></script>";
         assert_eq!(
             reversed,
-            inject_jquery_compatibility_with_hashes(reversed, &files, expected)
+            inject_jquery_compatibility_with_hashes(reversed, &files, expected, None)
         );
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    #[test]
+    fn html_finish_observation_retains_conditional_runtime_reads_and_misses() {
+        let mut files = BTreeMap::new();
+        for (path, bytes) in [
+            (JQUERY_PATH, b"jquery".as_slice()),
+            (JQUERY_UI_PATH, b"jquery-ui".as_slice()),
+            (JQUERY_SHIM_PATH, b"shim".as_slice()),
+        ] {
+            files.insert(
+                path.into(),
+                PublisherRuntimeFile {
+                    path: path.into(),
+                    bytes: bytes.to_vec(),
+                    media_type: "text/javascript".into(),
+                    provenance: provenance("test", "MIT", path, None),
+                },
+            );
+        }
+        let hashes = [
+            Sha256Digest::of_bytes(b"jquery").to_string(),
+            Sha256Digest::of_bytes(b"jquery-ui").to_string(),
+            Sha256Digest::of_bytes(b"shim").to_string(),
+        ];
+        let expected = [hashes[0].as_str(), hashes[1].as_str(), hashes[2].as_str()];
+        let html = "<i style='background:url(tbl_bck134.png)'></i><script src='assets/js/jquery.js'></script><script src='assets/js/jquery-ui.min.js'></script>";
+        let mut observation = FinishHtmlObservation::default();
+        let tables = materialize_missing_table_backgrounds(html, &files, Some(&mut observation));
+        let output = inject_jquery_compatibility_with_hashes(
+            &tables,
+            &files,
+            expected,
+            Some(&mut observation),
+        );
+        assert!(output.contains(JQUERY_SHIM_PATH));
+        assert!(observation.missing.contains("tbl_bck134.png"));
+        assert!(observation
+            .generated_table_backgrounds
+            .contains("tbl_bck134.png"));
+        assert_eq!(observation.ready.len(), 3);
+        assert_eq!(observation.attempted.len(), 4);
     }
 }

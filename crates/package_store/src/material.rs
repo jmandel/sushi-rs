@@ -6,7 +6,7 @@
 //! and separately canonicalizes the top-level semantic bytes used by a
 //! `SiteBuild` package lock.
 
-use crate::{derived_index, BundleSource};
+use crate::derived_index;
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -48,7 +48,7 @@ pub fn normalize_package_material(
     label: &str,
     entries: BTreeMap<String, Vec<u8>>,
 ) -> Result<NormalizedPackageMaterial> {
-    finish_normalized_package_material(label, canonicalize_package_material(label, entries)?)
+    finish_normalized_package_material(canonicalize_package_material(label, entries)?)
 }
 
 pub(crate) fn canonicalize_package_material(
@@ -74,22 +74,24 @@ pub(crate) fn canonicalize_package_material(
     })
 }
 
-pub(crate) fn finish_normalized_package_material(
-    label: &str,
-    material: CanonicalPackageMaterial,
-) -> Result<NormalizedPackageMaterial> {
-    let CanonicalPackageMaterial {
-        mut files,
-        declared_dependencies,
-    } = material;
-    let mut source = BundleSource::new();
-    source.mount_package(label, files.clone());
-    let package_dir = source.cache_root().join(label).join("package");
-    let index = derived_index::build(&source, &package_dir);
-    files.insert(
+pub(crate) fn finish_prepared_package_material(
+    mut material: CanonicalPackageMaterial,
+) -> CanonicalPackageMaterial {
+    let index = derived_index::build_from_package_files(&material.files);
+    material.files.insert(
         derived_index::SIDECAR_NAME.to_string(),
         derived_index::to_bytes(&index),
     );
+    material
+}
+
+pub(crate) fn finish_normalized_package_material(
+    material: CanonicalPackageMaterial,
+) -> Result<NormalizedPackageMaterial> {
+    let CanonicalPackageMaterial {
+        files,
+        declared_dependencies,
+    } = finish_prepared_package_material(material);
 
     let semantic_files = files
         .iter()

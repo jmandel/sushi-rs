@@ -9,6 +9,9 @@ description = "F5: the Jekyll-equivalent page pass — layouts/includes via rend
 [lib]
 name = "render_page"
 
+[features]
+dependency-observation = []
+
 [[bin]]
 name = "pagecorpus"
 path = "src/bin/pagecorpus.rs"

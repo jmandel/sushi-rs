@@ -89,6 +89,14 @@ public class SnapOracleR4 {
       NpmPackage npm = pcm.loadPackageFromCacheOnly(pv[0], pv[1]);
       if (ctx == null) {
         ctx = new SimpleWorkerContext.SimpleWorkerContextBuilder().withAllowLoadingDuplicates(true).fromPackage(npm);
+        // The legacy one-argument builder overload above loads package bytes but
+        // does not call BaseWorkerContext.finishLoading. Publisher's loader does,
+        // and therefore synthesizes a minimal context-versioned Base when R4 core
+        // does not contain one. Install that same resource without also enabling
+        // the CoreVersionPinner (this oracle deliberately isolates Layer A).
+        if (!ctx.hasResource(StructureDefinition.class, "http://hl7.org/fhir/StructureDefinition/Base")) {
+          ctx.cacheResource(ProfileUtilities.makeBaseDefinition(npm.fhirVersion()));
+        }
       } else {
         ctx.loadFromPackage(npm, null);
       }

@@ -238,7 +238,7 @@ pub struct BundleCompressionMetrics {
 struct BundleLayer {
     files: LayerFiles,
     /// Directory paths introduced by those files.
-    dirs: std::collections::BTreeSet<PathBuf>,
+    dirs: Rc<std::collections::BTreeSet<PathBuf>>,
 }
 
 #[derive(Debug)]
@@ -249,7 +249,7 @@ enum LayerFiles {
     /// its member directory is mounted immediately and chunks inflate lazily.
     Compressed {
         files: PreparedCompressedFiles,
-        names: BTreeMap<PathBuf, String>,
+        names: Rc<BTreeMap<PathBuf, String>>,
     },
 }
 
@@ -299,6 +299,35 @@ impl BundleSource {
     /// constructors. Package dirs live at `<root>/<id>#<ver>/package`.
     pub fn cache_root(&self) -> &Path {
         &self.root
+    }
+
+    /// Share immutable mounted carrier bytes and decoded directory/member
+    /// indexes while replacing every mutable decompression cache. Owned layers
+    /// have no read cache and can be shared as-is. Prepared ranges which shared
+    /// one batch cache in the source share one new cache in the fork.
+    pub fn fork_read_cache(&self) -> Self {
+        let mut backings = BTreeMap::new();
+        let layers = self
+            .layers
+            .iter()
+            .map(|(label, layer)| {
+                let forked = match &layer.files {
+                    LayerFiles::Owned(_) => Rc::clone(layer),
+                    LayerFiles::Compressed { files, names } => Rc::new(BundleLayer {
+                        files: LayerFiles::Compressed {
+                            files: files.fork_read_cache(&mut backings),
+                            names: Rc::clone(names),
+                        },
+                        dirs: Rc::clone(&layer.dirs),
+                    }),
+                };
+                (label.clone(), forked)
+            })
+            .collect();
+        Self {
+            root: self.root.clone(),
+            layers,
+        }
     }
 
     /// Snapshot lazy prepared-package storage counters without reading a body.
@@ -356,7 +385,7 @@ impl BundleSource {
             label.to_string(),
             Rc::new(BundleLayer {
                 files: LayerFiles::Owned(files),
-                dirs,
+                dirs: Rc::new(dirs),
             }),
         );
     }
@@ -382,8 +411,11 @@ impl BundleSource {
         self.layers.insert(
             label.to_string(),
             Rc::new(BundleLayer {
-                files: LayerFiles::Compressed { files, names },
-                dirs,
+                files: LayerFiles::Compressed {
+                    files,
+                    names: Rc::new(names),
+                },
+                dirs: Rc::new(dirs),
             }),
         );
     }
@@ -440,7 +472,7 @@ impl PackageSource for BundleSource {
         }
         // Direct subdirectory children.
         for layer in self.layers.values() {
-            for dpath in &layer.dirs {
+            for dpath in layer.dirs.iter() {
                 if dpath.parent() == Some(path) {
                     if let Some(name) = dpath.file_name().and_then(|n| n.to_str()) {
                         if seen.insert(name.to_string()) {
@@ -468,6 +500,10 @@ impl PackageSource for BundleSource {
             || self
                 .layer_for_path(path)
                 .is_some_and(|layer| layer.dirs.contains(path))
+    }
+
+    fn fork_read_cache(&self) -> io::Result<Box<dyn PackageSource>> {
+        Ok(Box::new(BundleSource::fork_read_cache(self)))
     }
 
     // write_new: default (read-only) — the sidecar write-once fails soft, and the
@@ -736,5 +772,65 @@ mod tests {
                 .unwrap(),
             b"second"
         );
+    }
+
+    #[test]
+    fn read_cache_fork_shares_carrier_and_indexes_but_isolates_observation_state() {
+        let prepared = crate::PreparedPackage::prepare(
+            "p#1",
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"p","version":"1"}"#.to_vec(),
+                ),
+                ("first.txt".into(), b"first".to_vec()),
+                ("second.txt".into(), b"second".to_vec()),
+            ]),
+        )
+        .unwrap();
+        let encoded = prepared.encode();
+        let decoded = crate::PreparedPackage::decode_expected(&encoded, &prepared.key).unwrap();
+        let mut retained = BundleSource::new();
+        decoded.mount_into(&mut retained);
+        retained
+            .read(&retained.cache_root().join("p#1/package/first.txt"))
+            .unwrap();
+        let retained_before = retained.compression_metrics();
+        assert!(retained_before.cached_raw_bytes > 0);
+
+        let working = retained.fork_read_cache();
+        let working_before = working.compression_metrics();
+        assert_eq!(
+            working_before.compressed_retained_bytes,
+            retained_before.compressed_retained_bytes
+        );
+        assert_eq!(working_before.cached_raw_bytes, 0);
+        let (
+            LayerFiles::Compressed {
+                files: retained_files,
+                names: retained_names,
+            },
+            LayerFiles::Compressed {
+                files: working_files,
+                names: working_names,
+            },
+        ) = (&retained.layers["p#1"].files, &working.layers["p#1"].files)
+        else {
+            panic!("prepared cache fork unexpectedly materialized files")
+        };
+        assert!(Rc::ptr_eq(retained_names, working_names));
+        assert!(retained_files.shares_member_index_with(working_files));
+        assert!(Rc::ptr_eq(
+            &retained.layers["p#1"].dirs,
+            &working.layers["p#1"].dirs
+        ));
+        assert!(retained_files.shares_backing_bytes_with(working_files));
+        assert!(!retained_files.shares_read_cache_with(working_files));
+
+        working
+            .read(&working.cache_root().join("p#1/package/second.txt"))
+            .unwrap();
+        assert!(working.compression_metrics().cached_raw_bytes > 0);
+        assert_eq!(retained.compression_metrics(), retained_before);
     }
 }

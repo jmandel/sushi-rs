@@ -8,10 +8,12 @@ description = "Target-neutral FHIR IG site execution shared by native and WASM h
 
 [features]
 wire-contract = ["dep:api_envelope", "api_envelope/wire-contract", "dep:schemars", "dep:ts-rs", "content_store/wire-contract", "package_store/wire-contract", "site_build/wire-contract"]
+dependency-observation = ["dep:dependency_observation", "package_store/dependency-observation", "render_page/dependency-observation", "site_producer/dependency-observation"]
 
 [dependencies]
 api_envelope = { workspace = true, optional = true }
 compiler = { workspace = true }
+dependency_observation = { workspace = true, optional = true }
 content_store = { workspace = true }
 package_store = { workspace = true }
 prepared_guide = { workspace = true }

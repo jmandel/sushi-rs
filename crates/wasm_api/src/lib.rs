@@ -11,11 +11,9 @@
 //!
 //! ```js
 //! const s = new Session();
-//! s.mount(bundlesJson);                  // -> { ok, apiVersion, result: { mounted } }
-//! s.prepareAndMount(bundlesJson);        // cold normalize/mount + artifact metadata
 //! const artifact = s.takePrepared(label); // direct Uint8Array, intentionally not JSON
-//! s.beginPreparedMount(count);           // warm all-or-nothing compact transaction
-//! s.stagePreparedMount(bytes, key);      // one checked artifact at a time
+//! s.beginPreparedMount(count);           // all-or-nothing compact transaction
+//! s.stagePreparedMount(index, bytes, key, label); // checked artifacts, any arrival order
 //! s.commitPreparedMount();               // publish only after all stages validate
 //! s.snapshot(urlOrInlineSd);
 //! s.prepareProject(projectRevisionJson, generatorSpecJson);
@@ -79,8 +77,9 @@ use api_envelope::{envelope, envelope_ser, envelope_typed, API_VERSION};
 struct Engine {
     /// The bundle source packages are mounted into, wrapped in an `Rc` so each
     /// `compile`/`snapshot` call shares the (large) mounted bytes with a cheap
-    /// clone. `mount` appends lazily-fetched packages by rebuilding a clone and
-    /// committing on success — so per-keystroke compiles never copy bundle bytes.
+    /// clone. The indexed prepared transaction appends resolver-selected
+    /// packages by rebuilding a shallow clone and committing once, so
+    /// per-keystroke compiles never copy bundle bytes.
     bundle: Option<Rc<BundleSource>>,
     cache_root: PathBuf,
     /// The `<id>#<ver>` labels of the packages mounted, in mount order — the
@@ -89,10 +88,10 @@ struct Engine {
     /// Exact prepared carriers from which both the resolver view and every
     /// SiteBuild PackageEnvironment are derived.
     package_materials: BTreeMap<String, MountedPackage>,
-    /// Short-lived direct-binary exports produced by `prepareAndMount`. The JS
+    /// Short-lived direct-binary exports produced by package preparation. The JS
     /// host removes each with `takePrepared` immediately after persisting it.
     prepared_exports: BTreeMap<String, Vec<u8>>,
-    /// A multi-call warm mount validates compact artifacts one at a time and
+    /// A multi-call mount validates compact cold or warm artifacts one at a time and
     /// commits them together. This avoids constructing a second whole-closure
     /// JavaScript batch while retaining the existing all-or-nothing law.
     prepared_mount: Option<PreparedMountTransaction>,
@@ -112,7 +111,10 @@ struct Engine {
 struct PreparedMountTransaction {
     expected_packages: u32,
     base_generation: u64,
-    packages: Vec<package_store::PreparedPackage>,
+    /// Prepared artifacts keyed by their resolver-declared position. Fetch and
+    /// validation may finish out of order, but commit always reconstructs the
+    /// exact resolver order before mutating the mounted package generation.
+    packages: BTreeMap<u32, package_store::PreparedPackage>,
     artifact_bytes: u64,
     indexed_members: u64,
     decode_validate_ms: f64,
@@ -157,76 +159,6 @@ impl Engine {
         Ok(parsed.len() as u32)
     }
 
-    /// Mount ADDITIONAL bundles (lazy per-bundle loading, editor spec §1).
-    /// Already-mounted labels are skipped (idempotent). Returns the total package
-    /// count after mounting.
-    ///
-    /// Builds on a CLONE of the mounted state and only commits it AFTER a
-    /// successful mount — so a mid-mount error (e.g. bad base64 in a lazily
-    /// fetched bundle) leaves the existing state intact rather than uninitialized.
-    fn mount(&mut self, bundles_json: &str) -> Result<u32, String> {
-        let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
-            .map_err(|e| format!("mount_bundles: bad bundles JSON: {e}"))?;
-        let mut src = (**self
-            .bundle
-            .as_ref()
-            .ok_or("mount_bundles: engine not initialized; call init() first")?)
-        .clone();
-        let mut labels = self.packages.clone();
-        let mut package_materials = self.package_materials.clone();
-        let existing: BTreeSet<String> = labels.iter().cloned().collect();
-        let mut transaction = BTreeSet::new();
-        let mut fresh = Vec::new();
-        for package in parsed {
-            if existing.contains(&package.label) {
-                continue;
-            }
-            if !transaction.insert(package.label.clone()) {
-                return Err(format!(
-                    "mount_bundles: duplicate new package label in one transaction: {}",
-                    package.label
-                ));
-            }
-            fresh.push(package);
-        }
-        // Fallible: on Err we return WITHOUT having touched our bundle/packages.
-        let package_set_changed = !fresh.is_empty();
-        mount_into(
-            &mut src,
-            &fresh,
-            &mut labels,
-            &mut package_materials,
-            "mount_bundles",
-        )?;
-        // Commit only after success.
-        self.cache_root = src.cache_root().to_path_buf();
-        self.bundle = Some(Rc::new(src));
-        let total = labels.len() as u32;
-        self.packages = labels;
-        self.package_materials = package_materials;
-        if package_set_changed {
-            self.package_generation = self.package_generation.wrapping_add(1);
-            // A resolver fixpoint is a statement about the mounted candidate
-            // set. Even if a new package looks unrelated, mutable/range
-            // requests must be resolved again before another project prepare.
-            self.resolved_packages = None;
-        }
-        Ok(total)
-    }
-
-    /// Mount one versioned binary PreparedPackage. Validation happens before
-    /// any engine mutation; the artifact's current derived-index sidecar is
-    /// mounted directly, so this path performs no resource-index rebuild.
-    fn mount_prepared(&mut self, bytes: Vec<u8>, expected_key: &str) -> Result<u32, String> {
-        let expected: package_store::PreparedPackageKey = expected_key
-            .parse()
-            .map_err(|error| format!("mountPrepared: invalid expected key: {error:#}"))?;
-        let prepared = package_store::PreparedPackage::decode_owned(bytes, &expected)
-            .map_err(|error| format!("mountPrepared: invalid artifact: {error:#}"))?;
-        self.commit_prepared(vec![prepared], "mountPrepared")?;
-        Ok(self.packages.len() as u32)
-    }
-
     fn begin_prepared_mount(&mut self, expected_packages: u32) -> Result<(), String> {
         if self.bundle.is_none() {
             return Err("beginPreparedMount: engine not initialized; call init() first".into());
@@ -243,7 +175,7 @@ impl Engine {
             // `expected_packages` crosses the public WASM boundary. Grow only
             // as validated artifacts arrive instead of trusting it as an eager
             // allocation size (a forged u32::MAX must not trap the worker).
-            packages: Vec::new(),
+            packages: BTreeMap::new(),
             artifact_bytes: 0,
             indexed_members: 0,
             decode_validate_ms: 0.0,
@@ -258,15 +190,25 @@ impl Engine {
 
     fn stage_prepared_mount(
         &mut self,
+        index: u32,
         bytes: Vec<u8>,
         expected_key: &str,
+        expected_label: &str,
     ) -> Result<PreparedStageResult, String> {
         let transaction = self
             .prepared_mount
             .as_mut()
             .ok_or("stagePreparedMount: no prepared mount is active")?;
-        if transaction.packages.len() >= transaction.expected_packages as usize {
-            return Err("stagePreparedMount: received more packages than declared".into());
+        if index >= transaction.expected_packages {
+            return Err(format!(
+                "stagePreparedMount: package index {index} is outside declared range 0..{}",
+                transaction.expected_packages
+            ));
+        }
+        if transaction.packages.contains_key(&index) {
+            return Err(format!(
+                "stagePreparedMount: package index {index} was already staged"
+            ));
         }
         let expected: package_store::PreparedPackageKey = expected_key
             .parse()
@@ -276,9 +218,15 @@ impl Engine {
         let package = package_store::PreparedPackage::decode_owned(bytes, &expected)
             .map_err(|error| format!("stagePreparedMount: invalid artifact: {error:#}"))?;
         let decode_validate_ms = (clock_ms() - started).max(0.0);
+        if package.label != expected_label {
+            return Err(format!(
+                "stagePreparedMount: expected package label {expected_label}, artifact contains {}",
+                package.label
+            ));
+        }
         if transaction
             .packages
-            .iter()
+            .values()
             .any(|prior| prior.label == package.label)
         {
             return Err(format!(
@@ -291,7 +239,7 @@ impl Engine {
         transaction.artifact_bytes = transaction.artifact_bytes.saturating_add(artifact_bytes);
         transaction.indexed_members = transaction.indexed_members.saturating_add(indexed_members);
         transaction.decode_validate_ms += decode_validate_ms;
-        transaction.packages.push(package);
+        transaction.packages.insert(index, package);
         Ok(PreparedStageResult {
             label,
             staged: transaction.packages.len() as u32,
@@ -318,8 +266,15 @@ impl Engine {
                 transaction.packages.len()
             ));
         }
+        let mut packages = transaction.packages;
+        let mut ordered = Vec::with_capacity(packages.len());
+        for index in 0..transaction.expected_packages {
+            ordered.push(packages.remove(&index).ok_or_else(|| {
+                format!("commitPreparedMount: package index {index} was not staged")
+            })?);
+        }
         let started = clock_ms();
-        let added = self.commit_prepared(transaction.packages, "commitPreparedMount")?;
+        let added = self.commit_prepared(ordered, "commitPreparedMount")?;
         let compression = compression_delta(
             transaction.base_compression,
             self.bundle
@@ -353,47 +308,6 @@ impl Engine {
             .as_ref()
             .map(|source| source.compression_metrics())
             .unwrap_or_default()
-    }
-
-    /// Commit a package batch prepared without holding the Session's mutable
-    /// engine borrow. Keeping decode/normalize/encode outside this short commit
-    /// lets package-resolution callbacks observe the prior complete generation
-    /// instead of recursively borrowing a half-built transaction.
-    fn commit_prepared_batch(
-        &mut self,
-        batch: PreparedMountBatch,
-        base_generation: u64,
-    ) -> Result<PrepareMountResult, String> {
-        if self.bundle.is_none() {
-            return Err("prepareAndMount: engine not initialized; call init() first".into());
-        }
-        if self.package_generation != base_generation {
-            return Err(
-                "prepareAndMount: package generation changed while artifacts were prepared".into(),
-            );
-        }
-        // Do not expose artifacts from a transaction whose mount fails.
-        let added = self.commit_prepared(batch.prepared, "prepareAndMount")?;
-        self.prepared_exports.extend(batch.pending);
-        Ok(PrepareMountResult {
-            mounted: self.packages.len() as u32,
-            added,
-            artifacts: batch.artifacts,
-            artifact_bytes: batch.artifact_bytes,
-            prepared_members: batch.prepared_members,
-            input_json_bytes: batch.input_json_bytes,
-            base64_bytes: batch.base64_bytes,
-            decoded_source_bytes: batch.decoded_source_bytes,
-            normalized_bytes: batch.normalized_bytes,
-            mount_member_body_copies: 0,
-            json_parse_ms: batch.json_parse_ms,
-            base64_decode_ms: batch.base64_decode_ms,
-            normalization_ms: batch.normalization_ms,
-            indexing_ms: batch.indexing_ms,
-            artifact_encode_ms: batch.artifact_encode_ms,
-            decode_validate_prepare_ms: batch.decode_validate_prepare_ms,
-            mount_ms: 0.0,
-        })
     }
 
     /// Retain only the compact exports from a package batch. The normalized
@@ -779,10 +693,10 @@ struct PreparedMountBatch {
 fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, String> {
     let started = clock_ms();
     let parsed: Vec<BundleInput> = serde_json::from_str(bundles_json)
-        .map_err(|error| format!("prepareAndMount: bad bundles JSON: {error}"))?;
+        .map_err(|error| format!("prepareArtifacts: bad bundles JSON: {error}"))?;
     let parsed_at = clock_ms();
     if parsed.is_empty() {
-        return Err("prepareAndMount: no packages supplied".into());
+        return Err("prepareArtifacts: no packages supplied".into());
     }
     let mut transaction = BTreeSet::new();
     let mut artifacts = Vec::with_capacity(parsed.len());
@@ -800,7 +714,7 @@ fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, Strin
     for package in parsed {
         if !transaction.insert(package.label.clone()) {
             return Err(format!(
-                "prepareAndMount: duplicate package label in one transaction: {}",
+                "prepareArtifacts: duplicate package label in one transaction: {}",
                 package.label
             ));
         }
@@ -809,19 +723,19 @@ fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, Strin
             base64_bytes = base64_bytes.saturating_add(b64.len() as u64);
             let decode_started = clock_ms();
             let body = base64_decode(&b64)
-                .map_err(|error| format!("prepareAndMount: bad base64 for {name}: {error}"))?;
+                .map_err(|error| format!("prepareArtifacts: bad base64 for {name}: {error}"))?;
             base64_decode_ms += (clock_ms() - decode_started).max(0.0);
             decoded_source_bytes = decoded_source_bytes.saturating_add(body.len() as u64);
             entries.insert(name, body);
         }
         let normalize_started = clock_ms();
         let builder = package_store::PreparedPackage::normalize(&package.label, entries)
-            .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+            .map_err(|error| format!("prepareArtifacts: invalid package: {error:#}"))?;
         normalization_ms += (clock_ms() - normalize_started).max(0.0);
         let index_started = clock_ms();
         let package = builder
             .build()
-            .map_err(|error| format!("prepareAndMount: invalid package: {error:#}"))?;
+            .map_err(|error| format!("prepareArtifacts: invalid package: {error:#}"))?;
         indexing_ms += (clock_ms() - index_started).max(0.0);
         normalized_bytes = normalized_bytes.saturating_add(package.files.raw_bytes());
         let encode_started = clock_ms();
@@ -1009,6 +923,18 @@ mod prepared_mount_tests {
     use std::io::{Cursor, Write};
     use tar::{Builder, Header};
 
+    fn prepared(label: &str) -> package_store::PreparedPackage {
+        let (name, version) = label.split_once('#').unwrap();
+        package_store::PreparedPackage::prepare(
+            label,
+            BTreeMap::from([(
+                "package.json".into(),
+                format!(r#"{{"name":"{name}","version":"{version}"}}"#).into_bytes(),
+            )]),
+        )
+        .unwrap()
+    }
+
     fn tgz(files: &[(&str, &[u8])]) -> Vec<u8> {
         let encoder = GzEncoder::new(Vec::new(), Compression::default());
         let mut archive = Builder::new(encoder);
@@ -1132,11 +1058,152 @@ mod prepared_mount_tests {
         let mut engine = Engine::default();
         engine.init("[]").unwrap();
         engine.begin_prepared_mount(1).unwrap();
-        engine.stage_prepared_mount(bytes, &key).unwrap();
+        engine
+            .stage_prepared_mount(0, bytes, &key, "demo.package#1.0.0")
+            .unwrap();
         let mounted = engine.commit_prepared_mount().unwrap();
         assert_eq!(mounted.added, 1);
         assert_eq!(mounted.compression.chunks_inflated, 0);
         assert_eq!(mounted.compression.raw_inflated_bytes, 0);
+    }
+
+    #[test]
+    fn prepared_mount_accepts_out_of_order_staging_but_commits_resolver_order() {
+        let packages = [
+            prepared("demo.zero#1.0.0"),
+            prepared("demo.one#1.0.0"),
+            prepared("demo.two#1.0.0"),
+        ];
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(3).unwrap();
+        for index in [2, 0, 1] {
+            let package = &packages[index];
+            engine
+                .stage_prepared_mount(
+                    index as u32,
+                    package.encode(),
+                    &package.key.cache_key(),
+                    &package.label,
+                )
+                .unwrap();
+        }
+        engine.commit_prepared_mount().unwrap();
+        assert_eq!(
+            engine.packages,
+            vec!["demo.zero#1.0.0", "demo.one#1.0.0", "demo.two#1.0.0"]
+        );
+    }
+
+    #[test]
+    fn prepared_mount_rejects_bad_slots_and_never_partially_commits() {
+        let zero = prepared("demo.zero#1.0.0");
+        let one = prepared("demo.one#1.0.0");
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+
+        engine.begin_prepared_mount(2).unwrap();
+        assert!(engine
+            .stage_prepared_mount(2, zero.encode(), &zero.key.cache_key(), &zero.label)
+            .unwrap_err()
+            .contains("outside declared range"));
+        engine
+            .stage_prepared_mount(0, zero.encode(), &zero.key.cache_key(), &zero.label)
+            .unwrap();
+        assert!(engine
+            .stage_prepared_mount(0, one.encode(), &one.key.cache_key(), &one.label)
+            .unwrap_err()
+            .contains("already staged"));
+        assert!(engine.abort_prepared_mount());
+        assert!(engine.packages.is_empty());
+
+        engine.begin_prepared_mount(2).unwrap();
+        engine
+            .stage_prepared_mount(0, zero.encode(), &zero.key.cache_key(), &zero.label)
+            .unwrap();
+        assert!(engine
+            .commit_prepared_mount()
+            .unwrap_err()
+            .contains("expected 2 packages, staged 1"));
+        assert!(engine.packages.is_empty());
+        engine.begin_prepared_mount(1).unwrap();
+        assert!(engine.abort_prepared_mount());
+    }
+
+    #[test]
+    fn prepared_mount_wrong_label_leaves_slot_retryable() {
+        let package = prepared("demo.package#1.0.0");
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(1).unwrap();
+        assert!(engine
+            .stage_prepared_mount(
+                0,
+                package.encode(),
+                &package.key.cache_key(),
+                "other.package#1.0.0",
+            )
+            .unwrap_err()
+            .contains("expected package label"));
+        engine
+            .stage_prepared_mount(
+                0,
+                package.encode(),
+                &package.key.cache_key(),
+                &package.label,
+            )
+            .unwrap();
+        engine.commit_prepared_mount().unwrap();
+        assert_eq!(engine.packages, vec!["demo.package#1.0.0"]);
+    }
+
+    #[test]
+    fn prepared_mount_rejects_duplicate_labels_at_distinct_indexes() {
+        let package = prepared("demo.package#1.0.0");
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(2).unwrap();
+        engine
+            .stage_prepared_mount(
+                0,
+                package.encode(),
+                &package.key.cache_key(),
+                &package.label,
+            )
+            .unwrap();
+        assert!(engine
+            .stage_prepared_mount(
+                1,
+                package.encode(),
+                &package.key.cache_key(),
+                &package.label
+            )
+            .unwrap_err()
+            .contains("duplicate package label"));
+        assert!(engine.abort_prepared_mount());
+        assert!(engine.packages.is_empty());
+    }
+
+    #[test]
+    fn prepared_mount_generation_change_aborts_without_mutation() {
+        let package = prepared("demo.package#1.0.0");
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(1).unwrap();
+        engine
+            .stage_prepared_mount(
+                0,
+                package.encode(),
+                &package.key.cache_key(),
+                &package.label,
+            )
+            .unwrap();
+        engine.package_generation += 1;
+        assert!(engine
+            .commit_prepared_mount()
+            .unwrap_err()
+            .contains("state changed during transaction"));
+        assert!(engine.packages.is_empty());
     }
 
     #[test]
@@ -1166,13 +1233,13 @@ mod prepared_mount_tests {
         engine.init("[]").unwrap();
         engine.begin_prepared_mount(1).unwrap();
         engine
-            .stage_prepared_mount(first.encode(), &first.key.cache_key())
+            .stage_prepared_mount(0, first.encode(), &first.key.cache_key(), &first.label)
             .unwrap();
         engine.commit_prepared_mount().unwrap();
 
         engine.begin_prepared_mount(1).unwrap();
         engine
-            .stage_prepared_mount(second.encode(), &second.key.cache_key())
+            .stage_prepared_mount(0, second.encode(), &second.key.cache_key(), &second.label)
             .unwrap();
         assert!(engine
             .commit_prepared_mount()
@@ -1182,6 +1249,69 @@ mod prepared_mount_tests {
         assert_eq!(
             &engine.package_materials["demo.package#1.0.0"].prepared.key,
             &first_key
+        );
+    }
+
+    #[test]
+    fn later_conflict_does_not_partially_commit_an_earlier_slot() {
+        fn versioned(label: &str, marker: &[u8]) -> package_store::PreparedPackage {
+            let (name, version) = label.split_once('#').unwrap();
+            package_store::PreparedPackage::prepare(
+                label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        format!(r#"{{"name":"{name}","version":"{version}"}}"#).into_bytes(),
+                    ),
+                    ("private/marker.txt".into(), marker.to_vec()),
+                ]),
+            )
+            .unwrap()
+        }
+
+        let original = versioned("demo.conflict#1.0.0", b"original");
+        let conflicting = versioned("demo.conflict#1.0.0", b"conflicting");
+        let newcomer = prepared("demo.new#1.0.0");
+        let original_key = original.key.clone();
+        let mut engine = Engine::default();
+        engine.init("[]").unwrap();
+        engine.begin_prepared_mount(1).unwrap();
+        engine
+            .stage_prepared_mount(
+                0,
+                original.encode(),
+                &original.key.cache_key(),
+                &original.label,
+            )
+            .unwrap();
+        engine.commit_prepared_mount().unwrap();
+
+        engine.begin_prepared_mount(2).unwrap();
+        engine
+            .stage_prepared_mount(
+                0,
+                newcomer.encode(),
+                &newcomer.key.cache_key(),
+                &newcomer.label,
+            )
+            .unwrap();
+        engine
+            .stage_prepared_mount(
+                1,
+                conflicting.encode(),
+                &conflicting.key.cache_key(),
+                &conflicting.label,
+            )
+            .unwrap();
+        assert!(engine
+            .commit_prepared_mount()
+            .unwrap_err()
+            .contains("already mounted with different content"));
+        assert_eq!(engine.packages, vec!["demo.conflict#1.0.0"]);
+        assert!(!engine.package_materials.contains_key("demo.new#1.0.0"));
+        assert_eq!(
+            engine.package_materials["demo.conflict#1.0.0"].prepared.key,
+            original_key
         );
     }
 }
@@ -1362,31 +1492,6 @@ impl Session {
         )
     }
 
-    /// Mount ADDITIONAL bundles (additive, idempotent). Envelope result:
-    /// `{ "mounted": <total-count> }`.
-    pub fn mount(&self, bundles_json: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "mount",
-            self.with_engine("mount", |engine| engine.mount(bundles_json))
-                .map(|n| serde_json::json!({ "mounted": n })),
-        )
-    }
-
-    /// Mount one binary PreparedPackage without JSON/base64 transport or a
-    /// derived-index rebuild. `expected_key` is the exact manifest/cache key.
-    #[wasm_bindgen(js_name = mountPrepared)]
-    pub fn mount_prepared(&self, bytes: Vec<u8>, expected_key: &str) -> String {
-        set_panic_hook();
-        envelope(
-            "mountPrepared",
-            self.with_engine("mountPrepared", |engine| {
-                engine.mount_prepared(bytes, expected_key)
-            })
-            .map(|mounted| serde_json::json!({ "mounted": mounted })),
-        )
-    }
-
     /// Begin an all-or-nothing compact prepared-package transaction. Artifacts
     /// are staged individually to bound host peak memory, then committed once.
     #[wasm_bindgen(js_name = beginPreparedMount)]
@@ -1402,12 +1507,18 @@ impl Session {
     }
 
     #[wasm_bindgen(js_name = stagePreparedMount)]
-    pub fn stage_prepared_mount(&self, bytes: Vec<u8>, expected_key: &str) -> String {
+    pub fn stage_prepared_mount(
+        &self,
+        index: u32,
+        bytes: Vec<u8>,
+        expected_key: &str,
+        expected_label: &str,
+    ) -> String {
         set_panic_hook();
         envelope_ser(
             "stagePreparedMount",
             self.with_engine("stagePreparedMount", |engine| {
-                engine.stage_prepared_mount(bytes, expected_key)
+                engine.stage_prepared_mount(index, bytes, expected_key, expected_label)
             }),
         )
     }
@@ -1431,36 +1542,6 @@ impl Session {
             })
             .map(|aborted| serde_json::json!({ "aborted": aborted })),
         )
-    }
-
-    /// Cold-path bridge for the current inflated JSON/base64 package shape.
-    /// Normalizes each package once, mounts it transactionally, and stages the
-    /// exact `.fpp` artifact for zero-base64 transfer through `takePrepared`.
-    #[wasm_bindgen(js_name = prepareAndMount)]
-    pub fn prepare_and_mount(&self, bundles_json: &str) -> String {
-        set_panic_hook();
-        let result = (|| {
-            let base_generation = self.with_engine("prepareAndMount.preflight", |engine| {
-                if engine.bundle.is_none() {
-                    return Err("prepareAndMount: engine not initialized; call init() first".into());
-                }
-                Ok(engine.package_generation)
-            })?;
-
-            // Package parsing, decoding, normalization, indexing, and encoding
-            // deliberately run without a mutable Session borrow. In the browser
-            // these phases invoke host clocks and may permit package-resolution
-            // work to re-enter this Session; that work must see the previous
-            // complete generation, never a half-built mount.
-            let batch = prepare_package_batch(bundles_json)?;
-            let mount_started = clock_ms();
-            let mut result = self.with_engine("prepareAndMount.commit", move |engine| {
-                engine.commit_prepared_batch(batch, base_generation)
-            })?;
-            result.mount_ms = (clock_ms() - mount_started).max(0.0);
-            Ok(result)
-        })();
-        envelope_ser("prepareAndMount", result)
     }
 
     /// Convert one or a few cold raw packages into compact authenticated
@@ -1512,7 +1593,7 @@ impl Session {
         envelope_ser("prepareTgzArtifact", result)
     }
 
-    /// Move one artifact staged by `prepareAndMount` into a JS `Uint8Array`.
+    /// Move one artifact staged by package preparation into a JS `Uint8Array`.
     /// Metadata and errors for preparation remain in the uniform JSON envelope;
     /// a missing/twice-taken binary is surfaced as a JS exception.
     #[wasm_bindgen(js_name = takePrepared)]
@@ -1916,6 +1997,9 @@ impl Engine {
         prepared.events.push(site_engine::BuildEvent {
             operation: Some(site_engine::BuildOperation::Prepare),
             build_id: Some(prepared.site.build_id.clone()),
+            phase: Some("package.storage".into()),
+            source: Some(site_engine::BuildEventSource::Rust),
+            start_ms: None,
             stage: site_engine::BuildStage::BundleMount,
             label: None,
             bytes: None,

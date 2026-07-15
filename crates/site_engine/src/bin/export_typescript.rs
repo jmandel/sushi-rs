@@ -124,6 +124,7 @@ fn main() {
         declaration::<site_engine::OutputDescriptor>(&config),
         declaration::<site_engine::OutputCatalog>(&config),
         declaration::<site_engine::BuildStage>(&config),
+        declaration::<site_engine::BuildEventSource>(&config),
         declaration::<site_engine::BuildEvent>(&config),
         declaration::<site_engine::BuildOperation>(&config),
         declaration::<site_engine::BuildErrorPhase>(&config),
@@ -355,6 +356,9 @@ mod tests {
         for field in [
             "operation",
             "buildId",
+            "phase",
+            "source",
+            "startMs",
             "label",
             "bytes",
             "totalBytes",
@@ -383,6 +387,9 @@ mod tests {
         let event = site_engine::BuildEvent {
             operation: None,
             build_id: None,
+            phase: None,
+            source: None,
+            start_ms: None,
             stage: site_engine::BuildStage::Ready,
             label: None,
             bytes: None,

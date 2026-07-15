@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [features]
 wire-contract = ["dep:schemars", "dep:ts-rs"]
+dependency-observation = ["dep:dependency_observation"]
 
 [dependencies]
 serde.workspace = true
@@ -19,5 +20,6 @@ sha2.workspace = true
 miniz_oxide.workspace = true
 flate2.workspace = true
 tar.workspace = true
+dependency_observation = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 ts-rs = { workspace = true, optional = true }

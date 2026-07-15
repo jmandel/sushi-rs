@@ -55,6 +55,31 @@ fn synthetic_pkg(label: &str) -> Value {
     })
 }
 
+fn mount_transaction(s: &Session, bundles: Value) -> Value {
+    let prepared = parse(s.prepare_artifacts(&bundles.to_string()));
+    if prepared["ok"] != true {
+        return prepared;
+    }
+    let artifacts = prepared["result"]["artifacts"].as_array().unwrap();
+    assert_eq!(
+        parse(s.begin_prepared_mount(artifacts.len() as u32))["ok"],
+        true
+    );
+    for (index, artifact) in artifacts.iter().enumerate() {
+        let label = artifact["label"].as_str().unwrap();
+        let key = artifact["cacheKey"].as_str().unwrap();
+        let bytes = match s.take_prepared(label) {
+            Ok(bytes) => bytes,
+            Err(_) => panic!("takePrepared failed for {label}"),
+        };
+        assert_eq!(
+            parse(s.stage_prepared_mount(index as u32, bytes, key, label))["ok"],
+            true
+        );
+    }
+    parse(s.commit_prepared_mount())
+}
+
 #[test]
 fn session_envelope_shape_on_success_and_error() {
     let s = Session::new();
@@ -92,16 +117,12 @@ fn session_mount_is_additive_and_idempotent() {
         1
     );
     assert_eq!(
-        mounted(parse(
-            s.mount(&json!([synthetic_pkg("m.b#1.0.0")]).to_string())
-        )),
+        mounted(mount_transaction(&s, json!([synthetic_pkg("m.b#1.0.0")]))),
         2
     );
     // dup is skipped
     assert_eq!(
-        mounted(parse(
-            s.mount(&json!([synthetic_pkg("m.a#1.0.0")]).to_string())
-        )),
+        mounted(mount_transaction(&s, json!([synthetic_pkg("m.a#1.0.0")]))),
         2
     );
 }
@@ -115,14 +136,14 @@ fn independently_constructed_sessions_do_not_share_mutable_state() {
 
     // The second handle has no mounted package source. Under the old zero-sized
     // global handle this unexpectedly succeeded by observing `first`'s state.
-    let second_mount = parse(second.mount(&json!([synthetic_pkg("isolated.b#1.0.0")]).to_string()));
+    let second_mount = mount_transaction(&second, json!([synthetic_pkg("isolated.b#1.0.0")]));
     assert_eq!(second_mount["ok"], false);
     assert!(second_mount["error"]["message"]
         .as_str()
         .unwrap()
         .contains("engine not initialized"));
 
-    let first_mount = parse(first.mount(&json!([synthetic_pkg("isolated.b#1.0.0")]).to_string()));
+    let first_mount = mount_transaction(&first, json!([synthetic_pkg("isolated.b#1.0.0")]));
     assert_eq!(first_mount["result"]["mounted"], 2);
 }
 
@@ -225,7 +246,7 @@ fn session_resolve_template_reports_exact_missing_parent_then_complete_chain() {
     assert_eq!(missing["result"]["satisfied"], false);
     assert_eq!(missing["result"]["missing"], "base#1.0.0");
 
-    assert_eq!(parse(session.mount(&json!([base]).to_string()))["ok"], true);
+    assert_eq!(mount_transaction(&session, json!([base]))["ok"], true);
     let complete = parse(session.resolve_template("leaf#2.0.0"));
     assert_eq!(complete["ok"], true);
     assert_eq!(complete["result"]["satisfied"], true);

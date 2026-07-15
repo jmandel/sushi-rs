@@ -20,6 +20,93 @@ use std::rc::Rc;
 use super::context::WalkContext;
 use crate::{convert_r4_sd_to_r5, PackageContext};
 
+const BASE_DEFINITION_URL: &str = "http://hl7.org/fhir/StructureDefinition/Base";
+
+/// Publisher's `BaseWorkerContext.finishLoading` installs a minimal synthetic
+/// `Base` at the context's FHIR version when core does not provide one. This is
+/// deliberately distinct from SUSHI's `sushi-r5forR4` virtual `Base`: the latter
+/// is a 5.0.0 compiler definition whose constraints and mappings must not leak
+/// into an R4 Publisher snapshot.
+///
+/// A StructureDefinition does not carry the worker-context object through this
+/// API, so the exact context version comes from the derived definition (the
+/// normal Publisher/SUSHI path) or a versioned canonical. When the package
+/// universe already contains Base at that version (R5 and later), ordinary
+/// resolution must win; synthesis is only for a target release whose universe
+/// lacks its own Base. Conflicting explicit versions fail exactly rather than
+/// silently crossing FHIR releases.
+pub(crate) fn publisher_base(
+    ctx: &WalkContext,
+    derived: &Value,
+    query: &str,
+) -> anyhow::Result<Option<Rc<Value>>> {
+    let (canonical, requested_version) = query
+        .split_once('|')
+        .map_or((query, None), |(url, version)| (url, Some(version)));
+    if canonical != BASE_DEFINITION_URL {
+        return Ok(None);
+    }
+
+    let derived_version = derived
+        .get("fhirVersion")
+        .and_then(Value::as_str)
+        .filter(|version| !version.is_empty());
+    let requested_version = requested_version.filter(|version| !version.is_empty());
+    if let (Some(requested), Some(derived)) = (requested_version, derived_version) {
+        if requested != derived {
+            anyhow::bail!("base not found: {query} (Publisher context FHIR version is {derived})");
+        }
+    }
+
+    let version = derived_version
+        .or(requested_version)
+        .map(str::to_string)
+        .or_else(|| {
+            ctx.pkg.fetch(query).and_then(|base| {
+                base.get("version")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+        });
+    let Some(version) = version else {
+        // With no target-release evidence, leave ordinary resolution in charge.
+        return Ok(None);
+    };
+    let universe_has_target_base = ctx
+        .pkg
+        .fetch(query)
+        .is_some_and(|base| base.get("version").and_then(Value::as_str) == Some(version.as_str()));
+    if universe_has_target_base {
+        return Ok(None);
+    }
+
+    Ok(Some(Rc::new(serde_json::json!({
+        "resourceType": "StructureDefinition",
+        "id": "Base",
+        "url": BASE_DEFINITION_URL,
+        "version": version,
+        "name": "Base",
+        "status": "active",
+        "fhirVersion": version,
+        "kind": "complex-type",
+        "abstract": true,
+        "type": "Base",
+        "snapshot": {
+            "element": [{
+                "id": "Base",
+                "path": "Base",
+                "min": 0,
+                "max": "*",
+                "base": { "path": "Base", "min": 0, "max": "*" },
+                "isModifier": false
+            }]
+        },
+        "differential": {
+            "element": [{ "id": "Base", "path": "Base", "min": 0, "max": "*" }]
+        }
+    }))))
+}
+
 /// LAYER B / B1 (composition (a)): pin a base/dep SD's canonicals in place iff
 /// `ctx.pin_base_versions` is set AND `url` is a PACKAGE-loaded (non-local)
 /// resource. Java's `CoreVersionPinner` runs at load ONLY over the core/dependency

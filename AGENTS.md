@@ -7,6 +7,223 @@
 
 ## 0. HANDOFF — current state (read FIRST, updated 2026-07-12)
 
+**LOCAL RUST/WASM TOOLCHAIN (2026-07-15):** `rustup` exists outside the default
+`PATH` at `/home/jmandel/.cargo/bin/rustup`. The pinned local compiler is
+`/home/jmandel/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin/rustc`
+with the `wasm32-unknown-unknown` target installed; use
+`/home/jmandel/.cargo/bin/wasm-bindgen` 0.2.126 and CI-matching Binaryen 117 at
+`/home/jmandel/.local/opt/binaryen-version_117/bin/wasm-opt`. From the parent
+editor, the reproducible invocation is:
+
+```text
+PATH=/home/jmandel/.local/opt/binaryen-version_117/bin:/home/jmandel/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin:/home/jmandel/.cargo/bin:/usr/bin:/bin WASM_RUSTUP_HOME=/home/jmandel/.rustup WASM_CARGO_HOME=/home/jmandel/.cargo WASM_TOOLCHAIN_BIN=/home/jmandel/.rustup/toolchains/1.96.0-x86_64-unknown-linux-gnu/bin WASM_BINDGEN=/home/jmandel/.cargo/bin/wasm-bindgen SUSHI_RS_DIR=/home/jmandel/hobby/fhir-publisher-rs/fhir-ig-editor/vendor/sushi-rs scripts/build-wasm.sh
+```
+
+It rebuilt current dirty source successfully; the first link took 33.32 s and
+the Binaryen-optimized WASM is 6,475,349 bytes with SHA-256 `3526f039...`.
+Focused WASM API suites pass 15 + 5 + 8; the parent editor's 149 app tests,
+Pages-base production build, Cycle renderer typecheck, and 176 Cycle Publisher
+tests are green. A root-base browser attempt failed
+honestly on `/assets/*` 404s and is not acceptance evidence. The corrected
+artifact is `c89e08f9...` (177 files / 112,608,648 bytes) and its complete
+receipt `/tmp/fhir-local-rust-196-binaryen117-pages-full-browser.log` says
+`E2E GATE: PASS`. It proves current dirty source through Tiny/Cycle, US Core
+runtime closure and one shell, real mCODE, package retry atomicity, restart,
+scroll, and mobile geometry. The exact matrix and fast-4G receipt below close
+local performance/memory acceptance; deployment/live acceptance remains
+separate, incomplete, and unauthorized.
+
+The canonical artifact hash uses the benchmark recipe's bytewise path order.
+Ignore the discarded locale-sorted manual value `3712f003...`.
+
+The parent editor's exact current matrix is complete at
+`target/benchmark-results/current-rust196-binaryen117-matrix`, bound to artifact
+`c89e08f9...` and recipe `f9f7648a...`. `aggregate.json` is `ok:true`, 24/24;
+every receipt has memory evidence and zero pending/cross-phase requests, and
+all verified whole-Chromium quota scopes were released. Fast cold medians for
+Tiny/IPS/US Core/mCODE are 11.293/15.505/34.749/36.656 s; fast edits are
+1.296/3.111/4.318/1.566 s; 25%-CPU cold medians are
+58.620/85.319/172.339/169.027 s. Fast RSS medians are
+1.531/1.739/2.597/2.029 GB. There are 18 known mCODE diagram 404s plus two
+favicon 404s; do not claim zero request failures.
+
+The read-only page-reuse audit found zero currently eligible cross-build pages:
+six deliberate global Unknowns plus per-page catalog/render Unknowns force the
+canonical path, and `INCREMENTAL_EXECUTION_ENABLED` remains `false`. The first
+safe later seam is bounded post-prepare Publisher-page manifest replay against
+the new canonical RenderState/output catalog, never compiler incrementality.
+Manifests must capture positive and negative include/data reads, page source,
+fragment output digests, runtime post-pass inputs, and renderer/options recipe;
+any incomplete or changed fact renders canonically. Retain only with current/
+previous runtimes, cap at 100k facts/32 MiB, and prove deliberate hits/misses in
+an expanded four-guide differential oracle before enabling.
+
+Landing was explicitly authorized on 2026-07-15. Pre-dirty heads equal remotes: engine
+`snapshot-gen` and `main` are both `cbfadd9e`, Cycle is `090453f1`, and editor
+is `3420fae7`. Current workspace/all-target check, fmt, generated contract/
+schema drift, WASM 15 + 5 + 8, Cycle typecheck/176 tests, app 149 tests/build,
+native differential, full browser gate, matrix, and diff checks are green.
+Proceed by committing/pushing `snapshot-gen`, fast-forwarding/pushing engine
+`main`, regenerating/committing Cycle, then repinning the editor and rebuilding
+WASM from the committed engine so the stamp is truthful before the final Pages
+gate and editor push. Do not claim deployment until Pages and a fresh live
+profile both pass.
+
+The exact-current US Core fast-4G receipt is complete and `ok:true` at
+`target/benchmark-results/current-rust196-binaryen117-uscore-fast4g.json`,
+bound to artifact `c89e08f9...` / recipe `f9f7648a...`. Under 150 ms latency
+and 200,000 B/s download, cold is 627.571 s for 120,877,107 bytes
+(114,048,991 package-like); hard reload is 9.863 s, the representative profile
+edit is 4.408 s including 300 ms debounce, and same-Worker reopen is 1.927 s.
+Every phase boundary is closed. The one rule id covers page 55/55,
+dedicated-Worker 32/32, and engine-Worker 32/32 eligible requests; Worker main
+scripts remain explicitly unprofiled. Package fetch and preparation overlap
+13.882 s. Whole-Chromium peak RSS is 2,286,370,816 bytes across 10 processes.
+This is fast-4G evidence only; slow-4G remains unrun.
+
+**DELETION-FIRST PERFORMANCE CERTIFICATION (ACTIVE, UNCOMMITTED 2026-07-15):**
+PreparedGuide now borrows all selection candidates and clones only final
+resources; SiteEngine's private same-key guide cache holds `Rc<PreparedGuide>`.
+PreparedPackage builds its derived index directly from borrowed files and no
+longer constructs a temporary BundleSource or unused normalized payload. Public
+APIs, package identities, closed builds, outputs, and receipts are unchanged.
+The exact current editor artifact passes the complete Pages-subpath browser
+gate and a 24/24 fast+25%-CPU matrix at
+`target/benchmark-results/deletion-final-matrix/aggregate.json`; a five-run IPS
+stress proves the complete-ledger Worker request/target join has no lifecycle
+race. Fast cold Tiny/IPS/US Core/mCODE medians are 11.307/15.634/34.996/37.258
+s and edits are 1.252/3.085/4.356/1.565 s.
+
+The fresh current-source independent-process Fig matrix passes at
+`target/native-cli-benchmarks/20260715T115056Z-3788346/receipt.json`. It built
+release Fig `c93b38cbf0fc...` from this dirty source with an isolated hardlinked
+cache. Tiny/IPS/US Core/mCODE prepare medians are 9.062/12.780/33.126/30.093 s;
+outputs .375/.636/1.452/1.331 s; one render .384/.637/1.500/1.399 s; finalize
+.523/2.247/6.349/4.034 s. No commit/push without new explicit permission. The
+authoritative editor `AGENTS.md` owns the complete browser/network receipt and
+remaining certification state.
+
+**DEPENDENCY OBSERVATION AND DIFFERENTIAL ORACLE (ACTIVE, UNCOMMITTED
+2026-07-15):** non-default `dependency-observation/v1` now records typed causal
+facts across compiler package fishing, compilation, PreparedGuide, SiteBuild,
+Liquid/page artifacts, Publisher HTML post-processing, and final output. It is
+observation-only: `INCREMENTAL_EXECUTION_ENABLED` is `false`, known gaps and
+global invalidations force a full build, and any observer assembly/render error
+is contained as global Unknown evidence rather than changing canonical build
+success. The shared package selector is unchanged. Its optional trace has a
+100,000-record ceiling and exact 32 MiB retained String/Vec capacity ceiling,
+drops records on overflow, avoids further observation allocation, and is
+cleared before any PackageStore is retained.
+
+The exhaustive current-source receipt is
+`target/incremental-differential/full-current-race-free-final-20260715/aggregate.json`
+(`pass`, 4/4). A frozen self-exec runner builds one frozen binary
+`a2d4d1d19f88fd3ca12a51953663ce01f040ccd8954aa3be6f3e20c349b08701`
+from read-only engine input
+`0cd5768d69368c875bff9a895bdbf66dd4fe4313c3f193192a9a634e0f51717d`
+using a private Cargo target. It freezes/reverifies every fixture/helper/catalog
+input, requires two identical package closure/carrier captures, executes from
+those immutable carrier bytes, and retains 30 deduplicated read-only carrier
+objects (203,819,085 bytes). Fresh A, retained A -> B -> A, and fresh B match at
+every compiled/closed/catalog/content/final-output boundary for Tiny 1,799, IPS
+2,233, US Core 3,848, and mCODE 2,872 outputs; return-A compilation and SiteBuild
+cache hits equal 1 throughout. Default and observation-enabled focused suites,
+workspace all-target check, fmt, and diff integrity pass. The user-local pinned
+Rust 1.96 toolchain documented above now also rebuilds this current source for
+wasm32 successfully, and the exact current artifact passes the complete local
+browser gate above. This is a
+correctness oracle and evidence layer, not an
+incremental execution path or a measured speedup. No commit/push without new
+explicit permission.
+
+**R4 LOGICAL SPECIALIZATION SUPPORT (ACTIVE, UNCOMMITTED 2026-07-14):** a real
+IPS browser benchmark failed at Publisher preparation. The final source audit
+corrected the initial Base assumption: the seven-definition
+`sushi-r5forR4#1.0.0` virtual package is compiler support, but its `Base` is
+version 5.0.0 and is not Publisher's R4 base. `walk::resolve::publisher_base`
+now creates Publisher's separate minimal synthetic Base at the exact derived
+context version only when the target universe lacks Base, rejects conflicting
+versioned canonicals, and preserves the real R5 Base (including `ele-1`).
+Snapshot contexts still seed the shared virtual package for its R5-only datatype definitions.
+The Java Layer-A oracle now installs this synthetic Base without enabling
+CoreVersionPinner, and its corrected seven-element golden has no leaked R5 root
+constraint/mapping and a 4.0.1 base stamp. The focused
+`walk/specialization.rs` ports Q20/Q2/Q9, including reverse current-context
+selection, type expansion/append behavior, base completion, and Publisher's
+raw-parent-prefix insertion ordering. Exact tests cover a published-IPS-shaped
+Document root, real R5 Base inheritance, cross-version rejection, the Java golden, and a local
+`Base -> Document -> IPSSectionsLM` chain. `cargo test -p snapshot_gen` is green
+(10 unit, bundle, conversion, 3 Layer-B, 5 specialization, walk); SiteEngine is
+25 pass/1 explicit ignore; fmt is clean. Rebuild WASM and rerun real IPS browser
+acceptance before treating the prerequisite as certified.
+
+**PERFORMANCE TIMELINE CONTRACT (ACTIVE, UNCOMMITTED 2026-07-14):** the current
+cross-host performance round adds optional `phase`, `source`, and epoch-aligned
+`startMs` fields to the existing generated `BuildEvent`; functional identities
+and the four-operation API are unchanged. Rust preparation marks `site.prepare`
+and package storage marks `package.storage`; browser Worker/Window code supplies
+aligned host spans and WASM-memory observations. Generated editor/Cycle
+declarations and the wire schema must be regenerated together. Focused
+SiteEngine/WASM contract gates and the exact rebuilt-WASM full browser gate are
+green; `/tmp/fhir-performance-timeline-browser.log` proves the ordered startup
+trace, streaming compilation, and all catalog/restart/mobile scenarios. The
+corrected four-guide repeated baseline and all measured optimization work
+remain pending. Do not infer safe declaration-level incrementality: the
+compiler does not yet emit a complete actual lookup dependency graph.
+
+**BOUNDED COMPILER PACKAGE-STORE REUSE (ACTIVE, UNCOMMITTED 2026-07-14):**
+SiteEngine is being changed to retain compiler package indexes through its current and
+previous successful semantic compilations. The exact private key binds the
+package-store recipe/API, full config identity, resolver-ordered executable
+labels, canonical resolution-support labels, and each authenticated prepared
+package carrier. A normal compile miss may reuse lookup indexes and successfully
+parsed resource bodies; an exact semantic hit still bypasses compilation. A new
+store candidate is installed only with a successful compilation, and the two
+semantic generations are the outer bound. Independent review found that the
+first draft still compiled directly against the retained store, allowing its
+interior parsed-body cache to grow on a later failed compile. The correction now
+shares immutable catalog indexes, prepared-carrier bytes, and decoded member
+indexes while forking both parsed-body state and the bounded decompression/read
+cache for each compilation. Promotion drops that transient read cache and
+retains only a bounded successful parsed cache. Mutable disk sources reject the
+reuse fork rather than masquerading as immutable, but continue through the
+canonical fresh compiler path and attach no retained store. Each retained cache
+is limited to 1,024 entries/16 MiB original JSON bytes. A second independent
+review caught a deterministic but non-LRU greedy byte-budget trim; current source evicts strictly oldest-first,
+uses one lower-index-wins recency tie, and adds the adversarial 4+6+6 under 10
+fragmentation case. A real SiteEngine transaction test now exercises a same-key
+new package-body read followed by a late failure, then mixed hit/miss successful
+promotion, prior-store immutability, previous-generation ownership, metrics, and
+the literal production bounds. A test-only full cache fingerprint includes
+values, recency, counters, keys, and weights; a warm mixed-hit/miss compile is
+compared with a clean compile's complete outcome/render set. Metrics separately
+report active, current+previous logical, deduplicated shared-body, and unique
+catalog retention. The caller-owned compiler seam derives its cache root from
+the store and rejects a mismatched package-affecting config. Corrected native
+gates are green: package_store 50 unit + 2 integration, compiler 25 lib + 3
+definition-location integration, and SiteEngine 31 passed/1 fixture-dependent
+ignored. The real DiskSource regression compiles two distinct fresh revisions
+with zero retained store/catalog/body generations. Actual parsed
+hits/misses/inserts/evictions and retained weight
+remain separate from store-key reuse. `build_project_in_memory_with_ig` still
+delegates to the one canonical caller-owned-store flow. No browser WASM has
+been installed and no gain is claimed yet. The complete engine boundary receipt
+is `/tmp/engine-boundary-gate-final.log`: snapshot_gen 21/21 including all five
+R5-for-R4/logical-specialization tests, WASM lib 15/15, expand 5/5, Session 8/8,
+generated wire-contract drift, the documented Rust 1.96 wasm32 release build,
+workspace formatting, and diff integrity are green. The raw wasm32 artifact
+exists only under engine `target`; it was not copied into the editor.
+
+**ORDERED PACKAGE-ACQUISITION TRANSACTION (ACTIVE, UNBUILT 2026-07-14):**
+`wasm_api` stages complete PreparedPackage artifacts in a sparse resolver-indexed
+map. `stagePreparedMount(index, bytes, key, expectedLabel)` rejects an out-of-
+range/occupied slot, invalid key/artifact, wrong embedded label, or duplicate
+label before insertion; a failed slot is therefore retryable. Commit proves all
+slots, reconstructs `0..N`, and then uses the existing atomic generation-guarded
+mount. The browser opens one private ticket before bounded fetch, transfers and
+prepares each arrival immediately, and commits only the exact resolver order.
+This source has not yet passed fmt/tests/wasm32 or a rebuilt browser matrix.
+
 **BINARY TGZ PACKAGE INGRESS (UNCOMMITTED 2026-07-12):** browser cold package
 preparation now calls `Session.prepareTgzArtifact(label, Uint8Array)` instead of
 receiving an inflated base64/JSON file map. The method parses outside the
@@ -196,8 +413,9 @@ constructor/cache publisher for the ordinary and outer Cycle sites. Public
 `output-cache publish`, TypeScript receipt constructors/sealing, site-producer
 filesystem staging, and the unused SiteBuild successor/resolution protocol are
 deleted. The real two-pass native receipt is `so1-sha256:d5fb41f4...` with 91
-files; the second pass verified the same cache entry and skipped Liquid. Full
-current-WASM Chromium certification is still running.
+files; the second pass verified the same cache entry and skipped Liquid. At
+that historical checkpoint current-WASM certification was still running;
+later sections record its completion.
 
 External finalization now requires the renderer-opened `inputBuildId` in its
 typed plan. Fig compares it to the independently restored SiteEngine handle
@@ -476,7 +694,9 @@ retired flag instead of silently treating it as an ordinary package label. The
 `mountPreparedBatch` Engine/Session method, wire manifest type, transactional
 test, and documentation are also gone. Warm browser mounting has one bounded
 `beginPreparedMount -> stagePreparedMount -> commitPreparedMount` transaction;
-single `mountPrepared` and cold `prepareAndMount` remain. Active generated WASM
+the later ordered-transaction cleanup also deleted the single-artifact
+`mountPrepared` and cold `prepareAndMount` alternatives. Cold carriers now
+prepare first and enter that same indexed transaction. Active generated WASM
 browser artifacts were deliberately not edited by hand and must be refreshed by
 the normal rebuild. Gates: Fig library 14/14 plus integration 4/4,
 `cargo check -p fig`, WASM lib 35 pass/2 ignored, Session 8/8, fmt/diff-check.
@@ -777,16 +997,16 @@ carrier bytes are deterministic and content-addressed. Shared builders emit `.fp
 `fig packages prepare` and `rust_sushi packages prepare`; both commands use the
 same strict `PreparedPackageSetRequest` parser/executor and reject unsafe labels
 before constructing cache/output paths. Their ordinary manifest output and `.fpp`
-bytes are identical; `fig --json` adds only its standard API envelope. WASM
-exposes `Session.mountPrepared(bytes, expectedKey)`. The editor Worker uses the
-staged/cold APIs below and stores artifacts through its verified OPFS ContentStore.
+bytes are identical; `fig --json` adds only its standard API envelope. The editor
+Worker stores artifacts through its verified OPFS ContentStore and uses the sole
+indexed transaction below for both cold and warm packages.
 Focused gates: `cargo test -p package_store -p package_acquisition`, the prepared
 mount tests in `wasm_api`, and a real two-binary artifact `cmp`.
-Cold hosts can call `Session.prepareAndMount` once then drain direct binary
-artifacts with `takePrepared`; warm hosts can atomically call
-`beginPreparedMount` / per-artifact `stagePreparedMount` /
-`commitPreparedMount`; failure aborts without package mutation. These paths
-return phase and compressed/lazy-storage metrics.
+Cold hosts call `prepareTgzArtifact` (or raw-bundle compatibility
+`prepareArtifacts`) then drain direct binary artifacts with `takePrepared`;
+every host atomically calls `beginPreparedMount` / per-artifact
+`stagePreparedMount` / `commitPreparedMount`. Failure aborts without package
+mutation. These paths return phase and compressed/lazy-storage metrics.
 Cold metrics separate JSON parsing, base64 decoding, normalization, derived-index
 construction, artifact encoding, and mount time with input/base64/decoded/
 normalized/artifact byte counts; warm metrics separate manifest parsing,

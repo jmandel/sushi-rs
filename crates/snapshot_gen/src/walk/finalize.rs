@@ -283,7 +283,7 @@ pub(crate) fn finalize(
             snapshot.insert(
                 "extension".to_string(),
                 serde_json::json!([{
-                    "url": "http://hl7.org/fhir/StructureDefinition/structuredefinition-base-version",
+                    "url": "http://hl7.org/fhir/tools/StructureDefinition/snapshot-base-version",
                     "valueString": version
                 }]),
             );

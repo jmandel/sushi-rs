@@ -79,23 +79,26 @@ shallow-copies labels/Rcs rather than package bodies.
 ## Browser flow
 
 Engine boot loads only the package catalog. The Rust resolver selects the active
-project's closure; manifest `loadPhase` values distinguish resolver-selected
-`compile`, `snapshot`, and `on-demand` packages.
+project's exact compile and context closure; manifest `loadPhase` values are
+transport hints (`compile` or `on-demand`), never a second semantic resolver.
 
 Cold package flow:
 
 1. The host authenticates/fetches a baked tgz, local drop, or registry package.
-2. `Session.prepareAndMount` validates, normalizes, builds the derived index,
-   mounts immutable layers, and reports artifact metadata.
-3. `Session.takePrepared(label)` transfers the `.fpp` as `Uint8Array`.
-4. The Worker writes it to the OPFS ContentStore and publishes a small pointer.
+2. `Session.prepareTgzArtifact` (binary carriers) or `prepareArtifacts` (the
+   compatibility raw-bundle input) validates, normalizes, builds the derived
+   index, and retains one compact artifact without mounting it.
+3. `Session.takePrepared(label)` transfers the `.fpp` as `Uint8Array`; the host
+   writes it to the OPFS ContentStore and publishes a small pointer.
+4. The Worker stages every prepared arrival by resolver index and performs one
+   `commitPreparedMount` only after the complete resolver batch succeeds.
 
 Warm package flow:
 
 1. The main thread reads only small pointers.
 2. The Worker reads and authenticates `.fpp` bytes directly from OPFS.
-3. It calls `beginPreparedMount`, then reads and stages one compact artifact at
-   a time; it never allocates a second closure-sized batch.
+3. It opens one indexed transaction, then reads and stages one compact artifact
+   at a time; it never allocates a second closure-sized batch.
 4. `commitPreparedMount` installs layers only after every artifact validates;
    any failure calls `abortPreparedMount` and reacquires original transport.
 

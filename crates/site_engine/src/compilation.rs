@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -8,6 +9,13 @@ use crate::{PackageView, SiteEngine};
 
 const SEMANTIC_COMPILATION_KEY_SCHEMA: &str = "semantic-compilation-key/v1";
 const SEMANTIC_COMPILATION_RECIPE: &str = "sushi.compile-project/v1";
+const COMPILER_PACKAGE_STORE_KEY_SCHEMA: &str = "compiler-package-store-key/v1";
+const COMPILER_PACKAGE_STORE_RECIPE: &str = "package-store.project-index+lazy-json/v1";
+const COMPILER_PACKAGE_STORE_RETAINED_CACHE_LIMITS: package_store::PackageStoreCacheLimits =
+    package_store::PackageStoreCacheLimits {
+        max_entries: 1024,
+        max_approximate_source_bytes: 16 * 1024 * 1024,
+    };
 // This is the semantic recipe version, not a transport-envelope dependency.
 // It deliberately retains the value used by the former WASM-owned key.
 const SEMANTIC_ENGINE_API: u32 = 1;
@@ -260,18 +268,126 @@ pub struct CompilationOutcome {
 #[derive(Debug)]
 pub(crate) struct CompilationTransition {
     pub(crate) outcome: CompilationOutcome,
+    pub(crate) measurements: CompilationMeasurements,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct SemanticCompilationKey {
     semantic_inputs_sha256: site_build::Sha256Digest,
     resolved_packages: ResolvedPackageClosure,
+    package_store: CompilerPackageStoreKey,
 }
 
 struct SemanticCompilation {
     key: SemanticCompilationKey,
     compiled: Vec<(PathBuf, Value)>,
     outcome: CompilationOutcome,
+    // Authenticated immutable package sources may attach one retained store
+    // only after compilation succeeds. Non-retainable sources (notably native
+    // disk caches) still compile canonically, but deliberately attach none.
+    package_store: Option<Rc<RetainedPackageStore>>,
+    #[cfg(feature = "dependency-observation")]
+    package_lookups: dependency_observation::PackageLookupTrace,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct CompilerPackageStoreKey(site_build::Sha256Digest);
+
+struct RetainedPackageStore {
+    key: CompilerPackageStoreKey,
+    store: package_store::PackageStore,
+}
+
+struct WorkingPackageStore {
+    key: CompilerPackageStoreKey,
+    store: package_store::PackageStore,
+    retain_after_success: bool,
+}
+
+struct PackageStorePromotion {
+    retained: Option<Rc<RetainedPackageStore>>,
+    activity: package_store::PackageStoreCacheStats,
+    active: package_store::PackageStoreCacheStats,
+}
+
+struct CompiledSemanticCandidate {
+    semantic: SemanticCompilation,
+    package_store_activity: package_store::PackageStoreCacheStats,
+    active_package_store: package_store::PackageStoreCacheStats,
+}
+
+impl RetainedPackageStore {
+    fn fork_for_compile(&self) -> Result<WorkingPackageStore, String> {
+        Ok(WorkingPackageStore {
+            key: self.key.clone(),
+            store: self
+                .store
+                .fork_for_compile()
+                .map_err(|error| format!("compile failed: reuse package store: {error:#}"))?,
+            retain_after_success: true,
+        })
+    }
+}
+
+impl WorkingPackageStore {
+    fn promote(self) -> Result<PackageStorePromotion, String> {
+        if !self.retain_after_success {
+            return Ok(PackageStorePromotion {
+                retained: None,
+                activity: self.store.cache_stats(),
+                active: package_store::PackageStoreCacheStats::default(),
+            });
+        }
+        let retained = Rc::new(RetainedPackageStore {
+            key: self.key,
+            store: self
+                .store
+                .into_retained(COMPILER_PACKAGE_STORE_RETAINED_CACHE_LIMITS)
+                .map_err(|error| format!("compile failed: retain package store: {error:#}"))?,
+        });
+        let stats = retained.store.cache_stats();
+        Ok(PackageStorePromotion {
+            retained: Some(retained),
+            activity: stats,
+            active: stats,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct CompilationMeasurements {
+    pub(crate) semantic_compilation_cache_hit: bool,
+    pub(crate) package_store_cache_hit: bool,
+    pub(crate) package_store_used: bool,
+    pub(crate) package_store_key_ms: f64,
+    pub(crate) package_store_build_ms: f64,
+    pub(crate) retained_package_store_generations: usize,
+    pub(crate) package_body_cache_hits: u64,
+    pub(crate) package_body_cache_misses: u64,
+    pub(crate) package_body_cache_inserts: u64,
+    pub(crate) package_body_cache_evictions: u64,
+    pub(crate) active_package_body_entries: usize,
+    pub(crate) active_package_body_approximate_source_bytes: usize,
+    pub(crate) retained_package_catalog_generations: usize,
+    pub(crate) retained_package_catalog_entries: usize,
+    pub(crate) retained_package_body_logical_entries: usize,
+    pub(crate) retained_package_body_logical_approximate_source_bytes: usize,
+    pub(crate) retained_package_body_unique_entries: usize,
+    pub(crate) retained_package_body_unique_approximate_source_bytes: usize,
+}
+
+impl CompilationMeasurements {
+    fn record_retained(&mut self, retained: package_store::PackageStoreRetainedStats) {
+        self.retained_package_store_generations = retained.store_generations;
+        self.retained_package_catalog_generations = retained.catalog_generations;
+        self.retained_package_catalog_entries = retained.catalog_entries;
+        self.retained_package_body_logical_entries = retained.parsed_logical_entries;
+        self.retained_package_body_logical_approximate_source_bytes =
+            retained.parsed_logical_approximate_source_bytes;
+        self.retained_package_body_unique_entries = retained.parsed_unique_entries;
+        self.retained_package_body_unique_approximate_source_bytes =
+            retained.parsed_unique_approximate_source_bytes;
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -291,6 +407,24 @@ struct SemanticCompilationKeyPayload<'a> {
     inputs: &'a RenderSemanticInputs,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompilerPackageStoreKeyPayload<'a> {
+    schema: &'static str,
+    recipe: &'static str,
+    engine_api: u32,
+    config_sha256: &'a site_build::Sha256Digest,
+    resolved_labels: Vec<CompilerPackageCarrier>,
+    resolution_support: Vec<CompilerPackageCarrier>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompilerPackageCarrier {
+    label: String,
+    content: site_build::ContentRef,
+}
+
 #[derive(Default)]
 pub(crate) struct CompilationState {
     active: Option<SemanticCompilation>,
@@ -303,6 +437,7 @@ pub(crate) struct CompilationState {
 fn semantic_compilation_key(
     inputs: &RenderSemanticInputs,
     resolved_packages: &ResolvedPackageClosure,
+    package_store: &CompilerPackageStoreKey,
     operation: &str,
 ) -> Result<SemanticCompilationKey, String> {
     let semantic_inputs_sha256 = site_build::sha256_canonical(&SemanticCompilationKeyPayload {
@@ -315,7 +450,48 @@ fn semantic_compilation_key(
     Ok(SemanticCompilationKey {
         semantic_inputs_sha256,
         resolved_packages: resolved_packages.clone(),
+        package_store: package_store.clone(),
     })
+}
+
+fn compiler_package_store_key(
+    config: &str,
+    resolved: &ResolvedPackageClosure,
+    packages: &PackageView,
+    operation: &str,
+) -> Result<CompilerPackageStoreKey, String> {
+    let carrier = |label: &str| -> Result<CompilerPackageCarrier, String> {
+        let content = packages.carrier_identity(label).ok_or_else(|| {
+            format!("{operation}: exact carrier identity is missing for resolved package {label}")
+        })?;
+        Ok(CompilerPackageCarrier {
+            label: label.into(),
+            content: content.clone(),
+        })
+    };
+    let resolved_labels = resolved
+        .labels
+        .iter()
+        .map(|label| carrier(label))
+        .collect::<Result<Vec<_>, _>>()?;
+    // `resolution_support` is a BTreeSet in the resolver certificate, so its
+    // iteration is the canonical stable order bound into this key.
+    let resolution_support = resolved
+        .resolution_support
+        .iter()
+        .map(|label| carrier(label))
+        .collect::<Result<Vec<_>, _>>()?;
+    let config_sha256 = site_build::Sha256Digest::of_bytes(config.as_bytes());
+    let digest = site_build::sha256_canonical(&CompilerPackageStoreKeyPayload {
+        schema: COMPILER_PACKAGE_STORE_KEY_SCHEMA,
+        recipe: COMPILER_PACKAGE_STORE_RECIPE,
+        engine_api: SEMANTIC_ENGINE_API,
+        config_sha256: &config_sha256,
+        resolved_labels,
+        resolution_support,
+    })
+    .map_err(|error| format!("{operation}: hash compiler package-store key: {error}"))?;
+    Ok(CompilerPackageStoreKey(digest))
 }
 
 impl CompilationState {
@@ -348,6 +524,33 @@ impl CompilationState {
         }
         Some(outcome)
     }
+
+    fn retained_package_store(
+        &self,
+        key: &CompilerPackageStoreKey,
+    ) -> Option<Rc<RetainedPackageStore>> {
+        [&self.active, &self.previous]
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.package_store.as_ref())
+            .find(|store| store.key == *key)
+            .cloned()
+    }
+
+    #[cfg(test)]
+    fn retained_package_store_generations(&self) -> usize {
+        self.retained_package_store_stats().store_generations
+    }
+
+    fn retained_package_store_stats(&self) -> package_store::PackageStoreRetainedStats {
+        package_store::aggregate_retained_stats(
+            [&self.active, &self.previous]
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| entry.package_store.as_ref())
+                .map(|store| &store.store),
+        )
+    }
 }
 
 impl SiteEngine {
@@ -373,6 +576,11 @@ impl SiteEngine {
                 "compileProject: package view does not match the exact resolved closure".into(),
             );
         }
+        let mut measurements = CompilationMeasurements::default();
+        let package_store_key_started = self.timer();
+        let package_store_key =
+            compiler_package_store_key(&inputs.config, &resolved, &packages, operation)?;
+        measurements.package_store_key_ms = package_store_key_started.elapsed_ms();
         let page_listing = page_listing_from_site_files(&inputs.site_files);
         let semantic_inputs = RenderSemanticInputs {
             config: inputs.config.clone(),
@@ -383,22 +591,80 @@ impl SiteEngine {
                 .map(|(directory, names)| (directory.clone(), names.clone()))
                 .collect(),
         };
-        let key = semantic_compilation_key(&semantic_inputs, &resolved, operation)?;
+        let key =
+            semantic_compilation_key(&semantic_inputs, &resolved, &package_store_key, operation)?;
         let project =
             CompiledProjectRevision::capture(inputs.clone(), resolved.clone(), operation)?;
         if let Some(outcome) = self.compilation.restore(&key) {
             self.compilation.project = Some(project);
-            return Ok(CompilationTransition { outcome });
+            measurements.semantic_compilation_cache_hit = true;
+            let stats = self
+                .compilation
+                .active
+                .as_ref()
+                .expect("restored semantic compilation is active")
+                .package_store
+                .as_ref()
+                .map(|store| store.store.cache_stats())
+                .unwrap_or_default();
+            measurements.record_retained(self.compilation.retained_package_store_stats());
+            measurements.active_package_body_entries = stats.entries;
+            measurements.active_package_body_approximate_source_bytes =
+                stats.approximate_source_bytes;
+            return Ok(CompilationTransition {
+                outcome,
+                measurements,
+            });
         }
 
-        let next = compile(inputs, packages, &page_listing, key)?;
-        let outcome = next.outcome.clone();
-        let semantic_changed = self.compilation.replace_active(next);
+        measurements.package_store_used = true;
+        let package_store = if let Some(store) =
+            self.compilation.retained_package_store(&package_store_key)
+        {
+            measurements.package_store_cache_hit = true;
+            store.fork_for_compile()?
+        } else {
+            let cache_dir = packages.root().to_string_lossy().into_owned();
+            let package_store_started = self.timer();
+            let (compile_packages, retain_after_success) = match packages.fork_for_compile() {
+                Ok(packages) => (packages, true),
+                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => (packages, false),
+                Err(error) => {
+                    return Err(format!("compile failed: isolate package source: {error}"))
+                }
+            };
+            let store = package_store::PackageStore::for_project_with_config(
+                compile_packages,
+                &inputs.config,
+                &cache_dir,
+            )
+            .map_err(|error| format!("compile failed: package store: {error:#}"))?;
+            measurements.package_store_build_ms = package_store_started.elapsed_ms();
+            WorkingPackageStore {
+                key: package_store_key,
+                store,
+                retain_after_success,
+            }
+        };
+        let candidate = compile(inputs, package_store, &page_listing, key)?;
+        measurements.package_body_cache_hits = candidate.package_store_activity.hits;
+        measurements.package_body_cache_misses = candidate.package_store_activity.misses;
+        measurements.package_body_cache_inserts = candidate.package_store_activity.inserts;
+        measurements.package_body_cache_evictions = candidate.package_store_activity.evictions;
+        measurements.active_package_body_entries = candidate.active_package_store.entries;
+        measurements.active_package_body_approximate_source_bytes =
+            candidate.active_package_store.approximate_source_bytes;
+        let outcome = candidate.semantic.outcome.clone();
+        let semantic_changed = self.compilation.replace_active(candidate.semantic);
         self.compilation.project = Some(project);
         if semantic_changed {
             self.clear_preparation();
         }
-        Ok(CompilationTransition { outcome })
+        measurements.record_retained(self.compilation.retained_package_store_stats());
+        Ok(CompilationTransition {
+            outcome,
+            measurements,
+        })
     }
 
     pub fn clear_compilation(&mut self) {
@@ -420,6 +686,19 @@ impl SiteEngine {
             .as_ref()
             .map(|active| active.outcome.diagnostics.as_slice())
             .unwrap_or_default()
+    }
+
+    #[cfg(feature = "dependency-observation")]
+    pub(crate) fn dependency_compilation(
+        &self,
+    ) -> Option<(
+        &CompilationOutcome,
+        &dependency_observation::PackageLookupTrace,
+    )> {
+        self.compilation
+            .active
+            .as_ref()
+            .map(|active| (&active.outcome, &active.package_lookups))
     }
 
     pub(crate) fn project_revision(&self) -> Option<&CompiledProjectRevision> {
@@ -448,9 +727,15 @@ impl SiteEngine {
                 .into_iter()
                 .collect(),
         };
-        let key =
-            semantic_compilation_key(&semantic_inputs, &project.resolved_packages, "test fixture")
-                .expect("test project semantic key");
+        let package_store =
+            retained_package_store_for_test(&project.config, &project.resolved_packages);
+        let key = semantic_compilation_key(
+            &semantic_inputs,
+            &project.resolved_packages,
+            &package_store.key,
+            "test fixture",
+        )
+        .expect("test project semantic key");
         self.compilation.active = Some(SemanticCompilation {
             key,
             compiled,
@@ -458,6 +743,9 @@ impl SiteEngine {
                 resources: Vec::new(),
                 diagnostics: Vec::new(),
             },
+            package_store: Some(package_store),
+            #[cfg(feature = "dependency-observation")]
+            package_lookups: Default::default(),
         });
         self.compilation.previous = None;
         self.compilation.project = Some(project);
@@ -466,10 +754,10 @@ impl SiteEngine {
 
 fn compile(
     inputs: ProjectRevision,
-    packages: PackageView,
+    package_store: WorkingPackageStore,
     page_listing: &HashMap<String, Vec<String>>,
     key: SemanticCompilationKey,
-) -> Result<SemanticCompilation, String> {
+) -> Result<CompiledSemanticCandidate, String> {
     let fsh_files = inputs
         .fsh
         .iter()
@@ -477,16 +765,17 @@ fn compile(
         .collect::<Vec<_>>();
     let predefined = ordered_predefined_resources(&inputs.predefined);
     let predefined_for_render = predefined.clone();
-    let cache = packages.root().to_string_lossy().into_owned();
-    let (compiled, ig_resource, diagnostics) = compiler::build_project_in_memory_with_ig(
-        &inputs.config,
-        &fsh_files,
-        predefined,
-        packages,
-        &cache,
-        page_listing.clone(),
-    )
-    .map_err(|error| format!("compile failed: {error:#}"))?;
+    let (compiled, ig_resource, diagnostics) =
+        compiler::build_project_in_memory_with_ig_from_store(
+            &inputs.config,
+            &fsh_files,
+            predefined,
+            &package_store.store,
+            page_listing.clone(),
+        )
+        .map_err(|error| format!("compile failed: {error:#}"))?;
+    #[cfg(feature = "dependency-observation")]
+    let dependency_package_lookups = package_store.store.take_dependency_observations();
 
     let mut render_set = compiled
         .iter()
@@ -526,13 +815,61 @@ fn compile(
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(SemanticCompilation {
-        key,
-        compiled: render_set,
-        outcome: CompilationOutcome {
-            resources,
-            diagnostics,
+    let package_store = package_store.promote()?;
+    Ok(CompiledSemanticCandidate {
+        semantic: SemanticCompilation {
+            key,
+            compiled: render_set,
+            outcome: CompilationOutcome {
+                resources,
+                diagnostics,
+            },
+            package_store: package_store.retained,
+            #[cfg(feature = "dependency-observation")]
+            package_lookups: dependency_package_lookups,
         },
+        package_store_activity: package_store.activity,
+        active_package_store: package_store.active,
+    })
+}
+
+#[cfg(test)]
+fn retained_package_store_for_test(
+    config: &str,
+    resolved: &ResolvedPackageClosure,
+) -> Rc<RetainedPackageStore> {
+    let source = Rc::new(package_store::BundleSource::new());
+    let root = source.cache_root().to_path_buf();
+    let carrier_identities = resolved
+        .labels
+        .iter()
+        .chain(resolved.resolution_support.iter())
+        .map(|label| {
+            (
+                label.clone(),
+                site_build::ContentRef::of_bytes(
+                    label.as_bytes(),
+                    Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                ),
+            )
+        })
+        .collect();
+    let view = PackageView::new(
+        source,
+        root.clone(),
+        Some(resolved.labels.iter().cloned().collect()),
+    )
+    .with_carrier_identities(carrier_identities);
+    let key = compiler_package_store_key(config, resolved, &view, "test fixture")
+        .expect("test package-store key");
+    let cache_dir = root.to_string_lossy().into_owned();
+    let store = package_store::PackageStore::for_project_with_config(view, config, &cache_dir)
+        .expect("test package store");
+    Rc::new(RetainedPackageStore {
+        key,
+        store: store
+            .into_retained(COMPILER_PACKAGE_STORE_RETAINED_CACHE_LIMITS)
+            .expect("retain test package store"),
     })
 }
 
@@ -680,12 +1017,15 @@ fn predefined_render_path(source: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     use package_store::BundleSource;
 
     use super::*;
 
     const CONFIG: &str = "id: test\ncanonical: https://example.test\nfhirVersion: 4.0.1\n";
+    const FSH_ONLY_CONFIG: &str =
+        "id: store-test\ncanonical: https://example.test\nfhirVersion: 4.0.1\nFSHOnly: true\n";
 
     fn resolved() -> ResolvedPackageClosure {
         ResolvedPackageClosure {
@@ -696,9 +1036,202 @@ mod tests {
     }
 
     fn package_view() -> PackageView {
+        let resolution = resolved();
+        package_view_for(&resolution, "")
+    }
+
+    fn package_view_for(resolution: &ResolvedPackageClosure, carrier_tag: &str) -> PackageView {
         let source = Rc::new(BundleSource::new());
         let root = source.cache_root().to_path_buf();
-        PackageView::new(source, root, Some(resolved().labels.into_iter().collect()))
+        let carrier_identities = resolution
+            .labels
+            .iter()
+            .chain(resolution.resolution_support.iter())
+            .map(|label| {
+                let identity = if carrier_tag.is_empty() {
+                    label.clone()
+                } else {
+                    format!("{label}@{carrier_tag}")
+                };
+                (
+                    label.clone(),
+                    site_build::ContentRef::of_bytes(
+                        identity.as_bytes(),
+                        Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                    ),
+                )
+            })
+            .collect();
+        PackageView::new(
+            source,
+            root,
+            Some(resolution.labels.iter().cloned().collect()),
+        )
+        .with_carrier_identities(carrier_identities)
+    }
+
+    fn fsh_only_inputs(config: &str, page: &str) -> ProjectRevision {
+        ProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::from([(format!("input/pagecontent/{page}.md"), Vec::new())]),
+        }
+    }
+
+    fn resolved_for(config: &str, labels: &[&str], support: &[&str]) -> ResolvedPackageClosure {
+        ResolvedPackageClosure {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: support.iter().map(|label| (*label).into()).collect(),
+            labels: labels.iter().map(|label| (*label).into()).collect(),
+        }
+    }
+
+    fn two_resource_core() -> package_store::PreparedPackage {
+        let definition = |id: &str| {
+            serde_json::to_vec(&serde_json::json!({
+                "resourceType": "StructureDefinition",
+                "id": id,
+                "url": format!("http://hl7.org/fhir/StructureDefinition/{id}"),
+                "version": "4.0.1",
+                "name": id,
+                "status": "active",
+                "kind": "resource",
+                "abstract": false,
+                "type": id,
+                "derivation": "specialization",
+                "snapshot": { "element": [{ "id": id, "path": id }] },
+                "differential": { "element": [{ "id": id, "path": id }] }
+            }))
+            .unwrap()
+        };
+        let index_files = ["Patient", "Observation"].map(|id| {
+            serde_json::json!({
+                "filename": format!("StructureDefinition-{id}.json"),
+                "resourceType": "StructureDefinition",
+                "id": id,
+                "url": format!("http://hl7.org/fhir/StructureDefinition/{id}"),
+                "version": "4.0.1",
+                "kind": "resource",
+                "type": id
+            })
+        });
+        let index = serde_json::to_vec(&serde_json::json!({
+            "index-version": 2,
+            "files": index_files
+        }))
+        .unwrap();
+        package_store::PreparedPackage::prepare(
+            "hl7.fhir.r4.core#4.0.1",
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"hl7.fhir.r4.core","version":"4.0.1"}"#.to_vec(),
+                ),
+                (".index.json".into(), index),
+                (
+                    "StructureDefinition-Patient.json".into(),
+                    definition("Patient"),
+                ),
+                (
+                    "StructureDefinition-Observation.json".into(),
+                    definition("Observation"),
+                ),
+            ]),
+        )
+        .unwrap()
+    }
+
+    fn compressed_two_resource_core() -> package_store::PreparedPackage {
+        let prepared = two_resource_core();
+        package_store::PreparedPackage::decode_expected(&prepared.encode(), &prepared.key).unwrap()
+    }
+
+    struct TemporaryPackageCache(PathBuf);
+
+    impl Drop for TemporaryPackageCache {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn disk_package_view(
+        resolution: &ResolvedPackageClosure,
+    ) -> (PackageView, TemporaryPackageCache) {
+        static NEXT_CACHE: AtomicU64 = AtomicU64::new(0);
+
+        let prepared = two_resource_core();
+        let artifact = prepared.artifact_bytes();
+        let package_dir = std::env::temp_dir()
+            .join(format!(
+                "site-engine-package-store-{}-{}",
+                std::process::id(),
+                NEXT_CACHE.fetch_add(1, Ordering::Relaxed)
+            ))
+            .join(&prepared.label)
+            .join("package");
+        std::fs::create_dir_all(&package_dir).unwrap();
+        for (name, bytes) in prepared.files.materialize_all().unwrap() {
+            let path = package_dir.join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(path, bytes).unwrap();
+        }
+        let root = package_dir
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let cache = TemporaryPackageCache(root.clone());
+        let view = PackageView::new(
+            Rc::new(package_store::DiskSource),
+            root,
+            Some(resolution.labels.iter().cloned().collect()),
+        )
+        .with_carrier_identities(BTreeMap::from([(
+            prepared.label,
+            site_build::ContentRef::of_bytes(
+                artifact.as_ref(),
+                Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+            ),
+        )]));
+        (view, cache)
+    }
+
+    fn profile_inputs(config: &str, parent: &str, page: &str) -> ProjectRevision {
+        ProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::from([(
+                "input/fsh/profile.fsh".into(),
+                format!("Profile: CacheProfile\nParent: {parent}\nId: cache-profile\n"),
+            )]),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::from([(format!("input/pagecontent/{page}.md"), Vec::new())]),
+        }
+    }
+
+    fn assert_compilation_outcome_eq(warm: &CompilationOutcome, fresh: &CompilationOutcome) {
+        let resources = |outcome: &CompilationOutcome| {
+            outcome
+                .resources
+                .iter()
+                .map(|resource| {
+                    (
+                        resource.filename.clone(),
+                        resource.text.clone(),
+                        resource.body.clone(),
+                        resource.resource_type.clone(),
+                        resource.id.clone(),
+                        resource.url.clone(),
+                        resource.definition.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(resources(warm), resources(fresh));
+        assert_eq!(warm.diagnostics, fresh.diagnostics);
     }
 
     fn inputs_for(parent: &str, site_body: &[u8]) -> ProjectRevision {
@@ -726,8 +1259,15 @@ mod tests {
             "resourceType": "StructureDefinition",
             "id": name
         });
+        let package_store = retained_package_store_for_test(CONFIG, &resolved());
         SemanticCompilation {
-            key: semantic_compilation_key(&semantic_inputs, &resolved(), "test").unwrap(),
+            key: semantic_compilation_key(
+                &semantic_inputs,
+                &resolved(),
+                &package_store.key,
+                "test",
+            )
+            .unwrap(),
             compiled: vec![(
                 PathBuf::from(format!("/__compiled__/StructureDefinition-{name}.json")),
                 body.clone(),
@@ -750,6 +1290,9 @@ mod tests {
                     owner_definition: None,
                 }],
             },
+            package_store: Some(package_store),
+            #[cfg(feature = "dependency-observation")]
+            package_lookups: Default::default(),
         }
     }
 
@@ -965,6 +1508,427 @@ mod tests {
     }
 
     #[test]
+    fn compiler_package_store_key_binds_config_order_support_and_carriers() {
+        let core = "hl7.fhir.r4.core#4.0.1";
+        let terminology = "hl7.terminology.r4#6.2.0";
+        let base = resolved_for(FSH_ONLY_CONFIG, &[core, terminology], &[core]);
+        let base_view = package_view_for(&base, "carrier-a");
+        let base_key =
+            compiler_package_store_key(FSH_ONLY_CONFIG, &base, &base_view, "test").unwrap();
+        let source = Rc::new(BundleSource::new());
+        let root = source.cache_root().to_path_buf();
+        let identityless =
+            PackageView::new(source, root, Some(base.labels.iter().cloned().collect()));
+        assert!(
+            compiler_package_store_key(FSH_ONLY_CONFIG, &base, &identityless, "test",)
+                .unwrap_err()
+                .contains("carrier identity")
+        );
+
+        let reordered = resolved_for(FSH_ONLY_CONFIG, &[terminology, core], &[core]);
+        assert_ne!(
+            base_key,
+            compiler_package_store_key(
+                FSH_ONLY_CONFIG,
+                &reordered,
+                &package_view_for(&reordered, "carrier-a"),
+                "test",
+            )
+            .unwrap()
+        );
+
+        let support_changed =
+            resolved_for(FSH_ONLY_CONFIG, &[core, terminology], &[core, terminology]);
+        assert_ne!(
+            base_key,
+            compiler_package_store_key(
+                FSH_ONLY_CONFIG,
+                &support_changed,
+                &package_view_for(&support_changed, "carrier-a"),
+                "test",
+            )
+            .unwrap()
+        );
+
+        assert_ne!(
+            base_key,
+            compiler_package_store_key(
+                FSH_ONLY_CONFIG,
+                &base,
+                &package_view_for(&base, "carrier-b"),
+                "test",
+            )
+            .unwrap()
+        );
+
+        let changed_config = format!("{FSH_ONLY_CONFIG}status: active\n");
+        let config_resolution = resolved_for(&changed_config, &[core, terminology], &[core]);
+        assert_ne!(
+            base_key,
+            compiler_package_store_key(
+                &changed_config,
+                &config_resolution,
+                &package_view_for(&config_resolution, "carrier-a"),
+                "test",
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn ordinary_revision_reuses_one_prebuilt_compiler_package_store() {
+        let core = "hl7.fhir.r4.core#4.0.1";
+        let resolution = resolved_for(FSH_ONLY_CONFIG, &[core], &[core]);
+        let mut engine = SiteEngine::default();
+
+        let first = engine
+            .compile_project(
+                fsh_only_inputs(FSH_ONLY_CONFIG, "first"),
+                package_view_for(&resolution, "same-carrier"),
+                resolution.clone(),
+            )
+            .unwrap();
+        assert!(first.measurements.package_store_used);
+        assert!(!first.measurements.package_store_cache_hit);
+        assert_eq!(first.measurements.retained_package_store_generations, 1);
+        let first_store = engine
+            .compilation
+            .active
+            .as_ref()
+            .unwrap()
+            .package_store
+            .as_ref()
+            .unwrap()
+            .clone();
+        let first_cache = first_store.store.cache_stats();
+
+        let second = engine
+            .compile_project(
+                fsh_only_inputs(FSH_ONLY_CONFIG, "second"),
+                package_view_for(&resolution, "same-carrier"),
+                resolution,
+            )
+            .unwrap();
+        assert!(second.measurements.package_store_used);
+        assert!(second.measurements.package_store_cache_hit);
+        assert_eq!(second.measurements.package_store_build_ms, 0.0);
+        assert_eq!(second.measurements.retained_package_store_generations, 2);
+        assert_eq!(second.measurements.retained_package_catalog_generations, 1);
+        assert!(second.measurements.retained_package_catalog_entries > 0);
+        assert!(!Rc::ptr_eq(
+            &first_store,
+            engine
+                .compilation
+                .active
+                .as_ref()
+                .unwrap()
+                .package_store
+                .as_ref()
+                .unwrap()
+        ));
+        assert_eq!(first_store.store.cache_stats(), first_cache);
+    }
+
+    #[test]
+    fn fresh_disk_source_compiles_without_retaining_package_store() {
+        let core = "hl7.fhir.r4.core#4.0.1";
+        let resolution = resolved_for(FSH_ONLY_CONFIG, &[core], &[core]);
+        let (package_view, _cache) = disk_package_view(&resolution);
+        let mut engine = SiteEngine::default();
+
+        for page in ["first", "second"] {
+            let transition = engine
+                .compile_project(
+                    profile_inputs(FSH_ONLY_CONFIG, "Patient", page),
+                    package_view.clone(),
+                    resolution.clone(),
+                )
+                .unwrap();
+            assert!(transition.measurements.package_store_used);
+            assert!(!transition.measurements.package_store_cache_hit);
+            assert!(transition.measurements.package_body_cache_misses > 0);
+            assert!(transition.measurements.package_body_cache_inserts > 0);
+            assert_eq!(transition.measurements.active_package_body_entries, 0);
+            assert_eq!(
+                transition
+                    .measurements
+                    .active_package_body_approximate_source_bytes,
+                0
+            );
+            assert_eq!(
+                transition.measurements.retained_package_store_generations,
+                0
+            );
+            assert_eq!(
+                transition.measurements.retained_package_catalog_generations,
+                0
+            );
+            assert_eq!(
+                transition
+                    .measurements
+                    .retained_package_body_logical_entries,
+                0
+            );
+            assert_eq!(
+                transition.measurements.retained_package_body_unique_entries,
+                0
+            );
+            assert!(engine
+                .compilation
+                .active
+                .as_ref()
+                .unwrap()
+                .package_store
+                .is_none());
+            assert_eq!(engine.compilation.retained_package_store_generations(), 0);
+        }
+    }
+
+    #[test]
+    fn same_key_failed_compile_cannot_mutate_retained_parsed_bodies() {
+        assert_eq!(
+            COMPILER_PACKAGE_STORE_RETAINED_CACHE_LIMITS.max_entries,
+            1024
+        );
+        assert_eq!(
+            COMPILER_PACKAGE_STORE_RETAINED_CACHE_LIMITS.max_approximate_source_bytes,
+            16 * 1024 * 1024
+        );
+
+        let core = "hl7.fhir.r4.core#4.0.1";
+        let resolution = resolved_for(FSH_ONLY_CONFIG, &[core], &[core]);
+        let environment = crate::PackageEnvironment::new([compressed_two_resource_core()]).unwrap();
+        let package_view = environment.scoped(&resolution.labels, "test").unwrap();
+        let mut engine = SiteEngine::default();
+
+        let first = engine
+            .compile_project(
+                profile_inputs(FSH_ONLY_CONFIG, "Patient", "first"),
+                package_view.clone(),
+                resolution.clone(),
+            )
+            .unwrap();
+        assert!(first.measurements.package_body_cache_misses > 0);
+        assert!(first.measurements.package_body_cache_inserts > 0);
+        let retained = engine
+            .compilation
+            .active
+            .as_ref()
+            .unwrap()
+            .package_store
+            .as_ref()
+            .unwrap()
+            .clone();
+        let retained_stats = retained.store.cache_stats();
+        let retained_generations = engine.compilation.retained_package_store_generations();
+
+        // Compilation reads the previously unseen Observation parent before
+        // `compile` projects predefined resources into the render set. The
+        // unsafe path therefore creates a deliberately late failure after the
+        // working cache has changed, exercising the real success boundary.
+        let mut failed = profile_inputs(FSH_ONLY_CONFIG, "Observation", "failed");
+        let unsafe_path = "input/resources/../late-failure.json".to_string();
+        let unsafe_value = serde_json::json!({
+            "resourceType": "Patient",
+            "id": "late-failure"
+        });
+        failed
+            .predefined
+            .insert(unsafe_path.clone(), unsafe_value.clone());
+        failed
+            .site_files
+            .insert(unsafe_path, serde_json::to_vec(&unsafe_value).unwrap());
+        let error = engine
+            .compile_project(failed, package_view.clone(), resolution.clone())
+            .unwrap_err();
+        assert!(error.contains("invalid local resource path"), "{error}");
+        assert_eq!(
+            engine.compilation.retained_package_store_generations(),
+            retained_generations
+        );
+        assert!(Rc::ptr_eq(
+            &retained,
+            &engine
+                .compilation
+                .active
+                .as_ref()
+                .unwrap()
+                .package_store
+                .as_ref()
+                .unwrap()
+        ));
+        assert!(engine.compilation.previous.is_none());
+        assert_eq!(retained.store.cache_stats(), retained_stats);
+
+        // A later successful same-key miss promotes a distinct fork. It reads
+        // the new Observation body while also hitting the retained Patient,
+        // and the untouched prior store becomes the previous generation.
+        let mut successor_inputs = profile_inputs(FSH_ONLY_CONFIG, "Observation", "successor");
+        successor_inputs.fsh.insert(
+            "input/fsh/patient-cache.fsh".into(),
+            "Profile: PatientCacheProfile\nParent: Patient\nId: patient-cache-profile\n".into(),
+        );
+        let successor = engine
+            .compile_project(successor_inputs.clone(), package_view, resolution.clone())
+            .unwrap();
+        assert!(successor.measurements.package_store_cache_hit);
+        assert!(successor.measurements.package_body_cache_hits > 0);
+        assert!(successor.measurements.package_body_cache_misses > 0);
+        assert!(successor.measurements.package_body_cache_inserts > 0);
+        assert_eq!(successor.measurements.retained_package_store_generations, 2);
+        assert_eq!(
+            successor.measurements.retained_package_catalog_generations,
+            1
+        );
+        assert!(successor.measurements.active_package_body_entries > retained_stats.entries);
+        assert_eq!(
+            successor.measurements.retained_package_body_logical_entries,
+            retained_stats.entries + successor.measurements.active_package_body_entries
+        );
+        assert_eq!(
+            successor.measurements.retained_package_body_unique_entries,
+            successor.measurements.active_package_body_entries
+        );
+        assert!(
+            successor
+                .measurements
+                .retained_package_body_unique_approximate_source_bytes
+                < successor
+                    .measurements
+                    .retained_package_body_logical_approximate_source_bytes
+        );
+        let active = engine.compilation.active.as_ref().unwrap();
+        let previous = engine.compilation.previous.as_ref().unwrap();
+        assert!(!Rc::ptr_eq(
+            &retained,
+            active.package_store.as_ref().unwrap()
+        ));
+        assert!(Rc::ptr_eq(
+            &retained,
+            previous.package_store.as_ref().unwrap()
+        ));
+        assert_eq!(retained.store.cache_stats(), retained_stats);
+
+        // A clean compiler over the same exact carrier must produce the full
+        // semantic outcome and render set byte-for-byte. This exercises the
+        // warm mixed-hit/miss path rather than merely comparing helper APIs on
+        // an empty cache.
+        let fresh_environment =
+            crate::PackageEnvironment::new([compressed_two_resource_core()]).unwrap();
+        let fresh_view = fresh_environment
+            .scoped(&resolution.labels, "fresh parity")
+            .unwrap();
+        let mut fresh_engine = SiteEngine::default();
+        let fresh = fresh_engine
+            .compile_project(successor_inputs, fresh_view, resolution)
+            .unwrap();
+        assert_compilation_outcome_eq(&successor.outcome, &fresh.outcome);
+        assert_eq!(
+            engine.compiled_resources(),
+            fresh_engine.compiled_resources()
+        );
+    }
+
+    #[test]
+    fn failed_store_candidate_preserves_two_successes_and_third_success_evicts_oldest() {
+        let core = "hl7.fhir.r4.core#4.0.1";
+        let resolution = resolved_for(FSH_ONLY_CONFIG, &[core], &[core]);
+        let mut engine = SiteEngine::default();
+        engine
+            .compile_project(
+                fsh_only_inputs(FSH_ONLY_CONFIG, "a"),
+                package_view_for(&resolution, "carrier-a"),
+                resolution.clone(),
+            )
+            .unwrap();
+        let a_key = engine
+            .compilation
+            .active
+            .as_ref()
+            .unwrap()
+            .package_store
+            .as_ref()
+            .unwrap()
+            .key
+            .clone();
+        engine
+            .compile_project(
+                fsh_only_inputs(FSH_ONLY_CONFIG, "b"),
+                package_view_for(&resolution, "carrier-b"),
+                resolution.clone(),
+            )
+            .unwrap();
+        let b_key = engine
+            .compilation
+            .active
+            .as_ref()
+            .unwrap()
+            .package_store
+            .as_ref()
+            .unwrap()
+            .key
+            .clone();
+        assert_eq!(engine.compilation.retained_package_store_generations(), 2);
+
+        let invalid_config = "id: failed\ncanonical: []\nfhirVersion: 4.0.1\nFSHOnly: true\n";
+        let invalid_resolution = resolved_for(invalid_config, &[core], &[core]);
+        assert!(engine
+            .compile_project(
+                fsh_only_inputs(invalid_config, "failed"),
+                package_view_for(&invalid_resolution, "carrier-c"),
+                invalid_resolution,
+            )
+            .is_err());
+        assert_eq!(engine.compilation.retained_package_store_generations(), 2);
+        assert_eq!(
+            engine
+                .compilation
+                .active
+                .as_ref()
+                .unwrap()
+                .package_store
+                .as_ref()
+                .unwrap()
+                .key,
+            b_key
+        );
+        assert_eq!(
+            engine
+                .compilation
+                .previous
+                .as_ref()
+                .unwrap()
+                .package_store
+                .as_ref()
+                .unwrap()
+                .key,
+            a_key
+        );
+
+        let third = engine
+            .compile_project(
+                fsh_only_inputs(FSH_ONLY_CONFIG, "c"),
+                package_view_for(&resolution, "carrier-c"),
+                resolution,
+            )
+            .unwrap();
+        assert_eq!(third.measurements.retained_package_store_generations, 2);
+        assert_eq!(
+            engine
+                .compilation
+                .previous
+                .as_ref()
+                .unwrap()
+                .package_store
+                .as_ref()
+                .unwrap()
+                .key,
+            b_key
+        );
+        assert!(engine.compilation.retained_package_store(&a_key).is_none());
+    }
+
+    #[test]
     fn atomic_prepare_preserves_typed_compilation_on_generator_failure() {
         let mut engine = reuse_engine();
         let core_label = "hl7.fhir.r4.core#4.0.1";
@@ -977,6 +1941,15 @@ mod tests {
         )
         .unwrap();
         let environment = crate::PackageEnvironment::new([package]).unwrap();
+        let exact_view = environment.scoped(&resolved().labels, "test").unwrap();
+        engine
+            .compilation
+            .active
+            .as_mut()
+            .unwrap()
+            .key
+            .package_store =
+            compiler_package_store_key(CONFIG, &resolved(), &exact_view, "test").unwrap();
 
         let error = engine
             .prepare_values(
@@ -1133,7 +2106,9 @@ mod tests {
                 .into_iter()
                 .collect(),
         };
-        let a_key = semantic_compilation_key(&a_semantics, &resolved(), "test").unwrap();
+        let package_store = retained_package_store_for_test(CONFIG, &resolved());
+        let a_key = semantic_compilation_key(&a_semantics, &resolved(), &package_store.key, "test")
+            .unwrap();
         assert!(engine.compilation.restore(&a_key).is_none());
         assert_eq!(engine.compilation.cache_hits, 0);
 
@@ -1146,7 +2121,8 @@ mod tests {
                 .into_iter()
                 .collect(),
         };
-        let b_key = semantic_compilation_key(&b_semantics, &resolved(), "test").unwrap();
+        let b_key = semantic_compilation_key(&b_semantics, &resolved(), &package_store.key, "test")
+            .unwrap();
         let outcome = engine.compilation.restore(&b_key).unwrap();
         assert_eq!(
             outcome.resources[0].filename,

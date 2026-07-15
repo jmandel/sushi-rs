@@ -9,6 +9,9 @@ description = "Publisher projection: synthesize stock-template page shells, data
 [lib]
 name = "site_producer"
 
+[features]
+dependency-observation = []
+
 [dependencies]
 serde_json = { workspace = true }
 anyhow = { workspace = true }

@@ -216,30 +216,34 @@ rust_sushi packages prepare --cache <cache> --out <dir> <id#ver>...
 ```
 
 Both commands emit `<id>#<ver>.fpp` files and
-`prepared-package-manifest.json`. `Session.mountPrepared(bytes, expectedKey)`
-consumes one artifact. Hosts must also verify the manifest's artifact SHA-256
-before calling the engine; the engine independently verifies the
-prepared-package key and canonical directory metadata, and derives the exact
-carrier digest retained by SiteBuild.
+`prepared-package-manifest.json`. Hosts verify the manifest's artifact SHA-256,
+then pass each artifact through the indexed `beginPreparedMount` /
+`stagePreparedMount` / `commitPreparedMount` transaction. The engine
+independently verifies the prepared-package key, expected label, resolver slot,
+and canonical directory metadata, and derives the exact carrier digest retained
+by SiteBuild.
 
 For a warm multi-package start, call `Session.beginPreparedMount(count)`, then
-read/authenticate and `stagePreparedMount(bytes, cacheKey)` one artifact at a
-time. `commitPreparedMount()` installs the complete set only after every artifact
-and conflict validates; `abortPreparedMount()` drops staged state on failure.
+read/authenticate and `stagePreparedMount(resolverIndex, bytes, cacheKey,
+expectedLabel)` as artifacts arrive. Arrival order is irrelevant: commit
+reconstructs the exact resolver order. The expected label is checked before a
+slot is occupied, so a rejected carrier leaves that slot retryable.
+`commitPreparedMount()` installs the complete set only after every artifact and
+conflict validates; `abortPreparedMount()` drops staged state on failure.
 This bounds JavaScript peak memory by the largest artifact instead of allocating
 a closure-sized concatenation. Results report `decodeValidateMs`, `mountMs`,
 artifact bytes, requested packages, and newly added/total package counts,
 compressed retained/declared raw bytes, lazy-inflate counters, `indexedMembers`,
 and `memberBodyCopies` (zero at mount).
 
-For a cold registry bundle, `Session.prepareAndMount(legacyBundlesJson)` performs
-base64 decode, normalization, derived-index construction, binary encoding, and
-mounting in one transaction. Its metadata envelope identifies every artifact
-and reports `decodeValidatePrepareMs` separately from `mountMs`; the host then
-calls `takePrepared(label)` once per package to receive a direct `Uint8Array` for
-OPFS. PreparedPackage v1/v2 pointers are rejected as misses and rebuilt from the
-authenticated tgz/registry source; the browser never expands v1 merely to
-migrate it.
+For a cold registry package, `Session.prepareTgzArtifact(label, bytes)` performs
+bounded TGZ parsing, normalization, derived-index construction, and binary
+encoding without mounting. The host calls `takePrepared(label)` once to receive
+the direct `.fpp` `Uint8Array` for OPFS and the same indexed transaction stages
+it immediately. `prepareArtifacts(rawBundlesJson)` is retained only for explicit
+raw local-bundle compatibility. PreparedPackage v1/v2 pointers are rejected as
+misses and rebuilt from the authenticated source; the browser never expands an
+old pointer merely to migrate it.
 
 `BundleSource` stores each mounted package in an immutable `Rc` layer keyed by
 package label. Transactional mounts shallow-clone that small label map; they do

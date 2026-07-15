@@ -145,8 +145,13 @@ impl PackageEnvironment {
             materials.insert(label, material);
         }
         let root = source.cache_root().to_path_buf();
+        let carrier_identities = materials
+            .iter()
+            .map(|(label, material)| (label.clone(), material.content().clone()))
+            .collect();
         Ok(Self {
-            packages: PackageView::new(Rc::new(source), root, None),
+            packages: PackageView::new(Rc::new(source), root, None)
+                .with_carrier_identities(carrier_identities),
             mounted_labels,
             materials,
         })
@@ -278,9 +283,86 @@ struct PrepareMeasurements {
 }
 
 impl PrepareMeasurements {
-    fn event(&self, build_id: &str, compile_ms: f64) -> crate::BuildEvent {
+    fn event(
+        &self,
+        build_id: &str,
+        compile_ms: f64,
+        compilation: &crate::compilation::CompilationMeasurements,
+    ) -> crate::BuildEvent {
         let metrics = BTreeMap::from([
             ("compileProjectMs".into(), compile_ms),
+            (
+                "semanticCompilationCacheHit".into(),
+                f64::from(compilation.semantic_compilation_cache_hit),
+            ),
+            (
+                "compilerPackageStoreCacheHit".into(),
+                f64::from(compilation.package_store_cache_hit),
+            ),
+            (
+                "compilerPackageStoreUsed".into(),
+                f64::from(compilation.package_store_used),
+            ),
+            (
+                "compilerPackageStoreKeyMs".into(),
+                compilation.package_store_key_ms,
+            ),
+            (
+                "compilerPackageStoreBuildMs".into(),
+                compilation.package_store_build_ms,
+            ),
+            (
+                "compilerPackageStoreRetainedGenerations".into(),
+                compilation.retained_package_store_generations as f64,
+            ),
+            (
+                "compilerPackageBodyCacheHits".into(),
+                compilation.package_body_cache_hits as f64,
+            ),
+            (
+                "compilerPackageBodyCacheMisses".into(),
+                compilation.package_body_cache_misses as f64,
+            ),
+            (
+                "compilerPackageBodyCacheInserts".into(),
+                compilation.package_body_cache_inserts as f64,
+            ),
+            (
+                "compilerPackageBodyCacheEvictions".into(),
+                compilation.package_body_cache_evictions as f64,
+            ),
+            (
+                "compilerPackageBodyActiveEntries".into(),
+                compilation.active_package_body_entries as f64,
+            ),
+            (
+                "compilerPackageBodyActiveApproxSourceBytes".into(),
+                compilation.active_package_body_approximate_source_bytes as f64,
+            ),
+            (
+                "compilerPackageCatalogRetainedGenerations".into(),
+                compilation.retained_package_catalog_generations as f64,
+            ),
+            (
+                "compilerPackageCatalogRetainedEntries".into(),
+                compilation.retained_package_catalog_entries as f64,
+            ),
+            (
+                "compilerPackageBodyRetainedLogicalEntries".into(),
+                compilation.retained_package_body_logical_entries as f64,
+            ),
+            (
+                "compilerPackageBodyRetainedLogicalApproxSourceBytes".into(),
+                compilation.retained_package_body_logical_approximate_source_bytes as f64,
+            ),
+            (
+                "compilerPackageBodyRetainedUniqueEntries".into(),
+                compilation.retained_package_body_unique_entries as f64,
+            ),
+            (
+                "compilerPackageBodyRetainedUniqueApproxSourceBytes".into(),
+                compilation.retained_package_body_unique_approximate_source_bytes as f64,
+            ),
             ("rustPrepareTotalMs".into(), self.total_ms),
             ("projectRevisionMs".into(), self.project_revision_ms),
             ("packageLockMs".into(), self.package_lock_ms),
@@ -319,6 +401,9 @@ impl PrepareMeasurements {
         crate::BuildEvent {
             operation: Some(crate::BuildOperation::Prepare),
             build_id: Some(build_id.into()),
+            phase: Some("site.prepare".into()),
+            source: Some(crate::BuildEventSource::Rust),
+            start_ms: None,
             stage: crate::BuildStage::SiteBuild,
             label: Some(build_id.into()),
             bytes: None,
@@ -353,7 +438,7 @@ struct PublisherRenderSemanticsCacheEntry {
 #[derive(Clone)]
 struct PreparedGuideCacheEntry {
     key: site_build::Sha256Digest,
-    guide: site_build::PreparedGuide,
+    guide: Rc<site_build::PreparedGuide>,
 }
 
 struct SnapshotCompletedLocalCacheEntry {
@@ -606,7 +691,7 @@ impl SiteEngine {
                 )
             })?;
         let compile_started = self.timer();
-        let compilation = self
+        let transition = self
             .compile_project(inputs, packages, resolved)
             .map_err(|message| {
                 crate::BuildError::new(
@@ -615,8 +700,11 @@ impl SiteEngine {
                     crate::BuildErrorCode::CompileFailed,
                     message,
                 )
-            })?
-            .outcome;
+            })?;
+        let crate::compilation::CompilationTransition {
+            outcome: compilation,
+            measurements: compilation_measurements,
+        } = transition;
         let compile_ms = elapsed_ms(compile_started);
         let site = match self.prepare(spec, environment) {
             Ok(site) => site,
@@ -630,7 +718,10 @@ impl SiteEngine {
                 .with_successful_compilation(compilation));
             }
         };
-        let events = vec![site.measurements.event(&site.build_id, compile_ms)];
+        let events =
+            vec![site
+                .measurements
+                .event(&site.build_id, compile_ms, &compilation_measurements)];
         Ok(PreparedProjectResult {
             compilation,
             site,
@@ -2423,6 +2514,58 @@ mod tests {
     use content_store::ContentStore;
 
     #[test]
+    fn prepare_event_reports_compiler_package_store_reuse_metrics() {
+        let compilation = crate::compilation::CompilationMeasurements {
+            semantic_compilation_cache_hit: false,
+            package_store_cache_hit: true,
+            package_store_used: true,
+            package_store_key_ms: 1.25,
+            package_store_build_ms: 0.0,
+            retained_package_store_generations: 2,
+            package_body_cache_hits: 7,
+            package_body_cache_misses: 3,
+            package_body_cache_inserts: 2,
+            package_body_cache_evictions: 1,
+            active_package_body_entries: 8,
+            active_package_body_approximate_source_bytes: 4096,
+            retained_package_catalog_generations: 1,
+            retained_package_catalog_entries: 200,
+            retained_package_body_logical_entries: 12,
+            retained_package_body_logical_approximate_source_bytes: 6144,
+            retained_package_body_unique_entries: 9,
+            retained_package_body_unique_approximate_source_bytes: 4608,
+        };
+        let event = PrepareMeasurements::default().event("build", 12.0, &compilation);
+        let metrics = event.metrics.expect("prepare metrics");
+        assert_eq!(metrics["compilerPackageStoreCacheHit"], 1.0);
+        assert_eq!(metrics["compilerPackageStoreUsed"], 1.0);
+        assert_eq!(metrics["compilerPackageStoreKeyMs"], 1.25);
+        assert_eq!(metrics["compilerPackageStoreBuildMs"], 0.0);
+        assert_eq!(metrics["compilerPackageStoreRetainedGenerations"], 2.0);
+        assert_eq!(metrics["compilerPackageBodyCacheHits"], 7.0);
+        assert_eq!(metrics["compilerPackageBodyCacheMisses"], 3.0);
+        assert_eq!(metrics["compilerPackageBodyCacheInserts"], 2.0);
+        assert_eq!(metrics["compilerPackageBodyCacheEvictions"], 1.0);
+        assert_eq!(metrics["compilerPackageBodyActiveEntries"], 8.0);
+        assert_eq!(
+            metrics["compilerPackageBodyActiveApproxSourceBytes"],
+            4096.0
+        );
+        assert_eq!(metrics["compilerPackageCatalogRetainedGenerations"], 1.0);
+        assert_eq!(metrics["compilerPackageCatalogRetainedEntries"], 200.0);
+        assert_eq!(metrics["compilerPackageBodyRetainedLogicalEntries"], 12.0);
+        assert_eq!(
+            metrics["compilerPackageBodyRetainedLogicalApproxSourceBytes"],
+            6144.0
+        );
+        assert_eq!(metrics["compilerPackageBodyRetainedUniqueEntries"], 9.0);
+        assert_eq!(
+            metrics["compilerPackageBodyRetainedUniqueApproxSourceBytes"],
+            4608.0
+        );
+    }
+
+    #[test]
     fn prepared_package_carrier_closes_without_inflating_members() {
         let label = "demo.package#1.0.0";
         let semantic_files = BTreeMap::from([
@@ -3208,6 +3351,16 @@ mod tests {
                 .unwrap();
             live_pages.insert(path.clone(), (output, bytes));
         }
+        #[cfg(feature = "dependency-observation")]
+        for path in &page_paths {
+            let path = site_build::OutputPath::parse(path.clone()).unwrap();
+            assert!(matches!(
+                engine
+                    .dependency_decision_for_page(&prepared.build_id, &path)
+                    .unwrap(),
+                ::dependency_observation::RebuildDecision::FullBuild { .. }
+            ));
+        }
         for path in page_paths.iter().rev() {
             let output = restored.render(&restored_handle, path).unwrap();
             let bytes = restored
@@ -3447,7 +3600,7 @@ impl SiteEngine {
         operation: &str,
         cache_key: site_build::Sha256Digest,
         snapshot_cache_key: site_build::Sha256Digest,
-    ) -> Result<site_build::PreparedGuide, String> {
+    ) -> Result<Rc<site_build::PreparedGuide>, String> {
         if self.compiled_resources().is_empty() {
             return Err(format!(
                 "{operation}: no compiled revision; call compileProject first"
@@ -3522,7 +3675,7 @@ impl SiteEngine {
             .as_ref()
             .expect("snapshot-completed local cache was hit or installed");
         let project = self.project_revision().expect("compiled project exists");
-        let guide = assemble_prepared_model(
+        let guide = Rc::new(assemble_prepared_model(
             operation,
             &snapshot.generated,
             &snapshot.primary_implementation_guide,
@@ -3532,7 +3685,7 @@ impl SiteEngine {
             &input.liquid_asset_dirs,
             input.branch.clone(),
             input.revision.clone(),
-        )?;
+        )?);
         self.preparation.prepared_guide = Some(PreparedGuideCacheEntry {
             key: cache_key,
             guide: guide.clone(),
@@ -4580,6 +4733,21 @@ impl SiteEngine {
             recipe_sha256: site_build::sha256_canonical(&(template, &parameters))
                 .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
         };
+        #[cfg(feature = "dependency-observation")]
+        let dependency_observation = match self.dependency_compilation() {
+            Some((compilation, package_lookups)) => {
+                crate::dependency_observation::BuildDependencyObservation::capture(
+                    compilation,
+                    package_lookups,
+                    &prepared,
+                    &build,
+                    &catalog,
+                )
+            }
+            None => crate::dependency_observation::BuildDependencyObservation::unavailable(
+                "successful compilation has no dependency observation",
+            ),
+        };
         let handle = build.site_build().build_id().to_string();
         let installed = self.install_publisher(PublisherRuntime {
             preparation_key: Some(preparation_key),
@@ -4591,6 +4759,8 @@ impl SiteEngine {
             objects,
             renderer,
             output_options: parameters,
+            #[cfg(feature = "dependency-observation")]
+            dependency_observation,
         });
         debug_assert_eq!(installed, handle);
         metrics.catalog_ms = elapsed_ms(catalog_total_started);
@@ -4832,6 +5002,9 @@ impl SiteEngine {
                 .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
         };
         let handle = build.site_build().build_id().to_string();
+        #[cfg(feature = "dependency-observation")]
+        let dependency_observation =
+            crate::dependency_observation::BuildDependencyObservation::restored(&build, &catalog);
         let installed = self.install_publisher(PublisherRuntime {
             preparation_key: None,
             recipe_assets,
@@ -4842,6 +5015,8 @@ impl SiteEngine {
             objects,
             renderer,
             output_options: parameters,
+            #[cfg(feature = "dependency-observation")]
+            dependency_observation,
         });
         debug_assert_eq!(installed, handle);
         Ok(handle)
