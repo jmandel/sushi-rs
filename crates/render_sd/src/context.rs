@@ -21,6 +21,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use serde_json::Value;
 
@@ -116,6 +117,49 @@ struct PkgEntry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+struct PackageCatalogSelection {
+    packages_dir: PathBuf,
+    dependencies: Vec<(String, String)>,
+    core_package: String,
+}
+
+/// Immutable package metadata used by an [`IgContext`].
+///
+/// The catalog contains only authenticated package-derived indexes and paths;
+/// it never contains the IG's own resources, page/template bytes, terminology
+/// cache, or either of `IgContext`'s lazy lookup/body caches. Callers may retain
+/// it only while their package-carrier identity is exact. This type also binds
+/// the primary IG's ordered dependency selection and target core, so a caller
+/// cannot accidentally reuse it after those semantic inputs change.
+pub struct IgContextPackageCatalog {
+    selection: PackageCatalogSelection,
+    packages: Rc<Vec<PkgEntry>>,
+    resource_entries: usize,
+    retained_approx_bytes: usize,
+}
+
+impl IgContextPackageCatalog {
+    /// Number of package entries in the immutable resolution catalog.
+    pub fn len(&self) -> usize {
+        self.packages.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.packages.is_empty()
+    }
+
+    /// Canonical resource/spec-path entries retained by the package index.
+    pub fn resource_entries(&self) -> usize {
+        self.resource_entries
+    }
+
+    /// Deterministic logical admission weight, not allocator/process memory.
+    pub fn retained_approx_bytes(&self) -> usize {
+        self.retained_approx_bytes
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResourceIdentity {
     pub resource_type: String,
     pub id: String,
@@ -124,7 +168,7 @@ pub struct ResourceIdentity {
 pub struct IgContext {
     /// own IG resources: canonical -> Resolved (local page).
     own: HashMap<String, Resolved>,
-    packages: Vec<PkgEntry>,
+    packages: Rc<Vec<PkgEntry>>,
     /// lazy cache of dependency lookups.
     cache: RefCell<HashMap<String, Option<Resolved>>>,
     /// lazy cache of full-resource loads.
@@ -146,6 +190,11 @@ pub struct IgContext {
     own_package_id: Option<String>,
     /// Every own resource file (rtype, id, path), incl. url-less examples.
     own_files: Vec<(String, String, PathBuf)>,
+    /// Current own-resource values keyed by their semantic path. Session
+    /// callers supply these directly from PreparedGuide so rendering never
+    /// serializes them merely to parse them back. Native filesystem callers
+    /// populate the same map during their one canonical directory scan.
+    own_values: HashMap<PathBuf, Rc<Value>>,
     /// The read seam (FsTree natively; MemTree in the wasm session). All lazy
     /// resource/package/txcache reads go through this.
     tree: crate::tree::Tree,
@@ -222,6 +271,75 @@ impl IgContext {
         txcache_dir: Option<&Path>,
         primary_implementation_guide: Option<&ResourceIdentity>,
     ) -> IgContext {
+        Self::load_with_tree_and_primary_reusing_package_catalog(
+            tree,
+            own_dir,
+            packages_dir,
+            txcache_dir,
+            primary_implementation_guide,
+            None,
+        )
+        .0
+    }
+
+    /// Load a fresh IG-owned context while optionally sharing the immutable
+    /// package catalog from an earlier successful generation.
+    ///
+    /// Own resources, terminology externals, the tree, and both lazy caches are
+    /// always reconstructed. A catalog is accepted only when its package root,
+    /// ordered primary-IG dependencies, and selected core are identical. The
+    /// caller is additionally responsible for retaining a catalog only under
+    /// an exact authenticated package-carrier identity.
+    pub fn load_with_tree_and_primary_reusing_package_catalog(
+        tree: crate::tree::Tree,
+        own_dir: &Path,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+        primary_implementation_guide: Option<&ResourceIdentity>,
+        reusable_package_catalog: Option<Rc<IgContextPackageCatalog>>,
+    ) -> (IgContext, Rc<IgContextPackageCatalog>, bool) {
+        Self::load_with_tree_and_primary_reusing_package_catalog_inner(
+            tree,
+            own_dir,
+            None,
+            packages_dir,
+            txcache_dir,
+            primary_implementation_guide,
+            reusable_package_catalog,
+        )
+    }
+
+    /// Session-oriented loader that consumes the already parsed current
+    /// PreparedGuide resources. All selection/indexing behavior is shared with
+    /// the filesystem loader; only the redundant JSON text round-trip is gone.
+    pub fn load_with_preparsed_own_and_primary_reusing_package_catalog(
+        tree: crate::tree::Tree,
+        own_resources: Vec<(PathBuf, Value)>,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+        primary_implementation_guide: Option<&ResourceIdentity>,
+        reusable_package_catalog: Option<Rc<IgContextPackageCatalog>>,
+    ) -> (IgContext, Rc<IgContextPackageCatalog>, bool) {
+        Self::load_with_tree_and_primary_reusing_package_catalog_inner(
+            tree,
+            Path::new("/__preparsed_own__"),
+            Some(own_resources),
+            packages_dir,
+            txcache_dir,
+            primary_implementation_guide,
+            reusable_package_catalog,
+        )
+    }
+
+    fn load_with_tree_and_primary_reusing_package_catalog_inner(
+        tree: crate::tree::Tree,
+        own_dir: &Path,
+        preparsed_own: Option<Vec<(PathBuf, Value)>>,
+        packages_dir: &Path,
+        txcache_dir: Option<&Path>,
+        primary_implementation_guide: Option<&ResourceIdentity>,
+        reusable_package_catalog: Option<Rc<IgContextPackageCatalog>>,
+    ) -> (IgContext, Rc<IgContextPackageCatalog>, bool) {
         let mut own = HashMap::new();
         // Every resource-shaped own file (incl. url-less example instances), for
         // the whole-IG scans (uses/references/aggregates). (rtype, id, path).
@@ -231,67 +349,88 @@ impl IgContext {
         let mut own_canonical: Option<String> = None;
         let mut own_package_id: Option<String> = None;
         let mut ig_candidates: Vec<(String, Value)> = Vec::new();
-        if let Some(rd) = tree.read_dir(own_dir) {
-            for (fname, _is_file) in rd {
-                let p = own_dir.join(&fname);
-                if !fname.ends_with(".json") {
-                    continue;
-                }
-                // Only resource-shaped files: Type-id.json
-                let Some(text) = tree.read(&p) else { continue };
-                let Ok(v) = serde_json::from_str::<Value>(&text) else {
-                    continue;
-                };
-                let rtype = v.get("resourceType").and_then(|x| x.as_str()).unwrap_or("");
-                if rtype.is_empty() {
-                    continue;
-                }
-                // FetchedResource id: the resource's own `id`, else the id from
-                // the `{Type}-{id}.json` filename (the publisher keys the
-                // FetchedResource off the IG reference, not the body — a rare
-                // stub example may omit `id`, e.g. us-core DocumentReference-
-                // discharge-summary).
-                let id_owned: String = match v.get("id").and_then(|x| x.as_str()) {
-                    Some(i) if !i.is_empty() => i.to_string(),
-                    _ => fname
-                        .strip_suffix(".json")
-                        .and_then(|s| s.strip_prefix(&format!("{}-", rtype)))
-                        .unwrap_or("")
-                        .to_string(),
-                };
-                let id: &str = &id_owned;
-                // Record every own resource file (incl. url-less examples).
-                // Once the explicit primary guide is known below, only that one
-                // is removed; additional IG instances remain ordinary resources.
-                if !id.is_empty() {
-                    own_files.push((rtype.to_string(), id.to_string(), p.clone()));
-                }
-                if rtype == "ImplementationGuide" {
-                    ig_candidates.push((id_owned.clone(), v.clone()));
-                }
-                let Some(url) = v.get("url").and_then(|x| x.as_str()) else {
-                    continue;
-                };
-                own.insert(
-                    url.to_string(),
-                    Resolved {
-                        web_path: format!("{}-{}.html", rtype, id),
-                        name: v.get("name").and_then(|x| x.as_str()).map(String::from),
-                        title: v.get("title").and_then(|x| x.as_str()).map(String::from),
-                        rtype: rtype.to_string(),
-                        version: String::new(),
-                        kind: v.get("kind").and_then(|x| x.as_str()).map(String::from),
-                        derivation: v
-                            .get("derivation")
-                            .and_then(|x| x.as_str())
-                            .map(String::from),
-                        file: Some(p.clone()),
-                        external: false,
-                        pkg: None,
-                        tx_server: None,
-                    },
-                );
+        let mut own_values = HashMap::new();
+        let resources = match preparsed_own {
+            Some(resources) => resources
+                .into_iter()
+                .filter_map(|(path, value)| {
+                    let filename = path.file_name()?.to_str()?.to_string();
+                    Some((filename, path, value))
+                })
+                .collect::<Vec<_>>(),
+            None => tree
+                .read_dir(own_dir)
+                .into_iter()
+                .flatten()
+                .filter_map(|(filename, _is_file)| {
+                    if !filename.ends_with(".json") {
+                        return None;
+                    }
+                    let path = own_dir.join(&filename);
+                    let text = tree.read(&path)?;
+                    let value = serde_json::from_str::<Value>(&text).ok()?;
+                    Some((filename, path, value))
+                })
+                .collect(),
+        };
+        for (fname, p, v) in resources {
+            let value = Rc::new(v);
+            let rtype = value
+                .get("resourceType")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            if rtype.is_empty() {
+                continue;
             }
+            // FetchedResource id: the resource's own `id`, else the id from
+            // the `{Type}-{id}.json` filename (the publisher keys the
+            // FetchedResource off the IG reference, not the body — a rare
+            // stub example may omit `id`, e.g. us-core DocumentReference-
+            // discharge-summary).
+            let id_owned: String = match value.get("id").and_then(|x| x.as_str()) {
+                Some(i) if !i.is_empty() => i.to_string(),
+                _ => fname
+                    .strip_suffix(".json")
+                    .and_then(|s| s.strip_prefix(&format!("{}-", rtype)))
+                    .unwrap_or("")
+                    .to_string(),
+            };
+            let id: &str = &id_owned;
+            // Record every own resource file (incl. url-less examples).
+            // Once the explicit primary guide is known below, only that one
+            // is removed; additional IG instances remain ordinary resources.
+            if !id.is_empty() {
+                own_files.push((rtype.to_string(), id.to_string(), p.clone()));
+            }
+            if rtype == "ImplementationGuide" {
+                ig_candidates.push((id_owned.clone(), value.as_ref().clone()));
+            }
+            own_values.insert(p.clone(), value.clone());
+            let Some(url) = value.get("url").and_then(|x| x.as_str()) else {
+                continue;
+            };
+            own.insert(
+                url.to_string(),
+                Resolved {
+                    web_path: format!("{}-{}.html", rtype, id),
+                    name: value.get("name").and_then(|x| x.as_str()).map(String::from),
+                    title: value
+                        .get("title")
+                        .and_then(|x| x.as_str())
+                        .map(String::from),
+                    rtype: rtype.to_string(),
+                    version: String::new(),
+                    kind: value.get("kind").and_then(|x| x.as_str()).map(String::from),
+                    derivation: value
+                        .get("derivation")
+                        .and_then(|x| x.as_str())
+                        .map(String::from),
+                    file: Some(p.clone()),
+                    external: false,
+                    pkg: None,
+                    tx_server: None,
+                },
+            );
         }
 
         let selected_ig = match primary_implementation_guide {
@@ -336,90 +475,16 @@ impl IgContext {
             }
         }
 
-        // Transitive dependency closure (breadth-first over package.json deps).
-        let mut to_visit = deps.clone();
-        let mut seen: Vec<(String, String)> = Vec::new();
-        while let Some((pid, ver)) = to_visit.pop() {
-            if seen.iter().any(|(p, v)| *p == pid && *v == ver) {
-                continue;
-            }
-            // Examples packages are never resolution sources (SpecMapManager
-            // SpecialPackageType.Examples; TypeManager excludes examples-
-            // sourced definitions).
-            if pid.ends_with(".examples") {
-                continue;
-            }
-            // The us-core "vNNN" facade packages are empty wrappers the
-            // publisher resolves to the REAL us-core package of that version
-            // (SimpleWorkerContext.java:695; SpecMapManager FACADE).
-            if pid.starts_with("hl7.fhir.us.core.v") {
-                to_visit.push(("hl7.fhir.us.core".to_string(), ver.clone()));
-                continue;
-            }
-            seen.push((pid.clone(), ver.clone()));
-            let pdir = packages_dir
-                .join(format!("{}#{}", pid, ver))
-                .join("package");
-            let pj = pdir.join("package.json");
-            if let Some(text) = tree.read(&pj) {
-                if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                    if let Some(d) = v.get("dependencies").and_then(|x| x.as_object()) {
-                        for (dp, dv) in d {
-                            if let Some(dvs) = dv.as_str() {
-                                to_visit.push((dp.to_string(), dvs.to_string()));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // The core package is always loaded (hl7.fhir.r4.core etc. comes in via
-        // the dependency closure of every IG package; if absent, scan for it).
-        if !seen.iter().any(|(p, _)| p.contains(".core")) {
-            if let Some(rd) = tree.read_dir(packages_dir) {
-                for (n, _isf) in rd {
-                    if n.starts_with("hl7.fhir.r4.core#")
-                        || n.starts_with("hl7.fhir.r4b.core#")
-                        || n.starts_with("hl7.fhir.r5.core#")
-                    {
-                        let parts: Vec<&str> = n.splitn(2, '#').collect();
-                        seen.push((parts[0].to_string(), parts[1].to_string()));
-                    }
-                }
-            }
-        }
-
-        // Core packages: only the one matching the IG's fhirVersion joins the
-        // resolution pool (the publisher loads other-version cores for tooling
-        // only; golden evidence: an R4 IG's base-type links are R4, never R5).
-        let want_core = match ig_fhir_version.as_deref() {
-            Some(v) if v.starts_with("4.0") => "hl7.fhir.r4.core",
-            Some(v) if v.starts_with("4.3") => "hl7.fhir.r4b.core",
-            Some(v) if v.starts_with("5.0") => "hl7.fhir.r5.core",
-            Some(v) if v.starts_with("3.0") => "hl7.fhir.r3.core",
-            _ => "hl7.fhir.r4.core",
+        let selection = PackageCatalogSelection {
+            packages_dir: packages_dir.to_path_buf(),
+            dependencies: deps,
+            core_package: core_package_for_fhir_version(ig_fhir_version.as_deref()).to_string(),
         };
-        seen.retain(|(pid, _)| {
-            !(pid.starts_with("hl7.fhir.r") && pid.ends_with(".core")) || pid == want_core
-        });
-
-        let mut packages = Vec::new();
-        for (pid, ver) in &seen {
-            let pdir = packages_dir
-                .join(format!("{}#{}", pid, ver))
-                .join("package");
-            // Existence via the TREE, not std::fs — bundle-served packages have
-            // no filesystem presence (the session-equivalence test caught the
-            // original `pdir.exists()` skipping every dependency in wasm).
-            if tree.read_dir(&pdir).is_none() {
-                continue;
-            }
-            let Some(mut entry) = load_package(&*tree, &pdir, ver) else {
-                continue;
+        let (package_catalog, package_catalog_hit) =
+            match reusable_package_catalog.filter(|catalog| catalog.selection == selection) {
+                Some(catalog) => (catalog, true),
+                None => (Rc::new(load_package_catalog(&*tree, selection)), false),
             };
-            entry.is_master = pid == want_core;
-            packages.push(entry);
-        }
 
         let mut tx_externals = HashMap::new();
         if let Some(txd) = txcache_dir {
@@ -463,10 +528,10 @@ impl IgContext {
             }
         }
 
-        IgContext {
+        let context = IgContext {
             tree,
             own,
-            packages,
+            packages: package_catalog.packages.clone(),
             cache: RefCell::new(HashMap::new()),
             res_cache: RefCell::new(HashMap::new()),
             tx_externals,
@@ -474,7 +539,9 @@ impl IgContext {
             own_canonical,
             own_package_id,
             own_files,
-        }
+            own_values,
+        };
+        (context, package_catalog, package_catalog_hit)
     }
 
     /// Resolve an external (tx-fetched) CodeSystem from `cs-externals.json`:
@@ -502,6 +569,21 @@ impl IgContext {
         &*self.tree
     }
 
+    /// Load one resolved resource body by its exact indexed path.
+    ///
+    /// Session-backed builds keep current own resources as parsed values rather
+    /// than materializing a second JSON filesystem.  Any renderer that follows
+    /// a [`Resolved::file`] must therefore use this seam instead of reading the
+    /// package/tree source directly. Package and native-filesystem paths still
+    /// fall through to the ordinary tree and are parsed on demand.
+    pub(crate) fn load_resource_path(&self, path: &Path) -> Option<Rc<Value>> {
+        if let Some(value) = self.own_values.get(path) {
+            return Some(value.clone());
+        }
+        let text = self.tree.read(path)?;
+        serde_json::from_str::<Value>(&text).ok().map(Rc::new)
+    }
+
     /// The IG's package id (ImplementationGuide.packageId), `xigReference`'s arg.
     pub fn own_package_id(&self) -> Option<&str> {
         self.own_package_id.as_deref()
@@ -514,6 +596,9 @@ impl IgContext {
     pub fn load_own_file(&self, refname: &str) -> Option<String> {
         for (rtype, id, path) in &self.own_files {
             if format!("{}-{}", rtype, id) == refname {
+                if let Some(value) = self.own_values.get(path) {
+                    return serde_json::to_string(value.as_ref()).ok();
+                }
                 return self.tree.read(path);
             }
         }
@@ -528,19 +613,21 @@ impl IgContext {
         let mut out: Vec<OwnResource> = Vec::new();
         for (rtype, id, f) in &self.own_files {
             let key = format!("__own__{}", f.display());
-            let cached = self.res_cache.borrow().get(&key).cloned();
-            let json = match cached {
-                Some(hit) => hit,
-                None => {
-                    let loaded = self
-                        .tree
-                        .read(f)
-                        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                        .map(std::rc::Rc::new);
-                    self.res_cache.borrow_mut().insert(key, loaded.clone());
-                    loaded
+            let json = self.own_values.get(f).cloned().or_else(|| {
+                let cached = self.res_cache.borrow().get(&key).cloned();
+                match cached {
+                    Some(hit) => hit,
+                    None => {
+                        let loaded = self
+                            .tree
+                            .read(f)
+                            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                            .map(Rc::new);
+                        self.res_cache.borrow_mut().insert(key, loaded.clone());
+                        loaded
+                    }
                 }
-            };
+            });
             let Some(json) = json else { continue };
             // present(): title || name || "".  igp.getLinkFor(r, true) =
             // `{Type}-{id}.html` for own IG resources.
@@ -589,7 +676,7 @@ impl IgContext {
         // duplicates never shadow hl7.terminology's).
         let is_tho = url.starts_with("http://terminology.hl7.org");
         if !is_tho {
-            for pkg in &self.packages {
+            for pkg in self.packages.iter() {
                 if !pkg.is_master {
                     continue;
                 }
@@ -653,7 +740,7 @@ impl IgContext {
 
         let mut best: Option<Resolved> = None;
         let mut best_pkg = String::new();
-        for pkg in &self.packages {
+        for pkg in self.packages.iter() {
             // THO urls: the core package's v2-/v3- duplicates are never
             // fetchable masters; skip them when any THO package has the url.
             if is_tho
@@ -812,7 +899,7 @@ impl IgContext {
         if self.own.contains_key(url) {
             versions.push("");
         }
-        for pkg in &self.packages {
+        for pkg in self.packages.iter() {
             if pkg.files.contains_key(url) && !versions.contains(&pkg.version.as_str()) {
                 versions.push(&pkg.version);
             }
@@ -839,10 +926,7 @@ impl IgContext {
                 continue;
             }
             let Some(f) = &r.file else { continue };
-            let Some(text) = self.tree.read(f) else {
-                continue;
-            };
-            let Ok(v) = serde_json::from_str::<Value>(&text) else {
+            let Some(v) = self.load_resource_path(f) else {
                 continue;
             };
             let base = v
@@ -865,10 +949,7 @@ impl IgContext {
         }
         let out = self.resolve(canonical).and_then(|r| {
             let f = r.file?;
-            let text = self.tree.read(&f)?;
-            serde_json::from_str::<Value>(&text)
-                .ok()
-                .map(std::rc::Rc::new)
+            self.load_resource_path(&f)
         });
         self.res_cache
             .borrow_mut()
@@ -995,6 +1076,146 @@ pub fn strip_version(url: &str) -> String {
         Some((u, _)) => u.to_string(),
         None => url.to_string(),
     }
+}
+
+fn core_package_for_fhir_version(version: Option<&str>) -> &'static str {
+    match version {
+        Some(value) if value.starts_with("4.0") => "hl7.fhir.r4.core",
+        Some(value) if value.starts_with("4.3") => "hl7.fhir.r4b.core",
+        Some(value) if value.starts_with("5.0") => "hl7.fhir.r5.core",
+        Some(value) if value.starts_with("3.0") => "hl7.fhir.r3.core",
+        _ => "hl7.fhir.r4.core",
+    }
+}
+
+fn load_package_catalog(
+    tree: &dyn crate::tree::TreeSource,
+    selection: PackageCatalogSelection,
+) -> IgContextPackageCatalog {
+    // Transitive dependency closure (breadth-first over package.json deps).
+    let mut to_visit = selection.dependencies.clone();
+    let mut seen: Vec<(String, String)> = Vec::new();
+    while let Some((pid, ver)) = to_visit.pop() {
+        if seen.iter().any(|(p, v)| *p == pid && *v == ver) {
+            continue;
+        }
+        // Examples packages are never resolution sources (SpecMapManager
+        // SpecialPackageType.Examples; TypeManager excludes examples-sourced
+        // definitions).
+        if pid.ends_with(".examples") {
+            continue;
+        }
+        // The us-core "vNNN" facade packages are empty wrappers the publisher
+        // resolves to the REAL us-core package of that version.
+        if pid.starts_with("hl7.fhir.us.core.v") {
+            to_visit.push(("hl7.fhir.us.core".to_string(), ver.clone()));
+            continue;
+        }
+        seen.push((pid.clone(), ver.clone()));
+        let pdir = selection
+            .packages_dir
+            .join(format!("{}#{}", pid, ver))
+            .join("package");
+        if let Some(text) = tree.read(&pdir.join("package.json")) {
+            if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                if let Some(dependencies) = value.get("dependencies").and_then(Value::as_object) {
+                    for (dependency, version) in dependencies {
+                        if let Some(version) = version.as_str() {
+                            to_visit.push((dependency.clone(), version.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The core package is always loaded. If it is absent from the dependency
+    // closure, discover the mounted coordinate exactly as the legacy loader did.
+    if !seen.iter().any(|(package, _)| package.contains(".core")) {
+        if let Some(entries) = tree.read_dir(&selection.packages_dir) {
+            for (name, _is_file) in entries {
+                if name.starts_with("hl7.fhir.r4.core#")
+                    || name.starts_with("hl7.fhir.r4b.core#")
+                    || name.starts_with("hl7.fhir.r5.core#")
+                {
+                    let parts: Vec<&str> = name.splitn(2, '#').collect();
+                    seen.push((parts[0].to_string(), parts[1].to_string()));
+                }
+            }
+        }
+    }
+
+    // Only the core matching the selected IG release joins resolution.
+    seen.retain(|(package, _)| {
+        !(package.starts_with("hl7.fhir.r") && package.ends_with(".core"))
+            || package == &selection.core_package
+    });
+
+    let mut packages = Vec::new();
+    for (package, version) in &seen {
+        let directory = selection
+            .packages_dir
+            .join(format!("{}#{}", package, version))
+            .join("package");
+        // Existence must go through TreeSource: browser packages have no host
+        // filesystem representation.
+        if tree.read_dir(&directory).is_none() {
+            continue;
+        }
+        let Some(mut entry) = load_package(tree, &directory, version) else {
+            continue;
+        };
+        entry.is_master = package == &selection.core_package;
+        packages.push(entry);
+    }
+
+    let resource_entries = packages.iter().fold(0usize, |total, package| {
+        total
+            .saturating_add(package.files.len())
+            .saturating_add(package.spec_paths.as_ref().map_or(0, HashMap::len))
+    });
+    let retained_approx_bytes = package_catalog_approx_bytes(&selection, &packages);
+    IgContextPackageCatalog {
+        selection,
+        packages: Rc::new(packages),
+        resource_entries,
+        retained_approx_bytes,
+    }
+}
+
+fn package_catalog_approx_bytes(
+    selection: &PackageCatalogSelection,
+    packages: &[PkgEntry],
+) -> usize {
+    let mut bytes = selection.packages_dir.as_os_str().len()
+        + selection.core_package.len()
+        + selection
+            .dependencies
+            .iter()
+            .map(|(package, version)| package.len().saturating_add(version.len()))
+            .sum::<usize>();
+    for package in packages {
+        bytes = bytes
+            .saturating_add(package.base_url.len())
+            .saturating_add(package.version.len())
+            .saturating_add(package.id.len())
+            .saturating_add(package.canonical.as_ref().map_or(0, String::len))
+            .saturating_add(package.title.as_ref().map_or(0, String::len))
+            .saturating_add(package.dir.as_os_str().len());
+        for (canonical, (filename, resource_type, version)) in &package.files {
+            bytes = bytes
+                .saturating_add(canonical.len())
+                .saturating_add(filename.len())
+                .saturating_add(resource_type.len())
+                .saturating_add(version.len());
+        }
+        for (canonical, path) in package.spec_paths.iter().flatten() {
+            bytes = bytes
+                .saturating_add(canonical.len())
+                .saturating_add(path.len());
+        }
+    }
+    bytes
 }
 
 fn load_package(tree: &dyn crate::tree::TreeSource, pdir: &Path, ver: &str) -> Option<PkgEntry> {
@@ -1186,4 +1407,245 @@ fn version_key(v: &str) -> (Vec<i64>, bool, String) {
     let nums: Vec<i64> = core.split('.').map(|s| s.parse().unwrap_or(-1)).collect();
     // release (no prerelease) sorts above prerelease: bool true > false.
     (nums, pre.is_none(), pre.unwrap_or("").to_string())
+}
+
+#[cfg(test)]
+mod package_catalog_tests {
+    use super::*;
+    use crate::tree::{MemTree, Tree};
+
+    const OWN: &str = "/own";
+    const PACKAGES: &str = "/packages";
+    const CANONICAL: &str = "https://packages.example/StructureDefinition/shared";
+
+    fn insert_package(tree: &mut MemTree, label: &str, url: &str, dependencies: &str) {
+        let root = Path::new(PACKAGES).join(label).join("package");
+        let (name, version) = label.split_once('#').unwrap();
+        tree.insert_text(
+            root.join("package.json"),
+            &format!(
+                r#"{{"name":"{name}","version":"{version}","url":"{url}","dependencies":{dependencies}}}"#
+            ),
+        );
+        tree.insert_text(
+            root.join(".index.json"),
+            &format!(
+                r#"{{"files":[{{"url":"{CANONICAL}","filename":"StructureDefinition-shared.json","resourceType":"StructureDefinition","version":"{version}"}}]}}"#
+            ),
+        );
+        tree.insert_text(
+            root.join("StructureDefinition-shared.json"),
+            &format!(
+                r#"{{"resourceType":"StructureDefinition","id":"shared","url":"{CANONICAL}","name":"{name}","kind":"resource","derivation":"constraint"}}"#
+            ),
+        );
+    }
+
+    fn tree(fhir_version: &str, dependencies: &[(&str, &str)], own_shadow: bool) -> Tree {
+        let mut tree = MemTree::new();
+        let depends_on = dependencies
+            .iter()
+            .map(|(package, version)| {
+                format!(r#"{{"packageId":"{package}","version":"{version}"}}"#)
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        tree.insert_text(
+            Path::new(OWN).join("ImplementationGuide-demo.json"),
+            &format!(
+                r#"{{"resourceType":"ImplementationGuide","id":"demo","url":"https://example.org/ImplementationGuide/demo","packageId":"example.demo","fhirVersion":["{fhir_version}"],"dependsOn":[{depends_on}]}}"#
+            ),
+        );
+        if own_shadow {
+            tree.insert_text(
+                Path::new(OWN).join("StructureDefinition-own.json"),
+                &format!(
+                    r#"{{"resourceType":"StructureDefinition","id":"own","url":"{CANONICAL}","name":"own-current","kind":"resource","derivation":"constraint","type":"SpecialPatient"}}"#
+                ),
+            );
+        }
+        insert_package(
+            &mut tree,
+            "dep.one#1.0.0",
+            "https://packages.example/one",
+            r#"{"dep.two":"2.0.0"}"#,
+        );
+        insert_package(
+            &mut tree,
+            "dep.two#2.0.0",
+            "https://packages.example/two",
+            "{}",
+        );
+        insert_package(
+            &mut tree,
+            "hl7.fhir.r4.core#4.0.1",
+            "http://hl7.org/fhir/R4",
+            "{}",
+        );
+        insert_package(
+            &mut tree,
+            "hl7.fhir.r5.core#5.0.0",
+            "http://hl7.org/fhir/R5",
+            "{}",
+        );
+        Rc::new(tree)
+    }
+
+    fn load(
+        tree: Tree,
+        reusable: Option<Rc<IgContextPackageCatalog>>,
+    ) -> (IgContext, Rc<IgContextPackageCatalog>, bool) {
+        IgContext::load_with_tree_and_primary_reusing_package_catalog(
+            tree,
+            Path::new(OWN),
+            Path::new(PACKAGES),
+            None,
+            Some(&ResourceIdentity {
+                resource_type: "ImplementationGuide".into(),
+                id: "demo".into(),
+            }),
+            reusable,
+        )
+    }
+
+    #[test]
+    fn package_catalog_reuse_rechecks_selection_and_rebuilds_current_overlay() {
+        let (context_a, catalog_a, hit_a) =
+            load(tree("4.0.1", &[("dep.one", "1.0.0")], false), None);
+        assert!(!hit_a);
+        assert!(catalog_a.len() >= 3);
+        assert_ne!(
+            context_a.resolve(CANONICAL).unwrap().name.as_deref(),
+            Some("own-current")
+        );
+
+        // The shared package index is reused, but A's populated mixed lookup
+        // cache cannot suppress B's new own-resource shadow.
+        let (context_b, catalog_b, hit_b) = load(
+            tree("4.0.1", &[("dep.one", "1.0.0")], true),
+            Some(catalog_a.clone()),
+        );
+        assert!(hit_b);
+        assert!(Rc::ptr_eq(&catalog_a, &catalog_b));
+        assert_eq!(
+            context_b.resolve(CANONICAL).unwrap().name.as_deref(),
+            Some("own-current")
+        );
+
+        let direct_resources = vec![
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+                serde_json::json!({
+                    "resourceType":"ImplementationGuide",
+                    "id":"demo",
+                    "url":"https://example.org/ImplementationGuide/demo",
+                    "packageId":"example.demo",
+                    "fhirVersion":["4.0.1"],
+                    "dependsOn":[{"packageId":"dep.one","version":"1.0.0"}]
+                }),
+            ),
+            (
+                PathBuf::from("/__prepared__/StructureDefinition-own.json"),
+                serde_json::json!({
+                    "resourceType":"StructureDefinition",
+                    "id":"own",
+                    "url":CANONICAL,
+                    "name":"own-current",
+                    "kind":"resource",
+                    "derivation":"constraint",
+                    "type":"SpecialPatient"
+                }),
+            ),
+        ];
+        let (direct, direct_catalog, direct_hit) =
+            IgContext::load_with_preparsed_own_and_primary_reusing_package_catalog(
+                tree("4.0.1", &[("dep.one", "1.0.0")], false),
+                direct_resources,
+                Path::new(PACKAGES),
+                None,
+                Some(&ResourceIdentity {
+                    resource_type: "ImplementationGuide".into(),
+                    id: "demo".into(),
+                }),
+                Some(catalog_a.clone()),
+            );
+        assert!(direct_hit);
+        assert!(Rc::ptr_eq(&catalog_a, &direct_catalog));
+        assert_eq!(
+            direct.resolve(CANONICAL).unwrap().name.as_deref(),
+            Some("own-current")
+        );
+        assert_eq!(
+            direct
+                .load_resource(CANONICAL)
+                .unwrap()
+                .get("name")
+                .and_then(Value::as_str),
+            Some("own-current")
+        );
+        assert_eq!(direct.own_resources().len(), 1);
+        assert_eq!(
+            serde_json::from_str::<Value>(
+                &direct.load_own_file("StructureDefinition-own").unwrap()
+            )
+            .unwrap()["name"],
+            "own-current"
+        );
+
+        // A renderer following Resolved::file must see the same own SD through
+        // the filesystem and preparsed loaders. This exercises pseudo-JSON's
+        // rare profiled-type branch; a direct tree read would miss the
+        // preparsed value and emit the fallback `StructureDefinition` anchor.
+        let pseudo_source = crate::sdmodel::Sd::from_value(serde_json::json!({
+            "resourceType":"StructureDefinition",
+            "id":"source",
+            "url":"https://example.org/StructureDefinition/source",
+            "kind":"resource",
+            "type":"Observation",
+            "snapshot":{"element":[
+                {
+                    "id":"Observation",
+                    "path":"Observation",
+                    "min":0,
+                    "max":"*",
+                    "base":{"max":"*"}
+                },
+                {
+                    "id":"Observation.subject",
+                    "path":"Observation.subject",
+                    "min":0,
+                    "max":"1",
+                    "base":{"max":"1"},
+                    "type":[{"code":"Reference","profile":[CANONICAL]}]
+                }
+            ]}
+        }));
+        let filesystem_pseudo =
+            crate::pseudojson::pseudo_json(&pseudo_source, &context_b, "http://hl7.org/fhir/R4/");
+        let preparsed_pseudo =
+            crate::pseudojson::pseudo_json(&pseudo_source, &direct, "http://hl7.org/fhir/R4/");
+        assert_eq!(filesystem_pseudo, preparsed_pseudo);
+        assert!(preparsed_pseudo.contains("#SpecialPatient"));
+        assert!(!preparsed_pseudo.contains("#StructureDefinition"));
+
+        // Ordered primary-IG dependency selection is semantic identity.
+        let (_, reordered, reordered_hit) = load(
+            tree(
+                "4.0.1",
+                &[("dep.two", "2.0.0"), ("dep.one", "1.0.0")],
+                false,
+            ),
+            Some(catalog_a.clone()),
+        );
+        assert!(!reordered_hit);
+        assert!(!Rc::ptr_eq(&catalog_a, &reordered));
+
+        // A different selected core also refuses the retained catalog.
+        let (_, r5, r5_hit) = load(
+            tree("5.0.0", &[("dep.one", "1.0.0")], false),
+            Some(catalog_a.clone()),
+        );
+        assert!(!r5_hit);
+        assert!(!Rc::ptr_eq(&catalog_a, &r5));
+    }
 }

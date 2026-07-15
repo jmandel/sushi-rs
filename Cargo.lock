@@ -984,6 +984,8 @@ dependencies = [
  "package_acquisition",
  "package_store",
  "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

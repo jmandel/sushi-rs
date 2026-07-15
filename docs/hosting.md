@@ -74,6 +74,30 @@ as Publisher. No bulk renderer plan crosses into SiteEngine.
 Neither is another semantic handoff. Every ordinary WASM Session owns an
 independent engine; there is no process-global Session.
 
+## Private incremental preparation
+
+Incremental derivations live entirely inside `SiteEngine::prepare_project` and
+do not add a fifth operation, cache payload, or successor build type. The engine
+retains at most the current and previous successful semantic generations.
+Reusable StructureDefinition snapshots include a complete opaque read manifest
+and must revalidate every positive, negative, ordering, provenance, body, and
+recursive dependency fact against the new package/local context. Publisher
+preparation may share an immutable package metadata catalog only under the exact
+authenticated carriers, resolver order, selected core, and primary IG dependency
+selection. The new generation always constructs fresh own-resource and
+terminology overlays, mixed lookup caches, render state, output catalog, and
+pages.
+
+Candidates remain off-side to their complete authority boundary. Snapshot
+derivations promote only after a complete new PreparedGuide succeeds; Publisher
+package catalogs promote only after the complete runtime installs. A failure
+before either boundary promotes nothing at that boundary. Incomplete
+observation, identity mismatch, or an explicit resource/fact/byte limit forces
+the ordinary canonical path; bounded tombstones ensure older facts cannot
+outlive the two-generation window. Declaration-level compilation and cross-
+build page replay are disabled because their current observations are not
+complete reuse authority.
+
 ## Generator specifications
 
 Generator specifications are closed tagged objects. Unknown fields fail.

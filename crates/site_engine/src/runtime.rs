@@ -218,6 +218,10 @@ pub struct SiteEngine {
     runtimes: BTreeMap<String, Runtime>,
     generations: VecDeque<String>,
     clock_ms: fn() -> f64,
+    #[cfg(test)]
+    pub(crate) render_package_catalog_limits: Option<(usize, usize, usize)>,
+    #[cfg(test)]
+    pub(crate) fail_after_render_package_catalog_stage: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -247,6 +251,10 @@ impl Default for SiteEngine {
             runtimes: Default::default(),
             generations: Default::default(),
             clock_ms: native_clock_ms,
+            #[cfg(test)]
+            render_package_catalog_limits: None,
+            #[cfg(test)]
+            fail_after_render_package_catalog_stage: false,
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -6,7 +6,9 @@ use package_store::PackageSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::render_surface::RenderSemantics;
+use crate::render_surface::{
+    build_render_semantics_reusing_package_catalog, RenderPackageCatalog, RenderSemantics,
+};
 use crate::runtime::{
     AuthenticatedObject, ObjectMap, OutputDescriptor, OutputResourceSubject, OutputSubjectPage,
     PreparedOutput, PublisherRecipeAssets, PublisherRuntime,
@@ -21,12 +23,23 @@ const PREPARED_GUIDE_CACHE_SCHEMA: &str = "prepared-guide-cache-key/v1";
 const PREPARED_GUIDE_RECIPE: &str = "sushi.snapshot+site-semantics/v1";
 const SNAPSHOT_COMPLETED_LOCAL_CACHE_SCHEMA: &str = "snapshot-completed-local-cache-key/v1";
 const SNAPSHOT_COMPLETED_LOCAL_RECIPE: &str = "snapshot-gen.walk+local-precedence/v1";
+const SNAPSHOT_DERIVATION_HISTORY_LIMIT: usize = 2;
+const SNAPSHOT_DERIVATION_MAX_RESOURCES: usize = 4_096;
+const SNAPSHOT_DERIVATION_MAX_FACTS: usize = 100_000;
+const SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES: usize = 32 * 1024 * 1024;
+const SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES: usize = 128 * 1024 * 1024;
 const CLOSED_SITE_BUILD_CACHE_SCHEMA: &str = "closed-site-build-cache-key/v1";
 const CYCLE_PROJECTION_RECIPE: &str = "site-build.cycle-projection/v2";
 const PUBLISHER_RUNTIME_PREPARATION_SCHEMA: &str = "publisher-runtime-preparation-key/v1";
 const PUBLISHER_RUNTIME_PREPARATION_RECIPE: &str =
     "publisher-template-rust.runtime+model+render+catalog/v1";
 const PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA: &str = "publisher-render-semantics-cache/v1";
+const PUBLISHER_RENDER_PACKAGE_CATALOG_CACHE_SCHEMA: &str =
+    "publisher-render-package-catalog-cache/v2";
+const PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT: usize = 2;
+const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES: usize = 1_024;
+const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES: usize = 100_000;
+const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES: usize = 32 * 1024 * 1024;
 const PUBLISHER_RECIPE_ASSETS_SCHEMA: &str = "publisher-recipe-assets/v1";
 const PUBLISHER_RECIPE_ASSETS_RECIPE: &str =
     "package-store.template-loader+site-producer.publisher-runtime/v1";
@@ -267,6 +280,13 @@ struct PrepareMeasurements {
     prepared_guide_key_ms: f64,
     prepared_guide_ms: f64,
     snapshot_completed_local_cache_hit: bool,
+    snapshot_resource_cache_hits: u64,
+    snapshot_resource_cache_misses: u64,
+    snapshot_derivation_history_generations: u64,
+    snapshot_derivation_retained_facts: u64,
+    snapshot_derivation_retained_manifest_approx_bytes: u64,
+    snapshot_derivation_retained_generated_json_bytes: u64,
+    snapshot_derivation_admitted: bool,
     prepared_guide_cache_hit: bool,
     site_build_cache_hit: bool,
     publisher_recipe_assets_cache_hit: bool,
@@ -274,6 +294,17 @@ struct PrepareMeasurements {
     publisher_runtime_ms: f64,
     publisher_model_ms: f64,
     render_semantics_cache_hit: bool,
+    render_package_catalog_cache_hit: bool,
+    render_package_catalog_built: bool,
+    render_own_context_built: bool,
+    render_own_resources_preparsed: u64,
+    render_package_catalog_packages: u64,
+    render_package_catalog_entries: u64,
+    render_package_catalog_approx_bytes: u64,
+    render_package_catalog_admitted: bool,
+    render_package_catalog_retained_generations: u64,
+    render_semantics_ms: f64,
+    render_state_ms: f64,
     render_model_ms: f64,
     output_catalog_ms: f64,
     publisher_artifacts_ms: f64,
@@ -373,6 +404,34 @@ impl PrepareMeasurements {
                 f64::from(self.snapshot_completed_local_cache_hit),
             ),
             (
+                "snapshotResourceCacheHits".into(),
+                self.snapshot_resource_cache_hits as f64,
+            ),
+            (
+                "snapshotResourceCacheMisses".into(),
+                self.snapshot_resource_cache_misses as f64,
+            ),
+            (
+                "snapshotDerivationHistoryGenerations".into(),
+                self.snapshot_derivation_history_generations as f64,
+            ),
+            (
+                "snapshotDerivationRetainedFacts".into(),
+                self.snapshot_derivation_retained_facts as f64,
+            ),
+            (
+                "snapshotDerivationRetainedManifestApproxBytes".into(),
+                self.snapshot_derivation_retained_manifest_approx_bytes as f64,
+            ),
+            (
+                "snapshotDerivationRetainedGeneratedJsonBytes".into(),
+                self.snapshot_derivation_retained_generated_json_bytes as f64,
+            ),
+            (
+                "snapshotDerivationAdmitted".into(),
+                f64::from(self.snapshot_derivation_admitted),
+            ),
+            (
                 "preparedGuideCacheHit".into(),
                 f64::from(self.prepared_guide_cache_hit),
             ),
@@ -391,6 +450,44 @@ impl PrepareMeasurements {
                 "renderSemanticsCacheHit".into(),
                 f64::from(self.render_semantics_cache_hit),
             ),
+            (
+                "renderPackageCatalogCacheHit".into(),
+                f64::from(self.render_package_catalog_cache_hit),
+            ),
+            (
+                "renderPackageCatalogBuilt".into(),
+                f64::from(self.render_package_catalog_built),
+            ),
+            (
+                "renderOwnContextBuilt".into(),
+                f64::from(self.render_own_context_built),
+            ),
+            (
+                "renderOwnResourcesPreparsed".into(),
+                self.render_own_resources_preparsed as f64,
+            ),
+            (
+                "renderPackageCatalogPackages".into(),
+                self.render_package_catalog_packages as f64,
+            ),
+            (
+                "renderPackageCatalogEntries".into(),
+                self.render_package_catalog_entries as f64,
+            ),
+            (
+                "renderPackageCatalogApproxBytes".into(),
+                self.render_package_catalog_approx_bytes as f64,
+            ),
+            (
+                "renderPackageCatalogAdmitted".into(),
+                f64::from(self.render_package_catalog_admitted),
+            ),
+            (
+                "renderPackageCatalogRetainedGenerations".into(),
+                self.render_package_catalog_retained_generations as f64,
+            ),
+            ("renderSemanticsMs".into(), self.render_semantics_ms),
+            ("renderStateMs".into(), self.render_state_ms),
             ("renderModelMs".into(), self.render_model_ms),
             ("outputCatalogMs".into(), self.output_catalog_ms),
             ("publisherArtifactsMs".into(), self.publisher_artifacts_ms),
@@ -424,8 +521,10 @@ impl PrepareMeasurements {
 pub(crate) struct PreparationState {
     prepared_guide: Option<PreparedGuideCacheEntry>,
     snapshot_completed_local: Option<SnapshotCompletedLocalCacheEntry>,
+    snapshot_derivations: VecDeque<SnapshotDerivationGeneration>,
     closed_cycle: Option<ClosedSiteBuildCacheEntry>,
     publisher_render_semantics: Option<PublisherRenderSemanticsCacheEntry>,
+    publisher_render_package_catalogs: VecDeque<PublisherRenderPackageCatalogCacheEntry>,
     #[cfg(test)]
     cache_hits: DerivedCacheHits,
 }
@@ -433,6 +532,11 @@ pub(crate) struct PreparationState {
 struct PublisherRenderSemanticsCacheEntry {
     key: site_build::Sha256Digest,
     semantics: Rc<RenderSemantics>,
+}
+
+struct PublisherRenderPackageCatalogCacheEntry {
+    key: site_build::Sha256Digest,
+    catalog: Option<Rc<RenderPackageCatalog>>,
 }
 
 #[derive(Clone)]
@@ -445,6 +549,26 @@ struct SnapshotCompletedLocalCacheEntry {
     key: site_build::Sha256Digest,
     generated: Vec<Value>,
     primary_implementation_guide: Value,
+}
+
+#[derive(Clone)]
+struct SnapshotResourceDerivation {
+    source: site_build::Sha256Digest,
+    manifest: Rc<snapshot_gen::SnapshotDependencyManifest>,
+    generated: Rc<Value>,
+    generated_json_bytes: usize,
+}
+
+struct SnapshotDerivationGeneration {
+    resources: BTreeMap<String, SnapshotResourceDerivation>,
+    fact_count: usize,
+    manifest_approx_bytes: usize,
+    generated_json_bytes: usize,
+}
+
+struct SnapshotDerivationCandidate {
+    generation: SnapshotDerivationGeneration,
+    admitted: bool,
 }
 
 struct PreparationCacheKeys {
@@ -460,6 +584,26 @@ struct PublisherRenderSemanticsCachePayload<'a> {
     active_tables: bool,
     run_uuid: Option<&'a str>,
     txcache: BTreeMap<String, site_build::Sha256Digest>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRenderPackageCatalogCachePayload<'a> {
+    schema: &'static str,
+    engine_api: u32,
+    primary_implementation_guide: &'a site_build::SemanticResourceKey,
+    fhir_version: Option<&'a str>,
+    dependencies: Vec<PublisherRenderPackageSelection<'a>>,
+    package_lock: &'a site_build::PackageLock,
+    resolved_labels: &'a [String],
+    package_root: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PublisherRenderPackageSelection<'a> {
+    package_id: &'a str,
+    version: &'a str,
 }
 
 #[derive(Serialize)]
@@ -490,6 +634,7 @@ struct ClosedSiteBuildCacheEntry {
 #[derive(Default)]
 struct DerivedCacheHits {
     snapshot_completed_local: u64,
+    snapshot_resources: u64,
     prepared_guide: u64,
     closed_site_build: u64,
     retained_publisher_runtime: u64,
@@ -562,6 +707,21 @@ struct PublisherRuntimePreparationKeyPayload<'a> {
 impl SiteEngine {
     pub(crate) fn clear_preparation(&mut self) {
         self.preparation = PreparationState::default();
+    }
+
+    /// Invalidate exact derived values after a successful semantic transition,
+    /// while preserving only bounded cross-semantic derivations: self-
+    /// validating snapshot facts and exact-carrier-bound render package
+    /// catalogs. Neither contains current own-resource or page output state.
+    pub(crate) fn invalidate_exact_preparation(&mut self) {
+        let snapshot_derivations = std::mem::take(&mut self.preparation.snapshot_derivations);
+        let publisher_render_package_catalogs =
+            std::mem::take(&mut self.preparation.publisher_render_package_catalogs);
+        self.preparation = PreparationState {
+            snapshot_derivations,
+            publisher_render_package_catalogs,
+            ..PreparationState::default()
+        };
     }
 
     pub(crate) fn prepare(
@@ -836,6 +996,7 @@ impl SiteEngine {
             operation,
             keys.prepared_guide.clone(),
             keys.snapshot_completed_local.clone(),
+            &mut metrics,
         )?;
         metrics.prepared_guide_ms = elapsed_ms(started);
         let started = self.timer();
@@ -1393,6 +1554,24 @@ fn publisher_render_semantics(
     )
 }
 
+fn publisher_render_semantics_reusing_package_catalog(
+    prepared: &site_build::PreparedGuide,
+    packages: PackageView,
+    model: &PublisherModel,
+    options: &SiteOptions,
+    package_catalog_key: site_build::Sha256Digest,
+    reusable: Option<&RenderPackageCatalog>,
+) -> Result<(RenderSemantics, Rc<RenderPackageCatalog>, bool), String> {
+    build_render_semantics_reusing_package_catalog(
+        prepared_render_set(prepared)?,
+        Some(packages),
+        &model.site_files,
+        options,
+        package_catalog_key,
+        reusable,
+    )
+}
+
 fn publisher_render_state(
     semantics: &RenderSemantics,
     model: &PublisherModel,
@@ -1431,6 +1610,90 @@ fn publisher_render_semantics_cache_key(
         txcache,
     })
     .map_err(|error| format!("{operation}: hash Publisher render semantics key: {error}"))
+}
+
+fn publisher_render_package_catalog_cache_key(
+    prepared: &site_build::PreparedGuide,
+    package_lock: &site_build::PackageLock,
+    resolved_labels: &[String],
+    package_root: &str,
+    operation: &str,
+) -> Result<site_build::Sha256Digest, String> {
+    let implementation_guide = prepared
+        .resources
+        .iter()
+        .find(|resource| resource.key == prepared.guide.implementation_guide)
+        .ok_or_else(|| format!("{operation}: PreparedGuide has no primary ImplementationGuide"))?;
+    let fhir_version = implementation_guide
+        .resource
+        .get("fhirVersion")
+        .and_then(Value::as_array)
+        .and_then(|versions| versions.first())
+        .and_then(Value::as_str);
+    let dependencies = implementation_guide
+        .resource
+        .get("dependsOn")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|dependency| {
+            Some(PublisherRenderPackageSelection {
+                package_id: dependency.get("packageId")?.as_str()?,
+                version: dependency.get("version")?.as_str()?,
+            })
+        })
+        .collect();
+    site_build::sha256_canonical(&PublisherRenderPackageCatalogCachePayload {
+        schema: PUBLISHER_RENDER_PACKAGE_CATALOG_CACHE_SCHEMA,
+        engine_api: ENGINE_API,
+        primary_implementation_guide: &implementation_guide.key,
+        fhir_version,
+        dependencies,
+        package_lock,
+        resolved_labels,
+        package_root,
+    })
+    .map_err(|error| format!("{operation}: hash Publisher render package catalog key: {error}"))
+}
+
+fn promote_publisher_render_package_catalog(
+    history: &mut VecDeque<PublisherRenderPackageCatalogCacheEntry>,
+    candidate: PublisherRenderPackageCatalogCacheEntry,
+) {
+    if let Some(index) = history.iter().position(|entry| entry.key == candidate.key) {
+        history.remove(index);
+    }
+    history.push_back(candidate);
+    while history.len() > PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT {
+        history.pop_front();
+    }
+}
+
+#[cfg(test)]
+fn publisher_render_package_catalog_admitted(
+    packages: usize,
+    resource_entries: usize,
+    retained_approx_bytes: usize,
+) -> bool {
+    publisher_render_package_catalog_admitted_with_limits(
+        packages,
+        resource_entries,
+        retained_approx_bytes,
+        (
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES,
+        ),
+    )
+}
+
+fn publisher_render_package_catalog_admitted_with_limits(
+    packages: usize,
+    resource_entries: usize,
+    retained_approx_bytes: usize,
+    limits: (usize, usize, usize),
+) -> bool {
+    packages <= limits.0 && resource_entries <= limits.1 && retained_approx_bytes <= limits.2
 }
 
 fn publisher_catalog(
@@ -2513,6 +2776,478 @@ mod tests {
     use super::*;
     use content_store::ContentStore;
 
+    fn snapshot_derivation_fixture(
+        child_min: u64,
+        local_base_min: u64,
+        broken: bool,
+    ) -> (
+        crate::compilation::CompiledProjectRevision,
+        Vec<(PathBuf, Value)>,
+        PackageEnvironment,
+    ) {
+        let core_label = "hl7.fhir.r5.core#5.0.0";
+        let core = package_store::PreparedPackage::prepare(
+            core_label,
+            BTreeMap::from([(
+                "package.json".into(),
+                br#"{"name":"hl7.fhir.r5.core","version":"5.0.0","fhirVersions":["5.0.0"]}"#
+                    .to_vec(),
+            )]),
+        )
+        .unwrap();
+        let environment = PackageEnvironment::new([core]).unwrap();
+        let config = "id: demo.incremental\ncanonical: https://example.org/incremental\nname: IncrementalDemo\nstatus: draft\nversion: 1.0.0\nfhirVersion: 5.0.0\n";
+        let resolved = crate::ResolvedPackageClosure {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
+            labels: vec![core_label.into()],
+        };
+        let project = crate::compilation::CompiledProjectRevision::new(
+            crate::ProjectRevision {
+                config: config.into(),
+                fsh: BTreeMap::new(),
+                predefined: BTreeMap::new(),
+                site_files: BTreeMap::new(),
+            },
+            resolved,
+        )
+        .unwrap();
+        let ig = serde_json::json!({
+            "resourceType":"ImplementationGuide",
+            "id":"demo-incremental",
+            "packageId":"demo.incremental",
+            "url":"https://example.org/incremental/ImplementationGuide/demo-incremental",
+            "name":"IncrementalDemo",
+            "status":"draft",
+            "version":"1.0.0",
+            "fhirVersion":["5.0.0"],
+            "definition":{}
+        });
+        let profile = |id: &str, base: &str, min: u64| {
+            serde_json::json!({
+                "resourceType":"StructureDefinition",
+                "id":id,
+                "url":format!("https://example.org/StructureDefinition/{id}"),
+                "version":"1.0.0",
+                "name":id,
+                "status":"draft",
+                "fhirVersion":"5.0.0",
+                "kind":"complex-type",
+                "abstract":false,
+                "type":"Base",
+                "baseDefinition":base,
+                "derivation":"constraint",
+                "differential":{"element":[{
+                    "id":"Base",
+                    "path":"Base",
+                    "min":min,
+                    "max":"*"
+                }]}
+            })
+        };
+        let mut compiled = vec![
+            (
+                PathBuf::from("/__ig__/ImplementationGuide-demo-incremental.json"),
+                ig,
+            ),
+            (
+                PathBuf::from("/out/StructureDefinition-local-base.json"),
+                profile(
+                    "LocalBase",
+                    "http://hl7.org/fhir/StructureDefinition/Base",
+                    local_base_min,
+                ),
+            ),
+            (
+                PathBuf::from("/out/StructureDefinition-child.json"),
+                profile(
+                    "Child",
+                    "https://example.org/StructureDefinition/LocalBase",
+                    child_min,
+                ),
+            ),
+            (
+                PathBuf::from("/out/StructureDefinition-sibling.json"),
+                profile("Sibling", "http://hl7.org/fhir/StructureDefinition/Base", 0),
+            ),
+        ];
+        if broken {
+            compiled.push((
+                PathBuf::from("/out/StructureDefinition-z-broken.json"),
+                profile(
+                    "Broken",
+                    "https://example.org/StructureDefinition/DoesNotExist",
+                    0,
+                ),
+            ));
+        }
+        (project, compiled, environment)
+    }
+
+    fn cycle_spec() -> GeneratorSpec {
+        GeneratorSpec::Cycle {
+            build_epoch_secs: 1,
+            liquid_asset_dirs: vec![],
+            branch: None,
+            revision: None,
+        }
+    }
+
+    #[test]
+    fn compiled_revision_cache_identity_preserves_resource_and_json_order() {
+        let one: Value = serde_json::from_str(r#"{"a":1,"b":2}"#).unwrap();
+        let reordered: Value = serde_json::from_str(r#"{"b":2,"a":1}"#).unwrap();
+        let first = vec![
+            (PathBuf::from("a.json"), one.clone()),
+            (PathBuf::from("b.json"), serde_json::json!({"c":3})),
+        ];
+        let body_reordered = vec![
+            (PathBuf::from("a.json"), reordered),
+            (PathBuf::from("b.json"), serde_json::json!({"c":3})),
+        ];
+        let resources_reordered = vec![first[1].clone(), first[0].clone()];
+        assert_ne!(
+            compiled_revision_sha256(&first, "test").unwrap(),
+            compiled_revision_sha256(&body_reordered, "test").unwrap()
+        );
+        assert_ne!(
+            compiled_revision_sha256(&first, "test").unwrap(),
+            compiled_revision_sha256(&resources_reordered, "test").unwrap()
+        );
+        assert!(compiled_revision_sha256(
+            &[
+                (PathBuf::from("a.json"), one.clone()),
+                (PathBuf::from("a.json"), one),
+            ],
+            "test",
+        )
+        .unwrap_err()
+        .contains("duplicate path"));
+    }
+
+    #[test]
+    fn snapshot_derivations_reuse_independent_profiles_and_invalidate_descendants() {
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut retained = SiteEngine::default();
+        retained.install_compilation_for_test(project_a.clone(), compiled_a.clone());
+        let a = retained.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert_eq!(a.measurements.snapshot_resource_cache_hits, 0);
+        assert_eq!(a.measurements.snapshot_resource_cache_misses, 3);
+        assert!(a.measurements.snapshot_derivation_admitted);
+        let sibling_a = retained
+            .preparation
+            .snapshot_derivations
+            .back()
+            .unwrap()
+            .resources
+            .iter()
+            .find(|(path, _)| path.ends_with("StructureDefinition-sibling.json"))
+            .map(|(_, derivation)| (derivation.generated.clone(), derivation.manifest.clone()))
+            .unwrap();
+
+        let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, false);
+        retained.install_compilation_for_test(project_b.clone(), compiled_b.clone());
+        let b = retained.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert_eq!(b.measurements.snapshot_resource_cache_hits, 2);
+        assert_eq!(b.measurements.snapshot_resource_cache_misses, 1);
+        assert_eq!(b.measurements.snapshot_derivation_history_generations, 2);
+        let sibling_b = retained
+            .preparation
+            .snapshot_derivations
+            .back()
+            .unwrap()
+            .resources
+            .iter()
+            .find(|(path, _)| path.ends_with("StructureDefinition-sibling.json"))
+            .map(|(_, derivation)| (&derivation.generated, &derivation.manifest))
+            .unwrap();
+        assert!(Rc::ptr_eq(&sibling_a.0, sibling_b.0));
+        assert!(Rc::ptr_eq(&sibling_a.1, sibling_b.1));
+
+        let mut fresh_b = SiteEngine::default();
+        fresh_b.install_compilation_for_test(project_b, compiled_b);
+        let fresh_b = fresh_b.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert_eq!(
+            site_build::canonical_json_bytes(&b.site_build).unwrap(),
+            site_build::canonical_json_bytes(&fresh_b.site_build).unwrap()
+        );
+
+        // A is no longer the exact whole-snapshot entry. Returning directly
+        // after B proves the bounded per-resource history path, not the existing
+        // exact cache.
+        retained.install_compilation_for_test(project_a, compiled_a);
+        let return_a = retained.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert!(!return_a.measurements.snapshot_completed_local_cache_hit);
+        assert_eq!(return_a.measurements.snapshot_resource_cache_hits, 3);
+        assert_eq!(return_a.measurements.snapshot_resource_cache_misses, 0);
+
+        let (project_base, compiled_base, _) = snapshot_derivation_fixture(1, 1, false);
+        retained.install_compilation_for_test(project_base, compiled_base);
+        let base_changed = retained.prepare(cycle_spec(), environment).unwrap();
+        assert_eq!(base_changed.measurements.snapshot_resource_cache_hits, 1);
+        assert_eq!(base_changed.measurements.snapshot_resource_cache_misses, 2);
+    }
+
+    #[test]
+    fn empty_and_over_budget_successors_age_out_older_snapshot_derivations() {
+        let (project, compiled, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut engine = SiteEngine::default();
+        engine.install_compilation_for_test(project, compiled);
+        engine.prepare(cycle_spec(), environment).unwrap();
+        let retained_resources = engine
+            .preparation
+            .snapshot_derivations
+            .back()
+            .unwrap()
+            .resources
+            .clone();
+        assert!(!retained_resources.is_empty());
+
+        let overflow = snapshot_derivation_candidate(
+            retained_resources,
+            SNAPSHOT_DERIVATION_MAX_FACTS + 1,
+            0,
+            0,
+            true,
+        );
+        assert!(!overflow.admitted);
+        assert!(overflow.generation.resources.is_empty());
+        assert_eq!(overflow.generation.fact_count, 0);
+        let mut overflow_metrics = PrepareMeasurements::default();
+        promote_snapshot_derivation(&mut engine.preparation, overflow, &mut overflow_metrics);
+        assert_eq!(engine.preparation.snapshot_derivations.len(), 2);
+        assert!(!overflow_metrics.snapshot_derivation_admitted);
+
+        let empty = snapshot_derivation_candidate(BTreeMap::new(), 0, 0, 0, true);
+        assert!(!empty.admitted);
+        let mut empty_metrics = PrepareMeasurements::default();
+        promote_snapshot_derivation(&mut engine.preparation, empty, &mut empty_metrics);
+        assert_eq!(engine.preparation.snapshot_derivations.len(), 2);
+        assert!(engine
+            .preparation
+            .snapshot_derivations
+            .iter()
+            .all(|generation| generation.resources.is_empty()));
+        assert_eq!(empty_metrics.snapshot_derivation_history_generations, 2);
+        assert_eq!(empty_metrics.snapshot_derivation_retained_facts, 0);
+        assert!(!empty_metrics.snapshot_derivation_admitted);
+    }
+
+    #[test]
+    fn render_package_catalog_admission_is_bounded_and_tombstones_age_history() {
+        assert!(publisher_render_package_catalog_admitted(
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES,
+        ));
+        assert!(!publisher_render_package_catalog_admitted(
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES + 1,
+            0,
+            0,
+        ));
+        assert!(!publisher_render_package_catalog_admitted(
+            0,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES + 1,
+            0,
+        ));
+        assert!(!publisher_render_package_catalog_admitted(
+            0,
+            0,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES + 1,
+        ));
+
+        let tombstone = |body: &[u8]| PublisherRenderPackageCatalogCacheEntry {
+            key: site_build::Sha256Digest::of_bytes(body),
+            catalog: None,
+        };
+        let mut history = VecDeque::new();
+        let a = site_build::Sha256Digest::of_bytes(b"a");
+        promote_publisher_render_package_catalog(&mut history, tombstone(b"a"));
+        promote_publisher_render_package_catalog(&mut history, tombstone(b"b"));
+        promote_publisher_render_package_catalog(&mut history, tombstone(b"c"));
+        assert_eq!(
+            history.len(),
+            PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT
+        );
+        assert!(history.iter().all(|entry| entry.catalog.is_none()));
+        assert!(history.iter().all(|entry| entry.key != a));
+    }
+
+    #[test]
+    fn public_prepare_project_preserves_snapshot_history_across_semantic_compile() {
+        #[derive(Clone)]
+        struct Source(crate::ProjectRevision);
+        impl crate::ProjectSource for Source {
+            fn config(&mut self) -> Result<String, String> {
+                Ok(self.0.config.clone())
+            }
+
+            fn capture(
+                &mut self,
+                _packages: &PackageEnvironment,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::ProjectRevision, String> {
+                Ok(self.0.clone())
+            }
+        }
+
+        #[derive(Clone)]
+        struct Packages {
+            resolved: crate::ResolvedPackageClosure,
+            environment: PackageEnvironment,
+        }
+        impl crate::PackageProvider for Packages {
+            fn resolve(
+                &mut self,
+                config: &str,
+                _generator: &GeneratorSpec,
+            ) -> Result<crate::ResolvedPackageClosure, String> {
+                if site_build::Sha256Digest::of_bytes(config.as_bytes())
+                    != self.resolved.config_sha256
+                {
+                    return Err("test package closure belongs to different config".into());
+                }
+                Ok(self.resolved.clone())
+            }
+
+            fn environment(
+                &mut self,
+                resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<PackageEnvironment, String> {
+                if resolved != &self.resolved {
+                    return Err("test package provider received a different closure".into());
+                }
+                Ok(self.environment.clone())
+            }
+        }
+
+        fn captured_revision(
+            compiled_project: &crate::compilation::CompiledProjectRevision,
+            compiled: &[(PathBuf, Value)],
+        ) -> crate::ProjectRevision {
+            let mut predefined = BTreeMap::new();
+            let mut site_files = BTreeMap::new();
+            for (_, body) in compiled {
+                if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
+                    continue;
+                }
+                let id = body.get("id").and_then(Value::as_str).unwrap();
+                let path = format!("input/resources/StructureDefinition-{id}.json");
+                let bytes = serde_json::to_vec(body).unwrap();
+                predefined.insert(path.clone(), body.clone());
+                site_files.insert(path, bytes);
+            }
+            crate::ProjectRevision {
+                config: compiled_project.config().to_string(),
+                fsh: BTreeMap::new(),
+                predefined,
+                site_files,
+            }
+        }
+
+        fn prepare_metrics(result: &crate::PreparedProjectResult) -> &BTreeMap<String, f64> {
+            result
+                .events
+                .iter()
+                .find_map(|event| event.metrics.as_ref())
+                .expect("prepare event metrics")
+        }
+
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let resolved = project_a.resolved_packages().clone();
+        let revision_a = captured_revision(&project_a, &compiled_a);
+        let mut engine = SiteEngine::default();
+        let mut source_a = Source(revision_a);
+        let mut packages = Packages {
+            resolved: resolved.clone(),
+            environment: environment.clone(),
+        };
+        let a = engine
+            .prepare_project(&mut source_a, &mut packages, cycle_spec())
+            .unwrap();
+        assert_eq!(prepare_metrics(&a)["snapshotResourceCacheHits"], 0.0);
+        assert_eq!(prepare_metrics(&a)["snapshotResourceCacheMisses"], 3.0);
+
+        let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, false);
+        let revision_b = captured_revision(&project_b, &compiled_b);
+        let mut source_b = Source(revision_b);
+        let b = engine
+            .prepare_project(&mut source_b, &mut packages, cycle_spec())
+            .unwrap();
+        assert_eq!(prepare_metrics(&b)["semanticCompilationCacheHit"], 0.0);
+        assert_eq!(prepare_metrics(&b)["snapshotResourceCacheHits"], 2.0);
+        assert_eq!(prepare_metrics(&b)["snapshotResourceCacheMisses"], 1.0);
+        assert_eq!(
+            prepare_metrics(&b)["snapshotDerivationHistoryGenerations"],
+            2.0
+        );
+    }
+
+    #[test]
+    fn failed_snapshot_successor_promotes_no_incremental_state() {
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut engine = SiteEngine::default();
+        engine.install_compilation_for_test(project_a, compiled_a);
+        engine.prepare(cycle_spec(), environment.clone()).unwrap();
+        let history_before = engine.preparation.snapshot_derivations.len();
+        let exact_before = engine
+            .preparation
+            .snapshot_completed_local
+            .as_ref()
+            .unwrap()
+            .key
+            .clone();
+        let retained_before = engine
+            .preparation
+            .snapshot_derivations
+            .back()
+            .unwrap()
+            .resources
+            .iter()
+            .map(|(path, derivation)| {
+                (
+                    path.clone(),
+                    Rc::as_ptr(&derivation.generated) as usize,
+                    Rc::as_ptr(&derivation.manifest) as usize,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, true);
+        engine.install_compilation_for_test(project_b, compiled_b);
+        let error = engine.prepare(cycle_spec(), environment).unwrap_err();
+        assert!(error.contains("DoesNotExist"), "{error}");
+        assert_eq!(
+            engine.preparation.snapshot_derivations.len(),
+            history_before
+        );
+        assert_eq!(
+            engine
+                .preparation
+                .snapshot_completed_local
+                .as_ref()
+                .unwrap()
+                .key,
+            exact_before
+        );
+        let retained_after = engine
+            .preparation
+            .snapshot_derivations
+            .back()
+            .unwrap()
+            .resources
+            .iter()
+            .map(|(path, derivation)| {
+                (
+                    path.clone(),
+                    Rc::as_ptr(&derivation.generated) as usize,
+                    Rc::as_ptr(&derivation.manifest) as usize,
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(retained_after, retained_before);
+    }
+
     #[test]
     fn prepare_event_reports_compiler_package_store_reuse_metrics() {
         let compilation = crate::compilation::CompilationMeasurements {
@@ -3204,39 +3939,46 @@ mod tests {
     fn typed_prepare_constructs_and_retains_complete_publisher_build() {
         let core_label = "hl7.fhir.r4.core#4.0.1";
         let template_label = "demo.template#1.0.0";
-        let core = package_store::PreparedPackage::prepare(
-            core_label,
-            BTreeMap::from([
-                (
-                    "package.json".into(),
-                    br#"{"name":"hl7.fhir.r4.core","version":"4.0.1","fhirVersions":["4.0.1"]}"#
-                        .to_vec(),
-                ),
-                ("other/fhir.css".into(), b"body{}".to_vec()),
-                ("other/icon_element.gif".into(), b"icon".to_vec()),
-                ("other/tbl_spacer.png".into(), b"spacer".to_vec()),
-            ]),
-        )
-        .unwrap();
-        let template = package_store::PreparedPackage::prepare(
-            template_label,
-            BTreeMap::from([
-                (
-                    "package.json".into(),
-                    br#"{"name":"demo.template","version":"1.0.0","type":"fhir.template"}"#.to_vec(),
-                ),
-                (
-                    "config.json".into(),
-                    br#"{"defaults":{"Any":{"template-base":"template/layouts/default.html","base":"{{[type]}}-{{[id]}}.html"}}}"#.to_vec(),
-                ),
-                (
-                    "layouts/default.html".into(),
-                    b"---\n---\n{{content}}".to_vec(),
-                ),
-            ]),
-        )
-        .unwrap();
-        let environment = PackageEnvironment::new([core, template]).unwrap();
+        let make_core = |marker: &[u8]| {
+            package_store::PreparedPackage::prepare(
+                core_label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        br#"{"name":"hl7.fhir.r4.core","version":"4.0.1","url":"http://hl7.org/fhir/R4","fhirVersions":["4.0.1"]}"#
+                            .to_vec(),
+                    ),
+                    (".index.json".into(), br#"{"files":[]}"#.to_vec()),
+                    ("carrier-marker.txt".into(), marker.to_vec()),
+                    ("other/fhir.css".into(), b"body{}".to_vec()),
+                    ("other/icon_element.gif".into(), b"icon".to_vec()),
+                    ("other/tbl_spacer.png".into(), b"spacer".to_vec()),
+                ]),
+            )
+            .unwrap()
+        };
+        let make_template = || {
+            package_store::PreparedPackage::prepare(
+                template_label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        br#"{"name":"demo.template","version":"1.0.0","type":"fhir.template"}"#.to_vec(),
+                    ),
+                    (
+                        "config.json".into(),
+                        br#"{"defaults":{"Any":{"template-base":"template/layouts/default.html","base":"{{[type]}}-{{[id]}}.html"}}}"#.to_vec(),
+                    ),
+                    (
+                        "layouts/default.html".into(),
+                        b"---\n---\n{{content}}".to_vec(),
+                    ),
+                ]),
+            )
+            .unwrap()
+        };
+        let environment =
+            PackageEnvironment::new([make_core(b"carrier-a"), make_template()]).unwrap();
         let config = "id: demo.ig\ncanonical: https://example.org/demo\nname: Demo\nstatus: draft\nversion: 1.0.0\nfhirVersion: 4.0.1\n";
         let resolved = crate::ResolvedPackageClosure {
             config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
@@ -3465,8 +4207,86 @@ mod tests {
         assert!(engine.outputs(&second.build_id).is_ok());
         assert!(engine.outputs(&fourth.build_id).is_ok());
 
-        // Renderer-semantic options are identity, so changing one deliberately
-        // misses the semantic reuse rather than borrowing incompatible state.
+        // A semantic successor cannot reuse the whole RenderSemantics, but its
+        // exact package carriers and primary-IG selection can reuse only the
+        // immutable package catalog. Current own resources/context are rebuilt.
+        let patient = serde_json::json!({
+            "resourceType":"Patient",
+            "id":"semantic-successor",
+            "name":[{"family":"Current"}]
+        });
+        let install_semantic = |engine: &mut SiteEngine, primary_ig: Value| {
+            let project = crate::compilation::CompiledProjectRevision::new(
+                crate::ProjectRevision {
+                    config: config.into(),
+                    fsh: BTreeMap::new(),
+                    predefined: BTreeMap::new(),
+                    site_files: BTreeMap::from([(
+                        "input/pagecontent/index.md".into(),
+                        b"# Fourth narrative".to_vec(),
+                    )]),
+                },
+                resolved.clone(),
+            )
+            .unwrap();
+            engine.install_compilation_for_test(
+                project,
+                vec![
+                    (
+                        PathBuf::from("/__ig__/ImplementationGuide-demo.json"),
+                        primary_ig,
+                    ),
+                    (
+                        PathBuf::from("/out/Patient-semantic-successor.json"),
+                        patient.clone(),
+                    ),
+                ],
+            );
+        };
+        install_semantic(&mut engine, ig.clone());
+        let semantic = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(!semantic.measurements.render_semantics_cache_hit);
+        assert!(semantic.measurements.render_package_catalog_cache_hit);
+        assert!(!semantic.measurements.render_package_catalog_built);
+        assert!(semantic.measurements.render_own_context_built);
+        assert!(semantic.measurements.render_package_catalog_packages > 0);
+        assert!(semantic.measurements.render_package_catalog_admitted);
+        assert!(
+            semantic
+                .measurements
+                .render_package_catalog_retained_generations
+                <= PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT as u64
+        );
+
+        // Ordered primary-IG package selection is catalog identity. Adding an
+        // explicit core dependency builds a second generation even though the
+        // resulting mounted package happens to be the same fallback core.
+        let mut ig_b = ig.clone();
+        ig_b["dependsOn"] = serde_json::json!([{
+            "packageId": core_label,
+            "version": "4.0.1"
+        }]);
+        install_semantic(&mut engine, ig_b);
+        let generation_b = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(!generation_b.measurements.render_semantics_cache_hit);
+        assert!(!generation_b.measurements.render_package_catalog_cache_hit);
+        assert!(generation_b.measurements.render_package_catalog_built);
+        assert!(generation_b.measurements.render_own_context_built);
+        assert_eq!(
+            generation_b
+                .measurements
+                .render_package_catalog_retained_generations,
+            PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT as u64
+        );
+
+        // A -> B -> A retains exactly two catalog generations. Changing a
+        // renderer option prevents exact runtime/RenderSemantics reuse, so this
+        // return exercises catalog A rather than an older whole-build hit.
+        install_semantic(&mut engine, ig.clone());
         let option_miss = engine
             .prepare(
                 GeneratorSpec::Publisher {
@@ -3475,11 +4295,14 @@ mod tests {
                     active_tables: false,
                     run_uuid: None,
                 },
-                environment,
+                environment.clone(),
             )
             .unwrap();
         assert!(option_miss.measurements.publisher_recipe_assets_cache_hit);
         assert!(!option_miss.measurements.render_semantics_cache_hit);
+        assert!(option_miss.measurements.render_package_catalog_cache_hit);
+        assert!(!option_miss.measurements.render_package_catalog_built);
+        assert!(option_miss.measurements.render_own_context_built);
         assert!(!option_miss.measurements.site_build_cache_hit);
         assert_eq!(
             engine
@@ -3488,6 +4311,151 @@ mod tests {
                 .publisher_recipe_artifact_builds,
             1,
             "prose/options successors must reuse exact template/runtime artifact records"
+        );
+
+        // A catalog staged under a new selection key is not visible until the
+        // complete Publisher runtime installs. A retry after a deliberately
+        // later failure must rebuild that catalog rather than observe the
+        // uncommitted candidate.
+        let mut late_failure_ig = ig.clone();
+        late_failure_ig["title"] = Value::String("late failure candidate".into());
+        late_failure_ig["dependsOn"] = serde_json::json!([
+            {"packageId":core_label,"version":"4.0.1"},
+            {"packageId":core_label,"version":"4.0.1"}
+        ]);
+        install_semantic(&mut engine, late_failure_ig.clone());
+        engine.fail_after_render_package_catalog_stage = true;
+        let failure = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap_err();
+        assert!(failure.contains("after render package catalog staging"));
+        engine.fail_after_render_package_catalog_stage = false;
+        let recovered = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(!recovered.measurements.render_package_catalog_cache_hit);
+        assert!(recovered.measurements.render_package_catalog_built);
+
+        // Exercise the production admission wiring through a complete prepare:
+        // an over-budget success installs a same-key tombstone. The next
+        // semantic successor rebuilds instead of hitting an older retained
+        // catalog; restoring the real bounds admits a later fresh generation.
+        engine.render_package_catalog_limits = Some((0, 0, 0));
+        let mut over_budget_1 = ig.clone();
+        over_budget_1["title"] = Value::String("over budget one".into());
+        install_semantic(&mut engine, over_budget_1);
+        let over_budget_1 = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(!over_budget_1.measurements.render_package_catalog_admitted);
+
+        let mut over_budget_2 = ig.clone();
+        over_budget_2["title"] = Value::String("over budget two".into());
+        install_semantic(&mut engine, over_budget_2);
+        let over_budget_2 = engine
+            .prepare(publisher_spec.clone(), environment.clone())
+            .unwrap();
+        assert!(!over_budget_2.measurements.render_package_catalog_cache_hit);
+        assert!(over_budget_2.measurements.render_package_catalog_built);
+        assert!(!over_budget_2.measurements.render_package_catalog_admitted);
+
+        engine.render_package_catalog_limits = None;
+        let mut admitted_again = ig;
+        admitted_again["title"] = Value::String("admitted again".into());
+        install_semantic(&mut engine, admitted_again);
+        let admitted_again = engine.prepare(publisher_spec, environment).unwrap();
+        assert!(!admitted_again.measurements.render_package_catalog_cache_hit);
+        assert!(admitted_again.measurements.render_package_catalog_built);
+        assert!(admitted_again.measurements.render_package_catalog_admitted);
+    }
+
+    #[test]
+    fn render_package_catalog_key_binds_authenticated_carriers_and_selection() {
+        fn package_lock(bytes: &[u8]) -> site_build::PackageLock {
+            site_build::PackageLock::from_packages([site_build::LockedPackage {
+                coordinate: site_build::PackageCoordinate::parse("hl7.fhir.r4.core#4.0.1").unwrap(),
+                content: site_build::ContentRef::of_bytes(
+                    bytes,
+                    Some(package_store::PREPARED_PACKAGE_MEDIA_TYPE),
+                ),
+                dependencies: BTreeSet::new(),
+            }])
+            .unwrap()
+        }
+
+        let prepared = prepared_with_all_roles();
+        let labels = vec!["hl7.fhir.r4.core#4.0.1".to_string()];
+        let lock_a = package_lock(b"carrier-a");
+        let key_a = publisher_render_package_catalog_cache_key(
+            &prepared,
+            &lock_a,
+            &labels,
+            "/packages",
+            "test",
+        )
+        .unwrap();
+        assert_eq!(
+            key_a,
+            publisher_render_package_catalog_cache_key(
+                &prepared,
+                &lock_a,
+                &labels,
+                "/packages",
+                "test",
+            )
+            .unwrap()
+        );
+        let mut metadata_only = prepared.clone();
+        metadata_only.resources[0].resource["title"] = Value::String("Irrelevant".into());
+        assert_eq!(
+            key_a,
+            publisher_render_package_catalog_cache_key(
+                &metadata_only,
+                &lock_a,
+                &labels,
+                "/packages",
+                "test",
+            )
+            .unwrap(),
+            "primary-IG fields not read by package selection must not fragment the cache"
+        );
+        let mut changed_selection = prepared.clone();
+        changed_selection.resources[0].resource["dependsOn"] = serde_json::json!([{
+            "packageId":"hl7.fhir.r4.core",
+            "version":"4.0.1"
+        }]);
+        assert_ne!(
+            key_a,
+            publisher_render_package_catalog_cache_key(
+                &changed_selection,
+                &lock_a,
+                &labels,
+                "/packages",
+                "test",
+            )
+            .unwrap()
+        );
+        assert_ne!(
+            key_a,
+            publisher_render_package_catalog_cache_key(
+                &prepared,
+                &package_lock(b"carrier-b"),
+                &labels,
+                "/packages",
+                "test",
+            )
+            .unwrap()
+        );
+        assert_ne!(
+            key_a,
+            publisher_render_package_catalog_cache_key(
+                &prepared,
+                &lock_a,
+                &labels,
+                "/other-root",
+                "test",
+            )
+            .unwrap()
         );
     }
 
@@ -3600,7 +4568,9 @@ impl SiteEngine {
         operation: &str,
         cache_key: site_build::Sha256Digest,
         snapshot_cache_key: site_build::Sha256Digest,
+        metrics: &mut PrepareMeasurements,
     ) -> Result<Rc<site_build::PreparedGuide>, String> {
+        record_snapshot_derivation_metrics(&self.preparation, metrics);
         if self.compiled_resources().is_empty() {
             return Err(format!(
                 "{operation}: no compiled revision; call compileProject first"
@@ -3620,6 +4590,8 @@ impl SiteEngine {
             .snapshot_completed_local
             .as_ref()
             .is_some_and(|entry| entry.key == snapshot_cache_key);
+        let mut snapshot_candidate = None;
+        let mut derivation_candidate = None;
         if snapshot_hit {
             #[cfg(test)]
             {
@@ -3649,31 +4621,117 @@ impl SiteEngine {
             .map_err(|error| format!("{operation}: package context: {error:#}"))?;
             let (mut local_resources, primary_implementation_guide) =
                 prepared_local_resource_set(self.compiled_resources(), operation)?;
-            let mut snapshot_locals = local_resources.clone();
+            let mut snapshot_locals = local_resources
+                .iter()
+                .filter(|(_, body)| {
+                    body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
+                })
+                .cloned()
+                .collect::<Vec<_>>();
             snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
             context.load_local_resources(snapshot_locals);
+            let mut derivations = BTreeMap::new();
+            let mut derivation_fact_count = 0usize;
+            let mut derivation_manifest_approx_bytes = 0usize;
+            let mut derivation_generated_json_bytes = 0usize;
+            let mut derivation_admissible = true;
             for (path, body) in &mut local_resources {
                 if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
                     continue;
                 }
+                let path_key = path.to_str().ok_or_else(|| {
+                    format!("{operation}: snapshot resource path is not UTF-8: {path:?}")
+                })?;
+                let source_bytes = serde_json::to_vec(body).map_err(|error| {
+                    format!("{operation}: encode snapshot source {path_key}: {error}")
+                })?;
+                let source = site_build::Sha256Digest::of_bytes(&source_bytes);
                 let label = path
                     .file_name()
                     .and_then(|name| name.to_str())
                     .unwrap_or("StructureDefinition");
-                *body = snapshot_gen::generate_snapshot(body.clone(), &context, Default::default())
+                let reusable = self
+                    .preparation
+                    .snapshot_derivations
+                    .iter()
+                    .rev()
+                    .filter_map(|generation| generation.resources.get(path_key))
+                    .find(|candidate| {
+                        candidate.source == source
+                            && context.matches_snapshot_dependencies(candidate.manifest.as_ref())
+                    })
+                    .cloned();
+                let derivation = if let Some(candidate) = reusable {
+                    metrics.snapshot_resource_cache_hits += 1;
+                    #[cfg(test)]
+                    {
+                        self.preparation.cache_hits.snapshot_resources += 1;
+                    }
+                    *body = candidate.generated.as_ref().clone();
+                    candidate
+                } else {
+                    metrics.snapshot_resource_cache_misses += 1;
+                    let (generated, manifest) = snapshot_gen::generate_snapshot_with_manifest(
+                        body.clone(),
+                        &context,
+                        Default::default(),
+                    )
                     .map_err(|error| format!("{operation}: snapshot {label}: {error:#}"))?;
+                    let generated_json_bytes = serde_json::to_vec(&generated)
+                        .map_err(|error| {
+                            format!("{operation}: measure generated snapshot {path_key}: {error}")
+                        })?
+                        .len();
+                    let generated = Rc::new(generated);
+                    *body = generated.as_ref().clone();
+                    SnapshotResourceDerivation {
+                        source,
+                        manifest: Rc::new(manifest),
+                        generated,
+                        generated_json_bytes,
+                    }
+                };
+                if derivation.manifest.is_complete() {
+                    derivation_fact_count =
+                        derivation_fact_count.saturating_add(derivation.manifest.fact_count());
+                    derivation_manifest_approx_bytes = derivation_manifest_approx_bytes
+                        .saturating_add(derivation.manifest.retained_approx_bytes());
+                    derivation_generated_json_bytes = derivation_generated_json_bytes
+                        .saturating_add(derivation.generated_json_bytes);
+                    if derivations.len() >= SNAPSHOT_DERIVATION_MAX_RESOURCES
+                        || derivation_fact_count > SNAPSHOT_DERIVATION_MAX_FACTS
+                        || derivation_manifest_approx_bytes
+                            > SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES
+                        || derivation_generated_json_bytes
+                            > SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES
+                    {
+                        derivation_admissible = false;
+                    } else {
+                        derivations.insert(path_key.to_string(), derivation);
+                    }
+                }
             }
-            self.preparation.snapshot_completed_local = Some(SnapshotCompletedLocalCacheEntry {
+            snapshot_candidate = Some(SnapshotCompletedLocalCacheEntry {
                 key: snapshot_cache_key,
                 generated: local_resources.into_iter().map(|(_, body)| body).collect(),
                 primary_implementation_guide,
             });
+            // Every successful semantic snapshot rebuild advances the bounded
+            // current/previous window. An empty or over-budget generation is a
+            // tombstone: it retains no partial derivations, but it still ages
+            // older facts out instead of letting them survive indefinitely.
+            derivation_candidate = Some(snapshot_derivation_candidate(
+                derivations,
+                derivation_fact_count,
+                derivation_manifest_approx_bytes,
+                derivation_generated_json_bytes,
+                derivation_admissible,
+            ));
         }
-        let snapshot = self
-            .preparation
-            .snapshot_completed_local
+        let snapshot = snapshot_candidate
             .as_ref()
-            .expect("snapshot-completed local cache was hit or installed");
+            .or(self.preparation.snapshot_completed_local.as_ref())
+            .expect("snapshot-completed local cache was hit or staged");
         let project = self.project_revision().expect("compiled project exists");
         let guide = Rc::new(assemble_prepared_model(
             operation,
@@ -3686,6 +4744,15 @@ impl SiteEngine {
             input.branch.clone(),
             input.revision.clone(),
         )?);
+        // Promote only after every canonical PreparedGuide step succeeds. A
+        // partially generated or augmentation-failing successor cannot alter
+        // the current/previous derivation history or exact snapshot cache.
+        if let Some(snapshot) = snapshot_candidate {
+            self.preparation.snapshot_completed_local = Some(snapshot);
+        }
+        if let Some(candidate) = derivation_candidate {
+            promote_snapshot_derivation(&mut self.preparation, candidate, metrics);
+        }
         self.preparation.prepared_guide = Some(PreparedGuideCacheEntry {
             key: cache_key,
             guide: guide.clone(),
@@ -3694,25 +4761,99 @@ impl SiteEngine {
     }
 }
 
+fn snapshot_derivation_candidate(
+    resources: BTreeMap<String, SnapshotResourceDerivation>,
+    fact_count: usize,
+    manifest_approx_bytes: usize,
+    generated_json_bytes: usize,
+    observation_complete: bool,
+) -> SnapshotDerivationCandidate {
+    let within_bounds = observation_complete
+        && resources.len() <= SNAPSHOT_DERIVATION_MAX_RESOURCES
+        && fact_count <= SNAPSHOT_DERIVATION_MAX_FACTS
+        && manifest_approx_bytes <= SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES
+        && generated_json_bytes <= SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES;
+    let admitted = within_bounds && !resources.is_empty();
+    let generation = if within_bounds {
+        SnapshotDerivationGeneration {
+            resources,
+            fact_count,
+            manifest_approx_bytes,
+            generated_json_bytes,
+        }
+    } else {
+        SnapshotDerivationGeneration {
+            resources: BTreeMap::new(),
+            fact_count: 0,
+            manifest_approx_bytes: 0,
+            generated_json_bytes: 0,
+        }
+    };
+    SnapshotDerivationCandidate {
+        generation,
+        admitted,
+    }
+}
+
+fn promote_snapshot_derivation(
+    preparation: &mut PreparationState,
+    candidate: SnapshotDerivationCandidate,
+    metrics: &mut PrepareMeasurements,
+) {
+    metrics.snapshot_derivation_admitted = candidate.admitted;
+    preparation
+        .snapshot_derivations
+        .push_back(candidate.generation);
+    while preparation.snapshot_derivations.len() > SNAPSHOT_DERIVATION_HISTORY_LIMIT {
+        preparation.snapshot_derivations.pop_front();
+    }
+    record_snapshot_derivation_metrics(preparation, metrics);
+}
+
+fn record_snapshot_derivation_metrics(
+    preparation: &PreparationState,
+    metrics: &mut PrepareMeasurements,
+) {
+    metrics.snapshot_derivation_history_generations = preparation.snapshot_derivations.len() as u64;
+    metrics.snapshot_derivation_retained_facts = preparation
+        .snapshot_derivations
+        .iter()
+        .map(|generation| generation.fact_count as u64)
+        .sum();
+    metrics.snapshot_derivation_retained_manifest_approx_bytes = preparation
+        .snapshot_derivations
+        .iter()
+        .map(|generation| generation.manifest_approx_bytes as u64)
+        .sum();
+    metrics.snapshot_derivation_retained_generated_json_bytes = preparation
+        .snapshot_derivations
+        .iter()
+        .map(|generation| generation.generated_json_bytes as u64)
+        .sum();
+}
+
 fn compiled_revision_sha256(
     compiled: &[(PathBuf, Value)],
     operation: &str,
 ) -> Result<site_build::Sha256Digest, String> {
+    let mut seen = BTreeSet::new();
     let values = compiled
         .iter()
         .map(|(path, body)| {
-            path.to_str()
-                .map(|path| (path.to_string(), body))
-                .ok_or_else(|| format!("{operation}: compiled path is not UTF-8: {path:?}"))
+            let path = path
+                .to_str()
+                .ok_or_else(|| format!("{operation}: compiled path is not UTF-8: {path:?}"))?;
+            if !seen.insert(path) {
+                return Err(format!(
+                    "{operation}: compiled revision contains duplicate path {path}"
+                ));
+            }
+            Ok((path, body))
         })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    if values.len() != compiled.len() {
-        return Err(format!(
-            "{operation}: compiled revision contains duplicate paths"
-        ));
-    }
-    site_build::sha256_canonical(&values)
-        .map_err(|error| format!("{operation}: hash compiled revision: {error}"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let bytes = serde_json::to_vec(&values)
+        .map_err(|error| format!("{operation}: encode compiled revision: {error}"))?;
+    Ok(site_build::Sha256Digest::of_bytes(&bytes))
 }
 
 fn prepared_local_resource_set(
@@ -4534,6 +5675,7 @@ impl SiteEngine {
             operation,
             keys.prepared_guide.clone(),
             keys.snapshot_completed_local.clone(),
+            &mut metrics,
         )?;
         metrics.prepared_guide_ms = elapsed_ms(started);
         if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
@@ -4623,13 +5765,16 @@ impl SiteEngine {
         )?;
         metrics.publisher_model_ms = elapsed_ms(started);
 
-        let started = self.timer();
+        let render_model_started = self.timer();
+        let render_semantics_started = self.timer();
         let render_semantics_key = publisher_render_semantics_cache_key(
             &keys.snapshot_completed_local,
             &model,
             &options,
             operation,
         )?;
+        let mut render_semantics_candidate = None;
+        let mut render_package_catalog_candidate = None;
         let render_semantics = match self
             .preparation
             .publisher_render_semantics
@@ -4646,22 +5791,85 @@ impl SiteEngine {
                     &project.resolved_packages().labels,
                     operation,
                 )?;
-                let semantics = Rc::new(publisher_render_semantics(
+                let package_root = render_packages.root().to_string_lossy().into_owned();
+                let package_catalog_key = publisher_render_package_catalog_cache_key(
                     &prepared,
-                    render_packages,
-                    &model,
-                    &options,
-                )?);
-                self.preparation.publisher_render_semantics =
-                    Some(PublisherRenderSemanticsCacheEntry {
-                        key: render_semantics_key,
-                        semantics: semantics.clone(),
-                    });
+                    &compile_lock,
+                    &project.resolved_packages().labels,
+                    &package_root,
+                    operation,
+                )?;
+                let reusable_catalog = self
+                    .preparation
+                    .publisher_render_package_catalogs
+                    .iter()
+                    .rev()
+                    .find(|entry| entry.key == package_catalog_key)
+                    .and_then(|entry| entry.catalog.clone());
+                let (semantics, package_catalog, package_catalog_hit) =
+                    publisher_render_semantics_reusing_package_catalog(
+                        &prepared,
+                        render_packages,
+                        &model,
+                        &options,
+                        package_catalog_key.clone(),
+                        reusable_catalog.as_deref(),
+                    )?;
+                metrics.render_package_catalog_cache_hit = package_catalog_hit;
+                metrics.render_package_catalog_built = !package_catalog_hit;
+                metrics.render_own_context_built = true;
+                metrics.render_own_resources_preparsed = prepared.resources.len() as u64;
+                metrics.render_package_catalog_packages = package_catalog.package_count() as u64;
+                metrics.render_package_catalog_entries =
+                    package_catalog.resource_entry_count() as u64;
+                metrics.render_package_catalog_approx_bytes =
+                    package_catalog.retained_approx_bytes() as u64;
+                #[cfg(test)]
+                let admission_limits = self.render_package_catalog_limits.unwrap_or((
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES,
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES,
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES,
+                ));
+                #[cfg(not(test))]
+                let admission_limits = (
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES,
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES,
+                    PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES,
+                );
+                metrics.render_package_catalog_admitted =
+                    publisher_render_package_catalog_admitted_with_limits(
+                        package_catalog.package_count(),
+                        package_catalog.resource_entry_count(),
+                        package_catalog.retained_approx_bytes(),
+                        admission_limits,
+                    );
+                render_package_catalog_candidate = Some(PublisherRenderPackageCatalogCacheEntry {
+                    key: package_catalog_key,
+                    catalog: metrics
+                        .render_package_catalog_admitted
+                        .then_some(package_catalog),
+                });
+                let semantics = Rc::new(semantics);
+                render_semantics_candidate = Some(PublisherRenderSemanticsCacheEntry {
+                    key: render_semantics_key,
+                    semantics: semantics.clone(),
+                });
                 semantics
             }
         };
+        #[cfg(test)]
+        if self.fail_after_render_package_catalog_stage
+            && render_package_catalog_candidate.is_some()
+        {
+            return Err(
+                "prepareProject: injected failure after render package catalog staging".into(),
+            );
+        }
+        metrics.render_semantics_ms = elapsed_ms(render_semantics_started);
+        let render_state_started = self.timer();
         let state = publisher_render_state(&render_semantics, &model, &options)?;
-        metrics.render_model_ms = elapsed_ms(started);
+        metrics.render_state_ms = elapsed_ms(render_state_started);
+        metrics.render_model_ms = elapsed_ms(render_model_started);
 
         let catalog_total_started = self.timer();
         let started = self.timer();
@@ -4763,6 +5971,17 @@ impl SiteEngine {
             dependency_observation,
         });
         debug_assert_eq!(installed, handle);
+        if let Some(candidate) = render_semantics_candidate {
+            self.preparation.publisher_render_semantics = Some(candidate);
+        }
+        if let Some(candidate) = render_package_catalog_candidate {
+            promote_publisher_render_package_catalog(
+                &mut self.preparation.publisher_render_package_catalogs,
+                candidate,
+            );
+        }
+        metrics.render_package_catalog_retained_generations =
+            self.preparation.publisher_render_package_catalogs.len() as u64;
         metrics.catalog_ms = elapsed_ms(catalog_total_started);
         metrics.total_ms = elapsed_ms(total_started);
         Ok(PrepareResult {

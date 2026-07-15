@@ -30,6 +30,7 @@ struct Case {
     report: PathBuf,
     expected_changed_output: String,
     expect_compilation_change: bool,
+    expect_snapshot_partial_reuse: bool,
     template_coordinate: String,
     build_epoch_secs: i64,
     fixture: Value,
@@ -45,7 +46,20 @@ struct Receipt {
     comparisons: Vec<&'static str>,
     package_corpus: PackageCorpusSummary,
     executions: BTreeMap<String, ExecutionSummary>,
-    retained_return_metrics: BTreeMap<String, f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failed_successor: Option<FailedSuccessorSummary>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FailedSuccessorSummary {
+    operation: site_engine::BuildOperation,
+    phase: site_engine::BuildErrorPhase,
+    code: site_engine::BuildErrorCode,
+    retryable: bool,
+    successful_compilation: bool,
+    injected_body_sha256: site_build::Sha256Digest,
+    recovery: ExecutionSummary,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -820,6 +834,201 @@ fn require_metric(evidence: &Evidence, key: &str) -> Result<()> {
     Ok(())
 }
 
+fn metric(evidence: &Evidence, key: &str) -> Result<f64> {
+    evidence
+        .metrics
+        .get(key)
+        .copied()
+        .ok_or_else(|| anyhow!("execution did not report {key}"))
+}
+
+fn count_metric(evidence: &Evidence, key: &str) -> Result<f64> {
+    let value = metric(evidence, key)?;
+    if !value.is_finite() || value < 0.0 || value.fract() != 0.0 {
+        bail!("execution reported invalid count metric {key}={value}");
+    }
+    Ok(value)
+}
+
+fn require_snapshot_reuse(case: &Case, retained_b: &Evidence, fresh_b: &Evidence) -> Result<()> {
+    let retained_hits = count_metric(retained_b, "snapshotResourceCacheHits")?;
+    let retained_misses = count_metric(retained_b, "snapshotResourceCacheMisses")?;
+    let fresh_hits = count_metric(fresh_b, "snapshotResourceCacheHits")?;
+    let fresh_misses = count_metric(fresh_b, "snapshotResourceCacheMisses")?;
+    let fresh_whole_hit = count_metric(fresh_b, "snapshotCompletedLocalCacheHit")?;
+    if fresh_whole_hit != 0.0 {
+        bail!("fresh B incorrectly reported exact snapshot reuse");
+    }
+    if case.expect_snapshot_partial_reuse {
+        if metric(retained_b, "snapshotCompletedLocalCacheHit")? != 0.0
+            || retained_hits <= 0.0
+            || retained_misses <= 0.0
+            || fresh_hits != 0.0
+            || fresh_misses <= 0.0
+            || retained_hits + retained_misses != fresh_misses
+            || count_metric(retained_b, "snapshotDerivationAdmitted")? != 1.0
+            || count_metric(fresh_b, "snapshotDerivationAdmitted")? != 1.0
+        {
+            bail!(
+                "retained B did not prove bounded partial snapshot reuse: retained hits/misses={retained_hits}/{retained_misses}, fresh hits/misses={fresh_hits}/{fresh_misses}, metrics={:?}",
+                retained_b.metrics
+            );
+        }
+    } else {
+        if count_metric(retained_b, "snapshotCompletedLocalCacheHit")? != 1.0
+            || retained_hits != 0.0
+            || retained_misses != 0.0
+            || fresh_hits != 0.0
+            || fresh_misses <= 0.0
+            || count_metric(fresh_b, "snapshotDerivationAdmitted")? != 1.0
+        {
+            bail!(
+                "site-only retained B did not exercise exact snapshot reuse against a canonical fresh miss: {:?}",
+                retained_b.metrics
+            );
+        }
+    }
+    Ok(())
+}
+
+fn require_render_package_catalog_reuse(
+    case: &Case,
+    retained_b: &Evidence,
+    fresh_b: &Evidence,
+) -> Result<()> {
+    let fresh_entries = count_metric(fresh_b, "renderPackageCatalogEntries")?;
+    let fresh_packages = count_metric(fresh_b, "renderPackageCatalogPackages")?;
+    let fresh_catalog_bytes = count_metric(fresh_b, "renderPackageCatalogApproxBytes")?;
+    let fresh_own_resources = count_metric(fresh_b, "renderOwnResourcesPreparsed")?;
+    if count_metric(fresh_b, "renderSemanticsCacheHit")? != 0.0
+        || count_metric(fresh_b, "renderPackageCatalogCacheHit")? != 0.0
+        || count_metric(fresh_b, "renderPackageCatalogBuilt")? != 1.0
+        || count_metric(fresh_b, "renderOwnContextBuilt")? != 1.0
+        || count_metric(fresh_b, "renderPackageCatalogAdmitted")? != 1.0
+        || fresh_packages <= 0.0
+        || fresh_entries <= 0.0
+        || fresh_catalog_bytes <= 0.0
+        || fresh_own_resources <= 0.0
+    {
+        bail!(
+            "fresh B did not prove canonical render package-catalog construction: {:?}",
+            fresh_b.metrics
+        );
+    }
+
+    if case.expect_snapshot_partial_reuse {
+        let retained_generations =
+            count_metric(retained_b, "renderPackageCatalogRetainedGenerations")?;
+        if count_metric(retained_b, "renderSemanticsCacheHit")? != 0.0
+            || count_metric(retained_b, "renderPackageCatalogCacheHit")? != 1.0
+            || count_metric(retained_b, "renderPackageCatalogBuilt")? != 0.0
+            || count_metric(retained_b, "renderOwnContextBuilt")? != 1.0
+            || count_metric(retained_b, "renderOwnResourcesPreparsed")? != fresh_own_resources
+            || count_metric(retained_b, "renderPackageCatalogAdmitted")? != 1.0
+            || count_metric(retained_b, "renderPackageCatalogPackages")? != fresh_packages
+            || count_metric(retained_b, "renderPackageCatalogEntries")? != fresh_entries
+            || count_metric(retained_b, "renderPackageCatalogApproxBytes")? != fresh_catalog_bytes
+            || !(1.0..=2.0).contains(&retained_generations)
+        {
+            bail!(
+                "retained B did not prove bounded package-catalog-only render-context reuse: {:?}",
+                retained_b.metrics
+            );
+        }
+    } else if count_metric(retained_b, "renderSemanticsCacheHit")? != 1.0
+        || count_metric(retained_b, "renderPackageCatalogCacheHit")? != 0.0
+        || count_metric(retained_b, "renderPackageCatalogBuilt")? != 0.0
+        || count_metric(retained_b, "renderOwnContextBuilt")? != 0.0
+        || count_metric(retained_b, "renderOwnResourcesPreparsed")? != 0.0
+        || count_metric(retained_b, "renderPackageCatalogAdmitted")? != 0.0
+    {
+        bail!(
+            "site-only retained B did not short-circuit through exact RenderSemantics: {:?}",
+            retained_b.metrics
+        );
+    }
+    Ok(())
+}
+
+fn failed_snapshot_successor_probe(
+    engine: &mut site_engine::SiteEngine,
+    revision_a: &site_engine::ProjectRevision,
+    revision_b: &site_engine::ProjectRevision,
+    corpus: &PackageCorpus,
+    environment: &site_engine::PackageEnvironment,
+    spec: &site_engine::GeneratorSpec,
+    byte_store: &VerifiedByteStore,
+) -> Result<(FailedSuccessorSummary, Evidence)> {
+    let path = "input/resources/StructureDefinition-incremental-failed-successor-probe.json";
+    let body = serde_json::json!({
+        "resourceType": "StructureDefinition",
+        "id": "incremental-failed-successor-probe",
+        "url": "http://example.org/fhir/StructureDefinition/incremental-failed-successor-probe",
+        "name": "IncrementalFailedSuccessorProbe",
+        "status": "draft",
+        "fhirVersion": "4.0.1",
+        "kind": "resource",
+        "abstract": false,
+        "type": "Patient",
+        "baseDefinition": "http://example.org/fhir/StructureDefinition/incremental-definitely-missing-base",
+        "derivation": "constraint",
+        "differential": {
+            "element": [{"id": "Patient", "path": "Patient"}]
+        }
+    });
+    let body_bytes = serde_json::to_vec(&body)?;
+    let mut failed_revision = revision_a.clone();
+    failed_revision.predefined.insert(path.into(), body);
+    failed_revision
+        .site_files
+        .insert(path.into(), body_bytes.clone());
+    let mut source = FixedSource {
+        revision: failed_revision,
+    };
+    let mut packages = FixedPackages {
+        resolved: corpus.resolved.clone(),
+        environment: environment.clone(),
+    };
+    let error = engine
+        .prepare_project(&mut source, &mut packages, spec.clone())
+        .expect_err("missing snapshot base must fail after semantic compilation");
+    if error.operation != site_engine::BuildOperation::Prepare
+        || error.phase != site_engine::BuildErrorPhase::Preparation
+        || error.code != site_engine::BuildErrorCode::RendererFailed
+        || error.retryable
+        || error.successful_compilation.is_none()
+        || !error
+            .message
+            .contains("incremental-definitely-missing-base")
+    {
+        bail!("failed successor returned the wrong typed error: {error:?}");
+    }
+    let operation = error.operation;
+    let phase = error.phase;
+    let code = error.code;
+    let retryable = error.retryable;
+    let successful_compilation = error.successful_compilation.is_some();
+    let recovery = prepare_on(
+        engine,
+        revision_b,
+        corpus,
+        environment,
+        spec,
+        RenderOrder::Forward,
+        byte_store,
+    )?;
+    let summary = FailedSuccessorSummary {
+        operation,
+        phase,
+        code,
+        retryable,
+        successful_compilation,
+        injected_body_sha256: site_build::Sha256Digest::of_bytes(&body_bytes),
+        recovery: recovery.summary(),
+    };
+    Ok((summary, recovery))
+}
+
 fn run_case(case: &Case) -> Result<Receipt> {
     let source_a = canonical_directory(&case.source_a, "source A")?;
     let source_b = canonical_directory(&case.source_b, "source B")?;
@@ -860,6 +1069,19 @@ fn run_case(case: &Case) -> Result<Receipt> {
         RenderOrder::Forward,
         &byte_store,
     )?;
+    let failed_successor = if case.case_id == "tiny" {
+        Some(failed_snapshot_successor_probe(
+            &mut fresh_a_engine,
+            &revision_a,
+            &revision_b,
+            &corpus,
+            &fresh_a_environment,
+            &spec,
+            &byte_store,
+        )?)
+    } else {
+        None
+    };
     drop(fresh_a_engine);
 
     let mut retained_engine = site_engine::SiteEngine::default();
@@ -906,6 +1128,32 @@ fn run_case(case: &Case) -> Result<Receipt> {
     )?;
     drop(fresh_b_engine);
 
+    if let Some((_, recovery_b)) = &failed_successor {
+        compare_complete(
+            case,
+            "failed-successor-recovery-b-vs-fresh-b",
+            recovery_b,
+            &fresh_b,
+            &byte_store,
+        )?;
+        let recovery_hits = count_metric(recovery_b, "snapshotResourceCacheHits")?;
+        let recovery_misses = count_metric(recovery_b, "snapshotResourceCacheMisses")?;
+        let fresh_hits = count_metric(&fresh_b, "snapshotResourceCacheHits")?;
+        let fresh_misses = count_metric(&fresh_b, "snapshotResourceCacheMisses")?;
+        if count_metric(recovery_b, "snapshotCompletedLocalCacheHit")? != 0.0
+            || recovery_hits <= 0.0
+            || recovery_misses <= 0.0
+            || recovery_hits + recovery_misses != fresh_misses
+            || fresh_hits != 0.0
+            || count_metric(recovery_b, "snapshotDerivationAdmitted")? != 1.0
+        {
+            bail!("failed-successor recovery B did not retain safe classified snapshot reuse");
+        }
+        require_render_package_catalog_reuse(case, recovery_b, &fresh_b).context(
+            "failed-successor recovery B did not retain the last successful render package catalog",
+        )?;
+    }
+
     compare_prepared(
         case,
         "fresh-a-vs-retained-seed-a",
@@ -928,6 +1176,18 @@ fn run_case(case: &Case) -> Result<Receipt> {
     )?;
     require_metric(&retained_return_a, "semanticCompilationCacheHit")?;
     require_metric(&retained_return_a, "siteBuildCacheHit")?;
+    if metric(&retained_return_a, "snapshotResourceCacheHits")? != 0.0
+        || metric(&retained_return_a, "snapshotResourceCacheMisses")? != 0.0
+        || metric(&retained_return_a, "renderPackageCatalogCacheHit")? != 0.0
+        || metric(&retained_return_a, "renderPackageCatalogBuilt")? != 0.0
+        || metric(&retained_return_a, "renderOwnContextBuilt")? != 0.0
+        || metric(&retained_return_a, "renderOwnResourcesPreparsed")? != 0.0
+        || metric(&retained_return_a, "renderPackageCatalogAdmitted")? != 0.0
+    {
+        bail!("returned A exact build reuse must not masquerade as incremental derivation proof");
+    }
+    require_snapshot_reuse(case, &retained_b, &fresh_b)?;
+    require_render_package_catalog_reuse(case, &retained_b, &fresh_b)?;
 
     if fresh_a.build_id == fresh_b.build_id {
         bail!("A and B produced the same ClosedSiteBuild id");
@@ -978,10 +1238,12 @@ fn run_case(case: &Case) -> Result<Receipt> {
             "initial and fully materialized output catalogs",
             "every output ContentRef and byte body",
             "canonical final SiteOutput",
+            "retained B classified snapshot reuse accounting against fresh B",
+            "retained B classified render package-catalog reuse against fresh B",
         ],
         package_corpus: corpus.summary.clone(),
         executions,
-        retained_return_metrics: retained_return_a.metrics,
+        failed_successor: failed_successor.map(|(summary, _)| summary),
     })
 }
 

@@ -5,8 +5,8 @@
 //! page/template overlay rebuilds only `RenderState`; a semantic compile input
 //! or output, package, txcache, or semantic-option change rebuilds both.
 //!
-//! Virtual layout (all reads via `TreeSource`):
-//!   /own/<Type>-<id>.json      — the last compile()'s resources (incl. the IG)
+//! Semantic inputs and virtual tree layout:
+//!   preparsed own values       — the current PreparedGuide resources (incl. IG)
 //!   /site/en/<page>.(md|html)  — page sources (template + staged pagecontent)
 //!   /site/_includes/<name>     — template/static includes (fragment kinds are
 //!                                 NOT here — they materialize on include-miss)
@@ -16,8 +16,8 @@
 //!
 //! One shared fragment cache per site generation: the page include loop and the
 //! external `render_fragment` hit the SAME map. The FragmentEngine itself can
-//! span site generations because its TreeSource intentionally contains only
-//! semantic inputs (`/own`, package files, and `/site/txcache`) — never mutable
+//! span site generations because its IgContext contains only semantic inputs
+//! (preparsed own values, package files, and `/site/txcache`) — never mutable
 //! page/template bytes.
 //!
 //! Page sources are the publisher's STAGED shape: `.html` with front matter
@@ -41,7 +41,7 @@ use render_page::{
     render_page, FragmentEngineArtifactResolver, PageArtifactReadSet, PageProvider,
     SharedArtifactCache, SiteData,
 };
-use render_sd::context::{IgContext, ResourceIdentity};
+use render_sd::context::{IgContext, IgContextPackageCatalog, ResourceIdentity};
 #[cfg(test)]
 use render_sd::engine::FragError;
 use render_sd::engine::{FragmentEngine, IgFacts};
@@ -226,6 +226,30 @@ pub struct RenderSemantics {
     tree: Rc<dyn TreeSource>,
 }
 
+/// Exact-carrier-bound reusable half of `IgContext` package resolution.
+///
+/// SiteEngine owns the key because only it sees authenticated package carrier
+/// identities. `render_sd` independently verifies the primary IG's ordered
+/// dependency/core selection before accepting the catalog.
+pub(crate) struct RenderPackageCatalog {
+    key: site_build::Sha256Digest,
+    catalog: Rc<IgContextPackageCatalog>,
+}
+
+impl RenderPackageCatalog {
+    pub(crate) fn package_count(&self) -> usize {
+        self.catalog.len()
+    }
+
+    pub(crate) fn resource_entry_count(&self) -> usize {
+        self.catalog.resource_entries()
+    }
+
+    pub(crate) fn retained_approx_bytes(&self) -> usize {
+        self.catalog.retained_approx_bytes()
+    }
+}
+
 /// The per-generation render state.
 pub struct RenderState {
     engine_first_includes: bool,
@@ -239,28 +263,7 @@ pub struct RenderState {
     pages: Vec<(String, PathBuf)>,
 }
 
-const OWN_DIR: &str = "/own";
 const SITE_DIR: &str = "/site";
-
-fn insert_compiled(mem: &mut MemTree, compiled: &[(PathBuf, Value)]) -> Result<(), String> {
-    // /own: the compiled resources, named {Type}-{id}.json (compile() already
-    // produces synthetic paths shaped that way; fall back to the body).
-    for (p, v) in compiled {
-        let fname = p
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(String::from)
-            .or_else(|| {
-                let t = v.get("resourceType")?.as_str()?;
-                let id = v.get("id")?.as_str()?;
-                Some(format!("{}-{}.json", t, id))
-            })
-            .ok_or_else(|| "compiled resource without a name".to_string())?;
-        let text = serde_json::to_string(v).map_err(|e| e.to_string())?;
-        mem.insert_text(Path::new(OWN_DIR).join(fname), &text);
-    }
-    Ok(())
-}
 
 fn package_root(bundle: &Option<PackageView>) -> PathBuf {
     bundle
@@ -277,6 +280,17 @@ pub fn build_render_semantics(
     site_files: &HashMap<PathBuf, Vec<u8>>,
     options: &SiteOptions,
 ) -> Result<RenderSemantics, String> {
+    build_render_semantics_internal(compiled, bundle, site_files, options, None)
+        .map(|(semantics, _, _)| semantics)
+}
+
+fn build_render_semantics_internal(
+    compiled: Vec<(PathBuf, Value)>,
+    bundle: Option<PackageView>,
+    site_files: &HashMap<PathBuf, Vec<u8>>,
+    options: &SiteOptions,
+    reusable_package_catalog: Option<Rc<IgContextPackageCatalog>>,
+) -> Result<(RenderSemantics, Rc<IgContextPackageCatalog>, bool), String> {
     let explicit_guides: Vec<ResourceIdentity> = compiled
         .iter()
         .filter(|(path, value)| {
@@ -296,9 +310,8 @@ pub fn build_render_semantics(
     if explicit_guides.len() > 1 {
         return Err("render semantics has multiple explicit primary ImplementationGuides".into());
     }
-    let primary_guide = explicit_guides.first();
+    let primary_guide = explicit_guides.first().cloned();
     let mut mem = MemTree::new();
-    insert_compiled(&mut mem, &compiled)?;
 
     // Terminology cache bytes are semantic inputs even though the public mount
     // surface places them under /site. Copy only this subtree into the semantic
@@ -325,14 +338,6 @@ pub fn build_render_semantics(
     } else {
         None
     };
-    let ctx = IgContext::load_with_tree_and_primary(
-        tree.clone(),
-        Path::new(OWN_DIR),
-        &pkg_root,
-        txcache_dir.as_deref(),
-        primary_guide,
-    );
-
     // Facts mirror pagecorpus's page-pass set: version + txcache. Whole-IG
     // aggregate kinds needing richer facts fire their documented loud gaps.
     let ig_candidates: Vec<&Value> = compiled
@@ -342,7 +347,7 @@ pub fn build_render_semantics(
         })
         .map(|(_, value)| value)
         .collect();
-    let ig = match primary_guide {
+    let ig = match primary_guide.as_ref() {
         Some(primary) => ig_candidates
             .iter()
             .copied()
@@ -355,21 +360,60 @@ pub fn build_render_semantics(
         .unwrap_or("")
         .to_string();
     let facts = IgFacts {
-        txcache_dir,
+        txcache_dir: txcache_dir.clone(),
         ig_version,
         ..Default::default()
     };
+    let (ctx, package_catalog, package_catalog_hit) =
+        IgContext::load_with_preparsed_own_and_primary_reusing_package_catalog(
+            tree.clone(),
+            compiled,
+            &pkg_root,
+            txcache_dir.as_deref(),
+            primary_guide.as_ref(),
+            reusable_package_catalog,
+        );
     let uuid = options
         .run_uuid
         .clone()
         .unwrap_or_else(|| "00000000-0000-4000-8000-editor000000".to_string());
     let engine = Rc::new(FragmentEngine::new(ctx, uuid, options.active_tables, facts));
 
-    Ok(RenderSemantics {
-        engine,
-        packages: bundle,
-        tree,
-    })
+    Ok((
+        RenderSemantics {
+            engine,
+            packages: bundle,
+            tree,
+        },
+        package_catalog,
+        package_catalog_hit,
+    ))
+}
+
+/// Build current render semantics while reusing only authenticated immutable
+/// package metadata. Own resources, txcache, trees, lazy caches, FragmentEngine,
+/// and RenderState are always rebuilt for the current generation.
+pub(crate) fn build_render_semantics_reusing_package_catalog(
+    compiled: Vec<(PathBuf, Value)>,
+    bundle: Option<PackageView>,
+    site_files: &HashMap<PathBuf, Vec<u8>>,
+    options: &SiteOptions,
+    package_catalog_key: site_build::Sha256Digest,
+    reusable: Option<&RenderPackageCatalog>,
+) -> Result<(RenderSemantics, Rc<RenderPackageCatalog>, bool), String> {
+    let candidate = reusable
+        .filter(|catalog| catalog.key == package_catalog_key)
+        .map(|catalog| catalog.catalog.clone());
+    let (semantics, catalog, hit) =
+        build_render_semantics_internal(compiled, bundle, site_files, options, candidate)?;
+    Ok((
+        semantics,
+        Rc::new(RenderPackageCatalog {
+            key: package_catalog_key,
+            catalog,
+        }),
+        hit,
+    ))
 }
 
 /// Build the cheap page/template half over an already-loaded semantic core.

@@ -18,7 +18,7 @@ mod walk;
 
 pub use cli::{main_cli, SnapshotOptions};
 pub use layer_b::{apply_post as apply_layer_b_post, LayerBOptions};
-pub use package::PackageContext;
+pub use package::{PackageContext, SnapshotDependencyManifest};
 pub use walk::{disable_trace, enable_trace};
 
 // Re-export the merge helpers at crate root so `walk/` can reach them via
@@ -42,6 +42,21 @@ pub fn generate_snapshot(
     options: SnapshotOptions,
 ) -> anyhow::Result<Value> {
     walk::generate_snapshot(derived, ctx, options)
+}
+
+/// Generate one snapshot and return the exact PackageContext reads that can
+/// authorize reuse in a later, freshly constructed context. Capture failure or
+/// overflow never changes canonical generation; it returns an incomplete
+/// manifest that always fails revalidation.
+pub fn generate_snapshot_with_manifest(
+    derived: Value,
+    ctx: &PackageContext,
+    options: SnapshotOptions,
+) -> anyhow::Result<(Value, SnapshotDependencyManifest)> {
+    ctx.begin_snapshot_dependency_capture();
+    let generated = walk::generate_snapshot(derived, ctx, options);
+    let manifest = ctx.finish_snapshot_dependency_capture();
+    generated.map(|generated| (generated, manifest))
 }
 
 /// OPT-IN: generate a snapshot (Layer A, unchanged) and then apply the enabled

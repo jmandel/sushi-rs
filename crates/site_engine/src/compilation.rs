@@ -658,7 +658,7 @@ impl SiteEngine {
         let semantic_changed = self.compilation.replace_active(candidate.semantic);
         self.compilation.project = Some(project);
         if semantic_changed {
-            self.clear_preparation();
+            self.invalidate_exact_preparation();
         }
         measurements.record_retained(self.compilation.retained_package_store_stats());
         Ok(CompilationTransition {

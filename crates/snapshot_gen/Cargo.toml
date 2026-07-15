@@ -11,9 +11,11 @@ indexmap.workspace = true
 json_emit.workspace = true
 package_store.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 # Bundle-path gate: build browser-mountable bundles from the isolated cache and
 # run the fixture ladder through a package_store::BundleSource (native proof of
 # the P1 delivery shape).
 package_acquisition.workspace = true
+tempfile.workspace = true

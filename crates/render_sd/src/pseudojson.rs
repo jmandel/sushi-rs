@@ -773,8 +773,8 @@ impl<'a> Ctx<'a> {
 
     fn load_ext_sd(&self, r: &crate::context::Resolved) -> Option<Sd> {
         let f = r.file.clone()?;
-        let text = self.ctx.tree().read(&f)?;
-        Sd::from_json(&text).ok()
+        let value = self.ctx.load_resource_path(&f)?;
+        Some(Sd::from_value(value.as_ref().clone()))
     }
 
     /// `writeCardinality` (psdr:2170).
