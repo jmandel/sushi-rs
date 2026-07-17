@@ -78,7 +78,8 @@ independent engine; there is no process-global Session.
 
 Incremental derivations live entirely inside `SiteEngine::prepare_project` and
 do not add a fifth operation, cache payload, or successor build type. The engine
-retains at most the current and previous successful semantic generations.
+retains exactly three bounded current/previous histories: semantic compilation,
+prepared derivations, and installed runtimes.
 Reusable StructureDefinition snapshots include a complete opaque read manifest
 and must revalidate every positive, negative, ordering, provenance, body, and
 recursive dependency fact against the new package/local context. Publisher
@@ -88,15 +89,14 @@ selection. The new generation always constructs fresh own-resource and
 terminology overlays, mixed lookup caches, render state, output catalog, and
 pages.
 
-Candidates remain off-side to their complete authority boundary. Snapshot
-derivations promote only after a complete new PreparedGuide succeeds; Publisher
-package catalogs promote only after the complete runtime installs. A failure
-before either boundary promotes nothing at that boundary. Incomplete
-observation, identity mismatch, or an explicit resource/fact/byte limit forces
-the ordinary canonical path; bounded tombstones ensure older facts cannot
-outlive the two-generation window. Declaration-level compilation and cross-
-build page replay are disabled because their current observations are not
-complete reuse authority.
+One owned compilation candidate and one owned target candidate remain off-side
+through all fallible close and object-verification work. A single infallible
+success commit advances semantic, preparation, and runtime history together.
+Incomplete identity proof or an explicit resource/fact/byte limit forces the
+ordinary canonical path; bounded tombstones ensure older facts cannot outlive
+the two-generation window. Declaration-level compilation and cross-build page
+replay have no production plumbing; they remain deferred until an independent
+complete dependency proof exists.
 
 ## Generator specifications
 

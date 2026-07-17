@@ -13,16 +13,21 @@
 #   E2  missing example-resource include — `{% include(_relative) X.json|xml %}`
 #       of a checked-in/Publisher example instance not present in _includes.
 #       Same error-vs-empty shape. Out of scope (F4/F5).
-#   E3  unsupported IG-specific tag — `{% sql %}` / `{% sqlToData %}` (IG-
-#       Guidance/genomics extension per survey (d)); the oracle itself PARSE-
-#       ERRORS, so it is out of scope for both.
+#   E3  surrounding-layer tag — `{% sql %}` / `{% sqlToData %}` and Publisher
+#       fragment/localization tags. Plain Jekyll does not register these, so
+#       this Liquid-core-only oracle PARSE-ERRORS. SQL is supported by
+#       SiteEngine's pre-Liquid publisher_sql layer; E3 does not classify that
+#       product capability as unsupported or verified.
 #
 # Anything else is UNEXPLAINED and fails the gate.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ORACLE="$ROOT/scripts/liquid-oracle.rb"
-RENDER="$ROOT/crates/render_liquid/target/release/render"
-[ -x "$RENDER" ] || RENDER="$ROOT/crates/render_liquid/target/debug/render"
+RENDER="${LIQUID_RENDER_BIN:-$ROOT/crates/render_liquid/target/release/render}"
+if [ -z "${LIQUID_RENDER_BIN:-}" ] && [ ! -x "$RENDER" ]; then
+  RENDER="$ROOT/crates/render_liquid/target/debug/render"
+fi
+[ -x "$RENDER" ] || { echo "render_liquid binary not found: $RENDER (build it or set LIQUID_RENDER_BIN)" >&2; exit 2; }
 MANIFEST="$ROOT/crates/render_liquid/tests/corpus/manifest.tsv"
 
 pass=0; e1=0; e2=0; e3=0; unexplained=0
@@ -32,12 +37,11 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 classify() {
   # $1 oracle stderr, $2 oracle out, $3 rust out, $4 template
   local oerr="$1" oout="$2" rout="$3" tpl="$4"
-  # E3: oracle PARSE-errors on a Publisher-custom tag that plain Jekyll's Liquid
-  # does not register — sql/sqlToData (IG-Guidance/genomics) and
-  # lang/lang-fragment/fragment (localization + Publisher fragment tags, survey
-  # (b)). These abort the whole page in the oracle; our engine treats them as
-  # registry-documented passthrough (emit nothing) and renders the rest. Out of
-  # scope for Liquid control-flow parity.
+  # E3: oracle PARSE-errors on a surrounding-layer tag that plain Jekyll's
+  # Liquid does not register — sql/sqlToData and lang/lang-fragment/fragment.
+  # These abort the whole page in this oracle. SQL is executed before Liquid in
+  # the production SiteEngine, so this is only outside the Liquid-core
+  # differential, not a claim that the Publisher renderer lacks SQL.
   if grep -qiE "Unknown tag '(sql|sqlToData|lang|lang-fragment|fragment)'" "$oerr"; then echo E3; return; fi
   # E1/E2: Jekyll ABORTS the whole page when an include file can't be located
   # (IncludeTag raises IOError "Could not locate the included file 'X'"),
@@ -109,7 +113,7 @@ echo "================ liquid F1c differential gate ================"
 echo "PASS (byte-identical) : $pass"
 echo "E1 artifact .xhtml miss: $e1   (out of scope: F4/F5 fragment store)"
 echo "E2 example-resource miss: $e2  (out of scope: F4/F5 example inclusion)"
-echo "E3 sql/sqlToData tag   : $e3   (out of scope: IG-specific extension)"
+echo "E3 surrounding-layer tag: $e3   (not verified by the Liquid-core oracle)"
 echo "UNEXPLAINED            : $unexplained"
 if [ "$unexplained" -gt 0 ]; then
   echo "--- unexplained files ---"; cat "$tmp/unexplained.txt"

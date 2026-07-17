@@ -16,7 +16,9 @@ PreparedGuide + exact PackageEnvironment + selected template coordinate
              +----------------+----------------+
              |                                 |
        produce()                         PublisherRuntime::assemble()
-       page shells + _data               core/template/runtime files
+       one produced-file catalog          core/template/runtime files
+       shells + structural pages +
+       _data + generated includes
              |                                 |
              +----------- authored files ------+
                               |
@@ -33,7 +35,7 @@ The shell/data/runtime results are private preparation artifacts. Every byte
 needed to reconstruct Publisher execution is rooted in the closed `SiteBuild`
 and stored by `ContentRef`; hosts never exchange these pieces individually.
 
-## Shell and `_data` production
+## Produced-file catalog
 
 The production path constructs `ProducerInputs` with
 `ProducerInputs::from_prepared`. It selects the compiler's explicit primary
@@ -41,18 +43,23 @@ ImplementationGuide, verifies resource identity, preserves the primary guide's
 `definition.resource[]` order, and consumes prepared navigation and authored
 roles.
 
-`produce(&ProducerInputs)` emits resource page shells and the derivable `_data`
-model. Shell layout selection and output names follow Publisher configuration
-fallback rules. The historical F0 US Core oracle established byte parity for
-1,297 page shells and `artifacts.json`; current tests cover the in-memory
-`PreparedGuide` boundary and the full browser gate exercises US Core through
-the canonical SiteEngine path. Other data files explicitly classify Publisher
-run-context gaps where source semantics are insufficient, such as
-Publisher-assigned OIDs, validation counters, tooling strings, and global
-previous/next interleaving.
+`produce(&ProducerInputs)` returns one collision-checked path-to-bytes catalog.
+It contains resource page shells, derivable `_data`, generated includes, and
+Publisher-owned TOC/Artifacts wrappers and bodies. One `StructuralModel` drives
+both those structural bodies and `pages.json`, including guides with no explicit
+navigation root. Authored structural paths win explicitly; cross-category path
+collisions fail instead of depending on insertion order. Shell layout selection
+and output names follow Publisher configuration fallback rules.
 
-There is no production `produce -> write temp/pages -> reopen` transition.
-Shells and data move directly into the immutable render model and closed build.
+The historical F0 US Core oracle established byte parity for 1,297 page shells
+and `artifacts.json`; current tests cover the in-memory `PreparedGuide` boundary
+and the full browser gate exercises US Core through the canonical SiteEngine
+path. Other data files explicitly classify Publisher run-context gaps where
+source semantics are insufficient, such as Publisher-assigned OIDs, validation
+counters, tooling strings, and global previous/next interleaving.
+
+There is no production `produce -> write temp/pages -> reopen` transition. The
+generic catalog moves directly into the immutable render model and closed build.
 
 ## Generated fragments are renderer-private
 

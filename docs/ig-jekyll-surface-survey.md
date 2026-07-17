@@ -5,6 +5,11 @@ distribution* measured over real IG source repos, not the theoretical Jekyll/Liq
 Every number below is counted from the corpus; commands are reproducible from
 `scratchpad/ig-survey/`.
 
+> **Historical survey, not a current capability contract.** Current behavior
+> and executable evidence live in the root architecture document and
+> `crates/render_liquid/README.md`. SQL is a Publisher pre-Liquid close-step
+> capability; Cycle deliberately rejects SQL.
+
 **Method.** 16 IG source repos cloned shallow into
 `.../scratchpad/ig-survey/`, plus the local `periodicity-impl/cycle` IG (17 total). Authored,
 Jekyll-processed content = `input/pagecontent/**`, `input/pages/**`, `input/intro-notes/**`
@@ -169,21 +174,27 @@ fhir-ips 1, eu-laboratory 1.
 `{% layout %}`, collections / arbitrary `site.data.*` sprawl beyond the curated surface, Liquid
 inside data files, runtime filesystem `_includes` resolution, definition lists, whitespace-control
 *parity* nuance, and Jekyll `---` front-matter in authored pages (1 page total). `{% sql %}` is an
-IG-Guidance-documented feature used only by IG-Guidance (2×) — keep it a cycle-specific extension,
-not core.
+IG-Guidance-documented Publisher extension used only by IG-Guidance (2×). It is not Liquid core:
+the current Publisher path executes it in SiteEngine before Rust Liquid, while Cycle intentionally
+has no database or SQL tag.
 
 **Recommended build target: implement T0+T1 fully (92% verbatim); make T2 a bounded add-on driven by
 US-Core.** An IG that hits an unimplemented T2 construct should fail loud, not silently mis-render.
 
 ---
 
-## (e) Delta vs cycle's `liquid.ts` subset
+## (e) Historical delta vs the former Cycle subset
+
+This section records the 2026-07-03 implementation that the survey originally
+measured. It is retained as provenance for the cutline, not as a current support
+claim. The present Cycle renderer uses LiquidJS with strict filters and closed
+include/fragment adapters, and deliberately rejects `sql`/`sqlToData`.
 
 cycle's `core/liquid.ts` (LiquidJS locked down) + `liquid-subset.md` already covers the T1 core and
 several T2/extension items. Cross-checked against the corpus:
 
-**Already covered by cycle (good):** `include` → registry/asset, `assign`, `capture`, `comment`,
-`raw`, `{{path|filter}}`, `lang-fragment`, `fragment` (Publisher), `sql`/`sqlToData`, the string
+**Covered by the surveyed Cycle implementation:** `include` → registry/asset, `assign`, `capture`, `comment`,
+`raw`, `{{path|filter}}`, `lang-fragment`, `fragment` (Publisher), the string
 filters (`replace/remove/append/prepend/downcase/upcase/strip/default/date/markdownify`), and the
 `site.data.fhir.ig` surface. cycle also nails the two dominant data paths conceptually (it exposes
 `site.data.fhir.*`).

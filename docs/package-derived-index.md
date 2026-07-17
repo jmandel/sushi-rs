@@ -129,11 +129,14 @@ load-time numbers and the gate results (full corpus at scorecard counts,
 ## `PackageSource` trait + browser bundles (WASM P1)
 
 The read path no longer calls `std::fs` directly: every access goes through the
-`package_store::source::PackageSource` trait
-(`read`/`read_dir`/`exists`/`is_dir`/`write_new`). The native impl `DiskSource`
-forwards each call to `std::fs`, so behavior is byte-for-byte unchanged (the full
-34-IG corpus + `cargo test --workspace` + sushi IPS byte-parity gate this). This
-is what keeps `std::fs` out of the read path so a wasm build stays plausible.
+`package_store::source::PackageSource` trait. Its surface is `read`, optional
+`immutable_content_identity`, `read_dir`, `exists`, non-following regular-file
+`is_file`, `is_dir`, immutable `fork_read_cache`, and write-once `write_new`.
+The native impl `DiskSource` forwards file operations to `std::fs`, returns no
+immutable member identity, and rejects a read-cache fork; browser prepared
+carriers provide both capabilities. This keeps `std::fs` out of every other
+read-path site so a wasm build stays plausible without pretending an ambient
+disk tree is immutable.
 
 Native callers are unchanged: `PackageStore::for_project(ig, cache)` and
 `PackageContext::new(cache, packages)` keep their old signatures and construct a

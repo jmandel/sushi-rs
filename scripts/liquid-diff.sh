@@ -15,7 +15,8 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ORACLE="$ROOT/scripts/liquid-oracle.rb"
-RENDER="$ROOT/crates/render_liquid/target/debug/render"
+RENDER="${LIQUID_RENDER_BIN:-$ROOT/crates/render_liquid/target/debug/render}"
+[ -x "$RENDER" ] || { echo "render_liquid binary not found: $RENDER (build it or set LIQUID_RENDER_BIN)" >&2; exit 2; }
 FIX="$ROOT/crates/render_liquid/tests/fixtures"
 
 pass=0; diff=0; err=0

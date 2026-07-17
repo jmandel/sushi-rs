@@ -40,7 +40,7 @@ crates/render_liquid/
   tests/
     semantics.rs        # unit tests pinning load-bearing behaviors
     fixtures/           # 34 synthetic per-construct fixtures (+contexts)
-    corpus/             # gate manifest + generated contexts/overlays
+    corpus/             # ignored generated contexts/overlays; regenerate before making corpus claims
 scripts/
   liquid-oracle.rb        # the ORACLE: Jekyll 4.4.1 filter set + options
   liquid-build-context.rb # materialize site.data the Jekyll way (CSV/YAML)
@@ -115,9 +115,11 @@ The Java Publisher evaluates `{% fragment %}`/`{% include %}` even inside
 - **Example-resource includes** (`{% include(_relative) X.json|xml %}` of
   checked-in/Publisher example instances) unless the provider supplies them as
   ordinary include files.
-- `{% sql %}` / `{% sqlToData %}` — not part of native Publisher Liquid. Cycle's
-  separate LiquidJS implementation may explicitly inject legacy read-only SQL
-  in its trusted native CLI; portable/browser Cycle mode does not.
+- `{% sql %}` / `{% sqlToData %}` — not part of Liquid core. The
+  `publisher_sql` close step expands them once into ordinary page/include/data
+  files before this crate parses anything. The renderer therefore has no SQL
+  state or database lifecycle. Calling this crate directly leaves the tags out
+  of scope. Cycle's separate LiquidJS renderer remains independent.
 - `highlight` / `tablerow` / `cycle` — measured **zero** in the corpus.
 - Layout inheritance / `{% layout %}` — the `page` crate (F5), not Liquid-core.
 
@@ -136,8 +138,9 @@ bash scripts/liquid-diff.sh fixtures                          # 34/34 byte-equal
 bash scripts/liquid-gate-setup.sh && bash scripts/liquid-gate.sh   # full corpus
 ```
 
-Result (10 IGs, all liquid-bearing authored pages + includes on the cutline —
-US Core's full T2 set + T1 pages, plus every other IG's T2 files):
+Historical result from the 2026-07-03 captured corpus (10 IGs, all
+liquid-bearing authored pages + includes on that cutline — US Core's full T2
+set + T1 pages, plus every other IG's T2 files):
 
 ```
 PASS (byte-identical) : 388
@@ -147,6 +150,11 @@ E3 publisher-custom tag :   4   (out of scope: sql/sqlToData, lang-fragment)
 UNEXPLAINED            :   0
 ```
 
-Every residual diff is an accounted out-of-scope class; **0 unexplained on the
-cutline**. The `cargo test -p render_liquid` and 34 synthetic-fixture commands
-above are the authoritative current gates rather than a duplicated test count.
+Every residual diff in that captured run was an accounted surrounding-layer or
+missing-input class; **0 unexplained on the historical cutline**. The generated
+corpus is intentionally ignored and is absent from a clean checkout. Therefore
+the current always-available evidence is `cargo test -p render_liquid` plus the
+synthetic fixture differential; a new real-guide claim requires regenerating
+the corpus from an explicit `LIQUID_CORPUS_ROOT` and retaining its receipt. The
+current gaps are stated in this document and pinned by the executable semantic
+and differential gates above; there is no generated capability-document layer.

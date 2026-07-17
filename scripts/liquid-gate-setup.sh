@@ -6,14 +6,19 @@
 # Publisher-generated artifact `.xhtml` includes), and a manifest.tsv that
 # `liquid-diff.sh corpus` consumes.
 #
-# The corpus INPUTS are READ-ONLY (the staged IG source trees under
-# temp/{top20,holdout}); everything generated here lands under
+# The corpus INPUTS are READ-ONLY (captured staged IG source trees under an
+# explicit LIQUID_CORPUS_ROOT/{top20,holdout}); everything generated here lands under
 # crates/render_liquid/tests/corpus/gen/ so the gate is reproducible.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CORPUS="$ROOT/crates/render_liquid/tests/corpus"
 GEN="$CORPUS/gen"
-TEMP="${LIQUID_CORPUS_ROOT:-/home/jmandel/hobby/sushi-rs/temp}"
+if [ -z "${LIQUID_CORPUS_ROOT:-}" ]; then
+  echo "LIQUID_CORPUS_ROOT is required and must name the captured top20/holdout corpus" >&2
+  exit 2
+fi
+TEMP="$(realpath "$LIQUID_CORPUS_ROOT")"
+[ -d "$TEMP" ] || { echo "LIQUID_CORPUS_ROOT is not a directory: $TEMP" >&2; exit 2; }
 MOCK="$CORPUS/mock-ctx.json"
 
 rm -rf "$GEN"; mkdir -p "$GEN/ctx" "$GEN/inc"

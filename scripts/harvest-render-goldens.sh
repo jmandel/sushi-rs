@@ -38,9 +38,11 @@
 #   harvest-render-goldens.sh <ig-slug>
 # where <ig-slug> is one of: us-core sdc plan-net
 #
-# Environment (all have sane defaults):
-#   PUBLISHER_JAR   path to publisher.jar (default: cycle input-cache 2.2.10)
-#   SCRATCH         scratchpad root for isolated builds
+# Required environment:
+#   PUBLISHER_JAR   path to the pinned publisher.jar
+#   SOURCE_DIR      read-only checkout of the selected IG
+#   BUILD_ROOT      disk-backed root for isolated builds and package caches
+# Optional environment:
 #   GOLDENS_DIR     destination render-goldens/ dir (default: repo render-goldens)
 #   MAX_FRAGMENT_BYTES  fragments larger than this are excluded + logged (default 1048576 = 1MiB).
 #     Rationale: the only fragments that blow past this are the *-{xml,json,ttl}-html
@@ -62,26 +64,31 @@ if [[ -z "$SLUG" ]]; then
 fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCRATCH="${SCRATCH:-/tmp/claude-1000/-home-jmandel-hobby/33fc8265-3f9a-4a4b-8eaf-39a38ad53b3d/scratchpad}"
-PUBLISHER_JAR="${PUBLISHER_JAR:-/home/jmandel/hobby/periodicity-impl/cycle/input-cache/publisher.jar}"
+for required in PUBLISHER_JAR SOURCE_DIR BUILD_ROOT; do
+  if [[ -z "${!required:-}" ]]; then
+    echo "$required is required; see the environment contract at the top of this script" >&2
+    exit 2
+  fi
+done
+PUBLISHER_JAR="$(realpath "$PUBLISHER_JAR")"
+SRC="$(realpath "$SOURCE_DIR")"
 GOLDENS_DIR="${GOLDENS_DIR:-$REPO_ROOT/render-goldens}"
 MAX_FRAGMENT_BYTES="${MAX_FRAGMENT_BYTES:-1048576}"
-IG_SURVEY="$SCRATCH/ig-survey"
-IG_SURVEY_MINE="$SCRATCH/ig-survey-mine"
-# Build scratch defaults to a DISK-backed location (NOT the small tmpfs
-# scratchpad): the IG Publisher's cross-version comparison packages and package
-# cache are large (US Core alone unpacks ~8 historical comparison packages).
-# Override with BUILD_ROOT= if needed. Kept OUTSIDE the repo so it is never
-# committed. IMPORTANT: the path MUST be normalized (no "..") — the publisher's
+# Build scratch must be a DISK-backed location (NOT a small tmpfs): the IG
+# Publisher's cross-version comparison packages and package cache are large (US
+# Core alone unpacks ~8 historical comparison packages). Keep it outside the
+# repo so it is never committed. IMPORTANT: the path MUST be normalized (no
+# "..") — the publisher's
 # PublisherIGLoader.loadPrePages does path-substring arithmetic that throws
 # StringIndexOutOfBoundsException when the build dir path contains "..".
-BUILD_ROOT="$(realpath -m "${BUILD_ROOT:-$REPO_ROOT/../sushi-rs-snapshot-f0-builds}")"
+BUILD_ROOT="$(realpath -m "$BUILD_ROOT")"
 
-# Map slug -> read-only source dir, publisher target (ig.ini path relative to src)
+# Map slug to provenance URL. SOURCE_DIR is always explicit so the harvester
+# cannot silently consume a stale developer checkout.
 case "$SLUG" in
-  us-core)  SRC="$IG_SURVEY_MINE/US-Core"; REMOTE="https://github.com/HL7/US-Core.git" ;;
-  sdc)      SRC="$IG_SURVEY/sdc"; REMOTE="https://github.com/HL7/sdc.git" ;;
-  plan-net) SRC="$IG_SURVEY_MINE/davinci-pdex-plan-net"; REMOTE="https://github.com/HL7/davinci-pdex-plan-net.git" ;;
+  us-core)  REMOTE="https://github.com/HL7/US-Core.git" ;;
+  sdc)      REMOTE="https://github.com/HL7/sdc.git" ;;
+  plan-net) REMOTE="https://github.com/HL7/davinci-pdex-plan-net.git" ;;
   *) echo "unknown ig slug: $SLUG" >&2; exit 2 ;;
 esac
 

@@ -130,11 +130,11 @@ ready bytes by digest/length from OPFS; build-id response caches and transferred
 ArrayBuffers are performance fallbacks, not authority. There is no derived-
 artifact manifest, asset-byte API, or base64 generation cache.
 
-Within WASM, PreparedGuide and target preparation have exact in-session reuse.
-Their identity binds ProjectRevision, PackageLock, actual compiled semantics,
-preparation inputs, and recipe/API versions. There is intentionally no browser
-cache of the UI `CompileResult`: it cannot restore compiler semantics into a
-new Session and would be a false cache hit.
+Within WASM, `SiteEngine` owns bounded current/previous semantic, preparation,
+and runtime histories. Reuse stays private and revalidates the exact inputs of
+the derived value; there is no persisted or overlapping exact `PreparedGuide`
+cache. There is intentionally no browser cache of the UI `CompileResult`: it
+cannot restore compiler semantics into a new Session and would be a false hit.
 
 Native complete-output reuse is private host storage, not a `site_build` API.
 The host derives a pre-render pointer from the exact closed input and renderer
