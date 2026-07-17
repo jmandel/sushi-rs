@@ -158,6 +158,38 @@ fn direct_projection_uses_explicit_primary_order_examples_and_authored_fragments
 }
 
 #[test]
+fn authored_structural_pages_override_only_their_generated_defaults() {
+    let mut prepared = fixture();
+    prepared.authored_files.extend([
+        authored(
+            AuthoredFileRole::PageContent,
+            "artifacts.md",
+            "input/pages/artifacts.md",
+        ),
+        authored(
+            AuthoredFileRole::Include,
+            "en/toc.xml",
+            "input/includes/en/toc.xml",
+        ),
+    ]);
+    let inputs = site_producer::ProducerInputs::from_prepared(
+        &prepared,
+        &json!({"defaults":{}}),
+        HashMap::new(),
+        "en/",
+    )
+    .unwrap();
+
+    assert!(inputs.authored_page_content.contains("artifacts.md"));
+    assert!(inputs.authored_include_content.contains("en/toc.xml"));
+    let output = site_producer::produce(&inputs).unwrap();
+    assert!(output.files.contains_key("en/toc.html"));
+    assert!(!output.files.contains_key("en/artifacts.html"));
+    assert!(!output.files.contains_key("_includes/en/toc.xml"));
+    assert!(output.files.contains_key("_includes/en/artifacts.xml"));
+}
+
+#[test]
 fn missing_explicit_primary_fails_instead_of_selecting_an_ambient_guide() {
     let mut prepared = fixture();
     prepared
@@ -188,7 +220,8 @@ fn prepared_menu_is_emitted_by_site_producer() {
     )
     .unwrap();
     let output = site_producer::produce(&inputs).unwrap();
-    assert!(output.includes["menu.xml"].contains("<a href=\"index.html\">Home</a>"));
+    assert!(String::from_utf8_lossy(&output.files["_includes/menu.xml"])
+        .contains("<a href=\"index.html\">Home</a>"));
 }
 
 #[test]
@@ -282,8 +315,11 @@ fn from_memory_orders_resources_and_reads_captured_template_relative_layouts() {
     );
 
     let output = site_producer::produce(&inputs).unwrap();
-    assert_eq!(output.pages["en/CodeSystem-first.html"], "CodeSystem/first");
-    assert_eq!(output.pages["en/ValueSet-second.html"], "ValueSet/second");
+    assert_eq!(
+        output.files["en/CodeSystem-first.html"],
+        b"CodeSystem/first"
+    );
+    assert_eq!(output.files["en/ValueSet-second.html"], b"ValueSet/second");
 }
 
 #[test]

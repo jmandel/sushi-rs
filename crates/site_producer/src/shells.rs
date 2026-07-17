@@ -257,4 +257,34 @@ mod tests {
         assert!(error.contains("ValueSet/first"));
         assert!(error.contains("ValueSet/second"));
     }
+
+    #[test]
+    fn resource_shell_cannot_claim_a_generated_data_path() {
+        let resource = Resource::from_value(
+            json!({
+                "resourceType": "ValueSet",
+                "id": "collision",
+                "name": "Collision",
+                "status": "draft"
+            }),
+            "ValueSet-collision.json",
+            false,
+        )
+        .unwrap();
+        let inputs = ProducerInputs::from_memory(
+            vec![resource],
+            &json!({"defaults":{"ValueSet":{
+                "template-base":"layouts/base.html",
+                "base":"_data/pages.json"
+            }}}),
+            HashMap::from([("layouts/base.html".into(), "{{[uid]}}".into())]),
+            &json!({"resourceType":"ImplementationGuide","id":"guide"}),
+            HashSet::new(),
+            "",
+        )
+        .unwrap();
+
+        let error = crate::produce(&inputs).unwrap_err().to_string();
+        assert!(error.contains("Publisher producer collision at _data/pages.json"));
+    }
 }

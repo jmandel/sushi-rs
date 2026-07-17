@@ -30,7 +30,7 @@ struct Case {
     report: PathBuf,
     expected_changed_output: String,
     expect_compilation_change: bool,
-    expect_snapshot_partial_reuse: bool,
+    expected_snapshot_resource_misses: Option<u64>,
     template_coordinate: String,
     build_epoch_secs: i64,
     fixture: Value,
@@ -855,14 +855,9 @@ fn require_snapshot_reuse(case: &Case, retained_b: &Evidence, fresh_b: &Evidence
     let retained_misses = count_metric(retained_b, "snapshotResourceCacheMisses")?;
     let fresh_hits = count_metric(fresh_b, "snapshotResourceCacheHits")?;
     let fresh_misses = count_metric(fresh_b, "snapshotResourceCacheMisses")?;
-    let fresh_whole_hit = count_metric(fresh_b, "snapshotCompletedLocalCacheHit")?;
-    if fresh_whole_hit != 0.0 {
-        bail!("fresh B incorrectly reported exact snapshot reuse");
-    }
-    if case.expect_snapshot_partial_reuse {
-        if metric(retained_b, "snapshotCompletedLocalCacheHit")? != 0.0
-            || retained_hits <= 0.0
-            || retained_misses <= 0.0
+    if let Some(expected_misses) = case.expected_snapshot_resource_misses {
+        let expected_misses = expected_misses as f64;
+        if retained_misses != expected_misses
             || fresh_hits != 0.0
             || fresh_misses <= 0.0
             || retained_hits + retained_misses != fresh_misses
@@ -870,20 +865,19 @@ fn require_snapshot_reuse(case: &Case, retained_b: &Evidence, fresh_b: &Evidence
             || count_metric(fresh_b, "snapshotDerivationAdmitted")? != 1.0
         {
             bail!(
-                "retained B did not prove bounded partial snapshot reuse: retained hits/misses={retained_hits}/{retained_misses}, fresh hits/misses={fresh_hits}/{fresh_misses}, metrics={:?}",
+                "retained B did not prove exact bounded per-resource snapshot reuse: retained hits/misses={retained_hits}/{retained_misses}, expected misses={expected_misses}, fresh hits/misses={fresh_hits}/{fresh_misses}, metrics={:?}",
                 retained_b.metrics
             );
         }
     } else {
-        if count_metric(retained_b, "snapshotCompletedLocalCacheHit")? != 1.0
-            || retained_hits != 0.0
+        if retained_hits != fresh_misses
             || retained_misses != 0.0
             || fresh_hits != 0.0
             || fresh_misses <= 0.0
             || count_metric(fresh_b, "snapshotDerivationAdmitted")? != 1.0
         {
             bail!(
-                "site-only retained B did not exercise exact snapshot reuse against a canonical fresh miss: {:?}",
+                "site-only retained B did not exercise complete per-resource snapshot reuse against a canonical fresh miss: {:?}",
                 retained_b.metrics
             );
         }
@@ -916,7 +910,7 @@ fn require_render_package_catalog_reuse(
         );
     }
 
-    if case.expect_snapshot_partial_reuse {
+    if case.expected_snapshot_resource_misses.is_some() {
         let retained_generations =
             count_metric(retained_b, "renderPackageCatalogRetainedGenerations")?;
         if count_metric(retained_b, "renderSemanticsCacheHit")? != 0.0
@@ -1140,8 +1134,7 @@ fn run_case(case: &Case) -> Result<Receipt> {
         let recovery_misses = count_metric(recovery_b, "snapshotResourceCacheMisses")?;
         let fresh_hits = count_metric(&fresh_b, "snapshotResourceCacheHits")?;
         let fresh_misses = count_metric(&fresh_b, "snapshotResourceCacheMisses")?;
-        if count_metric(recovery_b, "snapshotCompletedLocalCacheHit")? != 0.0
-            || recovery_hits <= 0.0
+        if recovery_hits <= 0.0
             || recovery_misses <= 0.0
             || recovery_hits + recovery_misses != fresh_misses
             || fresh_hits != 0.0

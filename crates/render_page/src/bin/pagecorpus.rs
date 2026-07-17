@@ -3,8 +3,12 @@
 //! against the publisher's Jekyll output (`output/en/*.html`, or for cycle the
 //! `temp/pages/en/*.html` re-render — cycle's output/ has no en pages).
 //!
-//! Usage: pagecorpus <ig> [--verbose] [--only <name>] [--limit N] [--engine]
+//! Usage: PAGE_CORPUS_BUILD_ROOT=<captured-builds> pagecorpus <ig>
+//!        [--verbose] [--only <name>] [--limit N] [--engine]
 //!   ig: cycle | plan-net | us-core
+//!   PAGE_CORPUS_BUILD_ROOT contains one self-contained captured Publisher
+//!   build per IG (`<root>/<ig>/temp/pages`, output, isolated package cache).
+//!   Cycle may override its golden directory with CYCLE_GOLDEN_DIR.
 //!   --engine : ALSO resolve registered generated includes through the typed
 //!              FragmentEngine adapter (proves byte-identical materialization);
 //!              default reads all includes from the build's pre-generated
@@ -16,8 +20,25 @@ use render_page::{render_page, FragmentEngineArtifactResolver, PageProvider, Sit
 use render_sd::context::IgContext;
 use render_sd::engine::{FragmentEngine, IgFacts};
 
-const REPO: &str = "/home/jmandel/hobby/sushi-rs-snapshot";
-const F0: &str = "/home/jmandel/hobby/sushi-rs-snapshot-f0-builds";
+fn build_root() -> PathBuf {
+    let value = std::env::var_os("PAGE_CORPUS_BUILD_ROOT").unwrap_or_else(|| {
+        eprintln!("PAGE_CORPUS_BUILD_ROOT is required and must name captured Publisher builds");
+        std::process::exit(2);
+    });
+    let root = PathBuf::from(value);
+    if !root.is_dir() {
+        eprintln!(
+            "PAGE_CORPUS_BUILD_ROOT is not a directory: {}",
+            root.display()
+        );
+        std::process::exit(2);
+    }
+    root
+}
+
+fn engine_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
 
 struct IgPaths {
     /// The Jekyll source root (`temp/pages`).
@@ -37,39 +58,37 @@ struct IgPaths {
 }
 
 fn ig_paths(ig: &str) -> IgPaths {
+    let b = build_root().join(ig);
     match ig {
         "plan-net" => {
             // Multi-language build: inputs under temp/pages/en, goldens under
             // output/en, page.path = `en/<name>`.
-            let b = format!("{}/{}", F0, ig);
             IgPaths {
-                pages_root: PathBuf::from(format!("{}/temp/pages", b)),
-                input_dir: PathBuf::from(format!("{}/temp/pages/en", b)),
-                golden_dir: PathBuf::from(format!("{}/output/en", b)),
-                data_dir: PathBuf::from(format!("{}/temp/pages/_data", b)),
-                includes_dir: PathBuf::from(format!("{}/temp/pages/_includes", b)),
-                own_dir: PathBuf::from(format!("{}/output", b)),
-                packages_dir: PathBuf::from(format!("{}/.home/.fhir/packages", b)),
-                txcache_dir: Some(PathBuf::from(format!("{}/input-cache/txcache", b))),
+                pages_root: b.join("temp/pages"),
+                input_dir: b.join("temp/pages/en"),
+                golden_dir: b.join("output/en"),
+                data_dir: b.join("temp/pages/_data"),
+                includes_dir: b.join("temp/pages/_includes"),
+                own_dir: b.join("output"),
+                packages_dir: b.join(".home/.fhir/packages"),
+                txcache_dir: Some(b.join("input-cache/txcache")),
             }
         }
         "us-core" => {
             // FLAT single-language build: inputs temp/pages/*.html, goldens
             // output/*.html, page.path = `<name>` (no en/ subdir).
-            let b = format!("{}/{}", F0, ig);
             IgPaths {
-                pages_root: PathBuf::from(format!("{}/temp/pages", b)),
-                input_dir: PathBuf::from(format!("{}/temp/pages", b)),
-                golden_dir: PathBuf::from(format!("{}/output", b)),
-                data_dir: PathBuf::from(format!("{}/temp/pages/_data", b)),
-                includes_dir: PathBuf::from(format!("{}/temp/pages/_includes", b)),
-                own_dir: PathBuf::from(format!("{}/output", b)),
-                packages_dir: PathBuf::from(format!("{}/.home/.fhir/packages", b)),
-                txcache_dir: Some(PathBuf::from(format!("{}/input-cache/txcache", b))),
+                pages_root: b.join("temp/pages"),
+                input_dir: b.join("temp/pages"),
+                golden_dir: b.join("output"),
+                data_dir: b.join("temp/pages/_data"),
+                includes_dir: b.join("temp/pages/_includes"),
+                own_dir: b.join("output"),
+                packages_dir: b.join(".home/.fhir/packages"),
+                txcache_dir: Some(b.join("input-cache/txcache")),
             }
         }
         "cycle" => {
-            let b = "/home/jmandel/hobby/periodicity-impl/cycle";
             // cycle's committed output/ has no en pages (the publisher's Jekyll
             // step aborted on the missing `_includes/sample-viewer-links.md`,
             // which the sitegen wrapper generates in a real build). We regenerate
@@ -79,19 +98,16 @@ fn ig_paths(ig: &str) -> IgPaths {
             // fresh Jekyll output tree captured as the page-parity oracle.
             let golden_dir = std::env::var("CYCLE_GOLDEN_DIR")
                 .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from(format!("{}/output/en", b)));
+                .unwrap_or_else(|_| b.join("output/en"));
             IgPaths {
-                pages_root: PathBuf::from(format!("{}/temp/pages", b)),
-                input_dir: PathBuf::from(format!("{}/temp/pages/en", b)),
+                pages_root: b.join("temp/pages"),
+                input_dir: b.join("temp/pages/en"),
                 golden_dir,
-                data_dir: PathBuf::from(format!("{}/temp/pages/_data", b)),
-                includes_dir: PathBuf::from(format!("{}/temp/pages/_includes", b)),
-                own_dir: PathBuf::from(format!("{}/temp/pages", b)),
-                packages_dir: PathBuf::from(format!(
-                    "{}/.fhir/packages",
-                    std::env::var("HOME").unwrap_or_default()
-                )),
-                txcache_dir: Some(PathBuf::from(format!("{}/input-cache/txcache", b))),
+                data_dir: b.join("temp/pages/_data"),
+                includes_dir: b.join("temp/pages/_includes"),
+                own_dir: b.join("temp/pages"),
+                packages_dir: b.join(".home/.fhir/packages"),
+                txcache_dir: Some(b.join("input-cache/txcache")),
             }
         }
         _ => panic!("unknown ig {}", ig),
@@ -111,7 +127,10 @@ fn build_engine(ig: &str, p: &IgPaths) -> FragmentEngine {
 }
 
 fn harvest_uuid(ig: &str) -> String {
-    let dir = format!("{}/render-goldens/{}/fragments", REPO, ig);
+    let dir = engine_root()
+        .join("render-goldens")
+        .join(ig)
+        .join("fragments");
     let Ok(rd) = std::fs::read_dir(&dir) else {
         return String::new();
     };
@@ -345,6 +364,9 @@ fn main() {
     );
     for (n, d, len) in fails.iter().take(500) {
         println!("    {} @ {} / {}", n, d, len);
+    }
+    if total == 0 || no_golden != 0 || !fails.is_empty() {
+        std::process::exit(1);
     }
 }
 

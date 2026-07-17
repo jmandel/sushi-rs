@@ -18,8 +18,9 @@
 //!   (`{% include x.md k="v" %}` + `include.k`).
 //!
 //! Behavior matches **Jekyll 4.4.1's Liquid 4.0.4** (Jekyll wins over spec on
-//! divergence). See `scripts/liquid-oracle.rb` for the reference and
-//! `tests/differential.rs` for the gate.
+//! divergence). See `scripts/liquid-oracle.rb` for the reference,
+//! `tests/semantics.rs` for focused cases, and `scripts/liquid-diff.sh` for the
+//! differential gate.
 //!
 //! # The {% raw %} Publisher quirk (registry)
 //! The Java IG Publisher evaluates `{% fragment %}` / `{% include %}` even
@@ -74,7 +75,7 @@ pub fn tag_registry() -> Vec<TagDoc> {
         TagDoc { name: "comment", kind: Supported, note: "T1: body discarded." },
         TagDoc { name: "raw", kind: Supported, note: "T1: body emitted VERBATIM by default; with Options::publisher_raw_quirk the body is re-parsed+evaluated to mirror the Java Publisher (survey nasty #4)." },
         TagDoc { name: "include", kind: Supported, note: "T1/T2: registry-resolved via DataProvider::include_source; supports parameterized includes `k=\"v\"` exposed as include.*, dynamic `{{path}}.md` names, and recursive re-render." },
-        TagDoc { name: "include_relative", kind: Supported, note: "Treated identically to include (corpus does not distinguish load paths)." },
+        TagDoc { name: "include_relative", kind: Supported, note: "Resolved through DataProvider::include_source_relative so the page host can use the including page directory; providers may deliberately fall back to ordinary include resolution." },
         TagDoc { name: "if", kind: Supported, note: "T2: elsif/else, ==/!=/<>/</>/<=/>=, contains, .size operands, and/or (right-assoc, no precedence — Jekyll/Liquid)." },
         TagDoc { name: "unless", kind: Supported, note: "T2: desugars to negated if." },
         TagDoc { name: "for", kind: Supported, note: "T2: forloop.{index,index0,rindex,rindex0,first,last,length}; offset:/limit:/reversed; break/continue; for-else." },
@@ -85,7 +86,7 @@ pub fn tag_registry() -> Vec<TagDoc> {
         TagDoc { name: "decrement", kind: Supported, note: "Liquid counter (prints post-decrement, starts at -1)." },
         TagDoc { name: "lang-fragment", kind: Passthrough, note: "Localization tag: emits nothing (host may register a handler); out-of-core." },
         TagDoc { name: "fragment", kind: Passthrough, note: "Publisher fragment tag: emits nothing here (F4 fragment store handles it); QUIRK: Publisher evaluates it inside raw — see publisher_raw_quirk." },
-        TagDoc { name: "sql/sqlToData", kind: OutOfScope, note: "IG-Guidance/genomics-only documented feature; emits nothing (cycle-specific extension per survey (d)). The oracle (plain Jekyll) also can't parse it — a parse error, correctly out of scope." },
+        TagDoc { name: "sql/sqlToData", kind: OutOfScope, note: "Not Liquid-core. publisher_sql expands these directives once into ordinary source/include/data files before this crate parses anything; direct users of render_liquid still receive an unknown tag. Cycle's LiquidJS renderer is separate." },
         TagDoc { name: "highlight/tablerow/cycle", kind: OutOfScope, note: "Measured ZERO in corpus — not implemented (parse as UnknownTag, emit nothing)." },
         TagDoc { name: "layout", kind: OutOfScope, note: "Layout inheritance is the `page` crate's job (F5), not Liquid-core; out of scope here." },
     ]

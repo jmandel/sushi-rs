@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -10,8 +10,9 @@ use crate::render_surface::{
     build_render_semantics_reusing_package_catalog, RenderPackageCatalog, RenderSemantics,
 };
 use crate::runtime::{
-    AuthenticatedObject, ObjectMap, OutputDescriptor, OutputResourceSubject, OutputSubjectPage,
-    PreparedOutput, PublisherRecipeAssets, PublisherRuntime,
+    is_static_output, AuthenticatedObject, MaterializedPublisherCatalog, ObjectMap,
+    OutputDescriptor, OutputResourceSubject, OutputSubjectPage, PreparedOutput,
+    PublisherRecipeAssets, PublisherRenderCore, PublisherRuntime,
 };
 use crate::{
     build_render_semantics, build_render_state_from_semantics, PackageView, RenderState,
@@ -19,24 +20,20 @@ use crate::{
 };
 
 const ENGINE_API: u32 = 1;
-const PREPARED_GUIDE_CACHE_SCHEMA: &str = "prepared-guide-cache-key/v1";
+const PREPARED_GUIDE_IDENTITY_SCHEMA: &str = "prepared-guide-identity/v1";
 const PREPARED_GUIDE_RECIPE: &str = "sushi.snapshot+site-semantics/v1";
-const SNAPSHOT_COMPLETED_LOCAL_CACHE_SCHEMA: &str = "snapshot-completed-local-cache-key/v1";
-const SNAPSHOT_COMPLETED_LOCAL_RECIPE: &str = "snapshot-gen.walk+local-precedence/v1";
-const SNAPSHOT_DERIVATION_HISTORY_LIMIT: usize = 2;
 const SNAPSHOT_DERIVATION_MAX_RESOURCES: usize = 4_096;
 const SNAPSHOT_DERIVATION_MAX_FACTS: usize = 100_000;
 const SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES: usize = 32 * 1024 * 1024;
-const SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES: usize = 128 * 1024 * 1024;
-const CLOSED_SITE_BUILD_CACHE_SCHEMA: &str = "closed-site-build-cache-key/v1";
+const SNAPSHOT_DERIVATION_MAX_SNAPSHOT_JSON_BYTES: usize = 128 * 1024 * 1024;
 const CYCLE_PROJECTION_RECIPE: &str = "site-build.cycle-projection/v2";
+const CYCLE_RUNTIME_KEY_SCHEMA: &str = "cycle-runtime-key/v1";
 const PUBLISHER_RUNTIME_PREPARATION_SCHEMA: &str = "publisher-runtime-preparation-key/v1";
 const PUBLISHER_RUNTIME_PREPARATION_RECIPE: &str =
-    "publisher-template-rust.runtime+model+render+catalog/v1";
-const PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA: &str = "publisher-render-semantics-cache/v1";
+    "publisher-template-rust.runtime+model+structural+render+catalog/v3";
+const PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA: &str = "publisher-render-semantics-cache/v2";
 const PUBLISHER_RENDER_PACKAGE_CATALOG_CACHE_SCHEMA: &str =
     "publisher-render-package-catalog-cache/v2";
-const PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT: usize = 2;
 const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_PACKAGES: usize = 1_024;
 const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_RESOURCE_ENTRIES: usize = 100_000;
 const PUBLISHER_RENDER_PACKAGE_CATALOG_MAX_APPROX_BYTES: usize = 32 * 1024 * 1024;
@@ -88,6 +85,7 @@ pub enum GeneratorKind {
 
 #[derive(Clone)]
 struct PackageMaterial {
+    key: package_store::PreparedPackageKey,
     object: AuthenticatedObject,
     declared_dependencies: BTreeMap<String, String>,
 }
@@ -106,6 +104,7 @@ impl PackageMaterial {
         };
         let declared_dependencies = mount.declared_dependencies.clone();
         Ok(Self {
+            key: mount.key,
             object: AuthenticatedObject::eager_authenticated(content, artifact)
                 .map_err(|error| format!("prepared package carrier: {error}"))?,
             declared_dependencies,
@@ -125,6 +124,7 @@ impl std::fmt::Debug for PackageMaterial {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PackageMaterial")
+            .field("key", &self.key)
             .field("content", self.content())
             .field("declared_dependencies", &self.declared_dependencies)
             .finish_non_exhaustive()
@@ -133,9 +133,10 @@ impl std::fmt::Debug for PackageMaterial {
 
 #[derive(Clone)]
 pub struct PackageEnvironment {
+    source: Rc<package_store::BundleSource>,
     packages: PackageView,
-    mounted_labels: Vec<String>,
-    materials: BTreeMap<String, PackageMaterial>,
+    mounted_labels: Rc<Vec<String>>,
+    materials: Rc<BTreeMap<String, PackageMaterial>>,
 }
 
 impl PackageEnvironment {
@@ -157,17 +158,98 @@ impl PackageEnvironment {
             mounted_labels.push(label.clone());
             materials.insert(label, material);
         }
+        Self::from_parts(source, mounted_labels, materials)
+    }
+
+    fn from_parts(
+        source: package_store::BundleSource,
+        mounted_labels: Vec<String>,
+        materials: BTreeMap<String, PackageMaterial>,
+    ) -> Result<Self, String> {
+        let source = Rc::new(source);
         let root = source.cache_root().to_path_buf();
         let carrier_identities = materials
             .iter()
             .map(|(label, material)| (label.clone(), material.content().clone()))
             .collect();
         Ok(Self {
-            packages: PackageView::new(Rc::new(source), root, None)
+            packages: PackageView::new(source.clone(), root, None)
                 .with_carrier_identities(carrier_identities),
-            mounted_labels,
-            materials,
+            source,
+            mounted_labels: Rc::new(mounted_labels),
+            materials: Rc::new(materials),
         })
+    }
+
+    /// Return a successor environment by mounting one complete package batch.
+    /// Validation finishes before the shallow source clone; all remaining
+    /// fallible construction stays off-side, so callers can atomically replace
+    /// the prior environment only after the successor is complete. The
+    /// execution view and package-lock carriers are created from each same
+    /// typed `PreparedPackage`; they cannot drift into parallel authorities.
+    pub fn extended(
+        &self,
+        prepared: Vec<package_store::PreparedPackage>,
+        operation: &str,
+    ) -> Result<(Self, u32), String> {
+        let mut transaction = BTreeSet::new();
+        for package in &prepared {
+            if !transaction.insert(package.label.clone()) {
+                return Err(format!(
+                    "{operation}: duplicate package label in one transaction: {}",
+                    package.label
+                ));
+            }
+            if let Some(existing) = self.materials.get(&package.label) {
+                let incoming = site_build::Sha256Digest::parse(package.artifact_sha256())
+                    .map_err(|error| format!("{operation}: prepared carrier digest: {error}"))?;
+                if existing.key != package.key || existing.content().sha256 != incoming {
+                    return Err(format!(
+                        "{operation}: package label {} is already mounted with different content",
+                        package.label
+                    ));
+                }
+            }
+        }
+
+        let mut source = (*self.source).clone();
+        let mut mounted_labels = (*self.mounted_labels).clone();
+        let mut materials = (*self.materials).clone();
+        let mut added = 0u32;
+        for package in prepared {
+            if materials.contains_key(&package.label) {
+                continue;
+            }
+            let label = package.label.clone();
+            let material = PackageMaterial::from_prepared(package.mount_into(&mut source))?;
+            mounted_labels.push(label.clone());
+            materials.insert(label, material);
+            added += 1;
+        }
+        if added == 0 {
+            return Ok((self.clone(), 0));
+        }
+        Ok((Self::from_parts(source, mounted_labels, materials)?, added))
+    }
+
+    pub fn mounted_len(&self) -> usize {
+        self.mounted_labels.len()
+    }
+
+    pub fn mounted_labels(&self) -> &[String] {
+        self.mounted_labels.as_slice()
+    }
+
+    pub fn package_key(&self, label: &str) -> Option<&package_store::PreparedPackageKey> {
+        self.materials.get(label).map(|material| &material.key)
+    }
+
+    pub fn all_packages(&self) -> PackageView {
+        self.packages.clone()
+    }
+
+    pub fn compression_metrics(&self) -> package_store::BundleCompressionMetrics {
+        self.source.compression_metrics()
     }
 
     pub fn resolve_template(&self, coordinate: &str) -> Result<TemplateResolution, String> {
@@ -273,26 +355,17 @@ pub trait PackageProvider {
 }
 
 #[derive(Clone, Debug, Default)]
-struct PrepareMeasurements {
+pub(crate) struct PrepareMeasurements {
     total_ms: f64,
-    project_revision_ms: f64,
-    package_lock_ms: f64,
-    prepared_guide_key_ms: f64,
-    prepared_guide_ms: f64,
-    snapshot_completed_local_cache_hit: bool,
     snapshot_resource_cache_hits: u64,
     snapshot_resource_cache_misses: u64,
     snapshot_derivation_history_generations: u64,
     snapshot_derivation_retained_facts: u64,
     snapshot_derivation_retained_manifest_approx_bytes: u64,
-    snapshot_derivation_retained_generated_json_bytes: u64,
+    snapshot_derivation_retained_snapshot_json_bytes: u64,
     snapshot_derivation_admitted: bool,
-    prepared_guide_cache_hit: bool,
     site_build_cache_hit: bool,
     publisher_recipe_assets_cache_hit: bool,
-    template_materialize_ms: f64,
-    publisher_runtime_ms: f64,
-    publisher_model_ms: f64,
     render_semantics_cache_hit: bool,
     render_package_catalog_cache_hit: bool,
     render_package_catalog_built: bool,
@@ -303,14 +376,6 @@ struct PrepareMeasurements {
     render_package_catalog_approx_bytes: u64,
     render_package_catalog_admitted: bool,
     render_package_catalog_retained_generations: u64,
-    render_semantics_ms: f64,
-    render_state_ms: f64,
-    render_model_ms: f64,
-    output_catalog_ms: f64,
-    publisher_artifacts_ms: f64,
-    site_build_close_ms: f64,
-    closure_verify_ms: f64,
-    catalog_ms: f64,
 }
 
 impl PrepareMeasurements {
@@ -333,14 +398,6 @@ impl PrepareMeasurements {
             (
                 "compilerPackageStoreUsed".into(),
                 f64::from(compilation.package_store_used),
-            ),
-            (
-                "compilerPackageStoreKeyMs".into(),
-                compilation.package_store_key_ms,
-            ),
-            (
-                "compilerPackageStoreBuildMs".into(),
-                compilation.package_store_build_ms,
             ),
             (
                 "compilerPackageStoreRetainedGenerations".into(),
@@ -395,14 +452,6 @@ impl PrepareMeasurements {
                 compilation.retained_package_body_unique_approximate_source_bytes as f64,
             ),
             ("rustPrepareTotalMs".into(), self.total_ms),
-            ("projectRevisionMs".into(), self.project_revision_ms),
-            ("packageLockMs".into(), self.package_lock_ms),
-            ("preparedGuideKeyMs".into(), self.prepared_guide_key_ms),
-            ("preparedGuideMs".into(), self.prepared_guide_ms),
-            (
-                "snapshotCompletedLocalCacheHit".into(),
-                f64::from(self.snapshot_completed_local_cache_hit),
-            ),
             (
                 "snapshotResourceCacheHits".into(),
                 self.snapshot_resource_cache_hits as f64,
@@ -424,16 +473,12 @@ impl PrepareMeasurements {
                 self.snapshot_derivation_retained_manifest_approx_bytes as f64,
             ),
             (
-                "snapshotDerivationRetainedGeneratedJsonBytes".into(),
-                self.snapshot_derivation_retained_generated_json_bytes as f64,
+                "snapshotDerivationRetainedSnapshotJsonBytes".into(),
+                self.snapshot_derivation_retained_snapshot_json_bytes as f64,
             ),
             (
                 "snapshotDerivationAdmitted".into(),
                 f64::from(self.snapshot_derivation_admitted),
-            ),
-            (
-                "preparedGuideCacheHit".into(),
-                f64::from(self.prepared_guide_cache_hit),
             ),
             (
                 "siteBuildCacheHit".into(),
@@ -443,9 +488,6 @@ impl PrepareMeasurements {
                 "publisherRecipeAssetsCacheHit".into(),
                 f64::from(self.publisher_recipe_assets_cache_hit),
             ),
-            ("templateMaterializeMs".into(), self.template_materialize_ms),
-            ("publisherRuntimeMs".into(), self.publisher_runtime_ms),
-            ("publisherModelMs".into(), self.publisher_model_ms),
             (
                 "renderSemanticsCacheHit".into(),
                 f64::from(self.render_semantics_cache_hit),
@@ -486,14 +528,6 @@ impl PrepareMeasurements {
                 "renderPackageCatalogRetainedGenerations".into(),
                 self.render_package_catalog_retained_generations as f64,
             ),
-            ("renderSemanticsMs".into(), self.render_semantics_ms),
-            ("renderStateMs".into(), self.render_state_ms),
-            ("renderModelMs".into(), self.render_model_ms),
-            ("outputCatalogMs".into(), self.output_catalog_ms),
-            ("publisherArtifactsMs".into(), self.publisher_artifacts_ms),
-            ("siteBuildCloseMs".into(), self.site_build_close_ms),
-            ("closureVerifyMs".into(), self.closure_verify_ms),
-            ("catalogMs".into(), self.catalog_ms),
         ]);
         crate::BuildEvent {
             operation: Some(crate::BuildOperation::Prepare),
@@ -519,51 +553,42 @@ impl PrepareMeasurements {
 
 #[derive(Default)]
 pub(crate) struct PreparationState {
-    prepared_guide: Option<PreparedGuideCacheEntry>,
-    snapshot_completed_local: Option<SnapshotCompletedLocalCacheEntry>,
-    snapshot_derivations: VecDeque<SnapshotDerivationGeneration>,
-    closed_cycle: Option<ClosedSiteBuildCacheEntry>,
-    publisher_render_semantics: Option<PublisherRenderSemanticsCacheEntry>,
-    publisher_render_package_catalogs: VecDeque<PublisherRenderPackageCatalogCacheEntry>,
+    history: crate::History2<PreparationGeneration>,
     #[cfg(test)]
     cache_hits: DerivedCacheHits,
 }
 
+#[derive(Default)]
+struct PreparationGeneration {
+    snapshots: SnapshotDerivationGeneration,
+    render_semantics: Option<PublisherRenderSemanticsCacheEntry>,
+    render_package_catalog: Option<PublisherRenderPackageCatalogCacheEntry>,
+}
+
+#[derive(Clone)]
 struct PublisherRenderSemanticsCacheEntry {
     key: site_build::Sha256Digest,
     semantics: Rc<RenderSemantics>,
 }
 
+#[derive(Clone)]
 struct PublisherRenderPackageCatalogCacheEntry {
     key: site_build::Sha256Digest,
     catalog: Option<Rc<RenderPackageCatalog>>,
 }
 
 #[derive(Clone)]
-struct PreparedGuideCacheEntry {
-    key: site_build::Sha256Digest,
-    guide: Rc<site_build::PreparedGuide>,
-}
-
-struct SnapshotCompletedLocalCacheEntry {
-    key: site_build::Sha256Digest,
-    generated: Vec<Value>,
-    primary_implementation_guide: Value,
-}
-
-#[derive(Clone)]
 struct SnapshotResourceDerivation {
-    source: site_build::Sha256Digest,
-    manifest: Rc<snapshot_gen::SnapshotDependencyManifest>,
-    generated: Rc<Value>,
-    generated_json_bytes: usize,
+    derivation: Rc<snapshot_gen::SnapshotDerivation>,
+    retention: snapshot_gen::SnapshotDerivationRetention,
 }
 
+#[derive(Default)]
 struct SnapshotDerivationGeneration {
     resources: BTreeMap<String, SnapshotResourceDerivation>,
     fact_count: usize,
     manifest_approx_bytes: usize,
-    generated_json_bytes: usize,
+    snapshot_json_bytes: usize,
 }
 
 struct SnapshotDerivationCandidate {
@@ -571,18 +596,69 @@ struct SnapshotDerivationCandidate {
     admitted: bool,
 }
 
+struct PreparedGuideStage {
+    guide: Rc<site_build::PreparedGuide>,
+    generation: PreparationGeneration,
+    snapshot_admitted: bool,
+}
+
+struct PublisherClosureInputs {
+    preparation_key: site_build::Sha256Digest,
+    project: site_build::ProjectIdentity,
+    package_lock: site_build::PackageLock,
+    prepared: Rc<site_build::PreparedGuide>,
+    recipe_assets: Rc<PublisherRecipeAssets>,
+    template: site_build::PackageCoordinate,
+    fhir_version: String,
+    renderer: site_build::ProducerRef,
+    parameters: BTreeMap<String, String>,
+    diagnostics: BTreeSet<site_build::BuildDiagnostic>,
+}
+
+struct NewPublisherTarget {
+    pub(crate) core: PublisherRenderCore,
+    closure: PublisherClosureInputs,
+    preparation: PreparedGuideStage,
+    metrics: PrepareMeasurements,
+}
+
+enum PublisherTargetCandidate {
+    Reuse {
+        handle: String,
+        build: site_build::ClosedSiteBuild,
+        metrics: PrepareMeasurements,
+    },
+    New(NewPublisherTarget),
+}
+
+struct TargetCandidate {
+    compilation: crate::compilation::CompilationCandidate,
+    compile_ms: f64,
+    generation: PublisherTargetCandidate,
+}
+
 struct PreparationCacheKeys {
     prepared_guide: site_build::Sha256Digest,
-    snapshot_completed_local: site_build::Sha256Digest,
+    render_semantics_source: site_build::Sha256Digest,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderSemanticsSourceKeyPayload<'a> {
+    schema: &'static str,
+    engine_api: u32,
+    compiled_sha256: &'a site_build::Sha256Digest,
+    package_lock: &'a site_build::PackageLock,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PublisherRenderSemanticsCachePayload<'a> {
     schema: &'static str,
-    snapshot_completed_local_key: &'a site_build::Sha256Digest,
+    prepared_guide_key: &'a site_build::Sha256Digest,
     active_tables: bool,
     run_uuid: Option<&'a str>,
+    build_epoch_secs: i64,
     txcache: BTreeMap<String, site_build::Sha256Digest>,
 }
 
@@ -624,19 +700,10 @@ struct PublisherRecipePackage<'a> {
     content: &'a site_build::ContentRef,
 }
 
-#[derive(Clone)]
-struct ClosedSiteBuildCacheEntry {
-    key: site_build::Sha256Digest,
-    projection: site_build::cycle_semantic::ClosedCycleProjection,
-}
-
 #[cfg(test)]
 #[derive(Default)]
 struct DerivedCacheHits {
-    snapshot_completed_local: u64,
     snapshot_resources: u64,
-    prepared_guide: u64,
-    closed_site_build: u64,
     retained_publisher_runtime: u64,
     publisher_recipe_artifact_builds: u64,
 }
@@ -651,7 +718,7 @@ struct PrepareGuideOptions {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct PreparedGuideCachePayload<'a> {
+struct PreparedGuideIdentityPayload<'a> {
     schema: &'static str,
     recipe: &'static str,
     engine_api: u32,
@@ -666,20 +733,7 @@ struct PreparedGuideCachePayload<'a> {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SnapshotCompletedLocalCachePayload<'a> {
-    schema: &'static str,
-    recipe: &'static str,
-    engine_api: u32,
-    compiled_sha256: &'a site_build::Sha256Digest,
-    package_lock: &'a site_build::PackageLock,
-    resolved_config_sha256: &'a site_build::Sha256Digest,
-    resolution_support: &'a BTreeSet<String>,
-    resolved_labels: &'a [String],
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ClosedSiteBuildCachePayload<'a> {
+struct CycleRuntimeKeyPayload<'a> {
     schema: &'static str,
     recipe: &'static str,
     prepared_guide_key: &'a site_build::Sha256Digest,
@@ -709,21 +763,11 @@ impl SiteEngine {
         self.preparation = PreparationState::default();
     }
 
-    /// Invalidate exact derived values after a successful semantic transition,
-    /// while preserving only bounded cross-semantic derivations: self-
-    /// validating snapshot facts and exact-carrier-bound render package
-    /// catalogs. Neither contains current own-resource or page output state.
-    pub(crate) fn invalidate_exact_preparation(&mut self) {
-        let snapshot_derivations = std::mem::take(&mut self.preparation.snapshot_derivations);
-        let publisher_render_package_catalogs =
-            std::mem::take(&mut self.preparation.publisher_render_package_catalogs);
-        self.preparation = PreparationState {
-            snapshot_derivations,
-            publisher_render_package_catalogs,
-            ..PreparationState::default()
-        };
-    }
+    /// Preparation generations are keyed or self-validating and deliberately
+    /// survive semantic transitions so current/previous reuse remains possible.
+    pub(crate) fn invalidate_exact_preparation(&mut self) {}
 
+    #[cfg(test)]
     pub(crate) fn prepare(
         &mut self,
         spec: GeneratorSpec,
@@ -743,24 +787,29 @@ impl SiteEngine {
                     revision,
                 },
                 &environment,
+                None,
             ),
             GeneratorSpec::Publisher {
                 template_coordinate,
                 build_epoch_secs,
                 active_tables,
                 run_uuid,
-            } => self.prepare_publisher(
-                &template_coordinate,
-                PrepareGuideOptions {
-                    build_epoch_secs,
-                    liquid_asset_dirs: vec!["input/includes".into()],
-                    branch: None,
-                    revision: None,
-                },
-                active_tables,
-                run_uuid,
-                &environment,
-            ),
+            } => {
+                let generation = self.prepare_publisher_generation(
+                    &template_coordinate,
+                    PrepareGuideOptions {
+                        build_epoch_secs,
+                        liquid_asset_dirs: vec!["input/includes".into()],
+                        branch: None,
+                        revision: None,
+                    },
+                    active_tables,
+                    run_uuid,
+                    &environment,
+                    None,
+                )?;
+                self.close_publisher_generation(generation)
+            }
         }
     }
 
@@ -840,6 +889,10 @@ impl SiteEngine {
         spec: GeneratorSpec,
         environment: PackageEnvironment,
     ) -> Result<PreparedProjectResult, crate::BuildError<crate::CompilationOutcome>> {
+        if matches!(spec, GeneratorSpec::Publisher { .. }) {
+            let pending = self.prepare_publisher_values(inputs, resolved, spec, environment)?;
+            return self.close_publisher_value(pending);
+        }
         let packages = environment
             .scoped(&resolved.labels, "prepare(project)")
             .map_err(|message| {
@@ -851,8 +904,8 @@ impl SiteEngine {
                 )
             })?;
         let compile_started = self.timer();
-        let transition = self
-            .compile_project(inputs, packages, resolved)
+        let candidate = self
+            .compile_candidate(inputs, packages, resolved)
             .map_err(|message| {
                 crate::BuildError::new(
                     crate::BuildOperation::Prepare,
@@ -861,12 +914,27 @@ impl SiteEngine {
                     message,
                 )
             })?;
-        let crate::compilation::CompilationTransition {
-            outcome: compilation,
-            measurements: compilation_measurements,
-        } = transition;
+        let compilation = candidate.outcome().clone();
         let compile_ms = elapsed_ms(compile_started);
-        let site = match self.prepare(spec, environment) {
+        let GeneratorSpec::Cycle {
+            build_epoch_secs,
+            liquid_asset_dirs,
+            branch,
+            revision,
+        } = spec
+        else {
+            unreachable!("Publisher prepare_values returns through its pending transaction")
+        };
+        let site = match self.prepare_cycle(
+            &PrepareGuideOptions {
+                build_epoch_secs,
+                liquid_asset_dirs,
+                branch,
+                revision,
+            },
+            &environment,
+            Some(&candidate),
+        ) {
             Ok(site) => site,
             Err(message) => {
                 return Err(crate::BuildError::new(
@@ -878,50 +946,164 @@ impl SiteEngine {
                 .with_successful_compilation(compilation));
             }
         };
-        let events =
-            vec![site
-                .measurements
-                .event(&site.build_id, compile_ms, &compilation_measurements)];
-        Ok(PreparedProjectResult {
-            compilation,
+        Ok(self.commit_success(candidate, site, compile_ms))
+    }
+
+    /// The sole successful ProjectRevision transaction commit. Target closure,
+    /// content verification, and runtime installation have no remaining
+    /// fallible work when this is called; semantic recency and the authored
+    /// revision therefore advance together with the already-closed target.
+    fn commit_success(
+        &mut self,
+        compilation: crate::compilation::CompilationCandidate,
+        site: PrepareResult,
+        compile_ms: f64,
+    ) -> PreparedProjectResult {
+        let outcome = compilation.outcome().clone();
+        let compilation_measurements = self.commit_compilation(compilation);
+        let event = site
+            .measurements
+            .event(&site.build_id, compile_ms, &compilation_measurements);
+        PreparedProjectResult {
+            compilation: outcome,
             site,
-            events,
+            events: vec![event],
+        }
+    }
+
+    fn prepare_publisher_values(
+        &mut self,
+        inputs: crate::ProjectRevision,
+        resolved: crate::ResolvedPackageClosure,
+        spec: GeneratorSpec,
+        environment: PackageEnvironment,
+    ) -> Result<TargetCandidate, crate::BuildError<crate::CompilationOutcome>> {
+        let packages = environment
+            .scoped(&resolved.labels, "prepare(project)")
+            .map_err(|message| {
+                crate::BuildError::new(
+                    crate::BuildOperation::Prepare,
+                    crate::BuildErrorPhase::PackageResolution,
+                    crate::BuildErrorCode::InvalidInput,
+                    message,
+                )
+            })?;
+        let compile_started = self.timer();
+        let compilation =
+            self.compile_candidate(inputs, packages, resolved)
+                .map_err(|message| {
+                    crate::BuildError::new(
+                        crate::BuildOperation::Prepare,
+                        crate::BuildErrorPhase::Compilation,
+                        crate::BuildErrorCode::CompileFailed,
+                        message,
+                    )
+                })?;
+        let compile_ms = elapsed_ms(compile_started);
+        let GeneratorSpec::Publisher {
+            template_coordinate,
+            build_epoch_secs,
+            active_tables,
+            run_uuid,
+        } = spec
+        else {
+            unreachable!("prepare_publisher_values requires Publisher")
+        };
+        let generation = match self
+            .prepare_publisher_generation(
+                &template_coordinate,
+                PrepareGuideOptions {
+                    build_epoch_secs,
+                    liquid_asset_dirs: vec!["input/includes".into()],
+                    branch: None,
+                    revision: None,
+                },
+                active_tables,
+                run_uuid,
+                &environment,
+                Some(&compilation),
+            )
+            .map_err(|message| {
+                crate::BuildError::new(
+                    crate::BuildOperation::Prepare,
+                    crate::BuildErrorPhase::Preparation,
+                    crate::BuildErrorCode::RendererFailed,
+                    message,
+                )
+                .with_successful_compilation(compilation.outcome().clone())
+            }) {
+            Ok(generation) => generation,
+            Err(error) => return Err(error),
+        };
+        Ok(TargetCandidate {
+            compilation,
+            compile_ms,
+            generation,
         })
+    }
+
+    fn close_publisher_value(
+        &mut self,
+        pending: TargetCandidate,
+    ) -> Result<PreparedProjectResult, crate::BuildError<crate::CompilationOutcome>> {
+        let TargetCandidate {
+            compilation,
+            compile_ms,
+            generation,
+        } = pending;
+        let outcome = compilation.outcome().clone();
+        let completion = match self.close_publisher_generation(generation) {
+            Ok(completion) => completion,
+            Err(message) => {
+                return Err(crate::BuildError::new(
+                    crate::BuildOperation::Prepare,
+                    crate::BuildErrorPhase::Preparation,
+                    crate::BuildErrorCode::RendererFailed,
+                    message,
+                )
+                .with_successful_compilation(outcome));
+            }
+        };
+        Ok(self.commit_success(compilation, completion, compile_ms))
     }
 
     fn prepare_cycle(
         &mut self,
         options: &PrepareGuideOptions,
         environment: &PackageEnvironment,
+        compilation: Option<&crate::compilation::CompilationCandidate>,
     ) -> Result<PrepareResult, String> {
         let total_started = self.timer();
         let operation = "prepare(cycle)";
         let mut metrics = PrepareMeasurements::default();
-        let project = self.project_revision().cloned().ok_or_else(|| {
-            format!("{operation}: compileProject has not established a complete source revision")
-        })?;
-        let (project_id, fhir_version) = compiled_ig_identity(self.compiled_resources())?;
-        let started = self.timer();
-        let project_revision = site_build_project_revision(&project, &project_id)?;
-        metrics.project_revision_ms = elapsed_ms(started);
-        let started = self.timer();
+        let project = compilation
+            .map(crate::compilation::CompilationCandidate::project)
+            .or_else(|| self.project_revision())
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                    "{operation}: compileProject has not established a complete source revision"
+                )
+            })?;
+        let compiled = compilation
+            .map(crate::compilation::CompilationCandidate::compiled_resources)
+            .unwrap_or_else(|| self.compiled_resources());
+        let (project_id, fhir_version) = compiled_ig_identity(compiled)?;
+        let (project_revision, project_objects) =
+            site_build_project_revision(&project, &project_id)?;
         let package_lock = site_build_package_lock(&project, environment)?;
-        metrics.package_lock_ms = elapsed_ms(started);
-        let started = self.timer();
         let keys = self.preparation_cache_keys(
             options,
             &project_revision,
             &package_lock,
-            project.resolved_packages(),
+            compiled,
             operation,
         )?;
-        metrics.snapshot_completed_local_cache_hit = self
-            .preparation
-            .snapshot_completed_local
-            .as_ref()
-            .is_some_and(|entry| entry.key == keys.snapshot_completed_local);
-        metrics.prepared_guide_key_ms = elapsed_ms(started);
-        let diagnostics = site_build_diagnostics(self.compile_diagnostics());
+        let diagnostics = site_build_diagnostics(
+            compilation
+                .map(crate::compilation::CompilationCandidate::diagnostics)
+                .unwrap_or_else(|| self.compile_diagnostics()),
+        );
         let mut parameters = BTreeMap::from([
             ("contract".into(), site_build::cycle_semantic::TARGET.into()),
             (
@@ -950,56 +1132,27 @@ impl SiteEngine {
             template: None,
             parameters,
         };
-        let closed_key =
-            closed_site_build_cache_key(&keys.prepared_guide, &render_target, &diagnostics)
-                .map_err(|error| format!("{operation}: cache key: {error}"))?;
-        if let Some(entry) = &self.preparation.closed_cycle {
-            if entry.key == closed_key {
-                metrics.site_build_cache_hit = true;
-                metrics.prepared_guide_cache_hit = self
-                    .preparation
-                    .prepared_guide
-                    .as_ref()
-                    .is_some_and(|prepared| prepared.key == keys.prepared_guide);
-                metrics.total_ms = elapsed_ms(total_started);
-                #[cfg(test)]
-                {
-                    self.preparation.cache_hits.closed_site_build += 1;
-                }
-                let projection = entry.projection.clone();
-                let handle = projection.site_build.site_build().build_id().to_string();
-                let mut objects = environment_objects(
-                    &project,
-                    projection.site_build.site_build().package_lock(),
-                    environment,
-                    operation,
-                )?;
-                merge_objects(&mut objects, projection.objects.clone())?;
-                self.install_cycle(projection.site_build.clone(), objects);
-                return Ok(PrepareResult {
-                    build_id: handle,
-                    generator: GeneratorKind::Cycle,
-                    site_build: projection.site_build,
-                    measurements: metrics,
-                });
-            }
+        let closed_key = cycle_runtime_key(&keys.prepared_guide, &render_target, &diagnostics)
+            .map_err(|error| format!("{operation}: cache key: {error}"))?;
+        if let Some((handle, build)) = self.find_cycle(&closed_key) {
+            metrics.site_build_cache_hit = true;
+            self.commit_cycle_reuse(&handle);
+            metrics.total_ms = elapsed_ms(total_started);
+            return Ok(PrepareResult {
+                build_id: handle,
+                generator: GeneratorKind::Cycle,
+                site_build: build,
+                measurements: metrics,
+            });
         }
-        metrics.prepared_guide_cache_hit = self
-            .preparation
-            .prepared_guide
-            .as_ref()
-            .is_some_and(|prepared| prepared.key == keys.prepared_guide);
-        let started = self.timer();
-        let prepared = self.site_model_from_compile(
+        let prepared_stage = self.site_model_from_compile_candidate(
             options,
             environment,
             operation,
-            keys.prepared_guide.clone(),
-            keys.snapshot_completed_local.clone(),
             &mut metrics,
+            compilation,
         )?;
-        metrics.prepared_guide_ms = elapsed_ms(started);
-        let started = self.timer();
+        let prepared = prepared_stage.guide.clone();
         let projection = site_build::cycle_semantic::close_prepared(
             &prepared,
             site_build::cycle_semantic::CycleProjectionInput {
@@ -1010,20 +1163,20 @@ impl SiteEngine {
             },
         )
         .map_err(|error| format!("{operation}: {error}"))?;
-        metrics.catalog_ms = elapsed_ms(started);
-        self.preparation.closed_cycle = Some(ClosedSiteBuildCacheEntry {
-            key: closed_key,
-            projection: projection.clone(),
-        });
         let handle = projection.site_build.site_build().build_id().to_string();
         let mut objects = environment_objects(
-            &project,
+            &project_objects,
             projection.site_build.site_build().package_lock(),
             environment,
             operation,
         )?;
         merge_objects(&mut objects, projection.objects.clone())?;
-        self.install_cycle(projection.site_build.clone(), objects);
+        #[cfg(test)]
+        if self.fail_during_cycle_close {
+            return Err("prepareProject: injected failure during Cycle close".into());
+        }
+        self.install_cycle(projection.site_build.clone(), objects, Some(closed_key));
+        let _ = self.commit_prepared_guide_stage(prepared_stage, &mut metrics);
         metrics.total_ms = elapsed_ms(total_started);
         Ok(PrepareResult {
             build_id: handle,
@@ -1048,30 +1201,6 @@ fn is_fragment_include(name: &str) -> bool {
     FRAGMENT_SUFFIXES
         .iter()
         .any(|suffix| name.ends_with(&format!("-{suffix}")))
-}
-
-fn is_static_asset(path: &str) -> bool {
-    matches!(
-        path.rsplit_once('.')
-            .map(|(_, extension)| extension.to_ascii_lowercase())
-            .as_deref(),
-        Some(
-            "css"
-                | "js"
-                | "png"
-                | "svg"
-                | "jpg"
-                | "jpeg"
-                | "gif"
-                | "webp"
-                | "ico"
-                | "woff"
-                | "woff2"
-                | "ttf"
-                | "otf"
-                | "eot"
-        )
-    )
 }
 
 #[derive(Clone, Copy)]
@@ -1102,7 +1231,45 @@ fn insert_prepared_output(
         }
     }
     let content = site_build::ContentRef::of_bytes(&bytes, Some(media_type));
-    insert_object(objects, &content, bytes)?;
+    // `ContentRef::of_bytes` authenticated this exact owned allocation. Do not
+    // hash it a second time through the trust-boundary `insert_object` helper.
+    insert_authenticated_object(objects, &content, Rc::new(bytes))?;
+    outputs.insert(
+        path,
+        PreparedOutput {
+            content,
+            producer,
+            source,
+            owner: None,
+        },
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn insert_prepared_output_content(
+    outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+    objects: &ObjectMap,
+    path: &str,
+    content: site_build::ContentRef,
+    producer: site_build::OutputProducer,
+    source: Option<String>,
+    collision: PreparedOutputCollision,
+) -> Result<(), String> {
+    let path = site_build::OutputPath::parse(path.to_string())
+        .map_err(|error| format!("invalid output path {path}: {error}"))?;
+    if let Some(existing) = outputs.get(&path) {
+        if matches!(collision, PreparedOutputCollision::Reject) {
+            return Err(format!(
+                "prepared output collision at {path}: producer {} and {}",
+                existing.producer.id, producer.id
+            ));
+        }
+    }
+    objects
+        .get(&content.sha256)
+        .ok_or_else(|| format!("authenticated object {} is absent", content.sha256))?
+        .authenticates(&content)?;
     outputs.insert(
         path,
         PreparedOutput {
@@ -1172,38 +1339,6 @@ fn merge_authenticated_objects(target: &mut ObjectMap, source: &ObjectMap) -> Re
     Ok(())
 }
 
-fn add_page_relative_output_aliases(
-    outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
-    pages: &[String],
-) -> Result<(), String> {
-    let directories = pages
-        .iter()
-        .filter_map(|page| page.rsplit_once('/').map(|(directory, _)| directory))
-        .filter(|directory| !directory.is_empty())
-        .collect::<BTreeSet<_>>();
-    let originals = outputs
-        .iter()
-        .filter(|(path, _)| is_static_asset(path.as_str()))
-        .map(|(path, output)| (path.clone(), output.clone()))
-        .collect::<Vec<_>>();
-    for directory in directories {
-        for (path, output) in &originals {
-            if path.as_str().starts_with(&format!("{directory}/")) {
-                continue;
-            }
-            let alias = site_build::OutputPath::parse(format!("{directory}/{path}"))
-                .map_err(|error| format!("prepare(publisher): invalid asset alias: {error}"))?;
-            let mut alias_output = output.clone();
-            alias_output.source = alias_output
-                .source
-                .as_ref()
-                .map(|source| format!("{source}; alias={alias}"));
-            outputs.entry(alias).or_insert(alias_output);
-        }
-    }
-    Ok(())
-}
-
 fn authored_projection_targets(file: &site_build::AuthoredFile) -> Result<Vec<String>, String> {
     let path = file.path.as_str();
     let mut targets = Vec::new();
@@ -1259,8 +1394,46 @@ fn validate_authored_projections(files: &[site_build::AuthoredFile]) -> Result<(
     Ok(())
 }
 
+/// Reuse the project's already authenticated source object when an authored
+/// Publisher input is the exact captured source bytes. The prepared-guide
+/// augmentation contract normally gives every authored file one source read;
+/// hand-built/derived inputs fall back to ordinary local admission.
+fn authenticated_authored_content(
+    project: &site_build::ProjectIdentity,
+    objects: &ObjectMap,
+    file: &site_build::AuthoredFile,
+    operation: &str,
+) -> Result<Option<site_build::ContentRef>, String> {
+    let mut reads = file.source_reads.iter();
+    let Some(read) = reads.next() else {
+        return Ok(None);
+    };
+    if reads.next().is_some() {
+        return Ok(None);
+    }
+    let path = site_build::SourcePath::parse(read.as_str().to_string())
+        .map_err(|error| format!("{operation}: authored source {read}: {error}"))?;
+    let Some(source) = project.sources.get(&path) else {
+        return Ok(None);
+    };
+    let Some(object) = objects.get(&source.content.sha256) else {
+        return Ok(None);
+    };
+    object.authenticates(&source.content)?;
+    let bytes = object.materialize()?;
+    if bytes.as_slice() != file.content.as_slice() {
+        return Ok(None);
+    }
+    Ok(Some(site_build::ContentRef {
+        sha256: source.content.sha256.clone(),
+        byte_length: source.content.byte_length,
+        media_type: Some(file.mime.clone()),
+    }))
+}
+
 fn stage_prepared_authored_files(
     prepared: &site_build::PreparedGuide,
+    project: &site_build::ProjectIdentity,
     site_files: &mut HashMap<PathBuf, Vec<u8>>,
     outputs: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
     objects: &mut ObjectMap,
@@ -1276,19 +1449,36 @@ fn stage_prepared_authored_files(
             .collect::<Vec<_>>()
             .join(",");
         match file.role {
-            site_build::AuthoredFileRole::Image => insert_prepared_output(
-                outputs,
-                objects,
-                path,
-                file.content.clone(),
-                &file.mime,
-                site_build::OutputProducer {
+            site_build::AuthoredFileRole::Image => {
+                let producer = site_build::OutputProducer {
                     id: "publisher-authored-asset".into(),
                     version: project_id.into(),
-                },
-                Some(source),
-                PreparedOutputCollision::AuthoredOverridesRenderer,
-            )?,
+                };
+                if let Some(content) =
+                    authenticated_authored_content(project, objects, file, "prepare(publisher)")?
+                {
+                    insert_prepared_output_content(
+                        outputs,
+                        objects,
+                        path,
+                        content,
+                        producer,
+                        Some(source),
+                        PreparedOutputCollision::AuthoredOverridesRenderer,
+                    )?;
+                } else {
+                    insert_prepared_output(
+                        outputs,
+                        objects,
+                        path,
+                        file.content.clone(),
+                        &file.mime,
+                        producer,
+                        Some(source),
+                        PreparedOutputCollision::AuthoredOverridesRenderer,
+                    )?;
+                }
+            }
             site_build::AuthoredFileRole::Data => {
                 site_files.insert(
                     PathBuf::from(format!("/site/_data/{path}")),
@@ -1376,69 +1566,124 @@ fn prepared_render_set(
         .collect()
 }
 
-fn output_catalog(
+fn publisher_output_plan(
     ready: &BTreeMap<site_build::OutputPath, PreparedOutput>,
     pages: Vec<String>,
     resource_pages: &BTreeMap<String, site_producer::ResourcePageMetadata>,
     operation: &str,
-) -> Result<Vec<OutputDescriptor>, String> {
-    let mut catalog = ready
-        .iter()
-        .map(|(path, output)| OutputDescriptor {
-            path: path.clone(),
-            kind: if is_static_asset(path.as_str()) {
-                crate::OutputKind::Asset
-            } else {
-                crate::OutputKind::Auxiliary
-            },
-            media_type: output
-                .content
-                .media_type
-                .clone()
-                .expect("prepared output media type"),
-            content: Some(output.content.clone()),
-            title: None,
-            subject: None,
-            subject_page: None,
-            page_kind: None,
+) -> Result<MaterializedPublisherCatalog, String> {
+    let pages = pages
+        .into_iter()
+        .map(|page| {
+            let metadata = resource_pages.get(&page);
+            let path = site_build::OutputPath::parse(page.clone())
+                .map_err(|error| format!("{operation}: invalid page {page}: {error}"))?;
+            Ok(OutputDescriptor {
+                path,
+                kind: crate::OutputKind::Page,
+                media_type: "text/html".into(),
+                content: None,
+                title: metadata.map(|metadata| metadata.title.clone()),
+                subject: metadata.map(|metadata| OutputResourceSubject {
+                    resource_type: metadata.resource_type.clone(),
+                    id: metadata.id.clone(),
+                }),
+                subject_page: metadata.map(|metadata| match metadata.role {
+                    site_producer::ResourcePageRole::Primary => OutputSubjectPage::Primary,
+                    site_producer::ResourcePageRole::Companion => OutputSubjectPage::Companion,
+                }),
+                page_kind: None,
+            })
         })
-        .collect::<Vec<_>>();
-    for page in pages {
-        let metadata = resource_pages.get(&page);
-        let path = site_build::OutputPath::parse(page.clone())
-            .map_err(|error| format!("{operation}: invalid page {page}: {error}"))?;
-        catalog.push(OutputDescriptor {
-            path,
-            kind: crate::OutputKind::Page,
-            media_type: "text/html".into(),
-            content: None,
-            title: metadata.map(|metadata| metadata.title.clone()),
-            subject: metadata.map(|metadata| OutputResourceSubject {
-                resource_type: metadata.resource_type.clone(),
-                id: metadata.id.clone(),
-            }),
-            subject_page: metadata.map(|metadata| match metadata.role {
-                site_producer::ResourcePageRole::Primary => OutputSubjectPage::Primary,
-                site_producer::ResourcePageRole::Companion => OutputSubjectPage::Companion,
-            }),
-            page_kind: None,
-        });
-    }
-    catalog.sort_by(|left, right| left.path.cmp(&right.path));
-    for pair in catalog.windows(2) {
-        if pair[0].path == pair[1].path {
-            return Err(format!(
-                "{operation}: duplicate output path {}",
-                pair[0].path
-            ));
-        }
-    }
-    Ok(catalog)
+        .collect::<Result<Vec<_>, String>>()?;
+    let static_originals = ready
+        .keys()
+        .filter(|path| is_static_output(path.as_str()))
+        .cloned()
+        .collect();
+    MaterializedPublisherCatalog::new(ready, pages, static_originals, operation)
 }
 
 struct PublisherModel {
     site_files: Rc<HashMap<PathBuf, Vec<u8>>>,
     resource_pages: BTreeMap<String, site_producer::ResourcePageMetadata>,
+}
+
+fn insert_site_file(
+    files: &mut HashMap<PathBuf, Vec<u8>>,
+    path: PathBuf,
+    bytes: Vec<u8>,
+    owner: &str,
+) -> Result<(), String> {
+    match files.get(&path) {
+        None => {
+            files.insert(path, bytes);
+            Ok(())
+        }
+        Some(existing) if existing == &bytes => Ok(()),
+        Some(_) => Err(format!(
+            "prepare(publisher): {owner} collides with an existing mounted file at {}",
+            path.display()
+        )),
+    }
+}
+
+fn expand_sql_sources(
+    prepared: &site_build::PreparedGuide,
+    site_files: &mut HashMap<PathBuf, Vec<u8>>,
+) -> Result<(), String> {
+    let sources = site_files
+        .iter()
+        .filter(|(path, _)| {
+            matches!(
+                path.extension().and_then(|extension| extension.to_str()),
+                Some("html" | "md" | "xml")
+            )
+        })
+        .map(|(path, bytes)| (path.to_string_lossy().into_owned(), bytes.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let has_directive = sources.values().any(|bytes| {
+        bytes
+            .windows(b"{% sql".len())
+            .any(|window| window == b"{% sql")
+            || bytes
+                .windows(b"{%! sql".len())
+                .any(|window| window == b"{%! sql")
+    });
+    if !has_directive {
+        return Ok(());
+    }
+    let runtime = publisher_sql::SqlRuntime::from_resources(
+        prepared.resources.iter().map(|resource| &resource.resource),
+    );
+    let expansion = publisher_sql::expand_publisher_sql(&runtime, sources);
+    for (path, bytes) in expansion.rewritten_sources {
+        let path = PathBuf::from(path);
+        let Some(current) = site_files.get_mut(&path) else {
+            return Err(format!(
+                "prepare(publisher): SQL expansion rewrote absent source {}",
+                path.display()
+            ));
+        };
+        *current = bytes;
+    }
+    for (name, bytes) in expansion.generated_includes {
+        insert_site_file(
+            site_files,
+            PathBuf::from(format!("/site/_includes/{name}")),
+            bytes,
+            "generated SQL include",
+        )?;
+    }
+    for (name, bytes) in expansion.generated_data {
+        insert_site_file(
+            site_files,
+            PathBuf::from(format!("/site/_data/{name}.json")),
+            bytes,
+            "generated sqlToData file",
+        )?;
+    }
+    Ok(())
 }
 
 fn publisher_runtime_outputs(
@@ -1476,68 +1721,79 @@ fn publisher_runtime_outputs(
     Ok(ready)
 }
 
-fn publisher_model(
-    prepared: &site_build::PreparedGuide,
-    template_files: &BTreeMap<String, Vec<u8>>,
-    ready: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
-    objects: &mut ObjectMap,
-    project_id: &str,
-    operation: &str,
-) -> Result<PublisherModel, String> {
-    let config_json: Value = serde_json::from_slice(
-        template_files
-            .get("config.json")
-            .ok_or_else(|| format!("{operation}: template artifacts contain no config.json"))?,
-    )
-    .map_err(|error| format!("{operation}: bad template config.json: {error}"))?;
-    let layouts = template_files
-        .iter()
-        .filter_map(|(relative, bytes)| {
-            relative
-                .strip_prefix("layouts/")
-                .and_then(|_| String::from_utf8(bytes.clone()).ok())
-                .map(|text| (format!("template/{relative}"), text))
-        })
-        .collect::<HashMap<_, _>>();
-    if layouts.is_empty() {
-        return Err(format!(
-            "{operation}: template artifacts contain no layouts"
-        ));
-    }
-    let producer_inputs =
-        site_producer::ProducerInputs::from_prepared(prepared, &config_json, layouts, "en/")
+impl SiteEngine {
+    fn publisher_model(
+        &self,
+        prepared: &site_build::PreparedGuide,
+        project: &site_build::ProjectIdentity,
+        template_files: &BTreeMap<String, Vec<u8>>,
+        ready: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+        objects: &mut ObjectMap,
+        project_id: &str,
+        operation: &str,
+    ) -> Result<PublisherModel, String> {
+        let config_json: Value =
+            serde_json::from_slice(template_files.get("config.json").ok_or_else(|| {
+                format!("{operation}: template artifacts contain no config.json")
+            })?)
+            .map_err(|error| format!("{operation}: bad template config.json: {error}"))?;
+        let layouts = template_files
+            .iter()
+            .filter_map(|(relative, bytes)| {
+                relative
+                    .strip_prefix("layouts/")
+                    .and_then(|_| String::from_utf8(bytes.clone()).ok())
+                    .map(|text| (format!("template/{relative}"), text))
+            })
+            .collect::<HashMap<_, _>>();
+        if layouts.is_empty() {
+            return Err(format!(
+                "{operation}: template artifacts contain no layouts"
+            ));
+        }
+        let producer_inputs =
+            site_producer::ProducerInputs::from_prepared(prepared, &config_json, layouts, "en/")
+                .map_err(|error| format!("{operation}: {error:#}"))?;
+        let produced = site_producer::produce(&producer_inputs)
             .map_err(|error| format!("{operation}: {error:#}"))?;
-    let produced = site_producer::produce(&producer_inputs)
-        .map_err(|error| format!("{operation}: {error:#}"))?;
-    let resource_pages = produced.resource_pages;
-    let mut site_files = HashMap::new();
-    for (relative, bytes) in template_files {
-        let mounted = match relative.strip_prefix("includes/") {
-            Some(name) => format!("_includes/{name}"),
-            None => format!("template/{relative}"),
-        };
-        site_files.insert(PathBuf::from(format!("/site/{mounted}")), bytes.clone());
+
+        let resource_pages = produced.resource_pages;
+        let mut site_files = HashMap::new();
+        for (relative, bytes) in template_files {
+            let mounted = match relative.strip_prefix("includes/") {
+                Some(name) => format!("_includes/{name}"),
+                None => format!("template/{relative}"),
+            };
+            insert_site_file(
+                &mut site_files,
+                PathBuf::from(format!("/site/{mounted}")),
+                bytes.clone(),
+                "template file",
+            )?;
+        }
+        for (relative, bytes) in produced.files {
+            insert_site_file(
+                &mut site_files,
+                PathBuf::from(format!("/site/{relative}")),
+                bytes,
+                "site producer output",
+            )?;
+        }
+        stage_prepared_authored_files(
+            prepared,
+            project,
+            &mut site_files,
+            ready,
+            objects,
+            project_id,
+        )?;
+
+        expand_sql_sources(prepared, &mut site_files)?;
+        Ok(PublisherModel {
+            site_files: Rc::new(site_files),
+            resource_pages,
+        })
     }
-    for (name, body) in produced.pages {
-        site_files.insert(PathBuf::from(format!("/site/{name}")), body.into_bytes());
-    }
-    for (name, body) in produced.data {
-        site_files.insert(
-            PathBuf::from(format!("/site/_data/{name}")),
-            body.into_bytes(),
-        );
-    }
-    for (name, body) in produced.includes {
-        site_files.insert(
-            PathBuf::from(format!("/site/_includes/{name}")),
-            body.into_bytes(),
-        );
-    }
-    stage_prepared_authored_files(prepared, &mut site_files, ready, objects, project_id)?;
-    Ok(PublisherModel {
-        site_files: Rc::new(site_files),
-        resource_pages,
-    })
 }
 
 fn publisher_render_semantics(
@@ -1555,7 +1811,7 @@ fn publisher_render_semantics(
 }
 
 fn publisher_render_semantics_reusing_package_catalog(
-    prepared: &site_build::PreparedGuide,
+    render_set: Vec<(PathBuf, serde_json::Value)>,
     packages: PackageView,
     model: &PublisherModel,
     options: &SiteOptions,
@@ -1563,7 +1819,7 @@ fn publisher_render_semantics_reusing_package_catalog(
     reusable: Option<&RenderPackageCatalog>,
 ) -> Result<(RenderSemantics, Rc<RenderPackageCatalog>, bool), String> {
     build_render_semantics_reusing_package_catalog(
-        prepared_render_set(prepared)?,
+        render_set,
         Some(packages),
         &model.site_files,
         options,
@@ -1585,9 +1841,10 @@ fn publisher_render_state(
 }
 
 fn publisher_render_semantics_cache_key(
-    snapshot_completed_local_key: &site_build::Sha256Digest,
+    prepared_guide_key: &site_build::Sha256Digest,
     model: &PublisherModel,
     options: &SiteOptions,
+    build_epoch_secs: i64,
     operation: &str,
 ) -> Result<site_build::Sha256Digest, String> {
     let txcache_root = PathBuf::from("/site/txcache");
@@ -1604,9 +1861,10 @@ fn publisher_render_semantics_cache_key(
         .collect();
     site_build::sha256_canonical(&PublisherRenderSemanticsCachePayload {
         schema: PUBLISHER_RENDER_SEMANTICS_CACHE_SCHEMA,
-        snapshot_completed_local_key,
+        prepared_guide_key,
         active_tables: options.active_tables,
         run_uuid: options.run_uuid.as_deref(),
+        build_epoch_secs,
         txcache,
     })
     .map_err(|error| format!("{operation}: hash Publisher render semantics key: {error}"))
@@ -1656,19 +1914,6 @@ fn publisher_render_package_catalog_cache_key(
     .map_err(|error| format!("{operation}: hash Publisher render package catalog key: {error}"))
 }
 
-fn promote_publisher_render_package_catalog(
-    history: &mut VecDeque<PublisherRenderPackageCatalogCacheEntry>,
-    candidate: PublisherRenderPackageCatalogCacheEntry,
-) {
-    if let Some(index) = history.iter().position(|entry| entry.key == candidate.key) {
-        history.remove(index);
-    }
-    history.push_back(candidate);
-    while history.len() > PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT {
-        history.pop_front();
-    }
-}
-
 #[cfg(test)]
 fn publisher_render_package_catalog_admitted(
     packages: usize,
@@ -1696,14 +1941,10 @@ fn publisher_render_package_catalog_admitted_with_limits(
     packages <= limits.0 && resource_entries <= limits.1 && retained_approx_bytes <= limits.2
 }
 
-fn publisher_catalog(
-    state: &RenderState,
-    ready: &mut BTreeMap<site_build::OutputPath, PreparedOutput>,
+fn publisher_mounted_tree_digest(
     model: &PublisherModel,
     operation: &str,
-) -> Result<(Vec<OutputDescriptor>, site_build::Sha256Digest), String> {
-    let pages = state.list_pages();
-    add_page_relative_output_aliases(ready, &pages)?;
+) -> Result<site_build::Sha256Digest, String> {
     let tree_manifest = model
         .site_files
         .iter()
@@ -1714,10 +1955,8 @@ fn publisher_catalog(
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let tree_digest = site_build::sha256_canonical(&tree_manifest)
-        .map_err(|error| format!("{operation}: hash mounted tree: {error}"))?;
-    let catalog = output_catalog(ready, pages, &model.resource_pages, operation)?;
-    Ok((catalog, tree_digest))
+    site_build::sha256_canonical(&tree_manifest)
+        .map_err(|error| format!("{operation}: hash mounted tree: {error}"))
 }
 
 fn publisher_artifacts(
@@ -1725,6 +1964,7 @@ fn publisher_artifacts(
     project: &site_build::ProjectIdentity,
     package_lock: &site_build::PackageLock,
     recipe_assets: &PublisherRecipeAssets,
+    authenticated_objects: &ObjectMap,
 ) -> Result<
     (
         site_build::ArtifactCatalog,
@@ -1833,18 +2073,36 @@ fn publisher_artifacts(
                     .map_err(|error| format!("prepare(publisher): authored source read: {error}"))
             })
             .collect::<Result<_, _>>()?;
-        push_artifact(
-            &mut records,
-            &mut roots,
-            &mut objects,
-            key,
-            file.content.clone(),
-            Some(&file.mime),
-            "prepared-guide",
-            "publisher.authored-file/v1",
-            BTreeMap::from([("role".into(), authored_role_name(file.role.clone()).into())]),
-            reads,
-        )?;
+        if let Some(content) = authenticated_authored_content(
+            project,
+            authenticated_objects,
+            file,
+            "prepare(publisher)",
+        )? {
+            push_artifact_content(
+                &mut records,
+                &mut roots,
+                key,
+                content,
+                "prepared-guide",
+                "publisher.authored-file/v1",
+                BTreeMap::from([("role".into(), authored_role_name(file.role.clone()).into())]),
+                reads,
+            );
+        } else {
+            push_artifact(
+                &mut records,
+                &mut roots,
+                &mut objects,
+                key,
+                file.content.clone(),
+                Some(&file.mime),
+                "prepared-guide",
+                "publisher.authored-file/v1",
+                BTreeMap::from([("role".into(), authored_role_name(file.role.clone()).into())]),
+                reads,
+            )?;
+        }
     }
     let catalog = site_build::ArtifactCatalog::from_records(records)
         .map_err(|error| format!("prepare(publisher): artifact catalog: {error}"))?;
@@ -1945,7 +2203,27 @@ fn push_artifact(
     reads: BTreeSet<site_build::ReadDependency>,
 ) -> Result<(), String> {
     let content = site_build::ContentRef::of_bytes(&bytes, media_type.map(str::to_string));
-    insert_object(objects, &content, bytes)?;
+    // The digest was just computed from this exact owned allocation. Retain
+    // that proof directly instead of routing it through the external-object
+    // verifier and hashing the bytes twice.
+    insert_authenticated_object(objects, &content, Rc::new(bytes))?;
+    push_artifact_content(
+        records, roots, key, content, producer, recipe, attributes, reads,
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_artifact_content(
+    records: &mut Vec<site_build::ArtifactRecord>,
+    roots: &mut BTreeSet<site_build::ArtifactKey>,
+    key: site_build::ArtifactKey,
+    content: site_build::ContentRef,
+    producer: &str,
+    recipe: &str,
+    attributes: BTreeMap<String, String>,
+    reads: BTreeSet<site_build::ReadDependency>,
+) {
     records.push(site_build::ArtifactRecord {
         key: key.clone(),
         state: site_build::ArtifactState::Ready { content },
@@ -1957,7 +2235,6 @@ fn push_artifact(
         reads,
     });
     roots.insert(key);
-    Ok(())
 }
 
 fn authored_role_name(role: site_build::AuthoredFileRole) -> &'static str {
@@ -2252,6 +2529,7 @@ fn package_view_from_closed_build(
         ));
     }
     let mut source = package_store::BundleSource::new();
+    let mut carrier_identities = BTreeMap::new();
     for label in labels {
         let coordinate = site_build::PackageCoordinate::parse(label)
             .map_err(|error| format!("{operation}: invalid compile package {label}: {error}"))?;
@@ -2277,9 +2555,11 @@ fn package_view_from_closed_build(
             ));
         }
         package.mount_into(&mut source);
+        carrier_identities.insert(label.clone(), locked.content.clone());
     }
     let root = source.cache_root().to_path_buf();
-    let packages = PackageView::new(Rc::new(source), root, Some(expected));
+    let packages = PackageView::new(Rc::new(source), root, Some(expected))
+        .with_carrier_identities(carrier_identities);
     publisher_render_package_view(packages, labels, operation)
 }
 
@@ -2288,29 +2568,30 @@ fn publisher_render_package_view(
     labels: &[String],
     operation: &str,
 ) -> Result<PackageView, String> {
-    let mut allowed_files = BTreeSet::new();
+    let mut direct_file_directories = BTreeSet::new();
+    let mut additional_files = BTreeSet::new();
     for label in labels {
         let package_root = packages.root().join(label);
         let semantic_root = package_root.join("package");
-        for entry in packages
-            .read_dir(&semantic_root)
-            .map_err(|error| format!("{operation}: list semantic package {label}: {error}"))?
-        {
-            if entry.is_file {
-                allowed_files.insert(semantic_root.join(entry.file_name));
-            }
+        if !packages.is_dir(&semantic_root) {
+            return Err(format!(
+                "{operation}: list semantic package {label}: no such directory"
+            ));
         }
+        direct_file_directories.insert(semantic_root);
         let normalized_path = package_root.join("package/other/spec.internals");
         let native_path = package_root.join("other/spec.internals");
         if packages.exists(&normalized_path) {
-            allowed_files.insert(normalized_path.clone());
+            additional_files.insert(normalized_path);
         } else if packages.exists(&native_path) {
-            allowed_files.insert(native_path.clone());
+            additional_files.insert(native_path);
         }
     }
-    // Both live and restored execution receive the same exact projection of
-    // the rooted carrier: top-level semantic members plus spec.internals.
-    packages.restricted_to_files(allowed_files)
+    // Both live and restored execution receive the same declarative projection
+    // of the rooted carrier: files directly under each selected package plus
+    // the one selected spec.internals. Do not materialize and then revalidate a
+    // duplicate set of every package member merely to express this file shape.
+    packages.restricted_to_direct_files(direct_file_directories, additional_files)
 }
 
 fn verify_closed_package_materials(
@@ -2776,6 +3057,52 @@ mod tests {
     use super::*;
     use content_store::ContentStore;
 
+    #[test]
+    fn authored_content_reuses_only_the_exact_authenticated_project_source() {
+        let bytes = b"guide image".to_vec();
+        let source_path = site_build::SourcePath::parse("input/images/guide.png").unwrap();
+        let source_content =
+            site_build::ContentRef::of_bytes(&bytes, Some("image/png".to_string()));
+        let project = site_build::ProjectIdentity {
+            project_id: "demo.ig".into(),
+            revision: "sources-sha256:test".into(),
+            sources: site_build::SourceManifest::from_entries([(
+                source_path,
+                site_build::SourceEntry {
+                    kind: site_build::SourceKind::Asset,
+                    content: source_content.clone(),
+                },
+            )])
+            .unwrap(),
+        };
+        let mut objects = ObjectMap::new();
+        insert_object(&mut objects, &source_content, bytes.clone()).unwrap();
+        let mut file = site_build::AuthoredFile {
+            role: site_build::AuthoredFileRole::Image,
+            path: site_build::PreparedPath::parse("guide.png").unwrap(),
+            mime: "image/png".into(),
+            content: bytes,
+            source_reads: BTreeSet::from([site_build::PreparedPath::parse(
+                "input/images/guide.png",
+            )
+            .unwrap()]),
+        };
+
+        let reused = authenticated_authored_content(&project, &objects, &file, "test")
+            .unwrap()
+            .expect("exact source should be reused");
+        assert_eq!(reused.sha256, source_content.sha256);
+        assert_eq!(reused.byte_length, source_content.byte_length);
+        assert_eq!(reused.media_type.as_deref(), Some("image/png"));
+
+        file.content[0] ^= 1;
+        assert!(
+            authenticated_authored_content(&project, &objects, &file, "test")
+                .unwrap()
+                .is_none()
+        );
+    }
+
     fn snapshot_derivation_fixture(
         child_min: u64,
         local_base_min: u64,
@@ -2893,6 +3220,59 @@ mod tests {
         }
     }
 
+    fn snapshot_derivation_state_fingerprint(engine: &SiteEngine) -> String {
+        let generations = engine
+            .preparation
+            .history
+            .iter()
+            .map(|generation| {
+                let resources = generation
+                    .snapshots
+                    .resources
+                    .iter()
+                    .map(|(path, derivation)| {
+                        (
+                            path.clone(),
+                            Rc::as_ptr(&derivation.derivation) as usize,
+                            derivation.retention,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                (
+                    resources,
+                    generation.snapshots.fact_count,
+                    generation.snapshots.manifest_approx_bytes,
+                    generation.snapshots.snapshot_json_bytes,
+                )
+            })
+            .collect::<Vec<_>>();
+        format!("{generations:?}")
+    }
+
+    fn current_snapshot_generation(engine: &SiteEngine) -> &SnapshotDerivationGeneration {
+        &engine
+            .preparation
+            .history
+            .current
+            .as_ref()
+            .expect("current preparation generation")
+            .snapshots
+    }
+
+    fn promote_snapshot_candidate_for_test(
+        engine: &mut SiteEngine,
+        candidate: SnapshotDerivationCandidate,
+        metrics: &mut PrepareMeasurements,
+    ) {
+        metrics.snapshot_derivation_admitted = candidate.admitted;
+        engine.preparation.history.promote(PreparationGeneration {
+            snapshots: candidate.generation,
+            render_semantics: None,
+            render_package_catalog: None,
+        });
+        record_snapshot_derivation_metrics(&engine.preparation, metrics);
+    }
+
     #[test]
     fn compiled_revision_cache_identity_preserves_resource_and_json_order() {
         let one: Value = serde_json::from_str(r#"{"a":1,"b":2}"#).unwrap();
@@ -2934,15 +3314,11 @@ mod tests {
         assert_eq!(a.measurements.snapshot_resource_cache_hits, 0);
         assert_eq!(a.measurements.snapshot_resource_cache_misses, 3);
         assert!(a.measurements.snapshot_derivation_admitted);
-        let sibling_a = retained
-            .preparation
-            .snapshot_derivations
-            .back()
-            .unwrap()
+        let sibling_a = current_snapshot_generation(&retained)
             .resources
             .iter()
             .find(|(path, _)| path.ends_with("StructureDefinition-sibling.json"))
-            .map(|(_, derivation)| (derivation.generated.clone(), derivation.manifest.clone()))
+            .map(|(_, derivation)| derivation.derivation.clone())
             .unwrap();
 
         let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, false);
@@ -2951,18 +3327,13 @@ mod tests {
         assert_eq!(b.measurements.snapshot_resource_cache_hits, 2);
         assert_eq!(b.measurements.snapshot_resource_cache_misses, 1);
         assert_eq!(b.measurements.snapshot_derivation_history_generations, 2);
-        let sibling_b = retained
-            .preparation
-            .snapshot_derivations
-            .back()
-            .unwrap()
+        let sibling_b = current_snapshot_generation(&retained)
             .resources
             .iter()
             .find(|(path, _)| path.ends_with("StructureDefinition-sibling.json"))
-            .map(|(_, derivation)| (&derivation.generated, &derivation.manifest))
+            .map(|(_, derivation)| &derivation.derivation)
             .unwrap();
-        assert!(Rc::ptr_eq(&sibling_a.0, sibling_b.0));
-        assert!(Rc::ptr_eq(&sibling_a.1, sibling_b.1));
+        assert!(Rc::ptr_eq(&sibling_a, sibling_b));
 
         let mut fresh_b = SiteEngine::default();
         fresh_b.install_compilation_for_test(project_b, compiled_b);
@@ -2972,20 +3343,111 @@ mod tests {
             site_build::canonical_json_bytes(&fresh_b.site_build).unwrap()
         );
 
-        // A is no longer the exact whole-snapshot entry. Returning directly
-        // after B proves the bounded per-resource history path, not the existing
-        // exact cache.
+        // A and B are the bounded runtime history. Returning directly to A
+        // should reuse that closed build instead of reopening snapshot work.
         retained.install_compilation_for_test(project_a, compiled_a);
         let return_a = retained.prepare(cycle_spec(), environment.clone()).unwrap();
-        assert!(!return_a.measurements.snapshot_completed_local_cache_hit);
-        assert_eq!(return_a.measurements.snapshot_resource_cache_hits, 3);
+        assert!(return_a.measurements.site_build_cache_hit);
+        assert_eq!(return_a.measurements.snapshot_resource_cache_hits, 0);
         assert_eq!(return_a.measurements.snapshot_resource_cache_misses, 0);
 
-        let (project_base, compiled_base, _) = snapshot_derivation_fixture(1, 1, false);
-        retained.install_compilation_for_test(project_base, compiled_base);
-        let base_changed = retained.prepare(cycle_spec(), environment).unwrap();
+        let (project_base, mut compiled_base, _) = snapshot_derivation_fixture(1, 1, false);
+        compiled_base.reverse();
+        retained.install_compilation_for_test(project_base.clone(), compiled_base.clone());
+        let base_changed = retained.prepare(cycle_spec(), environment.clone()).unwrap();
         assert_eq!(base_changed.measurements.snapshot_resource_cache_hits, 1);
         assert_eq!(base_changed.measurements.snapshot_resource_cache_misses, 2);
+        let mut fresh_base = SiteEngine::default();
+        fresh_base.install_compilation_for_test(project_base, compiled_base);
+        let fresh_base = fresh_base
+            .prepare(cycle_spec(), environment.clone())
+            .unwrap();
+        assert_eq!(
+            site_build::canonical_json_bytes(&base_changed.site_build).unwrap(),
+            site_build::canonical_json_bytes(&fresh_base.site_build).unwrap()
+        );
+    }
+
+    #[test]
+    fn snapshot_derivation_reuses_structure_and_recomposes_current_metadata() {
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut retained = SiteEngine::default();
+        retained.install_compilation_for_test(project_a, compiled_a);
+        retained.prepare(cycle_spec(), environment.clone()).unwrap();
+        let child_snapshot_a = current_snapshot_generation(&retained)
+            .resources
+            .iter()
+            .find(|(path, _)| path.ends_with("StructureDefinition-child.json"))
+            .map(|(_, derivation)| derivation.derivation.clone())
+            .unwrap();
+
+        let (project_b, mut compiled_b, _) = snapshot_derivation_fixture(0, 0, false);
+        let child_b = compiled_b
+            .iter_mut()
+            .find(|(_, resource)| resource.get("id").and_then(Value::as_str) == Some("Child"))
+            .map(|(_, resource)| resource)
+            .unwrap();
+        child_b["title"] = Value::String("Current child title".into());
+        child_b["status"] = Value::String("active".into());
+        child_b["description"] = Value::String("Current child description".into());
+        child_b["publisher"] = Value::String("Current publisher".into());
+
+        retained.install_compilation_for_test(project_b.clone(), compiled_b.clone());
+        let current = retained.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert_eq!(current.measurements.snapshot_resource_cache_hits, 3);
+        assert_eq!(current.measurements.snapshot_resource_cache_misses, 0);
+        let child_snapshot_b = current_snapshot_generation(&retained)
+            .resources
+            .iter()
+            .find(|(path, _)| path.ends_with("StructureDefinition-child.json"))
+            .map(|(_, derivation)| derivation.derivation.clone())
+            .unwrap();
+        assert!(Rc::ptr_eq(&child_snapshot_a, &child_snapshot_b));
+
+        let prepared_child = |engine: &mut SiteEngine, environment: &PackageEnvironment| {
+            let mut metrics = PrepareMeasurements::default();
+            engine
+                .site_model_from_compile_candidate(
+                    &PrepareGuideOptions {
+                        build_epoch_secs: 1,
+                        liquid_asset_dirs: Vec::new(),
+                        branch: None,
+                        revision: None,
+                    },
+                    environment,
+                    "test",
+                    &mut metrics,
+                    None,
+                )
+                .unwrap()
+                .guide
+                .resources
+                .iter()
+                .find(|resource| {
+                    resource.resource.get("id").and_then(Value::as_str) == Some("Child")
+                })
+                .map(|resource| resource.resource.clone())
+                .unwrap()
+        };
+        let current_child = prepared_child(&mut retained, &environment);
+        assert_eq!(
+            current_child.get("title").and_then(Value::as_str),
+            Some("Current child title")
+        );
+        assert_eq!(
+            current_child.get("description").and_then(Value::as_str),
+            Some("Current child description")
+        );
+
+        let mut fresh = SiteEngine::default();
+        fresh.install_compilation_for_test(project_b, compiled_b);
+        fresh.prepare(cycle_spec(), environment.clone()).unwrap();
+        let fresh_child = prepared_child(&mut fresh, &environment);
+        assert_eq!(
+            serde_json::to_vec(&current_child).unwrap(),
+            serde_json::to_vec(&fresh_child).unwrap(),
+            "retained and fresh resources must match in values and key order"
+        );
     }
 
     #[test]
@@ -2994,13 +3456,7 @@ mod tests {
         let mut engine = SiteEngine::default();
         engine.install_compilation_for_test(project, compiled);
         engine.prepare(cycle_spec(), environment).unwrap();
-        let retained_resources = engine
-            .preparation
-            .snapshot_derivations
-            .back()
-            .unwrap()
-            .resources
-            .clone();
+        let retained_resources = current_snapshot_generation(&engine).resources.clone();
         assert!(!retained_resources.is_empty());
 
         let overflow = snapshot_derivation_candidate(
@@ -3014,20 +3470,20 @@ mod tests {
         assert!(overflow.generation.resources.is_empty());
         assert_eq!(overflow.generation.fact_count, 0);
         let mut overflow_metrics = PrepareMeasurements::default();
-        promote_snapshot_derivation(&mut engine.preparation, overflow, &mut overflow_metrics);
-        assert_eq!(engine.preparation.snapshot_derivations.len(), 2);
+        promote_snapshot_candidate_for_test(&mut engine, overflow, &mut overflow_metrics);
+        assert_eq!(engine.preparation.history.len(), 2);
         assert!(!overflow_metrics.snapshot_derivation_admitted);
 
         let empty = snapshot_derivation_candidate(BTreeMap::new(), 0, 0, 0, true);
         assert!(!empty.admitted);
         let mut empty_metrics = PrepareMeasurements::default();
-        promote_snapshot_derivation(&mut engine.preparation, empty, &mut empty_metrics);
-        assert_eq!(engine.preparation.snapshot_derivations.len(), 2);
+        promote_snapshot_candidate_for_test(&mut engine, empty, &mut empty_metrics);
+        assert_eq!(engine.preparation.history.len(), 2);
         assert!(engine
             .preparation
-            .snapshot_derivations
+            .history
             .iter()
-            .all(|generation| generation.resources.is_empty()));
+            .all(|generation| generation.snapshots.resources.is_empty()));
         assert_eq!(empty_metrics.snapshot_derivation_history_generations, 2);
         assert_eq!(empty_metrics.snapshot_derivation_retained_facts, 0);
         assert!(!empty_metrics.snapshot_derivation_admitted);
@@ -3060,17 +3516,24 @@ mod tests {
             key: site_build::Sha256Digest::of_bytes(body),
             catalog: None,
         };
-        let mut history = VecDeque::new();
+        let mut history = crate::History2::default();
         let a = site_build::Sha256Digest::of_bytes(b"a");
-        promote_publisher_render_package_catalog(&mut history, tombstone(b"a"));
-        promote_publisher_render_package_catalog(&mut history, tombstone(b"b"));
-        promote_publisher_render_package_catalog(&mut history, tombstone(b"c"));
-        assert_eq!(
-            history.len(),
-            PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT
-        );
-        assert!(history.iter().all(|entry| entry.catalog.is_none()));
-        assert!(history.iter().all(|entry| entry.key != a));
+        for entry in [tombstone(b"a"), tombstone(b"b"), tombstone(b"c")] {
+            history.promote(PreparationGeneration {
+                snapshots: Default::default(),
+                render_semantics: None,
+                render_package_catalog: Some(entry),
+            });
+        }
+        assert_eq!(history.len(), 2);
+        assert!(history.iter().all(|generation| generation
+            .render_package_catalog
+            .as_ref()
+            .is_some_and(|entry| entry.catalog.is_none())));
+        assert!(history.iter().all(|generation| generation
+            .render_package_catalog
+            .as_ref()
+            .is_some_and(|entry| entry.key != a)));
     }
 
     #[test]
@@ -3181,6 +3644,47 @@ mod tests {
             prepare_metrics(&b)["snapshotDerivationHistoryGenerations"],
             2.0
         );
+
+        let compilation_before = engine.compilation_state_fingerprint();
+        let preparation_before = (
+            snapshot_derivation_state_fingerprint(&engine),
+            engine.retained_generation_handles(),
+        );
+        let (project_c, compiled_c, _) = snapshot_derivation_fixture(1, 1, false);
+        let revision_c = captured_revision(&project_c, &compiled_c);
+        engine.fail_during_cycle_close = true;
+        let error = engine
+            .prepare_project(&mut Source(revision_c.clone()), &mut packages, cycle_spec())
+            .unwrap_err();
+        assert!(
+            error
+                .message
+                .contains("injected failure during Cycle close"),
+            "{}",
+            error.message
+        );
+        engine.fail_during_cycle_close = false;
+        assert_eq!(engine.compilation_state_fingerprint(), compilation_before);
+        assert_eq!(
+            (
+                snapshot_derivation_state_fingerprint(&engine),
+                engine.retained_generation_handles(),
+            ),
+            preparation_before
+        );
+
+        let retry = engine
+            .prepare_project(&mut Source(revision_c.clone()), &mut packages, cycle_spec())
+            .unwrap();
+        let mut fresh = SiteEngine::default();
+        let mut fresh_packages = packages.clone();
+        let fresh = fresh
+            .prepare_project(&mut Source(revision_c), &mut fresh_packages, cycle_spec())
+            .unwrap();
+        assert_eq!(
+            site_build::canonical_json_bytes(&retry.site.site_build).unwrap(),
+            site_build::canonical_json_bytes(&fresh.site.site_build).unwrap()
+        );
     }
 
     #[test]
@@ -3189,63 +3693,52 @@ mod tests {
         let mut engine = SiteEngine::default();
         engine.install_compilation_for_test(project_a, compiled_a);
         engine.prepare(cycle_spec(), environment.clone()).unwrap();
-        let history_before = engine.preparation.snapshot_derivations.len();
-        let exact_before = engine
-            .preparation
-            .snapshot_completed_local
-            .as_ref()
-            .unwrap()
-            .key
-            .clone();
-        let retained_before = engine
-            .preparation
-            .snapshot_derivations
-            .back()
-            .unwrap()
-            .resources
-            .iter()
-            .map(|(path, derivation)| {
-                (
-                    path.clone(),
-                    Rc::as_ptr(&derivation.generated) as usize,
-                    Rc::as_ptr(&derivation.manifest) as usize,
-                )
-            })
-            .collect::<Vec<_>>();
+        let history_before = engine.preparation.history.len();
+        let retained_before = snapshot_derivation_state_fingerprint(&engine);
 
         let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, true);
         engine.install_compilation_for_test(project_b, compiled_b);
         let error = engine.prepare(cycle_spec(), environment).unwrap_err();
         assert!(error.contains("DoesNotExist"), "{error}");
+        assert_eq!(engine.preparation.history.len(), history_before);
+        let retained_after = snapshot_derivation_state_fingerprint(&engine);
+        assert_eq!(retained_after, retained_before);
+    }
+
+    #[test]
+    fn late_cycle_failure_promotes_no_preparation_state_and_retry_matches_fresh() {
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut engine = SiteEngine::default();
+        engine.install_compilation_for_test(project_a, compiled_a);
+        engine.prepare(cycle_spec(), environment.clone()).unwrap();
+        let history_before = snapshot_derivation_state_fingerprint(&engine);
+        let runtimes_before = engine.retained_generation_handles();
+
+        let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, false);
+        engine.install_compilation_for_test(project_b.clone(), compiled_b.clone());
+        engine.fail_during_cycle_close = true;
+        let error = engine
+            .prepare(cycle_spec(), environment.clone())
+            .unwrap_err();
+        assert!(
+            error.contains("injected failure during Cycle close"),
+            "{error}"
+        );
+        engine.fail_during_cycle_close = false;
         assert_eq!(
-            engine.preparation.snapshot_derivations.len(),
+            snapshot_derivation_state_fingerprint(&engine),
             history_before
         );
+        assert_eq!(engine.retained_generation_handles(), runtimes_before);
+
+        let retry = engine.prepare(cycle_spec(), environment.clone()).unwrap();
+        let mut fresh = SiteEngine::default();
+        fresh.install_compilation_for_test(project_b, compiled_b);
+        let fresh = fresh.prepare(cycle_spec(), environment).unwrap();
         assert_eq!(
-            engine
-                .preparation
-                .snapshot_completed_local
-                .as_ref()
-                .unwrap()
-                .key,
-            exact_before
+            site_build::canonical_json_bytes(&retry.site_build).unwrap(),
+            site_build::canonical_json_bytes(&fresh.site_build).unwrap()
         );
-        let retained_after = engine
-            .preparation
-            .snapshot_derivations
-            .back()
-            .unwrap()
-            .resources
-            .iter()
-            .map(|(path, derivation)| {
-                (
-                    path.clone(),
-                    Rc::as_ptr(&derivation.generated) as usize,
-                    Rc::as_ptr(&derivation.manifest) as usize,
-                )
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(retained_after, retained_before);
     }
 
     #[test]
@@ -3254,8 +3747,6 @@ mod tests {
             semantic_compilation_cache_hit: false,
             package_store_cache_hit: true,
             package_store_used: true,
-            package_store_key_ms: 1.25,
-            package_store_build_ms: 0.0,
             retained_package_store_generations: 2,
             package_body_cache_hits: 7,
             package_body_cache_misses: 3,
@@ -3274,8 +3765,6 @@ mod tests {
         let metrics = event.metrics.expect("prepare metrics");
         assert_eq!(metrics["compilerPackageStoreCacheHit"], 1.0);
         assert_eq!(metrics["compilerPackageStoreUsed"], 1.0);
-        assert_eq!(metrics["compilerPackageStoreKeyMs"], 1.25);
-        assert_eq!(metrics["compilerPackageStoreBuildMs"], 0.0);
         assert_eq!(metrics["compilerPackageStoreRetainedGenerations"], 2.0);
         assert_eq!(metrics["compilerPackageBodyCacheHits"], 7.0);
         assert_eq!(metrics["compilerPackageBodyCacheMisses"], 3.0);
@@ -3384,6 +3873,93 @@ mod tests {
     }
 
     #[test]
+    fn package_environment_successor_is_ordered_idempotent_and_atomic() {
+        let package = |label: &str, marker: &[u8]| {
+            let (name, version) = label.split_once('#').unwrap();
+            package_store::PreparedPackage::prepare(
+                label,
+                BTreeMap::from([
+                    (
+                        "package.json".into(),
+                        format!(r#"{{"name":"{name}","version":"{version}"}}"#).into_bytes(),
+                    ),
+                    ("private/marker.txt".into(), marker.to_vec()),
+                ]),
+            )
+            .unwrap()
+        };
+        let a_label = "demo.a#1.0.0";
+        let b_label = "demo.b#1.0.0";
+        let c_label = "demo.c#1.0.0";
+        let a = package(a_label, b"a");
+        let b = package(b_label, b"b");
+        let environment = PackageEnvironment::new([a]).unwrap();
+        let before = environment.compression_metrics();
+
+        let (successor, added) = environment.extended(vec![b.clone()], "test").unwrap();
+        assert_eq!(added, 1);
+        assert_eq!(successor.mounted_labels(), [a_label, b_label]);
+        assert_eq!(
+            successor.compression_metrics().chunks_inflated,
+            before.chunks_inflated
+        );
+        assert_eq!(
+            successor
+                .packages
+                .read(
+                    &successor
+                        .packages
+                        .root()
+                        .join(b_label)
+                        .join("package/private/marker.txt")
+                )
+                .unwrap(),
+            b"b"
+        );
+        assert!(!environment.packages.is_file(
+            &environment
+                .packages
+                .root()
+                .join(b_label)
+                .join("package/private/marker.txt")
+        ));
+
+        let (idempotent, added) = successor.extended(vec![b], "test").unwrap();
+        assert_eq!(added, 0);
+        assert_eq!(idempotent.mounted_labels(), successor.mounted_labels());
+
+        let conflict = package(a_label, b"conflict");
+        assert!(successor
+            .extended(vec![conflict.clone()], "test")
+            .err()
+            .unwrap()
+            .contains("already mounted with different content"));
+        assert_eq!(successor.mounted_labels(), [a_label, b_label]);
+
+        let newcomer = package(c_label, b"c");
+        assert!(successor
+            .extended(vec![newcomer, conflict], "test")
+            .err()
+            .unwrap()
+            .contains("already mounted with different content"));
+        assert_eq!(successor.mounted_labels(), [a_label, b_label]);
+        assert!(successor.package_key(c_label).is_none());
+        assert_eq!(
+            environment
+                .packages
+                .read(
+                    &environment
+                        .packages
+                        .root()
+                        .join(a_label)
+                        .join("package/private/marker.txt")
+                )
+                .unwrap(),
+            b"a"
+        );
+    }
+
+    #[test]
     fn live_publisher_package_view_matches_closed_restoration_authority() {
         let label = "demo.package#1.0.0";
         let package = package_store::PreparedPackage::prepare(
@@ -3422,10 +3998,78 @@ mod tests {
                 .unwrap(),
             b"spec"
         );
+        let package_root = root.join(label).join("package");
+        let mut package_entries = view
+            .read_dir(&package_root)
+            .unwrap()
+            .into_iter()
+            .map(|entry| (entry.file_name, entry.is_file))
+            .collect::<Vec<_>>();
+        package_entries.sort();
+        assert_eq!(
+            package_entries,
+            vec![
+                (".derived-index.json".into(), true),
+                ("StructureDefinition-demo.json".into(), true),
+                ("other".into(), false),
+                ("package.json".into(), true),
+            ]
+        );
+        assert_eq!(
+            view.read_dir(&package_root.join("other"))
+                .unwrap()
+                .into_iter()
+                .map(|entry| (entry.file_name, entry.is_file))
+                .collect::<Vec<_>>(),
+            vec![("spec.internals".into(), true)]
+        );
+        assert!(view.is_dir(&package_root.join("other")));
+        assert!(!view.is_dir(&package_root.join("template")));
         assert!(!view.exists(&root.join(label).join("package/template/private.txt")));
         assert!(view
             .read(&root.join(label).join("package/template/private.txt"))
             .is_err());
+    }
+
+    #[test]
+    fn publisher_package_view_prefers_normalized_spec_and_falls_back_to_native() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("cache");
+        let label = "demo.package#1.0.0";
+        let package_root = root.join(label);
+        std::fs::create_dir_all(package_root.join("package")).unwrap();
+        std::fs::create_dir_all(package_root.join("other")).unwrap();
+        std::fs::write(package_root.join("other/spec.internals"), b"native-spec").unwrap();
+
+        let scoped = || {
+            PackageView::new(
+                Rc::new(package_store::DiskSource::new()),
+                root.clone(),
+                Some(BTreeSet::from([label.into()])),
+            )
+        };
+        let native = publisher_render_package_view(scoped(), &[label.into()], "test").unwrap();
+        assert_eq!(
+            native
+                .read(&package_root.join("other/spec.internals"))
+                .unwrap(),
+            b"native-spec"
+        );
+
+        std::fs::create_dir_all(package_root.join("package/other")).unwrap();
+        std::fs::write(
+            package_root.join("package/other/spec.internals"),
+            b"normalized-spec",
+        )
+        .unwrap();
+        let normalized = publisher_render_package_view(scoped(), &[label.into()], "test").unwrap();
+        assert_eq!(
+            normalized
+                .read(&package_root.join("package/other/spec.internals"))
+                .unwrap(),
+            b"normalized-spec"
+        );
+        assert!(!normalized.exists(&package_root.join("other/spec.internals")));
     }
 
     #[test]
@@ -3448,7 +4092,7 @@ mod tests {
         )
         .unwrap();
 
-        let revision = site_build_project_revision(&project, "overlap.ig").unwrap();
+        let (revision, _) = site_build_project_revision(&project, "overlap.ig").unwrap();
         let entry = revision
             .sources
             .get(&site_build::SourcePath::parse(path).unwrap())
@@ -3877,8 +4521,15 @@ mod tests {
             artifact_records: Rc::new(artifact_records),
             artifact_roots: Rc::new(artifact_roots),
         };
-        let (artifacts, plan, mut objects) =
-            publisher_artifacts(&prepared, &project, &lock, &recipe_assets).unwrap();
+        let authenticated_objects = ObjectMap::new();
+        let (artifacts, plan, mut objects) = publisher_artifacts(
+            &prepared,
+            &project,
+            &lock,
+            &recipe_assets,
+            &authenticated_objects,
+        )
+        .unwrap();
         merge_authenticated_objects(&mut objects, &recipe_assets.objects).unwrap();
         for (_, package) in lock.iter() {
             let bytes = if package.coordinate == core {
@@ -3935,6 +4586,238 @@ mod tests {
         assert!(verify_ready_artifacts(&build, &missing, "test").is_err());
     }
 
+    fn publisher_prepare_fixture(
+        narrative: &str,
+    ) -> (
+        crate::ProjectRevision,
+        crate::ResolvedPackageClosure,
+        GeneratorSpec,
+        PackageEnvironment,
+    ) {
+        let core_label = "hl7.fhir.r4.core#4.0.1";
+        let template_label = "demo.template#1.0.0";
+        let core = package_store::PreparedPackage::prepare(
+            core_label,
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"hl7.fhir.r4.core","version":"4.0.1","url":"http://hl7.org/fhir/R4","fhirVersions":["4.0.1"]}"#
+                        .to_vec(),
+                ),
+                (".index.json".into(), br#"{"files":[]}"#.to_vec()),
+                ("other/fhir.css".into(), b"body{}".to_vec()),
+                ("other/icon_element.gif".into(), b"icon".to_vec()),
+                ("other/tbl_spacer.png".into(), b"spacer".to_vec()),
+            ]),
+        )
+        .unwrap();
+        let template = package_store::PreparedPackage::prepare(
+            template_label,
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"demo.template","version":"1.0.0","type":"fhir.template"}"#
+                        .to_vec(),
+                ),
+                (
+                    "config.json".into(),
+                    br#"{"defaults":{"Any":{"template-base":"template/layouts/default.html","base":"{{[type]}}-{{[id]}}.html"}}}"#
+                        .to_vec(),
+                ),
+                (
+                    "layouts/default.html".into(),
+                    b"---\n---\n{{content}}".to_vec(),
+                ),
+            ]),
+        )
+        .unwrap();
+        let environment = PackageEnvironment::new([core, template]).unwrap();
+        let config = "id: demo.stage\ncanonical: https://example.org/stage\nname: StageDemo\nstatus: draft\nversion: 1.0.0\nfhirVersion: 4.0.1\n";
+        let revision = crate::ProjectRevision {
+            config: config.into(),
+            fsh: BTreeMap::new(),
+            predefined: BTreeMap::new(),
+            site_files: BTreeMap::from([(
+                "input/pagecontent/index.md".into(),
+                narrative.as_bytes().to_vec(),
+            )]),
+        };
+        let resolved = crate::ResolvedPackageClosure {
+            config_sha256: site_build::Sha256Digest::of_bytes(config.as_bytes()),
+            resolution_support: BTreeSet::new(),
+            labels: vec![core_label.into()],
+        };
+        let spec = GeneratorSpec::Publisher {
+            template_coordinate: template_label.into(),
+            build_epoch_secs: 1,
+            active_tables: true,
+            run_uuid: None,
+        };
+        (revision, resolved, spec, environment)
+    }
+
+    #[test]
+    fn canonical_publisher_prepare_is_atomic_with_one_eager_catalog() {
+        #[derive(Clone)]
+        struct Source(crate::ProjectRevision);
+        impl crate::ProjectSource for Source {
+            fn config(&mut self) -> Result<String, String> {
+                Ok(self.0.config.clone())
+            }
+
+            fn capture(
+                &mut self,
+                _packages: &PackageEnvironment,
+                _resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<crate::ProjectRevision, String> {
+                Ok(self.0.clone())
+            }
+        }
+
+        #[derive(Clone)]
+        struct Packages {
+            resolved: crate::ResolvedPackageClosure,
+            environment: PackageEnvironment,
+        }
+        impl crate::PackageProvider for Packages {
+            fn resolve(
+                &mut self,
+                config: &str,
+                _generator: &GeneratorSpec,
+            ) -> Result<crate::ResolvedPackageClosure, String> {
+                if site_build::Sha256Digest::of_bytes(config.as_bytes())
+                    != self.resolved.config_sha256
+                {
+                    return Err("fixture config changed".into());
+                }
+                Ok(self.resolved.clone())
+            }
+
+            fn environment(
+                &mut self,
+                resolved: &crate::ResolvedPackageClosure,
+            ) -> Result<PackageEnvironment, String> {
+                if resolved != &self.resolved {
+                    return Err("fixture closure changed".into());
+                }
+                Ok(self.environment.clone())
+            }
+        }
+
+        fn state_fingerprint(engine: &SiteEngine) -> String {
+            let derivations = snapshot_derivation_state_fingerprint(engine);
+            let semantics = engine
+                .preparation
+                .history
+                .iter()
+                .filter_map(|generation| generation.render_semantics.as_ref())
+                .map(|entry| (entry.key.clone(), Rc::as_ptr(&entry.semantics) as usize));
+            let semantics = semantics.collect::<Vec<_>>();
+            let catalogs = engine
+                .preparation
+                .history
+                .iter()
+                .filter_map(|generation| generation.render_package_catalog.as_ref())
+                .map(|entry| {
+                    (
+                        entry.key.clone(),
+                        entry
+                            .catalog
+                            .as_ref()
+                            .map(|catalog| Rc::as_ptr(catalog) as usize),
+                    )
+                })
+                .collect::<Vec<_>>();
+            format!(
+                "{:?}",
+                (
+                    engine.compilation_state_fingerprint(),
+                    derivations,
+                    semantics,
+                    catalogs,
+                    engine.retained_generation_handles(),
+                )
+            )
+        }
+
+        let (revision_a, resolved, spec, environment) = publisher_prepare_fixture("# A");
+        let mut packages = Packages {
+            resolved: resolved.clone(),
+            environment: environment.clone(),
+        };
+        let mut engine = SiteEngine::default();
+        let installed_a = engine
+            .prepare_project(&mut Source(revision_a), &mut packages, spec.clone())
+            .unwrap();
+        let a_fingerprint = state_fingerprint(&engine);
+
+        let (mut revision_b, _, _, _) = publisher_prepare_fixture("# B");
+        revision_b
+            .fsh
+            .insert("input/fsh/change.fsh".into(), "// semantic B".into());
+        engine.fail_during_publisher_close = true;
+        let error = engine
+            .prepare_project(&mut Source(revision_b.clone()), &mut packages, spec.clone())
+            .unwrap_err();
+        engine.fail_during_publisher_close = false;
+        assert!(error.message.contains("injected failure"));
+        assert!(
+            error.successful_compilation.is_some(),
+            "the failed canonical prepare still reports its successful compilation"
+        );
+        assert_eq!(state_fingerprint(&engine), a_fingerprint);
+        assert!(engine.outputs(&installed_a.site.build_id).is_ok());
+
+        let completed = engine
+            .prepare_project(&mut Source(revision_b.clone()), &mut packages, spec.clone())
+            .unwrap();
+        assert_eq!(completed.events[0].phase.as_deref(), Some("site.prepare"));
+        assert_ne!(completed.site.build_id, installed_a.site.build_id);
+        let rendered = engine
+            .render(&completed.site.build_id, "en/index.html")
+            .unwrap();
+        let rendered_bytes = engine
+            .read_content(&completed.site.build_id, rendered.sha256.as_str())
+            .unwrap();
+        rendered.verify(&rendered_bytes).unwrap();
+        let completed_catalog = engine.outputs(&completed.site.build_id).unwrap();
+        assert_eq!(
+            completed_catalog
+                .outputs
+                .iter()
+                .find(|output| output.path.as_str() == "en/index.html")
+                .and_then(|output| output.content.as_ref()),
+            Some(&rendered)
+        );
+        let repeated_catalog = engine.outputs(&completed.site.build_id).unwrap();
+        assert_eq!(repeated_catalog, completed_catalog);
+
+        // Exact reuse closes synchronously and may advance recency only after
+        // the retained handle and compilation candidate both validate.
+        let completed_fingerprint = state_fingerprint(&engine);
+        let reused = engine
+            .prepare_project(&mut Source(revision_b), &mut packages, spec.clone())
+            .unwrap();
+        assert_eq!(reused.site.build_id, completed.site.build_id);
+        assert_eq!(state_fingerprint(&engine), completed_fingerprint);
+
+        let (mut revision_d, _, _, _) = publisher_prepare_fixture("# D");
+        revision_d
+            .fsh
+            .insert("input/fsh/change.fsh".into(), "// semantic D".into());
+        let native = engine
+            .prepare_project(&mut Source(revision_d), &mut packages, spec)
+            .unwrap();
+        assert_eq!(native.events[0].phase.as_deref(), Some("site.prepare"));
+        let metrics = native.events[0].metrics.as_ref().unwrap();
+        assert_eq!(
+            native.events[0].duration_ms,
+            Some(metrics["compileProjectMs"] + metrics["rustPrepareTotalMs"]),
+            "native composed prepare must still report the combined measured Rust work"
+        );
+        assert!(native.events[0].duration_ms.unwrap() < 1_000.0);
+    }
+
     #[test]
     fn typed_prepare_constructs_and_retains_complete_publisher_build() {
         let core_label = "hl7.fhir.r4.core#4.0.1";
@@ -3950,6 +4833,7 @@ mod tests {
                     ),
                     (".index.json".into(), br#"{"files":[]}"#.to_vec()),
                     ("carrier-marker.txt".into(), marker.to_vec()),
+                    ("other/spec.internals".into(), b"spec".to_vec()),
                     ("other/fhir.css".into(), b"body{}".to_vec()),
                     ("other/icon_element.gif".into(), b"icon".to_vec()),
                     ("other/tbl_spacer.png".into(), b"spacer".to_vec()),
@@ -3972,6 +4856,10 @@ mod tests {
                     (
                         "layouts/default.html".into(),
                         b"---\n---\n{{content}}".to_vec(),
+                    ),
+                    (
+                        "includes/template-page.html".into(),
+                        b"<main><h1>{{site.data.pages[page.path].title}}</h1>{% assign path = page.path | split: '.html' %}{% include {{path}}.xml %}</main>".to_vec(),
                     ),
                 ]),
             )
@@ -4007,7 +4895,14 @@ mod tests {
             "status":"draft",
             "version":"1.0.0",
             "fhirVersion":["4.0.1"],
-            "definition":{}
+            "definition":{
+                "grouping":[{"id":"profiles","name":"Profiles"}],
+                "page":{
+                    "nameUrl":"index.html",
+                    "title":"Home",
+                    "generation":"markdown"
+                }
+            }
         });
         let mut engine = SiteEngine::default();
         engine.install_compilation_for_test(
@@ -4034,6 +4929,82 @@ mod tests {
             1
         );
         let closed = prepared.site_build.clone();
+        let mut closed_package_objects = ObjectMap::new();
+        for (_, locked) in closed.site_build().package_lock().iter() {
+            let bytes = Rc::new(
+                engine
+                    .read_content(&prepared.build_id, locked.content.sha256.as_str())
+                    .unwrap(),
+            );
+            insert_authenticated_object(&mut closed_package_objects, &locked.content, bytes)
+                .unwrap();
+        }
+        let live_packages = publisher_render_package_view(
+            environment.scoped(&resolved.labels, "test").unwrap(),
+            &resolved.labels,
+            "test",
+        )
+        .unwrap();
+        let restored_packages = package_view_from_closed_build(
+            &closed,
+            &closed_package_objects,
+            &resolved.labels,
+            "test",
+        )
+        .unwrap();
+        let package_root = live_packages.root().join(core_label).join("package");
+        let marker = package_root.join("carrier-marker.txt");
+        let spec = package_root.join("other/spec.internals");
+        let hidden = package_root.join("other/fhir.css");
+        let listing = |view: &PackageView, path: &std::path::Path| {
+            view.read_dir(path)
+                .unwrap()
+                .into_iter()
+                .map(|entry| (entry.file_name, entry.is_file))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            live_packages.read(&marker).unwrap(),
+            restored_packages.read(&marker).unwrap()
+        );
+        assert_eq!(
+            live_packages.read(&spec).unwrap(),
+            restored_packages.read(&spec).unwrap()
+        );
+        assert_eq!(
+            live_packages.exists(&marker),
+            restored_packages.exists(&marker)
+        );
+        assert_eq!(
+            live_packages.is_file(&marker),
+            restored_packages.is_file(&marker)
+        );
+        assert_eq!(
+            live_packages.is_dir(&package_root),
+            restored_packages.is_dir(&package_root)
+        );
+        assert_eq!(
+            listing(&live_packages, &package_root),
+            listing(&restored_packages, &package_root)
+        );
+        assert_eq!(
+            live_packages.immutable_content_identity(&marker),
+            restored_packages.immutable_content_identity(&marker)
+        );
+        assert!(live_packages.immutable_content_identity(&marker).is_some());
+        assert!(!live_packages.exists(&hidden));
+        assert!(!restored_packages.exists(&hidden));
+        let live_fork = live_packages.fork_for_compile().unwrap();
+        let restored_fork = restored_packages.fork_for_compile().unwrap();
+        assert_eq!(
+            live_fork.immutable_content_identity(&marker),
+            restored_fork.immutable_content_identity(&marker)
+        );
+        let leading_path = "en/index.html";
+        let leading_content = engine.render(&prepared.build_id, leading_path).unwrap();
+        let leading_bytes = engine
+            .read_content(&prepared.build_id, leading_content.sha256.as_str())
+            .unwrap();
         let live_catalog = engine.outputs(&prepared.build_id).unwrap();
         assert!(!live_catalog.outputs.is_empty());
         let mut content_refs = Vec::new();
@@ -4077,6 +5048,12 @@ mod tests {
         let mut restored = SiteEngine::default();
         let restored_handle = restored.restore(closed, &store).unwrap();
         assert_eq!(restored_handle, prepared.build_id);
+        let restored_leading = restored.render(&restored_handle, leading_path).unwrap();
+        let restored_leading_bytes = restored
+            .read_content(&restored_handle, restored_leading.sha256.as_str())
+            .unwrap();
+        assert_eq!(restored_leading, leading_content);
+        assert_eq!(restored_leading_bytes, leading_bytes);
         assert_eq!(restored.outputs(&restored_handle).unwrap(), live_catalog);
 
         let page_paths = live_catalog
@@ -4085,6 +5062,9 @@ mod tests {
             .filter(|output| output.content.is_none())
             .map(|output| output.path.to_string())
             .collect::<Vec<_>>();
+        assert!(page_paths.iter().any(|path| path == "en/toc.html"));
+        assert!(page_paths.iter().any(|path| path == "en/artifacts.html"));
+        assert!(page_paths.iter().all(|path| !path.starts_with("template/")));
         let mut live_pages = BTreeMap::new();
         for path in &page_paths {
             let output = engine.render(&prepared.build_id, path).unwrap();
@@ -4093,16 +5073,20 @@ mod tests {
                 .unwrap();
             live_pages.insert(path.clone(), (output, bytes));
         }
-        #[cfg(feature = "dependency-observation")]
-        for path in &page_paths {
-            let path = site_build::OutputPath::parse(path.clone()).unwrap();
-            assert!(matches!(
-                engine
-                    .dependency_decision_for_page(&prepared.build_id, &path)
-                    .unwrap(),
-                ::dependency_observation::RebuildDecision::FullBuild { .. }
-            ));
-        }
+        let toc = &live_pages["en/toc.html"].1;
+        assert!(std::str::from_utf8(toc)
+            .unwrap()
+            .contains("<h1>Table of Contents</h1>"));
+        assert!(std::str::from_utf8(toc)
+            .unwrap()
+            .contains("href=\"index.html\""));
+        assert!(std::str::from_utf8(toc)
+            .unwrap()
+            .contains("href=\"artifacts.html\""));
+        let artifacts = &live_pages["en/artifacts.html"].1;
+        assert!(std::str::from_utf8(artifacts)
+            .unwrap()
+            .contains("<h1>Artifacts Summary</h1>"));
         for path in page_paths.iter().rev() {
             let output = restored.render(&restored_handle, path).unwrap();
             let bytes = restored
@@ -4158,8 +5142,6 @@ mod tests {
         assert!(second.measurements.publisher_recipe_assets_cache_hit);
         assert!(second.measurements.render_semantics_cache_hit);
         assert!(!second.measurements.site_build_cache_hit);
-        assert_eq!(second.measurements.template_materialize_ms, 0.0);
-        assert_eq!(second.measurements.publisher_runtime_ms, 0.0);
         let prose_path = site_build::SourcePath::parse("input/pagecontent/index.md").unwrap();
         let prose_ref = second
             .site_build
@@ -4257,7 +5239,7 @@ mod tests {
             semantic
                 .measurements
                 .render_package_catalog_retained_generations
-                <= PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT as u64
+                <= 2
         );
 
         // Ordered primary-IG package selection is catalog identity. Adding an
@@ -4280,7 +5262,7 @@ mod tests {
             generation_b
                 .measurements
                 .render_package_catalog_retained_generations,
-            PUBLISHER_RENDER_PACKAGE_CATALOG_HISTORY_LIMIT as u64
+            2
         );
 
         // A -> B -> A retains exactly two catalog generations. Changing a
@@ -4519,17 +5501,42 @@ fn elapsed_ms(started: crate::runtime::PhaseTimer) -> f64 {
 }
 
 impl SiteEngine {
+    fn generate_snapshot_derivation(
+        &self,
+        input: snapshot_gen::SnapshotDerivationInput,
+        context: &snapshot_gen::PackageContext,
+        path_key: &str,
+        label: &str,
+        operation: &str,
+        _metrics: &mut PrepareMeasurements,
+    ) -> Result<(Value, SnapshotResourceDerivation), String> {
+        let (generated, derivation) =
+            snapshot_gen::generate_prepared_snapshot_derivation(input, context)
+                .map_err(|error| format!("{operation}: snapshot {label}: {error:#}"))?;
+        let retention = derivation
+            .retention()
+            .map_err(|error| format!("{operation}: measure snapshot {path_key}: {error:#}"))?;
+        let derivation = Rc::new(derivation);
+        Ok((
+            generated,
+            SnapshotResourceDerivation {
+                derivation,
+                retention,
+            },
+        ))
+    }
+
     fn preparation_cache_keys(
         &self,
         input: &PrepareGuideOptions,
         project: &site_build::ProjectIdentity,
         package_lock: &site_build::PackageLock,
-        resolved: &crate::ResolvedPackageClosure,
+        compiled: &[(PathBuf, Value)],
         operation: &str,
     ) -> Result<PreparationCacheKeys, String> {
-        let compiled_sha256 = compiled_revision_sha256(self.compiled_resources(), operation)?;
-        let prepared_guide = site_build::sha256_canonical(&PreparedGuideCachePayload {
-            schema: PREPARED_GUIDE_CACHE_SCHEMA,
+        let compiled_sha256 = compiled_revision_sha256(compiled, operation)?;
+        let prepared_guide = site_build::sha256_canonical(&PreparedGuideIdentityPayload {
+            schema: PREPARED_GUIDE_IDENTITY_SCHEMA,
             recipe: PREPARED_GUIDE_RECIPE,
             engine_api: ENGINE_API,
             project,
@@ -4540,203 +5547,169 @@ impl SiteEngine {
             branch: input.branch.as_deref(),
             revision: input.revision.as_deref(),
         })
-        .map_err(|error| format!("{operation}: hash PreparedGuide cache key: {error}"))?;
-        let snapshot_completed_local =
-            site_build::sha256_canonical(&SnapshotCompletedLocalCachePayload {
-                schema: SNAPSHOT_COMPLETED_LOCAL_CACHE_SCHEMA,
-                recipe: SNAPSHOT_COMPLETED_LOCAL_RECIPE,
+        .map_err(|error| format!("{operation}: hash PreparedGuide identity: {error}"))?;
+        let render_semantics_source =
+            site_build::sha256_canonical(&RenderSemanticsSourceKeyPayload {
+                schema: "publisher-render-semantics-source/v1",
                 engine_api: ENGINE_API,
                 compiled_sha256: &compiled_sha256,
                 package_lock,
-                resolved_config_sha256: &resolved.config_sha256,
-                resolution_support: &resolved.resolution_support,
-                resolved_labels: &resolved.labels,
             })
-            .map_err(|error| {
-                format!("{operation}: hash snapshot-completed local cache key: {error}")
-            })?;
+            .map_err(|error| format!("{operation}: hash render semantics source: {error}"))?;
         Ok(PreparationCacheKeys {
             prepared_guide,
-            snapshot_completed_local,
+            render_semantics_source,
         })
     }
 
-    fn site_model_from_compile(
+    fn site_model_from_compile_candidate(
         &mut self,
         input: &PrepareGuideOptions,
         environment: &PackageEnvironment,
         operation: &str,
-        cache_key: site_build::Sha256Digest,
-        snapshot_cache_key: site_build::Sha256Digest,
         metrics: &mut PrepareMeasurements,
-    ) -> Result<Rc<site_build::PreparedGuide>, String> {
+        compilation: Option<&crate::compilation::CompilationCandidate>,
+    ) -> Result<PreparedGuideStage, String> {
         record_snapshot_derivation_metrics(&self.preparation, metrics);
-        if self.compiled_resources().is_empty() {
+        let compiled = compilation
+            .map(crate::compilation::CompilationCandidate::compiled_resources)
+            .unwrap_or_else(|| self.compiled_resources());
+        if compiled.is_empty() {
             return Err(format!(
                 "{operation}: no compiled revision; call compileProject first"
             ));
         }
-        if let Some(entry) = &self.preparation.prepared_guide {
-            if entry.key == cache_key {
-                #[cfg(test)]
-                {
-                    self.preparation.cache_hits.prepared_guide += 1;
-                }
-                return Ok(entry.guide.clone());
-            }
-        }
-        let snapshot_hit = self
-            .preparation
-            .snapshot_completed_local
-            .as_ref()
-            .is_some_and(|entry| entry.key == snapshot_cache_key);
-        let mut snapshot_candidate = None;
-        let mut derivation_candidate = None;
-        if snapshot_hit {
-            #[cfg(test)]
-            {
-                self.preparation.cache_hits.snapshot_completed_local += 1;
-            }
-        } else {
-            let project = self.project_revision().ok_or_else(|| {
+        let project = compilation
+            .map(crate::compilation::CompilationCandidate::project)
+            .or_else(|| self.project_revision())
+            .cloned()
+            .ok_or_else(|| {
                 format!(
                     "{operation}: compileProject has not established a complete source revision"
                 )
             })?;
-            let resolved = project.resolved_packages();
-            let (_, fhir_version) = compiled_ig_identity(self.compiled_resources())?;
-            resolved_core_package(
-                resolved,
-                project.config(),
-                &fhir_version,
-                environment,
-                operation,
-            )?;
-            let source = environment.scoped(&resolved.labels, operation)?;
-            let mut context = snapshot_gen::PackageContext::new_with(
-                source,
-                environment.packages.root(),
-                &resolved.labels,
-            )
-            .map_err(|error| format!("{operation}: package context: {error:#}"))?;
-            let (mut local_resources, primary_implementation_guide) =
-                prepared_local_resource_set(self.compiled_resources(), operation)?;
-            let mut snapshot_locals = local_resources
-                .iter()
-                .filter(|(_, body)| {
-                    body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
-            context.load_local_resources(snapshot_locals);
-            let mut derivations = BTreeMap::new();
-            let mut derivation_fact_count = 0usize;
-            let mut derivation_manifest_approx_bytes = 0usize;
-            let mut derivation_generated_json_bytes = 0usize;
-            let mut derivation_admissible = true;
-            for (path, body) in &mut local_resources {
-                if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
-                    continue;
-                }
-                let path_key = path.to_str().ok_or_else(|| {
+        let resolved = project.resolved_packages();
+        let (_, fhir_version) = compiled_ig_identity(compiled)?;
+        resolved_core_package(
+            resolved,
+            project.config(),
+            &fhir_version,
+            environment,
+            operation,
+        )?;
+        let source = environment.scoped(&resolved.labels, operation)?;
+        let mut context = snapshot_gen::PackageContext::new_with(
+            source,
+            environment.packages.root(),
+            &resolved.labels,
+        )
+        .map_err(|error| format!("{operation}: package context: {error:#}"))?;
+        let (mut local_resources, primary_implementation_guide) =
+            prepared_local_resource_set(compiled, operation)?;
+        let mut snapshot_locals = local_resources
+            .iter()
+            .filter(|(_, body)| {
+                body.get("resourceType").and_then(Value::as_str) == Some("StructureDefinition")
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        snapshot_locals.sort_by(|left, right| left.0.cmp(&right.0));
+        context.load_local_resources(snapshot_locals);
+        let mut derivations = BTreeMap::new();
+        let mut derivation_fact_count = 0usize;
+        let mut derivation_manifest_approx_bytes = 0usize;
+        let mut derivation_snapshot_json_bytes = 0usize;
+        let mut derivation_admissible = true;
+        for (path, body) in &mut local_resources {
+            if body.get("resourceType").and_then(Value::as_str) != Some("StructureDefinition") {
+                continue;
+            }
+            let path_key = path
+                .to_str()
+                .ok_or_else(|| {
                     format!("{operation}: snapshot resource path is not UTF-8: {path:?}")
-                })?;
-                let source_bytes = serde_json::to_vec(body).map_err(|error| {
-                    format!("{operation}: encode snapshot source {path_key}: {error}")
-                })?;
-                let source = site_build::Sha256Digest::of_bytes(&source_bytes);
-                let label = path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("StructureDefinition");
-                let reusable = self
-                    .preparation
-                    .snapshot_derivations
-                    .iter()
-                    .rev()
-                    .filter_map(|generation| generation.resources.get(path_key))
-                    .find(|candidate| {
-                        candidate.source == source
-                            && context.matches_snapshot_dependencies(candidate.manifest.as_ref())
-                    })
-                    .cloned();
-                let derivation = if let Some(candidate) = reusable {
-                    metrics.snapshot_resource_cache_hits += 1;
-                    #[cfg(test)]
-                    {
-                        self.preparation.cache_hits.snapshot_resources += 1;
-                    }
-                    *body = candidate.generated.as_ref().clone();
-                    candidate
-                } else {
-                    metrics.snapshot_resource_cache_misses += 1;
-                    let (generated, manifest) = snapshot_gen::generate_snapshot_with_manifest(
-                        body.clone(),
-                        &context,
-                        Default::default(),
-                    )
-                    .map_err(|error| format!("{operation}: snapshot {label}: {error:#}"))?;
-                    let generated_json_bytes = serde_json::to_vec(&generated)
-                        .map_err(|error| {
-                            format!("{operation}: measure generated snapshot {path_key}: {error}")
-                        })?
-                        .len();
-                    let generated = Rc::new(generated);
-                    *body = generated.as_ref().clone();
-                    SnapshotResourceDerivation {
-                        source,
-                        manifest: Rc::new(manifest),
-                        generated,
-                        generated_json_bytes,
-                    }
-                };
-                if derivation.manifest.is_complete() {
-                    derivation_fact_count =
-                        derivation_fact_count.saturating_add(derivation.manifest.fact_count());
-                    derivation_manifest_approx_bytes = derivation_manifest_approx_bytes
-                        .saturating_add(derivation.manifest.retained_approx_bytes());
-                    derivation_generated_json_bytes = derivation_generated_json_bytes
-                        .saturating_add(derivation.generated_json_bytes);
-                    if derivations.len() >= SNAPSHOT_DERIVATION_MAX_RESOURCES
-                        || derivation_fact_count > SNAPSHOT_DERIVATION_MAX_FACTS
-                        || derivation_manifest_approx_bytes
-                            > SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES
-                        || derivation_generated_json_bytes
-                            > SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES
-                    {
-                        derivation_admissible = false;
-                    } else {
-                        derivations.insert(path_key.to_string(), derivation);
-                    }
+                })?
+                .to_string();
+            let mut input =
+                snapshot_gen::prepare_snapshot_derivation(body.clone(), Default::default())
+                    .map_err(|error| {
+                        format!("{operation}: prepare snapshot input {path_key}: {error:#}")
+                    })?;
+            let label = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("StructureDefinition")
+                .to_string();
+
+            let mut reusable = None;
+            for candidate in self
+                .preparation
+                .history
+                .iter()
+                .filter_map(|generation| generation.snapshots.resources.get(&path_key))
+            {
+                let recomposed = candidate
+                    .derivation
+                    .try_recompose(&mut input, &context)
+                    .map_err(|error| {
+                        format!("{operation}: recompose snapshot {path_key}: {error:#}")
+                    })?;
+                if let Some(recomposed) = recomposed {
+                    reusable = Some((candidate.clone(), recomposed));
+                    break;
                 }
             }
-            snapshot_candidate = Some(SnapshotCompletedLocalCacheEntry {
-                key: snapshot_cache_key,
-                generated: local_resources.into_iter().map(|(_, body)| body).collect(),
-                primary_implementation_guide,
-            });
-            // Every successful semantic snapshot rebuild advances the bounded
-            // current/previous window. An empty or over-budget generation is a
-            // tombstone: it retains no partial derivations, but it still ages
-            // older facts out instead of letting them survive indefinitely.
-            derivation_candidate = Some(snapshot_derivation_candidate(
-                derivations,
-                derivation_fact_count,
-                derivation_manifest_approx_bytes,
-                derivation_generated_json_bytes,
-                derivation_admissible,
-            ));
+            let derivation = if let Some((candidate, recomposed)) = reusable {
+                metrics.snapshot_resource_cache_hits += 1;
+                #[cfg(test)]
+                {
+                    self.preparation.cache_hits.snapshot_resources += 1;
+                }
+                *body = recomposed;
+                candidate
+            } else {
+                metrics.snapshot_resource_cache_misses += 1;
+                let (generated, derivation) = self.generate_snapshot_derivation(
+                    input, &context, &path_key, &label, operation, metrics,
+                )?;
+                *body = generated;
+                derivation
+            };
+
+            if derivation.retention.complete {
+                derivation_fact_count =
+                    derivation_fact_count.saturating_add(derivation.retention.dependency_facts);
+                derivation_manifest_approx_bytes = derivation_manifest_approx_bytes
+                    .saturating_add(derivation.retention.manifest_approx_bytes);
+                derivation_snapshot_json_bytes = derivation_snapshot_json_bytes
+                    .saturating_add(derivation.retention.snapshot_json_bytes);
+                if derivations.len() >= SNAPSHOT_DERIVATION_MAX_RESOURCES
+                    || derivation_fact_count > SNAPSHOT_DERIVATION_MAX_FACTS
+                    || derivation_manifest_approx_bytes
+                        > SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES
+                    || derivation_snapshot_json_bytes > SNAPSHOT_DERIVATION_MAX_SNAPSHOT_JSON_BYTES
+                {
+                    derivation_admissible = false;
+                } else {
+                    derivations.insert(path_key, derivation);
+                }
+            }
         }
-        let snapshot = snapshot_candidate
-            .as_ref()
-            .or(self.preparation.snapshot_completed_local.as_ref())
-            .expect("snapshot-completed local cache was hit or staged");
-        let project = self.project_revision().expect("compiled project exists");
+        let generated = local_resources
+            .into_iter()
+            .map(|(_, body)| body)
+            .collect::<Vec<_>>();
+        let snapshots = snapshot_derivation_candidate(
+            derivations,
+            derivation_fact_count,
+            derivation_manifest_approx_bytes,
+            derivation_snapshot_json_bytes,
+            derivation_admissible,
+        );
         let guide = Rc::new(assemble_prepared_model(
             operation,
-            &snapshot.generated,
-            &snapshot.primary_implementation_guide,
+            &generated,
+            &primary_implementation_guide,
             project.config(),
             project.site_files(),
             input.build_epoch_secs,
@@ -4744,20 +5717,27 @@ impl SiteEngine {
             input.branch.clone(),
             input.revision.clone(),
         )?);
-        // Promote only after every canonical PreparedGuide step succeeds. A
-        // partially generated or augmentation-failing successor cannot alter
-        // the current/previous derivation history or exact snapshot cache.
-        if let Some(snapshot) = snapshot_candidate {
-            self.preparation.snapshot_completed_local = Some(snapshot);
-        }
-        if let Some(candidate) = derivation_candidate {
-            promote_snapshot_derivation(&mut self.preparation, candidate, metrics);
-        }
-        self.preparation.prepared_guide = Some(PreparedGuideCacheEntry {
-            key: cache_key,
-            guide: guide.clone(),
-        });
-        Ok(guide)
+        Ok(PreparedGuideStage {
+            guide,
+            generation: PreparationGeneration {
+                snapshots: snapshots.generation,
+                render_semantics: None,
+                render_package_catalog: None,
+            },
+            snapshot_admitted: snapshots.admitted,
+        })
+    }
+
+    fn commit_prepared_guide_stage(
+        &mut self,
+        stage: PreparedGuideStage,
+        metrics: &mut PrepareMeasurements,
+    ) -> Rc<site_build::PreparedGuide> {
+        metrics.snapshot_derivation_admitted = stage.snapshot_admitted;
+        let guide = stage.guide;
+        self.preparation.history.promote(stage.generation);
+        record_snapshot_derivation_metrics(&self.preparation, metrics);
+        guide
     }
 }
 
@@ -4765,28 +5745,28 @@ fn snapshot_derivation_candidate(
     resources: BTreeMap<String, SnapshotResourceDerivation>,
     fact_count: usize,
     manifest_approx_bytes: usize,
-    generated_json_bytes: usize,
+    snapshot_json_bytes: usize,
     observation_complete: bool,
 ) -> SnapshotDerivationCandidate {
     let within_bounds = observation_complete
         && resources.len() <= SNAPSHOT_DERIVATION_MAX_RESOURCES
         && fact_count <= SNAPSHOT_DERIVATION_MAX_FACTS
         && manifest_approx_bytes <= SNAPSHOT_DERIVATION_MAX_MANIFEST_APPROX_BYTES
-        && generated_json_bytes <= SNAPSHOT_DERIVATION_MAX_GENERATED_JSON_BYTES;
+        && snapshot_json_bytes <= SNAPSHOT_DERIVATION_MAX_SNAPSHOT_JSON_BYTES;
     let admitted = within_bounds && !resources.is_empty();
     let generation = if within_bounds {
         SnapshotDerivationGeneration {
             resources,
             fact_count,
             manifest_approx_bytes,
-            generated_json_bytes,
+            snapshot_json_bytes,
         }
     } else {
         SnapshotDerivationGeneration {
             resources: BTreeMap::new(),
             fact_count: 0,
             manifest_approx_bytes: 0,
-            generated_json_bytes: 0,
+            snapshot_json_bytes: 0,
         }
     };
     SnapshotDerivationCandidate {
@@ -4795,40 +5775,25 @@ fn snapshot_derivation_candidate(
     }
 }
 
-fn promote_snapshot_derivation(
-    preparation: &mut PreparationState,
-    candidate: SnapshotDerivationCandidate,
-    metrics: &mut PrepareMeasurements,
-) {
-    metrics.snapshot_derivation_admitted = candidate.admitted;
-    preparation
-        .snapshot_derivations
-        .push_back(candidate.generation);
-    while preparation.snapshot_derivations.len() > SNAPSHOT_DERIVATION_HISTORY_LIMIT {
-        preparation.snapshot_derivations.pop_front();
-    }
-    record_snapshot_derivation_metrics(preparation, metrics);
-}
-
 fn record_snapshot_derivation_metrics(
     preparation: &PreparationState,
     metrics: &mut PrepareMeasurements,
 ) {
-    metrics.snapshot_derivation_history_generations = preparation.snapshot_derivations.len() as u64;
+    metrics.snapshot_derivation_history_generations = preparation.history.len() as u64;
     metrics.snapshot_derivation_retained_facts = preparation
-        .snapshot_derivations
+        .history
         .iter()
-        .map(|generation| generation.fact_count as u64)
+        .map(|generation| generation.snapshots.fact_count as u64)
         .sum();
     metrics.snapshot_derivation_retained_manifest_approx_bytes = preparation
-        .snapshot_derivations
+        .history
         .iter()
-        .map(|generation| generation.manifest_approx_bytes as u64)
+        .map(|generation| generation.snapshots.manifest_approx_bytes as u64)
         .sum();
-    metrics.snapshot_derivation_retained_generated_json_bytes = preparation
-        .snapshot_derivations
+    metrics.snapshot_derivation_retained_snapshot_json_bytes = preparation
+        .history
         .iter()
-        .map(|generation| generation.generated_json_bytes as u64)
+        .map(|generation| generation.snapshots.snapshot_json_bytes as u64)
         .sum();
 }
 
@@ -4950,23 +5915,21 @@ fn assemble_prepared_model(
 fn site_build_project_revision(
     project: &crate::compilation::CompiledProjectRevision,
     project_id: &str,
-) -> Result<site_build::ProjectIdentity, String> {
+) -> Result<(site_build::ProjectIdentity, ObjectMap), String> {
     let mut entries = BTreeMap::new();
+    let mut objects = ObjectMap::new();
     let mut insert = |path: &str,
                       kind: site_build::SourceKind,
-                      bytes: &[u8],
+                      bytes: Vec<u8>,
                       media_type: &str|
      -> Result<(), String> {
         let path = site_build::SourcePath::parse(path.to_string())
             .map_err(|error| format!("prepare: source path {path}: {error}"))?;
+        let bytes = Rc::new(bytes);
+        let content = site_build::ContentRef::of_bytes(bytes.as_ref(), Some(media_type));
+        insert_authenticated_object(&mut objects, &content, bytes)?;
         if entries
-            .insert(
-                path.clone(),
-                site_build::SourceEntry {
-                    kind,
-                    content: site_build::ContentRef::of_bytes(bytes, Some(media_type)),
-                },
-            )
+            .insert(path.clone(), site_build::SourceEntry { kind, content })
             .is_some()
         {
             return Err(format!(
@@ -4978,14 +5941,14 @@ fn site_build_project_revision(
     insert(
         "sushi-config.yaml",
         site_build::SourceKind::Config,
-        project.config().as_bytes(),
+        project.config().as_bytes().to_vec(),
         "application/yaml",
     )?;
     for (path, body) in project.fsh() {
         insert(
             path,
             site_build::SourceKind::Fsh,
-            body.as_bytes(),
+            body.as_bytes().to_vec(),
             "text/fhir-shorthand",
         )?;
     }
@@ -5001,13 +5964,13 @@ fn site_build_project_revision(
         insert(
             path,
             site_build::SourceKind::PredefinedResource,
-            &bytes,
+            bytes,
             "application/fhir+json",
         )?;
     }
     for (path, bytes) in project.site_files() {
         let (kind, media_type) = source_kind_and_media_type(path);
-        insert(path, kind, bytes, media_type)?;
+        insert(path, kind, bytes.clone(), media_type)?;
     }
     let sources = site_build::SourceManifest::from_entries(entries)
         .map_err(|error| format!("prepare: source manifest: {error}"))?;
@@ -5016,11 +5979,14 @@ fn site_build_project_revision(
         site_build::sha256_canonical(&sources)
             .map_err(|error| format!("prepare: source revision: {error}"))?
     );
-    Ok(site_build::ProjectIdentity {
-        project_id: project_id.into(),
-        revision,
-        sources,
-    })
+    Ok((
+        site_build::ProjectIdentity {
+            project_id: project_id.into(),
+            revision,
+            sources,
+        },
+        objects,
+    ))
 }
 
 fn site_build_package_lock(
@@ -5096,21 +6062,12 @@ fn site_build_package_lock(
 }
 
 fn environment_objects(
-    project: &crate::compilation::CompiledProjectRevision,
+    project_objects: &ObjectMap,
     package_lock: &site_build::PackageLock,
     environment: &PackageEnvironment,
     operation: &str,
 ) -> Result<ObjectMap, String> {
-    let (project_id, _) = compiled_ig_identity_from_project(project)?;
-    let revision = site_build_project_revision(project, &project_id)?;
-    let mut objects = BTreeMap::new();
-    let source_bytes = project_source_bytes(project)?;
-    for (path, entry) in revision.sources.iter() {
-        let bytes = source_bytes
-            .get(path.as_str())
-            .ok_or_else(|| format!("{operation}: source bytes for {path} are absent"))?;
-        insert_object(&mut objects, &entry.content, bytes.clone())?;
-    }
+    let mut objects = project_objects.clone();
     for (coordinate, _) in package_lock.iter() {
         let label = coordinate.as_str();
         let material = environment
@@ -5131,47 +6088,6 @@ fn environment_objects(
         }
     }
     Ok(objects)
-}
-
-fn project_source_bytes(
-    project: &crate::compilation::CompiledProjectRevision,
-) -> Result<BTreeMap<String, Vec<u8>>, String> {
-    let mut bytes = BTreeMap::from([(
-        "sushi-config.yaml".into(),
-        project.config().as_bytes().to_vec(),
-    )]);
-    bytes.extend(
-        project
-            .fsh()
-            .iter()
-            .map(|(path, source)| (path.clone(), source.as_bytes().to_vec())),
-    );
-    for (path, body) in project.predefined() {
-        bytes.insert(
-            path.clone(),
-            serde_json::to_vec(body)
-                .map_err(|error| format!("prepare: serialize predefined {path}: {error}"))?,
-        );
-    }
-    bytes.extend(project.site_files().clone());
-    Ok(bytes)
-}
-
-fn compiled_ig_identity_from_project(
-    project: &crate::compilation::CompiledProjectRevision,
-) -> Result<(String, String), String> {
-    let config: Value = serde_yaml::from_str(project.config())
-        .map_err(|error| format!("prepare: parse config identity: {error}"))?;
-    let project_id = config
-        .get("id")
-        .or_else(|| config.get("packageId"))
-        .and_then(Value::as_str)
-        .ok_or("prepare: config has no id/packageId")?;
-    let fhir_version = config
-        .get("fhirVersion")
-        .and_then(Value::as_str)
-        .ok_or("prepare: config has no fhirVersion")?;
-    Ok((project_id.into(), fhir_version.into()))
 }
 
 fn source_kind_and_media_type(path: &str) -> (site_build::SourceKind, &'static str) {
@@ -5522,13 +6438,13 @@ fn with_template_chain(
         .map_err(|error| format!("{operation}: extend template package lock: {error}"))
 }
 
-fn closed_site_build_cache_key(
+fn cycle_runtime_key(
     prepared_guide_key: &site_build::Sha256Digest,
     render_target: &site_build::RenderTarget,
     diagnostics: &BTreeSet<site_build::BuildDiagnostic>,
 ) -> Result<site_build::Sha256Digest, site_build::CanonicalError> {
-    site_build::sha256_canonical(&ClosedSiteBuildCachePayload {
-        schema: CLOSED_SITE_BUILD_CACHE_SCHEMA,
+    site_build::sha256_canonical(&CycleRuntimeKeyPayload {
+        schema: CYCLE_RUNTIME_KEY_SCHEMA,
         recipe: CYCLE_PROJECTION_RECIPE,
         prepared_guide_key,
         render_target,
@@ -5573,14 +6489,15 @@ fn publisher_recipe_assets_key(
 }
 
 impl SiteEngine {
-    fn prepare_publisher(
+    fn prepare_publisher_generation(
         &mut self,
         template_coordinate: &str,
         guide_options: PrepareGuideOptions,
         active_tables: bool,
         run_uuid: Option<String>,
         environment: &PackageEnvironment,
-    ) -> Result<PrepareResult, String> {
+        compilation: Option<&crate::compilation::CompilationCandidate>,
+    ) -> Result<PublisherTargetCandidate, String> {
         let total_started = self.timer();
         let operation = "prepare(publisher)";
         let mut metrics = PrepareMeasurements::default();
@@ -5589,36 +6506,30 @@ impl SiteEngine {
         }
         let template = site_build::PackageCoordinate::parse(template_coordinate)
             .map_err(|error| format!("{operation}: template coordinate must be exact: {error}"))?;
-        let project = self.project_revision().cloned().ok_or_else(|| {
-            format!("{operation}: compileProject has not established a complete source revision")
-        })?;
-        let (project_id, fhir_version) = compiled_ig_identity(self.compiled_resources())
-            .map_err(|error| format!("{operation}: {error}"))?;
-        let started = self.timer();
-        let project_revision = site_build_project_revision(&project, &project_id)?;
-        metrics.project_revision_ms = elapsed_ms(started);
-        let started = self.timer();
+        let project = compilation
+            .map(crate::compilation::CompilationCandidate::project)
+            .or_else(|| self.project_revision())
+            .cloned()
+            .ok_or_else(|| {
+                format!(
+                    "{operation}: compileProject has not established a complete source revision"
+                )
+            })?;
+        let compiled = compilation
+            .map(crate::compilation::CompilationCandidate::compiled_resources)
+            .unwrap_or_else(|| self.compiled_resources());
+        let (project_id, fhir_version) =
+            compiled_ig_identity(compiled).map_err(|error| format!("{operation}: {error}"))?;
+        let (project_revision, project_objects) =
+            site_build_project_revision(&project, &project_id)?;
         let compile_lock = site_build_package_lock(&project, environment)?;
-        metrics.package_lock_ms = elapsed_ms(started);
-        let started = self.timer();
         let keys = self.preparation_cache_keys(
             &guide_options,
             &project_revision,
             &compile_lock,
-            project.resolved_packages(),
+            compiled,
             operation,
         )?;
-        metrics.snapshot_completed_local_cache_hit = self
-            .preparation
-            .snapshot_completed_local
-            .as_ref()
-            .is_some_and(|entry| entry.key == keys.snapshot_completed_local);
-        metrics.prepared_guide_cache_hit = self
-            .preparation
-            .prepared_guide
-            .as_ref()
-            .is_some_and(|entry| entry.key == keys.prepared_guide);
-        metrics.prepared_guide_key_ms = elapsed_ms(started);
 
         let resolution = environment.resolve_template(template_coordinate)?;
         if let Some(missing) = &resolution.missing {
@@ -5626,15 +6537,17 @@ impl SiteEngine {
                 "{operation}: template chain is incomplete; missing {missing}"
             ));
         }
-        let started = self.timer();
         let package_lock = with_template_chain(
             &compile_lock,
             &resolution.chain,
             &environment.materials,
             operation,
         )?;
-        metrics.package_lock_ms += elapsed_ms(started);
-        let diagnostics = site_build_diagnostics(self.compile_diagnostics());
+        let diagnostics = site_build_diagnostics(
+            compilation
+                .map(crate::compilation::CompilationCandidate::diagnostics)
+                .unwrap_or_else(|| self.compile_diagnostics()),
+        );
         let renderer =
             site_build::ProducerRef::new("publisher-template-rust", env!("CARGO_PKG_VERSION"));
         let preparation_key =
@@ -5653,31 +6566,24 @@ impl SiteEngine {
                 run_uuid: run_uuid.as_deref(),
             })
             .map_err(|error| format!("{operation}: retained runtime key: {error}"))?;
-        if let Some((handle, build)) = self.reuse_publisher(&preparation_key) {
+        if let Some((handle, build)) = self.find_publisher(&preparation_key) {
             metrics.site_build_cache_hit = true;
             metrics.total_ms = elapsed_ms(total_started);
-            #[cfg(test)]
-            {
-                self.preparation.cache_hits.retained_publisher_runtime += 1;
-            }
-            return Ok(PrepareResult {
-                build_id: handle,
-                generator: GeneratorKind::Publisher,
-                site_build: build,
-                measurements: metrics,
+            return Ok(PublisherTargetCandidate::Reuse {
+                handle,
+                build,
+                metrics,
             });
         }
 
-        let started = self.timer();
-        let prepared = self.site_model_from_compile(
+        let mut prepared_stage = self.site_model_from_compile_candidate(
             &guide_options,
             environment,
             operation,
-            keys.prepared_guide.clone(),
-            keys.snapshot_completed_local.clone(),
             &mut metrics,
+            compilation,
         )?;
-        metrics.prepared_guide_ms = elapsed_ms(started);
+        let prepared = prepared_stage.guide.clone();
         if prepared.guide.package_id != project_id || prepared.guide.fhir_version != fhir_version {
             return Err(format!(
                 "{operation}: PreparedGuide identity disagrees with compiled project"
@@ -5702,7 +6608,6 @@ impl SiteEngine {
                 assets
             }
             None => {
-                let started = self.timer();
                 let tree = package_store::template_loader::materialize(
                     &environment.packages,
                     &package_store::TemplatePaths::new(environment.packages.root()),
@@ -5711,8 +6616,6 @@ impl SiteEngine {
                 .map_err(|error| {
                     format!("{operation}: materialize {template_coordinate}: {error}")
                 })?;
-                metrics.template_materialize_ms = elapsed_ms(started);
-                let started = self.timer();
                 let publisher = Rc::new(
                     site_producer::publisher_runtime::PublisherRuntime::assemble(
                         &environment.packages,
@@ -5738,7 +6641,6 @@ impl SiteEngine {
                     self.preparation.cache_hits.publisher_recipe_artifact_builds += 1;
                 }
                 merge_authenticated_objects(&mut runtime_objects, &artifact_objects)?;
-                metrics.publisher_runtime_ms = elapsed_ms(started);
                 Rc::new(PublisherRecipeAssets {
                     key: Some(recipe_assets_key),
                     template_files,
@@ -5750,65 +6652,71 @@ impl SiteEngine {
                 })
             }
         };
-        let mut objects = environment_objects(&project, &package_lock, environment, operation)?;
+        let mut objects =
+            environment_objects(&project_objects, &package_lock, environment, operation)?;
         merge_authenticated_objects(&mut objects, &recipe_assets.objects)?;
         let mut ready = recipe_assets.ready.clone();
 
-        let started = self.timer();
-        let model = publisher_model(
+        let model = self.publisher_model(
             &prepared,
+            &project_revision,
             recipe_assets.template_files.as_ref(),
             &mut ready,
             &mut objects,
             &project_id,
             operation,
         )?;
-        metrics.publisher_model_ms = elapsed_ms(started);
 
-        let render_model_started = self.timer();
-        let render_semantics_started = self.timer();
         let render_semantics_key = publisher_render_semantics_cache_key(
-            &keys.snapshot_completed_local,
+            &keys.render_semantics_source,
             &model,
             &options,
+            guide_options.build_epoch_secs,
             operation,
         )?;
-        let mut render_semantics_candidate = None;
-        let mut render_package_catalog_candidate = None;
-        let render_semantics = match self
+        let render_packages = publisher_render_package_view(
+            environment.scoped(&project.resolved_packages().labels, operation)?,
+            &project.resolved_packages().labels,
+            operation,
+        )?;
+        let package_root = render_packages.root().to_string_lossy().into_owned();
+        let package_catalog_key = publisher_render_package_catalog_cache_key(
+            &prepared,
+            &compile_lock,
+            &project.resolved_packages().labels,
+            &package_root,
+            operation,
+        )?;
+        let retained_catalog = self
             .preparation
-            .publisher_render_semantics
-            .as_ref()
-            .filter(|entry| entry.key == render_semantics_key)
-        {
+            .history
+            .iter()
+            .filter_map(|generation| generation.render_package_catalog.as_ref())
+            .find(|entry| entry.key == package_catalog_key)
+            .cloned();
+        let retained_semantics = self
+            .preparation
+            .history
+            .iter()
+            .filter_map(|generation| generation.render_semantics.as_ref())
+            .find(|entry| entry.key == render_semantics_key)
+            .cloned();
+        let render_semantics = match retained_semantics {
             Some(entry) => {
                 metrics.render_semantics_cache_hit = true;
-                entry.semantics.clone()
+                let semantics = entry.semantics.clone();
+                prepared_stage.generation.render_semantics = Some(entry);
+                prepared_stage.generation.render_package_catalog = retained_catalog;
+                semantics
             }
             None => {
-                let render_packages = publisher_render_package_view(
-                    environment.scoped(&project.resolved_packages().labels, operation)?,
-                    &project.resolved_packages().labels,
-                    operation,
-                )?;
-                let package_root = render_packages.root().to_string_lossy().into_owned();
-                let package_catalog_key = publisher_render_package_catalog_cache_key(
-                    &prepared,
-                    &compile_lock,
-                    &project.resolved_packages().labels,
-                    &package_root,
-                    operation,
-                )?;
-                let reusable_catalog = self
-                    .preparation
-                    .publisher_render_package_catalogs
-                    .iter()
-                    .rev()
-                    .find(|entry| entry.key == package_catalog_key)
+                let reusable_catalog = retained_catalog
+                    .as_ref()
                     .and_then(|entry| entry.catalog.clone());
+                let render_set = prepared_render_set(&prepared)?;
                 let (semantics, package_catalog, package_catalog_hit) =
                     publisher_render_semantics_reusing_package_catalog(
-                        &prepared,
+                        render_set,
                         render_packages,
                         &model,
                         &options,
@@ -5843,38 +6751,33 @@ impl SiteEngine {
                         package_catalog.retained_approx_bytes(),
                         admission_limits,
                     );
-                render_package_catalog_candidate = Some(PublisherRenderPackageCatalogCacheEntry {
-                    key: package_catalog_key,
-                    catalog: metrics
-                        .render_package_catalog_admitted
-                        .then_some(package_catalog),
-                });
+                prepared_stage.generation.render_package_catalog =
+                    Some(PublisherRenderPackageCatalogCacheEntry {
+                        key: package_catalog_key,
+                        catalog: metrics
+                            .render_package_catalog_admitted
+                            .then_some(package_catalog),
+                    });
                 let semantics = Rc::new(semantics);
-                render_semantics_candidate = Some(PublisherRenderSemanticsCacheEntry {
-                    key: render_semantics_key,
-                    semantics: semantics.clone(),
-                });
+                prepared_stage.generation.render_semantics =
+                    Some(PublisherRenderSemanticsCacheEntry {
+                        key: render_semantics_key,
+                        semantics: semantics.clone(),
+                    });
                 semantics
             }
         };
         #[cfg(test)]
-        if self.fail_after_render_package_catalog_stage
-            && render_package_catalog_candidate.is_some()
-        {
+        if self.fail_after_render_package_catalog_stage && metrics.render_package_catalog_built {
             return Err(
                 "prepareProject: injected failure after render package catalog staging".into(),
             );
         }
-        metrics.render_semantics_ms = elapsed_ms(render_semantics_started);
-        let render_state_started = self.timer();
         let state = publisher_render_state(&render_semantics, &model, &options)?;
-        metrics.render_state_ms = elapsed_ms(render_state_started);
-        metrics.render_model_ms = elapsed_ms(render_model_started);
 
-        let catalog_total_started = self.timer();
-        let started = self.timer();
-        let (catalog, tree_digest) = publisher_catalog(&state, &mut ready, &model, operation)?;
-        metrics.output_catalog_ms = elapsed_ms(started);
+        let catalog =
+            publisher_output_plan(&ready, state.list_pages(), &model.resource_pages, operation)?;
+        let tree_digest = publisher_mounted_tree_digest(&model, operation)?;
         let mut parameters = BTreeMap::from([
             ("contract".into(), "publisher-site/v1".into()),
             (
@@ -5904,92 +6807,125 @@ impl SiteEngine {
         if let Some(run_uuid) = &run_uuid {
             parameters.insert("runUuid".into(), run_uuid.clone());
         }
-        let started = self.timer();
-        let (artifacts, plan, artifact_objects) = publisher_artifacts(
-            &prepared,
-            &project_revision,
-            &package_lock,
-            recipe_assets.as_ref(),
-        )?;
-        merge_authenticated_objects(&mut objects, &artifact_objects)?;
-        metrics.publisher_artifacts_ms = elapsed_ms(started);
-        let started = self.timer();
-        let build = site_build::SiteBuild::new(
-            project_revision,
-            package_lock,
-            site_build::RenderTarget {
-                renderer,
-                mode: site_build::RenderMode::NativeTemplate,
-                fhir_version,
-                template: Some(template.clone()),
-                parameters: parameters.clone(),
-            },
-            plan,
-            artifacts,
-            diagnostics,
-        )
-        .map_err(|error| format!("{operation}: SiteBuild: {error}"))?
-        .close()
-        .map_err(|error| format!("{operation}: close SiteBuild: {error}"))?;
-        metrics.site_build_close_ms = elapsed_ms(started);
-        let started = self.timer();
-        verify_ready_artifacts(&build, &objects, operation)?;
-        metrics.closure_verify_ms = elapsed_ms(started);
-        let renderer = site_build::RendererImplementation {
+        let renderer_implementation = site_build::RendererImplementation {
             id: "publisher-template-rust".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            recipe_sha256: site_build::sha256_canonical(&(template, &parameters))
+            recipe_sha256: site_build::sha256_canonical(&(&template, &parameters))
                 .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
         };
-        #[cfg(feature = "dependency-observation")]
-        let dependency_observation = match self.dependency_compilation() {
-            Some((compilation, package_lookups)) => {
-                crate::dependency_observation::BuildDependencyObservation::capture(
-                    compilation,
-                    package_lookups,
-                    &prepared,
-                    &build,
-                    &catalog,
-                )
-            }
-            None => crate::dependency_observation::BuildDependencyObservation::unavailable(
-                "successful compilation has no dependency observation",
-            ),
-        };
-        let handle = build.site_build().build_id().to_string();
-        let installed = self.install_publisher(PublisherRuntime {
-            preparation_key: Some(preparation_key),
-            recipe_assets,
-            state,
-            build: build.clone(),
-            catalog,
-            ready,
-            objects,
-            renderer,
-            output_options: parameters,
-            #[cfg(feature = "dependency-observation")]
-            dependency_observation,
-        });
-        debug_assert_eq!(installed, handle);
-        if let Some(candidate) = render_semantics_candidate {
-            self.preparation.publisher_render_semantics = Some(candidate);
-        }
-        if let Some(candidate) = render_package_catalog_candidate {
-            promote_publisher_render_package_catalog(
-                &mut self.preparation.publisher_render_package_catalogs,
-                candidate,
-            );
-        }
-        metrics.render_package_catalog_retained_generations =
-            self.preparation.publisher_render_package_catalogs.len() as u64;
-        metrics.catalog_ms = elapsed_ms(catalog_total_started);
         metrics.total_ms = elapsed_ms(total_started);
-        Ok(PrepareResult {
-            build_id: handle,
-            generator: GeneratorKind::Publisher,
-            site_build: build,
-            measurements: metrics,
-        })
+        Ok(PublisherTargetCandidate::New(NewPublisherTarget {
+            core: PublisherRenderCore {
+                recipe_assets: recipe_assets.clone(),
+                state,
+                catalog,
+                ready,
+                objects,
+                renderer: renderer_implementation,
+                output_options: parameters.clone(),
+            },
+            closure: PublisherClosureInputs {
+                preparation_key,
+                project: project_revision,
+                package_lock,
+                prepared: prepared.clone(),
+                recipe_assets,
+                template,
+                fhir_version,
+                renderer,
+                parameters,
+                diagnostics,
+            },
+            preparation: prepared_stage,
+            metrics,
+        }))
+    }
+
+    fn close_publisher_generation(
+        &mut self,
+        generation: PublisherTargetCandidate,
+    ) -> Result<PrepareResult, String> {
+        let operation = "prepare(publisher)";
+        match generation {
+            PublisherTargetCandidate::Reuse {
+                handle,
+                build,
+                mut metrics,
+            } => {
+                let completion_started = self.timer();
+                self.commit_publisher_reuse(&handle);
+                metrics.total_ms += elapsed_ms(completion_started);
+                #[cfg(test)]
+                {
+                    self.preparation.cache_hits.retained_publisher_runtime += 1;
+                }
+                Ok(PrepareResult {
+                    build_id: handle,
+                    generator: GeneratorKind::Publisher,
+                    site_build: build,
+                    measurements: metrics,
+                })
+            }
+            PublisherTargetCandidate::New(mut stage) => {
+                let completion_started = self.timer();
+                let (artifacts, plan, artifact_objects) = publisher_artifacts(
+                    &stage.closure.prepared,
+                    &stage.closure.project,
+                    &stage.closure.package_lock,
+                    stage.closure.recipe_assets.as_ref(),
+                    &stage.core.objects,
+                )?;
+                merge_authenticated_objects(&mut stage.core.objects, &artifact_objects)?;
+                #[cfg(test)]
+                if self.fail_during_publisher_close {
+                    return Err("prepareProject: injected failure during Publisher close".into());
+                }
+                let build = site_build::SiteBuild::new(
+                    stage.closure.project,
+                    stage.closure.package_lock,
+                    site_build::RenderTarget {
+                        renderer: stage.closure.renderer,
+                        mode: site_build::RenderMode::NativeTemplate,
+                        fhir_version: stage.closure.fhir_version,
+                        template: Some(stage.closure.template),
+                        parameters: stage.closure.parameters.clone(),
+                    },
+                    plan,
+                    artifacts,
+                    stage.closure.diagnostics,
+                )
+                .map_err(|error| format!("{operation}: SiteBuild: {error}"))?
+                .close()
+                .map_err(|error| format!("{operation}: close SiteBuild: {error}"))?;
+                verify_ready_artifacts(&build, &stage.core.objects, operation)?;
+                let handle = build.site_build().build_id().to_string();
+                let installed = self.install_publisher(
+                    PublisherRuntime {
+                        build: build.clone(),
+                        core: stage.core,
+                    },
+                    Some(stage.closure.preparation_key),
+                );
+                debug_assert_eq!(installed, handle);
+
+                // Every fallible closure/verification operation is complete.
+                // Promote all staged preparation facts only now.
+                let _ = self.commit_prepared_guide_stage(stage.preparation, &mut stage.metrics);
+                stage.metrics.render_package_catalog_retained_generations =
+                    self.preparation
+                        .history
+                        .iter()
+                        .filter(|generation| generation.render_package_catalog.is_some())
+                        .count() as u64;
+                stage.metrics.total_ms += elapsed_ms(completion_started);
+                Ok(PrepareResult {
+                    build_id: handle,
+                    generator: GeneratorKind::Publisher,
+                    site_build: build,
+                    measurements: stage.metrics,
+                })
+            }
+        }
     }
 }
 
@@ -6026,7 +6962,7 @@ impl SiteEngine {
         let objects = all_closed_objects(&build, store, operation)?;
         validate_closed_cycle(&build, &objects, operation)?;
         verify_closed_package_materials(&build, &objects, operation)?;
-        Ok(self.install_cycle(build, objects))
+        Ok(self.install_cycle(build, objects, None))
     }
 
     fn restore_publisher_runtime(
@@ -6191,8 +7127,9 @@ impl SiteEngine {
             artifact_roots: Rc::new(BTreeSet::new()),
         });
         let mut ready = recipe_assets.ready.clone();
-        let model = publisher_model(
+        let model = self.publisher_model(
             &prepared,
+            build.site_build().project(),
             recipe_assets.template_files.as_ref(),
             &mut ready,
             &mut objects,
@@ -6207,7 +7144,9 @@ impl SiteEngine {
         let packages = package_view_from_closed_build(&build, &objects, &package_order, operation)?;
         let semantics = publisher_render_semantics(&prepared, packages, &model, &options)?;
         let state = publisher_render_state(&semantics, &model, &options)?;
-        let (catalog, actual_tree) = publisher_catalog(&state, &mut ready, &model, operation)?;
+        let catalog =
+            publisher_output_plan(&ready, state.list_pages(), &model.resource_pages, operation)?;
+        let actual_tree = publisher_mounted_tree_digest(&model, operation)?;
         if actual_tree != expected_tree {
             return Err(format!(
                 "{operation}: mounted tree mismatch: expected {expected_tree}, reconstructed {actual_tree}"
@@ -6221,22 +7160,27 @@ impl SiteEngine {
                 .map_err(|error| format!("{operation}: renderer recipe: {error}"))?,
         };
         let handle = build.site_build().build_id().to_string();
-        #[cfg(feature = "dependency-observation")]
-        let dependency_observation =
-            crate::dependency_observation::BuildDependencyObservation::restored(&build, &catalog);
-        let installed = self.install_publisher(PublisherRuntime {
-            preparation_key: None,
-            recipe_assets,
-            state,
-            build,
-            catalog,
-            ready,
-            objects,
-            renderer,
-            output_options: parameters,
-            #[cfg(feature = "dependency-observation")]
-            dependency_observation,
-        });
+        let installed = self.install_publisher(
+            PublisherRuntime {
+                build,
+                core: PublisherRenderCore {
+                    recipe_assets,
+                    state,
+                    catalog,
+                    ready,
+                    objects,
+                    renderer,
+                    output_options: parameters,
+                },
+            },
+            None,
+        );
+        // A restored runtime now owns the live RenderState (and its optional
+        // SQL database). Drop the independent fresh-prepare semantics slot so a
+        // restore cannot retain a third distinct query snapshot.
+        for generation in self.preparation.history.iter_mut() {
+            generation.render_semantics = None;
+        }
         debug_assert_eq!(installed, handle);
         Ok(handle)
     }

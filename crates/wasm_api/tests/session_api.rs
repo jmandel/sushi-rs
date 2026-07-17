@@ -267,6 +267,7 @@ fn session_version_is_stamped() {
 #[test]
 fn project_compile_and_site_projection_fail_loud_without_hidden_fallbacks() {
     let session = Session::new();
+    assert_eq!(parse(session.init("[]"))["ok"], true);
 
     // Site generation has one atomic project boundary; there is no public
     // compile-then-prepare successor operation or hidden fallback.

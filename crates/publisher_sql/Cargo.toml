@@ -1,0 +1,20 @@
+[package]
+name = "publisher_sql"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Deterministic read-only HL7 Publisher SQL directives over a closed FHIR query snapshot"
+
+[dependencies]
+render_md = { workspace = true }
+render_xhtml = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusqlite = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+sqlite-wasm-rs = { workspace = true }

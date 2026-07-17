@@ -51,6 +51,7 @@ pub mod menu;
 pub mod publisher_runtime;
 pub mod resource;
 pub mod shells;
+mod structural;
 
 pub use config::Defaults;
 pub use resource::Resource;
@@ -71,20 +72,17 @@ pub enum ResourcePageRole {
     Companion,
 }
 
-/// The full producer output as deterministic in-memory maps. SiteEngine assigns
-/// output paths and addresses the bytes in its ContentStore.
+/// The full producer output. Keys are complete paths relative to the Publisher
+/// `/site` mount (`en/index.html`, `_data/pages.json`, `_includes/menu.xml`).
+/// One catalog makes ownership and collision handling uniform across pages,
+/// data, and includes; SiteEngine only mounts this map.
 #[derive(Debug, Default)]
 pub struct SiteProducerOutput {
-    /// Page shells, keyed by output filename (e.g. `StructureDefinition-us-core-patient.html`).
-    pub pages: BTreeMap<String, String>,
+    pub files: BTreeMap<String, Vec<u8>>,
     /// Exact resource subject for resource-owned shells, keyed by the same
-    /// final configured path as `pages`. Narrative pages are not emitted by
+    /// final configured path as `files`. Narrative pages are not emitted by
     /// this producer and therefore have no entry.
     pub resource_pages: BTreeMap<String, ResourcePageMetadata>,
-    /// `_data/*.json` files, keyed by bare filename (e.g. `artifacts.json`).
-    pub data: BTreeMap<String, String>,
-    /// Generated renderer includes owned by semantic guide preparation.
-    pub includes: BTreeMap<String, String>,
 }
 
 /// Address-free view of the template layout bytes captured for one immutable
@@ -131,6 +129,14 @@ pub struct ProducerInputs {
     /// spurious heading (publisher gates on file existence, PublisherGenerator
     /// `addPageDataRow` :3690).
     pub page_includes: std::collections::HashSet<String>,
+    /// Exact prepared PageContent paths. Structural defaults yield ownership
+    /// to an authored `toc.md|html` or `artifacts.md|html` instead of relying
+    /// on a later, silent map replacement.
+    pub authored_page_content: std::collections::HashSet<String>,
+    /// Exact prepared Include/ResourceContent paths. Generated structural
+    /// fragments likewise yield to an explicit authored path with the same
+    /// mounted name.
+    pub authored_include_content: std::collections::HashSet<String>,
     /// Prepared semantic navigation menu used to generate `menu.xml`.
     pub menu: Vec<site_build::MenuNode>,
     /// Output page-directory prefix for the shell file locations AND the
@@ -166,6 +172,8 @@ impl ProducerInputs {
             ig: IgContext::from_ig(ig),
             ig_json: ig.clone(),
             page_includes,
+            authored_page_content: std::collections::HashSet::new(),
+            authored_include_content: std::collections::HashSet::new(),
             menu: Vec::new(),
             page_prefix: page_prefix.to_string(),
         })
@@ -247,6 +255,24 @@ impl ProducerInputs {
             })
             .filter_map(|file| file.path.as_str().rsplit('/').next().map(str::to_string))
             .collect();
+        let authored_page_content = prepared
+            .authored_files
+            .iter()
+            .filter(|file| file.role == site_build::AuthoredFileRole::PageContent)
+            .map(|file| file.path.as_str().to_string())
+            .collect();
+        let authored_include_content = prepared
+            .authored_files
+            .iter()
+            .filter(|file| {
+                matches!(
+                    file.role,
+                    site_build::AuthoredFileRole::Include
+                        | site_build::AuthoredFileRole::ResourceContent
+                )
+            })
+            .map(|file| file.path.as_str().to_string())
+            .collect();
 
         Ok(ProducerInputs {
             resources,
@@ -255,6 +281,8 @@ impl ProducerInputs {
             ig: IgContext::from_ig(ig),
             ig_json: ig.clone(),
             page_includes,
+            authored_page_content,
+            authored_include_content,
             menu: prepared.menu.clone(),
             page_prefix: page_prefix.to_string(),
         })
@@ -349,11 +377,37 @@ fn example_reference_set(ig: &Value) -> std::collections::HashSet<(String, Strin
 
 /// Run the full producer: page shells + the derivable `_data` files.
 pub fn produce(inputs: &ProducerInputs) -> Result<SiteProducerOutput> {
-    let mut out = SiteProducerOutput::default();
-    shells::emit_shells(inputs, &mut out.pages, &mut out.resource_pages)?;
-    data::emit_data(inputs, &mut out.data)?;
+    let model = structural::StructuralModel::from_ig(&inputs.ig_json);
+    let mut pages = BTreeMap::new();
+    let mut data_files = BTreeMap::new();
+    let mut includes = BTreeMap::new();
+    let mut resource_pages = BTreeMap::new();
+    shells::emit_shells(inputs, &mut pages, &mut resource_pages)?;
+    data::emit_data(inputs, &model, &mut data_files)?;
+    structural::emit_structural_pages(inputs, &model, &mut pages, &mut includes)?;
     if let Some(menu) = menu::menu_xml(&inputs.menu) {
-        out.includes.insert("menu.xml".into(), menu);
+        includes.insert("menu.xml".into(), menu);
     }
-    Ok(out)
+    let mut files = BTreeMap::new();
+    merge_produced_files(&mut files, "", pages)?;
+    merge_produced_files(&mut files, "_data/", data_files)?;
+    merge_produced_files(&mut files, "_includes/", includes)?;
+    Ok(SiteProducerOutput {
+        files,
+        resource_pages,
+    })
+}
+
+fn merge_produced_files(
+    output: &mut BTreeMap<String, Vec<u8>>,
+    prefix: &str,
+    files: BTreeMap<String, String>,
+) -> Result<()> {
+    for (name, body) in files {
+        let path = format!("{prefix}{name}");
+        if output.insert(path.clone(), body.into_bytes()).is_some() {
+            bail!("Publisher producer collision at {path}");
+        }
+    }
+    Ok(())
 }

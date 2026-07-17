@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 use anyhow::Result;
 use serde_json::{json, Map, Value};
 
-use crate::{ProducerInputs, Resource};
+use crate::{structural::StructuralModel, ProducerInputs, Resource};
 
 // Extension canonicals the status/maturity model reads (ExtensionDefinitions).
 const EXT_FMM: &str = "http://hl7.org/fhir/StructureDefinition/structuredefinition-fmm";
@@ -40,7 +40,11 @@ const EXT_NORMATIVE_VERSION: &str =
     "http://hl7.org/fhir/StructureDefinition/structuredefinition-normative-version";
 
 /// Emit the derivable `_data` files.
-pub fn emit_data(inputs: &ProducerInputs, data: &mut BTreeMap<String, String>) -> Result<()> {
+pub(crate) fn emit_data(
+    inputs: &ProducerInputs,
+    structural: &StructuralModel,
+    data: &mut BTreeMap<String, String>,
+) -> Result<()> {
     data.insert("artifacts.json".to_string(), artifacts_json(inputs));
     data.insert(
         "structuredefinitions.json".to_string(),
@@ -50,7 +54,10 @@ pub fn emit_data(inputs: &ProducerInputs, data: &mut BTreeMap<String, String>) -
         "resources.json".to_string(),
         resources_json(inputs).to_string(),
     );
-    data.insert("pages.json".to_string(), pages_json(inputs).to_string());
+    data.insert(
+        "pages.json".to_string(),
+        pages_json(inputs, structural).to_string(),
+    );
     data.insert("fhir.json".to_string(), fhir_json(inputs).to_string());
     data.insert("info.json".to_string(), info_json(inputs).to_string());
     data.insert(
@@ -607,18 +614,52 @@ fn info_json(inputs: &ProducerInputs) -> Value {
 /// `addPageData`, PublisherGenerator.java:3583); artifact pages
 /// (`Type-id.html`) are synthesized with the fixed "Table of Contents →
 /// Artifacts Summary → self" breadcrumb the publisher gives them.
-fn pages_json(inputs: &ProducerInputs) -> Value {
-    let ig = &inputs.ig_json;
+fn pages_json(inputs: &ProducerInputs, structural: &StructuralModel) -> Value {
     let mut out = Map::new();
 
     // ---- narrative pages: DFS the definition.page tree ----
     let mut narrative_order: Vec<String> = Vec::new();
-    if let Some(root) = ig
-        .get("definition")
-        .and_then(|d| d.get("page"))
-        .filter(|p| !p.is_null())
-    {
+    if let Some(root) = structural.navigation.as_ref() {
         add_page_data(root, "0", "", &mut out, &mut narrative_order);
+    }
+
+    // These are Publisher-generated pages even when the authored navigation
+    // root is another page or does not explicitly list the artifact summary.
+    // Close their data contracts here so template-page.html never depends on
+    // host-side fallback data.
+    let toc = crate::structural::TABLE_OF_CONTENTS;
+    let artifacts = crate::structural::ARTIFACTS;
+    if !out.contains_key(toc.html_name) {
+        let mut entry = Map::new();
+        entry.insert("title".into(), json!(toc.title));
+        entry.insert("titlelang".into(), json!({}));
+        entry.insert(
+            "breadcrumb".into(),
+            json!(format!("<li><b>{}</b></li>", toc.title)),
+        );
+        entry.insert("breadcrumblang".into(), json!({}));
+        out.insert(toc.html_name.into(), Value::Object(entry));
+        narrative_order.insert(0, toc.html_name.into());
+    }
+
+    if !out.contains_key(artifacts.html_name) {
+        let root_name = structural.root_name();
+        let root_title = structural.root_title();
+        let mut entry = Map::new();
+        entry.insert("title".into(), json!(artifacts.title));
+        entry.insert("titlelang".into(), json!({}));
+        entry.insert(
+            "breadcrumb".into(),
+            json!(format!(
+                "<li><a href='{}'><b>{}</b></a></li><li><b>{}</b></li>",
+                root_name,
+                escape_xml(root_title),
+                artifacts.title
+            )),
+        );
+        entry.insert("breadcrumblang".into(), json!({}));
+        out.insert(artifacts.html_name.into(), Value::Object(entry));
+        narrative_order.push(artifacts.html_name.into());
     }
     // Linear previous/next among narrative pages (genBasePages :3380).
     for w in narrative_order.windows(2) {
@@ -631,32 +672,24 @@ fn pages_json(inputs: &ProducerInputs) -> Value {
     }
 
     // ---- artifact pages: one per resource that gets a base page ----
-    let root_name = ig
-        .get("definition")
-        .and_then(|d| d.get("page"))
-        .and_then(|p| p.get("nameUrl").or_else(|| p.get("name")))
-        .and_then(Value::as_str)
-        .unwrap_or("toc.html");
-    let root_title = ig
-        .get("definition")
-        .and_then(|d| d.get("page"))
-        .and_then(|p| p.get("title"))
-        .and_then(Value::as_str)
-        .unwrap_or("Table of Contents");
+    let root_name = structural.root_name();
+    let root_title = structural.root_title();
     let artifact_crumb = format!(
-        "<li><a href='{}'><b>{}</b></a></li><li><a href='artifacts.html'><b>Artifacts Summary</b></a></li>",
+        "<li><a href='{}'><b>{}</b></a></li><li><a href='{}'><b>{}</b></a></li>",
         root_name,
         escape_xml(root_title),
+        artifacts.html_name,
+        artifacts.title,
     );
 
     // Example grouping: exampleCanonical (profile url) -> [(exampleUrl, title)].
-    let examples_by_profile = example_groups(ig);
+    let examples_by_profile = structural.example_groups();
 
     // Artifact page title = the IG `definition.resource[].name` (keyed by Type/id).
     // The publisher titles every artifact page (SD/example/VS/CS) from its IG
     // registration name, not the resource's own title/name — an example instance
     // carries no title, so the resource-field fallback would wrongly show `Type/id`.
-    let ig_names = ig_resource_names(ig);
+    let ig_names = structural.resource_names();
 
     for r in &inputs.resources {
         let url = r.base_path();
@@ -718,20 +751,15 @@ fn pages_json(inputs: &ProducerInputs) -> Value {
 /// `label` is this page's numbering prefix; `crumb` is the accumulated ancestor
 /// breadcrumb (links). Records into `out` and appends the page name to `order`.
 fn add_page_data(
-    page: &Value,
+    page: &crate::structural::NavigationPage,
     label: &str,
     crumb: &str,
     out: &mut Map<String, Value>,
     order: &mut Vec<String>,
 ) {
-    let name = page
-        .get("nameUrl")
-        .or_else(|| page.get("name"))
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let title = page.get("title").and_then(Value::as_str).unwrap_or("");
-    let children = page.get("page").and_then(Value::as_array);
-    let has_children = children.map(|c| !c.is_empty()).unwrap_or(false);
+    let name = page.name.as_str();
+    let title = page.title.as_deref().unwrap_or("");
+    let has_children = !page.children.is_empty();
 
     let row_label = if has_children {
         format!("{label}.0")
@@ -751,13 +779,13 @@ fn add_page_data(
         order.push(name.to_string());
     }
 
-    if let Some(children) = children {
+    if !page.children.is_empty() {
         // child breadcrumb = accumulated + link to THIS page.
         let child_crumb = format!(
             "{crumb}<li><a href='{name}'><b>{}</b></a></li>",
             escape_xml(title)
         );
-        for (i, child) in children.iter().enumerate() {
+        for (i, child) in page.children.iter().enumerate() {
             let child_label = if label == "0" {
                 (i + 1).to_string()
             } else {
@@ -773,73 +801,6 @@ fn artifact_title(r: &Resource) -> String {
     str_field(&r.json, "title")
         .or_else(|| r.name.clone())
         .unwrap_or_else(|| format!("{}/{}", r.rt, r.id))
-}
-
-/// `Type/id` -> the IG registration `name`, from `IG.definition.resource[]`.
-/// This is the publisher's artifact-page title source for every artifact kind.
-fn ig_resource_names(ig: &Value) -> BTreeMap<String, String> {
-    let mut map = BTreeMap::new();
-    let Some(arr) = ig
-        .get("definition")
-        .and_then(|d| d.get("resource"))
-        .and_then(Value::as_array)
-    else {
-        return map;
-    };
-    for r in arr {
-        let Some(reference) = r
-            .get("reference")
-            .and_then(|x| x.get("reference"))
-            .and_then(Value::as_str)
-        else {
-            continue;
-        };
-        if let Some(name) = r.get("name").and_then(Value::as_str) {
-            map.insert(reference.to_string(), name.to_string());
-        }
-    }
-    map
-}
-
-/// exampleCanonical (profile url) -> [(example page url, example title)], from
-/// `IG.definition.resource[]`.
-fn example_groups(ig: &Value) -> BTreeMap<String, Vec<(String, String)>> {
-    let mut map: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
-    let Some(arr) = ig
-        .get("definition")
-        .and_then(|d| d.get("resource"))
-        .and_then(Value::as_array)
-    else {
-        return map;
-    };
-    for r in arr {
-        let Some(profile) = r.get("exampleCanonical").and_then(Value::as_str) else {
-            continue;
-        };
-        let reference = r
-            .get("reference")
-            .and_then(|x| x.get("reference"))
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        let Some((rt, id)) = reference.split_once('/') else {
-            continue;
-        };
-        let url = format!("{rt}-{id}.html");
-        let title = r
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or(id)
-            .to_string();
-        map.entry(profile.to_string())
-            .or_default()
-            .push((url, title));
-    }
-    // The publisher renders examples sorted by page url (Set<FetchedResource>
-    // ordering); match it so the example list is byte-stable.
-    for v in map.values_mut() {
-        v.sort();
-    }
-    map
 }
 
 /// Minimal XML text escaping (`Utilities.escapeXml`) for breadcrumb titles.

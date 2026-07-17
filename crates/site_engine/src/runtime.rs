@@ -1,11 +1,33 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use serde::Serialize;
 
 use crate::RenderState;
 
-const RETAINED_SITE_BUILD_LIMIT: usize = 2;
+pub(crate) fn is_static_output(path: &str) -> bool {
+    matches!(
+        path.rsplit_once('.')
+            .map(|(_, extension)| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some(
+            "css"
+                | "js"
+                | "png"
+                | "svg"
+                | "jpg"
+                | "jpeg"
+                | "gif"
+                | "webp"
+                | "ico"
+                | "woff"
+                | "woff2"
+                | "ttf"
+                | "otf"
+                | "eot"
+        )
+    )
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "wire-contract", derive(ts_rs::TS))]
@@ -99,6 +121,146 @@ pub(crate) struct PreparedOutput {
     pub owner: Option<site_build::OutputPath>,
 }
 
+pub(crate) struct MaterializedPublisherCatalog {
+    pub(crate) descriptors: Vec<OutputDescriptor>,
+    pub(crate) ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
+}
+
+impl MaterializedPublisherCatalog {
+    pub(crate) fn new(
+        ready: &BTreeMap<site_build::OutputPath, PreparedOutput>,
+        pages: Vec<OutputDescriptor>,
+        static_originals: BTreeSet<site_build::OutputPath>,
+        operation: &str,
+    ) -> Result<Self, String> {
+        if static_originals
+            .iter()
+            .any(|path| !ready.contains_key(path))
+        {
+            return Err(format!(
+                "{operation}: Publisher output plan names an absent static output"
+            ));
+        }
+        if let Some((path, _)) = ready
+            .iter()
+            .find(|(_, output)| output.content.media_type.is_none())
+        {
+            return Err(format!(
+                "{operation}: prepared output {path} has no media type"
+            ));
+        }
+        let mut page_paths = BTreeSet::new();
+        for page in &pages {
+            if page.kind != OutputKind::Page
+                || page.content.is_some()
+                || page.media_type != "text/html"
+            {
+                return Err(format!(
+                    "{operation}: Publisher page descriptor {} is not an unresolved HTML page",
+                    page.path
+                ));
+            }
+            if !page_paths.insert(page.path.clone()) {
+                return Err(format!("{operation}: duplicate output path {}", page.path));
+            }
+            if ready.contains_key(&page.path) {
+                return Err(format!("{operation}: duplicate output path {}", page.path));
+            }
+        }
+
+        let page_directories = pages
+            .iter()
+            .filter_map(|page| {
+                page.path
+                    .as_str()
+                    .rsplit_once('/')
+                    .map(|(directory, _)| directory.to_string())
+            })
+            .filter(|directory| !directory.is_empty())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+
+        // Validate the complete alias namespace while failure can still abort
+        // preparation without installing or promoting a generation.
+        for directory in &page_directories {
+            for path in &static_originals {
+                if path.as_str().starts_with(&format!("{directory}/")) {
+                    continue;
+                }
+                let alias = site_build::OutputPath::parse(format!("{directory}/{path}"))
+                    .map_err(|error| format!("{operation}: invalid asset alias: {error}"))?;
+                if !ready.contains_key(&alias) && page_paths.contains(&alias) {
+                    return Err(format!("{operation}: duplicate output path {alias}"));
+                }
+            }
+        }
+
+        // Close the complete ordinary output namespace during preparation.
+        let mut expanded = ready
+            .iter()
+            .filter(|(path, _)| !page_paths.contains(*path))
+            .map(|(path, output)| (path.clone(), output.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let originals = static_originals
+            .iter()
+            .filter_map(|path| ready.get(path).map(|output| (path, output)))
+            .collect::<Vec<_>>();
+        for directory in &page_directories {
+            for (path, output) in &originals {
+                if path.as_str().starts_with(&format!("{directory}/")) {
+                    continue;
+                }
+                let alias = site_build::OutputPath::parse(format!("{directory}/{path}"))
+                    .expect("validated Publisher asset alias");
+                let mut alias_output = (*output).clone();
+                alias_output.source = alias_output
+                    .source
+                    .as_ref()
+                    .map(|source| format!("{source}; alias={alias}"));
+                expanded.entry(alias).or_insert(alias_output);
+            }
+        }
+
+        let mut descriptors = expanded
+            .iter()
+            .map(|(path, output)| OutputDescriptor {
+                path: path.clone(),
+                kind: if is_static_output(path.as_str()) {
+                    OutputKind::Asset
+                } else {
+                    OutputKind::Auxiliary
+                },
+                media_type: output
+                    .content
+                    .media_type
+                    .clone()
+                    .expect("validated prepared output media type"),
+                content: Some(output.content.clone()),
+                title: None,
+                subject: None,
+                subject_page: None,
+                page_kind: None,
+            })
+            .collect::<Vec<_>>();
+        descriptors.extend(pages);
+        descriptors.sort_by(|left, right| left.path.cmp(&right.path));
+        debug_assert!(descriptors
+            .windows(2)
+            .all(|pair| pair[0].path != pair[1].path));
+        Ok(MaterializedPublisherCatalog {
+            descriptors,
+            ready: expanded,
+        })
+    }
+
+    pub(crate) fn contains_page(&self, path: &site_build::OutputPath) -> bool {
+        self.descriptors
+            .iter()
+            .any(|descriptor| descriptor.path == *path && descriptor.kind == OutputKind::Page)
+    }
+}
+
 /// Recipe-identical immutable Publisher implementation assets shared only
 /// through the already bounded current/previous runtimes. This is not a build
 /// handoff or an independent cache: every successor still constructs its own
@@ -113,21 +275,51 @@ pub(crate) struct PublisherRecipeAssets {
     pub artifact_roots: Rc<BTreeSet<site_build::ArtifactKey>>,
 }
 
-/// Complete immutable Publisher runtime installed only after preparation has
-/// succeeded. Path rendering may memoize addressed output bytes, but can never
-/// change the SiteBuild named by the handle.
-pub(crate) struct PublisherRuntime {
-    pub preparation_key: Option<site_build::Sha256Digest>,
+/// The exact render-capable half of one Publisher generation. Canonical
+/// preparation moves this value into the installed runtime without
+/// reconstructing its RenderState, fragment cache, or optional SQL runtime.
+pub(crate) struct PublisherRenderCore {
     pub recipe_assets: Rc<PublisherRecipeAssets>,
     pub state: Rc<RenderState>,
-    pub build: site_build::ClosedSiteBuild,
-    pub catalog: Vec<OutputDescriptor>,
+    pub catalog: MaterializedPublisherCatalog,
     pub ready: BTreeMap<site_build::OutputPath, PreparedOutput>,
     pub objects: ObjectMap,
     pub renderer: site_build::RendererImplementation,
     pub output_options: BTreeMap<String, String>,
-    #[cfg(feature = "dependency-observation")]
-    pub dependency_observation: crate::dependency_observation::BuildDependencyObservation,
+}
+
+/// Complete immutable Publisher runtime installed only after preparation has
+/// succeeded. Path rendering may memoize addressed output bytes, but can never
+/// change the SiteBuild named by the handle.
+pub(crate) struct PublisherRuntime {
+    pub build: site_build::ClosedSiteBuild,
+    pub core: PublisherRenderCore,
+}
+
+impl std::ops::Deref for PublisherRuntime {
+    type Target = PublisherRenderCore;
+
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+impl std::ops::DerefMut for PublisherRuntime {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.core
+    }
+}
+
+impl PublisherRenderCore {
+    fn output_catalog(&self, build_id: String) -> OutputCatalog {
+        let mut outputs = self.catalog.descriptors.clone();
+        for output in &mut outputs {
+            if let Some(ready) = self.ready.get(&output.path) {
+                output.content = Some(ready.content.clone());
+            }
+        }
+        OutputCatalog { build_id, outputs }
+    }
 }
 
 struct CycleRuntime {
@@ -197,6 +389,34 @@ enum Runtime {
     Cycle(CycleRuntime),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RuntimeKind {
+    Publisher,
+    Cycle,
+}
+
+struct RuntimeEntry {
+    handle: String,
+    preparation_key: Option<site_build::Sha256Digest>,
+    runtime: Runtime,
+}
+
+impl RuntimeEntry {
+    fn kind(&self) -> RuntimeKind {
+        match self.runtime {
+            Runtime::Publisher(_) => RuntimeKind::Publisher,
+            Runtime::Cycle(_) => RuntimeKind::Cycle,
+        }
+    }
+
+    fn build(&self) -> &site_build::ClosedSiteBuild {
+        match &self.runtime {
+            Runtime::Publisher(runtime) => &runtime.build,
+            Runtime::Cycle(runtime) => &runtime.build,
+        }
+    }
+}
+
 fn build_failure(
     operation: crate::BuildOperation,
     phase: crate::BuildErrorPhase,
@@ -204,6 +424,67 @@ fn build_failure(
     message: impl Into<String>,
 ) -> crate::BuildError<()> {
     crate::BuildError::new(operation, phase, code, message)
+}
+
+fn render_publisher_core(
+    core: &mut PublisherRenderCore,
+    path: site_build::OutputPath,
+) -> Result<site_build::ContentRef, crate::BuildError<()>> {
+    if let Some(output) = core
+        .ready
+        .get(&path)
+        .or_else(|| core.catalog.ready.get(&path))
+        .cloned()
+    {
+        let content = output.content.clone();
+        core.ready.entry(path).or_insert(output);
+        return Ok(content);
+    }
+    if !core.catalog.contains_page(&path) {
+        return Err(build_failure(
+            crate::BuildOperation::Render,
+            crate::BuildErrorPhase::Input,
+            crate::BuildErrorCode::InvalidInput,
+            format!("render: path {path} is not declared by outputs"),
+        ));
+    }
+    let html = core
+        .state
+        .render_page_by_name(path.as_str())
+        .map_err(|error| {
+            build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::Renderer,
+                crate::BuildErrorCode::RendererFailed,
+                format!("render {path}: {error}"),
+            )
+        })?;
+    let html = core.recipe_assets.publisher.finish_html(&html);
+    let bytes = html.into_bytes();
+    let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
+    let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))
+        .map_err(|message| {
+            build_failure(
+                crate::BuildOperation::Render,
+                crate::BuildErrorPhase::ContentStore,
+                crate::BuildErrorCode::Integrity,
+                format!("render {path}: {message}"),
+            )
+        })?;
+    core.objects.entry(content.sha256.clone()).or_insert(object);
+    core.ready.insert(
+        path.clone(),
+        PreparedOutput {
+            content: content.clone(),
+            producer: site_build::OutputProducer {
+                id: "publisher-page".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+            },
+            source: Some(path.to_string()),
+            owner: None,
+        },
+    );
+    Ok(content)
 }
 
 /// Canonical in-process executor and bounded immutable handle owner.
@@ -215,13 +496,16 @@ fn build_failure(
 pub struct SiteEngine {
     pub(crate) compilation: crate::compilation::CompilationState,
     pub(crate) preparation: crate::preparation::PreparationState,
-    runtimes: BTreeMap<String, Runtime>,
-    generations: VecDeque<String>,
+    runtimes: crate::History2<RuntimeEntry>,
     clock_ms: fn() -> f64,
     #[cfg(test)]
     pub(crate) render_package_catalog_limits: Option<(usize, usize, usize)>,
     #[cfg(test)]
     pub(crate) fail_after_render_package_catalog_stage: bool,
+    #[cfg(test)]
+    pub(crate) fail_during_publisher_close: bool,
+    #[cfg(test)]
+    pub(crate) fail_during_cycle_close: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -249,12 +533,15 @@ impl Default for SiteEngine {
             compilation: Default::default(),
             preparation: Default::default(),
             runtimes: Default::default(),
-            generations: Default::default(),
             clock_ms: native_clock_ms,
             #[cfg(test)]
             render_package_catalog_limits: None,
             #[cfg(test)]
             fail_after_render_package_catalog_stage: false,
+            #[cfg(test)]
+            fail_during_publisher_close: false,
+            #[cfg(test)]
+            fail_during_cycle_close: false,
         }
     }
 }
@@ -273,25 +560,17 @@ impl SiteEngine {
         }
     }
 
-    #[cfg(all(test, feature = "dependency-observation"))]
-    pub(crate) fn dependency_decision_for_page(
-        &self,
-        handle: &str,
-        path: &site_build::OutputPath,
-    ) -> Result<::dependency_observation::RebuildDecision, String> {
-        let runtime = self
-            .runtimes
-            .get(handle)
-            .ok_or_else(|| format!("unknown dependency-observation handle {handle}"))?;
-        let Runtime::Publisher(runtime) = runtime else {
-            return Err("Cycle dependency observation is conservatively whole-build".into());
-        };
-        runtime.dependency_observation.decision_for_page(path)
-    }
-
-    pub(crate) fn install_publisher(&mut self, runtime: PublisherRuntime) -> String {
+    pub(crate) fn install_publisher(
+        &mut self,
+        runtime: PublisherRuntime,
+        preparation_key: Option<site_build::Sha256Digest>,
+    ) -> String {
         let handle = runtime.build.site_build().build_id().to_string();
-        self.retain(handle.clone(), Runtime::Publisher(runtime));
+        self.retain(RuntimeEntry {
+            handle: handle.clone(),
+            preparation_key,
+            runtime: Runtime::Publisher(runtime),
+        });
         handle
     }
 
@@ -299,55 +578,114 @@ impl SiteEngine {
         &mut self,
         build: site_build::ClosedSiteBuild,
         objects: ObjectMap,
+        preparation_key: Option<site_build::Sha256Digest>,
     ) -> String {
         let handle = build.site_build().build_id().to_string();
-        self.retain(
-            handle.clone(),
-            Runtime::Cycle(CycleRuntime {
+        self.retain(RuntimeEntry {
+            handle: handle.clone(),
+            preparation_key,
+            runtime: Runtime::Cycle(CycleRuntime {
                 build,
                 objects,
                 renderer: None,
             }),
-        );
+        });
         handle
     }
 
-    fn retain(&mut self, handle: String, runtime: Runtime) {
-        self.generations.retain(|existing| existing != &handle);
-        self.runtimes.insert(handle.clone(), runtime);
-        self.generations.push_back(handle);
-        while self.generations.len() > RETAINED_SITE_BUILD_LIMIT {
-            let retired = self
-                .generations
-                .pop_front()
-                .expect("retained generation limit exceeded");
-            self.runtimes.remove(&retired);
+    fn retain(&mut self, entry: RuntimeEntry) {
+        if self
+            .runtimes
+            .current
+            .as_ref()
+            .is_some_and(|current| current.handle == entry.handle)
+        {
+            self.runtimes.current = Some(entry);
+            return;
         }
-        debug_assert_eq!(self.runtimes.len(), self.generations.len());
-        debug_assert!(self.runtimes.len() <= RETAINED_SITE_BUILD_LIMIT);
+        if self
+            .runtimes
+            .previous
+            .as_ref()
+            .is_some_and(|previous| previous.handle == entry.handle)
+        {
+            let prior_current = self.runtimes.current.take();
+            self.runtimes.current = Some(entry);
+            self.runtimes.previous = prior_current;
+            return;
+        }
+        self.runtimes.promote(entry);
     }
 
-    /// Reuse an exact Publisher runtime only while it is already retained. A
-    /// hit refreshes preparation recency and preserves rendered-page memoization.
-    pub(crate) fn reuse_publisher(
-        &mut self,
+    fn runtime(&self, handle: &str) -> Option<&Runtime> {
+        self.runtimes
+            .iter()
+            .find(|entry| entry.handle == handle)
+            .map(|entry| &entry.runtime)
+    }
+
+    fn runtime_mut(&mut self, handle: &str) -> Option<&mut Runtime> {
+        self.runtimes
+            .iter_mut()
+            .find(|entry| entry.handle == handle)
+            .map(|entry| &mut entry.runtime)
+    }
+
+    fn touch_runtime(&mut self, handle: &str, kind: RuntimeKind) {
+        if self
+            .runtimes
+            .current
+            .as_ref()
+            .is_some_and(|entry| entry.handle == handle && entry.kind() == kind)
+        {
+            return;
+        }
+        let matched = self
+            .runtimes
+            .previous
+            .as_ref()
+            .is_some_and(|entry| entry.handle == handle && entry.kind() == kind);
+        debug_assert!(
+            matched,
+            "validated retained runtime disappeared before commit"
+        );
+        if matched {
+            std::mem::swap(&mut self.runtimes.current, &mut self.runtimes.previous);
+        }
+    }
+
+    /// Find an exact retained Publisher without changing its recency. Recency
+    /// advances only after the canonical prepare transaction closes cleanly.
+    pub(crate) fn find_publisher(
+        &self,
         preparation_key: &site_build::Sha256Digest,
     ) -> Option<(String, site_build::ClosedSiteBuild)> {
-        let (handle, build) =
-            self.generations
-                .iter()
-                .rev()
-                .find_map(|handle| match self.runtimes.get(handle) {
-                    Some(Runtime::Publisher(runtime))
-                        if runtime.preparation_key.as_ref() == Some(preparation_key) =>
-                    {
-                        Some((handle.clone(), runtime.build.clone()))
-                    }
-                    _ => None,
-                })?;
-        self.generations.retain(|existing| existing != &handle);
-        self.generations.push_back(handle.clone());
-        Some((handle, build))
+        self.runtimes.iter().find_map(|entry| {
+            (entry.kind() == RuntimeKind::Publisher
+                && entry.preparation_key.as_ref() == Some(preparation_key))
+            .then(|| (entry.handle.clone(), entry.build().clone()))
+        })
+    }
+
+    pub(crate) fn commit_publisher_reuse(&mut self, handle: &str) {
+        debug_assert!(matches!(self.runtime(handle), Some(Runtime::Publisher(_))));
+        self.touch_runtime(handle, RuntimeKind::Publisher);
+    }
+
+    pub(crate) fn find_cycle(
+        &self,
+        preparation_key: &site_build::Sha256Digest,
+    ) -> Option<(String, site_build::ClosedSiteBuild)> {
+        self.runtimes.iter().find_map(|entry| {
+            (entry.kind() == RuntimeKind::Cycle
+                && entry.preparation_key.as_ref() == Some(preparation_key))
+            .then(|| (entry.handle.clone(), entry.build().clone()))
+        })
+    }
+
+    pub(crate) fn commit_cycle_reuse(&mut self, handle: &str) {
+        debug_assert!(matches!(self.runtime(handle), Some(Runtime::Cycle(_))));
+        self.touch_runtime(handle, RuntimeKind::Cycle);
     }
 
     /// Borrow immutable template/runtime assets from a retained Publisher
@@ -357,21 +695,24 @@ impl SiteEngine {
         &self,
         key: &site_build::Sha256Digest,
     ) -> Option<Rc<PublisherRecipeAssets>> {
-        self.generations
+        self.runtimes.iter().find_map(|entry| match &entry.runtime {
+            Runtime::Publisher(runtime) if runtime.recipe_assets.key.as_ref() == Some(key) => {
+                Some(runtime.recipe_assets.clone())
+            }
+            _ => None,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retained_generation_handles(&self) -> Vec<String> {
+        self.runtimes
             .iter()
-            .rev()
-            .find_map(|handle| match self.runtimes.get(handle) {
-                Some(Runtime::Publisher(runtime))
-                    if runtime.recipe_assets.key.as_ref() == Some(key) =>
-                {
-                    Some(runtime.recipe_assets.clone())
-                }
-                _ => None,
-            })
+            .map(|entry| entry.handle.clone())
+            .collect()
     }
 
     pub fn outputs(&self, handle: &str) -> Result<OutputCatalog, crate::BuildError<()>> {
-        let runtime = self.runtimes.get(handle).ok_or_else(|| {
+        let runtime = self.runtime(handle).ok_or_else(|| {
             build_failure(
                 crate::BuildOperation::Outputs,
                 crate::BuildErrorPhase::Lifecycle,
@@ -387,16 +728,7 @@ impl SiteEngine {
                 "outputs: Cycle output catalog belongs to the external LiquidJS host",
             ));
         };
-        let mut outputs = runtime.catalog.clone();
-        for output in &mut outputs {
-            if let Some(ready) = runtime.ready.get(&output.path) {
-                output.content = Some(ready.content.clone());
-            }
-        }
-        Ok(OutputCatalog {
-            build_id: runtime.build.site_build().build_id().to_string(),
-            outputs,
-        })
+        Ok(runtime.output_catalog(runtime.build.site_build().build_id().to_string()))
     }
 
     pub fn render(
@@ -412,7 +744,7 @@ impl SiteEngine {
                 format!("render: invalid output path {path}: {error}"),
             )
         })?;
-        let runtime = self.runtimes.get_mut(handle).ok_or_else(|| {
+        let runtime = self.runtime_mut(handle).ok_or_else(|| {
             build_failure(
                 crate::BuildOperation::Render,
                 crate::BuildErrorPhase::Lifecycle,
@@ -428,119 +760,14 @@ impl SiteEngine {
                 "render: Cycle outputs are rendered by the external LiquidJS host",
             ));
         };
-        if let Some(output) = runtime.ready.get(&path) {
-            return Ok(output.content.clone());
-        }
-        if !runtime.catalog.iter().any(|output| output.path == path) {
-            return Err(build_failure(
-                crate::BuildOperation::Render,
-                crate::BuildErrorPhase::Input,
-                crate::BuildErrorCode::InvalidInput,
-                format!("render: path {path} is not declared by outputs"),
-            ));
-        }
-        #[cfg(feature = "dependency-observation")]
-        let (html, dependency_reads) = runtime
-            .state
-            .render_page_tracked_by_name(path.as_str())
-            .map_err(|error| {
-                build_failure(
-                    crate::BuildOperation::Render,
-                    crate::BuildErrorPhase::Renderer,
-                    crate::BuildErrorCode::RendererFailed,
-                    format!("render {path}: {error}"),
-                )
-            })?;
-        #[cfg(not(feature = "dependency-observation"))]
-        let html = runtime
-            .state
-            .render_page_by_name(path.as_str())
-            .map_err(|error| {
-                build_failure(
-                    crate::BuildOperation::Render,
-                    crate::BuildErrorPhase::Renderer,
-                    crate::BuildErrorCode::RendererFailed,
-                    format!("render {path}: {error}"),
-                )
-            })?;
-        #[cfg(feature = "dependency-observation")]
-        runtime
-            .dependency_observation
-            .record_page(&path, dependency_reads)
-            .map_err(|message| {
-                build_failure(
-                    crate::BuildOperation::Render,
-                    crate::BuildErrorPhase::Renderer,
-                    crate::BuildErrorCode::Integrity,
-                    format!("render {path}: dependency observation: {message}"),
-                )
-            })?;
-        #[cfg(feature = "dependency-observation")]
-        let html = {
-            let (html, post_pass) = runtime.recipe_assets.publisher.finish_html_observed(&html);
-            runtime
-                .dependency_observation
-                .record_html_post_pass(&path, &post_pass)
-                .map_err(|message| {
-                    build_failure(
-                        crate::BuildOperation::Render,
-                        crate::BuildErrorPhase::Renderer,
-                        crate::BuildErrorCode::Integrity,
-                        format!("render {path}: HTML dependency observation: {message}"),
-                    )
-                })?;
-            html
-        };
-        #[cfg(not(feature = "dependency-observation"))]
-        let html = runtime.recipe_assets.publisher.finish_html(&html);
-        let bytes = html.into_bytes();
-        let content = site_build::ContentRef::of_bytes(&bytes, Some("text/html"));
-        #[cfg(feature = "dependency-observation")]
-        runtime
-            .dependency_observation
-            .record_page_output(&path, &content)
-            .map_err(|message| {
-                build_failure(
-                    crate::BuildOperation::Render,
-                    crate::BuildErrorPhase::Renderer,
-                    crate::BuildErrorCode::Integrity,
-                    format!("render {path}: output dependency observation: {message}"),
-                )
-            })?;
-        let object = AuthenticatedObject::eager_authenticated(content.clone(), Rc::new(bytes))
-            .map_err(|message| {
-                build_failure(
-                    crate::BuildOperation::Render,
-                    crate::BuildErrorPhase::ContentStore,
-                    crate::BuildErrorCode::Integrity,
-                    format!("render {path}: {message}"),
-                )
-            })?;
-        runtime
-            .objects
-            .entry(content.sha256.clone())
-            .or_insert(object);
-        runtime.ready.insert(
-            path.clone(),
-            PreparedOutput {
-                content: content.clone(),
-                producer: site_build::OutputProducer {
-                    id: "publisher-page".into(),
-                    version: env!("CARGO_PKG_VERSION").into(),
-                },
-                source: Some(path.to_string()),
-                owner: None,
-            },
-        );
-        Ok(content)
+        render_publisher_core(&mut runtime.core, path)
     }
 
     pub fn read_content(&self, handle: &str, digest: &str) -> Result<Vec<u8>, String> {
         let digest = site_build::Sha256Digest::parse(digest.to_string())
             .map_err(|error| format!("readContent: invalid digest: {error}"))?;
         let runtime = self
-            .runtimes
-            .get(handle)
+            .runtime(handle)
             .ok_or_else(|| format!("readContent: unknown build handle {handle}"))?;
         let object = match runtime {
             Runtime::Publisher(runtime) => runtime.objects.get(&digest).cloned(),
@@ -566,8 +793,7 @@ impl SiteEngine {
         let path_count = paths.len();
         let expected = paths.into_iter().collect::<BTreeSet<_>>();
         let runtime = self
-            .runtimes
-            .get_mut(handle)
+            .runtime_mut(handle)
             .ok_or_else(|| format!("openRenderer: unknown build handle {handle}"))?;
         let Runtime::Cycle(runtime) = runtime else {
             return Err("openRenderer: Publisher renderer is owned by Rust".into());
@@ -604,8 +830,7 @@ impl SiteEngine {
             .verify(&bytes)
             .map_err(|error| format!("admitOutput: verify {}: {error}", file.path))?;
         let runtime = self
-            .runtimes
-            .get_mut(handle)
+            .runtime_mut(handle)
             .ok_or_else(|| format!("admitOutput: unknown build handle {handle}"))?;
         let Runtime::Cycle(runtime) = runtime else {
             return Err("admitOutput: Publisher outputs are owned by Rust".into());
@@ -641,7 +866,7 @@ impl SiteEngine {
     }
 
     pub fn finalize(&self, handle: &str) -> Result<site_build::SiteOutput, crate::BuildError<()>> {
-        let runtime = self.runtimes.get(handle).ok_or_else(|| {
+        let runtime = self.runtime(handle).ok_or_else(|| {
             build_failure(
                 crate::BuildOperation::Finalize,
                 crate::BuildErrorPhase::Lifecycle,
@@ -670,10 +895,15 @@ impl SiteEngine {
     }
 
     fn finalize_publisher(runtime: &PublisherRuntime) -> Result<site_build::SiteOutput, String> {
+        let catalog = &runtime.catalog;
         let missing = runtime
             .catalog
+            .descriptors
             .iter()
-            .filter(|output| !runtime.ready.contains_key(&output.path))
+            .filter(|output| {
+                !runtime.ready.contains_key(&output.path)
+                    && !catalog.ready.contains_key(&output.path)
+            })
             .map(|output| output.path.to_string())
             .collect::<Vec<_>>();
         if !missing.is_empty() {
@@ -683,16 +913,20 @@ impl SiteEngine {
                 missing.join(", ")
             ));
         }
-        let files = runtime
-            .ready
-            .iter()
-            .map(|(path, output)| site_build::SiteOutputFile {
-                path: path.clone(),
+        let files = catalog.descriptors.iter().map(|descriptor| {
+            let output = runtime
+                .ready
+                .get(&descriptor.path)
+                .or_else(|| catalog.ready.get(&descriptor.path))
+                .expect("complete Publisher output checked above");
+            site_build::SiteOutputFile {
+                path: descriptor.path.clone(),
                 content: output.content.clone(),
                 producer: output.producer.clone(),
                 source: output.source.clone(),
                 owner: output.owner.clone(),
-            });
+            }
+        });
         let output = site_build::SiteOutput::new(
             &runtime.build,
             runtime.renderer.clone(),
@@ -754,5 +988,96 @@ impl SiteEngine {
             .verify_for(&runtime.build)
             .map_err(|error| format!("finalize: verify: {error}"))?;
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn prepared(bytes: &[u8], media_type: &str, source: &str) -> PreparedOutput {
+        PreparedOutput {
+            content: site_build::ContentRef::of_bytes(bytes, Some(media_type)),
+            producer: site_build::OutputProducer {
+                id: "fixture".into(),
+                version: "1".into(),
+            },
+            source: Some(source.into()),
+            owner: None,
+        }
+    }
+
+    fn page(path: &str) -> OutputDescriptor {
+        OutputDescriptor {
+            path: site_build::OutputPath::parse(path).unwrap(),
+            kind: OutputKind::Page,
+            media_type: "text/html".into(),
+            content: None,
+            title: Some("Fixture".into()),
+            subject: None,
+            subject_page: None,
+            page_kind: None,
+        }
+    }
+
+    #[test]
+    fn publisher_catalog_closes_aliases_eagerly() {
+        let css = site_build::OutputPath::parse("assets/site.css").unwrap();
+        let auxiliary = site_build::OutputPath::parse("package.json").unwrap();
+        let ready = BTreeMap::from([
+            (css.clone(), prepared(b"css", "text/css", "runtime")),
+            (
+                auxiliary.clone(),
+                prepared(b"{}", "application/json", "runtime"),
+            ),
+        ]);
+        let catalog = MaterializedPublisherCatalog::new(
+            &ready,
+            vec![page("en/index.html")],
+            BTreeSet::from([css.clone()]),
+            "test",
+        )
+        .unwrap();
+        let alias = site_build::OutputPath::parse("en/assets/site.css").unwrap();
+        let resolved = catalog.ready.get(&alias).unwrap();
+        assert_eq!(resolved.content, ready[&css].content);
+        assert_eq!(
+            resolved.source.as_deref(),
+            Some("runtime; alias=en/assets/site.css")
+        );
+        assert!(!catalog
+            .ready
+            .contains_key(&site_build::OutputPath::parse("en/package.json").unwrap()));
+        assert_eq!(
+            catalog
+                .descriptors
+                .iter()
+                .map(|output| (output.path.to_string(), output.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                ("assets/site.css".into(), OutputKind::Asset),
+                ("en/assets/site.css".into(), OutputKind::Asset),
+                ("en/index.html".into(), OutputKind::Page),
+                ("package.json".into(), OutputKind::Auxiliary),
+            ]
+        );
+    }
+
+    #[test]
+    fn publisher_catalog_rejects_page_collision_before_runtime_install() {
+        let path = site_build::OutputPath::parse("en/index.html").unwrap();
+        let ready = BTreeMap::from([(
+            path.clone(),
+            prepared(b"already ready", "text/html", "fixture"),
+        )]);
+        let error = MaterializedPublisherCatalog::new(
+            &ready,
+            vec![page(path.as_str())],
+            BTreeSet::new(),
+            "prepare(publisher)",
+        )
+        .err()
+        .expect("colliding plan must fail");
+        assert!(error.contains("duplicate output path en/index.html"));
     }
 }

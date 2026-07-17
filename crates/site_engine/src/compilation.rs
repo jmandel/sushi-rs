@@ -266,6 +266,7 @@ pub struct CompilationOutcome {
 /// Result plus the private transition facts a composing host needs to
 /// invalidate downstream preparation caches. These facts are not wire fields.
 #[derive(Debug)]
+#[cfg(test)]
 pub(crate) struct CompilationTransition {
     pub(crate) outcome: CompilationOutcome,
     pub(crate) measurements: CompilationMeasurements,
@@ -286,8 +287,6 @@ struct SemanticCompilation {
     // only after compilation succeeds. Non-retainable sources (notably native
     // disk caches) still compile canonically, but deliberately attach none.
     package_store: Option<Rc<RetainedPackageStore>>,
-    #[cfg(feature = "dependency-observation")]
-    package_lookups: dependency_observation::PackageLookupTrace,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -314,6 +313,43 @@ struct CompiledSemanticCandidate {
     semantic: SemanticCompilation,
     package_store_activity: package_store::PackageStoreCacheStats,
     active_package_store: package_store::PackageStoreCacheStats,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompilationCandidateSource {
+    Active,
+    Previous,
+    Fresh,
+}
+
+/// One complete successful compilation transition that is visible only to an
+/// in-flight Publisher prepare transaction. It owns a retained-package-store candidate and
+/// an authored revision, but does not change active/previous recency or the
+/// installed project until the enclosing Publisher generation closes and
+/// verifies successfully.
+pub(crate) struct CompilationCandidate {
+    semantic: Rc<SemanticCompilation>,
+    project: CompiledProjectRevision,
+    source: CompilationCandidateSource,
+    measurements: CompilationMeasurements,
+}
+
+impl CompilationCandidate {
+    pub(crate) fn outcome(&self) -> &CompilationOutcome {
+        &self.semantic.outcome
+    }
+
+    pub(crate) fn compiled_resources(&self) -> &[(PathBuf, Value)] {
+        &self.semantic.compiled
+    }
+
+    pub(crate) fn diagnostics(&self) -> &[CompilationDiagnostic] {
+        &self.semantic.outcome.diagnostics
+    }
+
+    pub(crate) fn project(&self) -> &CompiledProjectRevision {
+        &self.project
+    }
 }
 
 impl RetainedPackageStore {
@@ -359,8 +395,6 @@ pub(crate) struct CompilationMeasurements {
     pub(crate) semantic_compilation_cache_hit: bool,
     pub(crate) package_store_cache_hit: bool,
     pub(crate) package_store_used: bool,
-    pub(crate) package_store_key_ms: f64,
-    pub(crate) package_store_build_ms: f64,
     pub(crate) retained_package_store_generations: usize,
     pub(crate) package_body_cache_hits: u64,
     pub(crate) package_body_cache_misses: u64,
@@ -390,21 +424,21 @@ impl CompilationMeasurements {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
-struct RenderSemanticInputs {
-    config: String,
-    fsh: BTreeMap<String, String>,
-    predefined: BTreeMap<String, Value>,
-    page_listing: BTreeMap<String, Vec<String>>,
+#[derive(Clone, Copy, Debug, Serialize)]
+struct RenderSemanticInputs<'a> {
+    config: &'a str,
+    fsh: &'a BTreeMap<String, String>,
+    predefined: &'a BTreeMap<String, Value>,
+    page_listing: &'a BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SemanticCompilationKeyPayload<'a> {
+struct SemanticCompilationKeyPayload<'a, 'input> {
     schema: &'static str,
     recipe: &'static str,
     engine_api: u32,
-    inputs: &'a RenderSemanticInputs,
+    inputs: &'a RenderSemanticInputs<'input>,
 }
 
 #[derive(Serialize)]
@@ -427,15 +461,14 @@ struct CompilerPackageCarrier {
 
 #[derive(Default)]
 pub(crate) struct CompilationState {
-    active: Option<SemanticCompilation>,
-    previous: Option<SemanticCompilation>,
+    semantic: crate::History2<Rc<SemanticCompilation>>,
     project: Option<CompiledProjectRevision>,
     #[cfg(test)]
     cache_hits: u64,
 }
 
 fn semantic_compilation_key(
-    inputs: &RenderSemanticInputs,
+    inputs: &RenderSemanticInputs<'_>,
     resolved_packages: &ResolvedPackageClosure,
     package_store: &CompilerPackageStoreKey,
     operation: &str,
@@ -495,27 +528,34 @@ fn compiler_package_store_key(
 }
 
 impl CompilationState {
-    fn replace_active(&mut self, next: SemanticCompilation) -> bool {
+    fn replace_active(&mut self, next: impl Into<Rc<SemanticCompilation>>) -> bool {
+        let next = next.into();
         let same_semantics = self
-            .active
+            .semantic
+            .current
             .as_ref()
             .is_some_and(|active| active.key == next.key && active.compiled == next.compiled);
-        self.previous = self.active.replace(next);
+        self.semantic.previous = self.semantic.current.replace(next);
         !same_semantics
     }
 
+    #[cfg(test)]
     fn restore(&mut self, key: &SemanticCompilationKey) -> Option<CompilationOutcome> {
-        if self.active.as_ref().map(|entry| &entry.key) == Some(key) {
+        if self.semantic.current.as_ref().map(|entry| &entry.key) == Some(key) {
             #[cfg(test)]
             {
                 self.cache_hits += 1;
             }
-            return self.active.as_ref().map(|entry| entry.outcome.clone());
+            return self
+                .semantic
+                .current
+                .as_ref()
+                .map(|entry| entry.outcome.clone());
         }
-        if self.previous.as_ref().map(|entry| &entry.key) != Some(key) {
+        if self.semantic.previous.as_ref().map(|entry| &entry.key) != Some(key) {
             return None;
         }
-        let previous = self.previous.take().expect("previous key matched");
+        let previous = self.semantic.previous.take().expect("previous key matched");
         let outcome = previous.outcome.clone();
         self.replace_active(previous);
         #[cfg(test)]
@@ -529,9 +569,8 @@ impl CompilationState {
         &self,
         key: &CompilerPackageStoreKey,
     ) -> Option<Rc<RetainedPackageStore>> {
-        [&self.active, &self.previous]
-            .into_iter()
-            .flatten()
+        self.semantic
+            .iter()
             .filter_map(|entry| entry.package_store.as_ref())
             .find(|store| store.key == *key)
             .cloned()
@@ -544,9 +583,8 @@ impl CompilationState {
 
     fn retained_package_store_stats(&self) -> package_store::PackageStoreRetainedStats {
         package_store::aggregate_retained_stats(
-            [&self.active, &self.previous]
-                .into_iter()
-                .flatten()
+            self.semantic
+                .iter()
                 .filter_map(|entry| entry.package_store.as_ref())
                 .map(|store| &store.store),
         )
@@ -557,12 +595,31 @@ impl SiteEngine {
     /// Compile typed project inputs against one explicit resolver-scoped package
     /// view and closure. The successful authored revision and semantic result
     /// are committed together; failures leave both retained generations intact.
+    #[cfg(test)]
     pub(crate) fn compile_project(
         &mut self,
         inputs: ProjectRevision,
         packages: PackageView,
         resolved: ResolvedPackageClosure,
     ) -> Result<CompilationTransition, String> {
+        let candidate = self.compile_candidate(inputs, packages, resolved)?;
+        let outcome = candidate.outcome().clone();
+        let measurements = self.commit_compilation(candidate);
+        Ok(CompilationTransition {
+            outcome,
+            measurements,
+        })
+    }
+
+    /// Build one successful compilation candidate without changing the
+    /// installed active/previous/project state. Publisher staging composes
+    /// against this candidate through the normal SiteEngine accessors below.
+    pub(crate) fn compile_candidate(
+        &mut self,
+        inputs: ProjectRevision,
+        packages: PackageView,
+        resolved: ResolvedPackageClosure,
+    ) -> Result<CompilationCandidate, String> {
         let operation = "compileProject";
         let config_digest = site_build::Sha256Digest::of_bytes(inputs.config.as_bytes());
         if resolved.config_sha256 != config_digest {
@@ -576,43 +633,67 @@ impl SiteEngine {
                 "compileProject: package view does not match the exact resolved closure".into(),
             );
         }
+        validate_local_resource_inputs(&inputs.predefined, &inputs.site_files, operation)?;
         let mut measurements = CompilationMeasurements::default();
-        let package_store_key_started = self.timer();
         let package_store_key =
             compiler_package_store_key(&inputs.config, &resolved, &packages, operation)?;
-        measurements.package_store_key_ms = package_store_key_started.elapsed_ms();
         let page_listing = page_listing_from_site_files(&inputs.site_files);
+        let key_page_listing = page_listing
+            .iter()
+            .map(|(directory, names)| (directory.clone(), names.clone()))
+            .collect::<BTreeMap<_, _>>();
         let semantic_inputs = RenderSemanticInputs {
-            config: inputs.config.clone(),
-            fsh: inputs.fsh.clone(),
-            predefined: inputs.predefined.clone(),
-            page_listing: page_listing
-                .iter()
-                .map(|(directory, names)| (directory.clone(), names.clone()))
-                .collect(),
+            config: &inputs.config,
+            fsh: &inputs.fsh,
+            predefined: &inputs.predefined,
+            page_listing: &key_page_listing,
         };
         let key =
             semantic_compilation_key(&semantic_inputs, &resolved, &package_store_key, operation)?;
-        let project =
-            CompiledProjectRevision::capture(inputs.clone(), resolved.clone(), operation)?;
-        if let Some(outcome) = self.compilation.restore(&key) {
-            self.compilation.project = Some(project);
-            measurements.semantic_compilation_cache_hit = true;
-            let stats = self
-                .compilation
-                .active
+        let cached = if self
+            .compilation
+            .semantic
+            .current
+            .as_ref()
+            .map(|entry| &entry.key)
+            == Some(&key)
+        {
+            self.compilation
+                .semantic
+                .current
                 .as_ref()
-                .expect("restored semantic compilation is active")
+                .map(|entry| (Rc::clone(entry), CompilationCandidateSource::Active))
+        } else if self
+            .compilation
+            .semantic
+            .previous
+            .as_ref()
+            .map(|entry| &entry.key)
+            == Some(&key)
+        {
+            self.compilation
+                .semantic
+                .previous
+                .as_ref()
+                .map(|entry| (Rc::clone(entry), CompilationCandidateSource::Previous))
+        } else {
+            None
+        };
+        if let Some((semantic, source)) = cached {
+            let project = CompiledProjectRevision::capture(inputs, resolved.clone(), operation)?;
+            measurements.semantic_compilation_cache_hit = true;
+            let stats = semantic
                 .package_store
                 .as_ref()
                 .map(|store| store.store.cache_stats())
                 .unwrap_or_default();
-            measurements.record_retained(self.compilation.retained_package_store_stats());
             measurements.active_package_body_entries = stats.entries;
             measurements.active_package_body_approximate_source_bytes =
                 stats.approximate_source_bytes;
-            return Ok(CompilationTransition {
-                outcome,
+            return Ok(CompilationCandidate {
+                semantic,
+                project,
+                source,
                 measurements,
             });
         }
@@ -625,7 +706,6 @@ impl SiteEngine {
             store.fork_for_compile()?
         } else {
             let cache_dir = packages.root().to_string_lossy().into_owned();
-            let package_store_started = self.timer();
             let (compile_packages, retain_after_success) = match packages.fork_for_compile() {
                 Ok(packages) => (packages, true),
                 Err(error) if error.kind() == std::io::ErrorKind::Unsupported => (packages, false),
@@ -639,14 +719,14 @@ impl SiteEngine {
                 &cache_dir,
             )
             .map_err(|error| format!("compile failed: package store: {error:#}"))?;
-            measurements.package_store_build_ms = package_store_started.elapsed_ms();
             WorkingPackageStore {
                 key: package_store_key,
                 store,
                 retain_after_success,
             }
         };
-        let candidate = compile(inputs, package_store, &page_listing, key)?;
+        let candidate = compile(&inputs, package_store, &page_listing, key)?;
+        let project = CompiledProjectRevision::capture(inputs, resolved, operation)?;
         measurements.package_body_cache_hits = candidate.package_store_activity.hits;
         measurements.package_body_cache_misses = candidate.package_store_activity.misses;
         measurements.package_body_cache_inserts = candidate.package_store_activity.inserts;
@@ -654,17 +734,87 @@ impl SiteEngine {
         measurements.active_package_body_entries = candidate.active_package_store.entries;
         measurements.active_package_body_approximate_source_bytes =
             candidate.active_package_store.approximate_source_bytes;
-        let outcome = candidate.semantic.outcome.clone();
-        let semantic_changed = self.compilation.replace_active(candidate.semantic);
-        self.compilation.project = Some(project);
+        Ok(CompilationCandidate {
+            semantic: Rc::new(candidate.semantic),
+            project,
+            source: CompilationCandidateSource::Fresh,
+            measurements,
+        })
+    }
+
+    /// Promote the exact candidate only after its enclosing target close and
+    /// verification have succeeded. This method performs no fallible work.
+    pub(crate) fn commit_compilation(
+        &mut self,
+        candidate: CompilationCandidate,
+    ) -> CompilationMeasurements {
+        let semantic_changed = match candidate.source {
+            CompilationCandidateSource::Active => {
+                debug_assert!(self
+                    .compilation
+                    .semantic
+                    .current
+                    .as_ref()
+                    .is_some_and(|active| active.key == candidate.semantic.key));
+                #[cfg(test)]
+                {
+                    self.compilation.cache_hits += 1;
+                }
+                false
+            }
+            CompilationCandidateSource::Previous => {
+                #[cfg(test)]
+                {
+                    self.compilation.cache_hits += 1;
+                }
+                self.compilation.replace_active(candidate.semantic)
+            }
+            CompilationCandidateSource::Fresh => {
+                self.compilation.replace_active(candidate.semantic)
+            }
+        };
+        self.compilation.project = Some(candidate.project);
         if semantic_changed {
             self.invalidate_exact_preparation();
         }
+        let mut measurements = candidate.measurements;
         measurements.record_retained(self.compilation.retained_package_store_stats());
-        Ok(CompilationTransition {
-            outcome,
-            measurements,
-        })
+        measurements
+    }
+
+    #[cfg(test)]
+    pub(crate) fn compilation_state_fingerprint(
+        &self,
+    ) -> (
+        Option<usize>,
+        Option<usize>,
+        Option<site_build::Sha256Digest>,
+    ) {
+        let project = self.compilation.project.as_ref().map(|project| {
+            site_build::sha256_canonical(&(
+                project.config(),
+                project.fsh(),
+                project.predefined(),
+                project.site_files(),
+                &project.resolved_packages().config_sha256,
+                &project.resolved_packages().labels,
+                &project.resolved_packages().resolution_support,
+            ))
+            .expect("test compilation project fingerprint")
+        });
+        (
+            self.compilation
+                .semantic
+                .current
+                .as_ref()
+                .map(|semantic| Rc::as_ptr(semantic) as usize),
+            self.compilation
+                .semantic
+                .previous
+                .as_ref()
+                .map(|semantic| Rc::as_ptr(semantic) as usize),
+            project,
+        )
     }
 
     pub fn clear_compilation(&mut self) {
@@ -674,7 +824,8 @@ impl SiteEngine {
 
     pub fn compiled_resources(&self) -> &[(PathBuf, Value)] {
         self.compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .map(|active| active.compiled.as_slice())
             .unwrap_or_default()
@@ -682,23 +833,11 @@ impl SiteEngine {
 
     pub(crate) fn compile_diagnostics(&self) -> &[CompilationDiagnostic] {
         self.compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .map(|active| active.outcome.diagnostics.as_slice())
             .unwrap_or_default()
-    }
-
-    #[cfg(feature = "dependency-observation")]
-    pub(crate) fn dependency_compilation(
-        &self,
-    ) -> Option<(
-        &CompilationOutcome,
-        &dependency_observation::PackageLookupTrace,
-    )> {
-        self.compilation
-            .active
-            .as_ref()
-            .map(|active| (&active.outcome, &active.package_lookups))
     }
 
     pub(crate) fn project_revision(&self) -> Option<&CompiledProjectRevision> {
@@ -719,13 +858,14 @@ impl SiteEngine {
         project: CompiledProjectRevision,
         compiled: Vec<(PathBuf, Value)>,
     ) {
+        let page_listing = page_listing_from_site_files(&project.site_files)
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let semantic_inputs = RenderSemanticInputs {
-            config: project.config.clone(),
-            fsh: project.fsh.clone(),
-            predefined: project.predefined.clone(),
-            page_listing: page_listing_from_site_files(&project.site_files)
-                .into_iter()
-                .collect(),
+            config: &project.config,
+            fsh: &project.fsh,
+            predefined: &project.predefined,
+            page_listing: &page_listing,
         };
         let package_store =
             retained_package_store_for_test(&project.config, &project.resolved_packages);
@@ -736,7 +876,7 @@ impl SiteEngine {
             "test fixture",
         )
         .expect("test project semantic key");
-        self.compilation.active = Some(SemanticCompilation {
+        self.compilation.semantic.current = Some(Rc::new(SemanticCompilation {
             key,
             compiled,
             outcome: CompilationOutcome {
@@ -744,16 +884,14 @@ impl SiteEngine {
                 diagnostics: Vec::new(),
             },
             package_store: Some(package_store),
-            #[cfg(feature = "dependency-observation")]
-            package_lookups: Default::default(),
-        });
-        self.compilation.previous = None;
+        }));
+        self.compilation.semantic.previous = None;
         self.compilation.project = Some(project);
     }
 }
 
 fn compile(
-    inputs: ProjectRevision,
+    inputs: &ProjectRevision,
     package_store: WorkingPackageStore,
     page_listing: &HashMap<String, Vec<String>>,
     key: SemanticCompilationKey,
@@ -774,8 +912,6 @@ fn compile(
             page_listing.clone(),
         )
         .map_err(|error| format!("compile failed: {error:#}"))?;
-    #[cfg(feature = "dependency-observation")]
-    let dependency_package_lookups = package_store.store.take_dependency_observations();
 
     let mut render_set = compiled
         .iter()
@@ -825,8 +961,6 @@ fn compile(
                 diagnostics,
             },
             package_store: package_store.retained,
-            #[cfg(feature = "dependency-observation")]
-            package_lookups: dependency_package_lookups,
         },
         package_store_activity: package_store.activity,
         active_package_store: package_store.active,
@@ -1248,12 +1382,14 @@ mod tests {
 
     fn compilation(name: &str, parent: &str) -> SemanticCompilation {
         let inputs = inputs_for(parent, b"old prose");
-        let page_listing = page_listing_from_site_files(&inputs.site_files);
+        let page_listing = page_listing_from_site_files(&inputs.site_files)
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let semantic_inputs = RenderSemanticInputs {
-            config: inputs.config,
-            fsh: inputs.fsh,
-            predefined: inputs.predefined,
-            page_listing: page_listing.into_iter().collect(),
+            config: &inputs.config,
+            fsh: &inputs.fsh,
+            predefined: &inputs.predefined,
+            page_listing: &page_listing,
         };
         let body = serde_json::json!({
             "resourceType": "StructureDefinition",
@@ -1291,8 +1427,6 @@ mod tests {
                 }],
             },
             package_store: Some(package_store),
-            #[cfg(feature = "dependency-observation")]
-            package_lookups: Default::default(),
         }
     }
 
@@ -1302,7 +1436,7 @@ mod tests {
         engine
             .compilation
             .replace_active(compilation("Test", "Patient"));
-        engine.compilation.previous = None;
+        engine.compilation.semantic.previous = None;
         engine.compilation.project = Some(CompiledProjectRevision {
             config: inputs.config,
             fsh: inputs.fsh,
@@ -1338,6 +1472,120 @@ mod tests {
                 .map(Vec::as_slice),
             Some(b"new prose".as_slice())
         );
+    }
+
+    #[test]
+    fn candidates_share_semantic_allocations_and_defer_recency_until_commit() {
+        let mut engine = reuse_engine();
+        let active_a = engine
+            .compilation
+            .semantic
+            .current
+            .as_ref()
+            .unwrap()
+            .clone();
+        let installed_project_before = engine
+            .compilation
+            .project
+            .as_ref()
+            .unwrap()
+            .site_files()
+            .clone();
+
+        let candidate_a = engine
+            .compile_candidate(
+                inputs_for("Patient", b"candidate prose"),
+                package_view(),
+                resolved(),
+            )
+            .unwrap();
+        assert!(candidate_a.measurements.semantic_compilation_cache_hit);
+        assert!(Rc::ptr_eq(&active_a, &candidate_a.semantic));
+        assert_eq!(
+            engine.compilation.project.as_ref().unwrap().site_files(),
+            &installed_project_before,
+            "staging must not install the authored revision"
+        );
+        assert_eq!(engine.compilation.cache_hits, 0);
+        drop(candidate_a);
+        assert!(Rc::ptr_eq(
+            &active_a,
+            engine.compilation.semantic.current.as_ref().unwrap()
+        ));
+        assert!(engine.compilation.semantic.previous.is_none());
+        assert_eq!(engine.compilation.cache_hits, 0);
+
+        engine
+            .compile_project(
+                inputs_for("Observation", b"generation b"),
+                package_view(),
+                resolved(),
+            )
+            .unwrap();
+        let active_b = engine
+            .compilation
+            .semantic
+            .current
+            .as_ref()
+            .unwrap()
+            .clone();
+        let previous_a = engine
+            .compilation
+            .semantic
+            .previous
+            .as_ref()
+            .unwrap()
+            .clone();
+        assert!(Rc::ptr_eq(&active_a, &previous_a));
+
+        let candidate_a = engine
+            .compile_candidate(
+                inputs_for("Patient", b"return a"),
+                package_view(),
+                resolved(),
+            )
+            .unwrap();
+        assert!(Rc::ptr_eq(&previous_a, &candidate_a.semantic));
+        assert!(Rc::ptr_eq(
+            &active_b,
+            engine.compilation.semantic.current.as_ref().unwrap()
+        ));
+        assert!(Rc::ptr_eq(
+            &previous_a,
+            engine.compilation.semantic.previous.as_ref().unwrap()
+        ));
+        drop(candidate_a);
+        assert!(Rc::ptr_eq(
+            &active_b,
+            engine.compilation.semantic.current.as_ref().unwrap()
+        ));
+        assert!(Rc::ptr_eq(
+            &previous_a,
+            engine.compilation.semantic.previous.as_ref().unwrap()
+        ));
+
+        let candidate_a = engine
+            .compile_candidate(
+                inputs_for("Patient", b"committed return a"),
+                package_view(),
+                resolved(),
+            )
+            .unwrap();
+        let measurements = engine.commit_compilation(candidate_a);
+        assert!(measurements.semantic_compilation_cache_hit);
+        assert!(Rc::ptr_eq(
+            &previous_a,
+            engine.compilation.semantic.current.as_ref().unwrap()
+        ));
+        assert!(Rc::ptr_eq(
+            &active_b,
+            engine.compilation.semantic.previous.as_ref().unwrap()
+        ));
+        assert!(!Rc::ptr_eq(
+            engine.compilation.semantic.current.as_ref().unwrap(),
+            engine.compilation.semantic.previous.as_ref().unwrap()
+        ));
+        assert_eq!(engine.compilation.cache_hits, 1);
     }
 
     #[test]
@@ -1469,6 +1717,7 @@ mod tests {
         assert_eq!(
             engine
                 .compilation
+                .semantic
                 .previous
                 .as_ref()
                 .unwrap()
@@ -1485,8 +1734,22 @@ mod tests {
         engine
             .compilation
             .replace_active(compilation("Other", "Observation"));
-        let active_key = engine.compilation.active.as_ref().unwrap().key.clone();
-        let previous_key = engine.compilation.previous.as_ref().unwrap().key.clone();
+        let active_key = engine
+            .compilation
+            .semantic
+            .current
+            .as_ref()
+            .unwrap()
+            .key
+            .clone();
+        let previous_key = engine
+            .compilation
+            .semantic
+            .previous
+            .as_ref()
+            .unwrap()
+            .key
+            .clone();
         let prior_site = engine.project_revision().unwrap().site_files().clone();
 
         let mut invalid = inputs_for("Encounter", b"failed authored");
@@ -1498,9 +1761,12 @@ mod tests {
             .compile_project(invalid, package_view(), invalid_closure)
             .unwrap_err();
         assert!(!error.is_empty());
-        assert_eq!(engine.compilation.active.as_ref().unwrap().key, active_key);
         assert_eq!(
-            engine.compilation.previous.as_ref().unwrap().key,
+            engine.compilation.semantic.current.as_ref().unwrap().key,
+            active_key
+        );
+        assert_eq!(
+            engine.compilation.semantic.previous.as_ref().unwrap().key,
             previous_key
         );
         assert_eq!(engine.project_revision().unwrap().site_files(), &prior_site);
@@ -1593,7 +1859,8 @@ mod tests {
         assert_eq!(first.measurements.retained_package_store_generations, 1);
         let first_store = engine
             .compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .unwrap()
             .package_store
@@ -1611,7 +1878,6 @@ mod tests {
             .unwrap();
         assert!(second.measurements.package_store_used);
         assert!(second.measurements.package_store_cache_hit);
-        assert_eq!(second.measurements.package_store_build_ms, 0.0);
         assert_eq!(second.measurements.retained_package_store_generations, 2);
         assert_eq!(second.measurements.retained_package_catalog_generations, 1);
         assert!(second.measurements.retained_package_catalog_entries > 0);
@@ -1619,7 +1885,8 @@ mod tests {
             &first_store,
             engine
                 .compilation
-                .active
+                .semantic
+                .current
                 .as_ref()
                 .unwrap()
                 .package_store
@@ -1675,7 +1942,8 @@ mod tests {
             );
             assert!(engine
                 .compilation
-                .active
+                .semantic
+                .current
                 .as_ref()
                 .unwrap()
                 .package_store
@@ -1712,7 +1980,8 @@ mod tests {
         assert!(first.measurements.package_body_cache_inserts > 0);
         let retained = engine
             .compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .unwrap()
             .package_store
@@ -1750,14 +2019,15 @@ mod tests {
             &retained,
             &engine
                 .compilation
-                .active
+                .semantic
+                .current
                 .as_ref()
                 .unwrap()
                 .package_store
                 .as_ref()
                 .unwrap()
         ));
-        assert!(engine.compilation.previous.is_none());
+        assert!(engine.compilation.semantic.previous.is_none());
         assert_eq!(retained.store.cache_stats(), retained_stats);
 
         // A later successful same-key miss promotes a distinct fork. It reads
@@ -1797,8 +2067,8 @@ mod tests {
                     .measurements
                     .retained_package_body_logical_approximate_source_bytes
         );
-        let active = engine.compilation.active.as_ref().unwrap();
-        let previous = engine.compilation.previous.as_ref().unwrap();
+        let active = engine.compilation.semantic.current.as_ref().unwrap();
+        let previous = engine.compilation.semantic.previous.as_ref().unwrap();
         assert!(!Rc::ptr_eq(
             &retained,
             active.package_store.as_ref().unwrap()
@@ -1843,7 +2113,8 @@ mod tests {
             .unwrap();
         let a_key = engine
             .compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .unwrap()
             .package_store
@@ -1860,7 +2131,8 @@ mod tests {
             .unwrap();
         let b_key = engine
             .compilation
-            .active
+            .semantic
+            .current
             .as_ref()
             .unwrap()
             .package_store
@@ -1883,7 +2155,8 @@ mod tests {
         assert_eq!(
             engine
                 .compilation
-                .active
+                .semantic
+                .current
                 .as_ref()
                 .unwrap()
                 .package_store
@@ -1895,6 +2168,7 @@ mod tests {
         assert_eq!(
             engine
                 .compilation
+                .semantic
                 .previous
                 .as_ref()
                 .unwrap()
@@ -1916,6 +2190,7 @@ mod tests {
         assert_eq!(
             engine
                 .compilation
+                .semantic
                 .previous
                 .as_ref()
                 .unwrap()
@@ -1942,10 +2217,7 @@ mod tests {
         .unwrap();
         let environment = crate::PackageEnvironment::new([package]).unwrap();
         let exact_view = environment.scoped(&resolved().labels, "test").unwrap();
-        engine
-            .compilation
-            .active
-            .as_mut()
+        Rc::get_mut(engine.compilation.semantic.current.as_mut().unwrap())
             .unwrap()
             .key
             .package_store =
@@ -2098,13 +2370,14 @@ mod tests {
             .replace_active(compilation("Third", "Encounter"));
 
         let a_inputs = inputs_for("Patient", b"A");
+        let a_page_listing = page_listing_from_site_files(&a_inputs.site_files)
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let a_semantics = RenderSemanticInputs {
-            config: a_inputs.config,
-            fsh: a_inputs.fsh,
-            predefined: a_inputs.predefined,
-            page_listing: page_listing_from_site_files(&a_inputs.site_files)
-                .into_iter()
-                .collect(),
+            config: &a_inputs.config,
+            fsh: &a_inputs.fsh,
+            predefined: &a_inputs.predefined,
+            page_listing: &a_page_listing,
         };
         let package_store = retained_package_store_for_test(CONFIG, &resolved());
         let a_key = semantic_compilation_key(&a_semantics, &resolved(), &package_store.key, "test")
@@ -2113,13 +2386,14 @@ mod tests {
         assert_eq!(engine.compilation.cache_hits, 0);
 
         let b_inputs = inputs_for("Observation", b"B");
+        let b_page_listing = page_listing_from_site_files(&b_inputs.site_files)
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
         let b_semantics = RenderSemanticInputs {
-            config: b_inputs.config,
-            fsh: b_inputs.fsh,
-            predefined: b_inputs.predefined,
-            page_listing: page_listing_from_site_files(&b_inputs.site_files)
-                .into_iter()
-                .collect(),
+            config: &b_inputs.config,
+            fsh: &b_inputs.fsh,
+            predefined: &b_inputs.predefined,
+            page_listing: &b_page_listing,
         };
         let b_key = semantic_compilation_key(&b_semantics, &resolved(), &package_store.key, "test")
             .unwrap();

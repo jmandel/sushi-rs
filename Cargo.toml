@@ -4,7 +4,6 @@ members = [
     "crates/fsh_lexer_parser",
     "crates/fsh_model",
     "crates/fhir_model",
-    "crates/dependency_observation",
     "crates/package_acquisition",
     "crates/package_store",
     "crates/compiler",
@@ -23,6 +22,7 @@ members = [
     "crates/render_tables",
     "crates/render_sd",
     "crates/render_page",
+    "crates/publisher_sql",
     "crates/site_producer",
     "crates/api_envelope",
     "crates/fig",
@@ -39,7 +39,6 @@ rust-version = "1.90"
 fsh_lexer_parser = { path = "crates/fsh_lexer_parser" }
 fsh_model = { path = "crates/fsh_model" }
 fhir_model = { path = "crates/fhir_model" }
-dependency_observation = { path = "crates/dependency_observation" }
 package_store = { path = "crates/package_store" }
 package_acquisition = { path = "crates/package_acquisition" }
 compiler = { path = "crates/compiler" }
@@ -56,6 +55,7 @@ render_md = { path = "crates/render_md" }
 render_tables = { path = "crates/render_tables" }
 render_sd = { path = "crates/render_sd" }
 render_page = { path = "crates/render_page" }
+publisher_sql = { path = "crates/publisher_sql" }
 site_producer = { path = "crates/site_producer" }
 api_envelope = { path = "crates/api_envelope" }
 
@@ -80,6 +80,7 @@ tempfile = "3"
 ureq = { version = "2", features = ["json"] }
 walkdir = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+sqlite-wasm-rs = "=0.5.5"
 schemars = "1.2.1"
 ts-rs = { version = "12.0.1", default-features = false, features = ["serde-compat", "no-serde-warnings"] }
 

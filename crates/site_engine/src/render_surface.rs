@@ -435,6 +435,7 @@ pub fn build_render_state_from_semantics(
         if rel.starts_with("_includes/")
             || rel.starts_with("_data/")
             || rel.starts_with("_layouts/")
+            || rel.starts_with("template/")
             || rel.starts_with("txcache/")
             || rel.starts_with("assets/")
         {
@@ -537,7 +538,6 @@ impl RenderState {
     /// in a flat layout) — the same string is the Jekyll `page.path`. A source
     /// without front matter is a static file: returned verbatim (the
     /// publisher's Jekyll copies those unrendered).
-    #[cfg(any(not(feature = "dependency-observation"), test))]
     pub(crate) fn render_page_by_name(&self, name: &str) -> Result<String, String> {
         self.render_page_tracked_by_name(name).map(|(html, _)| html)
     }
@@ -620,6 +620,44 @@ mod tests {
             },
         )
         .expect("minimal render state")
+    }
+
+    #[test]
+    fn private_template_sources_do_not_escape_as_published_pages() {
+        let compiled = vec![(
+            PathBuf::from("StructureDefinition-test.json"),
+            serde_json::json!({
+                "resourceType": "StructureDefinition",
+                "id": "test",
+                "url": "http://example.org/StructureDefinition/test",
+                "name": "Test",
+                "status": "draft",
+                "fhirVersion": "4.0.1",
+                "kind": "resource",
+                "abstract": false,
+                "type": "Patient",
+                "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Patient",
+                "derivation": "constraint",
+                "snapshot": { "element": [{ "id": "Patient", "path": "Patient" }] }
+            }),
+        )];
+        let site_files = HashMap::from([
+            (
+                PathBuf::from("/site/en/index.html"),
+                b"---\n---\npublic".to_vec(),
+            ),
+            (
+                PathBuf::from("/site/template/layouts/layout-profile.html"),
+                b"---\n---\nprivate".to_vec(),
+            ),
+            (
+                PathBuf::from("/site/template/liquid/helper.md"),
+                b"---\n---\nprivate".to_vec(),
+            ),
+        ]);
+        let state =
+            build_render_state(&compiled, None, &site_files, &SiteOptions::default()).unwrap();
+        assert_eq!(state.list_pages(), vec!["en/index.html"]);
     }
 
     #[test]
