@@ -13,7 +13,7 @@ pub(crate) mod ids;
 mod loop_;
 mod paths;
 mod preprocess;
-mod resolve;
+pub(crate) mod resolve;
 mod simple;
 mod sliced;
 mod slicing;
@@ -26,11 +26,201 @@ mod updatefromdef;
 
 use anyhow::Context as _;
 use serde_json::Value;
+use sha2::{Digest as _, Sha256};
 use std::rc::Rc;
 
+use crate::package::SnapshotDependencyManifest;
 use crate::{PackageContext, SnapshotOptions};
 use context::{WalkConfig, WalkContext};
 use frame::{SlicingParams, WalkCursor, WalkFrame};
+
+/// Recipe identity for the exact subset of a converted StructureDefinition
+/// that the snapshot walk is allowed to observe. The walk receives only this
+/// projection; fields outside it can affect the returned resource envelope but
+/// cannot silently become undeclared snapshot dependencies.
+const SNAPSHOT_DERIVATION_INPUT_SCHEMA: &str = "snapshot-gen.derivation-input/v1";
+const SNAPSHOT_DERIVATION_FIELDS: &[&str] = &[
+    "resourceType",
+    "id",
+    "url",
+    "version",
+    "name",
+    "fhirVersion",
+    "kind",
+    "abstract",
+    "type",
+    "baseDefinition",
+    "derivation",
+    "differential",
+];
+
+/// A fully converted current resource envelope paired with the only input that
+/// the snapshot algorithm can observe. Callers can offer this opaque value to
+/// [`SnapshotDerivation::try_recompose`], which validates structural identity
+/// and package reads as one operation. They cannot bypass conversion, install a
+/// payload directly, or invent a separate generation path.
+///
+/// Adding any top-level input read to the canonical walk or adding a snapshot
+/// option requires extending `SNAPSHOT_DERIVATION_FIELDS` or this type's recipe
+/// identity. The walk receives only `structural`, so an undeclared top-level
+/// dependency cannot silently affect fresh generation.
+pub struct SnapshotDerivationInput {
+    envelope: Value,
+    structural: Value,
+    sort_differential: bool,
+    identity_sha256: [u8; 32],
+}
+
+/// Opaque snapshot payload emitted by the canonical walk. Callers can retain
+/// and recompose it but cannot manufacture a payload that bypasses generation.
+struct SnapshotArtifact {
+    snapshot: Value,
+}
+
+impl SnapshotArtifact {
+    fn from_completed(completed: &Value) -> anyhow::Result<Self> {
+        let snapshot = completed
+            .get("snapshot")
+            .context("generated StructureDefinition has no snapshot")?
+            .clone();
+        snapshot
+            .get("element")
+            .and_then(Value::as_array)
+            .context("generated snapshot has no element array")?;
+        Ok(Self { snapshot })
+    }
+
+    fn serialized_len(&self) -> anyhow::Result<usize> {
+        Ok(serde_json::to_vec(&self.snapshot)?.len())
+    }
+}
+
+/// Complete opaque proof for reusing one canonical snapshot derivation.
+/// Structural identity, exact PackageContext reads, and the generated artifact
+/// cannot be separated or supplied independently by a caller.
+pub struct SnapshotDerivation {
+    input_sha256: [u8; 32],
+    manifest: SnapshotDependencyManifest,
+    artifact: SnapshotArtifact,
+}
+
+/// The single bounded-history admission projection exposed by an opaque
+/// snapshot derivation. Callers may budget a complete derivation as one unit,
+/// but cannot inspect or replay its package-read manifest or artifact.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SnapshotDerivationRetention {
+    pub complete: bool,
+    pub dependency_facts: usize,
+    pub manifest_approx_bytes: usize,
+    pub snapshot_json_bytes: usize,
+}
+
+impl SnapshotDerivation {
+    pub(crate) fn from_completed(
+        input_sha256: [u8; 32],
+        manifest: SnapshotDependencyManifest,
+        completed: &Value,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            input_sha256,
+            manifest,
+            artifact: SnapshotArtifact::from_completed(completed)?,
+        })
+    }
+
+    /// Attempt exact reuse. A miss leaves `input` untouched so the caller can
+    /// test the previous bounded generation or execute canonical generation.
+    /// A hit consumes only the current envelope after both structural identity
+    /// and the complete package-read manifest have validated together.
+    pub fn try_recompose(
+        &self,
+        input: &mut SnapshotDerivationInput,
+        context: &PackageContext,
+    ) -> anyhow::Result<Option<Value>> {
+        if !self.manifest.is_complete()
+            || self.input_sha256 != input.identity_sha256
+            || !context.matches_snapshot_dependencies(&self.manifest)
+        {
+            return Ok(None);
+        }
+        input.recompose(&self.artifact).map(Some)
+    }
+
+    pub fn retention(&self) -> anyhow::Result<SnapshotDerivationRetention> {
+        Ok(SnapshotDerivationRetention {
+            complete: self.manifest.is_complete(),
+            dependency_facts: self.manifest.fact_count(),
+            manifest_approx_bytes: self.manifest.retained_approx_bytes(),
+            snapshot_json_bytes: self.artifact.serialized_len()?,
+        })
+    }
+}
+
+impl SnapshotDerivationInput {
+    fn from_external(derived: Value, options: SnapshotOptions) -> anyhow::Result<Self> {
+        let converted = resolve::to_r5_internal(&derived)?;
+        Self::from_internal(converted, options.sort_differential)
+    }
+
+    fn from_internal(envelope: Value, sort_differential: bool) -> anyhow::Result<Self> {
+        let source = envelope
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("derived is not an object"))?;
+        let mut structural = serde_json::Map::new();
+        for (field, value) in source {
+            if SNAPSHOT_DERIVATION_FIELDS.contains(&field.as_str()) {
+                structural.insert(field.clone(), value.clone());
+            }
+        }
+        let identity_sha256 = snapshot_derivation_identity(&structural, sort_differential)?;
+        Ok(Self {
+            envelope,
+            structural: Value::Object(structural),
+            sort_differential,
+            identity_sha256,
+        })
+    }
+
+    pub(crate) fn identity_sha256(&self) -> [u8; 32] {
+        self.identity_sha256
+    }
+
+    fn recompose(&mut self, artifact: &SnapshotArtifact) -> anyhow::Result<Value> {
+        let mut envelope = std::mem::take(&mut self.envelope);
+        finalize::install_snapshot(&mut envelope, artifact.snapshot.clone())?;
+        Ok(envelope)
+    }
+}
+
+fn snapshot_derivation_identity_bytes(
+    structural: &Value,
+    sort_differential: bool,
+) -> anyhow::Result<Vec<u8>> {
+    let mut bytes = SNAPSHOT_DERIVATION_INPUT_SCHEMA.as_bytes().to_vec();
+    bytes.push(0);
+    bytes.push(u8::from(sort_differential));
+    serde_json::to_writer(&mut bytes, structural)?;
+    Ok(bytes)
+}
+
+fn snapshot_derivation_identity(
+    structural: &serde_json::Map<String, Value>,
+    sort_differential: bool,
+) -> anyhow::Result<[u8; 32]> {
+    let value = Value::Object(structural.clone());
+    Ok(Sha256::digest(snapshot_derivation_identity_bytes(
+        &value,
+        sort_differential,
+    )?)
+    .into())
+}
+
+pub fn prepare_snapshot_derivation(
+    derived: Value,
+    options: SnapshotOptions,
+) -> anyhow::Result<SnapshotDerivationInput> {
+    SnapshotDerivationInput::from_external(derived, options)
+}
 
 /// Enable trace emission to `path` for the duration of the process. Called from
 /// the CLI when `--trace`/`SNAPSHOT_TRACE` is set.
@@ -48,7 +238,15 @@ pub fn generate_snapshot(
     pkg: &PackageContext,
     options: SnapshotOptions,
 ) -> anyhow::Result<Value> {
-    generate_snapshot_opt_pin(derived, pkg, options, false)
+    let input = SnapshotDerivationInput::from_external(derived, options)?;
+    generate_prepared_snapshot_opt_pin(input, pkg, false)
+}
+
+pub fn generate_prepared_snapshot(
+    input: SnapshotDerivationInput,
+    pkg: &PackageContext,
+) -> anyhow::Result<Value> {
+    generate_prepared_snapshot_opt_pin(input, pkg, false)
 }
 
 /// Layer-A walk with an OPT-IN base-version-pinning flag (Layer B B1,
@@ -59,6 +257,15 @@ pub(crate) fn generate_snapshot_opt_pin(
     derived: Value,
     pkg: &PackageContext,
     options: SnapshotOptions,
+    pin_base_versions: bool,
+) -> anyhow::Result<Value> {
+    let input = SnapshotDerivationInput::from_external(derived, options)?;
+    generate_prepared_snapshot_opt_pin(input, pkg, pin_base_versions)
+}
+
+fn generate_prepared_snapshot_opt_pin(
+    input: SnapshotDerivationInput,
+    pkg: &PackageContext,
     pin_base_versions: bool,
 ) -> anyhow::Result<Value> {
     let mut ctx = WalkContext {
@@ -76,10 +283,7 @@ pub(crate) fn generate_snapshot_opt_pin(
         spec_url: String::new(),
         pin_base_versions,
     };
-    // Convert R4 input to R5-internal.
-    let derived = resolve::to_r5_internal(&derived)?;
-    let out = generate_snapshot_with_opts(&mut ctx, derived, options.sort_differential, true)?;
-    Ok(out)
+    generate_snapshot_input_with_opts(&mut ctx, input, true)
 }
 
 /// Recursive generation entry used when a base/type SD lacks a snapshot
@@ -106,10 +310,33 @@ pub(crate) fn generate_snapshot_inner(
     };
     // Nested generation (PPP:810 / PU:762): plain generateSnapshot — the
     // driver-level sortDifferential and bare-root prepend do NOT apply.
-    let result = generate_snapshot_with_opts(&mut ctx, sd, false, false);
+    // `sd` already followed the local/package-specific conversion path in
+    // resolve_with_snapshot, so preserve that internal envelope as-is.
+    let result = SnapshotDerivationInput::from_internal(sd, false)
+        .and_then(|input| generate_snapshot_input_with_opts(&mut ctx, input, false));
     parent.gen_cache = std::mem::take(&mut ctx.gen_cache);
     parent.messages.extend(ctx.messages.drain(..));
     result
+}
+
+fn generate_snapshot_input_with_opts(
+    ctx: &mut WalkContext,
+    input: SnapshotDerivationInput,
+    top_level: bool,
+) -> anyhow::Result<Value> {
+    let SnapshotDerivationInput {
+        mut envelope,
+        structural,
+        sort_differential,
+        identity_sha256: _,
+    } = input;
+    let generated = generate_snapshot_with_opts(ctx, structural, sort_differential, top_level)?;
+    let snapshot = generated
+        .get("snapshot")
+        .context("generated StructureDefinition has no snapshot")?
+        .clone();
+    finalize::install_snapshot(&mut envelope, snapshot)?;
+    Ok(envelope)
 }
 
 fn generate_snapshot_with_opts(

@@ -58,12 +58,14 @@ pub(crate) fn publisher_base(
         }
     }
 
+    let resolved = ctx.pkg.resolve_snapshot_structure_definition(query);
     let version = derived_version
         .or(requested_version)
         .map(str::to_string)
         .or_else(|| {
-            ctx.pkg.fetch(query).and_then(|base| {
-                base.get("version")
+            resolved.as_ref().and_then(|base| {
+                base.raw
+                    .get("version")
                     .and_then(Value::as_str)
                     .map(str::to_string)
             })
@@ -72,10 +74,9 @@ pub(crate) fn publisher_base(
         // With no target-release evidence, leave ordinary resolution in charge.
         return Ok(None);
     };
-    let universe_has_target_base = ctx
-        .pkg
-        .fetch(query)
-        .is_some_and(|base| base.get("version").and_then(Value::as_str) == Some(version.as_str()));
+    let universe_has_target_base = resolved.as_ref().is_some_and(|base| {
+        base.raw.get("version").and_then(Value::as_str) == Some(version.as_str())
+    });
     if universe_has_target_base {
         return Ok(None);
     }
@@ -349,19 +350,8 @@ pub(crate) fn fix_loaded_resource(sd: &mut Value, package_id: Option<&str>) {
 /// local-dir resources get the full conversion; package resources get the
 /// lenient R5 read (see module doc).
 pub(crate) fn fetch_sd(pkg: &PackageContext, query: &str) -> Option<Value> {
-    let raw = pkg.fetch(query)?;
-    let raw = raw.as_ref();
-    let url = raw.get("url").and_then(Value::as_str).unwrap_or(query);
-    let mut out = if pkg.is_local(url) || pkg.is_local(query) {
-        to_r5_internal(raw).ok()?
-    } else {
-        lenient_r5_read_r4(raw)
-    };
-    let package_id = pkg
-        .package_id_for(url)
-        .or_else(|| pkg.package_id_for(query));
-    fix_loaded_resource(&mut out, package_id.as_deref());
-    Some(out)
+    let resolved = pkg.resolve_snapshot_structure_definition(query)?;
+    pkg.load_snapshot_structure_definition(&resolved).ok()
 }
 
 /// Resolve `query` to an R5-internal SD that HAS a snapshot, generating it
@@ -372,28 +362,14 @@ pub(crate) fn resolve_with_snapshot(
     query: &str,
 ) -> anyhow::Result<Option<Rc<Value>>> {
     // Resolve to the canonical url first so cache keys are stable.
-    let Some(raw) = ctx.pkg.fetch(query) else {
+    let Some(resolved) = ctx.pkg.resolve_snapshot_structure_definition(query) else {
         return Ok(None);
     };
-    let raw = raw.as_ref();
-    let url = raw
-        .get("url")
-        .and_then(Value::as_str)
-        .unwrap_or(query)
-        .to_string();
+    let url = resolved.url.clone();
     if let Some(hit) = ctx.gen_cache.get(&url) {
         return Ok(Some(hit.clone()));
     }
-    let mut sd = if ctx.pkg.is_local(&url) || ctx.pkg.is_local(query) {
-        to_r5_internal(raw)?
-    } else {
-        lenient_r5_read_r4(raw)
-    };
-    let package_id = ctx
-        .pkg
-        .package_id_for(&url)
-        .or_else(|| ctx.pkg.package_id_for(query));
-    fix_loaded_resource(&mut sd, package_id.as_deref());
+    let mut sd = ctx.pkg.load_snapshot_structure_definition(&resolved)?;
     if sd
         .get("snapshot")
         .and_then(|s| s.get("element"))

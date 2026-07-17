@@ -9,9 +9,12 @@
 //!
 //! Surface (deliberately minimal, mirroring only what the read path needs):
 //! - [`PackageSource::read`] — read a file's bytes (replaces `std::fs::read`).
+//! - [`PackageSource::immutable_content_identity`] — optional identity already
+//!   proven by a closed immutable source; never asks a source to hash on demand.
 //! - [`PackageSource::read_dir`] — list a directory's entries with a cheap
 //!   `is_file` flag (replaces `std::fs::read_dir` + `file_type`).
-//! - [`PackageSource::exists`] / [`PackageSource::is_dir`] — presence checks.
+//! - [`PackageSource::exists`] / [`PackageSource::is_file`] /
+//!   [`PackageSource::is_dir`] — presence and non-following entry-kind checks.
 //! - [`PackageSource::write_new`] — write-once sidecar support. Writable sources
 //!   (disk) create the file atomically; read-only sources return an error and the
 //!   caller falls back to an in-memory derive (fail-soft, per the derived-index
@@ -49,6 +52,19 @@ pub trait PackageSource: std::fmt::Debug {
     /// Read the full contents of the file at `path`.
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
 
+    /// Return an opaque SHA-256 identity which proves the exact immutable bytes
+    /// served by [`Self::read`] at `path`.
+    ///
+    /// This is an optional capability, not a request to read and hash the file:
+    /// ordinary disk and mutable sources return `None`. A closed wrapper can
+    /// derive an identity from an authenticated whole-source carrier plus the
+    /// selected path, without inflating a member. Callers may use it only to
+    /// reject stale derived values; a missing identity must fall back to reading
+    /// the bytes canonically.
+    fn immutable_content_identity(&self, _path: &Path) -> Option<[u8; 32]> {
+        None
+    }
+
     /// List the entries directly under `path`. Order is unspecified (all call
     /// sites sort or match by name); `DiskSource` returns the OS order, exactly as
     /// the old `read_dir().flatten()` loops did.
@@ -56,6 +72,11 @@ pub trait PackageSource: std::fmt::Debug {
 
     /// True iff `path` exists (file or directory).
     fn exists(&self, path: &Path) -> bool;
+
+    /// True iff `path` is a regular file entry without following symlinks.
+    /// This must agree with the `is_file` bit returned for the same entry by
+    /// [`Self::read_dir`].
+    fn is_file(&self, path: &Path) -> bool;
 
     /// True iff `path` exists and is a directory. Callers gate package indexing on
     /// this (`pkg_dir.is_dir()`), so a source must answer it faithfully.
@@ -86,11 +107,17 @@ impl<T: PackageSource + ?Sized> PackageSource for &T {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         (**self).read(path)
     }
+    fn immutable_content_identity(&self, path: &Path) -> Option<[u8; 32]> {
+        (**self).immutable_content_identity(path)
+    }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<DirEntry>> {
         (**self).read_dir(path)
     }
     fn exists(&self, path: &Path) -> bool {
         (**self).exists(path)
+    }
+    fn is_file(&self, path: &Path) -> bool {
+        (**self).is_file(path)
     }
     fn is_dir(&self, path: &Path) -> bool {
         (**self).is_dir(path)
@@ -137,6 +164,12 @@ impl PackageSource for DiskSource {
 
     fn exists(&self, path: &Path) -> bool {
         path.exists()
+    }
+
+    fn is_file(&self, path: &Path) -> bool {
+        std::fs::symlink_metadata(path)
+            .map(|metadata| metadata.file_type().is_file())
+            .unwrap_or(false)
     }
 
     fn is_dir(&self, path: &Path) -> bool {

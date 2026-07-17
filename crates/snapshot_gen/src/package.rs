@@ -5,7 +5,6 @@
 
 use anyhow::{bail, Context};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -24,43 +23,71 @@ const SNAPSHOT_DEPENDENCY_MAX_RETAINED_BYTES: usize = 1024 * 1024;
 /// so a newly introduced local or package resource invalidates a prior miss.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum SnapshotDependencyQuery {
-    Fetch(String),
+    /// Raw query resolution happens before canonical loading and before the
+    /// recursive generation cache probe. Preserve that observable ordering
+    /// without treating the complete raw resource envelope as snapshot input.
+    ResolveStructureDefinition(String),
+    /// Result of the one canonical local/package StructureDefinition loader.
+    LoadStructureDefinition(String),
     IsLocal(String),
     PackageId(String),
-    CanonicalVersion { url: String, resource_type: String },
+    CanonicalVersion {
+        url: String,
+        resource_type: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum SnapshotDependencyOutcome {
-    Resource(Option<[u8; 32]>),
+    Resolution(Option<SnapshotResolutionIdentity>),
+    LoadedStructureDefinition(SnapshotLoadedIdentity),
     Bool(bool),
     Text(Option<String>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SnapshotResolutionIdentity {
+    source_proof: Option<[u8; 32]>,
+    url: String,
+    version: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SnapshotLoadedIdentity {
+    source_proof: Option<[u8; 32]>,
+    outcome: SnapshotLoadedOutcome,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SnapshotLoadedOutcome {
+    Loaded([u8; 32]),
+    LoadFailed,
 }
 
 /// Private execution proof for one generated StructureDefinition snapshot.
 ///
 /// The fields stay opaque outside snapshot_gen so callers cannot manufacture
-/// partial evidence. An incomplete/overflowed manifest is useful for metrics
-/// but can never authorize reuse.
+/// partial evidence. An incomplete/overflowed manifest becomes an ineligible
+/// history entry and can never authorize reuse.
 #[derive(Clone, Debug)]
-pub struct SnapshotDependencyManifest {
+pub(crate) struct SnapshotDependencyManifest {
     reads: BTreeMap<SnapshotDependencyQuery, SnapshotDependencyOutcome>,
     complete: bool,
     retained_approx_bytes: usize,
 }
 
 impl SnapshotDependencyManifest {
-    pub fn is_complete(&self) -> bool {
+    pub(crate) fn is_complete(&self) -> bool {
         self.complete
     }
 
-    pub fn fact_count(&self) -> usize {
+    pub(crate) fn fact_count(&self) -> usize {
         self.reads.len()
     }
 
     /// Approximate logical bytes retained by the captured fact values. This is
     /// a deterministic admission weight, not allocator or process memory.
-    pub fn retained_approx_bytes(&self) -> usize {
+    pub(crate) fn retained_approx_bytes(&self) -> usize {
         self.retained_approx_bytes
     }
 }
@@ -124,10 +151,10 @@ pub struct PackageContext {
     // run, so caching parsed values cannot change output — only avoid repeated
     // disk reads and JSON parses.
     fetch_cache: RefCell<HashMap<String, Option<Rc<Value>>>>,
-    // Exact parsed-Value digests keyed by the immutable resolved resource path.
-    // Snapshot manifests across many profiles commonly read the same base; hash
-    // it once per PackageContext rather than once per manifest validation.
-    resource_digests: RefCell<HashMap<PathBuf, [u8; 32]>>,
+    // Exact post-canonical-load structural digests keyed by the resolved resource
+    // path. Snapshot manifests commonly read the same base; project the loaded
+    // value once per PackageContext rather than once per manifest validation.
+    loaded_sd_digests: RefCell<HashMap<PathBuf, [u8; 32]>>,
     // The storage backing package reads, held for the lazy per-resource `fetch`.
     // Native callers get a `DiskSource` (unchanged behavior); a browser/test caller
     // supplies a read-only in-memory source. Local-dir resources are always read
@@ -147,10 +174,20 @@ pub struct PackageContext {
     // index (which lists EVERY resource, incl. VS/CS). Never consulted by Layer A
     // — `by_url` is unchanged, so the OFF path is byte-identical.
     canonical_versions: RefCell<Option<HashMap<(String, String), String>>>,
-    // Present only around generate_snapshot_with_manifest. Observation is
+    // Present only around canonical derivation generation. Observation is
     // non-semantic: overflow or an internal inconsistency makes the resulting
     // manifest incomplete and therefore ineligible, but never fails generation.
     snapshot_dependencies: RefCell<Option<SnapshotDependencyTrace>>,
+}
+
+/// Raw, parsed StructureDefinition resolution retained only long enough to
+/// preserve the canonical URL-before-load / generation-cache-before-load
+/// ordering. Canonical conversion and package fixups happen exclusively in
+/// [`PackageContext::load_snapshot_structure_definition`].
+pub(crate) struct ResolvedSnapshotStructureDefinition {
+    query: String,
+    pub(crate) url: String,
+    pub(crate) raw: Rc<Value>,
 }
 
 #[derive(Clone, Debug)]
@@ -193,7 +230,7 @@ impl PackageContext {
             by_id: HashMap::new(),
             by_name: HashMap::new(),
             fetch_cache: RefCell::new(HashMap::new()),
-            resource_digests: RefCell::new(HashMap::new()),
+            loaded_sd_digests: RefCell::new(HashMap::new()),
             source: Box::new(source),
             in_memory_bodies: HashMap::new(),
             package_dirs: Vec::new(),
@@ -434,11 +471,7 @@ impl PackageContext {
     }
 
     pub(crate) fn is_local(&self, query: &str) -> bool {
-        let outcome = self
-            .by_url
-            .get(query)
-            .map(|entry| entry.local)
-            .unwrap_or(false);
+        let outcome = self.is_local_unobserved(query);
         if self.snapshot_dependency_capture_active() {
             self.observe_snapshot_dependency(
                 SnapshotDependencyQuery::IsLocal(query.to_string()),
@@ -448,21 +481,19 @@ impl PackageContext {
         outcome
     }
 
+    fn is_local_unobserved(&self, query: &str) -> bool {
+        self.by_url
+            .get(query)
+            .map(|entry| entry.local)
+            .unwrap_or(false)
+    }
+
     /// The owning npm package id for the resource resolved by `query`, mirroring
     /// Java's `PackageInformation.getId()`. Resolves by url first, then falls back
     /// to matching the resolved path (id/name lookups) to a `by_url` entry.
     /// `None` for local-dir resources or unresolved queries.
     pub(crate) fn package_id_for(&self, query: &str) -> Option<String> {
-        let outcome = if let Some(entry) = self.by_url.get(query) {
-            entry.package_id.clone()
-        } else {
-            self.resource_path(query).and_then(|path| {
-                self.by_url
-                    .values()
-                    .find(|entry| &entry.path == path)
-                    .and_then(|entry| entry.package_id.clone())
-            })
-        };
+        let outcome = self.package_id_for_unobserved(query);
         if self.snapshot_dependency_capture_active() {
             self.observe_snapshot_dependency(
                 SnapshotDependencyQuery::PackageId(query.to_string()),
@@ -472,14 +503,111 @@ impl PackageContext {
         outcome
     }
 
-    /// Fetch the memoized parsed resource for `query`, sharing the cached
-    /// `Rc<Value>`. Callers only read the raw resource (resolve its `url`, then
-    /// build a fresh converted copy), so handing back the `Rc` avoids the
-    /// per-hit deep clone the old `Value`-returning form paid on every fetch.
+    fn package_id_for_unobserved(&self, query: &str) -> Option<String> {
+        if let Some(entry) = self.by_url.get(query) {
+            entry.package_id.clone()
+        } else {
+            self.resource_path(query).and_then(|path| {
+                self.by_url
+                    .values()
+                    .find(|entry| &entry.path == path)
+                    .and_then(|entry| entry.package_id.clone())
+            })
+        }
+    }
+
+    /// Fetch the memoized raw parsed resource for non-walk callers. Snapshot
+    /// generation uses the typed resolve/load methods below so its manifest can
+    /// distinguish pre-load URL resolution from canonical loaded semantics.
     pub fn fetch(&self, query: &str) -> Option<Rc<Value>> {
-        let outcome = self.fetch_rc(query);
-        self.observe_snapshot_fetch(query, outcome.as_deref());
-        outcome
+        self.fetch_rc(query)
+    }
+
+    /// Resolve a raw StructureDefinition and record only the pre-load facts the
+    /// canonical walk observes before conversion: missing/present selection,
+    /// canonical URL, and version. The returned raw value is intentionally
+    /// opaque outside this crate and cannot authorize reuse by itself.
+    pub(crate) fn resolve_snapshot_structure_definition(
+        &self,
+        query: &str,
+    ) -> Option<ResolvedSnapshotStructureDefinition> {
+        self.resolve_snapshot_structure_definition_impl(query, true)
+    }
+
+    fn resolve_snapshot_structure_definition_impl(
+        &self,
+        query: &str,
+        observe: bool,
+    ) -> Option<ResolvedSnapshotStructureDefinition> {
+        let raw = self.fetch_rc(query);
+        if observe {
+            self.observe_snapshot_resolution(query, raw.as_deref());
+        }
+        let raw = raw?;
+        let url = raw
+            .get("url")
+            .and_then(Value::as_str)
+            .unwrap_or(query)
+            .to_string();
+        Some(ResolvedSnapshotStructureDefinition {
+            query: query.to_string(),
+            url,
+            raw,
+        })
+    }
+
+    /// Run the one canonical StructureDefinition load path. Local definitions
+    /// receive full current conversion; package definitions receive the
+    /// Publisher-compatible lenient read; successful package loads then receive
+    /// the same package fixups. Capture records only the post-load structural
+    /// projection (or a distinct load failure), never a raw-field blacklist.
+    pub(crate) fn load_snapshot_structure_definition(
+        &self,
+        resolved: &ResolvedSnapshotStructureDefinition,
+    ) -> anyhow::Result<Value> {
+        self.load_snapshot_structure_definition_impl(resolved, true)
+    }
+
+    fn load_snapshot_structure_definition_impl(
+        &self,
+        resolved: &ResolvedSnapshotStructureDefinition,
+        observe: bool,
+    ) -> anyhow::Result<Value> {
+        let local = if observe {
+            self.is_local(&resolved.url) || self.is_local(&resolved.query)
+        } else {
+            self.is_local_unobserved(&resolved.url) || self.is_local_unobserved(&resolved.query)
+        };
+        let converted = if local {
+            crate::sd_load::to_r5_internal(resolved.raw.as_ref())
+        } else {
+            Ok(crate::sd_load::lenient_r5_read_r4(resolved.raw.as_ref()))
+        };
+        let mut loaded = match converted {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                if observe {
+                    self.observe_snapshot_loaded(
+                        &resolved.query,
+                        SnapshotLoadedOutcome::LoadFailed,
+                    );
+                }
+                return Err(error);
+            }
+        };
+        let package_id = if observe {
+            self.package_id_for(&resolved.url)
+                .or_else(|| self.package_id_for(&resolved.query))
+        } else {
+            self.package_id_for_unobserved(&resolved.url)
+                .or_else(|| self.package_id_for_unobserved(&resolved.query))
+        };
+        crate::sd_load::fix_loaded_resource(&mut loaded, package_id.as_deref());
+        if observe && self.snapshot_dependency_capture_active() {
+            let digest = self.loaded_sd_digest(&resolved.query, &loaded);
+            self.observe_snapshot_loaded(&resolved.query, SnapshotLoadedOutcome::Loaded(digest));
+        }
+        Ok(loaded)
     }
 
     /// LAYER B (opt-in): resolve the `version` of the canonical `url` when it
@@ -617,13 +745,75 @@ impl PackageContext {
 
     /// Revalidate a prior manifest against this newly constructed context.
     /// No reads are added to an active capture while validating.
-    pub fn matches_snapshot_dependencies(&self, manifest: &SnapshotDependencyManifest) -> bool {
+    pub(crate) fn matches_snapshot_dependencies(
+        &self,
+        manifest: &SnapshotDependencyManifest,
+    ) -> bool {
         manifest.complete
-            && manifest.reads.iter().all(|(query, expected)| {
-                self.snapshot_dependency_outcome(query)
-                    .as_ref()
-                    .is_some_and(|actual| actual == expected)
-            })
+            && manifest
+                .reads
+                .iter()
+                .all(|(query, expected)| self.matches_snapshot_dependency(query, expected))
+    }
+
+    fn matches_snapshot_dependency(
+        &self,
+        query: &SnapshotDependencyQuery,
+        expected: &SnapshotDependencyOutcome,
+    ) -> bool {
+        match (query, expected) {
+            (
+                SnapshotDependencyQuery::ResolveStructureDefinition(query),
+                SnapshotDependencyOutcome::Resolution(expected),
+            ) => return self.matches_snapshot_resolution(query, expected.as_ref()),
+            (
+                SnapshotDependencyQuery::LoadStructureDefinition(query),
+                SnapshotDependencyOutcome::LoadedStructureDefinition(expected),
+            ) => return self.matches_snapshot_loaded(query, expected),
+            _ => {}
+        }
+        self.snapshot_dependency_outcome(query)
+            .as_ref()
+            .is_some_and(|actual| actual == expected)
+    }
+
+    fn matches_snapshot_resolution(
+        &self,
+        query: &str,
+        expected: Option<&SnapshotResolutionIdentity>,
+    ) -> bool {
+        let current_proof = self.snapshot_source_proof(query);
+        if let Some(expected) = expected {
+            if expected.source_proof.is_some() && current_proof.is_none() {
+                return false;
+            }
+            if expected.source_proof.is_some() && expected.source_proof == current_proof {
+                return true;
+            }
+            return self.fetch_rc(query).as_deref().is_some_and(|raw| {
+                let actual = self.snapshot_resolution_identity(query, raw);
+                actual.url == expected.url && actual.version == expected.version
+            });
+        }
+        self.fetch_rc(query).is_none()
+    }
+
+    fn matches_snapshot_loaded(&self, query: &str, expected: &SnapshotLoadedIdentity) -> bool {
+        let current_proof = self.snapshot_source_proof(query);
+        if expected.source_proof.is_some() && current_proof.is_none() {
+            return false;
+        }
+        if expected.source_proof.is_some() && expected.source_proof == current_proof {
+            return true;
+        }
+        let Some(resolved) = self.resolve_snapshot_structure_definition_impl(query, false) else {
+            return false;
+        };
+        let actual = match self.load_snapshot_structure_definition_impl(&resolved, false) {
+            Ok(loaded) => SnapshotLoadedOutcome::Loaded(self.loaded_sd_digest(query, &loaded)),
+            Err(_) => SnapshotLoadedOutcome::LoadFailed,
+        };
+        actual == expected.outcome
     }
 
     fn snapshot_dependency_outcome(
@@ -631,11 +821,8 @@ impl PackageContext {
         query: &SnapshotDependencyQuery,
     ) -> Option<SnapshotDependencyOutcome> {
         Some(match query {
-            SnapshotDependencyQuery::Fetch(query) => SnapshotDependencyOutcome::Resource(
-                self.fetch_rc(query)
-                    .as_deref()
-                    .map(|value| self.resource_digest(query, value)),
-            ),
+            SnapshotDependencyQuery::ResolveStructureDefinition(_)
+            | SnapshotDependencyQuery::LoadStructureDefinition(_) => return None,
             SnapshotDependencyQuery::IsLocal(query) => SnapshotDependencyOutcome::Bool(
                 self.by_url
                     .get(query)
@@ -715,39 +902,31 @@ impl PackageContext {
         trace.reads.insert(query, outcome);
     }
 
-    fn observe_snapshot_fetch(&self, query: &str, outcome: Option<&Value>) {
-        let mut capture = self.snapshot_dependencies.borrow_mut();
-        let Some(trace) = capture.as_mut() else {
-            return;
-        };
-        if !trace.complete {
-            return;
-        }
-        let dependency_query = SnapshotDependencyQuery::Fetch(query.to_string());
-        // PackageContext is immutable for the duration of one snapshot walk;
-        // the same query therefore cannot change result inside a capture. Avoid
-        // serializing and hashing a repeatedly fetched base/profile.
-        if trace.reads.contains_key(&dependency_query) {
+    fn observe_snapshot_resolution(&self, query: &str, outcome: Option<&Value>) {
+        let dependency_query =
+            SnapshotDependencyQuery::ResolveStructureDefinition(query.to_string());
+        let needs_identity = self
+            .snapshot_dependencies
+            .borrow()
+            .as_ref()
+            .is_some_and(|trace| trace.complete && !trace.reads.contains_key(&dependency_query));
+        if !needs_identity {
             return;
         }
-        let outcome = SnapshotDependencyOutcome::Resource(
-            outcome.map(|value| self.resource_digest(query, value)),
+        let outcome = SnapshotDependencyOutcome::Resolution(
+            outcome.map(|value| self.snapshot_resolution_identity(query, value)),
         );
-        let retained_approx_bytes =
-            snapshot_dependency_retained_approx_bytes(&dependency_query, &outcome);
-        if trace.reads.len() >= SNAPSHOT_DEPENDENCY_MAX_FACTS
-            || trace
-                .retained_approx_bytes
-                .saturating_add(retained_approx_bytes)
-                > SNAPSHOT_DEPENDENCY_MAX_RETAINED_BYTES
-        {
-            trace.complete = false;
-            trace.reads.clear();
-            trace.retained_approx_bytes = 0;
-            return;
-        }
-        trace.retained_approx_bytes += retained_approx_bytes;
-        trace.reads.insert(dependency_query, outcome);
+        self.observe_snapshot_dependency(dependency_query, outcome);
+    }
+
+    fn observe_snapshot_loaded(&self, query: &str, outcome: SnapshotLoadedOutcome) {
+        self.observe_snapshot_dependency(
+            SnapshotDependencyQuery::LoadStructureDefinition(query.to_string()),
+            SnapshotDependencyOutcome::LoadedStructureDefinition(SnapshotLoadedIdentity {
+                source_proof: self.snapshot_source_proof(query),
+                outcome,
+            }),
+        );
     }
 
     fn snapshot_dependency_capture_active(&self) -> bool {
@@ -757,24 +936,43 @@ impl PackageContext {
             .is_some_and(|trace| trace.complete)
     }
 
-    fn resource_digest(&self, query: &str, value: &Value) -> [u8; 32] {
+    fn loaded_sd_digest(&self, query: &str, value: &Value) -> [u8; 32] {
         let Some(path) = self.resource_path(query) else {
-            return value_digest(value);
+            return crate::sd_load::snapshot_dependency_digest(value);
         };
-        if let Some(digest) = self.resource_digests.borrow().get(path) {
+        if let Some(digest) = self.loaded_sd_digests.borrow().get(path) {
             return *digest;
         }
-        let digest = value_digest(value);
-        self.resource_digests
+        let digest = crate::sd_load::snapshot_dependency_digest(value);
+        self.loaded_sd_digests
             .borrow_mut()
             .insert(path.clone(), digest);
         digest
     }
-}
 
-fn value_digest(value: &Value) -> [u8; 32] {
-    let bytes = serde_json::to_vec(value).expect("serde_json::Value always serializes");
-    Sha256::digest(bytes).into()
+    fn snapshot_source_proof(&self, query: &str) -> Option<[u8; 32]> {
+        self.resource_path(query)
+            .and_then(|path| self.source.immutable_content_identity(path))
+    }
+
+    fn snapshot_resolution_identity(
+        &self,
+        query: &str,
+        value: &Value,
+    ) -> SnapshotResolutionIdentity {
+        SnapshotResolutionIdentity {
+            source_proof: self.snapshot_source_proof(query),
+            url: value
+                .get("url")
+                .and_then(Value::as_str)
+                .unwrap_or(query)
+                .to_string(),
+            version: value
+                .get("version")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+        }
+    }
 }
 
 fn snapshot_dependency_retained_approx_bytes(
@@ -782,7 +980,8 @@ fn snapshot_dependency_retained_approx_bytes(
     outcome: &SnapshotDependencyOutcome,
 ) -> usize {
     let query_bytes = match query {
-        SnapshotDependencyQuery::Fetch(query)
+        SnapshotDependencyQuery::ResolveStructureDefinition(query)
+        | SnapshotDependencyQuery::LoadStructureDefinition(query)
         | SnapshotDependencyQuery::IsLocal(query)
         | SnapshotDependencyQuery::PackageId(query) => query.len(),
         SnapshotDependencyQuery::CanonicalVersion { url, resource_type } => {
@@ -790,8 +989,11 @@ fn snapshot_dependency_retained_approx_bytes(
         }
     };
     let outcome_bytes = match outcome {
-        SnapshotDependencyOutcome::Resource(Some(_)) => 32,
-        SnapshotDependencyOutcome::Resource(None) | SnapshotDependencyOutcome::Bool(_) => 1,
+        SnapshotDependencyOutcome::Resolution(Some(identity)) => 34usize
+            .saturating_add(identity.url.len())
+            .saturating_add(identity.version.as_ref().map_or(0, String::len)),
+        SnapshotDependencyOutcome::Resolution(None) | SnapshotDependencyOutcome::Bool(_) => 1,
+        SnapshotDependencyOutcome::LoadedStructureDefinition(_) => 34,
         SnapshotDependencyOutcome::Text(value) => value
             .as_ref()
             .map_or(1, |value| value.len().saturating_add(1)),
@@ -846,11 +1048,119 @@ pub(crate) fn version_parts(version: &str) -> Vec<VersionPart> {
 mod dependency_manifest_tests {
     use super::*;
 
+    #[derive(Clone, Debug)]
+    struct ImmutableTestSource {
+        inner: package_store::BundleSource,
+        identities: BTreeMap<PathBuf, [u8; 32]>,
+    }
+
+    impl package_store::PackageSource for ImmutableTestSource {
+        fn read(&self, path: &Path) -> std::io::Result<Vec<u8>> {
+            self.inner.read(path)
+        }
+
+        fn immutable_content_identity(&self, path: &Path) -> Option<[u8; 32]> {
+            self.identities.get(path).copied()
+        }
+
+        fn read_dir(&self, path: &Path) -> std::io::Result<Vec<package_store::DirEntry>> {
+            self.inner.read_dir(path)
+        }
+
+        fn exists(&self, path: &Path) -> bool {
+            self.inner.exists(path)
+        }
+
+        fn is_file(&self, path: &Path) -> bool {
+            self.inner.is_file(path)
+        }
+
+        fn is_dir(&self, path: &Path) -> bool {
+            self.inner.is_dir(path)
+        }
+
+        fn fork_read_cache(&self) -> std::io::Result<Box<dyn package_store::PackageSource>> {
+            Ok(Box::new(Self {
+                inner: self.inner.fork_read_cache(),
+                identities: self.identities.clone(),
+            }))
+        }
+    }
+
+    fn prepared_package_context(base_min: u64) -> (ImmutableTestSource, PackageContext) {
+        prepared_package_context_with_base(base(base_min))
+    }
+
+    fn prepared_package_context_with_base(base: Value) -> (ImmutableTestSource, PackageContext) {
+        use sha2::{Digest, Sha256};
+
+        let package_label = "demo.base#1.0.0";
+        let base_bytes = serde_json::to_vec(&base).unwrap();
+        let prepared = package_store::PreparedPackage::prepare(
+            package_label,
+            BTreeMap::from([
+                (
+                    "package.json".to_string(),
+                    br#"{"name":"demo.base","version":"1.0.0"}"#.to_vec(),
+                ),
+                (
+                    ".index.json".to_string(),
+                    serde_json::to_vec(&serde_json::json!({
+                        "index-version": 2,
+                        "files": [{
+                            "filename":"StructureDefinition-LocalBase.json",
+                            "resourceType":"StructureDefinition",
+                            "id":"LocalBase",
+                            "url":"https://example.org/StructureDefinition/LocalBase",
+                            "version":"1.0.0",
+                            "kind":"resource",
+                            "type":"Patient",
+                            "derivation":"constraint"
+                        }]
+                    }))
+                    .unwrap(),
+                ),
+                (
+                    "StructureDefinition-LocalBase.json".to_string(),
+                    base_bytes.clone(),
+                ),
+            ]),
+        )
+        .unwrap();
+        let encoded = prepared.encode();
+        let decoded =
+            package_store::PreparedPackage::decode_expected(&encoded, &prepared.key).unwrap();
+        let mut source = package_store::BundleSource::new();
+        decoded.mount_into(&mut source);
+        let root = source.cache_root().to_path_buf();
+        let base_path = root
+            .join(package_label)
+            .join("package/StructureDefinition-LocalBase.json");
+        let source = ImmutableTestSource {
+            inner: source,
+            identities: BTreeMap::from([(base_path, Sha256::digest(&base_bytes).into())]),
+        };
+        let observer = source.clone();
+        let context = PackageContext::new_with(source, root, &[package_label.to_string()]).unwrap();
+        (observer, context)
+    }
+
     fn context(resources: Vec<(PathBuf, Value)>) -> PackageContext {
         let cache = tempfile::tempdir().unwrap();
         let mut context = PackageContext::new(cache.path(), &[]).unwrap();
         context.load_local_resources(resources);
         context
+    }
+
+    fn generate_with_manifest(
+        input: Value,
+        context: &PackageContext,
+    ) -> anyhow::Result<(Value, SnapshotDependencyManifest)> {
+        let prepared = crate::prepare_snapshot_derivation(input, Default::default())?;
+        context.begin_snapshot_dependency_capture();
+        let generated = crate::walk::generate_prepared_snapshot(prepared, context);
+        let manifest = context.finish_snapshot_dependency_capture();
+        generated.map(|generated| (generated, manifest))
     }
 
     fn base(min: u64) -> Value {
@@ -910,9 +1220,7 @@ mod dependency_manifest_tests {
             (PathBuf::from("a-base.json"), base(0)),
             (PathBuf::from("b-derived.json"), input.clone()),
         ]);
-        let (_, manifest) =
-            crate::generate_snapshot_with_manifest(input.clone(), &original, Default::default())
-                .unwrap();
+        let (_, manifest) = generate_with_manifest(input.clone(), &original).unwrap();
         assert!(manifest.is_complete());
         assert!(manifest.fact_count() > 0);
         assert!(original.matches_snapshot_dependencies(&manifest));
@@ -928,6 +1236,67 @@ mod dependency_manifest_tests {
             (PathBuf::from("b-derived.json"), input.clone()),
         ]);
         assert!(!changed_base.matches_snapshot_dependencies(&manifest));
+
+        let mut metadata_only_base = base(0);
+        metadata_only_base["title"] = Value::String("Current title".into());
+        metadata_only_base["status"] = Value::String("active".into());
+        metadata_only_base["description"] = Value::String("Current description".into());
+        metadata_only_base["publisher"] = Value::String("Current publisher".into());
+        let metadata_only = context(vec![
+            (PathBuf::from("a-base.json"), metadata_only_base),
+            (PathBuf::from("b-derived.json"), input.clone()),
+        ]);
+        assert!(
+            metadata_only.matches_snapshot_dependencies(&manifest),
+            "top-level envelope metadata is not a snapshot input"
+        );
+
+        let mut contact_changed_base = base(0);
+        contact_changed_base["contact"] = serde_json::json!([{
+            "name":"Changed contact",
+            "extension":[{"url":"https://example.org/unsupported","valueFoo":true}]
+        }]);
+        let contact_changed = context(vec![
+            (PathBuf::from("a-base.json"), contact_changed_base),
+            (PathBuf::from("b-derived.json"), input.clone()),
+        ]);
+        assert!(
+            contact_changed.matches_snapshot_dependencies(&manifest),
+            "successfully loaded metadata outside the structural projection is not a snapshot input"
+        );
+
+        let mut malformed_r4_base = base(0);
+        malformed_r4_base["fhirVersion"] = Value::String("4.0.1".into());
+        malformed_r4_base["contact"] = serde_json::json!([{
+            "name":"Malformed contact",
+            "extension":[{"url":"https://example.org/unsupported","valueFoo":true}]
+        }]);
+        let mut r4_input = input.clone();
+        r4_input["fhirVersion"] = Value::String("4.0.1".into());
+        let mut valid_r4_base = base(0);
+        valid_r4_base["fhirVersion"] = Value::String("4.0.1".into());
+        let valid_r4_context = context(vec![
+            (PathBuf::from("a-base.json"), valid_r4_base),
+            (PathBuf::from("b-derived.json"), r4_input.clone()),
+        ]);
+        let (_, valid_r4_manifest) = generate_with_manifest(r4_input.clone(), &valid_r4_context)
+            .expect("valid local R4 base loads canonically");
+        let malformed_context = context(vec![
+            (PathBuf::from("a-base.json"), malformed_r4_base),
+            (PathBuf::from("b-derived.json"), r4_input.clone()),
+        ]);
+        assert!(
+            !malformed_context.matches_snapshot_dependencies(&valid_r4_manifest),
+            "a prior successful load cannot be reused across a current conversion failure"
+        );
+        let error = crate::generate_snapshot(r4_input, &malformed_context, Default::default())
+            .expect_err("canonical fallback must still execute dependency conversion");
+        assert!(
+            error
+                .to_string()
+                .contains("unimplemented value[x] datatype converter: Foo"),
+            "{error:#}"
+        );
 
         let unrelated = context(vec![
             (PathBuf::from("a-base.json"), base(0)),
@@ -945,10 +1314,67 @@ mod dependency_manifest_tests {
     }
 
     #[test]
+    fn authenticated_member_identity_revalidates_without_reading_package_body() {
+        let input = derived();
+        let (source, original) = prepared_package_context(0);
+        let (_, manifest) = generate_with_manifest(input, &original).unwrap();
+        let base_query = SnapshotDependencyQuery::LoadStructureDefinition(
+            "https://example.org/StructureDefinition/LocalBase".into(),
+        );
+        assert!(matches!(
+            manifest.reads.get(&base_query),
+            Some(SnapshotDependencyOutcome::LoadedStructureDefinition(
+                SnapshotLoadedIdentity {
+                    source_proof: Some(_),
+                    outcome: SnapshotLoadedOutcome::Loaded(_)
+                }
+            ))
+        ));
+
+        let identical_source = ImmutableTestSource {
+            inner: source.inner.fork_read_cache(),
+            identities: source.identities.clone(),
+        };
+        let observer = identical_source.inner.clone();
+        let root = identical_source.inner.cache_root().to_path_buf();
+        let identical =
+            PackageContext::new_with(identical_source, root, &["demo.base#1.0.0".into()]).unwrap();
+        let before = observer.compression_metrics();
+        assert!(identical.matches_snapshot_dependencies(&manifest));
+        let after = observer.compression_metrics();
+        assert_eq!(after.chunks_inflated, before.chunks_inflated);
+        assert_eq!(after.raw_inflated_bytes, before.raw_inflated_bytes);
+
+        // Losing the closed-source proof never falls through to a comparison
+        // against the differently-domained parsed-value digest.
+        let unauthenticated = source.inner.fork_read_cache();
+        let root = unauthenticated.cache_root().to_path_buf();
+        let unauthenticated =
+            PackageContext::new_with(unauthenticated, root, &["demo.base#1.0.0".into()]).unwrap();
+        assert!(!unauthenticated.matches_snapshot_dependencies(&manifest));
+
+        let mut metadata_only_base = base(0);
+        metadata_only_base["title"] = Value::String("Current title".into());
+        metadata_only_base["status"] = Value::String("active".into());
+        metadata_only_base["description"] = Value::String("Current description".into());
+        metadata_only_base["publisher"] = Value::String("Current publisher".into());
+        let (_, changed_metadata) = prepared_package_context_with_base(metadata_only_base);
+        assert!(
+            changed_metadata.matches_snapshot_dependencies(&manifest),
+            "a changed authenticated carrier must run the loader and may prove equal loaded input"
+        );
+
+        let (_, changed_structure) = prepared_package_context(1);
+        assert!(!changed_structure.matches_snapshot_dependencies(&manifest));
+    }
+
+    #[test]
     fn negative_and_precedence_results_are_exact_manifest_facts() {
         let empty = context(Vec::new());
         empty.begin_snapshot_dependency_capture();
-        assert!(empty.fetch("FutureProfile").is_none());
+        assert!(empty
+            .resolve_snapshot_structure_definition("FutureProfile")
+            .is_none());
         let missing = empty.finish_snapshot_dependency_capture();
         assert!(empty.matches_snapshot_dependencies(&missing));
 
@@ -971,8 +1397,8 @@ mod dependency_manifest_tests {
         original.begin_snapshot_dependency_capture();
         assert_eq!(
             original
-                .fetch("LocalBase")
-                .and_then(|body| body["snapshot"]["element"][0]["min"].as_u64()),
+                .resolve_snapshot_structure_definition("LocalBase")
+                .and_then(|resolved| resolved.raw["snapshot"]["element"][0]["min"].as_u64()),
             Some(1)
         );
         let winner = original.finish_snapshot_dependency_capture();
@@ -989,7 +1415,9 @@ mod dependency_manifest_tests {
         let context = context(Vec::new());
         context.begin_snapshot_dependency_capture();
         for index in 0..=SNAPSHOT_DEPENDENCY_MAX_FACTS {
-            assert!(context.fetch(&format!("missing-{index}")).is_none());
+            assert!(context
+                .resolve_snapshot_structure_definition(&format!("missing-{index}"))
+                .is_none());
         }
         let manifest = context.finish_snapshot_dependency_capture();
         assert!(!manifest.is_complete());
@@ -1006,7 +1434,7 @@ mod dependency_manifest_tests {
         ]);
         crate::generate_snapshot(input, &context, Default::default()).unwrap();
         assert!(context.snapshot_dependencies.borrow().is_none());
-        assert!(context.resource_digests.borrow().is_empty());
+        assert!(context.loaded_sd_digests.borrow().is_empty());
     }
 
     fn package_context(base_min: u64) -> (tempfile::TempDir, PackageContext) {
@@ -1050,9 +1478,7 @@ mod dependency_manifest_tests {
     fn package_backed_base_origin_and_body_are_revalidated() {
         let input = derived();
         let (_original_cache, original) = package_context(0);
-        let (_, manifest) =
-            crate::generate_snapshot_with_manifest(input.clone(), &original, Default::default())
-                .unwrap();
+        let (_, manifest) = generate_with_manifest(input.clone(), &original).unwrap();
         let url = "https://example.org/StructureDefinition/LocalBase";
         assert_eq!(
             manifest
@@ -1071,5 +1497,30 @@ mod dependency_manifest_tests {
         assert!(identical.matches_snapshot_dependencies(&manifest));
         let (_changed_cache, changed) = package_context(1);
         assert!(!changed.matches_snapshot_dependencies(&manifest));
+    }
+
+    #[test]
+    fn derivation_recomposition_cannot_bypass_package_revalidation() {
+        let input = derived();
+        let (_original_cache, original) = package_context(0);
+        let prepared = crate::prepare_snapshot_derivation(input.clone(), Default::default())
+            .expect("prepare original derivation");
+        let (_, derivation) = crate::generate_prepared_snapshot_derivation(prepared, &original)
+            .expect("generate original derivation");
+
+        let (_changed_cache, changed) = package_context(1);
+        let mut current = crate::prepare_snapshot_derivation(input.clone(), Default::default())
+            .expect("prepare current input");
+        assert!(derivation
+            .try_recompose(&mut current, &changed)
+            .expect("dependency mismatch is a cache miss")
+            .is_none());
+
+        // A failed admission attempt leaves the opaque current envelope intact,
+        // so canonical retry or a matching bounded generation remains possible.
+        assert!(derivation
+            .try_recompose(&mut current, &original)
+            .expect("matching dependencies may recompose")
+            .is_some());
     }
 }

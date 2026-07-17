@@ -13,13 +13,17 @@ pub(crate) mod convert;
 pub mod layer_b;
 mod merge;
 mod package;
+mod sd_load;
 mod text;
 mod walk;
 
 pub use cli::{main_cli, SnapshotOptions};
 pub use layer_b::{apply_post as apply_layer_b_post, LayerBOptions};
-pub use package::{PackageContext, SnapshotDependencyManifest};
-pub use walk::{disable_trace, enable_trace};
+pub use package::PackageContext;
+pub use walk::{
+    disable_trace, enable_trace, prepare_snapshot_derivation, SnapshotDerivation,
+    SnapshotDerivationInput, SnapshotDerivationRetention,
+};
 
 // Re-export the merge helpers at crate root so `walk/` can reach them via
 // `use crate::{...}` without per-item import churn. `text` items are referenced
@@ -44,19 +48,21 @@ pub fn generate_snapshot(
     walk::generate_snapshot(derived, ctx, options)
 }
 
-/// Generate one snapshot and return the exact PackageContext reads that can
-/// authorize reuse in a later, freshly constructed context. Capture failure or
-/// overflow never changes canonical generation; it returns an incomplete
-/// manifest that always fails revalidation.
-pub fn generate_snapshot_with_manifest(
-    derived: Value,
+/// Generate from an already converted and structurally projected input. This
+/// is the same walk used by [`generate_snapshot`]; it exists so SiteEngine can
+/// compare the input identity and avoid converting a cache miss twice.
+pub fn generate_prepared_snapshot_derivation(
+    input: SnapshotDerivationInput,
     ctx: &PackageContext,
-    options: SnapshotOptions,
-) -> anyhow::Result<(Value, SnapshotDependencyManifest)> {
+) -> anyhow::Result<(Value, SnapshotDerivation)> {
+    let input_sha256 = input.identity_sha256();
     ctx.begin_snapshot_dependency_capture();
-    let generated = walk::generate_snapshot(derived, ctx, options);
+    let generated = walk::generate_prepared_snapshot(input, ctx);
     let manifest = ctx.finish_snapshot_dependency_capture();
-    generated.map(|generated| (generated, manifest))
+    generated.and_then(|generated| {
+        let derivation = SnapshotDerivation::from_completed(input_sha256, manifest, &generated)?;
+        Ok((generated, derivation))
+    })
 }
 
 /// OPT-IN: generate a snapshot (Layer A, unchanged) and then apply the enabled

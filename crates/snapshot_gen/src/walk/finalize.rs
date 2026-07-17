@@ -267,10 +267,6 @@ pub(crate) fn finalize(
         ctx.add_message(Severity::Error, &path, text);
     }
 
-    // Move the built snapshot onto the derived SD.
-    let obj = derived
-        .as_object_mut()
-        .ok_or_else(|| anyhow::anyhow!("derived is not an object"))?;
     let mut snapshot = serde_json::Map::new();
     snapshot.insert(
         "element".to_string(),
@@ -290,9 +286,22 @@ pub(crate) fn finalize(
         }
     }
 
+    install_snapshot(derived, Value::Object(snapshot))
+}
+
+/// Install a completed snapshot onto the current StructureDefinition envelope.
+///
+/// Snapshot generation deliberately operates on a structural projection of the
+/// definition. Both a freshly generated snapshot and a retained snapshot pass
+/// through this one function so metadata-only edits retain the exact current
+/// envelope and the Publisher-compatible key ordering remains identical.
+pub(crate) fn install_snapshot(derived: &mut Value, snapshot: Value) -> anyhow::Result<()> {
+    let obj = derived
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("derived is not an object"))?;
     // Reorder so snapshot follows differential like the goldens.
     let differential = obj.remove("differential");
-    obj.insert("snapshot".to_string(), Value::Object(snapshot));
+    obj.insert("snapshot".to_string(), snapshot);
     if let Some(differential) = differential {
         obj.insert("differential".to_string(), differential);
     }

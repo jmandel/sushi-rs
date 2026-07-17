@@ -277,6 +277,48 @@ impl BundleLayer {
             LayerFiles::Compressed { names, .. } => Box::new(names.keys()),
         }
     }
+
+    fn append_file_children(
+        &self,
+        path: &Path,
+        seen: &mut std::collections::BTreeSet<String>,
+        out: &mut Vec<DirEntry>,
+    ) {
+        for fpath in self.paths() {
+            if fpath.parent() != Some(path) {
+                continue;
+            }
+            if let Some(name) = fpath.file_name().and_then(|name| name.to_str()) {
+                if seen.insert(name.to_string()) {
+                    out.push(DirEntry {
+                        file_name: name.to_string(),
+                        is_file: true,
+                    });
+                }
+            }
+        }
+    }
+
+    fn append_directory_children(
+        &self,
+        path: &Path,
+        seen: &mut std::collections::BTreeSet<String>,
+        out: &mut Vec<DirEntry>,
+    ) {
+        for dpath in self.dirs.iter() {
+            if dpath.parent() != Some(path) {
+                continue;
+            }
+            if let Some(name) = dpath.file_name().and_then(|name| name.to_str()) {
+                if seen.insert(name.to_string()) {
+                    out.push(DirEntry {
+                        file_name: name.to_string(),
+                        is_file: false,
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn not_found() -> io::Error {
@@ -454,36 +496,25 @@ impl PackageSource for BundleSource {
         }
         let mut seen = std::collections::BTreeSet::new();
         let mut out = Vec::new();
-        // Direct file children.
-        for layer in self.layers.values() {
-            for fpath in layer.paths() {
-                if fpath.parent() != Some(path) {
-                    continue;
-                }
-                if let Some(name) = fpath.file_name().and_then(|n| n.to_str()) {
-                    if seen.insert(name.to_string()) {
-                        out.push(DirEntry {
-                            file_name: name.to_string(),
-                            is_file: true,
-                        });
-                    }
-                }
+        if path == self.root {
+            // The root is the only directory whose direct children can come
+            // from several mounted package layers. Preserve the historical
+            // files-before-directories order across that complete union.
+            for layer in self.layers.values() {
+                layer.append_file_children(path, &mut seen, &mut out);
             }
-        }
-        // Direct subdirectory children.
-        for layer in self.layers.values() {
-            for dpath in layer.dirs.iter() {
-                if dpath.parent() == Some(path) {
-                    if let Some(name) = dpath.file_name().and_then(|n| n.to_str()) {
-                        if seen.insert(name.to_string()) {
-                            out.push(DirEntry {
-                                file_name: name.to_string(),
-                                is_file: false,
-                            });
-                        }
-                    }
-                }
+            for layer in self.layers.values() {
+                layer.append_directory_children(path, &mut seen, &mut out);
             }
+        } else {
+            // Every non-root path is owned by its first component below root,
+            // exactly like read/exists/is_dir. Avoid scanning unrelated package
+            // layers for each package-specific directory listing.
+            let layer = self
+                .layer_for_path(path)
+                .expect("is_dir already proved a mounted bundle layer");
+            layer.append_file_children(path, &mut seen, &mut out);
+            layer.append_directory_children(path, &mut seen, &mut out);
         }
         Ok(out)
     }
@@ -493,6 +524,11 @@ impl PackageSource for BundleSource {
             || self
                 .layer_for_path(path)
                 .is_some_and(|layer| layer.contains(path))
+    }
+
+    fn is_file(&self, path: &Path) -> bool {
+        self.layer_for_path(path)
+            .is_some_and(|layer| layer.contains(path))
     }
 
     fn is_dir(&self, path: &Path) -> bool {
@@ -523,6 +559,31 @@ mod tests {
     use flate2::{write::GzEncoder, Compression};
     use std::io::Write;
     use tar::{Builder, Header};
+
+    fn entry_shape(entries: Vec<DirEntry>) -> Vec<(String, bool)> {
+        entries
+            .into_iter()
+            .map(|entry| (entry.file_name, entry.is_file))
+            .collect()
+    }
+
+    fn legacy_read_dir(source: &BundleSource, path: &Path) -> io::Result<Vec<DirEntry>> {
+        if !source.is_dir(path) {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no such directory in bundle",
+            ));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        let mut out = Vec::new();
+        for layer in source.layers.values() {
+            layer.append_file_children(path, &mut seen, &mut out);
+        }
+        for layer in source.layers.values() {
+            layer.append_directory_children(path, &mut seen, &mut out);
+        }
+        Ok(out)
+    }
 
     fn tgz(files: &[(&str, &[u8])]) -> Vec<u8> {
         let encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -720,6 +781,135 @@ mod tests {
     }
 
     #[test]
+    fn read_dir_routes_non_root_paths_without_changing_legacy_results() {
+        let empty = BundleSource::new();
+        assert!(empty.read_dir(empty.cache_root()).unwrap().is_empty());
+
+        let mut source = BundleSource::new();
+        source.mount_package(
+            "a#1",
+            [
+                ("alpha.json", b"alpha".to_vec()),
+                ("nested/one.json", b"one".to_vec()),
+                ("same", b"file wins".to_vec()),
+                ("same/deep.json", b"hidden directory entry".to_vec()),
+            ],
+        );
+        source.mount_package(
+            "b#1",
+            [
+                ("beta.json", b"beta".to_vec()),
+                ("nested/two.json", b"two".to_vec()),
+            ],
+        );
+
+        let root = source.cache_root().to_path_buf();
+        let a = root.join("a#1");
+        let a_package = a.join("package");
+        let a_nested = a_package.join("nested");
+        let b = root.join("b#1");
+        let b_package = b.join("package");
+        let b_nested = b_package.join("nested");
+        for path in [&root, &a, &a_package, &a_nested, &b, &b_package, &b_nested] {
+            assert_eq!(
+                entry_shape(source.read_dir(path).unwrap()),
+                entry_shape(legacy_read_dir(&source, path).unwrap()),
+                "optimized listing differs at {}",
+                path.display()
+            );
+        }
+        assert_eq!(
+            entry_shape(source.read_dir(&root).unwrap()),
+            vec![("a#1".into(), false), ("b#1".into(), false)]
+        );
+        assert_eq!(
+            entry_shape(source.read_dir(&a_package).unwrap()),
+            vec![
+                ("alpha.json".into(), true),
+                ("same".into(), true),
+                ("nested".into(), false),
+            ]
+        );
+        assert_eq!(
+            entry_shape(source.read_dir(&b_package).unwrap()),
+            vec![("beta.json".into(), true), ("nested".into(), false)]
+        );
+        for missing in [
+            root.join("absent#1"),
+            a_package.join("alpha.json"),
+            a_package.join("absent"),
+            PathBuf::from("/__outside_bundle__"),
+        ] {
+            assert_eq!(
+                source.read_dir(&missing).unwrap_err().kind(),
+                io::ErrorKind::NotFound
+            );
+        }
+    }
+
+    #[test]
+    fn read_dir_preserves_clone_and_same_label_replacement_namespaces() {
+        let mut source = BundleSource::new();
+        source.mount_package("p#1", [("old/path.json", b"old".to_vec())]);
+        let prior = source.clone();
+        source.mount_package("p#1", [("new/path.json", b"new".to_vec())]);
+
+        let prior_package = prior.cache_root().join("p#1/package");
+        let current_package = source.cache_root().join("p#1/package");
+        assert_eq!(
+            entry_shape(prior.read_dir(&prior_package).unwrap()),
+            vec![("old".into(), false)]
+        );
+        assert_eq!(
+            entry_shape(source.read_dir(&current_package).unwrap()),
+            vec![("new".into(), false)]
+        );
+        assert_eq!(
+            entry_shape(source.read_dir(source.cache_root()).unwrap()),
+            vec![("p#1".into(), false)]
+        );
+    }
+
+    #[test]
+    fn compressed_and_forked_read_dir_are_equivalent_and_non_inflating() {
+        let prepared = crate::PreparedPackage::prepare(
+            "p#1",
+            BTreeMap::from([
+                (
+                    "package.json".into(),
+                    br#"{"name":"p","version":"1"}"#.to_vec(),
+                ),
+                ("first.txt".into(), b"first".to_vec()),
+                ("nested/second.txt".into(), b"second".to_vec()),
+            ]),
+        )
+        .unwrap();
+        let decoded =
+            crate::PreparedPackage::decode_expected(&prepared.encode(), &prepared.key).unwrap();
+        let mut source = BundleSource::new();
+        decoded.mount_into(&mut source);
+        source.mount_package("owned#1", [("other.txt", b"other".to_vec())]);
+        let forked = source.fork_read_cache();
+        let before = source.compression_metrics();
+        let forked_before = forked.compression_metrics();
+
+        let paths = [
+            source.cache_root().to_path_buf(),
+            source.cache_root().join("p#1"),
+            source.cache_root().join("p#1/package"),
+            source.cache_root().join("p#1/package/nested"),
+            source.cache_root().join("owned#1/package"),
+        ];
+        for path in &paths {
+            let expected = entry_shape(legacy_read_dir(&source, path).unwrap());
+            assert_eq!(entry_shape(source.read_dir(path).unwrap()), expected);
+            assert_eq!(entry_shape(forked.read_dir(path).unwrap()), expected);
+        }
+        assert_eq!(source.compression_metrics(), before);
+        assert_eq!(forked.compression_metrics(), forked_before);
+    }
+
+    #[test]
     fn clones_share_immutable_layers_and_diverge_by_appending() {
         let mut original = BundleSource::new();
         original.mount_package("a#1", [("a.txt", b"a".to_vec())]);
@@ -766,12 +956,8 @@ mod tests {
             LayerFiles::Compressed { names, .. } => assert_eq!(names.len(), 4),
             LayerFiles::Owned(_) => panic!("prepared mount unexpectedly materialized files"),
         }
-        assert_eq!(
-            source
-                .read(&source.cache_root().join("p#1/package/second.txt"))
-                .unwrap(),
-            b"second"
-        );
+        let second = source.cache_root().join("p#1/package/second.txt");
+        assert_eq!(source.read(&second).unwrap(), b"second");
     }
 
     #[test]
