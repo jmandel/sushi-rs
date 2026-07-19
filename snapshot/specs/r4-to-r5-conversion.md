@@ -181,6 +181,12 @@ sidecars (e.g. `contextInvariant`/`_contextInvariant`
 `R5/formats/JsonParser.java:68293-68306`; `alias`/`_alias` 37525-37538). Value
 field/array always precedes its `_field` sidecar.
 
+The sidecar-only form is valid only for a known primitive choice. Complex
+datatypes do not use `_field` JSON, and Java's typed parser rejects unknown
+choice suffixes; the Rust converter therefore fails loudly for inputs such as
+`_fixedTiming` or `_valueUnknown` instead of treating them as primitive
+metadata.
+
 ### 3.4 id / extension on primitives across conversion
 
 `copyElement` (§2) copies the primitive's `id` and its `extension[]` onto the R5
@@ -611,6 +617,9 @@ behaviors. Corrections/clarifications discovered here:
      system, value, period, assigner (Reference).
    - **Reference** (`Reference40_50.java`): reference, type, identifier, display.
    - **Period** (`Period40_50.java:11-13`): start, end.
+   - **Expression** (`metadata40_50/Expression40_50.java:10-20`): description,
+     name (R4 id to R5 code; identical JSON primitive representation), language,
+     expression, reference.
    - **Quantity** (+Duration/Age/Count/Distance/MoneyQuantity/SimpleQuantity, which
      delegate to `Quantity40_50.copyQuantity`; `Quantity40_50.java:16-21`): value,
      comparator, unit, system, code.
@@ -621,7 +630,8 @@ behaviors. Corrections/clarifications discovered here:
      (convertType — same fail-loud dispatch).
    Any datatype NOT in this set returns `Err("unimplemented value[x] datatype
    converter: <Name>")` — no silent passthrough. None of the 338 smoke fixtures
-   needed anything beyond the above.
+   needed anything beyond the original set; SDC 4.0.0 subsequently required the
+   audited Expression converter above.
 
 5. **Nested/contained resources.** `copyDomainResource` recurses `contained[]`
    through `convertResource` with `failFast=true` (throws on unknown types). SD

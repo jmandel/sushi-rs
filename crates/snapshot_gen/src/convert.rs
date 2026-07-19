@@ -223,11 +223,35 @@ fn convert_value_choice(
             }
             let under = format!("_{k}");
             if let Some(sc) = src.get(&under) {
-                dst.insert(under, sc.clone());
+                dst.insert(under, convert_primitive_sidecar(sc)?);
             }
         }
     }
+    // A primitive choice may have extensions but no value, so its JSON has
+    // only `_baseType`. Java still converts that primitive's Element envelope.
+    for (k, v) in src {
+        let Some(choice_key) = k.strip_prefix('_') else {
+            continue;
+        };
+        if src.contains_key(choice_key) {
+            continue;
+        }
+        let Some(suffix) = choice_suffix(choice_key, base) else {
+            continue;
+        };
+        // Only FHIR primitives have the `_field` JSON representation. Java's
+        // typed parser cannot construct a sidecar-only complex or unknown
+        // choice, so accepting one here would silently diverge from it.
+        if !is_primitive_type(suffix) {
+            bail!("unimplemented value[x] datatype converter: {suffix}");
+        }
+        dst.insert(k.clone(), convert_primitive_sidecar(v)?);
+    }
     Ok(())
+}
+
+fn convert_primitive_sidecar(v: &Value) -> Result<Value> {
+    Ok(Value::Object(base_copy(as_obj(v), &[])?))
 }
 
 /// If `key` is `<base><Suffix>` with an uppercase-led suffix, return the suffix.
@@ -255,6 +279,7 @@ fn convert_datatype(suffix: &str, v: &Value) -> Result<Value> {
         "Identifier" => conv_identifier(v),
         "Reference" => conv_reference(v),
         "Period" => conv_period(v),
+        "Expression" => conv_expression(v),
         // Duration/Age/Count/Distance/MoneyQuantity/SimpleQuantity share the
         // Quantity copy (Duration40_50 delegates to Quantity40_50.copyQuantity).
         "Quantity" | "Duration" | "Age" | "Count" | "Distance" | "MoneyQuantity"
@@ -289,6 +314,19 @@ fn conv_period(v: &Value) -> Result<Value> {
     let mut o = base_copy(src, &[])?;
     prim_field(src, &mut o, "start");
     prim_field(src, &mut o, "end");
+    Ok(Value::Object(o))
+}
+
+/// `Expression40_50.convertExpression`: the R4 and R5 shapes are identical
+/// except that R4 `name` is an id and R5 `name` is a code. Both serialize as
+/// the same JSON primitive, so conversion only needs the ordinary primitive
+/// blank-value and sidecar rules while preserving the R5 serializer order.
+fn conv_expression(v: &Value) -> Result<Value> {
+    let src = as_obj(v);
+    let mut o = base_copy(src, &[])?;
+    for k in ["description", "name", "language", "expression", "reference"] {
+        prim_field(src, &mut o, k);
+    }
     Ok(Value::Object(o))
 }
 
@@ -788,5 +826,122 @@ mod tests {
         });
         let err = r4_sd_to_r5(&sd).unwrap_err();
         assert!(err.to_string().contains("Timing"), "{err}");
+    }
+
+    #[test]
+    fn expression_choice_converts_envelope_fields_and_primitive_sidecars() {
+        let expression = convert_datatype(
+            "Expression",
+            &json!({
+                "id": "expression-id",
+                "extension": [{"url": "http://example.org/flag", "valueBoolean": true}],
+                "description": " ",
+                "_description": {"id": "description-sidecar"},
+                "name": "initial",
+                "language": "text/fhirpath",
+                "expression": "%patient.birthDate",
+                "reference": "Library/example"
+            }),
+        )
+        .unwrap();
+        assert_eq!(
+            expression,
+            json!({
+                "id": "expression-id",
+                "extension": [{"url": "http://example.org/flag", "valueBoolean": true}],
+                "_description": {"id": "description-sidecar"},
+                "name": "initial",
+                "language": "text/fhirpath",
+                "expression": "%patient.birthDate",
+                "reference": "Library/example"
+            })
+        );
+        assert_eq!(
+            expression
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            vec![
+                "id",
+                "extension",
+                "_description",
+                "name",
+                "language",
+                "expression",
+                "reference",
+            ]
+        );
+
+        let source = json!({"_maxValueDate": {"extension": [{
+            "url": "http://example.org/dynamic-maximum",
+            "valueExpression": {
+                "description": " ",
+                "language": "text/fhirpath",
+                "expression": "today() + 1 day"
+            }
+        }]}});
+        let mut converted = Map::new();
+        convert_value_choice(as_obj(&source), &mut converted, "maxValue").unwrap();
+        assert_eq!(
+            converted["_maxValueDate"],
+            json!({
+                "extension": [{
+                    "url": "http://example.org/dynamic-maximum",
+                    "valueExpression": {
+                        "language": "text/fhirpath",
+                        "expression": "today() + 1 day"
+                    }
+                }]
+            })
+        );
+    }
+
+    #[test]
+    fn sidecar_only_choice_accepts_known_primitives_and_rejects_everything_else() {
+        for (source, base, expected_key) in [
+            (
+                json!({"_valueString": {"id": "string-sidecar"}}),
+                "value",
+                "_valueString",
+            ),
+            (
+                json!({"_fixedDate": {"extension": [{
+                    "url": "http://example.org/date-metadata",
+                    "valueBoolean": true
+                }]}}),
+                "fixed",
+                "_fixedDate",
+            ),
+        ] {
+            let mut converted = Map::new();
+            convert_value_choice(as_obj(&source), &mut converted, base).unwrap();
+            assert_eq!(converted.len(), 1);
+            assert_eq!(converted[expected_key], source[expected_key]);
+        }
+
+        for (source, base, suffix) in [
+            (
+                json!({"_valueUnknown": {"id": "unknown"}}),
+                "value",
+                "Unknown",
+            ),
+            (
+                json!({"_fixedTiming": {"id": "complex"}}),
+                "fixed",
+                "Timing",
+            ),
+            (
+                json!({"_valueExpression": {"id": "complex"}}),
+                "value",
+                "Expression",
+            ),
+        ] {
+            let mut converted = Map::new();
+            let err = convert_value_choice(as_obj(&source), &mut converted, base).unwrap_err();
+            assert!(err.to_string().contains(suffix), "{err}");
+            assert!(converted.is_empty());
+        }
     }
 }
