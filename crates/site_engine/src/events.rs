@@ -149,6 +149,7 @@ pub enum BuildErrorCode {
     InvalidInput,
     Unavailable,
     Integrity,
+    ResourceLimit,
     CompileFailed,
     RendererFailed,
     UnknownBuild,

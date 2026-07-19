@@ -720,10 +720,10 @@ impl PreparedPackage {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct MemberIdentity {
-    name: String,
-    raw_len: u64,
-    raw_sha256: [u8; 32],
+pub(crate) struct MemberIdentity {
+    pub(crate) name: String,
+    pub(crate) raw_len: u64,
+    pub(crate) raw_sha256: [u8; 32],
 }
 
 #[derive(Clone, Debug)]
@@ -733,45 +733,77 @@ struct EncodedMember {
     raw_offset: u64,
 }
 
-struct EncodedChunk {
+struct ChunkPlan {
+    indices: Vec<usize>,
     raw_len: u64,
-    raw_sha256: [u8; 32],
-    compressed: Vec<u8>,
 }
 
 fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>> {
     let identities = identities_from_files(files);
-    let source = source_metadata_digest(
+    let (_, encoded) = encode_from_member_bodies(
         &package.label,
         &package.declared_dependencies,
+        identities,
+        Some(&package.key),
+        |_, _, _| Ok(()),
+        |member, out| {
+            out.extend_from_slice(&files[&member.name]);
+            Ok(())
+        },
+    )?;
+    Ok(encoded)
+}
+
+/// Encode the canonical v3 carrier from sorted member identities while reading
+/// at most one final chunk of raw bodies through `append_body`. Cold TGZ
+/// preparation uses this with compressed per-member spools; the ordinary map
+/// path uses it above. Keeping the one directory/chunk recipe here makes the
+/// two paths byte-identical without retaining an aggregate raw file map.
+pub(crate) fn encode_from_member_bodies(
+    label: &str,
+    declared_dependencies: &BTreeMap<String, String>,
+    identities: Vec<MemberIdentity>,
+    expected_key: Option<&PreparedPackageKey>,
+    mut observe_working_set: impl FnMut(usize, usize, usize) -> Result<()>,
+    mut append_body: impl FnMut(&MemberIdentity, &mut Vec<u8>) -> Result<()>,
+) -> Result<(PreparedPackageKey, Vec<u8>)> {
+    let mut previous: Option<&str> = None;
+    for member in &identities {
+        validate_member_name(&member.name)?;
+        if previous.is_some_and(|prior| prior >= member.name.as_str()) {
+            bail!("prepared-package source members are not in canonical unique order");
+        }
+        previous = Some(&member.name);
+    }
+    let source = source_metadata_digest(
+        label,
+        declared_dependencies,
         identities
             .iter()
             .filter(|member| member.name != derived_index::SIDECAR_NAME),
     );
-    if source != package.key.source_digest()? {
+    let key = PreparedPackageKey::current(source);
+    if expected_key.is_some_and(|expected| expected != &key) {
         bail!("prepared-package source metadata disagrees with its key");
     }
     let mut encoded_members: Vec<EncodedMember> = identities
-        .iter()
-        .cloned()
+        .into_iter()
         .map(|identity| EncodedMember {
             identity,
             chunk: u32::MAX,
             raw_offset: 0,
         })
         .collect();
-    let by_name: BTreeMap<_, _> = encoded_members
-        .iter()
-        .enumerate()
-        .map(|(index, member)| (member.identity.name.clone(), index))
-        .collect();
     let mut chunks = Vec::new();
 
     // These two members are read during package setup and get independent
     // chunks, preventing either read from expanding unrelated resources.
     for hot in ["package.json", derived_index::SIDECAR_NAME] {
-        if let Some(&index) = by_name.get(hot) {
-            append_chunk(&mut encoded_members, files, &[index], &mut chunks)?;
+        if let Some(index) = encoded_members
+            .iter()
+            .position(|member| member.identity.name == hot)
+        {
+            plan_chunk(&mut encoded_members, &[index], &mut chunks)?;
         }
     }
 
@@ -782,37 +814,66 @@ fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) ->
         if name == "package.json" || name == derived_index::SIDECAR_NAME {
             continue;
         }
-        let length = files[name].len();
+        let length: usize = encoded_members[index]
+            .identity
+            .raw_len
+            .try_into()
+            .map_err(|_| anyhow!("prepared-package member is too large for this host"))?;
         if !pending.is_empty() && pending_bytes.saturating_add(length) > CHUNK_TARGET_BYTES {
-            append_chunk(&mut encoded_members, files, &pending, &mut chunks)?;
+            plan_chunk(&mut encoded_members, &pending, &mut chunks)?;
             pending.clear();
             pending_bytes = 0;
         }
         pending.push(index);
         pending_bytes = pending_bytes.saturating_add(length);
         if length >= CHUNK_TARGET_BYTES {
-            append_chunk(&mut encoded_members, files, &pending, &mut chunks)?;
+            plan_chunk(&mut encoded_members, &pending, &mut chunks)?;
             pending.clear();
             pending_bytes = 0;
         }
     }
     if !pending.is_empty() {
-        append_chunk(&mut encoded_members, files, &pending, &mut chunks)?;
+        plan_chunk(&mut encoded_members, &pending, &mut chunks)?;
     }
 
+    let header_capacity = MAGIC
+        .len()
+        .checked_add(4 * 4 + 32)
+        .and_then(|value| value.checked_add(4 + label.len()))
+        .and_then(|value| value.checked_add(4))
+        .and_then(|value| {
+            declared_dependencies
+                .iter()
+                .try_fold(value, |total, (name, version)| {
+                    total
+                        .checked_add(4 + name.len())
+                        .and_then(|next| next.checked_add(4 + version.len()))
+                })
+        })
+        .and_then(|value| value.checked_add(4 + 4))
+        .and_then(|value| {
+            encoded_members.iter().try_fold(value, |total, member| {
+                total.checked_add(4 + member.identity.name.len() + 4 + 8 + 8 + 32)
+            })
+        })
+        .and_then(|value| value.checked_add(chunks.len().saturating_mul(8 + 8 + 32)))
+        .ok_or_else(|| anyhow!("prepared-package header length overflow"))?;
+    observe_working_set(header_capacity, 0, 0)?;
     let mut out = Vec::new();
+    out.try_reserve_exact(header_capacity)
+        .context("reserve prepared-package header")?;
     out.extend_from_slice(MAGIC);
-    put_u32(&mut out, package.key.format_version);
-    put_u32(&mut out, package.key.normalization_version);
-    put_u32(&mut out, package.key.derived_index_version);
-    put_u32(&mut out, package.key.engine_abi_version);
+    put_u32(&mut out, key.format_version);
+    put_u32(&mut out, key.normalization_version);
+    put_u32(&mut out, key.derived_index_version);
+    put_u32(&mut out, key.engine_abi_version);
     out.extend_from_slice(&source);
-    put_string(&mut out, &package.label)?;
+    put_string(&mut out, label)?;
     put_u32(
         &mut out,
-        u32_len(package.declared_dependencies.len(), "dependency count")?,
+        u32_len(declared_dependencies.len(), "dependency count")?,
     );
-    for (name, version) in &package.declared_dependencies {
+    for (name, version) in declared_dependencies {
         put_string(&mut out, name)?;
         put_string(&mut out, version)?;
     }
@@ -825,40 +886,118 @@ fn encode_owned(package: &PreparedPackage, files: &BTreeMap<String, Vec<u8>>) ->
         put_u64(&mut out, member.identity.raw_len);
         out.extend_from_slice(&member.identity.raw_sha256);
     }
+    struct ChunkDescriptorPatch {
+        compressed_len: usize,
+        raw_sha256: usize,
+    }
+    let mut patches = Vec::with_capacity(chunks.len());
     for chunk in &chunks {
         put_u64(&mut out, chunk.raw_len);
-        put_u64(&mut out, chunk.compressed.len() as u64);
-        out.extend_from_slice(&chunk.raw_sha256);
+        let compressed_len = out.len();
+        put_u64(&mut out, 0);
+        let raw_sha256 = out.len();
+        out.extend_from_slice(&[0; 32]);
+        patches.push(ChunkDescriptorPatch {
+            compressed_len,
+            raw_sha256,
+        });
     }
-    for chunk in chunks {
-        out.extend_from_slice(&chunk.compressed);
+    if out.len() != header_capacity {
+        bail!("prepared-package header plan disagrees with encoded length");
     }
-    Ok(out)
+    observe_working_set(out.capacity(), 0, 0)?;
+    for (chunk, patch) in chunks.iter().zip(patches) {
+        let raw_len: usize = chunk
+            .raw_len
+            .try_into()
+            .map_err(|_| anyhow!("prepared-package chunk is too large for this host"))?;
+        observe_working_set(out.capacity(), raw_len, 0)?;
+        let mut raw = Vec::new();
+        raw.try_reserve_exact(raw_len)
+            .context("reserve prepared-package raw chunk")?;
+        observe_working_set(out.capacity(), raw.capacity(), 0)?;
+        for &index in &chunk.indices {
+            let start = raw.len();
+            append_body(&encoded_members[index].identity, &mut raw)?;
+            let body = &raw[start..];
+            if body.len() as u64 != encoded_members[index].identity.raw_len {
+                bail!(
+                    "prepared-package source member {} length changed during encoding",
+                    encoded_members[index].identity.name
+                );
+            }
+            let actual: [u8; 32] = Sha256::digest(body).into();
+            if actual != encoded_members[index].identity.raw_sha256 {
+                bail!(
+                    "prepared-package source member {} digest changed during encoding",
+                    encoded_members[index].identity.name
+                );
+            }
+        }
+        observe_working_set(out.capacity(), raw.capacity(), 0)?;
+        let raw_sha256: [u8; 32] = Sha256::digest(&raw).into();
+        let conservative_compressed_capacity = raw
+            .len()
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(1024))
+            .ok_or_else(|| anyhow!("prepared-package compression bound overflow"))?;
+        observe_working_set(
+            out.capacity(),
+            raw.capacity(),
+            conservative_compressed_capacity,
+        )?;
+        let compressed = deflate::compress_to_vec(&raw, COMPRESSION_LEVEL);
+        observe_working_set(out.capacity(), raw.capacity(), compressed.capacity())?;
+        out[patch.compressed_len..patch.compressed_len + 8]
+            .copy_from_slice(&(compressed.len() as u64).to_be_bytes());
+        out[patch.raw_sha256..patch.raw_sha256 + 32].copy_from_slice(&raw_sha256);
+        let required_output = out
+            .len()
+            .checked_add(compressed.len())
+            .ok_or_else(|| anyhow!("prepared-package output length overflow"))?;
+        let conservative_output_capacity = out
+            .capacity()
+            .max(required_output.checked_mul(2).unwrap_or(usize::MAX));
+        observe_working_set(
+            conservative_output_capacity,
+            raw.capacity(),
+            compressed.capacity(),
+        )?;
+        out.try_reserve_exact(compressed.len())
+            .context("reserve prepared-package compressed output")?;
+        observe_working_set(out.capacity(), raw.capacity(), compressed.capacity())?;
+        out.extend_from_slice(&compressed);
+    }
+    Ok((key, out))
 }
 
-fn append_chunk(
+fn plan_chunk(
     members: &mut [EncodedMember],
-    files: &BTreeMap<String, Vec<u8>>,
     indices: &[usize],
-    chunks: &mut Vec<EncodedChunk>,
+    chunks: &mut Vec<ChunkPlan>,
 ) -> Result<()> {
     let chunk_index = u32_len(chunks.len(), "chunk index")?;
     let raw_len: usize = indices.iter().try_fold(0usize, |total, &index| {
+        let length: usize = members[index]
+            .identity
+            .raw_len
+            .try_into()
+            .map_err(|_| anyhow!("prepared-package member is too large for this host"))?;
         total
-            .checked_add(files[&members[index].identity.name].len())
+            .checked_add(length)
             .ok_or_else(|| anyhow!("prepared-package chunk length overflow"))
     })?;
-    let mut raw = Vec::with_capacity(raw_len);
+    let mut raw_offset = 0u64;
     for &index in indices {
         members[index].chunk = chunk_index;
-        members[index].raw_offset = raw.len() as u64;
-        raw.extend_from_slice(&files[&members[index].identity.name]);
+        members[index].raw_offset = raw_offset;
+        raw_offset = raw_offset
+            .checked_add(members[index].identity.raw_len)
+            .ok_or_else(|| anyhow!("prepared-package chunk offset overflow"))?;
     }
-    let raw_sha256 = Sha256::digest(&raw).into();
-    chunks.push(EncodedChunk {
-        raw_len: raw.len() as u64,
-        raw_sha256,
-        compressed: deflate::compress_to_vec(&raw, COMPRESSION_LEVEL),
+    chunks.push(ChunkPlan {
+        indices: indices.to_vec(),
+        raw_len: raw_len as u64,
     });
     Ok(())
 }

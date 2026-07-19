@@ -12,9 +12,10 @@
 //! lifecycle, sidecar placement, non-CAS write-once fallback).
 
 use crate::source::PackageSource;
+use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::{collections::BTreeMap, path::Path};
+use serde_json::value::RawValue;
+use std::{collections::BTreeMap, fmt, path::Path};
 
 /// Format version of the derived index. Bumping this changes the CAS artifact
 /// filename ([`cas_artifact_name`]) so a stale artifact is never read — entries
@@ -65,6 +66,33 @@ pub struct DerivedEntry {
     pub name: Option<String>,
 }
 
+impl DerivedEntry {
+    /// Heap bytes retained by this row, plus its fixed inline representation.
+    /// Streaming preparation uses capacities because those are the allocations
+    /// that coexist with the compressed spool; serializing a row merely to
+    /// estimate it would create the very temporary allocation being measured.
+    pub(crate) fn retained_bytes(&self) -> u64 {
+        let strings = [
+            Some(&self.filename),
+            self.resource_type.as_ref(),
+            self.id.as_ref(),
+            self.url.as_ref(),
+            self.version.as_ref(),
+            self.kind.as_ref(),
+            self.sd_type.as_ref(),
+            self.derivation.as_ref(),
+            self.base_definition.as_ref(),
+            self.name.as_ref(),
+        ];
+        strings
+            .iter()
+            .flatten()
+            .fold(std::mem::size_of::<Self>() as u64, |total, value| {
+                total.saturating_add(value.capacity() as u64)
+            })
+    }
+}
+
 /// The parsed derived index (format version + rows).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DerivedIndex {
@@ -99,26 +127,90 @@ fn resource_filenames(source: &dyn PackageSource, package_dir: &Path) -> Vec<Str
     files
 }
 
-fn entry_from_json(json: &Value, filename: String) -> DerivedEntry {
-    let s = |k: &str| json.get(k).and_then(Value::as_str).map(str::to_string);
-    DerivedEntry {
-        filename,
-        resource_type: s("resourceType"),
-        id: s("id"),
-        url: s("url"),
-        version: s("version"),
-        kind: s("kind"),
-        sd_type: s("type"),
-        derivation: s("derivation"),
-        base_definition: s("baseDefinition"),
-        name: s("name"),
+#[derive(Default)]
+struct DerivedRootFields {
+    resource_type: Option<String>,
+    id: Option<String>,
+    url: Option<String>,
+    version: Option<String>,
+    kind: Option<String>,
+    sd_type: Option<String>,
+    derivation: Option<String>,
+    base_definition: Option<String>,
+    name: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for DerivedRootFields {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RootVisitor;
+        impl<'de> Visitor<'de> for RootVisitor {
+            type Value = DerivedRootFields;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a JSON object")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut result = DerivedRootFields::default();
+                while let Some(key) = map.next_key::<String>()? {
+                    let raw = map.next_value::<&RawValue>()?;
+                    let value = || serde_json::from_str::<String>(raw.get()).ok();
+                    match key.as_str() {
+                        "resourceType" => result.resource_type = value(),
+                        "id" => result.id = value(),
+                        "url" => result.url = value(),
+                        "version" => result.version = value(),
+                        "kind" => result.kind = value(),
+                        "type" => result.sd_type = value(),
+                        "derivation" => result.derivation = value(),
+                        "baseDefinition" => result.base_definition = value(),
+                        "name" => result.name = value(),
+                        _ => {}
+                    }
+                }
+                Ok(result)
+            }
+        }
+        deserializer.deserialize_map(RootVisitor)
     }
 }
 
 fn entry_from_bytes(bytes: &[u8], filename: String) -> Option<DerivedEntry> {
-    serde_json::from_slice::<Value>(bytes)
-        .ok()
-        .map(|json| entry_from_json(&json, filename))
+    // Validate the complete value first. Non-object JSON remains a valid
+    // resource candidate with no derived columns, matching the legacy Value
+    // projection. Object values are then scanned one key at a time: selected
+    // values borrow their raw JSON and unknown values are never materialized.
+    let root: &RawValue = serde_json::from_slice(bytes).ok()?;
+    let fields = if root.get().trim_start().starts_with('{') {
+        serde_json::from_str::<DerivedRootFields>(root.get()).ok()?
+    } else {
+        DerivedRootFields::default()
+    };
+    Some(DerivedEntry {
+        filename,
+        resource_type: fields.resource_type,
+        id: fields.id,
+        url: fields.url,
+        version: fields.version,
+        kind: fields.kind,
+        sd_type: fields.sd_type,
+        derivation: fields.derivation,
+        base_definition: fields.base_definition,
+        name: fields.name,
+    })
+}
+
+/// Lift the canonical derived columns from one top-level resource candidate.
+/// Streaming TGZ preparation calls this while the member is the sole retained
+/// raw body; map-backed preparation calls the same implementation below.
+pub(crate) fn entry_from_package_bytes(filename: String, bytes: &[u8]) -> Option<DerivedEntry> {
+    entry_from_bytes(bytes, filename)
 }
 
 /// Build the derived index for a materialized package directory by parsing each
@@ -216,6 +308,50 @@ pub fn load(source: &dyn PackageSource, package_dir: &Path) -> Vec<DerivedEntry>
 mod tests {
     use super::*;
     use crate::{source::DiskSource, BundleSource};
+
+    fn legacy_value_projection(filename: String, bytes: &[u8]) -> Option<DerivedEntry> {
+        let resource: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+        let string = |name: &str| {
+            resource
+                .get(name)
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        };
+        Some(DerivedEntry {
+            filename,
+            resource_type: string("resourceType"),
+            id: string("id"),
+            url: string("url"),
+            version: string("version"),
+            kind: string("kind"),
+            sd_type: string("type"),
+            derivation: string("derivation"),
+            base_definition: string("baseDefinition"),
+            name: string("name"),
+        })
+    }
+
+    #[test]
+    fn borrowed_projection_matches_legacy_value_semantics() {
+        let cases: &[&[u8]] = &[
+            br#"{"resourceType":"Old","resourceType":"Patient","id":"one","id":"two","name":"Final"}"#,
+            br#"null"#,
+            br#"[1,{"resourceType":"Patient"}]"#,
+            br#""valid scalar""#,
+            br#"{"resourceType":{"nested":"Patient"},"id":["not","a","string"],"url":false,"version":3,"kind":null,"type":"Observation","unknown":{"deep":[1,2,3]}}"#,
+            br#"{"resourceType":"Patient"#,
+            br#"not json"#,
+        ];
+        for (index, bytes) in cases.iter().enumerate() {
+            let filename = format!("case-{index}.json");
+            assert_eq!(
+                entry_from_package_bytes(filename.clone(), bytes),
+                legacy_value_projection(filename, bytes),
+                "case {index}: {}",
+                String::from_utf8_lossy(bytes)
+            );
+        }
+    }
 
     #[test]
     fn build_covers_content_including_name_and_base() {

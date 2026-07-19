@@ -26,8 +26,9 @@ pub mod template_loader;
 pub mod wire;
 
 pub use bundle::{
-    read_package_tgz, BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
-    BUNDLE_FORMAT_VERSION,
+    is_package_resource_policy_exhaustion, prepare_package_tgz_streaming, read_package_tgz,
+    BundleCompressionMetrics, BundleManifest, BundleManifestEntry, BundleSource,
+    PreparedTgzArtifact, BUNDLE_FORMAT_VERSION,
 };
 pub use material::{
     decode_normalized_package, encode_normalized_package, normalize_package_material,

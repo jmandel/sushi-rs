@@ -386,4 +386,14 @@ mod tests {
         )
         .is_err());
     }
+
+    #[test]
+    fn package_identity_keeps_legacy_json_duplicate_semantics() {
+        let dependencies = validate_package_identity_bytes(
+            "example.pkg#1.2.3",
+            br#"{"name":"wrong.pkg","name":"example.pkg","version":"0","version":"1.2.3","dependencies":{"dep.pkg":"old","dep.pkg":"new"}}"#,
+        )
+        .unwrap();
+        assert_eq!(dependencies.get("dep.pkg").map(String::as_str), Some("new"));
+    }
 }

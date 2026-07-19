@@ -613,6 +613,29 @@ struct PreparedMountBatch {
     decode_validate_prepare_ms: f64,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum TgzPreparationFailureKind {
+    Integrity,
+    ResourceLimit,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TgzPreparationFailure {
+    kind: TgzPreparationFailureKind,
+    message: String,
+}
+
+impl TgzPreparationFailure {
+    fn integrity(message: impl Into<String>) -> Self {
+        Self {
+            kind: TgzPreparationFailureKind::Integrity,
+            message: message.into(),
+        }
+    }
+}
+
 /// Decode, normalize, index, and encode packages without borrowing the mutable
 /// engine. This work can take seconds for large packages and invokes the host
 /// clock for metrics; only the resulting immutable batch enters the commit.
@@ -703,49 +726,50 @@ fn prepare_package_batch(bundles_json: &str) -> Result<PreparedMountBatch, Strin
 /// that object as JSON, and cloned hundreds of megabytes into the Worker. This
 /// path preserves the exact same package normalization boundary while keeping
 /// the compressed carrier binary end-to-end.
-fn prepare_tgz_package(label: &str, tgz: &[u8]) -> Result<PreparedMountBatch, String> {
+fn prepare_tgz_package(
+    label: &str,
+    tgz: &[u8],
+) -> Result<PreparedMountBatch, TgzPreparationFailure> {
     let started = clock_ms();
-    let entries = package_store::read_package_tgz(tgz)
-        .map_err(|error| format!("prepareTgzArtifact: decode {label}: {error:#}"))?;
-    let decoded_source_bytes = entries.values().map(|body| body.len() as u64).sum();
-
-    let normalize_started = clock_ms();
-    let builder = package_store::PreparedPackage::normalize(label, entries)
-        .map_err(|error| format!("prepareTgzArtifact: invalid package {label}: {error:#}"))?;
-    let normalization_ms = (clock_ms() - normalize_started).max(0.0);
-    let index_started = clock_ms();
-    let package = builder
-        .build()
-        .map_err(|error| format!("prepareTgzArtifact: invalid package {label}: {error:#}"))?;
-    let indexing_ms = (clock_ms() - index_started).max(0.0);
-    let normalized_bytes = package.files.raw_bytes();
-    let prepared_members = package.files.len() as u64;
-    let encode_started = clock_ms();
-    let bytes = package.encode();
-    let artifact_encode_ms = (clock_ms() - encode_started).max(0.0);
+    let package = package_store::prepare_package_tgz_streaming(label, tgz).map_err(|error| {
+        let kind = if package_store::is_package_resource_policy_exhaustion(&error) {
+            TgzPreparationFailureKind::ResourceLimit
+        } else {
+            TgzPreparationFailureKind::Integrity
+        };
+        TgzPreparationFailure {
+            kind,
+            message: format!("prepareTgzArtifact: decode {label}: {error:#}"),
+        }
+    })?;
+    let bytes = package.artifact;
     let artifact = PreparedExport {
-        label: package.label.clone(),
+        label: label.to_string(),
         cache_key: package.key.cache_key(),
         artifact_sha256: site_build::Sha256Digest::of_bytes(&bytes).to_string(),
         bytes: bytes.len() as u64,
     };
     let artifact_bytes = bytes.len() as u64;
     let mut pending = BTreeMap::new();
-    pending.insert(package.label.clone(), bytes);
+    pending.insert(label.to_string(), bytes);
     Ok(PreparedMountBatch {
         pending,
         artifacts: vec![artifact],
         artifact_bytes,
-        prepared_members,
+        prepared_members: package.members,
         input_json_bytes: 0,
         base64_bytes: 0,
-        decoded_source_bytes,
-        normalized_bytes,
+        decoded_source_bytes: package.logical_raw_bytes,
+        normalized_bytes: package.canonical_raw_bytes,
         json_parse_ms: 0.0,
         base64_decode_ms: 0.0,
-        normalization_ms,
-        indexing_ms,
-        artifact_encode_ms,
+        // Streaming fuses decode, normalization, derived indexing, and v3
+        // encoding while retaining only one raw member/chunk. The authoritative
+        // fused duration remains decodeValidatePrepareMs rather than inventing
+        // overlapping sub-span measurements here.
+        normalization_ms: 0.0,
+        indexing_ms: 0.0,
+        artifact_encode_ms: 0.0,
         decode_validate_prepare_ms: (clock_ms() - started).max(0.0),
     })
 }
@@ -1016,7 +1040,8 @@ mod prepared_mount_tests {
             Ok(_) => panic!("duplicate normalized paths must be rejected"),
             Err(error) => error,
         };
-        assert!(error.contains("duplicate package bundle member"));
+        assert!(matches!(error.kind, TgzPreparationFailureKind::Integrity));
+        assert!(error.message.contains("duplicate package bundle member"));
     }
 
     #[test]
@@ -1034,10 +1059,11 @@ mod prepared_mount_tests {
             serde_json::from_str(&session.prepare_tgz_artifact("demo.package#1.0.0", &carrier))
                 .unwrap();
         assert_eq!(result["ok"], false);
+        assert_eq!(result["error"]["kind"], "resource-limit");
         assert!(result["error"]["message"]
             .as_str()
             .unwrap()
-            .contains("limit is"));
+            .contains("resource policy allows"));
 
         let engine = session.engine.borrow();
         assert_eq!(engine.package_generation, before_generation);
@@ -1692,21 +1718,24 @@ impl Session {
     #[wasm_bindgen(js_name = prepareTgzArtifact)]
     pub fn prepare_tgz_artifact(&self, label: &str, tgz: &[u8]) -> String {
         set_panic_hook();
-        let result = (|| {
-            let base_generation = self.with_engine("prepareTgzArtifact.preflight", |engine| {
-                if engine.package_environment.is_none() {
-                    return Err(
-                        "prepareTgzArtifact: engine not initialized; call init() first".into(),
-                    );
-                }
-                Ok(engine.package_generation)
-            })?;
+        let result: Result<PrepareMountResult, TgzPreparationFailure> = (|| {
+            let base_generation = self
+                .with_engine("prepareTgzArtifact.preflight", |engine| {
+                    if engine.package_environment.is_none() {
+                        return Err(
+                            "prepareTgzArtifact: engine not initialized; call init() first".into(),
+                        );
+                    }
+                    Ok(engine.package_generation)
+                })
+                .map_err(TgzPreparationFailure::integrity)?;
             let batch = prepare_tgz_package(label, tgz)?;
             self.with_engine("prepareTgzArtifact.retain", move |engine| {
                 engine.retain_prepared_artifacts(batch, base_generation)
             })
+            .map_err(TgzPreparationFailure::integrity)
         })();
-        envelope_ser("prepareTgzArtifact", result)
+        envelope_typed("prepareTgzArtifact", result)
     }
 
     /// Move one artifact staged by package preparation into a JS `Uint8Array`.
