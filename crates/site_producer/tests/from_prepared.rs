@@ -255,6 +255,94 @@ fn prepared_example_metadata_drives_its_exact_renderer_subject_and_page() {
 }
 
 #[test]
+fn declared_formats_emit_shells_and_only_truthful_current_json_bytes() {
+    let prepared = fixture();
+    let inputs = site_producer::ProducerInputs::from_prepared(
+        &prepared,
+        &json!({
+            "formats": ["xml", "json", "ttl"],
+            "defaults": {
+                "Any": {
+                    "template-format": "template/layouts/format.html",
+                    "format": "{{[type]}}-{{[id]}}.{{[fmt]}}.html"
+                }
+            }
+        }),
+        HashMap::from([(
+            "template/layouts/format.html".into(),
+            "---\n---\nfmt={{[fmt]}} include={{[type]}}-{{[name]}}.xhtml".into(),
+        )]),
+        "en/",
+    )
+    .unwrap();
+    let expected_json = json_emit::to_fhir_json_string(
+        &prepared
+            .resources
+            .iter()
+            .find(|resource| {
+                resource.key.resource_type == "Observation" && resource.key.id == "example"
+            })
+            .unwrap()
+            .resource,
+    );
+    let output = site_producer::produce(&inputs).unwrap();
+
+    assert_eq!(
+        output.files["en/Observation-example.json.html"],
+        b"---\n---\nfmt=json include=Observation-example-json-html.xhtml"
+    );
+    for (format, label) in [("xml", "XML"), ("ttl", "TTL")] {
+        let shell =
+            std::str::from_utf8(&output.files[&format!("en/Observation-example.{format}.html")])
+                .unwrap();
+        assert!(
+            shell.contains("{% include fragment-pagebegin.html %}"),
+            "{shell}"
+        );
+        assert!(
+            shell.contains("{% include fragment-pageend.html %}"),
+            "{shell}"
+        );
+        assert!(
+            shell.contains(&format!(
+                "{{% include fragment-base-navtabs.html type='Observation' id='example' active='{format}' %}}"
+            )),
+            "{shell}"
+        );
+        assert!(
+            shell.contains(&format!("{label} representation of Observation/example")),
+            "{shell}"
+        );
+        assert!(
+            shell.contains(&format!(
+                "{{% include Observation-example-{format}-html.xhtml %}}"
+            )),
+            "{shell}"
+        );
+        assert!(!shell.contains("href="), "{shell}");
+        assert!(!shell.contains("download"), "{shell}");
+        assert!(!shell.contains("fmt="), "{shell}");
+    }
+    let raw = &output.public_outputs["en/Observation-example.json"];
+    assert_eq!(raw.bytes, expected_json.as_bytes());
+    assert_eq!(raw.media_type, "application/fhir+json");
+    assert_eq!(raw.source, "compiled resource Observation/example");
+    assert!(!output
+        .public_outputs
+        .contains_key("en/Observation-example.xml"));
+    assert!(!output
+        .public_outputs
+        .contains_key("en/Observation-example.ttl"));
+    for format in ["xml", "json", "ttl"] {
+        let metadata = &output.resource_pages[&format!("en/Observation-example.{format}.html")];
+        assert_eq!(metadata.resource_type, "Observation");
+        assert_eq!(metadata.id, "example");
+        assert_eq!(metadata.title, "Observation/example");
+        assert_eq!(metadata.role, site_producer::ResourcePageRole::Companion);
+    }
+}
+
+#[test]
 fn from_memory_orders_resources_and_reads_captured_template_relative_layouts() {
     let resources = vec![
         site_producer::Resource::from_value(

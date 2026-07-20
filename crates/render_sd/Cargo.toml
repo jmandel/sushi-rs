@@ -21,5 +21,6 @@ path = "src/bin/corpus.rs"
 render_xhtml = { workspace = true }
 render_tables = { workspace = true }
 serde_json = { workspace = true }
+json_emit = { workspace = true }
 
 [dev-dependencies]

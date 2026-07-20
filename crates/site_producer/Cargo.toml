@@ -14,5 +14,6 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 package_store = { workspace = true }
 site_build = { workspace = true }
+json_emit = { workspace = true }
 
 [dev-dependencies]

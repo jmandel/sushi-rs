@@ -791,6 +791,7 @@ dependencies = [
 name = "render_sd"
 version = "0.1.0"
 dependencies = [
+ "json_emit",
  "render_tables",
  "render_xhtml",
  "serde_json",
@@ -1119,6 +1120,7 @@ name = "site_producer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "json_emit",
  "package_store",
  "serde_json",
  "site_build",

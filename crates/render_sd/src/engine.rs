@@ -123,6 +123,9 @@ pub const PER_RESOURCE_KINDS: &[&str] = &[
     // leaves
     "contained-index",
     "history",
+    "json-html",
+    "xml-html",
+    "ttl-html",
     "pseudo-ttl",
     "pseudo-xml",
     "pseudo-json",
@@ -273,19 +276,32 @@ impl FragmentEngine {
         let run_uuid = &self.run_uuid;
         let at = self.active_tables;
 
+        // Publisher `template-format` layouts request these includes for every
+        // resource type. JSON is the exact current compiled representation;
+        // XML and Turtle remain explicit capability gaps until a canonical
+        // release-aware serializer exists.
+        if matches!(kind, "json-html" | "xml-html" | "ttl-html") {
+            return render_format_source(_ref, kind, json);
+        }
+
         // VS/CS terminology kinds route through vscs (need the resource Value).
         if matches!(kind, "cld" | "expansion" | "content") {
             let v: serde_json::Value = serde_json::from_str(json)
                 .map_err(|_| FragError::NoSuchResource(_ref.to_string()))?;
             let txcache = crate::fstxcache::FsTxCache::new(self.facts.txcache_dir.as_deref(), ctx);
             let _ = &txcache as &dyn TxCacheSource;
-            let body = match kind {
+            let fragment = match kind {
                 "content" => crate::vscs::render_cs_content(&v, ctx),
                 "cld" => crate::vscs::render_vs_cld(&v, ctx, &txcache),
                 "expansion" => crate::vscs::render_vs_expansion(&v, ctx, &txcache),
                 _ => unreachable!(),
             };
-            return Ok(body);
+            // The older vscs public surface predates FragmentEngine and returns
+            // the complete Publisher include file, including its raw wrapper.
+            // render_per_resource's contract is the unwrapped body; otherwise
+            // render_fragment adds a second wrapper and Liquid exposes the
+            // inner `{% raw %}` literally in CodeSystem/ValueSet pages.
+            return Ok(vscs_fragment_body(fragment));
         }
 
         // Everything else is an SD kind.
@@ -529,6 +545,35 @@ impl FragmentEngine {
             }
             _ => panic!("unregistered singleton kind {}", kind),
         }
+    }
+}
+
+fn render_format_source(ref_: &str, kind: &str, json: &str) -> Result<String, FragError> {
+    if kind == "json-html" {
+        let resource: serde_json::Value =
+            serde_json::from_str(json).map_err(|_| FragError::NoSuchResource(ref_.to_string()))?;
+        let current = json_emit::to_fhir_json_string(&resource);
+        return Ok(format!(
+            "<pre class=\"json\">{}</pre>",
+            crate::leaf::escape_xml(&current)
+        ));
+    }
+
+    let name = if kind == "xml-html" { "XML" } else { "Turtle" };
+    Ok(format!(
+        "<div class=\"ig-editor-gap\"><p><strong>{name} representation unavailable.</strong> This preview has no canonical {name} serializer for the current compiled resource and has not fabricated one. Use the JSON representation instead.</p></div>"
+    ))
+}
+
+fn vscs_fragment_body(fragment: String) -> String {
+    const OPEN: &str = "{% raw %}";
+    const CLOSE: &str = "{% endraw %}";
+    if fragment.starts_with(OPEN) && fragment.ends_with(CLOSE) {
+        fragment[OPEN.len()..fragment.len() - CLOSE.len()].to_string()
+    } else {
+        // Expansion degradation can be an ordinary unwrapped body when no
+        // terminology result is available. Preserve that existing behavior.
+        fragment
     }
 }
 

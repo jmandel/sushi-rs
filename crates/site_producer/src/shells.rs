@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, Result};
 
-use crate::{ProducerInputs, Resource, ResourcePageMetadata, ResourcePageRole};
+use crate::{
+    ProducedPublicOutput, ProducerInputs, Resource, ResourcePageMetadata, ResourcePageRole,
+};
 
 /// The `{{[...]}}` substitution: `doReplacements(String, FetchedResource, vars,
 /// format)` (IGKnowledgeProvider.java:147). `vars` always carries
@@ -39,6 +41,41 @@ fn do_replacements(s: &str, r: &Resource, fmt: Option<&str>) -> String {
 /// `template/layouts/layout-profile.html`).
 fn read_layout(inputs: &ProducerInputs, rel: &str) -> Option<String> {
     inputs.layouts.read(rel)
+}
+
+fn insert_shell(
+    r: &Resource,
+    role: ResourcePageRole,
+    path: String,
+    content: String,
+    pages: &mut BTreeMap<String, String>,
+    resource_pages: &mut BTreeMap<String, ResourcePageMetadata>,
+) -> Result<()> {
+    if let Some(existing) = resource_pages.get(&path) {
+        bail!(
+            "Publisher shell output collision at {path}: {}/{} {:?} and {}/{} {:?}",
+            existing.resource_type,
+            existing.id,
+            existing.role,
+            r.rt,
+            r.id,
+            role
+        );
+    }
+    if pages.contains_key(&path) {
+        bail!("Publisher shell output collision at {path}: shell has no matching subject");
+    }
+    pages.insert(path.clone(), content);
+    resource_pages.insert(
+        path,
+        ResourcePageMetadata {
+            resource_type: r.rt.clone(),
+            id: r.id.clone(),
+            title: r.title(),
+            role,
+        },
+    );
+    Ok(())
 }
 
 /// Emit one wrapper page (`genWrapperInner`): if the `template-*` property
@@ -82,31 +119,55 @@ fn emit_one(
     // The shell FILE location carries the page-dir prefix (must equal the render
     // surface's page.path); empty for a flat tree, `en/` for localized output.
     let path = format!("{}{out}", inputs.page_prefix);
-    if let Some(existing) = resource_pages.get(&path) {
-        bail!(
-            "Publisher shell output collision at {path}: {}/{} {:?} and {}/{} {:?}",
-            existing.resource_type,
-            existing.id,
-            existing.role,
-            r.rt,
-            r.id,
-            role
-        );
-    }
-    if pages.contains_key(&path) {
-        bail!("Publisher shell output collision at {path}: shell has no matching subject");
-    }
-    pages.insert(path.clone(), content);
-    resource_pages.insert(
-        path,
-        ResourcePageMetadata {
-            resource_type: r.rt.clone(),
-            id: r.id.clone(),
-            title: r.title(),
-            role,
-        },
+    insert_shell(r, role, path, content, pages, resource_pages)
+}
+
+/// A format page for a representation this engine cannot serialize. It keeps
+/// the standard template's page chrome and resource navigation, but deliberately
+/// omits the stock Raw/Download paragraph because no such public output exists.
+/// The engine-owned format include supplies the explicit capability-gap body.
+fn emit_unsupported_format(
+    inputs: &ProducerInputs,
+    r: &Resource,
+    format: &str,
+    pages: &mut BTreeMap<String, String>,
+    resource_pages: &mut BTreeMap<String, ResourcePageMetadata>,
+) -> Result<()> {
+    let output_name = inputs
+        .defaults
+        .get_property(r, "format")
+        .unwrap_or_else(|| "{{[type]}}-{{[id]}}-format.{{[fmt]}}.html".into());
+    let output_name = do_replacements(&output_name, r, Some(format));
+    let path = format!("{}{output_name}", inputs.page_prefix);
+    let navigation = if r.rt == "StructureDefinition" {
+        "fragment-profile-navtabs.html"
+    } else {
+        "fragment-base-navtabs.html"
+    };
+    let label = format.to_ascii_uppercase();
+    let content = format!(
+        "---\n---\n\
+{{% include fragment-pagebegin.html %}}\n\
+<div class=\"col-12\">\n\
+  <!--ReleaseHeader--><p id=\"publish-box\">Publish Box goes here</p><!--EndReleaseHeader-->\n\
+  {{% include {navigation} type='{resource_type}' id='{id}' active='{format}' %}}\n\
+  <a name=\"root\"> </a>\n\
+  <h2 id=\"root\">{label} representation of {resource_type}/{id}</h2>\n\
+  {{% include fragment-simpletable.html %}}\n\
+  {{% include {resource_type}-{id}-{format}-html.xhtml %}}\n\
+</div>\n\
+{{% include fragment-pageend.html %}}\n",
+        resource_type = r.rt,
+        id = r.id,
     );
-    Ok(())
+    insert_shell(
+        r,
+        ResourcePageRole::Companion,
+        path,
+        content,
+        pages,
+        resource_pages,
+    )
 }
 
 /// `makeTemplates` for every resource: base + definitions + each extraTemplate
@@ -115,6 +176,7 @@ pub fn emit_shells(
     inputs: &ProducerInputs,
     pages: &mut BTreeMap<String, String>,
     resource_pages: &mut BTreeMap<String, ResourcePageMetadata>,
+    public_outputs: &mut BTreeMap<String, ProducedPublicOutput>,
 ) -> Result<()> {
     for r in &inputs.resources {
         // base page
@@ -141,6 +203,60 @@ pub fn emit_shells(
             pages,
             resource_pages,
         )?;
+        // `formats` is a dedicated Publisher pass, not the `format` entry in
+        // extraTemplates. Each declared format gets its own template-format
+        // shell. The JSON representation is available from the current parsed
+        // resource; XML/Turtle are intentionally not fabricated here.
+        let has_format_template = inputs
+            .defaults
+            .get_property(r, "template-format")
+            .filter(|template| !template.is_empty())
+            .and_then(|template| read_layout(inputs, &template))
+            .is_some();
+        for format in &inputs.defaults.formats {
+            if !has_format_template {
+                continue;
+            }
+            if format == "json" {
+                emit_one(
+                    inputs,
+                    r,
+                    "template-format",
+                    Some("format"),
+                    "format",
+                    Some(format),
+                    ResourcePageRole::Companion,
+                    pages,
+                    resource_pages,
+                )?;
+                let path = format!("{}{}-{}.json", inputs.page_prefix, r.rt, r.id);
+                if pages.contains_key(&path) || public_outputs.contains_key(&path) {
+                    bail!("Publisher resource format output collision at {path}");
+                }
+                public_outputs.insert(
+                    path,
+                    ProducedPublicOutput {
+                        bytes: json_emit::to_fhir_json_string(&r.json).into_bytes(),
+                        media_type: "application/fhir+json".into(),
+                        source: format!("compiled resource {}/{}", r.rt, r.id),
+                    },
+                );
+            } else if matches!(format.as_str(), "xml" | "ttl") {
+                emit_unsupported_format(inputs, r, format, pages, resource_pages)?;
+            } else {
+                emit_one(
+                    inputs,
+                    r,
+                    "template-format",
+                    Some("format"),
+                    "format",
+                    Some(format),
+                    ResourcePageRole::Companion,
+                    pages,
+                    resource_pages,
+                )?;
+            }
+        }
         // extraTemplates
         for tn in &inputs.defaults.extra_templates {
             if tn == "format" || tn == "defns" {

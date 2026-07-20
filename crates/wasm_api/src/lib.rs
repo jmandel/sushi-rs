@@ -1816,6 +1816,16 @@ impl Session {
         )
     }
 
+    /// Private host lifecycle: abandon a prepared handle which never became a
+    /// published Build. This is not a fifth functional site operation.
+    #[wasm_bindgen(js_name = releaseBuild)]
+    pub fn release_site_build(&self, handle: &str) -> Result<bool, wasm_bindgen::JsValue> {
+        self.with_engine("releaseBuild", |engine| {
+            Ok(engine.release_site_build(handle))
+        })
+        .map_err(|error| wasm_bindgen::JsValue::from_str(&error))
+    }
+
     /// Materialize one declared output independently of every other path.
     #[wasm_bindgen(js_name = render)]
     pub fn render_site_output(&self, handle: &str, path: &str) -> String {
@@ -2159,6 +2169,10 @@ impl Engine {
         handle: &str,
     ) -> Result<OutputCatalogResult, site_engine::BuildError<()>> {
         self.sites.outputs(handle)
+    }
+
+    fn release_site_build(&mut self, handle: &str) -> bool {
+        self.sites.release(handle)
     }
 
     fn render_site_output(

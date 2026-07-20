@@ -79,10 +79,21 @@ pub enum ResourcePageRole {
 #[derive(Debug, Default)]
 pub struct SiteProducerOutput {
     pub files: BTreeMap<String, Vec<u8>>,
+    /// Already-materialized public outputs that bypass page rendering. Their
+    /// paths share the same collision-checked output namespace as rendered
+    /// pages, but their bytes do not need to be mounted as Liquid inputs.
+    pub public_outputs: BTreeMap<String, ProducedPublicOutput>,
     /// Exact resource subject for resource-owned shells, keyed by the same
     /// final configured path as `files`. Narrative pages are not emitted by
     /// this producer and therefore have no entry.
     pub resource_pages: BTreeMap<String, ResourcePageMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProducedPublicOutput {
+    pub bytes: Vec<u8>,
+    pub media_type: String,
+    pub source: String,
 }
 
 /// Address-free view of the template layout bytes captured for one immutable
@@ -382,7 +393,8 @@ pub fn produce(inputs: &ProducerInputs) -> Result<SiteProducerOutput> {
     let mut data_files = BTreeMap::new();
     let mut includes = BTreeMap::new();
     let mut resource_pages = BTreeMap::new();
-    shells::emit_shells(inputs, &mut pages, &mut resource_pages)?;
+    let mut public_outputs = BTreeMap::new();
+    shells::emit_shells(inputs, &mut pages, &mut resource_pages, &mut public_outputs)?;
     data::emit_data(inputs, &model, &mut data_files)?;
     structural::emit_structural_pages(inputs, &model, &mut pages, &mut includes)?;
     if let Some(menu) = menu::menu_xml(&inputs.menu) {
@@ -394,6 +406,7 @@ pub fn produce(inputs: &ProducerInputs) -> Result<SiteProducerOutput> {
     merge_produced_files(&mut files, "_includes/", includes)?;
     Ok(SiteProducerOutput {
         files,
+        public_outputs,
         resource_pages,
     })
 }

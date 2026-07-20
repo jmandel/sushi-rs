@@ -617,6 +617,32 @@ impl SiteEngine {
         self.runtimes.promote(entry);
     }
 
+    /// Release one private execution handle without disturbing the retained
+    /// predecessor. Hosts use this only when a successfully prepared candidate
+    /// loses its publication lease before it becomes externally visible.
+    #[doc(hidden)]
+    pub fn release(&mut self, handle: &str) -> bool {
+        if self
+            .runtimes
+            .current
+            .as_ref()
+            .is_some_and(|entry| entry.handle == handle)
+        {
+            self.runtimes.current = self.runtimes.previous.take();
+            return true;
+        }
+        if self
+            .runtimes
+            .previous
+            .as_ref()
+            .is_some_and(|entry| entry.handle == handle)
+        {
+            self.runtimes.previous = None;
+            return true;
+        }
+        false
+    }
+
     fn runtime(&self, handle: &str) -> Option<&Runtime> {
         self.runtimes
             .iter()

@@ -461,6 +461,8 @@ mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
 
+    use render_sd::context::IgContext;
+    use render_sd::engine::{FragmentEngine, IgFacts};
     use render_sd::tree::{MemTree, TreeSource};
     use serde_json::json;
 
@@ -488,6 +490,103 @@ mod tests {
 
     fn include_page(name: &str) -> String {
         format!("---\n---\n{{% include {name} %}}")
+    }
+
+    #[test]
+    fn generated_codesystem_include_has_one_raw_boundary_consumed_by_liquid() {
+        let mut tree = MemTree::new();
+        tree.insert_text(
+            Path::new("/own/CodeSystem-test.json"),
+            &serde_json::to_string(&json!({
+                "resourceType": "CodeSystem",
+                "id": "test",
+                "url": "http://example.test/CodeSystem/test",
+                "name": "TestCodeSystem",
+                "status": "draft",
+                "content": "complete",
+                "caseSensitive": true,
+                "concept": [{"code": "alpha", "display": "Alpha display"}]
+            }))
+            .unwrap(),
+        );
+        let tree: Rc<dyn TreeSource> = Rc::new(tree);
+        let context = IgContext::load_with_tree(
+            tree.clone(),
+            Path::new("/own"),
+            Path::new("/packages"),
+            None,
+        );
+        let engine = FragmentEngine::new(context, "test-run".into(), false, IgFacts::default());
+        let site = site();
+        let provider = PageProvider::new(&site, Path::new("/staged"))
+            .with_tree(tree)
+            .with_engine_first(true)
+            .with_artifact_resolver(FragmentEngineArtifactResolver::new(&engine));
+
+        // This is the dynamic include shape emitted by the standard template's
+        // layouts/layout-codesystem.html after Publisher shell substitution.
+        let rendered = render_page(
+            &include_page("CodeSystem-test-content.xhtml"),
+            "en/CodeSystem-test.html",
+            &provider,
+        );
+        assert!(!rendered.contains("{% raw %}"), "{rendered}");
+        assert!(!rendered.contains("{% endraw %}"), "{rendered}");
+        assert!(rendered.contains("Alpha display"), "{rendered}");
+    }
+
+    #[test]
+    fn resource_format_includes_show_current_json_and_honest_serialization_gaps() {
+        let resource = json!({
+            "resourceType": "Observation",
+            "id": "format-test",
+            "status": "final",
+            "valueString": "current <value> {% include never.xhtml %}"
+        });
+        let mut tree = MemTree::new();
+        tree.insert_text(
+            Path::new("/own/Observation-format-test.json"),
+            &serde_json::to_string(&resource).unwrap(),
+        );
+        let tree: Rc<dyn TreeSource> = Rc::new(tree);
+        let context = IgContext::load_with_tree(
+            tree.clone(),
+            Path::new("/own"),
+            Path::new("/packages"),
+            None,
+        );
+        let engine = FragmentEngine::new(context, "test-run".into(), false, IgFacts::default());
+        let site = site();
+        let provider = PageProvider::new(&site, Path::new("/staged"))
+            .with_tree(tree)
+            .with_engine_first(true)
+            .with_artifact_resolver(FragmentEngineArtifactResolver::new(&engine));
+
+        let json_page = render_page(
+            &include_page("Observation-format-test-json-html.xhtml"),
+            "en/Observation-format-test.json.html",
+            &provider,
+        );
+        assert!(json_page.starts_with("<pre class=\"json\">"), "{json_page}");
+        assert!(json_page.contains("&lt;value&gt;"), "{json_page}");
+        assert!(
+            json_page.contains("{% include never.xhtml %}"),
+            "{json_page}"
+        );
+        assert!(!json_page.contains("No such include"), "{json_page}");
+
+        for (format, name) in [("xml", "XML"), ("ttl", "Turtle")] {
+            let page = render_page(
+                &include_page(&format!("Observation-format-test-{format}-html.xhtml")),
+                &format!("en/Observation-format-test.{format}.html"),
+                &provider,
+            );
+            assert!(
+                page.contains(&format!("{name} representation unavailable")),
+                "{page}"
+            );
+            assert!(page.contains("has not fabricated one"), "{page}");
+        }
     }
 
     #[test]

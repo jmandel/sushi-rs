@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-/// The parsed `defaults` block + the `extraTemplates` names, in file order.
+/// The parsed resource projection fields from the template config.
 #[derive(Debug, Clone)]
 pub struct Defaults {
     /// The `defaults` object: key (e.g. `StructureDefinition`,
@@ -18,6 +18,10 @@ pub struct Defaults {
     /// stock config already declares `format`, and `defns` is handled explicitly
     /// by `makeTemplates`, so this list is the declared set.
     pub extra_templates: Vec<String>,
+    /// Resource serialization formats requested by the template's root
+    /// `formats` array, in declaration order. These drive the Publisher's
+    /// separate `template-format` pass; they are not ordinary extra templates.
+    pub formats: Vec<String>,
 }
 
 impl Defaults {
@@ -39,9 +43,18 @@ impl Defaults {
                 }
             }
         }
+        let formats = cfg
+            .get("formats")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
         Ok(Defaults {
             table,
             extra_templates,
+            formats,
         })
     }
 
@@ -51,6 +64,26 @@ impl Defaults {
 
     fn obj_str<'a>(o: Option<&'a Value>, prop: &str) -> Option<&'a str> {
         o.and_then(|c| c.get(prop)).and_then(Value::as_str)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn root_formats_are_distinct_from_extra_templates_and_keep_order() {
+        let defaults = Defaults::from_value(&json!({
+            "defaults": {},
+            "formats": ["xml", "json", 3, "ttl"],
+            "extraTemplates": ["testing", {"name": "format"}]
+        }))
+        .unwrap();
+
+        assert_eq!(defaults.formats, ["xml", "json", "ttl"]);
+        assert_eq!(defaults.extra_templates, ["testing", "format"]);
     }
 }
 

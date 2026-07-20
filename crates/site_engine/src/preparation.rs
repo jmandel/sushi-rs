@@ -1188,6 +1188,7 @@ impl SiteEngine {
 }
 
 const PAGE_MD_SHIM: &str = "---\r\n---\r\n{% include template-page-md.html %}";
+const PAGE_XML_SHIM: &str = "---\r\n---\r\n{% include template-page.html %}";
 const FRAGMENT_SUFFIXES: &[&str] = &[
     "intro",
     "introduction",
@@ -1368,6 +1369,14 @@ fn authored_projection_targets(file: &site_build::AuthoredFile) -> Result<Vec<St
                     targets.push(tree(page.clone()));
                     targets.push(output(&page)?);
                 }
+            } else if let Some(name) = path.strip_suffix(".xml") {
+                targets.push(tree(format!("_includes/en/{path}")));
+                targets.push(tree(format!("_includes/{path}")));
+                if !is_fragment_include(name) {
+                    let page = format!("en/{name}.html");
+                    targets.push(tree(page.clone()));
+                    targets.push(output(&page)?);
+                }
             } else if path.ends_with(".html") {
                 let page = format!("en/{path}");
                 targets.push(tree(page.clone()));
@@ -1493,7 +1502,11 @@ fn stage_prepared_authored_files(
                 );
             }
             site_build::AuthoredFileRole::PageContent => {
-                let Some(name) = path.strip_suffix(".md") else {
+                let (name, shell) = if let Some(name) = path.strip_suffix(".md") {
+                    (name, PAGE_MD_SHIM)
+                } else if let Some(name) = path.strip_suffix(".xml") {
+                    (name, PAGE_XML_SHIM)
+                } else {
                     if path.ends_with(".html") {
                         site_files.insert(
                             PathBuf::from(format!("/site/en/{path}")),
@@ -1513,7 +1526,7 @@ fn stage_prepared_authored_files(
                 if !is_fragment_include(name) {
                     site_files.insert(
                         PathBuf::from(format!("/site/en/{name}.html")),
-                        PAGE_MD_SHIM.as_bytes().to_vec(),
+                        shell.as_bytes().to_vec(),
                     );
                 }
             }
@@ -1757,7 +1770,26 @@ impl SiteEngine {
         let produced = site_producer::produce(&producer_inputs)
             .map_err(|error| format!("{operation}: {error:#}"))?;
 
-        let resource_pages = produced.resource_pages;
+        let site_producer::SiteProducerOutput {
+            files: produced_files,
+            public_outputs,
+            resource_pages,
+        } = produced;
+        for (path, output) in public_outputs {
+            insert_prepared_output(
+                ready,
+                objects,
+                &path,
+                output.bytes,
+                &output.media_type,
+                site_build::OutputProducer {
+                    id: "publisher-resource-format".into(),
+                    version: env!("CARGO_PKG_VERSION").into(),
+                },
+                Some(output.source),
+                PreparedOutputCollision::Reject,
+            )?;
+        }
         let mut site_files = HashMap::new();
         for (relative, bytes) in template_files {
             let mounted = match relative.strip_prefix("includes/") {
@@ -1771,7 +1803,7 @@ impl SiteEngine {
                 "template file",
             )?;
         }
-        for (relative, bytes) in produced.files {
+        for (relative, bytes) in produced_files {
             insert_site_file(
                 &mut site_files,
                 PathBuf::from(format!("/site/{relative}")),
@@ -3058,6 +3090,30 @@ mod tests {
     use content_store::ContentStore;
 
     #[test]
+    fn authored_xml_page_projects_to_include_shell_and_public_output() {
+        let file = site_build::AuthoredFile {
+            role: site_build::AuthoredFileRole::PageContent,
+            path: site_build::PreparedPath::parse("project.xml").unwrap(),
+            mime: "application/xml".into(),
+            content: br#"<div xmlns="http://www.w3.org/1999/xhtml">Project</div>"#.to_vec(),
+            source_reads: BTreeSet::from([site_build::PreparedPath::parse(
+                "input/pagecontent/project.xml",
+            )
+            .unwrap()]),
+        };
+
+        assert_eq!(
+            authored_projection_targets(&file).unwrap(),
+            vec![
+                "tree:/site/_includes/en/project.xml",
+                "tree:/site/_includes/project.xml",
+                "tree:/site/en/project.html",
+                "output:en/project.html",
+            ]
+        );
+    }
+
+    #[test]
     fn authored_content_reuses_only_the_exact_authenticated_project_source() {
         let bytes = b"guide image".to_vec();
         let source_path = site_build::SourcePath::parse("input/images/guide.png").unwrap();
@@ -3365,6 +3421,38 @@ mod tests {
         assert_eq!(
             site_build::canonical_json_bytes(&base_changed.site_build).unwrap(),
             site_build::canonical_json_bytes(&fresh_base.site_build).unwrap()
+        );
+    }
+
+    #[test]
+    fn released_superseded_runtime_preserves_published_predecessor() {
+        let (project_a, compiled_a, environment) = snapshot_derivation_fixture(0, 0, false);
+        let mut engine = SiteEngine::default();
+        engine.install_compilation_for_test(project_a, compiled_a);
+        let a = engine.prepare(cycle_spec(), environment.clone()).unwrap();
+
+        let (project_b, compiled_b, _) = snapshot_derivation_fixture(1, 0, false);
+        engine.install_compilation_for_test(project_b, compiled_b);
+        let b = engine.prepare(cycle_spec(), environment.clone()).unwrap();
+        assert_eq!(
+            engine.retained_generation_handles(),
+            vec![b.build_id.clone(), a.build_id.clone()]
+        );
+
+        assert!(engine.release(&b.build_id));
+        assert!(!engine.release(&b.build_id));
+        assert_eq!(
+            engine.retained_generation_handles(),
+            vec![a.build_id.clone()]
+        );
+
+        let (project_c, mut compiled_c, _) = snapshot_derivation_fixture(1, 1, false);
+        compiled_c.reverse();
+        engine.install_compilation_for_test(project_c, compiled_c);
+        let c = engine.prepare(cycle_spec(), environment).unwrap();
+        assert_eq!(
+            engine.retained_generation_handles(),
+            vec![c.build_id, a.build_id]
         );
     }
 
@@ -4163,6 +4251,119 @@ mod tests {
             sushi_config: serde_json::json!({"id":"demo.ig"}),
             authored_files,
         }
+    }
+
+    #[test]
+    fn declared_resource_formats_close_as_pages_and_current_json_output() {
+        let mut prepared = prepared_with_all_roles();
+        prepared.authored_files.clear();
+        prepared.resources.push(site_build::SemanticResource {
+            key: site_build::SemanticResourceKey {
+                resource_type: "Observation".into(),
+                id: "format-test".into(),
+            },
+            resource: serde_json::json!({
+                "resourceType": "Observation",
+                "id": "format-test",
+                "status": "final",
+                "valueString": "current <value>"
+            }),
+            publication: None,
+        });
+        let project = site_build::ProjectIdentity {
+            project_id: "demo.ig".into(),
+            revision: "formats".into(),
+            sources: site_build::SourceManifest::from_entries([]).unwrap(),
+        };
+        let template_files = BTreeMap::from([
+            (
+                "config.json".into(),
+                br#"{
+                    "formats":["xml","json","ttl"],
+                    "defaults":{"Any":{
+                        "template-format":"template/layouts/format.html",
+                        "format":"{{[type]}}-{{[id]}}.{{[fmt]}}.html"
+                    }}
+                }"#
+                .to_vec(),
+            ),
+            (
+                "layouts/format.html".into(),
+                b"---\n---\n{% include {{[type]}}-{{[name]}}.xhtml %}".to_vec(),
+            ),
+        ]);
+        let engine = SiteEngine::default();
+        let mut ready = BTreeMap::new();
+        let mut objects = ObjectMap::new();
+        let model = engine
+            .publisher_model(
+                &prepared,
+                &project,
+                &template_files,
+                &mut ready,
+                &mut objects,
+                "demo.ig",
+                "test",
+            )
+            .unwrap();
+        let options = SiteOptions::default();
+        let semantics = build_render_semantics(
+            prepared_render_set(&prepared).unwrap(),
+            None,
+            model.site_files.as_ref(),
+            &options,
+        )
+        .unwrap();
+        let state = publisher_render_state(&semantics, &model, &options).unwrap();
+        let catalog =
+            publisher_output_plan(&ready, state.list_pages(), &model.resource_pages, "test")
+                .unwrap();
+
+        for format in ["xml", "json", "ttl"] {
+            let path = format!("en/Observation-format-test.{format}.html");
+            let descriptor = catalog
+                .descriptors
+                .iter()
+                .find(|descriptor| descriptor.path.as_str() == path)
+                .unwrap_or_else(|| panic!("missing format page {path}"));
+            assert_eq!(descriptor.kind, crate::OutputKind::Page);
+            assert!(descriptor.content.is_none());
+        }
+        let raw = catalog
+            .descriptors
+            .iter()
+            .find(|descriptor| descriptor.path.as_str() == "en/Observation-format-test.json")
+            .expect("current JSON output is in the closed catalog");
+        assert_eq!(raw.kind, crate::OutputKind::Auxiliary);
+        assert_eq!(raw.media_type, "application/fhir+json");
+        let content = raw.content.as_ref().expect("raw JSON is materialized");
+        let bytes = objects[&content.sha256].materialize().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(bytes.as_slice()).unwrap(),
+            prepared.resources.last().unwrap().resource
+        );
+        assert!(bytes.ends_with(b"\n"));
+        assert!(!catalog
+            .descriptors
+            .iter()
+            .any(|descriptor| descriptor.path.as_str() == "en/Observation-format-test.xml"));
+        assert!(!catalog
+            .descriptors
+            .iter()
+            .any(|descriptor| descriptor.path.as_str() == "en/Observation-format-test.ttl"));
+
+        let json_page = state
+            .render_page_by_name("en/Observation-format-test.json.html")
+            .unwrap();
+        assert!(json_page.contains("<pre class=\"json\">"), "{json_page}");
+        assert!(json_page.contains("current &lt;value&gt;"), "{json_page}");
+        let xml_page = state
+            .render_page_by_name("en/Observation-format-test.xml.html")
+            .unwrap();
+        assert!(
+            xml_page.contains("XML representation unavailable"),
+            "{xml_page}"
+        );
     }
 
     fn closed_cycle_fixture() -> (
